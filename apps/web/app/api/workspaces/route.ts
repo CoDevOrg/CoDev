@@ -19,7 +19,14 @@ export async function POST(request: Request) {
       input.installationId,
       input.repositoryId,
     );
-    return Response.json({ workspace }, { status: 201 });
+    return Response.json(
+      {
+        workspace: {
+          id: workspace.id,
+        },
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return apiError(error);
   }
