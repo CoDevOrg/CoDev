@@ -10,6 +10,11 @@ export const serverEnvironmentSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   DATABASE_URL: optionalUrl,
+  POSTGRES_URL: optionalUrl,
+  POSTGRES_URL_NON_POOLING: optionalUrl,
+  SUPABASE_URL: optionalUrl,
+  NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,
   AWS_REGION: z.string().min(1).optional(),
   ORCHESTRATOR_URL: optionalUrl,

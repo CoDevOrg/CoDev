@@ -13,6 +13,7 @@ the website source; CoDev is not a downloadable desktop application.
 - Local landing page: `http://localhost:3000`
 - Fixture workspace: `http://localhost:3000/workspaces/demo`
 - Health endpoint: `http://localhost:3000/api/health`
+- Database health: `http://localhost:3000/api/health/database`
 
 ## Repository
 
@@ -54,6 +55,14 @@ with an OCI image:
 ```
 
 Docker and Docker Compose are intentionally not part of this repository.
+
+Production, preview, and development environments are connected to the
+`codev-db` Supabase resource through Vercel Marketplace. Pull the development
+credentials into the gitignored local environment with:
+
+```bash
+vercel env pull apps/web/.env.local --environment=development --yes
+```
 
 See [PRD.md](./PRD.md) for the product specification and [PLAN.md](./PLAN.md)
 for the eight-phase delivery roadmap.

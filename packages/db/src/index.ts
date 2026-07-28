@@ -1,11 +1,12 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
+import { normalizePostgresConnectionString } from "./connection";
 import * as schema from "./schema";
 
 export function createDatabase(connectionString: string) {
   const pool = new Pool({
-    connectionString,
+    connectionString: normalizePostgresConnectionString(connectionString),
     max: 5,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 5_000,
@@ -18,3 +19,4 @@ export function createDatabase(connectionString: string) {
 }
 
 export { schema };
+export { normalizePostgresConnectionString } from "./connection";

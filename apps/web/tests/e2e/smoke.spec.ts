@@ -54,3 +54,18 @@ test("health endpoint reports the web service", async ({ request }) => {
     service: "codev-web",
   });
 });
+
+test("database health endpoint reaches Supabase", async ({ request }) => {
+  test.skip(
+    process.env.PLAYWRIGHT_DATABASE_HEALTH !== "true",
+    "Only run when a Supabase environment is connected.",
+  );
+
+  const response = await request.get("/api/health/database");
+
+  expect(response.ok()).toBe(true);
+  await expect(response.json()).resolves.toEqual({
+    status: "ok",
+    service: "codev-database",
+  });
+});

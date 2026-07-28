@@ -10,5 +10,3 @@ test-results/
 .vercel/
 .DS_Store
 services/orchestrator/bin/
-
-.vercel

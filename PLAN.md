@@ -50,6 +50,7 @@ Create the Vercel-hosted website foundation, shared contracts, persistence schem
 - Vercel project: `codev`
 - Project root: `apps/web`
 - Runtime: Node.js 24 with Fluid Compute enabled
+- Database: `codev-db` Supabase resource connected through Vercel Marketplace
 - Verified preview promoted to production without rebuilding
 - Completed: July 28, 2026
 
