@@ -191,7 +191,6 @@ Resources:
             VolumeSize: 200
             VolumeType: gp3
             Iops: 3000
-            Throughput: 125
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
