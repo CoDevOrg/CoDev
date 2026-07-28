@@ -4,8 +4,13 @@ import { notFound } from "next/navigation";
 
 import { AppChrome } from "@/components/app-chrome";
 import { WorkspaceAccess } from "@/components/workspace-access";
+import { WorkspaceRuntime } from "@/components/workspace-runtime";
 import { requireUser } from "@/lib/session";
-import { getWorkspaceForMember, listWorkspaceMembers } from "@/lib/workspaces";
+import {
+  getWorkspaceForMember,
+  getWorkspaceRuntime,
+  listWorkspaceMembers,
+} from "@/lib/workspaces";
 
 export const metadata: Metadata = { title: "Workspace" };
 
@@ -19,7 +24,10 @@ export default async function WorkspacePage({
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) notFound();
 
-  const members = await listWorkspaceMembers(workspaceId);
+  const [members, runtime] = await Promise.all([
+    listWorkspaceMembers(workspaceId),
+    getWorkspaceRuntime(workspaceId),
+  ]);
 
   return (
     <AppChrome user={user}>
@@ -42,18 +50,19 @@ export default async function WorkspacePage({
           <span className="status-pill">{workspace.status}</span>
         </header>
 
-        <div className="phase-note">
-          <span>Phase 2</span>
-          <div>
-            <strong>Identity and access are ready.</strong>
-            <p>
-              Sandbox provisioning and the connected IDE arrive in Phase 3 and
-              Phase 4. This workspace currently holds repository, membership,
-              and capability state.
-            </p>
-          </div>
-          <Link href="/workspaces/demo">Open demo shell ↗</Link>
-        </div>
+        <WorkspaceRuntime
+          workspaceId={workspaceId}
+          runtime={
+            runtime
+              ? {
+                  status: runtime.status,
+                  sandboxId: runtime.sandboxId,
+                  lastError: runtime.lastError,
+                }
+              : null
+          }
+          isOwner={workspace.role === "owner"}
+        />
 
         <div className="workspace-stats">
           <div>

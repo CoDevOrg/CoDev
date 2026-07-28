@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CoDev single-host Firecracker runtime and IAM-authenticated control endpoint
+
+Parameters:
+  ArtifactBucket:
+    Type: String
+  ReleaseVersion:
+    Type: String
+  InstanceType:
+    Type: String
+    Default: a1.metal
+    AllowedPattern: ^[a-z0-9]+[a-z0-9.-]*\.metal$
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-2a
+  UbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+
+Resources:
+  RuntimeVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: codev-runtime
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref RuntimeVpc
+
+  RuntimeSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      CidrBlock: 10.42.0.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref RuntimeVpc
+      Tags:
+        - Key: Name
+          Value: codev-runtime
+
+  RuntimeRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref RuntimeVpc
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RuntimeRouteTable
+
+  RuntimeSubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RuntimeRouteTable
+      SubnetId: !Ref RuntimeSubnet
+
+  VpcLinkSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API Gateway VPC link for CoDev
+      SecurityGroupEgress: []
+      VpcId: !Ref RuntimeVpc
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Internal NLB for CoDev orchestrator
+      SecurityGroupEgress: []
+      VpcId: !Ref RuntimeVpc
+
+  HostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CoDev Firecracker host; no public ingress
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref RuntimeVpc
+
+  VpcLinkToLoadBalancerEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !GetAtt VpcLinkSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      DestinationSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+
+  LoadBalancerFromVpcLinkIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !GetAtt VpcLinkSecurityGroup.GroupId
+
+  LoadBalancerToHostEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      DestinationSecurityGroupId: !GetAtt HostSecurityGroup.GroupId
+
+  HostFromLoadBalancerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HostSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: codev-firecracker-host
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ReadRuntimeArtifacts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/releases/*
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}
+                Condition:
+                  StringLike:
+                    s3:prefix: releases/*
+
+  HostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref HostRole
+
+  FirecrackerHost:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - DefaultRoute
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      ImageId: !Ref UbuntuAmi
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref HostInstanceProfile
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: enabled
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref HostSecurityGroup
+          SubnetId: !Ref RuntimeSubnet
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: 200
+            VolumeType: gp3
+            Iops: 3000
+            Throughput: 125
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y awscli ca-certificates curl
+          until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
+            sleep 10
+          done
+          chmod 0700 /tmp/codev-bootstrap-host.sh
+          CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} /tmp/codev-bootstrap-host.sh
+      Tags:
+        - Key: Name
+          Value: codev-firecracker-host
+        - Key: Project
+          Value: CoDev
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  OrchestratorTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /healthz
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      Port: 8080
+      Protocol: TCP
+      TargetType: instance
+      Targets:
+        - Id: !Ref FirecrackerHost
+          Port: 8080
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref RuntimeVpc
+
+  InternalLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internal
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref RuntimeSubnet
+      Type: network
+      Tags:
+        - Key: Project
+          Value: CoDev
+
+  OrchestratorListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref OrchestratorTargetGroup
+      LoadBalancerArn: !Ref InternalLoadBalancer
+      Port: 8080
+      Protocol: TCP
+
+  ApiVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: codev-runtime
+      SecurityGroupIds:
+        - !Ref VpcLinkSecurityGroup
+      SubnetIds:
+        - !Ref RuntimeSubnet
+
+  RuntimeApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Description: IAM-authenticated CoDev sandbox control API
+      DisableExecuteApiEndpoint: false
+      Name: codev-runtime
+      ProtocolType: HTTP
+
+  RuntimeIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref RuntimeApi
+      ConnectionId: !Ref ApiVpcLink
+      ConnectionType: VPC_LINK
+      IntegrationMethod: ANY
+      IntegrationType: HTTP_PROXY
+      IntegrationUri: !Ref OrchestratorListener
+      PayloadFormatVersion: "1.0"
+
+  RuntimeRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RuntimeApi
+      AuthorizationType: AWS_IAM
+      RouteKey: ANY /{proxy+}
+      Target: !Sub integrations/${RuntimeIntegration}
+
+  RuntimeStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref RuntimeApi
+      AutoDeploy: true
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: true
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+      StageName: $default
+
+Outputs:
+  ApiId:
+    Value: !Ref RuntimeApi
+  ApiUrl:
+    Value: !GetAtt RuntimeApi.ApiEndpoint
+  HostInstanceId:
+    Value: !Ref FirecrackerHost
+  HostPublicIp:
+    Value: !GetAtt FirecrackerHost.PublicIp
+  RuntimeVpcId:
+    Value: !Ref RuntimeVpc

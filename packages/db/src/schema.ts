@@ -30,6 +30,13 @@ export const workspaceStatus = pgEnum("workspace_status", [
   "stopped",
   "failed",
 ]);
+export const sandboxRuntimeStatus = pgEnum("sandbox_runtime_status", [
+  "provisioning",
+  "ready",
+  "stopping",
+  "stopped",
+  "failed",
+]);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
 export const worktreeKind = pgEnum("worktree_kind", ["integration", "agent"]);
 export const worktreeStatus = pgEnum("worktree_status", [
@@ -156,6 +163,28 @@ export const workspaces = pgTable(
     index("workspaces_owner_idx").on(table.ownerId),
     index("workspaces_repository_idx").on(table.githubRepositoryId),
     index("workspaces_status_expiry_idx").on(table.status, table.expiresAt),
+  ],
+);
+
+export const workspaceRuntimes = pgTable(
+  "workspace_runtimes",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    sandboxId: text("sandbox_id").unique(),
+    backend: text("backend").default("firecracker").notNull(),
+    status: sandboxRuntimeStatus("status").default("provisioning").notNull(),
+    lastError: text("last_error"),
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+    stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("workspace_runtimes_status_updated_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
   ],
 );
 

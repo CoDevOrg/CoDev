@@ -1,4 +1,4 @@
-import type { AgentTurn, Workspace, Worktree } from "./domain";
+import type { AgentTurn, SandboxInstance, Workspace, Worktree } from "./domain";
 import type { WorkspaceEvent } from "./events";
 
 export interface CreateSandboxInput {
@@ -13,7 +13,8 @@ export interface SandboxHealth {
 
 export interface SandboxBackend {
   health(): Promise<SandboxHealth>;
-  createWorkspace(input: CreateSandboxInput): Promise<void>;
+  createWorkspace(input: CreateSandboxInput): Promise<SandboxInstance>;
+  getWorkspace(workspaceId: string): Promise<SandboxInstance | null>;
   destroyWorkspace(workspaceId: string): Promise<void>;
   createWorktree(worktree: Worktree): Promise<void>;
   readFile(worktreeId: string, path: string): Promise<string>;
@@ -39,14 +40,32 @@ export interface AgentProvider {
 
 export class FakeSandboxBackend implements SandboxBackend {
   readonly files = new Map<string, string>();
+  readonly instances = new Map<string, SandboxInstance>();
 
   async health(): Promise<SandboxHealth> {
     return { status: "ok", backend: "fake" };
   }
 
-  async createWorkspace(_input: CreateSandboxInput): Promise<void> {}
+  async createWorkspace(input: CreateSandboxInput): Promise<SandboxInstance> {
+    const now = new Date().toISOString();
+    const instance: SandboxInstance = {
+      id: `sandbox-${input.workspace.id}`,
+      workspaceId: input.workspace.id,
+      status: "ready",
+      createdAt: now,
+      lastActivityAt: now,
+      expiresAt: input.workspace.expiresAt,
+    };
+    this.instances.set(instance.workspaceId, instance);
+    return instance;
+  }
+
+  async getWorkspace(workspaceId: string): Promise<SandboxInstance | null> {
+    return this.instances.get(workspaceId) ?? null;
+  }
 
   async destroyWorkspace(workspaceId: string): Promise<void> {
+    this.instances.delete(workspaceId);
     for (const key of this.files.keys()) {
       if (key.startsWith(`${workspaceId}:`)) {
         this.files.delete(key);

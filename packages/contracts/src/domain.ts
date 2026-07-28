@@ -42,6 +42,15 @@ export const workspaceSchema = z.object({
   expiresAt: timestampSchema,
 });
 
+export const sandboxInstanceSchema = z.object({
+  id: z.string().min(1),
+  workspaceId: identifierSchema,
+  status: z.enum(["provisioning", "ready", "stopping", "stopped", "failed"]),
+  createdAt: timestampSchema,
+  lastActivityAt: timestampSchema,
+  expiresAt: timestampSchema,
+});
+
 export const worktreeSchema = z.object({
   id: identifierSchema,
   workspaceId: identifierSchema,
@@ -102,6 +111,7 @@ export const coordinationMessageSchema = z.object({
 
 export type User = z.infer<typeof userSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
+export type SandboxInstance = z.infer<typeof sandboxInstanceSchema>;
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
 export type Worktree = z.infer<typeof worktreeSchema>;
 export type AgentSession = z.infer<typeof agentSessionSchema>;

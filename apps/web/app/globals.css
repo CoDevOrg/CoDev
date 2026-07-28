@@ -700,6 +700,17 @@ button:disabled {
   font-size: 11px;
 }
 
+.runtime-note button {
+  min-width: 132px;
+}
+
+.runtime-state {
+  color: var(--violet);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
 .workspace-stats {
   display: grid;
   margin-bottom: 22px;

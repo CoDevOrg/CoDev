@@ -21,6 +21,19 @@ describe("server environment", () => {
     ).toThrow();
   });
 
+  it("accepts a Vercel OIDC role and orchestrator endpoint", () => {
+    expect(
+      readServerEnvironment({
+        AWS_REGION: "us-east-2",
+        AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
+        ORCHESTRATOR_URL: "https://example.execute-api.us-east-2.amazonaws.com",
+      }),
+    ).toMatchObject({
+      AWS_REGION: "us-east-2",
+      AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
+    });
+  });
+
   it("accepts Vercel Marketplace Supabase variables", () => {
     expect(
       readServerEnvironment({

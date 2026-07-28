@@ -112,6 +112,118 @@ export async function getWorkspaceForMember(
   return workspace;
 }
 
+export async function getWorkspaceRuntime(workspaceId: string) {
+  const [runtime] = await getDatabase()
+    .select()
+    .from(schema.workspaceRuntimes)
+    .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId))
+    .limit(1);
+  return runtime;
+}
+
+export async function beginWorkspaceProvisioning(
+  workspaceId: string,
+  userId: string,
+) {
+  await requireOwner(workspaceId, userId);
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .insert(schema.workspaceRuntimes)
+      .values({
+        workspaceId,
+        status: "provisioning",
+        lastError: null,
+        stoppedAt: null,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: schema.workspaceRuntimes.workspaceId,
+        set: {
+          status: "provisioning",
+          lastError: null,
+          stoppedAt: null,
+          updatedAt: new Date(),
+        },
+      });
+    await transaction
+      .update(schema.workspaces)
+      .set({ status: "provisioning", expiresAt, updatedAt: new Date() })
+      .where(eq(schema.workspaces.id, workspaceId));
+  });
+  return expiresAt;
+}
+
+export async function markWorkspaceReady(
+  workspaceId: string,
+  sandboxId: string,
+) {
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.workspaceRuntimes)
+      .set({
+        sandboxId,
+        status: "ready",
+        provisionedAt: now,
+        lastError: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
+    await transaction
+      .update(schema.workspaces)
+      .set({ status: "ready", lastActivityAt: now, updatedAt: now })
+      .where(eq(schema.workspaces.id, workspaceId));
+  });
+}
+
+export async function markWorkspaceFailed(workspaceId: string, error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message.slice(0, 2_000)
+      : "Provisioning failed.";
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.workspaceRuntimes)
+      .set({ status: "failed", lastError: message, updatedAt: now })
+      .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
+    await transaction
+      .update(schema.workspaces)
+      .set({ status: "failed", updatedAt: now })
+      .where(eq(schema.workspaces.id, workspaceId));
+  });
+}
+
+export async function beginWorkspaceStop(workspaceId: string, userId: string) {
+  await requireOwner(workspaceId, userId);
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.workspaceRuntimes)
+      .set({ status: "stopping", updatedAt: now })
+      .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
+    await transaction
+      .update(schema.workspaces)
+      .set({ status: "stopping", updatedAt: now })
+      .where(eq(schema.workspaces.id, workspaceId));
+  });
+}
+
+export async function markWorkspaceStopped(workspaceId: string) {
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.workspaceRuntimes)
+      .set({ status: "stopped", stoppedAt: now, updatedAt: now })
+      .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
+    await transaction
+      .update(schema.workspaces)
+      .set({ status: "stopped", updatedAt: now })
+      .where(eq(schema.workspaces.id, workspaceId));
+  });
+}
+
 export async function listWorkspaceMembers(workspaceId: string) {
   return getDatabase()
     .select({

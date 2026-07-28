@@ -22,6 +22,7 @@ export const serverEnvironmentSchema = z.object({
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,
   AWS_REGION: z.string().min(1).optional(),
+  AWS_ROLE_ARN: z.string().startsWith("arn:aws:iam::").optional(),
   ORCHESTRATOR_URL: optionalUrl,
 });
 
