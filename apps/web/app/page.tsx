@@ -56,6 +56,7 @@ export default function HomePage() {
         <div className="nav-links">
           <a href="#workflow">Workflow</a>
           <a href="#principles">Principles</a>
+          <Link href="/sign-in">Sign in</Link>
           <Link className="nav-cta" href="/workspaces/demo">
             Open demo
           </Link>

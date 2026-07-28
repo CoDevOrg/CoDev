@@ -69,3 +69,23 @@ test("database health endpoint reaches Supabase", async ({ request }) => {
     service: "codev-database",
   });
 });
+
+test("protected workspace routes require GitHub identity", async ({ page }) => {
+  await page.goto("/dashboard");
+
+  await expect(page).toHaveURL(/\/sign-in/);
+  await expect(
+    page.getByRole("heading", { name: "Open your CoDev workspace." }),
+  ).toBeVisible();
+});
+
+test("workspace APIs reject anonymous requests", async ({ request }) => {
+  const response = await request.post("/api/workspaces", {
+    data: { installationId: 1, repositoryId: 1 },
+  });
+
+  expect(response.status()).toBe(401);
+  await expect(response.json()).resolves.toEqual({
+    error: "Authentication required.",
+  });
+});

@@ -15,6 +15,11 @@ export const serverEnvironmentSchema = z.object({
   SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  AUTH_SECRET: z.string().min(32).optional(),
+  AUTH_GITHUB_ID: z.string().min(1).optional(),
+  AUTH_GITHUB_SECRET: z.string().min(1).optional(),
+  GITHUB_APP_SLUG: z.string().min(1).optional(),
+  CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,
   AWS_REGION: z.string().min(1).optional(),
   ORCHESTRATOR_URL: optionalUrl,
@@ -26,4 +31,15 @@ export function readServerEnvironment(
   input: Record<string, string | undefined> = process.env,
 ): ServerEnvironment {
   return serverEnvironmentSchema.parse(input);
+}
+
+export function isGitHubAuthConfigured(
+  input: Record<string, string | undefined> = process.env,
+) {
+  return Boolean(
+    input.AUTH_SECRET &&
+    input.AUTH_GITHUB_ID &&
+    input.AUTH_GITHUB_SECRET &&
+    input.CREDENTIAL_ENCRYPTION_KEY,
+  );
 }

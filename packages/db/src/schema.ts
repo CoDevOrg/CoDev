@@ -71,12 +71,40 @@ export const users = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     githubUserId: bigint("github_user_id", { mode: "bigint" }).notNull(),
     login: text("login").notNull(),
+    name: text("name"),
+    email: text("email"),
     avatarUrl: text("avatar_url"),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("users_github_user_id_idx").on(table.githubUserId),
     uniqueIndex("users_login_idx").on(table.login),
+  ],
+);
+
+export const githubConnections = pgTable(
+  "github_connections",
+  {
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    encryptedAccessToken: text("encrypted_access_token").notNull(),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+    }),
+    tokenType: text("token_type").default("bearer").notNull(),
+    scope: text("scope"),
+    keyVersion: integer("key_version").default(1).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("github_connections_access_expiry_idx").on(
+      table.accessTokenExpiresAt,
+    ),
   ],
 );
 
@@ -108,7 +136,14 @@ export const workspaces = pgTable(
     ownerId: uuid("owner_id")
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
+    githubInstallationId: bigint("github_installation_id", {
+      mode: "bigint",
+    }).notNull(),
+    githubRepositoryId: bigint("github_repository_id", {
+      mode: "bigint",
+    }).notNull(),
     repository: text("repository").notNull(),
+    defaultBranch: text("default_branch").notNull(),
     baseSha: text("base_sha").notNull(),
     status: workspaceStatus("status").default("pending").notNull(),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
@@ -119,6 +154,7 @@ export const workspaces = pgTable(
   },
   (table) => [
     index("workspaces_owner_idx").on(table.ownerId),
+    index("workspaces_repository_idx").on(table.githubRepositoryId),
     index("workspaces_status_expiry_idx").on(table.status, table.expiresAt),
   ],
 );
@@ -158,6 +194,10 @@ export const workspaceInvites = pgTable(
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedBy: uuid("accepted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

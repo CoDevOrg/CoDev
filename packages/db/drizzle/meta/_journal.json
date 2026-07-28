@@ -8,6 +8,20 @@
       "when": 1785277225500,
       "tag": "0000_perpetual_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785279077121,
+      "tag": "0001_aspiring_goliath",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785279077598,
+      "tag": "0002_secure_public_tables",
+      "breakpoints": true
     }
   ]
 }

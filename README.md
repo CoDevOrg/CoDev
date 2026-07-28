@@ -4,8 +4,9 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 1 is a public foundation preview. The workspace uses typed fixture data
-> and clearly labels repository, terminal, and agent connections as unavailable.
+> Phase 2 adds GitHub identity, public-repository workspace creation, invitations,
+> membership capabilities, and encrypted per-user OpenAI credentials. The IDE
+> remains a clearly labelled fixture until the sandbox and browser IDE phases.
 
 ## Website
 
@@ -14,6 +15,7 @@ the website source; CoDev is not a downloadable desktop application.
 - Fixture workspace: `http://localhost:3000/workspaces/demo`
 - Health endpoint: `http://localhost:3000/api/health`
 - Database health: `http://localhost:3000/api/health/database`
+- Signed-in dashboard: `http://localhost:3000/dashboard`
 
 ## Repository
 
@@ -34,7 +36,7 @@ pnpm install
 pnpm dev
 ```
 
-Run all Phase 1 checks:
+Run all project checks:
 
 ```bash
 pnpm format:check
@@ -63,6 +65,16 @@ credentials into the gitignored local environment with:
 ```bash
 vercel env pull apps/web/.env.local --environment=development --yes
 ```
+
+GitHub sign-in uses a GitHub App with this callback URL:
+
+```text
+https://codev-xi.vercel.app/api/auth/callback/github
+```
+
+Configure `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, and `GITHUB_APP_SLUG` in
+Vercel. `AUTH_SECRET` and the 32-byte `CREDENTIAL_ENCRYPTION_KEY` must also be
+set in every environment; never commit any of these values.
 
 See [PRD.md](./PRD.md) for the product specification and [PLAN.md](./PLAN.md)
 for the eight-phase delivery roadmap.

@@ -22,7 +22,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | Phase | Name                              | Status      |
 | ----- | --------------------------------- | ----------- |
 | 1     | Foundation and Live Website       | Complete    |
-| 2     | GitHub Identity and Workspaces    | Not started |
+| 2     | GitHub Identity and Workspaces    | Complete    |
 | 3     | Firecracker Runtime               | Not started |
 | 4     | Browser IDE and Terminal          | Not started |
 | 5     | Realtime Collaboration            | Not started |
@@ -57,6 +57,24 @@ Create the Vercel-hosted website foundation, shared contracts, persistence schem
 ## Phase 2: GitHub Identity and Workspaces
 
 Implement GitHub sign-in and installation discovery, public-repository selection, encrypted per-user OpenAI credentials, workspace creation, invitations, membership, and owner-managed terminal and merge capabilities.
+
+### Acceptance Criteria
+
+- Users authenticate through the CoDev GitHub App and only see repositories from installations available to their GitHub user token.
+- Repository selection excludes private and archived repositories and is revalidated server-side before workspace creation.
+- Workspace owners can create single-use, 24-hour invitations and independently grant terminal and merge capabilities to members.
+- GitHub access and refresh tokens and per-user OpenAI keys use authenticated encryption at rest and are never returned to the browser.
+- Supabase product tables have RLS enabled and grant no Data API access to `anon` or `authenticated`.
+- Authenticated product routes and mutation APIs reject anonymous access.
+
+### Phase 2 Delivery
+
+- GitHub App: [CoDev Web Workspace](https://github.com/apps/codev-web-workspace)
+- Installation scope: `yousef20920/CoDev`
+- Repository permission: read-only contents and metadata
+- OAuth user tokens: expiring, with encrypted refresh-token support
+- Database: 14 migrated tables with RLS and server-only privileges
+- Completed: July 28, 2026
 
 ## Phase 3: Firecracker Runtime
 
