@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.env.local
+.env.*.local
+.vercel/
+.DS_Store
+services/orchestrator/bin/
+
+.vercel

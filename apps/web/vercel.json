@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "fluid": true,
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 300
+    }
+  }
+}

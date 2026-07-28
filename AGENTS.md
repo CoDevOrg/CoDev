@@ -1,0 +1,29 @@
+# CoDev Repository Guidance
+
+## Product
+
+CoDev is a hosted website deployed on Vercel. Do not describe it as a downloadable desktop application.
+
+## Required Commands
+
+- Install: `pnpm install`
+- Develop website: `pnpm dev`
+- Format check: `pnpm format:check`
+- Lint: `pnpm lint`
+- Type check: `pnpm typecheck`
+- Unit tests: `pnpm test`
+- Production build: `pnpm build`
+- Browser tests: `pnpm test:e2e`
+- Go checks: `pnpm go:check`
+
+## Container Policy
+
+Use Apple's open-source [container](https://github.com/apple/container) tool whenever local container execution is needed. Do not add Dockerfiles, Docker Compose configuration, or commands that require Docker.
+
+## Engineering Conventions
+
+- Keep Next.js pages as Server Components unless browser state or event handlers require a client boundary.
+- Validate data crossing service or persistence boundaries.
+- Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
+- Preserve the separation between Vercel-hosted control services and AWS-hosted Firecracker infrastructure.
+- Add or update tests with every behavior change.
