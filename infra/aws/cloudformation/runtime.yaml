@@ -308,7 +308,7 @@ Resources:
       Name: codev-runtime
       ProtocolType: HTTP
 
-  RuntimeIntegration:
+  RuntimeLambdaIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref RuntimeApi
@@ -331,7 +331,7 @@ Resources:
       ApiId: !Ref RuntimeApi
       AuthorizationType: AWS_IAM
       RouteKey: ANY /{proxy+}
-      Target: !Sub integrations/${RuntimeIntegration}
+      Target: !Sub integrations/${RuntimeLambdaIntegration}
 
   RuntimeStage:
     Type: AWS::ApiGatewayV2::Stage
