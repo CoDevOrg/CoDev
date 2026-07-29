@@ -63,6 +63,9 @@ curl -fsSL "${firecracker_ci_base}/ubuntu-24.04.squashfs" -o "${work_dir}/ubuntu
 unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
 
 install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/codev-guestd"
+install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
+cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
+cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
