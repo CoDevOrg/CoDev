@@ -10,9 +10,6 @@ import { readServerEnvironment } from "@codev/config";
 
 import { getAwsConfiguration } from "./aws";
 
-const pollIntervalMs = 5_000;
-const defaultWakeTimeoutMs = 180_000;
-
 function getHostConfiguration() {
   const environment = readServerEnvironment();
   if (!environment.AWS_HOST_INSTANCE_ID) {
@@ -35,10 +32,6 @@ function createClient() {
   };
 }
 
-async function delay(milliseconds: number) {
-  await new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 export async function getHostState(): Promise<InstanceStateName> {
   const { client, instanceId } = createClient();
   const response = await client.send(
@@ -51,39 +44,31 @@ export async function getHostState(): Promise<InstanceStateName> {
   return state;
 }
 
-export async function ensureHostRunning(
-  timeoutMs = defaultWakeTimeoutMs,
-): Promise<"running" | "started"> {
+export async function requestHostWake(): Promise<"running" | "starting"> {
   const { client, instanceId } = createClient();
-  const deadline = Date.now() + timeoutMs;
-  let started = false;
+  const response = await client.send(
+    new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
+  );
+  const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
 
-  while (Date.now() < deadline) {
-    const response = await client.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-    );
-    const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-
-    if (state === "running") {
-      return started ? "started" : "running";
-    }
-    if (state === "stopped") {
-      await client.send(
-        new StartInstancesCommand({ InstanceIds: [instanceId] }),
-      );
-      started = true;
-    } else if (
-      state === "shutting-down" ||
-      state === "terminated" ||
-      state === undefined
-    ) {
-      throw new Error(
-        `The Firecracker host cannot be started from state ${state ?? "unknown"}.`,
-      );
-    }
-
-    await delay(pollIntervalMs);
+  if (state === "running") {
+    return "running";
   }
-
-  throw new Error("The Firecracker host did not become ready in time.");
+  if (state === "stopped") {
+    await client.send(new StartInstancesCommand({ InstanceIds: [instanceId] }));
+    return "starting";
+  }
+  if (state === "pending" || state === "stopping") {
+    return "starting";
+  }
+  if (
+    state === "shutting-down" ||
+    state === "terminated" ||
+    state === undefined
+  ) {
+    throw new Error(
+      `The Firecracker host cannot be started from state ${state ?? "unknown"}.`,
+    );
+  }
+  throw new Error(`Unexpected Firecracker host state: ${state}.`);
 }

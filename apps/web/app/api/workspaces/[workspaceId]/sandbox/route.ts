@@ -1,11 +1,11 @@
 import { apiError, getApiUser } from "@/lib/api";
-import { getHostState } from "@/lib/host";
+import { getHostState, requestHostWake } from "@/lib/host";
 import {
   destroySandbox,
   getSandbox,
   OrchestratorError,
   provisionSandbox,
-  wakeOrchestrator,
+  waitForOrchestrator,
 } from "@/lib/orchestrator";
 import {
   beginWorkspaceProvisioning,
@@ -75,8 +75,12 @@ export async function POST(
   }
 
   try {
+    const hostState = await requestHostWake();
+    if (hostState === "starting") {
+      return Response.json({ state: "starting" }, { status: 202 });
+    }
     const expiresAt = await beginWorkspaceProvisioning(workspaceId, user.id);
-    await wakeOrchestrator();
+    await waitForOrchestrator();
     const sandbox = await provisionSandbox({
       workspaceId,
       repositoryUrl: `https://github.com/${workspace.repository}.git`,

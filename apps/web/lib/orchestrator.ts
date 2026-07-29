@@ -8,7 +8,6 @@ import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
 import { getAwsConfiguration } from "./aws";
-import { ensureHostRunning } from "./host";
 
 const errorSchema = z.object({ error: z.string() });
 
@@ -114,15 +113,14 @@ export async function checkOrchestratorConnection() {
     .parse(await response.json());
 }
 
-export async function wakeOrchestrator() {
-  const hostResult = await ensureHostRunning();
+export async function waitForOrchestrator() {
   const deadline = Date.now() + 45_000;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
     try {
       await checkOrchestratorConnection();
-      return hostResult;
+      return;
     } catch (error) {
       lastError = error;
       await new Promise((resolve) => setTimeout(resolve, 2_500));

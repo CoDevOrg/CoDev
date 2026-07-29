@@ -38,9 +38,24 @@ export function WorkspaceRuntime({
         : "",
     );
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
-        method,
-      });
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
+          method,
+        });
+        if (method !== "POST" || response.status !== 202) {
+          break;
+        }
+        setMessage(
+          "The bare-metal AWS host is starting. Your microVM will be prepared automatically…",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+      }
+      if (!response || response.status === 202) {
+        throw new Error(
+          "The AWS host is still starting. Try again in a few minutes.",
+        );
+      }
       if (!response.ok) {
         throw new Error(await readError(response));
       }
