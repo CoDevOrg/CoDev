@@ -182,6 +182,7 @@ Resources:
           DeviceIndex: "0"
           GroupSet:
             - !Ref HostSecurityGroup
+          PrivateIpAddress: 10.42.0.10
           SubnetId: !Ref RuntimeSubnet
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
@@ -195,6 +196,12 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -euxo pipefail
+          timedatectl set-ntp true
+          systemctl restart systemd-timesyncd
+          until [ "$(timedatectl show --property=NTPSynchronized --value)" = "yes" ]; do
+            sleep 2
+          done
+          systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y awscli ca-certificates curl
