@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   FakeSandboxBackend,
+  terminalPollSchema,
   workspaceEventSchema,
   workspaceSchema,
 } from "./index";
@@ -21,6 +22,25 @@ describe("workspace contracts", () => {
     });
 
     expect(workspace.repository).toBe("codev/example");
+  });
+
+  it("requires strictly sequenced terminal chunks", () => {
+    expect(
+      terminalPollSchema.parse({
+        chunks: [{ sequence: 1, data: "ready\r\n" }],
+        nextSequence: 2,
+        exited: false,
+        exitCode: null,
+      }).chunks[0]?.sequence,
+    ).toBe(1);
+    expect(() =>
+      terminalPollSchema.parse({
+        chunks: [{ sequence: 0, data: "invalid" }],
+        nextSequence: 1,
+        exited: false,
+        exitCode: null,
+      }),
+    ).toThrow();
   });
 
   it("rejects an invalid event payload", () => {

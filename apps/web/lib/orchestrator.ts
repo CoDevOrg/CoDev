@@ -36,6 +36,18 @@ export interface SandboxExecInput {
   columns?: number | undefined;
 }
 
+const terminalPollSchema = z.object({
+  chunks: z.array(
+    z.object({
+      sequence: z.number().int().nonnegative(),
+      data: z.string(),
+    }),
+  ),
+  nextSequence: z.number().int().nonnegative(),
+  exited: z.boolean(),
+  exitCode: z.number().int().nullable(),
+});
+
 function getOrchestratorConfiguration() {
   const environment = readServerEnvironment();
   if (!environment.AWS_REGION) {
@@ -225,4 +237,129 @@ export async function getSandboxGitOutput(
     `/v1/sandboxes/${workspaceId}/git/${operation}`,
   );
   return z.object({ output: z.string() }).parse(await response.json()).output;
+}
+
+export async function listSandboxFiles(workspaceId: string) {
+  const result = await executeInSandbox(workspaceId, {
+    command: [
+      "find",
+      ".",
+      "-type",
+      "f",
+      "-not",
+      "-path",
+      "./.git/*",
+      "-not",
+      "-path",
+      "./node_modules/*",
+      "-not",
+      "-path",
+      "./target/*",
+    ],
+    timeoutSeconds: 30,
+  });
+  if (result.exitCode !== 0) {
+    throw new OrchestratorError("Could not list workspace files.", 502);
+  }
+  return result.output;
+}
+
+export async function searchSandboxFiles(
+  workspaceId: string,
+  query: string,
+) {
+  const result = await executeInSandbox(workspaceId, {
+    command: [
+      "git",
+      "grep",
+      "--line-number",
+      "--color=never",
+      "-I",
+      "--max-count",
+      "100",
+      "--",
+      query,
+      ".",
+    ],
+    timeoutSeconds: 30,
+  });
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    throw new OrchestratorError("Workspace search failed.", 502);
+  }
+  return result.output;
+}
+
+export async function readSandboxHeadFile(
+  workspaceId: string,
+  path: string,
+) {
+  const result = await executeInSandbox(workspaceId, {
+    command: ["git", "show", `HEAD:./${path}`],
+    timeoutSeconds: 30,
+  });
+  if (result.exitCode !== 0) return "";
+  return result.output;
+}
+
+export async function startSandboxTerminal(
+  workspaceId: string,
+  input: { rows: number; columns: number },
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/terminals`,
+    input,
+  );
+  return z
+    .object({ sessionId: z.string() })
+    .parse(await response.json()).sessionId;
+}
+
+export async function sendSandboxTerminalInput(
+  workspaceId: string,
+  sessionId: string,
+  data: string,
+) {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/terminals/${sessionId}/input`,
+    { data },
+  );
+}
+
+export async function resizeSandboxTerminal(
+  workspaceId: string,
+  sessionId: string,
+  input: { rows: number; columns: number },
+) {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/terminals/${sessionId}/resize`,
+    input,
+  );
+}
+
+export async function pollSandboxTerminal(
+  workspaceId: string,
+  sessionId: string,
+  after: number,
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/terminals/${sessionId}/poll`,
+    { after, waitMilliseconds: 20_000 },
+  );
+  return z
+    .object({ result: terminalPollSchema })
+    .parse(await response.json()).result;
+}
+
+export async function closeSandboxTerminal(
+  workspaceId: string,
+  sessionId: string,
+) {
+  await orchestratorRequest(
+    "DELETE",
+    `/v1/sandboxes/${workspaceId}/terminals/${sessionId}`,
+  );
 }

@@ -1,5 +1,8 @@
 import { apiError, getApiUser } from "@/lib/api";
-import { getSandboxGitOutput } from "@/lib/orchestrator";
+import {
+  getSandboxGitOutput,
+  readSandboxHeadFile,
+} from "@/lib/orchestrator";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
 export async function GET(
@@ -14,11 +17,22 @@ export async function GET(
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
 
   const operation = new URL(request.url).searchParams.get("operation");
-  if (operation !== "status" && operation !== "diff") {
-    return apiError(new Error("operation must be status or diff."), 400);
+  if (operation !== "status" && operation !== "diff" && operation !== "show") {
+    return apiError(
+      new Error("operation must be status, diff, or show."),
+      400,
+    );
   }
 
   try {
+    if (operation === "show") {
+      const path = new URL(request.url).searchParams.get("path")?.trim();
+      if (!path || path.length > 4_096 || path.includes("..")) {
+        return apiError(new Error("A valid workspace path is required."), 400);
+      }
+      const contents = await readSandboxHeadFile(workspaceId, path);
+      return Response.json({ contents });
+    }
     const output = await getSandboxGitOutput(workspaceId, operation);
     return Response.json({ output });
   } catch (error) {

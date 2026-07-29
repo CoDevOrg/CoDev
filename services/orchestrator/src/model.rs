@@ -112,3 +112,50 @@ pub struct ExecResponse {
     pub output: String,
     pub exit_code: i32,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalStartRequest {
+    #[serde(default)]
+    pub rows: u16,
+    #[serde(default)]
+    pub columns: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalInputRequest {
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalResizeRequest {
+    pub rows: u16,
+    pub columns: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPollRequest {
+    #[serde(default)]
+    pub after: u64,
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalChunk {
+    pub sequence: u64,
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPollResponse {
+    pub chunks: Vec<TerminalChunk>,
+    pub next_sequence: u64,
+    pub exited: bool,
+    pub exit_code: Option<i32>,
+}

@@ -7,7 +7,7 @@ use axum::{
     http::{HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use chrono::{Duration, Utc};
 use regex::Regex;
@@ -15,7 +15,10 @@ use serde::Deserialize;
 
 use crate::{
     backend::SharedBackend,
-    model::{CreateRequest, ExecRequest, Result, RuntimeError, WriteFileRequest},
+    model::{
+        CreateRequest, ExecRequest, Result, RuntimeError, TerminalInputRequest,
+        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest, WriteFileRequest,
+    },
 };
 
 const MAX_REQUEST_BYTES: usize = 1 << 20;
@@ -37,6 +40,26 @@ pub fn router(backend: SharedBackend) -> Router {
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
+        .route(
+            "/v1/sandboxes/{workspace_id}/terminals",
+            post(start_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/terminals/{session_id}/input",
+            post(input_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/terminals/{session_id}/resize",
+            post(resize_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/terminals/{session_id}/poll",
+            post(poll_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/terminals/{session_id}",
+            delete(close_terminal),
+        )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
@@ -139,6 +162,68 @@ async fn exec_pty(
     Ok(Json(serde_json::json!({ "result": result })))
 }
 
+async fn start_terminal(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<TerminalStartRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    let session_id = backend.start_terminal(&workspace_id, request).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "sessionId": session_id })),
+    ))
+}
+
+async fn input_terminal(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<TerminalInputRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_terminal_id(&session_id)?;
+    backend
+        .input_terminal(&workspace_id, &session_id, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn resize_terminal(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<TerminalResizeRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_terminal_id(&session_id)?;
+    backend
+        .resize_terminal(&workspace_id, &session_id, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn poll_terminal(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<TerminalPollRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_terminal_id(&session_id)?;
+    let result = backend
+        .poll_terminal(&workspace_id, &session_id, request)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
+}
+
+async fn close_terminal(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_terminal_id(&session_id)?;
+    backend.close_terminal(&workspace_id, &session_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn git_status(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -193,6 +278,16 @@ fn validate_workspace_id(workspace_id: &str) -> Result<()> {
     }
 }
 
+fn validate_terminal_id(session_id: &str) -> Result<()> {
+    if terminal_id_pattern().is_match(session_id) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest(
+            "invalid terminal session ID".into(),
+        ))
+    }
+}
+
 fn workspace_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
@@ -204,6 +299,11 @@ fn workspace_id_pattern() -> &'static Regex {
 fn commit_sha_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"^[0-9a-f]{40}$").expect("commit regex"))
+}
+
+fn terminal_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"^term-[0-9]+-[0-9]+$").expect("terminal regex"))
 }
 
 #[cfg(test)]

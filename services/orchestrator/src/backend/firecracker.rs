@@ -21,7 +21,8 @@ use crate::{
     guest_client::GuestClient,
     model::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-        WriteFileRequest,
+        TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+        TerminalStartRequest, WriteFileRequest,
     },
 };
 
@@ -256,6 +257,60 @@ impl FirecrackerBackend {
         let result = machine.guest.exec(&request).await?;
         self.mark_activity(&machine);
         Ok(result)
+    }
+
+    pub async fn start_terminal(
+        &self,
+        workspace_id: &str,
+        request: TerminalStartRequest,
+    ) -> Result<String> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.start_terminal(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn input_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalInputRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.input_terminal(session_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn resize_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalResizeRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.resize_terminal(session_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn poll_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalPollRequest,
+    ) -> Result<TerminalPollResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.poll_terminal(session_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn close_terminal(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.close_terminal(session_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
     }
 
     pub async fn git_status(&self, workspace_id: &str) -> Result<String> {

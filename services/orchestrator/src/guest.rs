@@ -1,8 +1,13 @@
 use std::{
+    collections::{HashMap, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -12,10 +17,17 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
-use crate::model::{ExecRequest, ExecResponse, FileResponse, RuntimeError, WriteFileRequest};
+use crate::model::{
+    ExecRequest, ExecResponse, FileResponse, RuntimeError, TerminalChunk, TerminalInputRequest,
+    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+    WriteFileRequest,
+};
 
 const MAX_BODY_BYTES: usize = 2 << 20;
 const MAX_OUTPUT_BYTES: usize = 2 << 20;
+const MAX_TERMINAL_BUFFER_BYTES: usize = 1 << 20;
+const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
+static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 pub struct GuestResponse {
     pub status: u16,
@@ -42,6 +54,7 @@ struct FileRequest {
 
 pub struct GuestService {
     workspace_root: PathBuf,
+    terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
 }
 
 impl GuestService {
@@ -52,7 +65,10 @@ impl GuestService {
                 "workspace disk is unavailable".into(),
             ));
         }
-        Ok(Self { workspace_root })
+        Ok(Self {
+            workspace_root,
+            terminals: Mutex::new(HashMap::new()),
+        })
     }
 
     pub fn handle(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
@@ -64,9 +80,22 @@ impl GuestService {
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),
             ("POST", "/v1/pty/exec") => self.exec(body),
+            ("POST", "/v1/terminals") => self.start_terminal(body),
             ("GET", "/v1/git/status") => self.git(&["status", "--porcelain=v1", "--branch"]),
             ("GET", "/v1/git/diff") => self.git(&["diff", "--no-ext-diff", "--"]),
-            _ => return GuestResponse::error(404, "route not found"),
+            _ => {
+                if let Some((session_id, action)) = terminal_route(path) {
+                    match (method, action) {
+                        ("POST", "input") => self.input_terminal(session_id, body),
+                        ("POST", "resize") => self.resize_terminal(session_id, body),
+                        ("POST", "poll") => self.poll_terminal(session_id, body),
+                        ("DELETE", "") => self.close_terminal(session_id),
+                        _ => Err(RuntimeError::BadRequest("invalid terminal action".into())),
+                    }
+                } else {
+                    return GuestResponse::error(404, "route not found");
+                }
+            }
         };
         match result {
             Ok(value) => GuestResponse::json(200, value),
@@ -223,6 +252,194 @@ impl GuestService {
         serde_json::to_value(response).map_err(RuntimeError::internal)
     }
 
+    fn start_terminal(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: TerminalStartRequest = decode(body)?;
+        let size = validated_terminal_size(request.rows, request.columns)?;
+        let pty = native_pty_system()
+            .openpty(size)
+            .map_err(RuntimeError::internal)?;
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.arg("-l");
+        command.cwd(&self.workspace_root);
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+        let mut child = pty
+            .slave
+            .spawn_command(command)
+            .map_err(RuntimeError::internal)?;
+        drop(pty.slave);
+        let mut reader = pty
+            .master
+            .try_clone_reader()
+            .map_err(RuntimeError::internal)?;
+        let writer = pty.master.take_writer().map_err(RuntimeError::internal)?;
+        let session_id = format!(
+            "term-{}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(RuntimeError::internal)?
+                .as_millis(),
+            TERMINAL_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        let session = Arc::new(TerminalSession {
+            master: Mutex::new(pty.master),
+            writer: Mutex::new(writer),
+            output: Mutex::new(TerminalOutput::default()),
+            output_changed: Condvar::new(),
+        });
+        self.terminals
+            .lock()
+            .expect("terminal map lock")
+            .insert(session_id.clone(), session.clone());
+
+        let reader_session = session.clone();
+        thread::spawn(move || {
+            let mut buffer = [0_u8; 8 << 10];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) | Err(_) => {
+                        let mut output =
+                            reader_session.output.lock().expect("terminal output lock");
+                        output.reader_closed = true;
+                        reader_session.output_changed.notify_all();
+                        break;
+                    }
+                    Ok(length) => {
+                        let data = String::from_utf8_lossy(&buffer[..length]).into_owned();
+                        let bytes = data.len();
+                        let mut output =
+                            reader_session.output.lock().expect("terminal output lock");
+                        while output.buffered_bytes >= MAX_TERMINAL_BUFFER_BYTES
+                            && !output.reader_closed
+                        {
+                            output = reader_session
+                                .output_changed
+                                .wait(output)
+                                .expect("terminal output lock");
+                        }
+                        let sequence = output.next_sequence;
+                        output.next_sequence += 1;
+                        output.buffered_bytes += bytes;
+                        output.chunks.push_back(TerminalChunk { sequence, data });
+                        reader_session.output_changed.notify_all();
+                    }
+                }
+            }
+        });
+
+        let child_session = session;
+        thread::spawn(move || {
+            let exit_code = child
+                .wait()
+                .map(|status| status.exit_code() as i32)
+                .unwrap_or(1);
+            let mut output = child_session.output.lock().expect("terminal output lock");
+            output.exit_code = Some(exit_code);
+            child_session.output_changed.notify_all();
+        });
+
+        Ok(serde_json::json!({ "sessionId": session_id }))
+    }
+
+    fn input_terminal(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: TerminalInputRequest = decode(body)?;
+        if request.data.len() > MAX_TERMINAL_INPUT_BYTES {
+            return Err(RuntimeError::BadRequest(
+                "terminal input exceeds 64 KiB".into(),
+            ));
+        }
+        let session = self.terminal(session_id)?;
+        let mut writer = session.writer.lock().expect("terminal writer lock");
+        writer
+            .write_all(request.data.as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(RuntimeError::internal)?;
+        Ok(serde_json::json!({ "accepted": request.data.len() }))
+    }
+
+    fn resize_terminal(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: TerminalResizeRequest = decode(body)?;
+        let size = validated_terminal_size(request.rows, request.columns)?;
+        self.terminal(session_id)?
+            .master
+            .lock()
+            .expect("terminal master lock")
+            .resize(size)
+            .map_err(RuntimeError::internal)?;
+        Ok(serde_json::json!({ "resized": true }))
+    }
+
+    fn poll_terminal(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: TerminalPollRequest = decode(body)?;
+        let session = self.terminal(session_id)?;
+        let mut output = session.output.lock().expect("terminal output lock");
+        while output
+            .chunks
+            .front()
+            .is_some_and(|chunk| chunk.sequence <= request.after)
+        {
+            if let Some(chunk) = output.chunks.pop_front() {
+                output.buffered_bytes = output.buffered_bytes.saturating_sub(chunk.data.len());
+            }
+        }
+        session.output_changed.notify_all();
+        if output.chunks.is_empty()
+            && !(output.reader_closed && output.exit_code.is_some())
+            && request.wait_milliseconds > 0
+        {
+            let wait = Duration::from_millis(request.wait_milliseconds.min(25_000));
+            let (next_output, _) = session
+                .output_changed
+                .wait_timeout(output, wait)
+                .expect("terminal output lock");
+            output = next_output;
+        }
+        let response = TerminalPollResponse {
+            chunks: output.chunks.iter().take(128).cloned().collect(),
+            next_sequence: output.next_sequence,
+            exited: output.reader_closed && output.exit_code.is_some(),
+            exit_code: output.exit_code,
+        };
+        serde_json::to_value(response).map_err(RuntimeError::internal)
+    }
+
+    fn close_terminal(&self, session_id: &str) -> crate::model::Result<serde_json::Value> {
+        let session = self
+            .terminals
+            .lock()
+            .expect("terminal map lock")
+            .remove(session_id)
+            .ok_or_else(|| RuntimeError::BadRequest("terminal session not found".into()))?;
+        let mut writer = session.writer.lock().expect("terminal writer lock");
+        let _ = writer.write_all(b"\x03exit\n");
+        let _ = writer.flush();
+        let mut output = session.output.lock().expect("terminal output lock");
+        output.reader_closed = true;
+        session.output_changed.notify_all();
+        Ok(serde_json::json!({ "closed": true }))
+    }
+
+    fn terminal(&self, session_id: &str) -> crate::model::Result<Arc<TerminalSession>> {
+        self.terminals
+            .lock()
+            .expect("terminal map lock")
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::BadRequest("terminal session not found".into()))
+    }
+
     fn git(&self, arguments: &[&str]) -> crate::model::Result<serde_json::Value> {
         let mut child = Command::new("git")
             .arg("-C")
@@ -303,6 +520,55 @@ impl GuestService {
     }
 }
 
+struct TerminalSession {
+    master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
+    writer: Mutex<Box<dyn Write + Send>>,
+    output: Mutex<TerminalOutput>,
+    output_changed: Condvar,
+}
+
+struct TerminalOutput {
+    chunks: VecDeque<TerminalChunk>,
+    buffered_bytes: usize,
+    next_sequence: u64,
+    reader_closed: bool,
+    exit_code: Option<i32>,
+}
+
+impl Default for TerminalOutput {
+    fn default() -> Self {
+        Self {
+            chunks: VecDeque::new(),
+            buffered_bytes: 0,
+            next_sequence: 1,
+            reader_closed: false,
+            exit_code: None,
+        }
+    }
+}
+
+fn terminal_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/terminals/")?;
+    let (session_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!session_id.is_empty()).then_some((session_id, action))
+}
+
+fn validated_terminal_size(rows: u16, columns: u16) -> crate::model::Result<PtySize> {
+    let rows = if rows == 0 { 24 } else { rows };
+    let cols = if columns == 0 { 80 } else { columns };
+    if rows > 500 || cols > 500 {
+        return Err(RuntimeError::BadRequest(
+            "terminal dimensions exceed 500 cells".into(),
+        ));
+    }
+    Ok(PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    })
+}
+
 fn decode<T: serde::de::DeserializeOwned>(body: &[u8]) -> crate::model::Result<T> {
     serde_json::from_slice(body).map_err(|error| RuntimeError::BadRequest(error.to_string()))
 }
@@ -367,5 +633,41 @@ mod tests {
         let service = GuestService::new(directory.path()).expect("service");
         let response = service.handle("POST", "/v1/files/read", br#"{"path":"../outside"}"#);
         assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn terminal_streams_sequenced_output() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let start = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);
+        assert_eq!(start.status, 200);
+        let start_body: serde_json::Value =
+            serde_json::from_slice(&start.body).expect("terminal start");
+        let session_id = start_body["sessionId"].as_str().expect("session id");
+
+        let input = service.handle(
+            "POST",
+            &format!("/v1/terminals/{session_id}/input"),
+            br#"{"data":"printf 'codev-terminal-ok\\n'\n"}"#,
+        );
+        assert_eq!(input.status, 200);
+        let poll = service.handle(
+            "POST",
+            &format!("/v1/terminals/{session_id}/poll"),
+            br#"{"after":0,"waitMilliseconds":2000}"#,
+        );
+        assert_eq!(poll.status, 200);
+        let result: TerminalPollResponse =
+            serde_json::from_slice(&poll.body).expect("terminal poll");
+        assert!(
+            result
+                .chunks
+                .iter()
+                .any(|chunk| chunk.data.contains("codev-terminal-ok"))
+        );
+        assert!(result.chunks.iter().all(|chunk| chunk.sequence > 0));
+
+        let close = service.handle("DELETE", &format!("/v1/terminals/{session_id}"), b"");
+        assert_eq!(close.status, 200);
     }
 }

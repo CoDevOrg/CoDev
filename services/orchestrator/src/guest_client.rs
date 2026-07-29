@@ -8,7 +8,9 @@ use tokio::{
 };
 
 use crate::model::{
-    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, WriteFileRequest,
+    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, TerminalInputRequest,
+    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+    WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 3 << 20;
@@ -54,6 +56,67 @@ impl GuestClient {
 
     pub async fn exec(&self, request: &ExecRequest) -> Result<ExecResponse> {
         self.request("POST", "/v1/pty/exec", Some(request)).await
+    }
+
+    pub async fn start_terminal(&self, request: &TerminalStartRequest) -> Result<String> {
+        let response: serde_json::Value =
+            self.request("POST", "/v1/terminals", Some(request)).await?;
+        response
+            .get("sessionId")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+            .ok_or_else(|| RuntimeError::GuestUnavailable("missing terminal session ID".into()))
+    }
+
+    pub async fn input_terminal(
+        &self,
+        session_id: &str,
+        request: &TerminalInputRequest,
+    ) -> Result<()> {
+        self.request::<_, serde_json::Value>(
+            "POST",
+            &format!("/v1/terminals/{session_id}/input"),
+            Some(request),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn resize_terminal(
+        &self,
+        session_id: &str,
+        request: &TerminalResizeRequest,
+    ) -> Result<()> {
+        self.request::<_, serde_json::Value>(
+            "POST",
+            &format!("/v1/terminals/{session_id}/resize"),
+            Some(request),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn poll_terminal(
+        &self,
+        session_id: &str,
+        request: &TerminalPollRequest,
+    ) -> Result<TerminalPollResponse> {
+        self.request(
+            "POST",
+            &format!("/v1/terminals/{session_id}/poll"),
+            Some(request),
+        )
+        .await
+    }
+
+    pub async fn close_terminal(&self, session_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/terminals/{session_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub async fn git_status(&self) -> Result<String> {

@@ -1,0 +1,608 @@
+"use client";
+
+import { DiffEditor, Editor, type OnMount } from "@monaco-editor/react";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
+import Image from "next/image";
+import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  languageForPath,
+  type SearchMatch,
+  type WorkspaceFile,
+} from "@/lib/ide";
+
+interface OpenFile {
+  path: string;
+  contents: string;
+  savedContents: string;
+  original: string;
+  revision: string;
+  dirty: boolean;
+}
+
+async function payload<T>(response: Response): Promise<T> {
+  const body = (await response.json().catch(() => null)) as
+    | (T & { error?: string })
+    | null;
+  if (!response.ok) {
+    throw new Error(body?.error ?? `Request failed with HTTP ${response.status}.`);
+  }
+  return body as T;
+}
+
+function fileName(path: string) {
+  return path.split("/").at(-1) ?? path;
+}
+
+export function WorkspaceIde({
+  workspaceId,
+  repository,
+  branch,
+  canTerminal,
+  user,
+}: {
+  workspaceId: string;
+  repository: string;
+  branch: string;
+  canTerminal: boolean;
+  user: { name?: string | null; login?: string; image?: string | null };
+}) {
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [openFile, setOpenFile] = useState<OpenFile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [gitStatus, setGitStatus] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState<SearchMatch[]>([]);
+  const [searching, setSearching] = useState(false);
+  const terminalElement = useRef<HTMLDivElement>(null);
+  const terminal = useRef<Terminal | null>(null);
+  const fitAddon = useRef<FitAddon | null>(null);
+  const terminalSession = useRef<string | null>(null);
+  const terminalInput = useRef("");
+  const terminalInputTimer = useRef<number | null>(null);
+  const terminalSendChain = useRef<Promise<void>>(Promise.resolve());
+
+  const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
+
+  const refreshFiles = useCallback(async () => {
+    const [filePayload, gitPayload] = await Promise.all([
+      fetch(`${apiBase}/files`, { cache: "no-store" }).then((response) =>
+        payload<{ files: WorkspaceFile[] }>(response),
+      ),
+      fetch(`${apiBase}/git?operation=status`, { cache: "no-store" }).then(
+        (response) => payload<{ output: string }>(response),
+      ),
+    ]);
+    setFiles(filePayload.files);
+    setGitStatus(gitPayload.output);
+  }, [apiBase]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshFiles()
+        .catch((caught) =>
+          setError(caught instanceof Error ? caught.message : "Could not load files."),
+        )
+        .finally(() => setLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshFiles]);
+
+  const writeTerminal = useCallback(async (value: string) => {
+    const instance = terminal.current;
+    if (!instance) return;
+    for (let offset = 0; offset < value.length; offset += 16_384) {
+      const chunk = value.slice(offset, offset + 16_384);
+      await new Promise<void>((resolve) => instance.write(chunk, resolve));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canTerminal || !terminalElement.current || terminal.current) return;
+    let stopped = false;
+    let pollTimer: number | null = null;
+    let resizeTimer: number | null = null;
+    let acknowledged = 0;
+    const instance = new Terminal({
+      convertEol: true,
+      cursorBlink: true,
+      cursorStyle: "bar",
+      fontFamily: "var(--font-geist-mono), monospace",
+      fontSize: 12,
+      theme: {
+        background: "#0b0e0d",
+        foreground: "#b9c1be",
+        cursor: "#46e6c1",
+        cyan: "#46e6c1",
+        blue: "#64b7d0",
+        red: "#ef8e8e",
+        green: "#79cea9",
+      },
+    });
+    const fit = new FitAddon();
+    instance.loadAddon(fit);
+    instance.open(terminalElement.current);
+    fit.fit();
+    instance.writeln("\x1b[33mConnecting to the Firecracker PTY…\x1b[0m");
+
+    async function flushInput() {
+      terminalInputTimer.current = null;
+      const sessionId = terminalSession.current;
+      const data = terminalInput.current;
+      terminalInput.current = "";
+      if (!sessionId || !data || stopped) return;
+      terminalSendChain.current = terminalSendChain.current
+        .then(async () => {
+          await fetch(`${apiBase}/terminal`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "input", sessionId, data }),
+          }).then((response) => payload<Record<string, never>>(response));
+        })
+        .catch(async (caught) => {
+          await writeTerminal(
+            `\r\n\x1b[31m${caught instanceof Error ? caught.message : "Terminal input failed."}\x1b[0m\r\n`,
+          );
+        });
+      await terminalSendChain.current;
+    }
+
+    function queueInput(data: string) {
+      terminalInput.current += data;
+      if (terminalInputTimer.current === null) {
+        terminalInputTimer.current = window.setTimeout(() => {
+          void flushInput();
+        }, 20);
+      }
+    }
+
+    async function poll(sessionId: string) {
+      if (stopped) return;
+      try {
+        const response = await fetch(`${apiBase}/terminal`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "poll",
+            sessionId,
+            after: acknowledged,
+          }),
+        }).then((result) =>
+          payload<{
+            result: {
+              chunks: { sequence: number; data: string }[];
+              exited: boolean;
+              exitCode: number | null;
+            };
+          }>(result),
+        );
+        for (const chunk of response.result.chunks) {
+          await writeTerminal(chunk.data);
+          acknowledged = Math.max(acknowledged, chunk.sequence);
+        }
+        if (response.result.exited) {
+          await writeTerminal(
+            `\r\n\x1b[33mPTY exited (${response.result.exitCode ?? "unknown"}). Reload to reconnect.\x1b[0m\r\n`,
+          );
+          return;
+        }
+      } catch (caught) {
+        await writeTerminal(
+          `\r\n\x1b[31m${caught instanceof Error ? caught.message : "Terminal stream interrupted."}\x1b[0m\r\n`,
+        );
+      }
+      if (!stopped) pollTimer = window.setTimeout(() => void poll(sessionId), 0);
+    }
+
+    async function connect() {
+      try {
+        const result = await fetch(`${apiBase}/terminal`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "start",
+            rows: instance.rows,
+            columns: instance.cols,
+          }),
+        }).then((response) => payload<{ sessionId: string }>(response));
+        if (stopped) return;
+        terminalSession.current = result.sessionId;
+        instance.clear();
+        void poll(result.sessionId);
+      } catch (caught) {
+        await writeTerminal(
+          `\x1b[31m${caught instanceof Error ? caught.message : "Could not start terminal."}\x1b[0m\r\n`,
+        );
+      }
+    }
+
+    const dataSubscription = instance.onData(queueInput);
+    const observer = new ResizeObserver(() => {
+      fit.fit();
+      const sessionId = terminalSession.current;
+      if (!sessionId) return;
+      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        void fetch(`${apiBase}/terminal`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "resize",
+            sessionId,
+            rows: instance.rows,
+            columns: instance.cols,
+          }),
+        });
+      }, 100);
+    });
+    observer.observe(terminalElement.current);
+    terminal.current = instance;
+    fitAddon.current = fit;
+    void connect();
+    return () => {
+      stopped = true;
+      observer.disconnect();
+      dataSubscription.dispose();
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
+      if (resizeTimer !== null) window.clearTimeout(resizeTimer);
+      if (terminalInputTimer.current !== null) {
+        window.clearTimeout(terminalInputTimer.current);
+      }
+      const sessionId = terminalSession.current;
+      if (sessionId) {
+        void fetch(
+          `${apiBase}/terminal?sessionId=${encodeURIComponent(sessionId)}`,
+          { method: "DELETE", keepalive: true },
+        );
+      }
+      instance.dispose();
+      terminal.current = null;
+      fitAddon.current = null;
+      terminalSession.current = null;
+    };
+  }, [apiBase, canTerminal, writeTerminal]);
+
+  async function openPath(path: string, line?: number) {
+    setError("");
+    try {
+      const [fileResult, headResult] = await Promise.all([
+        fetch(`${apiBase}/files`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path }),
+        }).then((response) =>
+          payload<{
+            file: { path: string; contents: string; revision: string };
+          }>(response),
+        ),
+        fetch(
+          `${apiBase}/git?operation=show&path=${encodeURIComponent(path)}`,
+          { cache: "no-store" },
+        ).then((response) => payload<{ contents: string }>(response)),
+      ]);
+      setOpenFile({
+        ...fileResult.file,
+        savedContents: fileResult.file.contents,
+        original: headResult.contents,
+        dirty: false,
+      });
+      setDiffOpen(false);
+      if (line) {
+        window.setTimeout(() => {
+          document
+            .querySelector(`[data-line="${line}"]`)
+            ?.scrollIntoView({ block: "center" });
+        }, 0);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open file.");
+    }
+  }
+
+  const save = useCallback(async () => {
+    if (!openFile?.dirty || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await fetch(`${apiBase}/files`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: openFile.path,
+          contents: openFile.contents,
+          expectedRevision: openFile.revision,
+        }),
+      }).then((response) => payload<{ revision: string }>(response));
+      setOpenFile((current) =>
+        current
+          ? {
+              ...current,
+              revision: result.revision,
+              savedContents: current.contents,
+              dirty: false,
+            }
+          : null,
+      );
+      await refreshFiles();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save file.");
+    } finally {
+      setSaving(false);
+    }
+  }, [apiBase, openFile, refreshFiles, saving]);
+
+  const editorMount: OnMount = useCallback(
+    (editor, monaco) => {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        void save();
+      });
+    },
+    [save],
+  );
+
+  useEffect(() => {
+    if (!query.trim()) return;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      void fetch(
+        `${apiBase}/files?query=${encodeURIComponent(query.trim())}`,
+        { cache: "no-store" },
+      )
+        .then((response) => payload<{ matches: SearchMatch[] }>(response))
+        .then((result) => setMatches(result.matches))
+        .catch((caught) =>
+          setError(caught instanceof Error ? caught.message : "Search failed."),
+        )
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [apiBase, query]);
+
+  const modifiedCount = useMemo(
+    () => files.filter((file) => file.status).length,
+    [files],
+  );
+
+  return (
+    <main className="live-ide" aria-label="CoDev browser IDE">
+      <header className="live-ide-topbar">
+        <Link className="workspace-brand" href={`/workspaces/${workspaceId}`}>
+          <span className="wordmark-mark workspace-brand-mark" aria-hidden="true">
+            <span />
+            <span />
+          </span>
+          <strong>CoDev</strong>
+        </Link>
+        <span className="topbar-divider" />
+        <div className="repo-crumbs">
+          <span className="github-glyph">⑂</span>
+          <strong>{repository}</strong>
+          <i>/</i>
+          <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
+        </div>
+        <div className="topbar-center">
+          <span className="branch-icon">⑂</span>
+          <span>{branch}</span>
+        </div>
+        <div className="topbar-actions">
+          <span className="connection-state connected">
+            <i /> Sandbox connected
+          </span>
+          {user.image ? (
+            <Image src={user.image} alt="" width={26} height={26} unoptimized />
+          ) : (
+            <span className="user-avatar">
+              {(user.login ?? user.name ?? "U").slice(0, 1).toUpperCase()}
+            </span>
+          )}
+        </div>
+      </header>
+
+      <div className="live-ide-grid">
+        <aside className="activity-rail" aria-label="IDE views">
+          <button
+            className={`rail-button ${searchOpen ? "" : "active"}`}
+            type="button"
+            aria-label="Explorer"
+            onClick={() => setSearchOpen(false)}
+          >
+            ◫
+          </button>
+          <button
+            className={`rail-button ${searchOpen ? "active" : ""}`}
+            type="button"
+            aria-label="Search"
+            onClick={() => setSearchOpen(true)}
+          >
+            ⌕
+          </button>
+          <span className="rail-spacer" />
+          <Link className="rail-button" href={`/workspaces/${workspaceId}`}>
+            ⚙
+          </Link>
+        </aside>
+
+        <aside className="file-sidebar">
+          <div className="panel-title">
+            <span>{searchOpen ? "Search" : "Explorer"}</span>
+            <button type="button" onClick={() => void refreshFiles()}>
+              ↻
+            </button>
+          </div>
+          {searchOpen ? (
+            <>
+              <div className="ide-search">
+                <input
+                  aria-label="Search workspace"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    if (!event.target.value.trim()) setMatches([]);
+                  }}
+                  placeholder="Search files"
+                  autoFocus
+                />
+              </div>
+              <div className="search-results">
+                {searching ? <p>Searching…</p> : null}
+                {matches.map((match) => (
+                  <button
+                    key={`${match.path}:${match.line}`}
+                    type="button"
+                    onClick={() => void openPath(match.path, match.line)}
+                  >
+                    <strong>{fileName(match.path)}</strong>
+                    <span>{match.path}:{match.line}</span>
+                    <small>{match.preview}</small>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="repository-heading">
+                <span>⌄</span>
+                <strong>{repository.split("/").at(-1)?.toUpperCase()}</strong>
+              </div>
+              <div className="file-tree">
+                {loading ? <p className="ide-empty">Loading files…</p> : null}
+                {files.map((file) => (
+                  <button
+                    className={`file-row ${openFile?.path === file.path ? "active" : ""}`}
+                    key={file.path}
+                    type="button"
+                    style={{ "--file-depth": file.path.split("/").length - 1 } as React.CSSProperties}
+                    onClick={() => void openPath(file.path)}
+                    title={file.path}
+                  >
+                    <span className="file-kind">◇</span>
+                    <span>{fileName(file.path)}</span>
+                    {file.status ? <i>{file.status}</i> : null}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </aside>
+
+        <section className="ide-editor">
+          <div className="editor-tabbar">
+            {openFile ? (
+              <div className="editor-tab active">
+                <span>{openFile.dirty ? "● " : ""}{fileName(openFile.path)}</span>
+              </div>
+            ) : null}
+            <div className="editor-tab-actions">
+              <button
+                type="button"
+                disabled={!openFile}
+                className={diffOpen ? "active" : ""}
+                onClick={() => setDiffOpen((value) => !value)}
+              >
+                Diff
+              </button>
+              <button type="button" disabled={!openFile?.dirty || saving} onClick={() => void save()}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+          {error ? <div className="ide-error">{error}</div> : null}
+          {openFile ? (
+            diffOpen ? (
+              <DiffEditor
+                original={openFile.original}
+                modified={openFile.contents}
+                language={languageForPath(openFile.path)}
+                theme="vs-dark"
+                options={{
+                  automaticLayout: true,
+                  fontFamily: "var(--font-geist-mono)",
+                  fontSize: 13,
+                  minimap: { enabled: false },
+                  renderSideBySide: true,
+                  readOnly: true,
+                }}
+              />
+            ) : (
+              <Editor
+                path={openFile.path}
+                value={openFile.contents}
+                language={languageForPath(openFile.path)}
+                theme="vs-dark"
+                onMount={editorMount}
+                onChange={(contents) =>
+                  setOpenFile((current) =>
+                    current
+                      ? {
+                          ...current,
+                          contents: contents ?? "",
+                          dirty: (contents ?? "") !== current.savedContents,
+                        }
+                      : null,
+                  )
+                }
+                options={{
+                  automaticLayout: true,
+                  fontFamily: "var(--font-geist-mono)",
+                  fontSize: 13,
+                  minimap: { enabled: false },
+                  padding: { top: 14 },
+                  smoothScrolling: true,
+                  tabSize: 2,
+                }}
+              />
+            )
+          ) : (
+            <div className="ide-welcome">
+              <span className="wordmark-mark" aria-hidden="true"><span /><span /></span>
+              <h1>Open a file to start building.</h1>
+              <p>Files are read from the isolated Firecracker workspace. Saves use revision checks to prevent silent overwrites.</p>
+              <kbd>⌘ S</kbd><span>Save active file</span>
+              <kbd>⌘ F</kbd><span>Find in active file</span>
+            </div>
+          )}
+        </section>
+
+        <aside className="ide-changes" aria-label="Git changes">
+          <div className="panel-title">
+            <span>Source control</span>
+            <strong>{modifiedCount}</strong>
+          </div>
+          <pre>{gitStatus || "Working tree clean"}</pre>
+          <div className="phase-note ide-phase-note">
+            <span>Phase 4</span>
+            <p>Live sandbox files, revision-safe saves, Git inspection, and an authenticated command terminal.</p>
+          </div>
+        </aside>
+
+        <section className="terminal-panel live-terminal" aria-label="Sandbox terminal">
+          <div className="terminal-head">
+            <div>
+              <button className="active" type="button">Terminal <span>1</span></button>
+            </div>
+            <div><span>{canTerminal ? "authenticated" : "capability required"}</span></div>
+          </div>
+          {canTerminal ? (
+            <div className="xterm-host" ref={terminalElement} />
+          ) : (
+            <div className="terminal-denied">
+              Ask the workspace owner for terminal capability.
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}

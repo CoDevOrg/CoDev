@@ -7,7 +7,8 @@ use chrono::{DateTime, Utc};
 
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-    WriteFileRequest,
+    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+    TerminalStartRequest, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
@@ -107,6 +108,83 @@ impl Backend {
             Self::Fake(backend) => backend.exec(workspace_id, request),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => backend.exec(workspace_id, request).await,
+        }
+    }
+
+    pub async fn start_terminal(
+        &self,
+        workspace_id: &str,
+        request: TerminalStartRequest,
+    ) -> Result<String> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.start_terminal(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.start_terminal(workspace_id, request).await,
+        }
+    }
+
+    pub async fn input_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalInputRequest,
+    ) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.input_terminal(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .input_terminal(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn resize_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalResizeRequest,
+    ) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.input_terminal(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .resize_terminal(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn poll_terminal(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: TerminalPollRequest,
+    ) -> Result<TerminalPollResponse> {
+        match self {
+            Self::Fake(backend) => backend.poll_terminal(workspace_id, session_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .poll_terminal(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn close_terminal(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.input_terminal(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.close_terminal(workspace_id, session_id).await,
         }
     }
 
@@ -239,6 +317,31 @@ impl FakeBackend {
         Ok(ExecResponse {
             output: String::new(),
             exit_code: 0,
+        })
+    }
+
+    fn start_terminal(&self, workspace_id: &str) -> Result<String> {
+        self.get(workspace_id)?;
+        Ok("term-1-1".into())
+    }
+
+    fn input_terminal(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn poll_terminal(
+        &self,
+        workspace_id: &str,
+        _session_id: &str,
+        request: TerminalPollRequest,
+    ) -> Result<TerminalPollResponse> {
+        self.get(workspace_id)?;
+        Ok(TerminalPollResponse {
+            chunks: Vec::new(),
+            next_sequence: request.after + 1,
+            exited: false,
+            exit_code: None,
         })
     }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -79,7 +80,7 @@ export function WorkspaceRuntime({
         </strong>
         <p>
           {status === "ready"
-            ? `Isolated microVM ${runtime?.sandboxId ?? ""} is running. The browser IDE connects in Phase 4.`
+            ? `Isolated microVM ${runtime?.sandboxId ?? ""} is running. The browser IDE is ready.`
             : status === "provisioning"
               ? "The repository is being prepared inside an isolated Firecracker microVM."
               : status === "failed"
@@ -90,14 +91,22 @@ export function WorkspaceRuntime({
       </div>
       {isOwner ? (
         status === "ready" ? (
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={busy}
-            onClick={() => void mutate("DELETE")}
-          >
-            {busy ? "Stopping…" : "Stop sandbox"}
-          </button>
+          <div className="runtime-actions">
+            <Link
+              className="primary-button"
+              href={`/workspaces/${workspaceId}/ide`}
+            >
+              Open IDE
+            </Link>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={busy}
+              onClick={() => void mutate("DELETE")}
+            >
+              {busy ? "Stopping…" : "Stop sandbox"}
+            </button>
+          </div>
         ) : (
           <button
             className="primary-button"

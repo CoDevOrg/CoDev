@@ -88,4 +88,12 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   await expect(response.json()).resolves.toEqual({
     error: "Authentication required.",
   });
+
+  const files = await request.get(
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/sandbox/files",
+  );
+  expect(files.status()).toBe(401);
+  await expect(files.json()).resolves.toEqual({
+    error: "Authentication required.",
+  });
 });
