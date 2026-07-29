@@ -59,6 +59,7 @@ export function WorkspaceRuntime({
       if (!response.ok) {
         throw new Error(await readError(response));
       }
+      setMessage("");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Request failed.");
