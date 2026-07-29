@@ -14,14 +14,9 @@ readonly base_dir="${runtime_dir}/base"
 # Bare-metal instances can initially inherit the AMI build clock. Wait for the
 # EC2 time source before making signed AWS requests or validating apt metadata.
 timedatectl set-ntp true
-systemctl restart systemd-timesyncd
-for _ in $(seq 1 60); do
-  if [[ "$(timedatectl show --property=NTPSynchronized --value)" == "yes" ]]; then
-    break
-  fi
-  sleep 2
-done
-if [[ "$(timedatectl show --property=NTPSynchronized --value)" != "yes" ]]; then
+systemctl restart chrony
+chronyc -a makestep
+if ! chronyc waitsync 60 1.0 0.0 2; then
   echo "system clock did not synchronize" >&2
   exit 1
 fi
