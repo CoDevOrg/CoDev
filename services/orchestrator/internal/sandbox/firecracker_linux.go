@@ -514,13 +514,16 @@ func runCommand(ctx context.Context, name string, arguments ...string) error {
 func waitForGuest(ctx context.Context, client *guestclient.Client) error {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	var lastErr error
 	for {
 		if err := client.Health(ctx); err == nil {
 			return nil
+		} else {
+			lastErr = err
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("guest daemon did not become ready: %w", ctx.Err())
+			return fmt.Errorf("guest daemon did not become ready: %w (last error: %v)", ctx.Err(), lastErr)
 		case <-ticker.C:
 		}
 	}
