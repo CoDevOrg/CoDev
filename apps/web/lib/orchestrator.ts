@@ -1,13 +1,14 @@
 import "server-only";
 
 import { Sha256 } from "@aws-crypto/sha256-js";
-import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import { readServerEnvironment } from "@codev/config";
 import { sandboxInstanceSchema, type SandboxInstance } from "@codev/contracts";
 import { HttpRequest } from "@smithy/protocol-http";
 import { SignatureV4 } from "@smithy/signature-v4";
-import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 import { z } from "zod";
+
+import { getAwsConfiguration } from "./aws";
+import { ensureHostRunning } from "./host";
 
 const errorSchema = z.object({ error: z.string() });
 
@@ -44,16 +45,9 @@ function getOrchestratorConfiguration() {
   if (!environment.ORCHESTRATOR_URL) {
     throw new Error("ORCHESTRATOR_URL is not configured.");
   }
-  const credentials = environment.AWS_ROLE_ARN
-    ? awsCredentialsProvider({
-        roleArn: environment.AWS_ROLE_ARN,
-        roleSessionName: "codev-vercel",
-      })
-    : defaultProvider();
   return {
-    region: environment.AWS_REGION,
+    ...getAwsConfiguration(),
     endpoint: environment.ORCHESTRATOR_URL,
-    credentials,
   };
 }
 
@@ -118,6 +112,28 @@ export async function checkOrchestratorConnection() {
       service: z.literal("codev-orchestrator"),
     })
     .parse(await response.json());
+}
+
+export async function wakeOrchestrator() {
+  const hostResult = await ensureHostRunning();
+  const deadline = Date.now() + 45_000;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      await checkOrchestratorConnection();
+      return hostResult;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+    }
+  }
+
+  throw new Error(
+    `The Firecracker host started but its orchestrator did not become healthy: ${
+      lastError instanceof Error ? lastError.message : "unknown error"
+    }`,
+  );
 }
 
 export async function provisionSandbox(

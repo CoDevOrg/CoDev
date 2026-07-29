@@ -23,6 +23,10 @@ export const serverEnvironmentSchema = z.object({
   REDIS_URL: optionalUrl,
   AWS_REGION: z.string().min(1).optional(),
   AWS_ROLE_ARN: z.string().startsWith("arn:aws:iam::").optional(),
+  AWS_HOST_INSTANCE_ID: z
+    .string()
+    .regex(/^i-[0-9a-f]+$/)
+    .optional(),
   ORCHESTRATOR_URL: optionalUrl,
 });
 

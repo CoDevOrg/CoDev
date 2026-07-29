@@ -80,6 +80,12 @@ func (backend *FirecrackerBackend) Health(_ context.Context) error {
 	return nil
 }
 
+func (backend *FirecrackerBackend) ActiveCount() int {
+	backend.mu.RLock()
+	defer backend.mu.RUnlock()
+	return len(backend.machines)
+}
+
 func (backend *FirecrackerBackend) Create(
 	ctx context.Context,
 	request CreateRequest,

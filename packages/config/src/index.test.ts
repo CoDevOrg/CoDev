@@ -26,11 +26,13 @@ describe("server environment", () => {
       readServerEnvironment({
         AWS_REGION: "us-east-2",
         AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
+        AWS_HOST_INSTANCE_ID: "i-013491494b11b2ec5",
         ORCHESTRATOR_URL: "https://example.execute-api.us-east-2.amazonaws.com",
       }),
     ).toMatchObject({
       AWS_REGION: "us-east-2",
       AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
+      AWS_HOST_INSTANCE_ID: "i-013491494b11b2ec5",
     });
   });
 

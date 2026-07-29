@@ -1,8 +1,11 @@
 import { apiError, getApiUser } from "@/lib/api";
+import { getHostState } from "@/lib/host";
 import {
   destroySandbox,
   getSandbox,
+  OrchestratorError,
   provisionSandbox,
+  wakeOrchestrator,
 } from "@/lib/orchestrator";
 import {
   beginWorkspaceProvisioning,
@@ -30,8 +33,25 @@ export async function GET(
     if (runtime?.status !== "ready") {
       return Response.json({ runtime });
     }
-    const sandbox = await getSandbox(workspaceId);
-    return Response.json({ runtime, sandbox });
+    const hostState = await getHostState();
+    if (hostState !== "running") {
+      await markWorkspaceStopped(workspaceId);
+      return Response.json({
+        runtime: { ...runtime, status: "stopped", sandboxId: null },
+      });
+    }
+    try {
+      const sandbox = await getSandbox(workspaceId);
+      return Response.json({ runtime, sandbox });
+    } catch (error) {
+      if (error instanceof OrchestratorError && error.status === 404) {
+        await markWorkspaceStopped(workspaceId);
+        return Response.json({
+          runtime: { ...runtime, status: "stopped", sandboxId: null },
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     return apiError(error, 502);
   }
@@ -56,6 +76,7 @@ export async function POST(
 
   try {
     const expiresAt = await beginWorkspaceProvisioning(workspaceId, user.id);
+    await wakeOrchestrator();
     const sandbox = await provisionSandbox({
       workspaceId,
       repositoryUrl: `https://github.com/${workspace.repository}.git`,

@@ -32,7 +32,11 @@ export function WorkspaceRuntime({
 
   async function mutate(method: "POST" | "DELETE") {
     setBusy(true);
-    setMessage("");
+    setMessage(
+      method === "POST"
+        ? "Waking the AWS host and preparing your isolated microVM…"
+        : "",
+    );
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
         method,
@@ -86,7 +90,7 @@ export function WorkspaceRuntime({
             onClick={() => void mutate("POST")}
           >
             {busy || status === "provisioning"
-              ? "Provisioning…"
+              ? "Waking host…"
               : "Start sandbox"}
           </button>
         )

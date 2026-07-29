@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,6 +19,11 @@ func main() {
 	backend, idleTimeout, err := configureBackend()
 	if err != nil {
 		slog.Error("configure sandbox backend", "error", err)
+		os.Exit(1)
+	}
+	hostIdleTimeout, err := hostIdleTimeoutFromEnvironment()
+	if err != nil {
+		slog.Error("configure host idle timeout", "error", err)
 		os.Exit(1)
 	}
 
@@ -38,6 +44,7 @@ func main() {
 	defer stop()
 
 	go reapIdleSandboxes(ctx, backend, idleTimeout)
+	go stopIdleHost(ctx, backend, hostIdleTimeout)
 
 	go func() {
 		slog.Info("orchestrator listening", "address", server.Addr)
@@ -53,6 +60,61 @@ func main() {
 	defer cancel()
 	if err := server.Shutdown(shutdownContext); err != nil {
 		slog.Error("orchestrator shutdown", "error", err)
+	}
+}
+
+func hostIdleTimeoutFromEnvironment() (time.Duration, error) {
+	value := os.Getenv("CODEV_HOST_IDLE_TIMEOUT")
+	if value == "" || value == "0" {
+		return 0, nil
+	}
+	timeout, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, errors.New("CODEV_HOST_IDLE_TIMEOUT must be a duration")
+	}
+	if timeout < 5*time.Minute || timeout > 4*time.Hour {
+		return 0, errors.New("CODEV_HOST_IDLE_TIMEOUT must be between five minutes and four hours")
+	}
+	return timeout, nil
+}
+
+func stopIdleHost(
+	ctx context.Context,
+	backend sandbox.Backend,
+	idleTimeout time.Duration,
+) {
+	if idleTimeout <= 0 {
+		return
+	}
+	controller := idleHostController{timeout: idleTimeout}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if !controller.observe(now, backend.ActiveCount()) {
+				continue
+			}
+			slog.Info("stopping idle Firecracker host", "idle_timeout", idleTimeout)
+			powerOffContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			output, err := exec.CommandContext(powerOffContext, "systemctl", "poweroff").CombinedOutput()
+			cancel()
+			if err != nil {
+				slog.Error(
+					"stop idle Firecracker host",
+					"error",
+					err,
+					"output",
+					string(output),
+				)
+				controller.reset(now)
+				continue
+			}
+			return
+		}
 	}
 }
 

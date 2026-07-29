@@ -140,6 +140,7 @@ export async function beginWorkspaceProvisioning(
       .onConflictDoUpdate({
         target: schema.workspaceRuntimes.workspaceId,
         set: {
+          sandboxId: null,
           status: "provisioning",
           lastError: null,
           stoppedAt: null,
@@ -215,7 +216,12 @@ export async function markWorkspaceStopped(workspaceId: string) {
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaceRuntimes)
-      .set({ status: "stopped", stoppedAt: now, updatedAt: now })
+      .set({
+        sandboxId: null,
+        status: "stopped",
+        stoppedAt: now,
+        updatedAt: now,
+      })
       .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
     await transaction
       .update(schema.workspaces)

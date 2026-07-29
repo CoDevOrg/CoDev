@@ -8,7 +8,8 @@ readonly team_slug="${VERCEL_TEAM_SLUG:-yousef20920s-projects}"
 readonly project_name="${VERCEL_PROJECT_NAME:-codev}"
 readonly instance_type="${CODEV_INSTANCE_TYPE:-a1.metal}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
-readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-080a0958d7399869e}"
+readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-0713df58d0d8b3c1c}"
+readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-40}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
 readonly artifact_bucket="${CODEV_ARTIFACT_BUCKET:-codev-runtime-${account_id}-${region}}"
 readonly artifacts_stack="${CODEV_ARTIFACTS_STACK:-codev-runtime-artifacts}"
@@ -68,6 +69,7 @@ aws cloudformation deploy \
     "InstanceType=${instance_type}" \
     "AvailabilityZone=${availability_zone}" \
     "UbuntuAmi=${host_ami_id}" \
+    "HostVolumeSizeGiB=${host_volume_size_gib}" \
   --no-fail-on-empty-changeset
 
 api_id="$(aws cloudformation describe-stacks \
@@ -124,13 +126,26 @@ ensure_vercel_role() {
     }')"
   invoke_policy="$(jq -cn \
     --arg resource "arn:aws:execute-api:${region}:${account_id}:${api_id}/*/*/*" \
+    --arg instance "arn:aws:ec2:${region}:${account_id}:instance/${instance_id}" \
     '{
       Version: "2012-10-17",
-      Statement: [{
-        Effect: "Allow",
-        Action: "execute-api:Invoke",
-        Resource: $resource
-      }]
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "execute-api:Invoke",
+          Resource: $resource
+        },
+        {
+          Effect: "Allow",
+          Action: "ec2:StartInstances",
+          Resource: $instance
+        },
+        {
+          Effect: "Allow",
+          Action: "ec2:DescribeInstances",
+          Resource: "*"
+        }
+      ]
     }')"
 
   if aws iam get-role --role-name "${role_name}" >/dev/null 2>&1; then

@@ -48,6 +48,7 @@ type ExecResult struct {
 
 type Backend interface {
 	Health(context.Context) error
+	ActiveCount() int
 	Create(context.Context, CreateRequest) (Instance, error)
 	Get(context.Context, string) (Instance, error)
 	Touch(context.Context, string) (Instance, error)
@@ -77,6 +78,12 @@ func NewFakeBackend() *FakeBackend {
 
 func (backend *FakeBackend) Health(_ context.Context) error {
 	return nil
+}
+
+func (backend *FakeBackend) ActiveCount() int {
+	backend.mu.RLock()
+	defer backend.mu.RUnlock()
+	return len(backend.instances)
 }
 
 func (backend *FakeBackend) Create(_ context.Context, request CreateRequest) (Instance, error) {

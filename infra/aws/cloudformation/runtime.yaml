@@ -15,7 +15,12 @@ Parameters:
     Default: us-east-2a
   UbuntuAmi:
     Type: AWS::EC2::Image::Id
-    Default: ami-080a0958d7399869e
+    Default: ami-0713df58d0d8b3c1c
+  HostVolumeSizeGiB:
+    Type: Number
+    Default: 40
+    MinValue: 40
+    MaxValue: 200
 
 Resources:
   RuntimeVpc:
@@ -67,17 +72,10 @@ Resources:
       RouteTableId: !Ref RuntimeRouteTable
       SubnetId: !Ref RuntimeSubnet
 
-  VpcLinkSecurityGroup:
+  ProxyLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: API Gateway VPC link for CoDev
-      SecurityGroupEgress: []
-      VpcId: !Ref RuntimeVpc
-
-  LoadBalancerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Internal NLB for CoDev orchestrator
+      GroupDescription: Private Lambda proxy for the CoDev orchestrator
       SecurityGroupEgress: []
       VpcId: !Ref RuntimeVpc
 
@@ -90,41 +88,23 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref RuntimeVpc
 
-  VpcLinkToLoadBalancerEgress:
+  ProxyLambdaToHostEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      GroupId: !GetAtt VpcLinkSecurityGroup.GroupId
-      IpProtocol: tcp
-      FromPort: 8080
-      ToPort: 8080
-      DestinationSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
-
-  LoadBalancerFromVpcLinkIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
-      IpProtocol: tcp
-      FromPort: 8080
-      ToPort: 8080
-      SourceSecurityGroupId: !GetAtt VpcLinkSecurityGroup.GroupId
-
-  LoadBalancerToHostEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      GroupId: !GetAtt ProxyLambdaSecurityGroup.GroupId
       IpProtocol: tcp
       FromPort: 8080
       ToPort: 8080
       DestinationSecurityGroupId: !GetAtt HostSecurityGroup.GroupId
 
-  HostFromLoadBalancerIngress:
+  HostFromProxyLambdaIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !GetAtt HostSecurityGroup.GroupId
       IpProtocol: tcp
       FromPort: 8080
       ToPort: 8080
-      SourceSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      SourceSecurityGroupId: !GetAtt ProxyLambdaSecurityGroup.GroupId
 
   HostRole:
     Type: AWS::IAM::Role
@@ -170,6 +150,7 @@ Resources:
       AvailabilityZone: !Ref AvailabilityZone
       ImageId: !Ref UbuntuAmi
       InstanceType: !Ref InstanceType
+      InstanceInitiatedShutdownBehavior: stop
       IamInstanceProfile: !Ref HostInstanceProfile
       MetadataOptions:
         HttpEndpoint: enabled
@@ -189,7 +170,7 @@ Resources:
           Ebs:
             DeleteOnTermination: true
             Encrypted: true
-            VolumeSize: 200
+            VolumeSize: !Ref HostVolumeSizeGiB
             VolumeType: gp3
             Iops: 3000
       UserData:
@@ -220,58 +201,105 @@ Resources:
         - Key: ManagedBy
           Value: CloudFormation
 
-  OrchestratorTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  RuntimeProxyRole:
+    Type: AWS::IAM::Role
     Properties:
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 15
-      HealthCheckPath: /healthz
-      HealthCheckPort: traffic-port
-      HealthCheckProtocol: HTTP
-      HealthyThresholdCount: 2
-      Port: 8080
-      Protocol: TCP
-      TargetType: instance
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: "10"
-      Targets:
-        - Id: !Ref FirecrackerHost
-          Port: 8080
-      UnhealthyThresholdCount: 3
-      VpcId: !Ref RuntimeVpc
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
 
-  InternalLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  RuntimeProxyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - ProxyLambdaToHostEgress
+      - HostFromProxyLambdaIngress
     Properties:
-      Scheme: internal
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Subnets:
-        - !Ref RuntimeSubnet
-      Type: network
-      Tags:
-        - Key: Project
-          Value: CoDev
+      Architectures:
+        - arm64
+      Code:
+        ZipFile: |
+          import base64
+          import json
+          import os
+          import urllib.error
+          import urllib.request
 
-  OrchestratorListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref OrchestratorTargetGroup
-      LoadBalancerArn: !Ref InternalLoadBalancer
-      Port: 8080
-      Protocol: TCP
+          ORIGIN = os.environ["ORCHESTRATOR_ORIGIN"].rstrip("/")
+          HOP_BY_HOP = {
+              "authorization",
+              "connection",
+              "content-length",
+              "host",
+              "transfer-encoding",
+              "x-amz-content-sha256",
+              "x-amz-date",
+              "x-amz-security-token",
+          }
 
-  ApiVpcLink:
-    Type: AWS::ApiGatewayV2::VpcLink
-    Properties:
-      Name: codev-runtime
-      SecurityGroupIds:
-        - !Ref VpcLinkSecurityGroup
-      SubnetIds:
-        - !Ref RuntimeSubnet
+          def handler(event, _context):
+              path = event.get("rawPath") or "/"
+              query = event.get("rawQueryString") or ""
+              url = ORIGIN + path + (("?" + query) if query else "")
+              headers = {
+                  key: value
+                  for key, value in (event.get("headers") or {}).items()
+                  if key.lower() not in HOP_BY_HOP
+              }
+              body = event.get("body")
+              if body is not None:
+                  body = (
+                      base64.b64decode(body)
+                      if event.get("isBase64Encoded")
+                      else body.encode("utf-8")
+                  )
+              request = urllib.request.Request(
+                  url,
+                  data=body,
+                  headers=headers,
+                  method=event["requestContext"]["http"]["method"],
+              )
+              try:
+                  response = urllib.request.urlopen(request, timeout=28)
+              except urllib.error.HTTPError as error:
+                  response = error
+              except Exception as error:
+                  return {
+                      "statusCode": 502,
+                      "headers": {"content-type": "application/json"},
+                      "body": json.dumps({"error": "Firecracker host unavailable"}),
+                  }
+
+              response_body = response.read()
+              response_headers = {
+                  key: value
+                  for key, value in response.headers.items()
+                  if key.lower() not in HOP_BY_HOP
+              }
+              return {
+                  "statusCode": response.status,
+                  "headers": response_headers,
+                  "body": base64.b64encode(response_body).decode("ascii"),
+                  "isBase64Encoded": True,
+              }
+      Environment:
+        Variables:
+          ORCHESTRATOR_ORIGIN: http://10.42.0.12:8080
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt RuntimeProxyRole.Arn
+      Runtime: python3.13
+      Timeout: 29
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt ProxyLambdaSecurityGroup.GroupId
+        SubnetIds:
+          - !Ref RuntimeSubnet
 
   RuntimeApi:
     Type: AWS::ApiGatewayV2::Api
@@ -285,12 +313,18 @@ Resources:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref RuntimeApi
-      ConnectionId: !Ref ApiVpcLink
-      ConnectionType: VPC_LINK
-      IntegrationMethod: ANY
-      IntegrationType: HTTP_PROXY
-      IntegrationUri: !Ref OrchestratorListener
-      PayloadFormatVersion: "1.0"
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt RuntimeProxyFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 30000
+
+  RuntimeProxyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RuntimeProxyFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RuntimeApi}/*/*
 
   RuntimeRoute:
     Type: AWS::ApiGatewayV2::Route
