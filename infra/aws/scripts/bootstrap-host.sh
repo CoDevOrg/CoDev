@@ -160,5 +160,6 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now codev-orchestrator.service
+systemctl enable codev-orchestrator.service
+systemctl restart codev-orchestrator.service
 systemctl --no-pager --full status codev-orchestrator.service
