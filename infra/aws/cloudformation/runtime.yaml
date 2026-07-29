@@ -182,7 +182,7 @@ Resources:
           DeviceIndex: "0"
           GroupSet:
             - !Ref HostSecurityGroup
-          PrivateIpAddress: 10.42.0.11
+          PrivateIpAddress: 10.42.0.12
           SubnetId: !Ref RuntimeSubnet
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
@@ -203,7 +203,10 @@ Resources:
           systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y awscli ca-certificates curl
+          apt-get install -y ca-certificates curl unzip
+          curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          /tmp/aws/install
           until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
             sleep 10
           done
