@@ -52,7 +52,7 @@ Instead of developers working in isolation on local setups (Cursor, Claude, Code
 | **Terminal Emulator**    | **xterm.js**                      | Streams raw PTY terminal output to the browser in real time.                                |
 | **Multiplayer Sync**     | **Yjs (CRDTs) + WebSockets**      | Real-time document conflict resolution, multiplayer cursors, and presence.                  |
 | **MicroVM Engine**       | **Firecracker / Apple Container** | Ephemeral, isolated, sub-second runtime sandboxes hosted in the cloud.                      |
-| **Orchestration**        | **Go / Rust**                     | High-performance daemon managing VM pooling, state sync, and container lifecycles.          |
+| **Orchestration**        | **Rust**                          | Memory-safe daemon managing VM pooling, state sync, and sandbox lifecycles.                 |
 | **AI Gateway Service**   | **Node.js / Python Middleware**   | Routes user/agent prompts, handles BYO-API key authentication, and streams model responses. |
 | **Cloud Infrastructure** | **AWS (EC2/EKS) & Cloudflare**    | Edge routing, global WebSocket connections, and microVM host cluster hosting.               |
 

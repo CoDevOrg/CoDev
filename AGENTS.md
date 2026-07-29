@@ -14,7 +14,7 @@ CoDev is a hosted website deployed on Vercel. Do not describe it as a downloadab
 - Unit tests: `pnpm test`
 - Production build: `pnpm build`
 - Browser tests: `pnpm test:e2e`
-- Go checks: `pnpm go:check`
+- Rust checks: `pnpm rust:check`
 
 ## Container Policy
 

@@ -10,3 +10,4 @@ test-results/
 .vercel/
 .DS_Store
 services/orchestrator/bin/
+services/orchestrator/target/

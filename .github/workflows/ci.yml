@@ -25,9 +25,7 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.6"
+      - run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
@@ -35,4 +33,4 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - run: pnpm go:check
+      - run: pnpm rust:check

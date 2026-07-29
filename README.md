@@ -25,13 +25,13 @@ apps/web/               Next.js website and Vercel Functions
 packages/contracts/     Shared Zod domain and event contracts
 packages/config/        Server-only environment validation
 packages/db/            Drizzle schema and PostgreSQL migrations
-services/orchestrator/  Go sandbox-service boundary
+services/orchestrator/  Rust sandbox-service boundary
 infra/aws/              AWS Firecracker infrastructure and deployment
 ```
 
 ## Development
 
-Node.js 24+, pnpm 11.5.0, and Go 1.25 are required.
+Node.js 24+, pnpm 11.5.0, and Rust 1.97 are required.
 
 ```bash
 pnpm install
@@ -47,7 +47,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
-pnpm go:check
+pnpm rust:check
 git diff --check
 ```
 

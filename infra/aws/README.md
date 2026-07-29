@@ -41,7 +41,7 @@ Defaults:
 - Hard workspace expiry: 4 hours
 - Host shutdown: 15 minutes after the final microVM stops
 
-The script builds both Go binaries for Linux ARM64, uploads an immutable release
+The script cross-compiles both statically linked Rust binaries for Linux ARM64, uploads an immutable release
 to private S3, deploys the CloudFormation stacks, and creates or updates the
 Vercel OIDC roles. It prints the API URL and role ARNs needed by Vercel.
 

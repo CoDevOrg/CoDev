@@ -24,16 +24,13 @@ trap 'rm -rf "${build_dir}"' EXIT
 echo "Building CoDev runtime ${release_version} for linux/arm64"
 (
   cd "${repo_root}/services/orchestrator"
-  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-    -trimpath \
-    -ldflags="-s -w" \
-    -o "${build_dir}/codev-orchestrator-linux-arm64" \
-    ./cmd/orchestrator
-  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-    -trimpath \
-    -ldflags="-s -w" \
-    -o "${build_dir}/codev-guestd-linux-arm64" \
-    ./cmd/guestd
+  cargo zigbuild --locked --release --target aarch64-unknown-linux-musl
+  cp \
+    target/aarch64-unknown-linux-musl/release/orchestrator \
+    "${build_dir}/codev-orchestrator-linux-arm64"
+  cp \
+    target/aarch64-unknown-linux-musl/release/guestd \
+    "${build_dir}/codev-guestd-linux-arm64"
 )
 
 aws cloudformation deploy \

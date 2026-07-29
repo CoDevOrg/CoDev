@@ -12,7 +12,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 - **Realtime:** Vercel Fluid Compute WebSockets with reconnect/resubscribe behavior and external durable state.
 - **Persistence:** Managed PostgreSQL for product data and Redis for realtime coordination.
 - **Sandboxes:** Apple Container for local development; Firecracker microVMs on AWS bare metal for hosted workspaces.
-- **Orchestration:** Go host orchestrator and guest daemon.
+- **Orchestration:** Rust host orchestrator and guest daemon.
 - **Agents:** OpenAI Responses API behind an `AgentProvider` contract, later executed as durable Vercel workflows.
 - **Source control:** GitHub authorization integration for identity, repository access, and branch publication.
 - **Local containers:** Apple Container only. Docker and Docker Compose are not used.
@@ -32,7 +32,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 
 ## Phase 1: Foundation and Live Website
 
-Create the Vercel-hosted website foundation, shared contracts, persistence schema, Go service boundary, accessible IDE shell, tests, and deployment configuration.
+Create the Vercel-hosted website foundation, shared contracts, persistence schema, Rust service boundary, accessible IDE shell, tests, and deployment configuration.
 
 ### Acceptance Criteria
 
@@ -41,7 +41,7 @@ Create the Vercel-hosted website foundation, shared contracts, persistence schem
 - Shared contracts cover the v1 workspace and agent domain.
 - PostgreSQL migrations represent the v1 data model.
 - Web and orchestrator health endpoints return stable `status: "ok"` payloads.
-- Formatting, linting, type checking, unit tests, browser smoke tests, Go tests, and production builds pass.
+- Formatting, linting, type checking, unit tests, browser smoke tests, Rust checks, and production builds pass.
 - A verified Vercel deployment is reachable.
 
 ### Phase 1 Delivery
@@ -78,7 +78,7 @@ Implement GitHub sign-in and installation discovery, public-repository selection
 
 ## Phase 3: Firecracker Runtime
 
-Provision jailed Firecracker microVMs on one AWS bare-metal host, clone repositories, expose authenticated file/PTY/Git operations through the Go guest daemon, enforce quotas, and destroy idle workspace disks.
+Provision jailed Firecracker microVMs on one AWS bare-metal host, clone repositories, expose authenticated file/PTY/Git operations through the Rust guest daemon, enforce quotas, and destroy idle workspace disks.
 
 ### Acceptance Criteria
 

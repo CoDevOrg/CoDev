@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
-    "go:check": "test -z \"$(gofmt -l services/orchestrator)\" && cd services/orchestrator && go vet ./... && go test ./..."
+    "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
