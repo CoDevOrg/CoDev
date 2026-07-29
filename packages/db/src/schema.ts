@@ -273,7 +273,12 @@ export const agentSessions = pgTable(
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
     issueNumber: integer("issue_number"),
+    name: text("name").notNull().default("Agent"),
+    model: text("model").notNull().default("gpt-5.6-sol"),
     status: agentSessionStatus("status").default("idle").notNull(),
+    workflowRunId: text("workflow_run_id"),
+    lastError: text("last_error"),
+    interruptedAt: timestamp("interrupted_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -301,10 +306,44 @@ export const agentTurns = pgTable(
     prompt: text("prompt").notNull(),
     status: agentTurnStatus("status").default("queued").notNull(),
     workflowRunId: text("workflow_run_id"),
+    responseId: text("response_id"),
+    output: text("output"),
+    lastError: text("last_error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     index("agent_turns_session_created_idx").on(
+      table.sessionId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const agentEvents = pgTable(
+  "agent_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: uuid("session_id")
+      .references(() => agentSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    turnId: uuid("turn_id")
+      .references(() => agentTurns.id, { onDelete: "cascade" })
+      .notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_events_idempotency_idx").on(table.idempotencyKey),
+    index("agent_events_session_created_idx").on(
       table.sessionId,
       table.createdAt,
     ),

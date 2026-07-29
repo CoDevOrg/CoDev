@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WriteFileRequest,
+    TerminalStartRequest, WorktreeCreateRequest, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
@@ -83,11 +83,16 @@ impl Backend {
         }
     }
 
-    pub async fn read_file(&self, workspace_id: &str, path: String) -> Result<FileResponse> {
+    pub async fn read_file(
+        &self,
+        workspace_id: &str,
+        path: String,
+        worktree_id: Option<&str>,
+    ) -> Result<FileResponse> {
         match self {
-            Self::Fake(backend) => backend.read_file(workspace_id, path),
+            Self::Fake(backend) => backend.read_file(workspace_id, path, worktree_id),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.read_file(workspace_id, path).await,
+            Self::Firecracker(backend) => backend.read_file(workspace_id, path, worktree_id).await,
         }
     }
 
@@ -188,19 +193,43 @@ impl Backend {
         }
     }
 
-    pub async fn git_status(&self, workspace_id: &str) -> Result<String> {
+    pub async fn create_worktree(
+        &self,
+        workspace_id: &str,
+        request: WorktreeCreateRequest,
+    ) -> Result<()> {
         match self {
-            Self::Fake(backend) => backend.git_status(workspace_id),
+            Self::Fake(backend) => backend.create_worktree(workspace_id, request),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.git_status(workspace_id).await,
+            Self::Firecracker(backend) => backend.create_worktree(workspace_id, request).await,
         }
     }
 
-    pub async fn git_diff(&self, workspace_id: &str) -> Result<String> {
+    pub async fn delete_worktree(&self, workspace_id: &str, worktree_id: &str) -> Result<()> {
         match self {
-            Self::Fake(backend) => backend.git_diff(workspace_id),
+            Self::Fake(backend) => backend.delete_worktree(workspace_id, worktree_id),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.git_diff(workspace_id).await,
+            Self::Firecracker(backend) => backend.delete_worktree(workspace_id, worktree_id).await,
+        }
+    }
+
+    pub async fn git_status(
+        &self,
+        workspace_id: &str,
+        worktree_id: Option<&str>,
+    ) -> Result<String> {
+        match self {
+            Self::Fake(backend) => backend.git_status(workspace_id, worktree_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.git_status(workspace_id, worktree_id).await,
+        }
+    }
+
+    pub async fn git_diff(&self, workspace_id: &str, worktree_id: Option<&str>) -> Result<String> {
+        match self {
+            Self::Fake(backend) => backend.git_diff(workspace_id, worktree_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.git_diff(workspace_id, worktree_id).await,
         }
     }
 }
@@ -298,7 +327,12 @@ impl FakeBackend {
         Ok(ids)
     }
 
-    fn read_file(&self, workspace_id: &str, path: String) -> Result<FileResponse> {
+    fn read_file(
+        &self,
+        workspace_id: &str,
+        path: String,
+        _worktree_id: Option<&str>,
+    ) -> Result<FileResponse> {
         self.get(workspace_id)?;
         Ok(FileResponse {
             path,
@@ -345,12 +379,22 @@ impl FakeBackend {
         })
     }
 
-    fn git_status(&self, workspace_id: &str) -> Result<String> {
+    fn git_status(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {
         self.get(workspace_id)?;
         Ok("## main".into())
     }
 
-    fn git_diff(&self, workspace_id: &str) -> Result<String> {
+    fn create_worktree(&self, workspace_id: &str, _request: WorktreeCreateRequest) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn delete_worktree(&self, workspace_id: &str, _worktree_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn git_diff(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {
         self.get(workspace_id)?;
         Ok(String::new())
     }

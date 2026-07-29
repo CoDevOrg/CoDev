@@ -2758,6 +2758,123 @@ footer > span {
     / 48px 260px minmax(420px, 1fr) 300px;
 }
 
+.agent-runtime-panel {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.agent-compose,
+.agent-follow-up {
+  display: flex;
+  margin: 12px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-compose label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #79827f;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.agent-compose input,
+.agent-compose textarea,
+.agent-follow-up textarea {
+  width: 100%;
+  padding: 8px;
+  resize: vertical;
+  border: 1px solid #303633;
+  border-radius: 4px;
+  outline: none;
+  background: #0d100f;
+  color: #d7dddb;
+  font:
+    10px/1.45 var(--font-geist-mono),
+    monospace;
+}
+
+.agent-compose input:focus,
+.agent-compose textarea:focus,
+.agent-follow-up textarea:focus {
+  border-color: rgba(70, 230, 193, 0.65);
+  box-shadow: 0 0 0 2px rgba(70, 230, 193, 0.08);
+}
+
+.agent-compose > button,
+.agent-follow-up button {
+  padding: 7px 9px;
+  border: 1px solid rgba(70, 230, 193, 0.32);
+  border-radius: 4px;
+  background: rgba(70, 230, 193, 0.1);
+  color: var(--teal);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.agent-compose button:disabled,
+.agent-follow-up button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.agent-event-stream {
+  max-height: 230px;
+  overflow-y: auto;
+  border: 1px solid #242927;
+  border-radius: 4px;
+  background: #0f1211;
+}
+
+.agent-event-stream > div {
+  padding: 7px 8px;
+  border-bottom: 1px solid #202422;
+}
+
+.agent-event-stream > div:last-child {
+  border-bottom: 0;
+}
+
+.agent-event-stream small {
+  color: #66706c;
+  font:
+    7px var(--font-geist-mono),
+    monospace;
+  text-transform: uppercase;
+}
+
+.agent-event-stream p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #a9b2ae;
+  font:
+    9px/1.45 var(--font-geist-mono),
+    monospace;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.agent-follow-up {
+  margin: 10px 0 0;
+}
+
+.agent-follow-up > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.agent-follow-up .agent-interrupt {
+  border-color: rgba(239, 142, 142, 0.28);
+  background: rgba(239, 142, 142, 0.07);
+  color: #ef9b9b;
+}
+
 .live-ide-grid .activity-rail {
   grid-area: rail;
 }

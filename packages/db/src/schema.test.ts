@@ -2,6 +2,7 @@ import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
+  agentEvents,
   agentSessions,
   coordinationMessages,
   pathClaims,
@@ -15,6 +16,9 @@ describe("database schema", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
     expect(getTableName(workspaceMembers)).toBe("workspace_members");
     expect(getTableName(agentSessions)).toBe("agent_sessions");
+    expect(getTableName(agentEvents)).toBe("agent_events");
+    expect(agentSessions.workflowRunId.name).toBe("workflow_run_id");
+    expect(agentEvents.idempotencyKey.name).toBe("idempotency_key");
     expect(getTableName(pathClaims)).toBe("path_claims");
     expect(getTableName(coordinationMessages)).toBe("coordination_messages");
     expect(getTableName(yjsSnapshots)).toBe("yjs_snapshots");

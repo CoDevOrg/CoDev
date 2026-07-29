@@ -22,7 +22,7 @@ use crate::{
     model::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
         TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-        TerminalStartRequest, WriteFileRequest,
+        TerminalStartRequest, WorktreeCreateRequest, WriteFileRequest,
     },
 };
 
@@ -234,9 +234,14 @@ impl FirecrackerBackend {
         Ok(destroyed)
     }
 
-    pub async fn read_file(&self, workspace_id: &str, path: String) -> Result<FileResponse> {
+    pub async fn read_file(
+        &self,
+        workspace_id: &str,
+        path: String,
+        worktree_id: Option<&str>,
+    ) -> Result<FileResponse> {
         let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.read_file(path).await?;
+        let result = machine.guest.read_file(path, worktree_id).await?;
         self.mark_activity(&machine);
         Ok(result)
     }
@@ -313,16 +318,38 @@ impl FirecrackerBackend {
         Ok(())
     }
 
-    pub async fn git_status(&self, workspace_id: &str) -> Result<String> {
+    pub async fn create_worktree(
+        &self,
+        workspace_id: &str,
+        request: WorktreeCreateRequest,
+    ) -> Result<()> {
         let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.git_status().await?;
+        machine.guest.create_worktree(&request).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn delete_worktree(&self, workspace_id: &str, worktree_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.delete_worktree(worktree_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn git_status(
+        &self,
+        workspace_id: &str,
+        worktree_id: Option<&str>,
+    ) -> Result<String> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.git_status(worktree_id).await?;
         self.mark_activity(&machine);
         Ok(result)
     }
 
-    pub async fn git_diff(&self, workspace_id: &str) -> Result<String> {
+    pub async fn git_diff(&self, workspace_id: &str, worktree_id: Option<&str>) -> Result<String> {
         let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.git_diff().await?;
+        let result = machine.guest.git_diff(worktree_id).await?;
         self.mark_activity(&machine);
         Ok(result)
     }

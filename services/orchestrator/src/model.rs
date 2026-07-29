@@ -90,12 +90,16 @@ pub struct WriteFileRequest {
     pub path: String,
     pub contents: String,
     pub expected_revision: String,
+    #[serde(default)]
+    pub worktree_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecRequest {
     pub command: Vec<String>,
+    #[serde(default)]
+    pub worktree_id: Option<String>,
     #[serde(default)]
     pub working_dir: String,
     #[serde(default)]
@@ -104,6 +108,13 @@ pub struct ExecRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeCreateRequest {
+    pub worktree_id: String,
+    pub head_sha: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

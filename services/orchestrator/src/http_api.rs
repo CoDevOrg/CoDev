@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, Path, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderValue, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -17,7 +17,8 @@ use crate::{
     backend::SharedBackend,
     model::{
         CreateRequest, ExecRequest, Result, RuntimeError, TerminalInputRequest,
-        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest, WriteFileRequest,
+        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest, WorktreeCreateRequest,
+        WriteFileRequest,
     },
 };
 
@@ -26,6 +27,14 @@ const MAX_REQUEST_BYTES: usize = 1 << 20;
 #[derive(Deserialize)]
 struct FileRequest {
     path: String,
+    #[serde(default, rename = "worktreeId")]
+    worktree_id: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeQuery {
+    worktree_id: Option<String>,
 }
 
 pub fn router(backend: SharedBackend) -> Router {
@@ -40,6 +49,14 @@ pub fn router(backend: SharedBackend) -> Router {
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees",
+            post(create_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}",
+            delete(delete_worktree),
+        )
         .route(
             "/v1/sandboxes/{workspace_id}/terminals",
             post(start_terminal),
@@ -128,7 +145,10 @@ async fn read_file(
     Json(request): Json<FileRequest>,
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
-    let file = backend.read_file(&workspace_id, request.path).await?;
+    validate_optional_worktree_id(request.worktree_id.as_deref())?;
+    let file = backend
+        .read_file(&workspace_id, request.path, request.worktree_id.as_deref())
+        .await?;
     Ok(Json(serde_json::json!({ "file": file })))
 }
 
@@ -138,6 +158,7 @@ async fn write_file(
     Json(request): Json<WriteFileRequest>,
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(request.worktree_id.as_deref())?;
     let revision = backend.write_file(&workspace_id, request).await?;
     Ok(Json(serde_json::json!({ "revision": revision })))
 }
@@ -148,6 +169,7 @@ async fn exec_pty(
     Json(request): Json<ExecRequest>,
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(request.worktree_id.as_deref())?;
     if request.command.is_empty() || request.command.len() > 32 {
         return Err(RuntimeError::BadRequest(
             "command must contain between 1 and 32 arguments".into(),
@@ -160,6 +182,33 @@ async fn exec_pty(
     }
     let result = backend.exec(&workspace_id, request).await?;
     Ok(Json(serde_json::json!({ "result": result })))
+}
+
+async fn create_worktree(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<WorktreeCreateRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&request.worktree_id)?;
+    if !commit_sha_pattern().is_match(&request.head_sha) {
+        return Err(RuntimeError::BadRequest("invalid worktree head SHA".into()));
+    }
+    backend.create_worktree(&workspace_id, request).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "created": true })),
+    ))
+}
+
+async fn delete_worktree(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, worktree_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&worktree_id)?;
+    backend.delete_worktree(&workspace_id, &worktree_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn start_terminal(
@@ -227,18 +276,26 @@ async fn close_terminal(
 async fn git_status(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
+    Query(query): Query<WorktreeQuery>,
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
-    let output = backend.git_status(&workspace_id).await?;
+    validate_optional_worktree_id(query.worktree_id.as_deref())?;
+    let output = backend
+        .git_status(&workspace_id, query.worktree_id.as_deref())
+        .await?;
     Ok(Json(serde_json::json!({ "output": output })))
 }
 
 async fn git_diff(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
+    Query(query): Query<WorktreeQuery>,
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
-    let output = backend.git_diff(&workspace_id).await?;
+    validate_optional_worktree_id(query.worktree_id.as_deref())?;
+    let output = backend
+        .git_diff(&workspace_id, query.worktree_id.as_deref())
+        .await?;
     Ok(Json(serde_json::json!({ "output": output })))
 }
 
@@ -288,6 +345,18 @@ fn validate_terminal_id(session_id: &str) -> Result<()> {
     }
 }
 
+fn validate_optional_worktree_id(worktree_id: Option<&str>) -> Result<()> {
+    worktree_id.map_or(Ok(()), validate_worktree_id)
+}
+
+fn validate_worktree_id(worktree_id: &str) -> Result<()> {
+    if worktree_id_pattern().is_match(worktree_id) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest("invalid worktree ID".into()))
+    }
+}
+
 fn workspace_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
@@ -304,6 +373,13 @@ fn commit_sha_pattern() -> &'static Regex {
 fn terminal_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"^term-[0-9]+-[0-9]+$").expect("terminal regex"))
+}
+
+fn worktree_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$").expect("worktree regex")
+    })
 }
 
 #[cfg(test)]
@@ -357,5 +433,38 @@ mod tests {
         assert_eq!(create.status(), StatusCode::CREATED);
         let body = to_bytes(create.into_body(), 1 << 20).await.expect("body");
         assert!(String::from_utf8_lossy(&body).contains("sandbox-e010bd2c"));
+
+        let worktree = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "worktreeId": "agent-one",
+                            "headSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(worktree.status(), StatusCode::CREATED);
+
+        let invalid_worktree = app
+            .oneshot(
+                Request::builder()
+                    .uri(
+                        "/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/git/status?worktreeId=../escape",
+                    )
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(invalid_worktree.status(), StatusCode::BAD_REQUEST);
     }
 }

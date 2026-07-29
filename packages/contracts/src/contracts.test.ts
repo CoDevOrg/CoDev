@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  agentActivityEventSchema,
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
   FakeSandboxBackend,
@@ -56,6 +57,20 @@ describe("workspace contracts", () => {
         data: { status: "invented" },
       }),
     ).toThrow();
+  });
+
+  it("accepts durable agent tool activity", () => {
+    expect(
+      agentActivityEventSchema.parse({
+        id,
+        workspaceId: id,
+        sessionId: id,
+        turnId: id,
+        type: "tool.called",
+        payload: { name: "read_file", arguments: '{"path":"README.md"}' },
+        createdAt: "2026-07-29T20:00:00.000Z",
+      }).type,
+    ).toBe("tool.called");
   });
 });
 

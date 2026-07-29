@@ -34,6 +34,7 @@ export interface SandboxExecInput {
   timeoutSeconds?: number | undefined;
   rows?: number | undefined;
   columns?: number | undefined;
+  worktreeId?: string | undefined;
 }
 
 const terminalPollSchema = z.object({
@@ -180,11 +181,36 @@ export async function destroySandbox(workspaceId: string) {
   }
 }
 
-export async function readSandboxFile(workspaceId: string, path: string) {
+export async function createSandboxWorktree(
+  workspaceId: string,
+  worktreeId: string,
+  headSha: string,
+) {
+  await orchestratorRequest("POST", `/v1/sandboxes/${workspaceId}/worktrees`, {
+    worktreeId,
+    headSha,
+  });
+}
+
+export async function deleteSandboxWorktree(
+  workspaceId: string,
+  worktreeId: string,
+) {
+  await orchestratorRequest(
+    "DELETE",
+    `/v1/sandboxes/${workspaceId}/worktrees/${worktreeId}`,
+  );
+}
+
+export async function readSandboxFile(
+  workspaceId: string,
+  path: string,
+  worktreeId?: string,
+) {
   const response = await orchestratorRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/files/read`,
-    { path },
+    { path, worktreeId },
   );
   return z
     .object({
@@ -199,7 +225,12 @@ export async function readSandboxFile(workspaceId: string, path: string) {
 
 export async function writeSandboxFile(
   workspaceId: string,
-  input: { path: string; contents: string; expectedRevision: string },
+  input: {
+    path: string;
+    contents: string;
+    expectedRevision: string;
+    worktreeId?: string;
+  },
 ) {
   const response = await orchestratorRequest(
     "POST",
@@ -239,10 +270,14 @@ export async function executeInSandbox(
 export async function getSandboxGitOutput(
   workspaceId: string,
   operation: "status" | "diff",
+  worktreeId?: string,
 ) {
+  const query = worktreeId
+    ? `?worktreeId=${encodeURIComponent(worktreeId)}`
+    : "";
   const response = await orchestratorRequest(
     "GET",
-    `/v1/sandboxes/${workspaceId}/git/${operation}`,
+    `/v1/sandboxes/${workspaceId}/git/${operation}${query}`,
   );
   return z.object({ output: z.string() }).parse(await response.json()).output;
 }

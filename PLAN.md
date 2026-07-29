@@ -26,7 +26,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 3     | Firecracker Runtime               | Complete    |
 | 4     | Browser IDE and Terminal          | Complete    |
 | 5     | Realtime Collaboration            | Complete    |
-| 6     | Parallel Agent Runtime            | Not started |
+| 6     | Parallel Agent Runtime            | Complete    |
 | 7     | Collision Coordination and Review | Not started |
 | 8     | GitHub Publication and Hardening  | Not started |
 
@@ -151,6 +151,26 @@ Add Yjs editing, cursors, active-file presence, Redis room coordination, durable
 ## Phase 6: Parallel Agent Runtime
 
 Run up to two durable agent sessions in separate Git worktrees. Stream tool calls and output, allow queued follow-ups and interruption, and use the prompt author's encrypted OpenAI credential for each turn.
+
+### Acceptance Criteria
+
+- Authenticated workspace members can run at most two agent sessions, each in a detached Git worktree isolated from the integration checkout and the other agent.
+- Vercel Workflow DevKit durably drains queued turns and can resume after function restarts or step retries.
+- OpenAI Responses API calls use `gpt-5.6-sol`, bounded repository tools, and the prompt author's encrypted key without persisting plaintext credentials in workflow state or exposing them to the browser or sandbox.
+- The IDE displays agent status, tool activity, results, queued follow-ups, failures, and interruption controls.
+- Agent file and command tools are path-confined, timeout-bounded, and cannot publish, merge, or access host credentials.
+- Schema, web, workflow, browser, and Rust checks pass against the deployed database and runtime.
+
+### Phase 6 Delivery
+
+- Agents: two app-level durable sessions with queue-draining Vercel workflows
+- Model: OpenAI Responses API using `gpt-5.6-sol` with medium reasoning
+- Isolation: detached Git worktrees inside each Firecracker workspace
+- Persistence: Supabase-backed turns, workflow run IDs, results, and idempotent activity events
+- Controls: queue follow-up and interrupt from the browser IDE
+- Security: per-author encrypted BYO key remains server-side; sandboxes receive no provider or GitHub credentials
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
+- Completed: July 29, 2026
 
 ## Phase 7: Collision Coordination and Review
 

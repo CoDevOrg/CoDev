@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
-import { encryptSecret } from "./crypto";
+import { decryptSecret, encryptSecret } from "./crypto";
 import { getDatabase } from "./database";
 
 const OPENAI_PROVIDER = "openai";
@@ -25,6 +25,26 @@ export async function getOpenAICredentialStatus(userId: string) {
     .limit(1);
 
   return credential ?? null;
+}
+
+export async function getOpenAIApiKey(userId: string) {
+  const [credential] = await getDatabase()
+    .select({ encryptedValue: schema.providerCredentials.encryptedValue })
+    .from(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.userId, userId),
+        eq(schema.providerCredentials.provider, OPENAI_PROVIDER),
+      ),
+    )
+    .limit(1);
+
+  if (!credential) {
+    throw new Error(
+      "Add an OpenAI API key in Settings before starting an agent turn.",
+    );
+  }
+  return decryptSecret(credential.encryptedValue);
 }
 
 export async function saveOpenAICredential(userId: string, apiKey: string) {

@@ -19,6 +19,7 @@ import {
   type SearchMatch,
   type WorkspaceFile,
 } from "@/lib/ide";
+import { AgentPanel } from "@/components/agent-panel";
 
 interface OpenFile {
   path: string;
@@ -73,7 +74,6 @@ export function WorkspaceIde({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
-  const [gitStatus, setGitStatus] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
@@ -97,16 +97,10 @@ export function WorkspaceIde({
   const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
 
   const refreshFiles = useCallback(async () => {
-    const [filePayload, gitPayload] = await Promise.all([
-      fetch(`${apiBase}/files`, { cache: "no-store" }).then((response) =>
-        payload<{ files: WorkspaceFile[] }>(response),
-      ),
-      fetch(`${apiBase}/git?operation=status`, { cache: "no-store" }).then(
-        (response) => payload<{ output: string }>(response),
-      ),
-    ]);
+    const filePayload = await fetch(`${apiBase}/files`, {
+      cache: "no-store",
+    }).then((response) => payload<{ files: WorkspaceFile[] }>(response));
     setFiles(filePayload.files);
-    setGitStatus(gitPayload.output);
   }, [apiBase]);
 
   useEffect(() => {
@@ -464,10 +458,6 @@ export function WorkspaceIde({
     return () => window.clearTimeout(timer);
   }, [apiBase, query]);
 
-  const modifiedCount = useMemo(
-    () => files.filter((file) => file.status).length,
-    [files],
-  );
   const distinctCollaborators = useMemo(
     () => [
       ...new Map(collaborators.map((member) => [member.id, member])).values(),
@@ -785,49 +775,7 @@ export function WorkspaceIde({
           )}
         </section>
 
-        <aside className="ide-changes" aria-label="Git changes">
-          <div className="panel-title">
-            <span>Source control</span>
-            <strong>{modifiedCount}</strong>
-          </div>
-          <pre>{gitStatus || "Working tree clean"}</pre>
-          <div className="collaboration-presence">
-            <div className="panel-title">
-              <span>People</span>
-              <strong>{distinctCollaborators.length}</strong>
-            </div>
-            {distinctCollaborators.length === 0 ? (
-              <p>Waiting for room presence…</p>
-            ) : (
-              distinctCollaborators.map((collaborator) => (
-                <div key={collaborator.id}>
-                  <i
-                    style={
-                      {
-                        "--presence-color": collaborator.color,
-                      } as React.CSSProperties
-                    }
-                  />
-                  <span>
-                    <strong>{collaboratorLabel(collaborator)}</strong>
-                    <small>
-                      {collaborator.activePath
-                        ? fileName(collaborator.activePath)
-                        : "In workspace"}
-                    </small>
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="phase-note ide-phase-note">
-            <span>Phase 5</span>
-            <p>
-              Yjs editing, live cursors, presence, reconnect recovery, and
-              filesystem reconciliation.
-            </p>
-          </div>
-        </aside>
+        <AgentPanel workspaceId={workspaceId} />
 
         <section
           className="terminal-panel live-terminal"

@@ -10,7 +10,7 @@ use tokio::{
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WriteFileRequest,
+    WorktreeCreateRequest, WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 3 << 20;
@@ -34,11 +34,11 @@ impl GuestClient {
             .map(|_| ())
     }
 
-    pub async fn read_file(&self, path: String) -> Result<FileResponse> {
+    pub async fn read_file(&self, path: String, worktree_id: Option<&str>) -> Result<FileResponse> {
         self.request(
             "POST",
             "/v1/files/read",
-            Some(&serde_json::json!({ "path": path })),
+            Some(&serde_json::json!({ "path": path, "worktreeId": worktree_id })),
         )
         .await
     }
@@ -119,12 +119,28 @@ impl GuestClient {
         .map(|_| ())
     }
 
-    pub async fn git_status(&self) -> Result<String> {
-        self.git("/v1/git/status").await
+    pub async fn create_worktree(&self, request: &WorktreeCreateRequest) -> Result<()> {
+        self.request::<_, serde_json::Value>("POST", "/v1/worktrees", Some(request))
+            .await
+            .map(|_| ())
     }
 
-    pub async fn git_diff(&self) -> Result<String> {
-        self.git("/v1/git/diff").await
+    pub async fn delete_worktree(&self, worktree_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/worktrees/{worktree_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {
+        self.git(&git_path("status", worktree_id)).await
+    }
+
+    pub async fn git_diff(&self, worktree_id: Option<&str>) -> Result<String> {
+        self.git(&git_path("diff", worktree_id)).await
     }
 
     async fn git(&self, path: &str) -> Result<String> {
@@ -218,6 +234,13 @@ impl GuestClient {
         })
         .await
         .map_err(|_| RuntimeError::GuestUnavailable("guest request timed out".into()))?
+    }
+}
+
+fn git_path(action: &str, worktree_id: Option<&str>) -> String {
+    match worktree_id {
+        Some(worktree_id) => format!("/v1/git/{action}?worktreeId={worktree_id}"),
+        None => format!("/v1/git/{action}"),
     }
 }
 

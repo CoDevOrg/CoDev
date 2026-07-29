@@ -75,7 +75,12 @@ export const agentSessionSchema = z.object({
   worktreeId: identifierSchema,
   createdBy: identifierSchema,
   issueNumber: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(32),
+  model: z.string().min(1),
   status: agentSessionStatusSchema,
+  workflowRunId: z.string().nullable(),
+  lastError: z.string().nullable(),
+  interruptedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
 });
 
@@ -85,6 +90,29 @@ export const agentTurnSchema = z.object({
   authorId: identifierSchema,
   prompt: z.string().min(1).max(50_000),
   status: z.enum(["queued", "running", "completed", "interrupted", "failed"]),
+  workflowRunId: z.string().nullable(),
+  responseId: z.string().nullable(),
+  output: z.string().nullable(),
+  lastError: z.string().nullable(),
+  startedAt: timestampSchema.nullable(),
+  finishedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+});
+
+export const agentActivityEventSchema = z.object({
+  id: identifierSchema,
+  workspaceId: identifierSchema,
+  sessionId: identifierSchema,
+  turnId: identifierSchema,
+  type: z.enum([
+    "turn.started",
+    "agent.output",
+    "tool.called",
+    "tool.completed",
+    "tool.failed",
+    "turn.completed",
+  ]),
+  payload: z.record(z.string(), z.unknown()),
   createdAt: timestampSchema,
 });
 
@@ -116,5 +144,6 @@ export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
 export type Worktree = z.infer<typeof worktreeSchema>;
 export type AgentSession = z.infer<typeof agentSessionSchema>;
 export type AgentTurn = z.infer<typeof agentTurnSchema>;
+export type AgentActivityEvent = z.infer<typeof agentActivityEventSchema>;
 export type PathClaim = z.infer<typeof pathClaimSchema>;
 export type CoordinationMessage = z.infer<typeof coordinationMessageSchema>;

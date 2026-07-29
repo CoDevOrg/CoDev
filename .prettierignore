@@ -6,4 +6,5 @@ playwright-report
 test-results
 pnpm-lock.yaml
 packages/db/drizzle
-
+apps/web/app/.well-known/workflow
+apps/web/.swc
