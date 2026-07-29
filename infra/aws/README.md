@@ -1,9 +1,9 @@
 # CoDev AWS Firecracker Runtime
 
 Phase 3 deploys one ARM bare-metal Firecracker host in `us-east-2`. Vercel
-reaches it through an IAM-authorized API Gateway HTTP API, a private VPC link,
-and an internal Network Load Balancer. The host has no public inbound rules and
-is administered through AWS Systems Manager.
+reaches it through an IAM-authorized API Gateway HTTP API and a usage-based
+Lambda proxy attached to the runtime VPC. The host has no public inbound rules
+and is administered through AWS Systems Manager.
 
 Current production endpoint:
 `https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com`.
@@ -15,7 +15,8 @@ user or access key:
   and register with Systems Manager.
 - `codev-vercel-production` trusts only the CoDev production OIDC subject.
 - `codev-vercel-preview` trusts only the CoDev preview OIDC subject.
-- Both Vercel roles can invoke only the CoDev API Gateway API.
+- Both Vercel roles can invoke only the CoDev API Gateway API, describe EC2
+  state, and start the exact Firecracker host.
 
 ## Deploy
 
@@ -31,12 +32,14 @@ Defaults:
 - Region: `us-east-2`
 - Availability Zone: `us-east-2a`
 - Host: `a1.metal`
-- Host image: `ami-080a0958d7399869e` (Ubuntu 24.04 ARM64 with a generic kernel)
+- Host image: `ami-0713df58d0d8b3c1c` (Ubuntu 24.04 ARM64 with a generic kernel)
+- Host root volume: 40 GiB encrypted gp3
 - Firecracker: `v1.13.2`
 - Maximum concurrent microVMs: 2
 - Per microVM: 2 vCPU, 2 GiB memory, 10 GiB sparse disk
 - Idle timeout: 30 minutes
 - Hard workspace expiry: 4 hours
+- Host shutdown: 15 minutes after the final microVM stops
 
 The script builds both Go binaries for Linux ARM64, uploads an immutable release
 to private S3, deploys the CloudFormation stacks, and creates or updates the
@@ -67,11 +70,12 @@ Host logs:
 sudo journalctl -u codev-orchestrator -f
 ```
 
-The encrypted 200 GiB host volume and all workspace disks are deleted with the
+The encrypted 40 GiB host volume and all workspace disks are deleted with the
 instance when the runtime stack is deleted. The artifact bucket is retained so
 that stack deletion cannot silently remove release evidence.
 
-The `a1.metal` host is an always-on, billable resource while running. At the
-deployment region's observed on-demand rate it costs approximately `$0.408/hour`
-before EBS and snapshot storage. Delete the `codev-runtime` stack when the live
-runtime is no longer needed; this also removes its networking and compute.
+The `a1.metal` host costs approximately `$0.408/hour` only while running. CoDev
+wakes it before provisioning a sandbox, and the orchestrator initiates an EC2
+stop after 15 idle minutes. The retained 40 GiB gp3 volume costs approximately
+`$3.20/month`; snapshot, Lambda, API Gateway, public IPv4 while running, and
+artifact storage are additional usage-based charges.

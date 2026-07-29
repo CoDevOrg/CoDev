@@ -84,7 +84,8 @@ Phase 3 runs jailed Firecracker microVMs on an AWS `a1.metal` host in
 `us-east-2`. Vercel uses environment-scoped OIDC roles and short-lived
 credentials to call an IAM-authorized API Gateway endpoint; no long-lived AWS
 access keys are stored in Vercel. The host has no inbound SSH access and is
-managed through AWS Systems Manager.
+managed through AWS Systems Manager. It starts when a workspace needs a
+sandbox and stops itself after 15 minutes without an active microVM.
 
 See [infra/aws/README.md](./infra/aws/README.md) for the architecture, quotas,
 deployment command, diagnostics, and cost-sensitive resources.

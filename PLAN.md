@@ -86,20 +86,23 @@ Provision jailed Firecracker microVMs on one AWS bare-metal host, clone reposito
 - Workspace creation boots a jailed ARM64 microVM, clones the selected repository, and reports its exact Git revision.
 - Authenticated file reads and writes, Git status, and PTY execution cross the host-to-guest boundary.
 - The host enforces a maximum of two concurrent microVMs, per-workspace CPU, memory, and disk limits, a 30-minute idle timeout, and a four-hour hard expiry.
-- Vercel invokes only the dedicated API Gateway API by exchanging its workload identity for short-lived AWS credentials; no AWS access keys are stored in Vercel.
+- Vercel exchanges its workload identity for short-lived AWS credentials scoped to the runtime API and permission to wake the exact Firecracker host; no AWS access keys are stored in Vercel.
 - The host has no public inbound access, uses encrypted storage, and is administered through AWS Systems Manager.
 - Workspace destruction terminates Firecracker and removes its writable disk and runtime directory.
+- A stopped host wakes on sandbox creation and powers itself off after 15 minutes with no active microVMs.
 
 ### Phase 3 Delivery
 
 - AWS account and region: `014576992564`, `us-east-2`
 - Runtime endpoint: [https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com](https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com)
-- Compute: one `a1.metal` host using the CoDev ARM64 generic-kernel image
+- Compute: one scale-to-zero `a1.metal` host using a 40 GiB CoDev ARM64 generic-kernel image
 - Runtime: Firecracker `v1.13.2`, jailed per workspace
 - Vercel authentication: environment-scoped production and preview OIDC roles
+- Private routing: API Gateway invokes a usage-based VPC Lambda proxy; no always-on load balancer
 - Guest capabilities: repository clone, revision-checked files, Git status, and PTY commands
 - Limits: two microVMs; 2 vCPU, 2 GiB RAM, and 10 GiB sparse disk per workspace
 - Lifecycle verification: a clean host booted a guest, cloned CoDev, served file/Git/PTY requests, and removed the guest on destroy
+- Cost optimization: wake on demand, 15-minute idle shutdown, and a 40 GiB gp3 root volume
 - Completed: July 29, 2026
 
 ## Phase 4: Browser IDE and Terminal
