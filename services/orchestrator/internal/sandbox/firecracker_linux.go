@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -354,12 +353,12 @@ func (backend *FirecrackerBackend) prepareAndStart(
 			ExecFile:       backend.config.FirecrackerBin,
 			JailerBinary:   backend.config.JailerBin,
 			CgroupVersion:  "2",
-			Stdout:         io.Discard,
-			Stderr:         io.Discard,
+			Stdout:         os.Stdout,
+			Stderr:         os.Stderr,
 		},
 	}
 	logger := logrus.New()
-	logger.SetOutput(io.Discard)
+	logger.SetOutput(os.Stderr)
 	machine, err := firecracker.NewMachine(
 		vmContext,
 		config,
