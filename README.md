@@ -4,9 +4,9 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 2 adds GitHub identity, public-repository workspace creation, invitations,
-> membership capabilities, and encrypted per-user OpenAI credentials. The IDE
-> remains a clearly labelled fixture until the sandbox and browser IDE phases.
+> Phase 3 adds the hosted AWS Firecracker runtime, Vercel workload identity,
+> repository cloning, and authenticated file, Git, and PTY operations. The IDE
+> remains a clearly labelled shell until Phase 4 connects Monaco and xterm.js.
 
 ## Website
 
@@ -15,6 +15,7 @@ the website source; CoDev is not a downloadable desktop application.
 - Fixture workspace: `http://localhost:3000/workspaces/demo`
 - Health endpoint: `http://localhost:3000/api/health`
 - Database health: `http://localhost:3000/api/health/database`
+- Orchestrator health: `http://localhost:3000/api/health/orchestrator`
 - Signed-in dashboard: `http://localhost:3000/dashboard`
 
 ## Repository
@@ -25,6 +26,7 @@ packages/contracts/     Shared Zod domain and event contracts
 packages/config/        Server-only environment validation
 packages/db/            Drizzle schema and PostgreSQL migrations
 services/orchestrator/  Go sandbox-service boundary
+infra/aws/              AWS Firecracker infrastructure and deployment
 ```
 
 ## Development
@@ -75,6 +77,17 @@ https://codev-xi.vercel.app/api/auth/callback/github
 Configure `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, and `GITHUB_APP_SLUG` in
 Vercel. `AUTH_SECRET` and the 32-byte `CREDENTIAL_ENCRYPTION_KEY` must also be
 set in every environment; never commit any of these values.
+
+## Hosted sandbox runtime
+
+Phase 3 runs jailed Firecracker microVMs on an AWS `a1.metal` host in
+`us-east-2`. Vercel uses environment-scoped OIDC roles and short-lived
+credentials to call an IAM-authorized API Gateway endpoint; no long-lived AWS
+access keys are stored in Vercel. The host has no inbound SSH access and is
+managed through AWS Systems Manager.
+
+See [infra/aws/README.md](./infra/aws/README.md) for the architecture, quotas,
+deployment command, diagnostics, and cost-sensitive resources.
 
 See [PRD.md](./PRD.md) for the product specification and [PLAN.md](./PLAN.md)
 for the eight-phase delivery roadmap.
