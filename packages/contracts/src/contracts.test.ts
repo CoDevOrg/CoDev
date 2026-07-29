@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  collaborationClientMessageSchema,
+  collaborationServerMessageSchema,
   FakeSandboxBackend,
   terminalPollSchema,
   workspaceEventSchema,
@@ -54,6 +56,47 @@ describe("workspace contracts", () => {
         data: { status: "invented" },
       }),
     ).toThrow();
+  });
+});
+
+describe("collaboration contracts", () => {
+  it("accepts document subscriptions and bounded Yjs updates", () => {
+    expect(
+      collaborationClientMessageSchema.parse({
+        type: "subscribe",
+        path: "src/index.ts",
+        stateVector: "AQID",
+      }).type,
+    ).toBe("subscribe");
+
+    expect(() =>
+      collaborationClientMessageSchema.parse({
+        type: "update",
+        path: "/etc/passwd",
+        update: "AQID",
+      }),
+    ).toThrow();
+  });
+
+  it("does not accept client-supplied identities", () => {
+    expect(() =>
+      collaborationClientMessageSchema.parse({
+        type: "awareness",
+        path: "src/index.ts",
+        update: "AQID",
+        actorId: id,
+      }),
+    ).toThrow();
+
+    expect(
+      collaborationServerMessageSchema.parse({
+        type: "conflict",
+        path: "src/index.ts",
+        snapshotRevision: "r1",
+        filesystemRevision: "r2",
+        message: "Both copies changed.",
+      }).type,
+    ).toBe("conflict");
   });
 });
 

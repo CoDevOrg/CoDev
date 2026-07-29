@@ -25,9 +25,7 @@ export function parseFileList(output: string): WorkspaceFile[] {
     .filter(Boolean)
     .filter(
       (path) =>
-        !path
-          .split("/")
-          .some((segment) => ignoredDirectories.has(segment)),
+        !path.split("/").some((segment) => ignoredDirectories.has(segment)),
     )
     .sort((left, right) => left.localeCompare(right))
     .map((path) => ({ path }));

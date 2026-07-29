@@ -3,10 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { WorkspaceIde } from "@/components/workspace-ide";
 import { requireUser } from "@/lib/session";
-import {
-  getWorkspaceForMember,
-  getWorkspaceRuntime,
-} from "@/lib/workspaces";
+import { getWorkspaceForMember, getWorkspaceRuntime } from "@/lib/workspaces";
 
 export const metadata: Metadata = { title: "IDE" };
 
@@ -31,6 +28,7 @@ export default async function WorkspaceIdePage({
       branch={workspace.defaultBranch}
       canTerminal={workspace.canTerminal}
       user={{
+        id: user.id,
         name: user.name ?? null,
         login: user.githubLogin ?? user.name ?? "GitHub user",
         image: user.image ?? null,

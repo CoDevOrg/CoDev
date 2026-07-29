@@ -8,11 +8,7 @@ import {
   searchSandboxFiles,
   writeSandboxFile,
 } from "@/lib/orchestrator";
-import {
-  attachGitStatus,
-  parseFileList,
-  parseSearchMatches,
-} from "@/lib/ide";
+import { attachGitStatus, parseFileList, parseSearchMatches } from "@/lib/ide";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
 const readSchema = z.object({ path: z.string().min(1).max(4_096) });

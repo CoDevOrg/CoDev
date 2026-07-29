@@ -1,8 +1,5 @@
 import { apiError, getApiUser } from "@/lib/api";
-import {
-  getSandboxGitOutput,
-  readSandboxHeadFile,
-} from "@/lib/orchestrator";
+import { getSandboxGitOutput, readSandboxHeadFile } from "@/lib/orchestrator";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
 export async function GET(
@@ -18,10 +15,7 @@ export async function GET(
 
   const operation = new URL(request.url).searchParams.get("operation");
   if (operation !== "status" && operation !== "diff" && operation !== "show") {
-    return apiError(
-      new Error("operation must be status, diff, or show."),
-      400,
-    );
+    return apiError(new Error("operation must be status, diff, or show."), 400);
   }
 
   try {

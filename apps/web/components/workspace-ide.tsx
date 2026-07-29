@@ -3,16 +3,17 @@
 import { DiffEditor, Editor, type OnMount } from "@monaco-editor/react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import type { editor as MonacoEditor } from "monaco-editor";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  type CollaborationConflict,
+  type CollaborationStatus,
+  type CollaborationUser,
+  WorkspaceCollaboration,
+} from "@/lib/collaboration-client";
 import {
   languageForPath,
   type SearchMatch,
@@ -33,13 +34,19 @@ async function payload<T>(response: Response): Promise<T> {
     | (T & { error?: string })
     | null;
   if (!response.ok) {
-    throw new Error(body?.error ?? `Request failed with HTTP ${response.status}.`);
+    throw new Error(
+      body?.error ?? `Request failed with HTTP ${response.status}.`,
+    );
   }
   return body as T;
 }
 
 function fileName(path: string) {
   return path.split("/").at(-1) ?? path;
+}
+
+function collaboratorLabel(collaborator: CollaborationUser) {
+  return collaborator.name ?? collaborator.login;
 }
 
 export function WorkspaceIde({
@@ -53,7 +60,12 @@ export function WorkspaceIde({
   repository: string;
   branch: string;
   canTerminal: boolean;
-  user: { name?: string | null; login?: string; image?: string | null };
+  user: {
+    id: string;
+    name?: string | null;
+    login?: string;
+    image?: string | null;
+  };
 }) {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
@@ -66,6 +78,14 @@ export function WorkspaceIde({
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [searching, setSearching] = useState(false);
+  const [collaborationStatus, setCollaborationStatus] =
+    useState<CollaborationStatus>("connecting");
+  const [collaborators, setCollaborators] = useState<CollaborationUser[]>([]);
+  const [collaborationConflict, setCollaborationConflict] =
+    useState<CollaborationConflict | null>(null);
+  const collaboration = useRef<WorkspaceCollaboration | null>(null);
+  const editor = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
+  const saveRef = useRef<() => Promise<void>>(async () => undefined);
   const terminalElement = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -90,10 +110,61 @@ export function WorkspaceIde({
   }, [apiBase]);
 
   useEffect(() => {
+    const client = new WorkspaceCollaboration(
+      workspaceId,
+      {
+        id: user.id,
+        login: user.login ?? user.name ?? "GitHub user",
+        name: user.name ?? null,
+        image: user.image ?? null,
+      },
+      {
+        onStatus: setCollaborationStatus,
+        onPresence: setCollaborators,
+        onConflict: setCollaborationConflict,
+        onDocument: (path, contents, synced) => {
+          setOpenFile((current) =>
+            current?.path === path
+              ? {
+                  ...current,
+                  contents,
+                  dirty: synced && contents !== current.savedContents,
+                }
+              : current,
+          );
+        },
+        onReconciled: (path, revision, contents) => {
+          setOpenFile((current) =>
+            current?.path === path
+              ? {
+                  ...current,
+                  contents,
+                  savedContents: contents,
+                  revision,
+                  dirty: false,
+                }
+              : current,
+          );
+          void refreshFiles().catch(() => undefined);
+        },
+        onError: setError,
+      },
+    );
+    collaboration.current = client;
+    client.connect();
+    return () => {
+      client.destroy();
+      collaboration.current = null;
+    };
+  }, [refreshFiles, user.id, user.image, user.login, user.name, workspaceId]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       void refreshFiles()
         .catch((caught) =>
-          setError(caught instanceof Error ? caught.message : "Could not load files."),
+          setError(
+            caught instanceof Error ? caught.message : "Could not load files.",
+          ),
         )
         .finally(() => setLoading(false));
     }, 0);
@@ -203,7 +274,8 @@ export function WorkspaceIde({
           `\r\n\x1b[31m${caught instanceof Error ? caught.message : "Terminal stream interrupted."}\x1b[0m\r\n`,
         );
       }
-      if (!stopped) pollTimer = window.setTimeout(() => void poll(sessionId), 0);
+      if (!stopped)
+        pollTimer = window.setTimeout(() => void poll(sessionId), 0);
     }
 
     async function connect() {
@@ -275,6 +347,7 @@ export function WorkspaceIde({
   }, [apiBase, canTerminal, writeTerminal]);
 
   async function openPath(path: string, line?: number) {
+    if (openFile?.path === path) return;
     setError("");
     try {
       const [fileResult, headResult] = await Promise.all([
@@ -307,7 +380,9 @@ export function WorkspaceIde({
         }, 0);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not open file.");
+      setError(
+        caught instanceof Error ? caught.message : "Could not open file.",
+      );
     }
   }
 
@@ -337,29 +412,48 @@ export function WorkspaceIde({
       );
       await refreshFiles();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save file.");
+      setError(
+        caught instanceof Error ? caught.message : "Could not save file.",
+      );
     } finally {
       setSaving(false);
     }
   }, [apiBase, openFile, refreshFiles, saving]);
 
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
   const editorMount: OnMount = useCallback(
-    (editor, monaco) => {
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        void save();
+    (instance, monaco) => {
+      editor.current = instance;
+      instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        void saveRef.current();
       });
+      if (openFile) {
+        collaboration.current?.openDocument(openFile.path, instance);
+      }
     },
-    [save],
+    [openFile],
   );
+
+  useEffect(() => {
+    const path = openFile?.path;
+    if (diffOpen) {
+      collaboration.current?.closeDocument();
+      return;
+    }
+    if (!path || !editor.current) return;
+    collaboration.current?.openDocument(path, editor.current);
+  }, [diffOpen, openFile?.path]);
 
   useEffect(() => {
     if (!query.trim()) return;
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void fetch(
-        `${apiBase}/files?query=${encodeURIComponent(query.trim())}`,
-        { cache: "no-store" },
-      )
+      void fetch(`${apiBase}/files?query=${encodeURIComponent(query.trim())}`, {
+        cache: "no-store",
+      })
         .then((response) => payload<{ matches: SearchMatch[] }>(response))
         .then((result) => setMatches(result.matches))
         .catch((caught) =>
@@ -374,12 +468,32 @@ export function WorkspaceIde({
     () => files.filter((file) => file.status).length,
     [files],
   );
+  const distinctCollaborators = useMemo(
+    () => [
+      ...new Map(collaborators.map((member) => [member.id, member])).values(),
+    ],
+    [collaborators],
+  );
+  const presenceByPath = useMemo(() => {
+    const paths = new Map<string, CollaborationUser[]>();
+    for (const member of distinctCollaborators) {
+      if (!member.activePath) continue;
+      paths.set(member.activePath, [
+        ...(paths.get(member.activePath) ?? []),
+        member,
+      ]);
+    }
+    return paths;
+  }, [distinctCollaborators]);
 
   return (
     <main className="live-ide" aria-label="CoDev browser IDE">
       <header className="live-ide-topbar">
         <Link className="workspace-brand" href={`/workspaces/${workspaceId}`}>
-          <span className="wordmark-mark workspace-brand-mark" aria-hidden="true">
+          <span
+            className="wordmark-mark workspace-brand-mark"
+            aria-hidden="true"
+          >
             <span />
             <span />
           </span>
@@ -397,9 +511,48 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
-          <span className="connection-state connected">
-            <i /> Sandbox connected
+          <span
+            className={`connection-state collaboration-${collaborationStatus}`}
+          >
+            <i />{" "}
+            {collaborationStatus === "online"
+              ? "Realtime online"
+              : collaborationStatus === "reconnecting"
+                ? "Reconnecting…"
+                : collaborationStatus === "connecting"
+                  ? "Connecting…"
+                  : "Realtime offline"}
           </span>
+          <div
+            className="presence-stack"
+            aria-label={`${distinctCollaborators.length} collaborators present`}
+          >
+            {distinctCollaborators.slice(0, 4).map((collaborator) =>
+              collaborator.image ? (
+                <Image
+                  key={collaborator.id}
+                  src={collaborator.image}
+                  alt={collaboratorLabel(collaborator)}
+                  title={collaboratorLabel(collaborator)}
+                  width={26}
+                  height={26}
+                  unoptimized
+                />
+              ) : (
+                <span
+                  key={collaborator.id}
+                  title={collaboratorLabel(collaborator)}
+                  style={
+                    {
+                      "--presence-color": collaborator.color,
+                    } as React.CSSProperties
+                  }
+                >
+                  {collaborator.login.slice(0, 1).toUpperCase()}
+                </span>
+              ),
+            )}
+          </div>
           {user.image ? (
             <Image src={user.image} alt="" width={26} height={26} unoptimized />
           ) : (
@@ -464,7 +617,9 @@ export function WorkspaceIde({
                     onClick={() => void openPath(match.path, match.line)}
                   >
                     <strong>{fileName(match.path)}</strong>
-                    <span>{match.path}:{match.line}</span>
+                    <span>
+                      {match.path}:{match.line}
+                    </span>
                     <small>{match.preview}</small>
                   </button>
                 ))}
@@ -483,13 +638,37 @@ export function WorkspaceIde({
                     className={`file-row ${openFile?.path === file.path ? "active" : ""}`}
                     key={file.path}
                     type="button"
-                    style={{ "--file-depth": file.path.split("/").length - 1 } as React.CSSProperties}
+                    style={
+                      {
+                        "--file-depth": file.path.split("/").length - 1,
+                      } as React.CSSProperties
+                    }
                     onClick={() => void openPath(file.path)}
                     title={file.path}
                   >
                     <span className="file-kind">◇</span>
                     <span>{fileName(file.path)}</span>
                     {file.status ? <i>{file.status}</i> : null}
+                    {(presenceByPath.get(file.path) ?? []).length > 0 ? (
+                      <span
+                        className="file-presence"
+                        aria-label="Active editors"
+                      >
+                        {(presenceByPath.get(file.path) ?? [])
+                          .slice(0, 3)
+                          .map((collaborator) => (
+                            <b
+                              key={collaborator.id}
+                              title={`${collaboratorLabel(collaborator)} is editing`}
+                              style={
+                                {
+                                  "--presence-color": collaborator.color,
+                                } as React.CSSProperties
+                              }
+                            />
+                          ))}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -501,7 +680,10 @@ export function WorkspaceIde({
           <div className="editor-tabbar">
             {openFile ? (
               <div className="editor-tab active">
-                <span>{openFile.dirty ? "● " : ""}{fileName(openFile.path)}</span>
+                <span>
+                  {openFile.dirty ? "● " : ""}
+                  {fileName(openFile.path)}
+                </span>
               </div>
             ) : null}
             <div className="editor-tab-actions">
@@ -513,12 +695,32 @@ export function WorkspaceIde({
               >
                 Diff
               </button>
-              <button type="button" disabled={!openFile?.dirty || saving} onClick={() => void save()}>
-                {saving ? "Saving…" : "Save"}
+              <button
+                type="button"
+                disabled={
+                  collaborationStatus === "online" || !openFile?.dirty || saving
+                }
+                onClick={() => void save()}
+              >
+                {collaborationStatus === "online"
+                  ? openFile?.dirty
+                    ? "Syncing…"
+                    : "Synced"
+                  : saving
+                    ? "Saving…"
+                    : "Save"}
               </button>
             </div>
           </div>
           {error ? <div className="ide-error">{error}</div> : null}
+          {collaborationConflict ? (
+            <div className="collaboration-conflict" role="alert">
+              <strong>
+                Filesystem conflict in {collaborationConflict.path}
+              </strong>
+              <span>{collaborationConflict.message}</span>
+            </div>
+          ) : null}
           {openFile ? (
             diffOpen ? (
               <DiffEditor
@@ -566,11 +768,19 @@ export function WorkspaceIde({
             )
           ) : (
             <div className="ide-welcome">
-              <span className="wordmark-mark" aria-hidden="true"><span /><span /></span>
+              <span className="wordmark-mark" aria-hidden="true">
+                <span />
+                <span />
+              </span>
               <h1>Open a file to start building.</h1>
-              <p>Files are read from the isolated Firecracker workspace. Saves use revision checks to prevent silent overwrites.</p>
-              <kbd>⌘ S</kbd><span>Save active file</span>
-              <kbd>⌘ F</kbd><span>Find in active file</span>
+              <p>
+                Files are read from the isolated Firecracker workspace. Saves
+                use revision checks to prevent silent overwrites.
+              </p>
+              <kbd>⌘ S</kbd>
+              <span>Save active file</span>
+              <kbd>⌘ F</kbd>
+              <span>Find in active file</span>
             </div>
           )}
         </section>
@@ -581,18 +791,59 @@ export function WorkspaceIde({
             <strong>{modifiedCount}</strong>
           </div>
           <pre>{gitStatus || "Working tree clean"}</pre>
+          <div className="collaboration-presence">
+            <div className="panel-title">
+              <span>People</span>
+              <strong>{distinctCollaborators.length}</strong>
+            </div>
+            {distinctCollaborators.length === 0 ? (
+              <p>Waiting for room presence…</p>
+            ) : (
+              distinctCollaborators.map((collaborator) => (
+                <div key={collaborator.id}>
+                  <i
+                    style={
+                      {
+                        "--presence-color": collaborator.color,
+                      } as React.CSSProperties
+                    }
+                  />
+                  <span>
+                    <strong>{collaboratorLabel(collaborator)}</strong>
+                    <small>
+                      {collaborator.activePath
+                        ? fileName(collaborator.activePath)
+                        : "In workspace"}
+                    </small>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
           <div className="phase-note ide-phase-note">
-            <span>Phase 4</span>
-            <p>Live sandbox files, revision-safe saves, Git inspection, and an authenticated command terminal.</p>
+            <span>Phase 5</span>
+            <p>
+              Yjs editing, live cursors, presence, reconnect recovery, and
+              filesystem reconciliation.
+            </p>
           </div>
         </aside>
 
-        <section className="terminal-panel live-terminal" aria-label="Sandbox terminal">
+        <section
+          className="terminal-panel live-terminal"
+          aria-label="Sandbox terminal"
+        >
           <div className="terminal-head">
             <div>
-              <button className="active" type="button">Terminal <span>1</span></button>
+              <button className="active" type="button">
+                Terminal <span>1</span>
+              </button>
             </div>
-            <div><span>{canTerminal ? "authenticated" : "capability required"}</span></div>
+            <div>
+              <span>
+                {canTerminal ? "authenticated" : "capability required"}
+              </span>
+            </div>
           </div>
           {canTerminal ? (
             <div className="xterm-host" ref={terminalElement} />

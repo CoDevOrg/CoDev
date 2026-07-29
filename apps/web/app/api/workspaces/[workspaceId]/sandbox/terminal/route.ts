@@ -36,11 +36,15 @@ const actionSchema = z.discriminatedUnion("action", [
 
 async function authorizedWorkspace(workspaceId: string) {
   const user = await getApiUser();
-  if (!user) return { response: apiError(new Error("Authentication required."), 401) };
+  if (!user)
+    return { response: apiError(new Error("Authentication required."), 401) };
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return { response: apiError(new Error("Workspace not found."), 404) };
+  if (!workspace)
+    return { response: apiError(new Error("Workspace not found."), 404) };
   if (!workspace.canTerminal) {
-    return { response: apiError(new Error("Terminal capability is required."), 403) };
+    return {
+      response: apiError(new Error("Terminal capability is required."), 403),
+    };
   }
   return { workspace };
 }

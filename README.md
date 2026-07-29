@@ -4,9 +4,10 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 4 connects authenticated workspaces to a Monaco browser IDE and an
-> xterm.js terminal backed by the Rust-managed Firecracker runtime. The public
-> fixture remains a clearly labelled, disconnected demo shell.
+> Phase 5 adds realtime Yjs editing, multiplayer cursors and presence, durable
+> Supabase snapshots, and Redis-backed coordination to authenticated Monaco
+> workspaces. The public fixture remains a clearly labelled, disconnected demo
+> shell.
 
 ## Website
 
@@ -16,6 +17,7 @@ the website source; CoDev is not a downloadable desktop application.
 - Health endpoint: `http://localhost:3000/api/health`
 - Database health: `http://localhost:3000/api/health/database`
 - Orchestrator health: `http://localhost:3000/api/health/orchestrator`
+- Realtime health: `http://localhost:3000/api/health/realtime`
 - Signed-in dashboard: `http://localhost:3000/dashboard`
 
 ## Repository

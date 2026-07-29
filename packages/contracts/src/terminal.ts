@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-export const terminalSessionIdSchema = z
-  .string()
-  .regex(/^term-[0-9]+-[0-9]+$/);
+export const terminalSessionIdSchema = z.string().regex(/^term-[0-9]+-[0-9]+$/);
 
 export const terminalDimensionsSchema = z.object({
   rows: z.number().int().min(1).max(500),

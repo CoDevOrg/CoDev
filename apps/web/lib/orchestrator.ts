@@ -272,10 +272,7 @@ export async function listSandboxFiles(workspaceId: string) {
   return result.output;
 }
 
-export async function searchSandboxFiles(
-  workspaceId: string,
-  query: string,
-) {
+export async function searchSandboxFiles(workspaceId: string, query: string) {
   const result = await executeInSandbox(workspaceId, {
     command: [
       "git",
@@ -297,10 +294,7 @@ export async function searchSandboxFiles(
   return result.output;
 }
 
-export async function readSandboxHeadFile(
-  workspaceId: string,
-  path: string,
-) {
+export async function readSandboxHeadFile(workspaceId: string, path: string) {
   const result = await executeInSandbox(workspaceId, {
     command: ["git", "show", `HEAD:./${path}`],
     timeoutSeconds: 30,
@@ -318,9 +312,8 @@ export async function startSandboxTerminal(
     `/v1/sandboxes/${workspaceId}/terminals`,
     input,
   );
-  return z
-    .object({ sessionId: z.string() })
-    .parse(await response.json()).sessionId;
+  return z.object({ sessionId: z.string() }).parse(await response.json())
+    .sessionId;
 }
 
 export async function sendSandboxTerminalInput(
@@ -357,9 +350,8 @@ export async function pollSandboxTerminal(
     `/v1/sandboxes/${workspaceId}/terminals/${sessionId}/poll`,
     { after, waitMilliseconds: 20_000 },
   );
-  return z
-    .object({ result: terminalPollSchema })
-    .parse(await response.json()).result;
+  return z.object({ result: terminalPollSchema }).parse(await response.json())
+    .result;
 }
 
 export async function closeSandboxTerminal(

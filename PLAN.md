@@ -25,7 +25,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 2     | GitHub Identity and Workspaces    | Complete    |
 | 3     | Firecracker Runtime               | Complete    |
 | 4     | Browser IDE and Terminal          | Complete    |
-| 5     | Realtime Collaboration            | Not started |
+| 5     | Realtime Collaboration            | Complete    |
 | 6     | Parallel Agent Runtime            | Not started |
 | 7     | Collision Coordination and Review | Not started |
 | 8     | GitHub Publication and Hardening  | Not started |
@@ -128,6 +128,25 @@ Connect Monaco and xterm.js to the sandbox, provide file navigation and search, 
 ## Phase 5: Realtime Collaboration
 
 Add Yjs editing, cursors, active-file presence, Redis room coordination, durable snapshots, reconnect/resubscribe behavior, and filesystem reconciliation across integration and agent worktrees.
+
+### Acceptance Criteria
+
+- Authenticated workspace members share Yjs-backed Monaco documents, cursors, and active-file presence without trusting client-supplied identity.
+- Vercel WebSocket instances coordinate document events and expiring presence through Redis streams.
+- Reconnects resubscribe with Yjs state vectors and recover edits made while the connection was unavailable.
+- PostgreSQL stores durable Yjs updates, state vectors, filesystem revisions, and explicit conflict metadata.
+- Clean external filesystem changes are ingested into the collaborative document; concurrent collaborative and filesystem changes surface a conflict without overwriting either version.
+- Realtime health, contract, reconciliation, formatting, linting, type checking, unit, browser, build, and Rust checks pass.
+
+### Phase 5 Delivery
+
+- Collaboration: Yjs and y-monaco with authenticated WebSocket upgrades, reconnect/resubscribe, and multiplayer awareness
+- Coordination: `codev-realtime` Upstash Redis resource connected through the Vercel Marketplace
+- Persistence: Supabase-backed durable snapshots with migration `0004_dear_daimon_hellstrom.sql`
+- Reconciliation: revision-checked sandbox writes, external-change ingestion, and explicit concurrent-change conflicts
+- Health: `/api/health/realtime`
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
+- Completed: July 29, 2026
 
 ## Phase 6: Parallel Agent Runtime
 

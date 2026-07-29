@@ -7,6 +7,7 @@ import {
   pathClaims,
   workspaceMembers,
   workspaces,
+  yjsSnapshots,
 } from "./schema";
 
 describe("database schema", () => {
@@ -16,5 +17,9 @@ describe("database schema", () => {
     expect(getTableName(agentSessions)).toBe("agent_sessions");
     expect(getTableName(pathClaims)).toBe("path_claims");
     expect(getTableName(coordinationMessages)).toBe("coordination_messages");
+    expect(getTableName(yjsSnapshots)).toBe("yjs_snapshots");
+    expect(yjsSnapshots.stateVector.name).toBe("state_vector_base64");
+    expect(yjsSnapshots.filesystemContents.name).toBe("filesystem_contents");
+    expect(yjsSnapshots.hasConflict.name).toBe("has_conflict");
   });
 });

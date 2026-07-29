@@ -29,6 +29,13 @@
       "when": 1785282310480,
       "tag": "0003_productive_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785351542671,
+      "tag": "0004_dear_daimon_hellstrom",
+      "breakpoints": true
     }
   ]
 }

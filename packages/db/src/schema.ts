@@ -392,6 +392,12 @@ export const yjsSnapshots = pgTable(
     path: text("path").notNull(),
     revision: text("revision").notNull(),
     update: text("update_base64").notNull(),
+    stateVector: text("state_vector_base64").default("").notNull(),
+    filesystemContents: text("filesystem_contents").default("").notNull(),
+    filesystemRevision: text("filesystem_revision"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    hasConflict: boolean("has_conflict").default(false).notNull(),
+    conflictFilesystemRevision: text("conflict_filesystem_revision"),
     ...timestamps,
   },
   (table) => [
