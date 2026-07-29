@@ -340,7 +340,7 @@ func (backend *FirecrackerBackend) prepareAndStart(
 	config := firecracker.Config{
 		SocketPath:      "api.socket",
 		KernelImagePath: backend.config.KernelImage,
-		KernelArgs:      "keep_bootcon console=ttyS0 reboot=k panic=1 pci=off quiet loglevel=1 8250.nr_uarts=0",
+		KernelArgs:      "keep_bootcon console=ttyS0 reboot=k panic=1 pci=off",
 		Drives:          drives,
 		VsockDevices: []firecracker.VsockDevice{{
 			ID:   "codev-guest",
