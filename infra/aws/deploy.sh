@@ -8,6 +8,7 @@ readonly team_slug="${VERCEL_TEAM_SLUG:-yousef20920s-projects}"
 readonly project_name="${VERCEL_PROJECT_NAME:-codev}"
 readonly instance_type="${CODEV_INSTANCE_TYPE:-a1.metal}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
+readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-080a0958d7399869e}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
 readonly artifact_bucket="${CODEV_ARTIFACT_BUCKET:-codev-runtime-${account_id}-${region}}"
 readonly artifacts_stack="${CODEV_ARTIFACTS_STACK:-codev-runtime-artifacts}"
@@ -66,6 +67,7 @@ aws cloudformation deploy \
     "ReleaseVersion=${release_version}" \
     "InstanceType=${instance_type}" \
     "AvailabilityZone=${availability_zone}" \
+    "UbuntuAmi=${host_ami_id}" \
   --no-fail-on-empty-changeset
 
 api_id="$(aws cloudformation describe-stacks \

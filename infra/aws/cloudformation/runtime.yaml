@@ -14,8 +14,8 @@ Parameters:
     Type: AWS::EC2::AvailabilityZone::Name
     Default: us-east-2a
   UbuntuAmi:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
+    Type: AWS::EC2::Image::Id
+    Default: ami-080a0958d7399869e
 
 Resources:
   RuntimeVpc:
@@ -206,7 +206,7 @@ Resources:
           apt-get install -y ca-certificates curl unzip
           curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
           unzip -q /tmp/awscliv2.zip -d /tmp
-          /tmp/aws/install
+          /tmp/aws/install --update
           until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
             sleep 10
           done
@@ -232,6 +232,9 @@ Resources:
       Port: 8080
       Protocol: TCP
       TargetType: instance
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "10"
       Targets:
         - Id: !Ref FirecrackerHost
           Port: 8080
