@@ -4,9 +4,9 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 3 adds the hosted AWS Firecracker runtime, Vercel workload identity,
-> repository cloning, and authenticated file, Git, and PTY operations. The IDE
-> remains a clearly labelled shell until Phase 4 connects Monaco and xterm.js.
+> Phase 4 connects authenticated workspaces to a Monaco browser IDE and an
+> xterm.js terminal backed by the Rust-managed Firecracker runtime. The public
+> fixture remains a clearly labelled, disconnected demo shell.
 
 ## Website
 

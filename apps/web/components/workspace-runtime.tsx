@@ -119,6 +119,13 @@ export function WorkspaceRuntime({
               : "Start sandbox"}
           </button>
         )
+      ) : status === "ready" ? (
+        <Link
+          className="primary-button"
+          href={`/workspaces/${workspaceId}/ide`}
+        >
+          Open IDE
+        </Link>
       ) : (
         <span className="runtime-state">{status}</span>
       )}

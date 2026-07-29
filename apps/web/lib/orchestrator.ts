@@ -213,10 +213,18 @@ export async function executeInSandbox(
   workspaceId: string,
   input: SandboxExecInput,
 ) {
+  // The guest exec endpoint uses a PTY. Give non-interactive commands a wide
+  // viewport so file paths, Git porcelain, and search matches are not wrapped
+  // before the website parses them.
+  const command = {
+    rows: 1_000,
+    columns: 4_096,
+    ...input,
+  };
   const response = await orchestratorRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/pty/exec`,
-    input,
+    command,
   );
   return z
     .object({

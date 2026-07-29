@@ -24,7 +24,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 1     | Foundation and Live Website       | Complete    |
 | 2     | GitHub Identity and Workspaces    | Complete    |
 | 3     | Firecracker Runtime               | Complete    |
-| 4     | Browser IDE and Terminal          | Not started |
+| 4     | Browser IDE and Terminal          | Complete    |
 | 5     | Realtime Collaboration            | Not started |
 | 6     | Parallel Agent Runtime            | Not started |
 | 7     | Collision Coordination and Review | Not started |
@@ -108,6 +108,22 @@ Provision jailed Firecracker microVMs on one AWS bare-metal host, clone reposito
 ## Phase 4: Browser IDE and Terminal
 
 Connect Monaco and xterm.js to the sandbox, provide file navigation and search, stream authenticated terminals with backpressure, and show Git status and side-by-side diffs.
+
+### Acceptance Criteria
+
+- Authenticated workspace members can open a desktop-first Monaco IDE backed by their running Firecracker workspace.
+- File navigation, repository search, revision-checked saves, Git status, and side-by-side diffs use authenticated workspace APIs.
+- xterm.js connects to a persistent Rust-managed PTY with resize, reconnect-safe sequencing, acknowledgement, bounded buffering, and backpressure.
+- Terminal access remains capability-gated and every sandbox operation is scoped to a workspace membership.
+- Browser smoke tests, production health checks, TypeScript checks, and Rust formatting, linting, and tests pass.
+
+### Phase 4 Delivery
+
+- IDE: Monaco editor and diff editor with file explorer, repository search, save conflict protection, and Git status
+- Terminal: xterm.js connected to a persistent Rust PTY through authenticated, sequenced long polling
+- Runtime: bounded unacknowledged output pauses the guest reader to provide backpressure
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
+- Completed: July 29, 2026
 
 ## Phase 5: Realtime Collaboration
 
