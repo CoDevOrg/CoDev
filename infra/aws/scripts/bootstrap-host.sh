@@ -11,6 +11,22 @@ readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecrack
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
 
+# Bare-metal instances can initially inherit the AMI build clock. Wait for the
+# EC2 time source before making signed AWS requests or validating apt metadata.
+timedatectl set-ntp true
+systemctl restart systemd-timesyncd
+for _ in $(seq 1 60); do
+  if [[ "$(timedatectl show --property=NTPSynchronized --value)" == "yes" ]]; then
+    break
+  fi
+  sleep 2
+done
+if [[ "$(timedatectl show --property=NTPSynchronized --value)" != "yes" ]]; then
+  echo "system clock did not synchronize" >&2
+  exit 1
+fi
+systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
