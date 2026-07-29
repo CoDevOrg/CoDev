@@ -322,6 +322,16 @@ func (backend *FirecrackerBackend) prepareAndStart(
 
 	uid := 20000 + len(backend.machines)
 	gid := uid
+	for _, diskPath := range []string{rootfs, workspaceDisk} {
+		if err := os.Chown(diskPath, uid, gid); err != nil {
+			cleanup()
+			return nil, fmt.Errorf("set jail disk ownership: %w", err)
+		}
+		if err := os.Chmod(diskPath, 0o600); err != nil {
+			cleanup()
+			return nil, fmt.Errorf("set jail disk permissions: %w", err)
+		}
+	}
 	numa := 0
 	vmContext, cancel := context.WithCancel(context.Background())
 	drives := firecracker.NewDrivesBuilder(rootfs).
