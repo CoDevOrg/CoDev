@@ -248,6 +248,15 @@ export const worktrees = pgTable(
     name: text("name").notNull(),
     headSha: text("head_sha").notNull(),
     status: worktreeStatus("status").default("active").notNull(),
+    reviewHeadSha: text("review_head_sha"),
+    reviewBaseSha: text("review_base_sha"),
+    reviewDiffDigest: text("review_diff_digest"),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    mergedAt: timestamp("merged_at", { withTimezone: true }),
+    discardedAt: timestamp("discarded_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -350,6 +359,37 @@ export const agentEvents = pgTable(
   ],
 );
 
+export const githubIssueAssignments = pgTable(
+  "github_issue_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: uuid("session_id")
+      .references(() => agentSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    githubRepositoryId: bigint("github_repository_id", {
+      mode: "bigint",
+    }).notNull(),
+    issueNumber: integer("issue_number").notNull(),
+    githubIssueId: bigint("github_issue_id", { mode: "bigint" }).notNull(),
+    title: text("title").notNull(),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("github_issue_assignments_repository_issue_idx").on(
+      table.githubRepositoryId,
+      table.issueNumber,
+    ),
+    uniqueIndex("github_issue_assignments_session_idx").on(table.sessionId),
+    index("github_issue_assignments_workspace_idx").on(table.workspaceId),
+  ],
+);
+
 export const workspaceEvents = pgTable(
   "workspace_events",
   {
@@ -410,6 +450,8 @@ export const coordinationMessages = pgTable(
       .notNull(),
     kind: text("kind").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    correlationId: uuid("correlation_id").defaultRandom().notNull(),
+    responseToId: uuid("response_to_id"),
     status: messageStatus("status").default("pending").notNull(),
     ...timestamps,
   },
@@ -437,12 +479,53 @@ export const yjsSnapshots = pgTable(
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     hasConflict: boolean("has_conflict").default(false).notNull(),
     conflictFilesystemRevision: text("conflict_filesystem_revision"),
+    conflictDetectedAt: timestamp("conflict_detected_at", {
+      withTimezone: true,
+    }),
+    conflictResolvedAt: timestamp("conflict_resolved_at", {
+      withTimezone: true,
+    }),
+    conflictResolvedBy: uuid("conflict_resolved_by").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    conflictResolution: text("conflict_resolution"),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("yjs_snapshots_worktree_path_idx").on(
       table.worktreeId,
       table.path,
+    ),
+  ],
+);
+
+export const collaborationConflictResolutions = pgTable(
+  "collaboration_conflict_resolutions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    worktreeId: uuid("worktree_id")
+      .references(() => worktrees.id, { onDelete: "cascade" })
+      .notNull(),
+    path: text("path").notNull(),
+    resolvedBy: uuid("resolved_by")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    strategy: text("strategy").notNull(),
+    snapshotRevision: text("snapshot_revision").notNull(),
+    filesystemRevision: text("filesystem_revision").notNull(),
+    resultRevision: text("result_revision").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("collaboration_conflict_resolutions_document_idx").on(
+      table.worktreeId,
+      table.path,
+      table.createdAt,
     ),
   ],
 );

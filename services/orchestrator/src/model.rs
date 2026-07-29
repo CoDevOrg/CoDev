@@ -21,6 +21,11 @@ pub enum RuntimeError {
     BadRequest(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("{message}")]
+    GitConflict {
+        message: String,
+        conflict_paths: Vec<String>,
+    },
     #[error("{0}")]
     Timeout(String),
     #[error("{0}")]
@@ -39,19 +44,23 @@ impl IntoResponse for RuntimeError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::SandboxNotFound => StatusCode::NOT_FOUND,
-            Self::CapacityExceeded | Self::Conflict(_) | Self::RevisionMismatch(_) => {
-                StatusCode::CONFLICT
-            }
+            Self::CapacityExceeded
+            | Self::Conflict(_)
+            | Self::GitConflict { .. }
+            | Self::RevisionMismatch(_) => StatusCode::CONFLICT,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Timeout(_) => StatusCode::REQUEST_TIMEOUT,
             Self::Unavailable(_) | Self::GuestUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (
-            status,
-            Json(serde_json::json!({ "error": self.to_string() })),
-        )
-            .into_response()
+        let body = match &self {
+            Self::GitConflict { conflict_paths, .. } => serde_json::json!({
+                "error": self.to_string(),
+                "conflictPaths": conflict_paths
+            }),
+            _ => serde_json::json!({ "error": self.to_string() }),
+        };
+        (status, Json(body)).into_response()
     }
 }
 
@@ -114,6 +123,54 @@ pub struct ExecRequest {
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeCreateRequest {
     pub worktree_id: String,
+    pub head_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeCheckpointRequest {
+    pub expected_head_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeCheckpointResponse {
+    pub head_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeReviewResponse {
+    pub base_sha: String,
+    pub head_sha: String,
+    pub diff: String,
+    pub diff_digest: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRebaseRequest {
+    pub expected_head_sha: String,
+    pub onto_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRebaseResponse {
+    pub head_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeMergeRequest {
+    pub expected_integration_head_sha: String,
+    pub expected_worktree_head_sha: String,
+    pub expected_diff_digest: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeMergeResponse {
     pub head_sha: String,
 }
 

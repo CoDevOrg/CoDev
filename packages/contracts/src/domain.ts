@@ -75,6 +75,8 @@ export const agentSessionSchema = z.object({
   worktreeId: identifierSchema,
   createdBy: identifierSchema,
   issueNumber: z.number().int().positive().nullable(),
+  issueTitle: z.string().min(1).max(1_000).nullable(),
+  issueUrl: z.url().nullable(),
   name: z.string().min(1).max(32),
   model: z.string().min(1),
   status: agentSessionStatusSchema,
@@ -126,6 +128,79 @@ export const pathClaimSchema = z.object({
   expiresAt: timestampSchema,
 });
 
+export const claimPathSchema = z
+  .string()
+  .min(1)
+  .max(4_096)
+  .refine(
+    (path) =>
+      !path.startsWith("/") &&
+      !path.includes("\0") &&
+      !path.split("/").some((part) => part === "." || part === "..") &&
+      (!path.includes("*") ||
+        (path.endsWith("/**") && !path.slice(0, -3).includes("*"))),
+    "Claims must be an exact relative path or a directory/** pattern.",
+  );
+
+export const createPathClaimSchema = z.object({
+  path: claimPathSchema,
+  intent: z.string().trim().min(1).max(2_000),
+  revision: z.string().min(1).max(255),
+  ttlSeconds: z.number().int().min(30).max(3_600).default(900),
+  contest: z.boolean().default(false),
+});
+
+const claimRequestPayloadSchema = z.object({
+  claimId: identifierSchema,
+  path: claimPathSchema,
+  intent: z.string().min(1).max(2_000),
+});
+const claimResponsePayloadSchema = z.object({
+  claimId: identifierSchema,
+  decision: z.enum(["accept", "reject", "counter"]),
+  reason: z.string().min(1).max(2_000).optional(),
+  proposedPath: claimPathSchema.optional(),
+});
+const handoffPayloadSchema = z.object({
+  paths: z.array(claimPathSchema).min(1).max(100),
+  summary: z.string().min(1).max(10_000),
+  revision: z.string().min(1).max(255).optional(),
+});
+const notePayloadSchema = z.object({
+  body: z.string().min(1).max(10_000),
+});
+
+export const coordinationMessageInputSchema = z.discriminatedUnion("kind", [
+  z.object({
+    toSessionId: identifierSchema,
+    kind: z.literal("claim_request"),
+    payload: claimRequestPayloadSchema,
+    correlationId: identifierSchema.optional(),
+    responseToId: identifierSchema.optional(),
+  }),
+  z.object({
+    toSessionId: identifierSchema,
+    kind: z.literal("claim_response"),
+    payload: claimResponsePayloadSchema,
+    correlationId: identifierSchema,
+    responseToId: identifierSchema,
+  }),
+  z.object({
+    toSessionId: identifierSchema,
+    kind: z.literal("handoff"),
+    payload: handoffPayloadSchema,
+    correlationId: identifierSchema.optional(),
+    responseToId: identifierSchema.optional(),
+  }),
+  z.object({
+    toSessionId: identifierSchema,
+    kind: z.literal("note"),
+    payload: notePayloadSchema,
+    correlationId: identifierSchema.optional(),
+    responseToId: identifierSchema.optional(),
+  }),
+]);
+
 export const coordinationMessageSchema = z.object({
   id: identifierSchema,
   workspaceId: identifierSchema,
@@ -133,9 +208,40 @@ export const coordinationMessageSchema = z.object({
   toSessionId: identifierSchema,
   kind: z.enum(["claim_request", "claim_response", "handoff", "note"]),
   payload: z.record(z.string(), z.unknown()),
+  correlationId: identifierSchema,
+  responseToId: identifierSchema.nullable(),
   status: z.enum(["pending", "delivered", "resolved"]),
   createdAt: timestampSchema,
 });
+
+export const conflictResolutionInputSchema = z
+  .object({
+    worktreeId: identifierSchema.optional(),
+    path: claimPathSchema,
+    strategy: z.enum(["collaboration", "filesystem", "merged"]),
+    expectedSnapshotRevision: z.string().min(1).max(255),
+    expectedFilesystemRevision: z.string().min(1).max(255),
+    mergedContents: z
+      .string()
+      .max(2 * 1_024 * 1_024)
+      .optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.strategy === "merged" && input.mergedContents === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["mergedContents"],
+        message: "Merged contents are required for the merged strategy.",
+      });
+    }
+    if (input.strategy !== "merged" && input.mergedContents !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["mergedContents"],
+        message: "Merged contents are only valid for the merged strategy.",
+      });
+    }
+  });
 
 export type User = z.infer<typeof userSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
@@ -147,3 +253,9 @@ export type AgentTurn = z.infer<typeof agentTurnSchema>;
 export type AgentActivityEvent = z.infer<typeof agentActivityEventSchema>;
 export type PathClaim = z.infer<typeof pathClaimSchema>;
 export type CoordinationMessage = z.infer<typeof coordinationMessageSchema>;
+export type CoordinationMessageInput = z.infer<
+  typeof coordinationMessageInputSchema
+>;
+export type ConflictResolutionInput = z.infer<
+  typeof conflictResolutionInputSchema
+>;

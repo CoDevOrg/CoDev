@@ -55,12 +55,14 @@ export function WorkspaceIde({
   repository,
   branch,
   canTerminal,
+  canMerge,
   user,
 }: {
   workspaceId: string;
   repository: string;
   branch: string;
   canTerminal: boolean;
+  canMerge: boolean;
   user: {
     id: string;
     name?: string | null;
@@ -83,6 +85,7 @@ export function WorkspaceIde({
   const [collaborators, setCollaborators] = useState<CollaborationUser[]>([]);
   const [collaborationConflict, setCollaborationConflict] =
     useState<CollaborationConflict | null>(null);
+  const [resolvingConflict, setResolvingConflict] = useState(false);
   const collaboration = useRef<WorkspaceCollaboration | null>(null);
   const editor = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -377,6 +380,75 @@ export function WorkspaceIde({
       setError(
         caught instanceof Error ? caught.message : "Could not open file.",
       );
+    }
+  }
+
+  async function resolveCollaborationConflict(
+    strategy: "collaboration" | "filesystem",
+  ) {
+    if (!collaborationConflict) return;
+    setResolvingConflict(true);
+    setError("");
+    try {
+      const result = await fetch(
+        `/api/workspaces/${workspaceId}/collaboration/conflicts/resolve`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            path: collaborationConflict.path,
+            strategy,
+            expectedSnapshotRevision: collaborationConflict.snapshotRevision,
+            expectedFilesystemRevision:
+              collaborationConflict.filesystemRevision,
+          }),
+        },
+      ).then((response) =>
+        payload<{ revision: string; strategy: string }>(response),
+      );
+      if (
+        strategy === "filesystem" &&
+        openFile?.path === collaborationConflict.path
+      ) {
+        const latest = await fetch(`${apiBase}/files`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: collaborationConflict.path }),
+        }).then((response) =>
+          payload<{
+            file: { path: string; contents: string; revision: string };
+          }>(response),
+        );
+        setOpenFile({
+          path: latest.file.path,
+          contents: latest.file.contents,
+          savedContents: latest.file.contents,
+          original: latest.file.contents,
+          revision: latest.file.revision,
+          dirty: false,
+        });
+      } else if (openFile?.path === collaborationConflict.path) {
+        setOpenFile((current) =>
+          current
+            ? {
+                ...current,
+                revision: result.revision,
+                savedContents: current.contents,
+                dirty: false,
+              }
+            : null,
+        );
+      }
+      setCollaborationConflict(null);
+      await refreshFiles();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Conflict resolution failed.",
+      );
+    } finally {
+      setResolvingConflict(false);
     }
   }
 
@@ -705,10 +777,32 @@ export function WorkspaceIde({
           {error ? <div className="ide-error">{error}</div> : null}
           {collaborationConflict ? (
             <div className="collaboration-conflict" role="alert">
-              <strong>
-                Filesystem conflict in {collaborationConflict.path}
-              </strong>
-              <span>{collaborationConflict.message}</span>
+              <div>
+                <strong>
+                  Filesystem conflict in {collaborationConflict.path}
+                </strong>
+                <span>{collaborationConflict.message}</span>
+              </div>
+              <div className="collaboration-conflict-actions">
+                <button
+                  type="button"
+                  disabled={resolvingConflict}
+                  onClick={() =>
+                    void resolveCollaborationConflict("collaboration")
+                  }
+                >
+                  Keep editor version
+                </button>
+                <button
+                  type="button"
+                  disabled={resolvingConflict}
+                  onClick={() =>
+                    void resolveCollaborationConflict("filesystem")
+                  }
+                >
+                  Use sandbox version
+                </button>
+              </div>
             </div>
           ) : null}
           {openFile ? (
@@ -775,7 +869,7 @@ export function WorkspaceIde({
           )}
         </section>
 
-        <AgentPanel workspaceId={workspaceId} />
+        <AgentPanel workspaceId={workspaceId} canMerge={canMerge} />
 
         <section
           className="terminal-panel live-terminal"

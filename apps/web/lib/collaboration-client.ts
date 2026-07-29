@@ -36,7 +36,8 @@ export interface CollaborationUser {
 export interface CollaborationConflict {
   path: string;
   message: string;
-  detectedAt?: string;
+  snapshotRevision: string;
+  filesystemRevision: string;
 }
 
 interface DocumentSession {

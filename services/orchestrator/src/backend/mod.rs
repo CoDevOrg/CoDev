@@ -8,7 +8,9 @@ use chrono::{DateTime, Utc};
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCreateRequest, WriteFileRequest,
+    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
@@ -213,6 +215,74 @@ impl Backend {
         }
     }
 
+    pub async fn checkpoint_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeCheckpointRequest,
+    ) -> Result<WorktreeCheckpointResponse> {
+        match self {
+            Self::Fake(backend) => backend.checkpoint_worktree(workspace_id, worktree_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .checkpoint_worktree(workspace_id, worktree_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn review_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        base_sha: &str,
+    ) -> Result<WorktreeReviewResponse> {
+        match self {
+            Self::Fake(backend) => backend.review_worktree(workspace_id, worktree_id, base_sha),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .review_worktree(workspace_id, worktree_id, base_sha)
+                    .await
+            }
+        }
+    }
+
+    pub async fn rebase_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeRebaseRequest,
+    ) -> Result<WorktreeRebaseResponse> {
+        match self {
+            Self::Fake(backend) => backend.rebase_worktree(workspace_id, worktree_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .rebase_worktree(workspace_id, worktree_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn merge_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeMergeRequest,
+    ) -> Result<WorktreeMergeResponse> {
+        match self {
+            Self::Fake(backend) => backend.merge_worktree(workspace_id, worktree_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .merge_worktree(workspace_id, worktree_id, request)
+                    .await
+            }
+        }
+    }
+
     pub async fn git_status(
         &self,
         workspace_id: &str,
@@ -392,6 +462,57 @@ impl FakeBackend {
     fn delete_worktree(&self, workspace_id: &str, _worktree_id: &str) -> Result<()> {
         self.get(workspace_id)?;
         Ok(())
+    }
+
+    fn checkpoint_worktree(
+        &self,
+        workspace_id: &str,
+        _worktree_id: &str,
+        request: WorktreeCheckpointRequest,
+    ) -> Result<WorktreeCheckpointResponse> {
+        self.get(workspace_id)?;
+        Ok(WorktreeCheckpointResponse {
+            head_sha: request.expected_head_sha,
+        })
+    }
+
+    fn review_worktree(
+        &self,
+        workspace_id: &str,
+        _worktree_id: &str,
+        base_sha: &str,
+    ) -> Result<WorktreeReviewResponse> {
+        self.get(workspace_id)?;
+        Ok(WorktreeReviewResponse {
+            base_sha: base_sha.into(),
+            head_sha: base_sha.into(),
+            diff: String::new(),
+            diff_digest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into(),
+        })
+    }
+
+    fn rebase_worktree(
+        &self,
+        workspace_id: &str,
+        _worktree_id: &str,
+        request: WorktreeRebaseRequest,
+    ) -> Result<WorktreeRebaseResponse> {
+        self.get(workspace_id)?;
+        Ok(WorktreeRebaseResponse {
+            head_sha: request.expected_head_sha,
+        })
+    }
+
+    fn merge_worktree(
+        &self,
+        workspace_id: &str,
+        _worktree_id: &str,
+        request: WorktreeMergeRequest,
+    ) -> Result<WorktreeMergeResponse> {
+        self.get(workspace_id)?;
+        Ok(WorktreeMergeResponse {
+            head_sha: request.expected_worktree_head_sha,
+        })
     }
 
     fn git_diff(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {

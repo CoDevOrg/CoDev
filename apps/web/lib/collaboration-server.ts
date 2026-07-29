@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import {
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
+  conflictResolutionInputSchema,
+  type ConflictResolutionInput,
   type CollaborationPresenceEntry,
   type CollaborationServerMessage,
   type CollaborationUser,
@@ -29,7 +31,7 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 const PRESENCE_TTL_MS = 60_000;
 const STREAM_MAX_LENGTH = 2_000;
 const REPLAY_LIMIT = 250;
-const LOCK_TTL_MS = 15_000;
+const LOCK_TTL_MS = 75_000;
 const INSTANCE_ID = randomUUID();
 
 interface Connection {
@@ -158,7 +160,9 @@ function shouldReceive(
   return (
     !("path" in message) ||
     message.type === "error" ||
-    connection.subscriptions.has(message.path)
+    (connection.subscriptions.has(message.path) &&
+      (!("worktreeId" in message) ||
+        connection.worktreeId === message.worktreeId))
   );
 }
 
@@ -296,7 +300,12 @@ async function replay(
   );
   const events = parseStreamResult([[streamKey(workspaceId), entries]]);
   for (const event of events) {
-    if ("path" in event.message && event.message.path === path)
+    if (
+      "path" in event.message &&
+      event.message.path === path &&
+      (!("worktreeId" in event.message) ||
+        event.message.worktreeId === connection.worktreeId)
+    )
       send(connection, event.message);
   }
 }
@@ -369,6 +378,16 @@ async function resolveWorktree(workspaceId: string, requested?: string) {
   return worktree?.id ?? null;
 }
 
+async function sandboxWorktreeScope(worktreeId: string) {
+  const [worktree] = await getDatabase()
+    .select({ kind: schema.worktrees.kind })
+    .from(schema.worktrees)
+    .where(eq(schema.worktrees.id, worktreeId))
+    .limit(1);
+  if (!worktree) throw new Error("Worktree not found.");
+  return worktree.kind === "agent" ? worktreeId : undefined;
+}
+
 async function loadSnapshot(worktreeId: string, path: string) {
   const [snapshot] = await getDatabase()
     .select({
@@ -406,6 +425,10 @@ async function saveSnapshot(
       lastSyncedAt: conflictFilesystemRevision ? null : now,
       hasConflict: Boolean(conflictFilesystemRevision),
       conflictFilesystemRevision,
+      conflictDetectedAt: conflictFilesystemRevision ? now : null,
+      conflictResolvedAt: null,
+      conflictResolvedBy: null,
+      conflictResolution: null,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -419,6 +442,10 @@ async function saveSnapshot(
         lastSyncedAt: conflictFilesystemRevision ? null : now,
         hasConflict: Boolean(conflictFilesystemRevision),
         conflictFilesystemRevision,
+        conflictDetectedAt: conflictFilesystemRevision ? now : null,
+        conflictResolvedAt: null,
+        conflictResolvedBy: null,
+        conflictResolution: null,
         updatedAt: now,
       },
     });
@@ -429,7 +456,11 @@ async function initializeSnapshot(
   worktreeId: string,
   path: string,
 ) {
-  const file = await readSandboxFile(workspaceId, path);
+  const file = await readSandboxFile(
+    workspaceId,
+    path,
+    await sandboxWorktreeScope(worktreeId),
+  );
   const doc = new Y.Doc();
   doc.getText("content").insert(0, file.contents);
   const encoded = encodedDocument(doc);
@@ -448,13 +479,18 @@ async function initializeSnapshot(
 }
 
 async function reconcileSnapshot(workspaceId: string, snapshot: Snapshot) {
-  const file = await readSandboxFile(workspaceId, snapshot.path);
+  const file = await readSandboxFile(
+    workspaceId,
+    snapshot.path,
+    await sandboxWorktreeScope(snapshot.worktreeId),
+  );
   const previousRevision = snapshot.filesystemRevision ?? snapshot.revision;
   if (snapshot.hasConflict) {
     return {
       snapshot,
       event: {
         type: "conflict" as const,
+        worktreeId: snapshot.worktreeId,
         path: snapshot.path,
         snapshotRevision: snapshot.revision,
         filesystemRevision:
@@ -481,6 +517,7 @@ async function reconcileSnapshot(workspaceId: string, snapshot: Snapshot) {
       snapshot,
       event: {
         type: "conflict" as const,
+        worktreeId: snapshot.worktreeId,
         path: snapshot.path,
         snapshotRevision: previousRevision,
         filesystemRevision: file.revision,
@@ -506,6 +543,7 @@ async function reconcileSnapshot(workspaceId: string, snapshot: Snapshot) {
     snapshot: reconciled,
     event: {
       type: "reconciled" as const,
+      worktreeId: snapshot.worktreeId,
       path: snapshot.path,
       revision: file.revision,
       source: "filesystem" as const,
@@ -544,7 +582,9 @@ async function subscribe(
   );
   connection.subscriptions.add(path);
   connection.activePath = path;
-  if (result.event) await publish(workspaceId, result.event);
+  if (result.event?.type === "reconciled") {
+    await publish(workspaceId, result.event);
+  }
   if (connection.resumeFrom && !connection.replayedPaths.has(path)) {
     connection.replayedPaths.add(path);
     await replay(workspaceId, connection, connection.resumeFrom, path);
@@ -561,6 +601,9 @@ async function subscribe(
     stateVector: encodeBase64(Y.encodeStateVector(doc)),
     revision: result.snapshot.revision,
   });
+  if (result.event?.type === "conflict") {
+    await publish(workspaceId, result.event);
+  }
   await refreshPresence(workspaceId, connection);
 }
 
@@ -596,6 +639,9 @@ async function applyDocumentUpdate(
       const doc = docFromUpdate(reconciled.snapshot.update);
       Y.applyUpdate(doc, decodeBase64(update), "client");
       const contents = doc.getText("content").toString();
+      const sandboxWorktreeId = await sandboxWorktreeScope(
+        connection.worktreeId!,
+      );
       if (reconciled.event) {
         const encoded = encodedDocument(doc);
         const filesystemRevision =
@@ -615,6 +661,7 @@ async function applyDocumentUpdate(
         return {
           event: {
             type: "conflict" as const,
+            worktreeId: connection.worktreeId!,
             path,
             snapshotRevision: loaded.revision,
             filesystemRevision,
@@ -631,6 +678,7 @@ async function applyDocumentUpdate(
           expectedRevision:
             reconciled.snapshot.filesystemRevision ??
             reconciled.snapshot.revision,
+          ...(sandboxWorktreeId ? { worktreeId: sandboxWorktreeId } : {}),
         });
         const encoded = encodedDocument(doc);
         await saveSnapshot({
@@ -646,6 +694,7 @@ async function applyDocumentUpdate(
           event: null,
           updateEvent: {
             type: "update" as const,
+            worktreeId: connection.worktreeId!,
             path,
             update,
             revision: written.revision,
@@ -654,7 +703,11 @@ async function applyDocumentUpdate(
           },
         };
       } catch {
-        const latest = await readSandboxFile(workspaceId, path);
+        const latest = await readSandboxFile(
+          workspaceId,
+          path,
+          sandboxWorktreeId,
+        );
         const encoded = encodedDocument(doc);
         await saveSnapshot(
           {
@@ -666,6 +719,7 @@ async function applyDocumentUpdate(
         return {
           event: {
             type: "conflict" as const,
+            worktreeId: connection.worktreeId!,
             path,
             snapshotRevision: reconciled.snapshot.revision,
             filesystemRevision: latest.revision,
@@ -752,6 +806,7 @@ async function publishAwareness(
   const cleanUpdate = sanitizeAwareness(update, connection.user);
   const event = {
     type: "awareness" as const,
+    worktreeId: connection.worktreeId!,
     path,
     update: cleanUpdate,
     actorId: connection.user.id,
@@ -981,6 +1036,130 @@ export async function handleCollaborationSocket(
 }
 
 export const collaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
+
+export class CollaborationConflictResolutionError extends Error {
+  readonly status = 409;
+}
+
+export async function resolveCollaborationConflict(
+  workspaceId: string,
+  userId: string,
+  rawInput: unknown,
+) {
+  const input: ConflictResolutionInput =
+    conflictResolutionInputSchema.parse(rawInput);
+  const worktreeId = await resolveWorktree(workspaceId, input.worktreeId);
+  if (!worktreeId) throw new Error("Active worktree not found.");
+
+  const result = await withDocumentLock(
+    workspaceId,
+    worktreeId,
+    input.path,
+    async () => {
+      const snapshot = await loadSnapshot(worktreeId, input.path);
+      if (!snapshot?.hasConflict) {
+        throw new CollaborationConflictResolutionError(
+          "No persistent collaboration conflict exists for this document.",
+        );
+      }
+      if (snapshot.revision !== input.expectedSnapshotRevision) {
+        throw new CollaborationConflictResolutionError(
+          "The collaboration snapshot changed before resolution.",
+        );
+      }
+      const sandboxWorktreeId = await sandboxWorktreeScope(worktreeId);
+      const file = await readSandboxFile(
+        workspaceId,
+        input.path,
+        sandboxWorktreeId,
+      );
+      if (file.revision !== input.expectedFilesystemRevision) {
+        throw new CollaborationConflictResolutionError(
+          "The filesystem changed before resolution.",
+        );
+      }
+
+      const doc = docFromUpdate(snapshot.update);
+      let contents = doc.getText("content").toString();
+      if (input.strategy === "filesystem") {
+        contents = file.contents;
+        replaceDocumentContents(doc, contents);
+      } else if (input.strategy === "merged") {
+        contents = input.mergedContents ?? "";
+        replaceDocumentContents(doc, contents);
+      }
+      let resultRevision = file.revision;
+      if (input.strategy !== "filesystem") {
+        const written = await writeSandboxFile(workspaceId, {
+          path: input.path,
+          contents,
+          expectedRevision: file.revision,
+          ...(sandboxWorktreeId ? { worktreeId: sandboxWorktreeId } : {}),
+        });
+        resultRevision = written.revision;
+      }
+      const encoded = encodedDocument(doc);
+      const now = new Date();
+      await getDatabase().transaction(async (transaction) => {
+        const [resolved] = await transaction
+          .update(schema.yjsSnapshots)
+          .set({
+            revision: resultRevision,
+            update: encoded.update,
+            stateVector: encoded.stateVector,
+            filesystemContents: contents,
+            filesystemRevision: resultRevision,
+            lastSyncedAt: now,
+            hasConflict: false,
+            conflictFilesystemRevision: null,
+            conflictResolvedAt: now,
+            conflictResolvedBy: userId,
+            conflictResolution: input.strategy,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(schema.yjsSnapshots.worktreeId, worktreeId),
+              eq(schema.yjsSnapshots.path, input.path),
+              eq(schema.yjsSnapshots.hasConflict, true),
+              eq(schema.yjsSnapshots.revision, input.expectedSnapshotRevision),
+            ),
+          )
+          .returning({ id: schema.yjsSnapshots.id });
+        if (!resolved) {
+          throw new CollaborationConflictResolutionError(
+            "The conflict was resolved by another request.",
+          );
+        }
+        await transaction
+          .insert(schema.collaborationConflictResolutions)
+          .values({
+            worktreeId,
+            path: input.path,
+            resolvedBy: userId,
+            strategy: input.strategy,
+            snapshotRevision: input.expectedSnapshotRevision,
+            filesystemRevision: input.expectedFilesystemRevision,
+            resultRevision,
+          });
+      });
+      return {
+        revision: resultRevision,
+        strategy: input.strategy,
+        update: encoded.update,
+      };
+    },
+  );
+  await publish(workspaceId, {
+    type: "reconciled",
+    worktreeId,
+    path: input.path,
+    revision: result.revision,
+    source: result.strategy === "filesystem" ? "filesystem" : "collaboration",
+    update: result.update,
+  });
+  return { revision: result.revision, strategy: result.strategy };
+}
 
 export async function checkRealtimeConnection() {
   const client = redisClient();

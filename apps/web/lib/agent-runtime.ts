@@ -8,6 +8,16 @@ import { schema } from "@codev/db";
 import { getOpenAIApiKey } from "./credentials";
 import { getDatabase } from "./database";
 import {
+  createCoordinationMessage,
+  createPathClaim,
+  listCoordinationMessages,
+  listPathClaims,
+  listWorkspacePathClaims,
+  releasePathClaim,
+  requireActivePathClaim,
+  updateCoordinationMessageStatus,
+} from "./agent-coordination";
+import {
   executeInSandbox,
   getSandboxGitOutput,
   readSandboxFile,
@@ -18,6 +28,128 @@ const MODEL = "gpt-5.6-sol";
 const MAX_TOOL_ROUNDS = 12;
 
 const tools: OpenAI.Responses.Tool[] = [
+  {
+    type: "function",
+    name: "claim_path",
+    description:
+      "Claim one exact relative path or directory/** before writing files.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        intent: { type: "string" },
+        revision: { type: "string" },
+      },
+      required: ["path", "intent", "revision"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "release_claim",
+    description: "Release one of this session's path claims.",
+    parameters: {
+      type: "object",
+      properties: { claimId: { type: "string" } },
+      required: ["claimId"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "list_claims",
+    description:
+      "List active and contested path claims across both workspace agents.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "contest_path",
+    description:
+      "Create a contested claim after an overlap, so the owning agents can negotiate.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        intent: { type: "string" },
+        revision: { type: "string" },
+      },
+      required: ["path", "intent", "revision"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "list_coordination",
+    description: "List structured messages sent to or from this agent session.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "request_claim_coordination",
+    description:
+      "Ask another agent to coordinate an overlapping claim using a correlated request.",
+    parameters: {
+      type: "object",
+      properties: {
+        toSessionId: { type: "string" },
+        claimId: { type: "string" },
+        path: { type: "string" },
+        intent: { type: "string" },
+      },
+      required: ["toSessionId", "claimId", "path", "intent"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "respond_to_claim",
+    description:
+      "Respond to a claim request with an accept, reject, or counter decision.",
+    parameters: {
+      type: "object",
+      properties: {
+        toSessionId: { type: "string" },
+        responseToId: { type: "string" },
+        correlationId: { type: "string" },
+        claimId: { type: "string" },
+        decision: { type: "string", enum: ["accept", "reject", "counter"] },
+        reason: { type: "string" },
+      },
+      required: [
+        "toSessionId",
+        "responseToId",
+        "correlationId",
+        "claimId",
+        "decision",
+        "reason",
+      ],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "resolve_coordination",
+    description:
+      "Mark a coordination message delivered or resolved after acting on it.",
+    parameters: {
+      type: "object",
+      properties: {
+        messageId: { type: "string" },
+        status: { type: "string", enum: ["delivered", "resolved"] },
+      },
+      required: ["messageId", "status"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
   {
     type: "function",
     name: "list_files",
@@ -197,6 +329,97 @@ function cleanPath(path: unknown) {
   return path;
 }
 
+export function validateAgentCommand(command: string[]) {
+  if (
+    command.length < 1 ||
+    command.length > 16 ||
+    command.some(
+      (part) =>
+        !part ||
+        part.includes("\0") ||
+        part.startsWith("/") ||
+        part.split("/").includes(".."),
+    )
+  ) {
+    throw new Error("Command arguments must stay inside the worktree.");
+  }
+  const executable = command[0] ?? "";
+  const readOnlyExecutables = new Set([
+    "rg",
+    "grep",
+    "find",
+    "ls",
+    "pwd",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "test",
+  ]);
+  if (executable === "git") {
+    const operation = command[1] ?? "";
+    if (
+      !new Set([
+        "status",
+        "diff",
+        "log",
+        "show",
+        "grep",
+        "rev-parse",
+        "ls-files",
+      ]).has(operation) ||
+      command.some(
+        (part) =>
+          part === "-C" ||
+          part.startsWith("--git-dir") ||
+          part.startsWith("--work-tree"),
+      )
+    ) {
+      throw new Error("Only read-only Git inspection commands are allowed.");
+    }
+    return command;
+  }
+  if (executable === "pnpm") {
+    const operation = command[1] ?? "";
+    if (
+      !new Set([
+        "test",
+        "lint",
+        "typecheck",
+        "build",
+        "format:check",
+        "rust:check",
+      ]).has(operation)
+    ) {
+      throw new Error("Only verification pnpm scripts are allowed.");
+    }
+    return command;
+  }
+  if (executable === "npm") {
+    if (
+      command[1] !== "run" ||
+      !new Set(["test", "lint", "typecheck", "build"]).has(command[2] ?? "")
+    ) {
+      throw new Error("Only verification npm scripts are allowed.");
+    }
+    return command;
+  }
+  if (executable === "cargo") {
+    const operation = command[1] ?? "";
+    if (
+      !new Set(["check", "test", "clippy", "fmt"]).has(operation) ||
+      (operation === "fmt" && !command.includes("--check"))
+    ) {
+      throw new Error("Only non-mutating Cargo verification is allowed.");
+    }
+    return command;
+  }
+  if (!readOnlyExecutables.has(executable)) {
+    throw new Error(`Command ${executable} is outside the agent boundary.`);
+  }
+  return command;
+}
+
 async function executeTool(
   context: AgentContext,
   name: string,
@@ -245,13 +468,110 @@ async function executeTool(
       ) {
         throw new Error("write_file requires contents and expectedRevision.");
       }
+      const path = cleanPath(input.path);
+      await requireActivePathClaim(
+        context.workspaceId,
+        context.sessionId,
+        path,
+        input.expectedRevision,
+      );
       return JSON.stringify(
         await writeSandboxFile(context.workspaceId, {
-          path: cleanPath(input.path),
+          path,
           contents: input.contents,
           expectedRevision: input.expectedRevision,
           worktreeId: context.worktreeId,
         }),
+      );
+    }
+    case "claim_path": {
+      return JSON.stringify(
+        await createPathClaim(context.workspaceId, context.sessionId, {
+          path: input.path,
+          intent: input.intent,
+          revision: input.revision,
+        }),
+      );
+    }
+    case "release_claim": {
+      if (typeof input.claimId !== "string") {
+        throw new Error("release_claim requires a claimId.");
+      }
+      return JSON.stringify(
+        await releasePathClaim(
+          context.workspaceId,
+          context.sessionId,
+          input.claimId,
+        ),
+      );
+    }
+    case "list_claims":
+      return JSON.stringify(
+        await listWorkspacePathClaims(context.workspaceId, context.sessionId),
+      );
+    case "contest_path":
+      return JSON.stringify(
+        await createPathClaim(context.workspaceId, context.sessionId, {
+          path: input.path,
+          intent: input.intent,
+          revision: input.revision,
+          contest: true,
+        }),
+      );
+    case "list_coordination":
+      return JSON.stringify(
+        await listCoordinationMessages(context.workspaceId, context.sessionId),
+      );
+    case "request_claim_coordination":
+      return JSON.stringify(
+        await createCoordinationMessage(
+          context.workspaceId,
+          context.sessionId,
+          {
+            toSessionId: input.toSessionId,
+            kind: "claim_request",
+            payload: {
+              claimId: input.claimId,
+              path: input.path,
+              intent: input.intent,
+            },
+          },
+        ),
+      );
+    case "respond_to_claim":
+      return JSON.stringify(
+        await createCoordinationMessage(
+          context.workspaceId,
+          context.sessionId,
+          {
+            toSessionId: input.toSessionId,
+            kind: "claim_response",
+            correlationId: input.correlationId,
+            responseToId: input.responseToId,
+            payload: {
+              claimId: input.claimId,
+              decision: input.decision,
+              reason: input.reason,
+            },
+          },
+        ),
+      );
+    case "resolve_coordination": {
+      if (
+        typeof input.messageId !== "string" ||
+        (input.status !== "delivered" && input.status !== "resolved")
+      ) {
+        throw new Error(
+          "resolve_coordination requires a messageId and valid status.",
+        );
+      }
+      return JSON.stringify(
+        await updateCoordinationMessageStatus(
+          context.workspaceId,
+          context.sessionId,
+          input.messageId,
+          input.status,
+        ),
       );
     }
     case "git_status":
@@ -269,23 +589,7 @@ async function executeTool(
       ) {
         throw new Error("run_command requires 1-16 string arguments.");
       }
-      const command = input.command as string[];
-      const blocked = new Set([
-        "bash",
-        "sh",
-        "zsh",
-        "sudo",
-        "rm",
-        "dd",
-        "mkfs",
-        "shutdown",
-        "reboot",
-        "curl",
-        "wget",
-      ]);
-      if (blocked.has(command[0] ?? "")) {
-        throw new Error(`Command ${command[0]} is outside the agent boundary.`);
-      }
+      const command = validateAgentCommand(input.command as string[]);
       const result = await executeInSandbox(context.workspaceId, {
         worktreeId: context.worktreeId,
         command,
@@ -347,7 +651,7 @@ export async function runAgentTurn(turnId: string) {
       model: context.model || MODEL,
       reasoning: { effort: "medium" },
       instructions:
-        "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",
+        "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",
       input,
       tools,
       ...(previousResponseId
@@ -455,6 +759,17 @@ export async function listAgentSessions(workspaceId: string) {
       status: schema.agentSessions.status,
       worktreeId: schema.agentSessions.worktreeId,
       worktreeName: schema.worktrees.name,
+      worktreeStatus: schema.worktrees.status,
+      reviewHeadSha: schema.worktrees.reviewHeadSha,
+      reviewBaseSha: schema.worktrees.reviewBaseSha,
+      reviewDiffDigest: schema.worktrees.reviewDiffDigest,
+      reviewedBy: schema.worktrees.reviewedBy,
+      reviewedAt: schema.worktrees.reviewedAt,
+      mergedAt: schema.worktrees.mergedAt,
+      discardedAt: schema.worktrees.discardedAt,
+      issueNumber: schema.agentSessions.issueNumber,
+      issueTitle: schema.githubIssueAssignments.title,
+      issueUrl: schema.githubIssueAssignments.url,
       lastError: schema.agentSessions.lastError,
       createdAt: schema.agentSessions.createdAt,
     })
@@ -462,6 +777,10 @@ export async function listAgentSessions(workspaceId: string) {
     .innerJoin(
       schema.worktrees,
       eq(schema.agentSessions.worktreeId, schema.worktrees.id),
+    )
+    .leftJoin(
+      schema.githubIssueAssignments,
+      eq(schema.agentSessions.id, schema.githubIssueAssignments.sessionId),
     )
     .where(eq(schema.agentSessions.workspaceId, workspaceId))
     .orderBy(asc(schema.agentSessions.createdAt));
@@ -490,7 +809,17 @@ export async function listAgentSessions(workspaceId: string) {
       .where(eq(schema.agentEvents.sessionId, session.id))
       .orderBy(desc(schema.agentEvents.createdAt))
       .limit(80);
-    result.push({ ...session, turns, events: events.reverse() });
+    const [claims, messages] = await Promise.all([
+      listPathClaims(workspaceId, session.id),
+      listCoordinationMessages(workspaceId, session.id),
+    ]);
+    result.push({
+      ...session,
+      turns,
+      events: events.reverse(),
+      claims,
+      messages,
+    });
   }
   return result;
 }

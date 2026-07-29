@@ -17,8 +17,9 @@ use crate::{
     backend::SharedBackend,
     model::{
         CreateRequest, ExecRequest, Result, RuntimeError, TerminalInputRequest,
-        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest, WorktreeCreateRequest,
-        WriteFileRequest,
+        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -35,6 +36,12 @@ struct FileRequest {
 #[serde(rename_all = "camelCase")]
 struct WorktreeQuery {
     worktree_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeReviewQuery {
+    base_sha: String,
 }
 
 pub fn router(backend: SharedBackend) -> Router {
@@ -56,6 +63,22 @@ pub fn router(backend: SharedBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}",
             delete(delete_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/checkpoint",
+            post(checkpoint_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/review",
+            get(review_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/rebase",
+            post(rebase_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/merge",
+            post(merge_worktree),
         )
         .route(
             "/v1/sandboxes/{workspace_id}/terminals",
@@ -211,6 +234,83 @@ async fn delete_worktree(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn checkpoint_worktree(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, worktree_id)): Path<(String, String)>,
+    Json(request): Json<WorktreeCheckpointRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&worktree_id)?;
+    validate_sha(&request.expected_head_sha, "expected worktree head SHA")?;
+    let response = backend
+        .checkpoint_worktree(&workspace_id, &worktree_id, request)
+        .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
+async fn review_worktree(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, worktree_id)): Path<(String, String)>,
+    Query(query): Query<WorktreeReviewQuery>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&worktree_id)?;
+    validate_sha(&query.base_sha, "review base SHA")?;
+    let response = backend
+        .review_worktree(&workspace_id, &worktree_id, &query.base_sha)
+        .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
+async fn rebase_worktree(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, worktree_id)): Path<(String, String)>,
+    Json(request): Json<WorktreeRebaseRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&worktree_id)?;
+    validate_sha(&request.expected_head_sha, "expected worktree head SHA")?;
+    validate_sha(&request.onto_sha, "rebase target SHA")?;
+    let response = backend
+        .rebase_worktree(&workspace_id, &worktree_id, request)
+        .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
+async fn merge_worktree(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, worktree_id)): Path<(String, String)>,
+    Json(request): Json<WorktreeMergeRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&worktree_id)?;
+    validate_sha(
+        &request.expected_integration_head_sha,
+        "expected integration head SHA",
+    )?;
+    validate_sha(
+        &request.expected_worktree_head_sha,
+        "expected worktree head SHA",
+    )?;
+    if !digest_pattern().is_match(&request.expected_diff_digest) {
+        return Err(RuntimeError::BadRequest(
+            "invalid expected diff digest".into(),
+        ));
+    }
+    let response = backend
+        .merge_worktree(&workspace_id, &worktree_id, request)
+        .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
 async fn start_terminal(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -357,6 +457,14 @@ fn validate_worktree_id(worktree_id: &str) -> Result<()> {
     }
 }
 
+fn validate_sha(value: &str, label: &str) -> Result<()> {
+    if commit_sha_pattern().is_match(value) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest(format!("invalid {label}")))
+    }
+}
+
 fn workspace_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
@@ -380,6 +488,11 @@ fn worktree_id_pattern() -> &'static Regex {
     PATTERN.get_or_init(|| {
         Regex::new(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$").expect("worktree regex")
     })
+}
+
+fn digest_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"^[0-9a-f]{64}$").expect("digest regex"))
 }
 
 #[cfg(test)]
@@ -453,6 +566,60 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(worktree.status(), StatusCode::CREATED);
+
+        let checkpoint = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/checkpoint")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "expectedHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(checkpoint.status(), StatusCode::OK);
+
+        let review = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/review?baseSha=fc1ba2947ffdaf8c1961e5342387e1079afface6")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(review.status(), StatusCode::OK);
+        let review_body = to_bytes(review.into_body(), 1 << 20).await.expect("body");
+        assert!(String::from_utf8_lossy(&review_body).contains("diffDigest"));
+
+        let invalid_merge = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/merge")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "expectedIntegrationHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
+                            "expectedWorktreeHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
+                            "expectedDiffDigest": "bad"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(invalid_merge.status(), StatusCode::BAD_REQUEST);
 
         let invalid_worktree = app
             .oneshot(

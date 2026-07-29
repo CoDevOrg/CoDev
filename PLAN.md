@@ -27,7 +27,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 4     | Browser IDE and Terminal          | Complete    |
 | 5     | Realtime Collaboration            | Complete    |
 | 6     | Parallel Agent Runtime            | Complete    |
-| 7     | Collision Coordination and Review | Not started |
+| 7     | Collision Coordination and Review | Complete    |
 | 8     | GitHub Publication and Hardening  | Not started |
 
 ## Phase 1: Foundation and Live Website
@@ -175,6 +175,28 @@ Run up to two durable agent sessions in separate Git worktrees. Stream tool call
 ## Phase 7: Collision Coordination and Review
 
 Add exact GitHub-issue duplicate detection, path claims, structured agent negotiation, revision-checked writes, collaborative conflict resolution, and capability-gated merge or discard.
+
+### Acceptance Criteria
+
+- Assigning the same GitHub issue to a second agent in the same repository is rejected before a worktree is created.
+- Agents claim exact paths or directory patterns before writing, can contest overlaps, and negotiate through correlated, typed coordination messages.
+- Collaborative document events are isolated by worktree; filesystem conflicts preserve both versions until a member explicitly chooses the editor, sandbox, or merged result.
+- Review preparation creates a stable checkpoint and complete binary-safe diff digest while freezing further agent turns.
+- Rebase reports conflicting paths and aborts cleanly without losing the review checkpoint.
+- Members with merge capability can merge only the reviewed head and digest into the current integration head; stale reviews, active conflicts, and contested claims block the operation.
+- Merge and discard cancel durable workflows, release claims, and remove agent worktrees idempotently.
+- Formatting, linting, type checking, unit tests, browser tests, production builds, Rust checks, database checks, and deployed health checks pass.
+
+### Phase 7 Delivery
+
+- Assignment: optional exact GitHub issue ownership with repository-wide uniqueness
+- Coordination: expiring path claims, overlap detection, contests, and structured agent-to-agent negotiation
+- Review: immutable checkpoint, complete diff digest, guarded rebase, capability-gated merge, and discard
+- Collaboration: explicit editor, filesystem, or merged conflict resolution with revision guards and audit history
+- Runtime: Rust release `phase7-1e532399ccbd` on the scale-to-zero AWS host
+- Database: Supabase migration `0006_cynical_vin_gonzales.sql` with RLS and server-only privileges
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
+- Completed: July 29, 2026
 
 ## Phase 8: GitHub Publication and Hardening
 

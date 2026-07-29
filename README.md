@@ -4,10 +4,11 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 6 adds two durable OpenAI coding-agent sessions, isolated Git
-> worktrees, live tool activity, queued follow-ups, and interruption controls.
-> Each turn uses its author's encrypted provider credential server-side; keys
-> are never sent to the browser or Firecracker guest.
+> Phase 7 adds exact issue ownership, expiring path claims, structured agent
+> negotiation, explicit collaboration-conflict resolution, and a guarded
+> review/rebase/merge/discard lifecycle. Each turn still uses its author's
+> encrypted provider credential server-side; keys are never sent to the
+> browser or Firecracker guest.
 
 ## Website
 

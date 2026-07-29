@@ -10,7 +10,9 @@ use tokio::{
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCreateRequest, WriteFileRequest,
+    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+    WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 3 << 20;
@@ -135,6 +137,58 @@ impl GuestClient {
         .map(|_| ())
     }
 
+    pub async fn checkpoint_worktree(
+        &self,
+        worktree_id: &str,
+        request: &WorktreeCheckpointRequest,
+    ) -> Result<WorktreeCheckpointResponse> {
+        self.request(
+            "POST",
+            &format!("/v1/worktrees/{worktree_id}/checkpoint"),
+            Some(request),
+        )
+        .await
+    }
+
+    pub async fn review_worktree(
+        &self,
+        worktree_id: &str,
+        base_sha: &str,
+    ) -> Result<WorktreeReviewResponse> {
+        self.request::<(), _>(
+            "GET",
+            &format!("/v1/worktrees/{worktree_id}/review?baseSha={base_sha}"),
+            None,
+        )
+        .await
+    }
+
+    pub async fn rebase_worktree(
+        &self,
+        worktree_id: &str,
+        request: &WorktreeRebaseRequest,
+    ) -> Result<WorktreeRebaseResponse> {
+        self.request(
+            "POST",
+            &format!("/v1/worktrees/{worktree_id}/rebase"),
+            Some(request),
+        )
+        .await
+    }
+
+    pub async fn merge_worktree(
+        &self,
+        worktree_id: &str,
+        request: &WorktreeMergeRequest,
+    ) -> Result<WorktreeMergeResponse> {
+        self.request(
+            "POST",
+            &format!("/v1/worktrees/{worktree_id}/merge"),
+            Some(request),
+        )
+        .await
+    }
+
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {
         self.git(&git_path("status", worktree_id)).await
     }
@@ -219,12 +273,33 @@ impl GuestClient {
                 .await
                 .map_err(|error| RuntimeError::GuestUnavailable(error.to_string()))?;
             if !(200..300).contains(&status) {
-                let message = serde_json::from_slice::<serde_json::Value>(&response_body)
-                    .ok()
+                let payload = serde_json::from_slice::<serde_json::Value>(&response_body).ok();
+                let message = payload
+                    .as_ref()
                     .and_then(|value| value.get("error")?.as_str().map(str::to_owned))
                     .unwrap_or_else(|| format!("guest daemon returned HTTP {status}"));
                 return Err(match status {
-                    409 => RuntimeError::Conflict(message),
+                    409 => {
+                        let conflict_paths = payload
+                            .as_ref()
+                            .and_then(|value| value.get("conflictPaths"))
+                            .and_then(|value| value.as_array())
+                            .map(|paths| {
+                                paths
+                                    .iter()
+                                    .filter_map(|path| path.as_str().map(str::to_owned))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        if conflict_paths.is_empty() {
+                            RuntimeError::Conflict(message)
+                        } else {
+                            RuntimeError::GitConflict {
+                                message,
+                                conflict_paths,
+                            }
+                        }
+                    }
                     408 => RuntimeError::Timeout(message),
                     _ => RuntimeError::GuestUnavailable(message),
                 });

@@ -93,6 +93,7 @@ const syncMessageSchema = z.object({
 
 const serverUpdateMessageSchema = z.object({
   type: z.literal("update"),
+  worktreeId: identifierSchema,
   path: collaborationPathSchema,
   update: yjsUpdateBase64Schema,
   revision: z.string().min(1),
@@ -101,6 +102,7 @@ const serverUpdateMessageSchema = z.object({
 });
 
 const serverAwarenessMessageSchema = awarenessMessageSchema.extend({
+  worktreeId: identifierSchema,
   actorId: identifierSchema,
   connectionId: z.string().min(1),
   streamId: z.string().min(1),
@@ -120,6 +122,7 @@ const presenceMessageSchema = z.object({
 
 const reconciledMessageSchema = z.object({
   type: z.literal("reconciled"),
+  worktreeId: identifierSchema,
   path: collaborationPathSchema,
   revision: z.string().min(1),
   source: z.enum(["collaboration", "filesystem"]),
@@ -128,6 +131,7 @@ const reconciledMessageSchema = z.object({
 
 const conflictMessageSchema = z.object({
   type: z.literal("conflict"),
+  worktreeId: identifierSchema,
   path: collaborationPathSchema,
   snapshotRevision: z.string().min(1),
   filesystemRevision: z.string().min(1),

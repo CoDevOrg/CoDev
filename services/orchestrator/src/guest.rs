@@ -20,7 +20,9 @@ use wait_timeout::ChildExt;
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, RuntimeError, TerminalChunk, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCreateRequest, WriteFileRequest,
+    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+    WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -54,9 +56,16 @@ struct FileRequest {
     worktree_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorktreeReviewQuery {
+    base_sha: String,
+}
+
 pub struct GuestService {
     workspace_root: PathBuf,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
+    mutations: Mutex<()>,
 }
 
 impl GuestService {
@@ -70,6 +79,7 @@ impl GuestService {
         Ok(Self {
             workspace_root,
             terminals: Mutex::new(HashMap::new()),
+            mutations: Mutex::new(()),
         })
     }
 
@@ -86,8 +96,17 @@ impl GuestService {
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
-                    match method {
-                        "DELETE" => self.delete_worktree(worktree_id),
+                    let (worktree_id, action_and_query) =
+                        worktree_id.split_once('/').unwrap_or((worktree_id, ""));
+                    let (action, query) = action_and_query
+                        .split_once('?')
+                        .unwrap_or((action_and_query, ""));
+                    match (method, action) {
+                        ("DELETE", "") => self.delete_worktree(worktree_id),
+                        ("POST", "checkpoint") => self.checkpoint_worktree(worktree_id, body),
+                        ("GET", "review") => self.review_worktree(worktree_id, query),
+                        ("POST", "rebase") => self.rebase_worktree(worktree_id, body),
+                        ("POST", "merge") => self.merge_worktree(worktree_id, body),
                         _ => Err(RuntimeError::BadRequest("invalid worktree action".into())),
                     }
                 } else if let Some((git_path, worktree_id)) = git_route(path) {
@@ -117,6 +136,16 @@ impl GuestService {
                 RuntimeError::RevisionMismatch(_) | RuntimeError::Conflict(_) => {
                     GuestResponse::error(409, error)
                 }
+                RuntimeError::GitConflict {
+                    message,
+                    conflict_paths,
+                } => GuestResponse::json(
+                    409,
+                    serde_json::json!({
+                        "error": message,
+                        "conflictPaths": conflict_paths
+                    }),
+                ),
                 RuntimeError::Timeout(_) => GuestResponse::error(408, error),
                 RuntimeError::Unavailable(_) => GuestResponse::error(503, error),
                 _ => GuestResponse::error(500, error),
@@ -158,6 +187,7 @@ impl GuestService {
 
     fn write_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: WriteFileRequest = decode(body)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
         if request.contents.len() > MAX_BODY_BYTES {
             return Err(RuntimeError::BadRequest(
                 "file exceeds the two MiB limit".into(),
@@ -181,6 +211,7 @@ impl GuestService {
 
     fn exec(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: ExecRequest = decode(body)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
         if request.command.is_empty() || request.command.len() > 32 {
             return Err(RuntimeError::BadRequest(
                 "command must contain between 1 and 32 arguments".into(),
@@ -270,6 +301,7 @@ impl GuestService {
 
     fn start_terminal(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: TerminalStartRequest = decode(body)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
         let size = validated_terminal_size(request.rows, request.columns)?;
         let pty = native_pty_system()
             .openpty(size)
@@ -458,6 +490,7 @@ impl GuestService {
 
     fn create_worktree(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: WorktreeCreateRequest = decode(body)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
         validate_worktree_id(&request.worktree_id)?;
         validate_commit_sha(&request.head_sha)?;
         let worktrees_root = self.worktrees_root()?;
@@ -486,9 +519,11 @@ impl GuestService {
 
     fn delete_worktree(&self, worktree_id: &str) -> crate::model::Result<serde_json::Value> {
         validate_worktree_id(worktree_id)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
         let target = self.worktrees_root()?.join(worktree_id);
         if !target.is_dir() {
-            return Err(RuntimeError::BadRequest("worktree not found".into()));
+            self.git(&self.workspace_root, &["worktree", "prune"])?;
+            return Ok(serde_json::json!({ "deleted": false }));
         }
         let target = fs::canonicalize(target).map_err(RuntimeError::internal)?;
         let root = self.worktrees_root()?;
@@ -512,7 +547,225 @@ impl GuestService {
         Ok(serde_json::json!({ "deleted": true }))
     }
 
+    fn checkpoint_worktree(
+        &self,
+        worktree_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_worktree_id(worktree_id)?;
+        let request: WorktreeCheckpointRequest = decode(body)?;
+        validate_commit_sha(&request.expected_head_sha)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        let root = self.target_root(Some(worktree_id))?;
+        self.require_head(&root, &request.expected_head_sha, "worktree")?;
+        self.git(&root, &["add", "--all"])?;
+        let staged = self.git_output(&root, &["diff", "--cached", "--quiet", "--"])?;
+        let head_sha = if staged.status.success() {
+            request.expected_head_sha
+        } else if staged.status.code() == Some(1) {
+            self.git(
+                &root,
+                &[
+                    "-c",
+                    "user.name=CoDev",
+                    "-c",
+                    "user.email=agent@codev.dev",
+                    "commit",
+                    "--no-gpg-sign",
+                    "-m",
+                    "CoDev agent checkpoint",
+                ],
+            )?;
+            self.head_sha(&root)?
+        } else {
+            return Err(git_failure("inspect staged checkpoint", &staged));
+        };
+        serde_json::to_value(WorktreeCheckpointResponse { head_sha })
+            .map_err(RuntimeError::internal)
+    }
+
+    fn review_worktree(
+        &self,
+        worktree_id: &str,
+        query: &str,
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_worktree_id(worktree_id)?;
+        let request = parse_review_query(query)?;
+        validate_commit_sha(&request.base_sha)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        let root = self.target_root(Some(worktree_id))?;
+        self.require_clean(&root, "checkpoint the worktree before review")?;
+        self.require_commit(&request.base_sha)?;
+        let head_sha = self.head_sha(&root)?;
+        let diff = self.review_diff(&request.base_sha, &head_sha)?;
+        let diff_digest = revision(&diff);
+        serde_json::to_value(WorktreeReviewResponse {
+            base_sha: request.base_sha,
+            head_sha,
+            diff: String::from_utf8_lossy(&diff).into_owned(),
+            diff_digest,
+        })
+        .map_err(RuntimeError::internal)
+    }
+
+    fn rebase_worktree(
+        &self,
+        worktree_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_worktree_id(worktree_id)?;
+        let request: WorktreeRebaseRequest = decode(body)?;
+        validate_commit_sha(&request.expected_head_sha)?;
+        validate_commit_sha(&request.onto_sha)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        let root = self.target_root(Some(worktree_id))?;
+        self.require_clean(&root, "checkpoint the worktree before rebasing")?;
+        self.require_head(&root, &request.expected_head_sha, "worktree")?;
+        self.require_head(&self.workspace_root, &request.onto_sha, "integration")?;
+        let output = self.git_output(&root, &["rebase", &request.onto_sha])?;
+        if !output.status.success() {
+            let conflicts = self
+                .git_output(&root, &["diff", "--name-only", "--diff-filter=U", "--"])?
+                .stdout;
+            let conflict_paths = String::from_utf8_lossy(&conflicts)
+                .lines()
+                .map(str::to_owned)
+                .collect();
+            let message = git_error_message("rebase worktree", &output);
+            let _ = self.git_output(&root, &["rebase", "--abort"]);
+            return Err(RuntimeError::GitConflict {
+                message,
+                conflict_paths,
+            });
+        }
+        let head_sha = self.head_sha(&root)?;
+        serde_json::to_value(WorktreeRebaseResponse { head_sha }).map_err(RuntimeError::internal)
+    }
+
+    fn merge_worktree(
+        &self,
+        worktree_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_worktree_id(worktree_id)?;
+        let request: WorktreeMergeRequest = decode(body)?;
+        validate_commit_sha(&request.expected_integration_head_sha)?;
+        validate_commit_sha(&request.expected_worktree_head_sha)?;
+        validate_digest(&request.expected_diff_digest)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        if !self.terminals.lock().expect("terminal map lock").is_empty() {
+            return Err(RuntimeError::Conflict(
+                "close active terminals before merging".into(),
+            ));
+        }
+        let root = self.target_root(Some(worktree_id))?;
+        self.require_clean(&root, "checkpoint the worktree before merging")?;
+        self.require_clean(&self.workspace_root, "integration worktree is dirty")?;
+        self.require_head(
+            &self.workspace_root,
+            &request.expected_integration_head_sha,
+            "integration",
+        )?;
+        self.require_head(&root, &request.expected_worktree_head_sha, "worktree")?;
+        let diff = self.review_diff(
+            &request.expected_integration_head_sha,
+            &request.expected_worktree_head_sha,
+        )?;
+        if revision(&diff) != request.expected_diff_digest {
+            return Err(RuntimeError::Conflict(
+                "reviewed diff digest is stale".into(),
+            ));
+        }
+        let ancestor = self.git_output(
+            &self.workspace_root,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                &request.expected_integration_head_sha,
+                &request.expected_worktree_head_sha,
+            ],
+        )?;
+        if !ancestor.status.success() {
+            return Err(RuntimeError::Conflict(
+                "worktree must be rebased before merging".into(),
+            ));
+        }
+        self.git(
+            &self.workspace_root,
+            &["merge", "--ff-only", &request.expected_worktree_head_sha],
+        )?;
+        let head_sha = self.head_sha(&self.workspace_root)?;
+        serde_json::to_value(WorktreeMergeResponse { head_sha }).map_err(RuntimeError::internal)
+    }
+
+    fn require_head(&self, root: &Path, expected: &str, label: &str) -> crate::model::Result<()> {
+        let actual = self.head_sha(root)?;
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(RuntimeError::Conflict(format!(
+                "{label} head changed: expected {expected}, found {actual}"
+            )))
+        }
+    }
+
+    fn require_clean(&self, root: &Path, message: &str) -> crate::model::Result<()> {
+        let output = self.git_output(root, &["status", "--porcelain=v1"])?;
+        if output.status.success() && output.stdout.is_empty() {
+            Ok(())
+        } else if output.status.success() {
+            Err(RuntimeError::Conflict(message.into()))
+        } else {
+            Err(git_failure("inspect worktree status", &output))
+        }
+    }
+
+    fn require_commit(&self, sha: &str) -> crate::model::Result<()> {
+        let object = format!("{sha}^{{commit}}");
+        let output = self.git_output(&self.workspace_root, &["cat-file", "-e", &object])?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(RuntimeError::BadRequest("Git commit not found".into()))
+        }
+    }
+
+    fn head_sha(&self, root: &Path) -> crate::model::Result<String> {
+        let output = self.git_output(root, &["rev-parse", "HEAD"])?;
+        if !output.status.success() {
+            return Err(git_failure("resolve Git head", &output));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().into())
+    }
+
+    fn review_diff(&self, base_sha: &str, head_sha: &str) -> crate::model::Result<Vec<u8>> {
+        let range = format!("{base_sha}...{head_sha}");
+        let output = self.git_output(
+            &self.workspace_root,
+            &["diff", "--binary", "--no-ext-diff", &range, "--"],
+        )?;
+        if output.status.success() {
+            Ok(output.stdout)
+        } else {
+            Err(git_failure("create review diff", &output))
+        }
+    }
+
     fn git(&self, root: &Path, arguments: &[&str]) -> crate::model::Result<serde_json::Value> {
+        let output = self.git_output(root, arguments)?;
+        if !output.status.success() {
+            return Err(git_failure("run Git command", &output));
+        }
+        Ok(serde_json::json!({
+            "output": String::from_utf8_lossy(&output.stdout)
+        }))
+    }
+
+    fn git_output(
+        &self,
+        root: &Path,
+        arguments: &[&str],
+    ) -> crate::model::Result<std::process::Output> {
         let mut child = Command::new("git")
             .arg("-C")
             .arg(root)
@@ -535,14 +788,7 @@ impl GuestService {
                 "git output exceeds the two MiB limit".into(),
             ));
         }
-        if !output.status.success() {
-            return Err(RuntimeError::Conflict(
-                String::from_utf8_lossy(&output.stderr).trim().into(),
-            ));
-        }
-        Ok(serde_json::json!({
-            "output": String::from_utf8_lossy(&output.stdout)
-        }))
+        Ok(output)
     }
 
     fn target_root(&self, worktree_id: Option<&str>) -> crate::model::Result<PathBuf> {
@@ -690,6 +936,43 @@ fn validate_commit_sha(head_sha: &str) -> crate::model::Result<()> {
     }
 }
 
+fn validate_digest(digest: &str) -> crate::model::Result<()> {
+    if digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest("invalid diff digest".into()))
+    }
+}
+
+fn parse_review_query(query: &str) -> crate::model::Result<WorktreeReviewQuery> {
+    let base_sha = query
+        .split('&')
+        .find_map(|part| part.strip_prefix("baseSha="))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| RuntimeError::BadRequest("baseSha is required".into()))?;
+    Ok(WorktreeReviewQuery {
+        base_sha: base_sha.into(),
+    })
+}
+
+fn git_error_message(action: &str, output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let message = stderr.trim();
+    if message.is_empty() {
+        format!("{action} failed with status {}", output.status)
+    } else {
+        format!("{action} failed: {message}")
+    }
+}
+
+fn git_failure(action: &str, output: &std::process::Output) -> RuntimeError {
+    RuntimeError::Conflict(git_error_message(action, output))
+}
+
 fn validated_terminal_size(rows: u16, columns: u16) -> crate::model::Result<PtySize> {
     let rows = if rows == 0 { 24 } else { rows };
     let cols = if columns == 0 { 80 } else { columns };
@@ -806,7 +1089,7 @@ mod tests {
             "/v1/worktrees",
             serde_json::to_string(&WorktreeCreateRequest {
                 worktree_id: "agent-one".into(),
-                head_sha,
+                head_sha: head_sha.clone(),
             })
             .expect("request")
             .as_bytes(),
@@ -861,6 +1144,139 @@ mod tests {
         let exec: ExecResponse = serde_json::from_slice(&exec.body).expect("exec");
         assert!(exec.output.contains("codev-agent-worktrees/agent-one"));
 
+        let worktree_root = directory
+            .path()
+            .join(".git/codev-agent-worktrees/agent-one");
+        fs::write(worktree_root.join("created.txt"), "new file").expect("new file");
+        let premature_review = service.handle(
+            "GET",
+            &format!("/v1/worktrees/agent-one/review?baseSha={head_sha}"),
+            b"",
+        );
+        assert_eq!(premature_review.status, 409);
+        let stale_checkpoint = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/checkpoint",
+            serde_json::to_string(&WorktreeCheckpointRequest {
+                expected_head_sha: "0".repeat(40),
+            })
+            .expect("checkpoint request")
+            .as_bytes(),
+        );
+        assert_eq!(stale_checkpoint.status, 409);
+        let checkpoint = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/checkpoint",
+            serde_json::to_string(&WorktreeCheckpointRequest {
+                expected_head_sha: head_sha.clone(),
+            })
+            .expect("checkpoint request")
+            .as_bytes(),
+        );
+        assert_eq!(
+            checkpoint.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&checkpoint.body)
+        );
+        let checkpoint: WorktreeCheckpointResponse =
+            serde_json::from_slice(&checkpoint.body).expect("checkpoint");
+        assert_ne!(checkpoint.head_sha, head_sha);
+
+        let review = service.handle(
+            "GET",
+            &format!("/v1/worktrees/agent-one/review?baseSha={head_sha}"),
+            b"",
+        );
+        assert_eq!(review.status, 200);
+        let review: WorktreeReviewResponse = serde_json::from_slice(&review.body).expect("review");
+        assert!(review.diff.contains("agent edit"));
+        assert!(review.diff.contains("created.txt"));
+        assert_eq!(review.diff_digest.len(), 64);
+
+        let terminal = service.handle("POST", "/v1/terminals", br#"{}"#);
+        assert_eq!(terminal.status, 200);
+        let terminal: serde_json::Value = serde_json::from_slice(&terminal.body).expect("terminal");
+        let terminal_id = terminal["sessionId"].as_str().expect("terminal id");
+        let terminal_blocked_merge = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/merge",
+            serde_json::to_string(&WorktreeMergeRequest {
+                expected_integration_head_sha: head_sha.clone(),
+                expected_worktree_head_sha: checkpoint.head_sha.clone(),
+                expected_diff_digest: review.diff_digest.clone(),
+            })
+            .expect("merge request")
+            .as_bytes(),
+        );
+        assert_eq!(terminal_blocked_merge.status, 409);
+        assert_eq!(
+            service
+                .handle("DELETE", &format!("/v1/terminals/{terminal_id}"), b"")
+                .status,
+            200
+        );
+
+        let stale_merge = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/merge",
+            serde_json::to_string(&WorktreeMergeRequest {
+                expected_integration_head_sha: head_sha.clone(),
+                expected_worktree_head_sha: checkpoint.head_sha.clone(),
+                expected_diff_digest: "0".repeat(64),
+            })
+            .expect("merge request")
+            .as_bytes(),
+        );
+        assert_eq!(stale_merge.status, 409);
+        assert_eq!(
+            fs::read_to_string(directory.path().join("hello.txt")).expect("integration read"),
+            "integration"
+        );
+
+        fs::write(directory.path().join("dirty.txt"), "dirty").expect("dirty integration");
+        let dirty_merge = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/merge",
+            serde_json::to_string(&WorktreeMergeRequest {
+                expected_integration_head_sha: head_sha.clone(),
+                expected_worktree_head_sha: checkpoint.head_sha.clone(),
+                expected_diff_digest: review.diff_digest.clone(),
+            })
+            .expect("merge request")
+            .as_bytes(),
+        );
+        assert_eq!(dirty_merge.status, 409);
+        fs::remove_file(directory.path().join("dirty.txt")).expect("clean integration");
+
+        let merge = service.handle(
+            "POST",
+            "/v1/worktrees/agent-one/merge",
+            serde_json::to_string(&WorktreeMergeRequest {
+                expected_integration_head_sha: head_sha,
+                expected_worktree_head_sha: checkpoint.head_sha.clone(),
+                expected_diff_digest: review.diff_digest,
+            })
+            .expect("merge request")
+            .as_bytes(),
+        );
+        assert_eq!(
+            merge.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&merge.body)
+        );
+        let merge: WorktreeMergeResponse = serde_json::from_slice(&merge.body).expect("merge");
+        assert_eq!(merge.head_sha, checkpoint.head_sha);
+        assert_eq!(
+            fs::read_to_string(directory.path().join("hello.txt")).expect("merged read"),
+            "agent edit"
+        );
+        assert_eq!(
+            fs::read_to_string(directory.path().join("created.txt")).expect("new file read"),
+            "new file"
+        );
+
         let invalid = service.handle("GET", "/v1/git/status?worktreeId=../integration", b"");
         assert_eq!(invalid.status, 400);
 
@@ -871,8 +1287,112 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&delete.body)
         );
+        let repeated_delete = service.handle("DELETE", "/v1/worktrees/agent-one", b"");
+        assert_eq!(repeated_delete.status, 200);
         let missing = service.handle("GET", "/v1/git/status?worktreeId=agent-one", b"");
         assert_eq!(missing.status, 400);
+    }
+
+    #[test]
+    fn rebase_reports_conflicts_and_aborts_without_losing_checkpoint() {
+        let directory = tempdir().expect("tempdir");
+        git(directory.path(), &["init", "--quiet"]);
+        git(
+            directory.path(),
+            &["config", "user.email", "codev@example.com"],
+        );
+        git(directory.path(), &["config", "user.name", "CoDev Test"]);
+        fs::write(directory.path().join("shared.txt"), "base\n").expect("shared");
+        fs::write(directory.path().join("agent.txt"), "base\n").expect("agent");
+        fs::write(directory.path().join("integration.txt"), "base\n").expect("integration");
+        git(directory.path(), &["add", "--all"]);
+        git(directory.path(), &["commit", "--quiet", "-m", "seed"]);
+        let base_sha = git_stdout(directory.path(), &["rev-parse", "HEAD"]);
+        let service = GuestService::new(directory.path()).expect("service");
+
+        for worktree_id in ["agent-rebase", "agent-conflict"] {
+            let create = service.handle(
+                "POST",
+                "/v1/worktrees",
+                serde_json::to_string(&WorktreeCreateRequest {
+                    worktree_id: worktree_id.into(),
+                    head_sha: base_sha.clone(),
+                })
+                .expect("create request")
+                .as_bytes(),
+            );
+            assert_eq!(create.status, 200);
+        }
+        let roots = directory.path().join(".git/codev-agent-worktrees");
+        fs::write(roots.join("agent-rebase/agent.txt"), "agent change\n").expect("agent edit");
+        fs::write(roots.join("agent-conflict/shared.txt"), "agent conflict\n")
+            .expect("conflict edit");
+        let rebase_checkpoint = checkpoint(&service, "agent-rebase", &base_sha);
+        let conflict_checkpoint = checkpoint(&service, "agent-conflict", &base_sha);
+
+        fs::write(
+            directory.path().join("integration.txt"),
+            "integration change\n",
+        )
+        .expect("integration edit");
+        fs::write(
+            directory.path().join("shared.txt"),
+            "integration conflict\n",
+        )
+        .expect("integration conflict");
+        git(directory.path(), &["add", "--all"]);
+        git(
+            directory.path(),
+            &["commit", "--quiet", "-m", "integration"],
+        );
+        let integration_sha = git_stdout(directory.path(), &["rev-parse", "HEAD"]);
+
+        let rebased = service.handle(
+            "POST",
+            "/v1/worktrees/agent-rebase/rebase",
+            serde_json::to_string(&WorktreeRebaseRequest {
+                expected_head_sha: rebase_checkpoint.head_sha,
+                onto_sha: integration_sha.clone(),
+            })
+            .expect("rebase request")
+            .as_bytes(),
+        );
+        assert_eq!(
+            rebased.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&rebased.body)
+        );
+        let rebased: WorktreeRebaseResponse =
+            serde_json::from_slice(&rebased.body).expect("rebase");
+        assert_ne!(rebased.head_sha, integration_sha);
+        assert_eq!(
+            fs::read_to_string(roots.join("agent-rebase/integration.txt"))
+                .expect("rebased integration file"),
+            "integration change\n"
+        );
+
+        let conflicted = service.handle(
+            "POST",
+            "/v1/worktrees/agent-conflict/rebase",
+            serde_json::to_string(&WorktreeRebaseRequest {
+                expected_head_sha: conflict_checkpoint.head_sha.clone(),
+                onto_sha: integration_sha,
+            })
+            .expect("rebase request")
+            .as_bytes(),
+        );
+        assert_eq!(conflicted.status, 409);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&conflicted.body).expect("conflict payload");
+        assert_eq!(payload["conflictPaths"][0], "shared.txt");
+        assert_eq!(
+            git_stdout(&roots.join("agent-conflict"), &["rev-parse", "HEAD"]),
+            conflict_checkpoint.head_sha
+        );
+        assert!(
+            git_stdout(&roots.join("agent-conflict"), &["status", "--porcelain=v1"]).is_empty()
+        );
     }
 
     #[test]
@@ -923,5 +1443,46 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    fn git_stdout(root: &Path, arguments: &[&str]) -> String {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(arguments)
+            .output()
+            .expect("git");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout)
+            .expect("git output")
+            .trim()
+            .into()
+    }
+
+    fn checkpoint(
+        service: &GuestService,
+        worktree_id: &str,
+        expected_head_sha: &str,
+    ) -> WorktreeCheckpointResponse {
+        let response = service.handle(
+            "POST",
+            &format!("/v1/worktrees/{worktree_id}/checkpoint"),
+            serde_json::to_string(&WorktreeCheckpointRequest {
+                expected_head_sha: expected_head_sha.into(),
+            })
+            .expect("checkpoint request")
+            .as_bytes(),
+        );
+        assert_eq!(
+            response.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&response.body)
+        );
+        serde_json::from_slice(&response.body).expect("checkpoint")
     }
 }

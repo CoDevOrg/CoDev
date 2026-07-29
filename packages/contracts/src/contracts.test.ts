@@ -4,6 +4,9 @@ import {
   agentActivityEventSchema,
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
+  conflictResolutionInputSchema,
+  coordinationMessageInputSchema,
+  createPathClaimSchema,
   FakeSandboxBackend,
   terminalPollSchema,
   workspaceEventSchema,
@@ -106,12 +109,63 @@ describe("collaboration contracts", () => {
     expect(
       collaborationServerMessageSchema.parse({
         type: "conflict",
+        worktreeId: "2f2387ed-4a63-4b05-88cc-266d65f7b82b",
         path: "src/index.ts",
         snapshotRevision: "r1",
         filesystemRevision: "r2",
         message: "Both copies changed.",
       }).type,
     ).toBe("conflict");
+  });
+});
+
+describe("agent coordination contracts", () => {
+  it("only accepts exact paths and directory claims", () => {
+    expect(
+      createPathClaimSchema.parse({
+        path: "src/**",
+        intent: "Refactor the source tree",
+        revision: "abc",
+      }).ttlSeconds,
+    ).toBe(900);
+    expect(() =>
+      createPathClaimSchema.parse({
+        path: "src/*.ts",
+        intent: "Too broad",
+        revision: "abc",
+      }),
+    ).toThrow();
+  });
+
+  it("validates negotiation payloads by message kind", () => {
+    expect(
+      coordinationMessageInputSchema.parse({
+        toSessionId: id,
+        kind: "note",
+        payload: { body: "I am changing the parser." },
+      }).kind,
+    ).toBe("note");
+    expect(() =>
+      coordinationMessageInputSchema.parse({
+        toSessionId: id,
+        kind: "claim_response",
+        payload: { body: "not structured" },
+        correlationId: id,
+        responseToId: id,
+      }),
+    ).toThrow();
+  });
+
+  it("requires merged contents only for manual merges", () => {
+    expect(
+      conflictResolutionInputSchema.parse({
+        path: "src/index.ts",
+        strategy: "merged",
+        expectedSnapshotRevision: "r1",
+        expectedFilesystemRevision: "r2",
+        mergedContents: "resolved",
+      }).strategy,
+    ).toBe("merged");
   });
 });
 

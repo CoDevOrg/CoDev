@@ -104,4 +104,19 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   await expect(agents.json()).resolves.toEqual({
     error: "Authentication required.",
   });
+
+  for (const endpoint of [
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/review",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/merge",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/discard",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/claims",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/messages",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/collaboration/conflicts/resolve",
+  ]) {
+    const protectedResponse = await request.post(endpoint, { data: {} });
+    expect(protectedResponse.status()).toBe(401);
+    await expect(protectedResponse.json()).resolves.toEqual({
+      error: "Authentication required.",
+    });
+  }
 });

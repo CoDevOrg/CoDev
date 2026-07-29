@@ -22,7 +22,9 @@ use crate::{
     model::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
         TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCreateRequest, WriteFileRequest,
+        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+        WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
@@ -334,6 +336,57 @@ impl FirecrackerBackend {
         machine.guest.delete_worktree(worktree_id).await?;
         self.mark_activity(&machine);
         Ok(())
+    }
+
+    pub async fn checkpoint_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeCheckpointRequest,
+    ) -> Result<WorktreeCheckpointResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine
+            .guest
+            .checkpoint_worktree(worktree_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn review_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        base_sha: &str,
+    ) -> Result<WorktreeReviewResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.review_worktree(worktree_id, base_sha).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn rebase_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeRebaseRequest,
+    ) -> Result<WorktreeRebaseResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.rebase_worktree(worktree_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn merge_worktree(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+        request: WorktreeMergeRequest,
+    ) -> Result<WorktreeMergeResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.merge_worktree(worktree_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
     }
 
     pub async fn git_status(
