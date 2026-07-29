@@ -65,7 +65,7 @@ unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
 install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/codev-guestd"
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
-cat >"${work_dir}/rootfs/etc/systemd/system/codev-workspace.mount" <<'UNIT'
+cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk
 Before=codev-guestd.service
@@ -83,8 +83,8 @@ UNIT
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
 Description=CoDev guest daemon
-After=codev-workspace.mount
-Requires=codev-workspace.mount
+After=workspace.mount
+Requires=workspace.mount
 
 [Service]
 Type=simple
@@ -105,8 +105,8 @@ MemoryMax=512M
 WantedBy=multi-user.target
 UNIT
 
-ln -s ../codev-workspace.mount \
-  "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-workspace.mount"
+ln -s ../workspace.mount \
+  "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/workspace.mount"
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
 
