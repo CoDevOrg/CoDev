@@ -163,7 +163,6 @@ Resources:
           DeviceIndex: "0"
           GroupSet:
             - !Ref HostSecurityGroup
-          PrivateIpAddress: 10.42.0.12
           SubnetId: !Ref RuntimeSubnet
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
@@ -289,7 +288,7 @@ Resources:
               }
       Environment:
         Variables:
-          ORCHESTRATOR_ORIGIN: http://10.42.0.12:8080
+          ORCHESTRATOR_ORIGIN: !Sub http://${FirecrackerHost.PrivateIp}:8080
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt RuntimeProxyRole.Arn
