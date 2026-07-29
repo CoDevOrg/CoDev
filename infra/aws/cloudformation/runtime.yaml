@@ -142,6 +142,38 @@ Resources:
       Roles:
         - !Ref HostRole
 
+  HostLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euxo pipefail
+            timedatectl set-ntp true
+            systemctl restart chrony
+            chronyc -a makestep
+            chronyc waitsync 60 1.0 0.0 2
+            systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y ca-certificates curl unzip
+            curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            /tmp/aws/install --update
+            until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
+              sleep 10
+            done
+            chmod 0700 /tmp/codev-bootstrap-host.sh
+            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} /tmp/codev-bootstrap-host.sh
+      TagSpecifications:
+        - ResourceType: launch-template
+          Tags:
+            - Key: Project
+              Value: CoDev
+            - Key: ManagedBy
+              Value: CloudFormation
+
   FirecrackerHost:
     Type: AWS::EC2::Instance
     DependsOn:
@@ -150,6 +182,9 @@ Resources:
       AvailabilityZone: !Ref AvailabilityZone
       ImageId: !Ref UbuntuAmi
       InstanceType: !Ref InstanceType
+      LaunchTemplate:
+        LaunchTemplateId: !Ref HostLaunchTemplate
+        Version: !GetAtt HostLaunchTemplate.LatestVersionNumber
       InstanceInitiatedShutdownBehavior: stop
       IamInstanceProfile: !Ref HostInstanceProfile
       MetadataOptions:
@@ -172,26 +207,6 @@ Resources:
             VolumeSize: !Ref HostVolumeSizeGiB
             VolumeType: gp3
             Iops: 3000
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          set -euxo pipefail
-          timedatectl set-ntp true
-          systemctl restart chrony
-          chronyc -a makestep
-          chronyc waitsync 60 1.0 0.0 2
-          systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y ca-certificates curl unzip
-          curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
-          unzip -q /tmp/awscliv2.zip -d /tmp
-          /tmp/aws/install --update
-          until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
-            sleep 10
-          done
-          chmod 0700 /tmp/codev-bootstrap-host.sh
-          CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} /tmp/codev-bootstrap-host.sh
       Tags:
         - Key: Name
           Value: codev-firecracker-host

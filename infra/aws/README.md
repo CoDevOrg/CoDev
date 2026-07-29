@@ -44,6 +44,8 @@ Defaults:
 The script cross-compiles both statically linked Rust binaries for Linux ARM64, uploads an immutable release
 to private S3, deploys the CloudFormation stacks, and creates or updates the
 Vercel OIDC roles. It prints the API URL and role ARNs needed by Vercel.
+Each release creates a new launch-template version, which makes CloudFormation
+replace the host instead of merely updating EC2 user data that would not rerun.
 
 Set `CODEV_HOST_AMI_ID` when deploying into another account or region because
 the default AMI is account- and region-specific.
