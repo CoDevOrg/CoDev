@@ -29,7 +29,8 @@ export async function GET() {
       service: "codev-orchestrator",
       state: "ready",
     });
-  } catch {
+  } catch (error) {
+    console.error("Orchestrator health check failed.", error);
     return NextResponse.json(
       {
         status: "degraded",
