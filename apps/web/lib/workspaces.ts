@@ -40,7 +40,7 @@ export async function createWorkspace(
     installationId,
     repositoryId,
   );
-  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + (4 * 60 - 5) * 60 * 1000);
 
   return getDatabase().transaction(async (transaction) => {
     const [workspace] = await transaction
