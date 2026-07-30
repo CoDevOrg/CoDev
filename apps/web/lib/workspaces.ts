@@ -9,6 +9,8 @@ import { getDatabase } from "./database";
 import { getPublicRepository } from "./github";
 import { assertWorkspaceQuota } from "./quotas";
 
+const workspaceRuntimeTtlMs = (4 * 60 - 5) * 60 * 1000;
+
 export class WorkspaceLifecycleError extends Error {
   constructor(
     message: string,
@@ -52,7 +54,7 @@ export async function createWorkspace(
     installationId,
     repositoryId,
   );
-  const expiresAt = new Date(Date.now() + (4 * 60 - 5) * 60 * 1000);
+  const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
 
   return getDatabase().transaction(async (transaction) => {
     const [workspace] = await transaction
@@ -146,7 +148,7 @@ export async function beginWorkspaceProvisioning(
   userId: string,
 ) {
   await requireOwner(workspaceId, userId);
-  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .insert(schema.workspaceRuntimes)
