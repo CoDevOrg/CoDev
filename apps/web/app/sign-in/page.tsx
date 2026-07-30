@@ -40,7 +40,7 @@ export default async function SignInPage({
         <h1>Open your CoDev workspace.</h1>
         <p>
           Sign in with the CoDev GitHub App to discover installations and choose
-          a public repository. CoDev never sends your GitHub token to a sandbox.
+          a repository. CoDev never sends your GitHub token to a sandbox.
         </p>
 
         {error ? (

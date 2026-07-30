@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/api";
-import { listPublicRepositories } from "@/lib/github";
+import { listRepositories } from "@/lib/github";
 
 export async function GET(
   _request: Request,
@@ -16,7 +16,7 @@ export async function GET(
     }
 
     return Response.json({
-      repositories: await listPublicRepositories(user.id, parsedInstallationId),
+      repositories: await listRepositories(user.id, parsedInstallationId),
     });
   } catch (error) {
     return apiError(error);

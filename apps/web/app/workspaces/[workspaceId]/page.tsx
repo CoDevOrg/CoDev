@@ -41,7 +41,10 @@ export default async function WorkspacePage({
           </div>
           <div>
             <p className="eyebrow">GitHub workspace</p>
-            <h1>{workspace.repository}</h1>
+            <h1>
+              {workspace.repositoryVisibility === "private" ? "🔒 " : ""}
+              {workspace.repository}
+            </h1>
             <p>
               {workspace.defaultBranch} at{" "}
               <code>{workspace.baseSha.slice(0, 12)}</code>

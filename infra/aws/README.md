@@ -9,6 +9,10 @@ Phase 8 adds 14-day API Gateway, Lambda, and structured Rust host log
 retention, request-ID propagation, CloudWatch alarms for API/Lambda/EC2
 failures, and a compact `codev-runtime-*` dashboard. See
 [Operations](../../docs/OPERATIONS.md) for incident and rollback procedures.
+Phase 9 adds a tagged monthly AWS Cost Budget. Set
+`CODEV_BUDGET_ALERT_EMAIL` during deployment to receive forecasted alerts at
+80% and actual-spend alerts at 100%; the recipient must confirm AWS's
+subscription email.
 
 Current production endpoint:
 `https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com`.
@@ -45,6 +49,7 @@ Defaults:
 - Idle timeout: 30 minutes
 - Hard workspace expiry: 4 hours
 - Host shutdown: 15 minutes after the final microVM stops
+- Monthly cost budget: $75 by default (`CODEV_MONTHLY_BUDGET_USD`)
 
 The script cross-compiles both statically linked Rust binaries for Linux ARM64, uploads an immutable release
 to private S3, deploys the CloudFormation stacks, and creates or updates the

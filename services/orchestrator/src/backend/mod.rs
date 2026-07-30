@@ -358,6 +358,7 @@ impl FakeBackend {
             id: format!("sandbox-{}", request.workspace_id),
             workspace_id: request.workspace_id.clone(),
             status: "ready".into(),
+            head_sha: request.base_sha.clone(),
             created_at: now,
             last_activity_at: now,
             expires_at: request.expires_at,
@@ -557,7 +558,8 @@ mod tests {
         let backend = Backend::fake();
         let request = CreateRequest {
             workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
-            repository_url: "https://github.com/yousef20920/CoDev.git".into(),
+            repository_url: Some("https://github.com/yousef20920/CoDev.git".into()),
+            repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
         };

@@ -7,6 +7,7 @@ import {
   conflictResolutionInputSchema,
   coordinationMessageInputSchema,
   createPathClaimSchema,
+  designPartnerFeedbackInputSchema,
   FakeSandboxBackend,
   createPublicationSchema,
   terminalPollSchema,
@@ -22,6 +23,7 @@ describe("workspace contracts", () => {
       id,
       ownerId: id,
       repository: "codev/example",
+      repositoryVisibility: "private",
       baseSha: "a".repeat(40),
       status: "ready",
       lastActivityAt: "2026-07-28T12:00:00.000Z",
@@ -29,6 +31,28 @@ describe("workspace contracts", () => {
     });
 
     expect(workspace.repository).toBe("codev/example");
+    expect(workspace.repositoryVisibility).toBe("private");
+  });
+
+  it("bounds design-partner feedback without product secrets", () => {
+    expect(
+      designPartnerFeedbackInputSchema.parse({
+        category: "workflow",
+        rating: 4,
+        message: "The publication recovery flow was clear.",
+        page: "/settings",
+        workspaceId: null,
+      }).rating,
+    ).toBe(4);
+    expect(() =>
+      designPartnerFeedbackInputSchema.parse({
+        category: "workflow",
+        rating: 6,
+        message: "too short",
+        page: null,
+        workspaceId: null,
+      }),
+    ).toThrow();
   });
 
   it("requires strictly sequenced terminal chunks", () => {

@@ -13,6 +13,10 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
   keys are prohibited.
 - Logs redact authorization, cookies, tokens, encrypted values, prompts, file
   contents, diffs, and terminal output.
+- Private repositories are read by the Vercel control plane and transferred to
+  AWS only as credential-free file snapshots. Snapshots reject unsafe paths,
+  submodules, unsupported modes, more than 500 files, individual files over
+  1 MiB, and total decoded content over 3 MiB.
 
 ## Publication
 
@@ -38,6 +42,16 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
   treats an already-missing sandbox as success.
 - Quotas bound active workspaces, queued turns, daily turns, terminal sessions,
   publication size, and control-plane request rates.
+
+## Design-partner feedback
+
+- Feedback requires an authenticated CoDev session and is limited to five
+  submissions per user per hour.
+- Records contain category, optional rating, message, page, release, and an
+  optional workspace identifier. CoDev does not automatically attach prompts,
+  source files, diffs, terminal output, GitHub tokens, or provider keys.
+- The table has RLS enabled and all Data API access is revoked from `anon` and
+  `authenticated`; only the server-side PostgreSQL connection can write it.
 
 ## Dependency Policy
 

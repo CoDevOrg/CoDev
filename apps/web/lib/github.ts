@@ -194,31 +194,26 @@ export async function listGitHubInstallations(userId: string) {
   return payload.installations;
 }
 
-export async function listPublicRepositories(
-  userId: string,
-  installationId: number,
-) {
+export async function listRepositories(userId: string, installationId: number) {
   const payload = await githubRequest<{ repositories: GitHubRepository[] }>(
     userId,
     `/user/installations/${installationId}/repositories?per_page=100`,
   );
-  return payload.repositories.filter(
-    (repository) => !repository.private && !repository.archived,
-  );
+  return payload.repositories.filter((repository) => !repository.archived);
 }
 
-export async function getPublicRepository(
+export async function getRepository(
   userId: string,
   installationId: number,
   repositoryId: number,
 ) {
-  const repositories = await listPublicRepositories(userId, installationId);
+  const repositories = await listRepositories(userId, installationId);
   const repository = repositories.find(
     (candidate) => candidate.id === repositoryId,
   );
   if (!repository) {
     throw new Error(
-      "That public repository is not available to this installation.",
+      "That repository is not available to this GitHub App installation.",
     );
   }
 
@@ -227,4 +222,91 @@ export async function getPublicRepository(
     `/repos/${repository.full_name}/commits/${encodeURIComponent(repository.default_branch)}`,
   );
   return { repository, baseSha: commit.sha };
+}
+
+export interface RepositorySnapshotFile {
+  path: string;
+  mode: "100644" | "100755" | "120000";
+  contentBase64: string;
+}
+
+export interface RepositorySnapshot {
+  files: RepositorySnapshotFile[];
+  totalBytes: number;
+}
+
+export async function getRepositorySnapshot(
+  userId: string,
+  repository: string,
+  commitSha: string,
+): Promise<RepositorySnapshot> {
+  const tree = await githubRequest<{
+    truncated: boolean;
+    tree: {
+      path: string;
+      mode: string;
+      type: "blob" | "tree" | "commit";
+      sha: string;
+      size?: number;
+    }[];
+  }>(
+    userId,
+    `/repos/${repository}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`,
+  );
+  if (tree.truncated) {
+    throw new Error("The repository tree is too large for a CoDev snapshot.");
+  }
+
+  const blobs = tree.tree.filter((entry) => entry.type === "blob");
+  if (tree.tree.some((entry) => entry.type === "commit")) {
+    throw new Error("Private repository snapshots do not support submodules.");
+  }
+  if (blobs.length > 500) {
+    throw new Error("Private repository snapshots are limited to 500 files.");
+  }
+  const declaredBytes = blobs.reduce(
+    (total, entry) => total + (entry.size ?? 0),
+    0,
+  );
+  if (declaredBytes > 3 * 1_024 * 1_024) {
+    throw new Error("Private repository snapshots are limited to 3 MiB.");
+  }
+
+  const files: RepositorySnapshotFile[] = [];
+  let totalBytes = 0;
+  for (let offset = 0; offset < blobs.length; offset += 10) {
+    const batch = blobs.slice(offset, offset + 10);
+    const contents = await Promise.all(
+      batch.map((entry) =>
+        githubRequest<{ content: string; encoding: string }>(
+          userId,
+          `/repos/${repository}/git/blobs/${entry.sha}`,
+        ),
+      ),
+    );
+    for (const [index, entry] of batch.entries()) {
+      const blob = contents[index];
+      if (!blob || blob.encoding !== "base64") {
+        throw new Error("GitHub returned an unsupported repository blob.");
+      }
+      if (!["100644", "100755", "120000"].includes(entry.mode)) {
+        throw new Error(`Unsupported Git mode for ${entry.path}.`);
+      }
+      const contentBase64 = blob.content.replace(/\s+/g, "");
+      const byteLength = Buffer.from(contentBase64, "base64").byteLength;
+      totalBytes += byteLength;
+      if (byteLength > 1 * 1_024 * 1_024) {
+        throw new Error(`Private repository file ${entry.path} exceeds 1 MiB.`);
+      }
+      if (totalBytes > 3 * 1_024 * 1_024) {
+        throw new Error("Private repository snapshots are limited to 3 MiB.");
+      }
+      files.push({
+        path: entry.path,
+        mode: entry.mode as RepositorySnapshotFile["mode"],
+        contentBase64,
+      });
+    }
+  }
+  return { files, totalBytes };
 }

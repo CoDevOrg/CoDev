@@ -57,7 +57,12 @@ export default async function DashboardPage() {
                     ⑂
                   </div>
                   <div>
-                    <strong>{workspace.repository}</strong>
+                    <strong>
+                      {workspace.repositoryVisibility === "private"
+                        ? "🔒 "
+                        : ""}
+                      {workspace.repository}
+                    </strong>
                     <span>
                       {workspace.defaultBranch} ·{" "}
                       {workspace.baseSha.slice(0, 7)}
@@ -74,7 +79,7 @@ export default async function DashboardPage() {
             <div className="empty-card">
               <span aria-hidden="true">＋</span>
               <strong>No workspaces yet</strong>
-              <p>Choose a public repository above to create the first one.</p>
+              <p>Choose a repository above to create the first one.</p>
             </div>
           )}
         </section>

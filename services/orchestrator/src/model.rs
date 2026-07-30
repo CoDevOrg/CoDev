@@ -70,9 +70,25 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     pub workspace_id: String,
-    pub repository_url: String,
+    pub repository_url: Option<String>,
+    pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,
     pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositorySnapshot {
+    pub files: Vec<RepositorySnapshotFile>,
+    pub total_bytes: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositorySnapshotFile {
+    pub path: String,
+    pub mode: String,
+    pub content_base64: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,6 +97,7 @@ pub struct Instance {
     pub id: String,
     pub workspace_id: String,
     pub status: String,
+    pub head_sha: String,
     pub created_at: DateTime<Utc>,
     pub last_activity_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,

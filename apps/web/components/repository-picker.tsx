@@ -61,7 +61,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
       setRepositories(payload.repositories);
       setState(payload.repositories.length ? "ready" : "empty");
       if (!payload.repositories.length) {
-        setMessage("This installation has no eligible public repositories.");
+        setMessage("This installation has no eligible repositories.");
       }
     } catch (error) {
       setMessage(
@@ -103,7 +103,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">New workspace</p>
-          <h2>Choose a public repository</h2>
+          <h2>Choose a repository</h2>
         </div>
         <a className="secondary-button" href={installUrl} target="_blank">
           Manage GitHub App ↗
@@ -135,6 +135,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
             <option value="">Select a repository</option>
             {repositories.map((repository) => (
               <option key={repository.id} value={repository.id}>
+                {repository.private ? "🔒 " : ""}
                 {repository.full_name}
               </option>
             ))}
@@ -163,7 +164,8 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
         </p>
       ) : null}
       <p className="security-note">
-        Private repositories are intentionally excluded in this release.
+        Private source is transferred as a bounded, credential-free snapshot.
+        GitHub tokens never enter the sandbox.
       </p>
     </section>
   );

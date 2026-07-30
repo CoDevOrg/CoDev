@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 
 import { AppChrome } from "@/components/app-chrome";
 import { CredentialForm } from "@/components/credential-form";
+import { FeedbackForm } from "@/components/feedback-form";
+import { LaunchPreflight } from "@/components/launch-preflight";
 import { getOpenAICredentialStatus } from "@/lib/credentials";
 import { requireUser } from "@/lib/session";
 
@@ -41,6 +43,30 @@ export default async function SettingsPage() {
               GitHub user token.
             </p>
           </div>
+        </section>
+        <section className="panel settings-panel feedback-panel">
+          <div className="settings-provider">
+            <span className="provider-mark" aria-hidden="true">
+              ◇
+            </span>
+            <div>
+              <h2>Design-partner feedback</h2>
+              <p>Help prioritize the launch experience.</p>
+            </div>
+          </div>
+          <FeedbackForm />
+        </section>
+        <section className="panel settings-panel feedback-panel">
+          <div className="settings-provider">
+            <span className="provider-mark" aria-hidden="true">
+              ✓
+            </span>
+            <div>
+              <h2>Launch preflight</h2>
+              <p>Verify design-partner dependencies and scale-to-zero.</p>
+            </div>
+          </div>
+          <LaunchPreflight />
         </section>
       </main>
     </AppChrome>

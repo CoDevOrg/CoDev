@@ -6,7 +6,7 @@ import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
 import { getDatabase } from "./database";
-import { getPublicRepository, GitHubApiError, githubRequest } from "./github";
+import { getRepository, GitHubApiError, githubRequest } from "./github";
 import { logEvent } from "./observability";
 import { exportSandboxPublication } from "./orchestrator";
 
@@ -281,7 +281,7 @@ export async function publishWorkspaceBranch(input: PublicationTarget) {
   }
 
   try {
-    const { repository } = await getPublicRepository(
+    const { repository } = await getRepository(
       input.userId,
       Number(reservation.target.installationId),
       Number(reservation.target.repositoryId),

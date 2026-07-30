@@ -21,8 +21,51 @@ Parameters:
     Default: 40
     MinValue: 40
     MaxValue: 200
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 75
+    MinValue: 1
+  BudgetAlertEmail:
+    Type: String
+    Default: ""
+
+Conditions:
+  HasBudgetAlertEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
 
 Resources:
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub ${AWS::StackName}-monthly
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        CostFilters:
+          TagKeyValue:
+            - user:Project$CoDev
+      NotificationsWithSubscribers: !If
+        - HasBudgetAlertEmail
+        - - Notification:
+              ComparisonOperator: GREATER_THAN
+              NotificationType: FORECASTED
+              Threshold: 80
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - Address: !Ref BudgetAlertEmail
+                SubscriptionType: EMAIL
+          - Notification:
+              ComparisonOperator: GREATER_THAN
+              NotificationType: ACTUAL
+              Threshold: 100
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - Address: !Ref BudgetAlertEmail
+                SubscriptionType: EMAIL
+        - !Ref AWS::NoValue
+
   RuntimeVpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -492,3 +535,5 @@ Outputs:
     Value: !Ref RuntimeVpc
   RuntimeDashboardName:
     Value: !Ref RuntimeDashboard
+  MonthlyBudgetName:
+    Value: !Sub ${AWS::StackName}-monthly

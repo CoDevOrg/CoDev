@@ -52,6 +52,7 @@ export class FakeSandboxBackend implements SandboxBackend {
       id: `sandbox-${input.workspace.id}`,
       workspaceId: input.workspace.id,
       status: "ready",
+      headSha: input.workspace.baseSha,
       createdAt: now,
       lastActivityAt: now,
       expiresAt: input.workspace.expiresAt,

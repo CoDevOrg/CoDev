@@ -36,6 +36,7 @@ export const workspaceSchema = z.object({
   id: identifierSchema,
   ownerId: identifierSchema,
   repository: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+  repositoryVisibility: z.enum(["public", "private"]),
   baseSha: z.string().regex(/^[0-9a-f]{40}$/),
   status: workspaceStatusSchema,
   lastActivityAt: timestampSchema,
@@ -46,6 +47,7 @@ export const sandboxInstanceSchema = z.object({
   id: z.string().min(1),
   workspaceId: identifierSchema,
   status: z.enum(["provisioning", "ready", "stopping", "stopped", "failed"]),
+  headSha: z.string().regex(/^[0-9a-f]{40}$/),
   createdAt: timestampSchema,
   lastActivityAt: timestampSchema,
   expiresAt: timestampSchema,
@@ -264,6 +266,14 @@ export const publicationBranchNameSchema = z
 export const createPublicationSchema = z.object({
   branchName: publicationBranchNameSchema,
   expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/),
+});
+
+export const designPartnerFeedbackInputSchema = z.object({
+  category: z.enum(["bug", "workflow", "feature", "other"]),
+  rating: z.number().int().min(1).max(5).nullable(),
+  message: z.string().trim().min(10).max(2_000),
+  page: z.string().trim().max(200).nullable(),
+  workspaceId: identifierSchema.nullable(),
 });
 
 export const publicationSchema = z.object({

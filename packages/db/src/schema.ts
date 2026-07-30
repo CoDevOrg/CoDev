@@ -141,6 +141,36 @@ export const providerCredentials = pgTable(
   ],
 );
 
+export const designPartnerFeedback = pgTable(
+  "design_partner_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    category: text("category").notNull(),
+    rating: integer("rating"),
+    message: text("message").notNull(),
+    page: text("page"),
+    release: text("release"),
+    status: text("status").default("new").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("design_partner_feedback_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    index("design_partner_feedback_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const workspaces = pgTable(
   "workspaces",
   {
@@ -155,6 +185,9 @@ export const workspaces = pgTable(
       mode: "bigint",
     }).notNull(),
     repository: text("repository").notNull(),
+    repositoryVisibility: text("repository_visibility")
+      .default("public")
+      .notNull(),
     defaultBranch: text("default_branch").notNull(),
     baseSha: text("base_sha").notNull(),
     status: workspaceStatus("status").default("pending").notNull(),

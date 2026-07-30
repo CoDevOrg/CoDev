@@ -116,6 +116,22 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   const lifecycle = await request.get("/api/cron/lifecycle");
   expect(lifecycle.status()).toBe(401);
 
+  for (const endpoint of ["/api/feedback", "/api/launch/preflight"]) {
+    const protectedResponse =
+      endpoint === "/api/feedback"
+        ? await request.post(endpoint, {
+            data: {
+              category: "workflow",
+              rating: 5,
+              message: "Anonymous feedback must not be accepted.",
+              page: "/",
+              workspaceId: null,
+            },
+          })
+        : await request.get(endpoint);
+    expect(protectedResponse.status()).toBe(401);
+  }
+
   for (const endpoint of [
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/review",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/merge",

@@ -8,6 +8,9 @@
 - Vercel logs are structured JSON with a release and request ID.
 - The AWS CloudWatch dashboard contains API count/5xx, Lambda errors/duration,
   and EC2 status checks. Logs retain for 14 days.
+- The `codev-runtime-monthly` budget tracks tagged CoDev spend. When an alert
+  email is configured, forecasted spend warns at 80% and actual spend warns at
+  100%.
 - Workspace audit events retain for 90 days.
 
 ## Deployment
@@ -36,6 +39,11 @@ curl -fsS \
 
 Run it twice when validating idempotency. The second response should report
 zero newly cleaned workspaces.
+
+Run the authenticated launch preflight from Settings before every
+design-partner session. With zero active workspaces, any host state other than
+`stopped` or `stopping` requires lifecycle reconciliation and an explicit EC2
+stop.
 
 If PostgreSQL says a runtime is ready while EC2 is stopped, the reconciler
 interrupts active work, expires claims, marks physical worktrees discarded,

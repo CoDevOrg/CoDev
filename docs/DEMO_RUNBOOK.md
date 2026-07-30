@@ -1,12 +1,12 @@
 # CoDev Design-Partner Demo
 
-Use a disposable public repository and a branch under `codev/`. Never demo
-against `main`.
+Use a disposable public or bounded private repository and a branch under
+`codev/`. Never demo against `main`.
 
 ## Before the call
 
 1. Confirm `https://codev-xi.vercel.app/api/health` is `ok`.
-2. Confirm `/api/ready` is `ready`; `orchestrator: sleeping` is expected.
+2. Run Settings → **Launch preflight** and confirm every dependency passes.
 3. Confirm the GitHub App has Contents **Read and write** permission and the
    repository installation is approved.
 4. Confirm the presenter has a saved OpenAI key in CoDev settings.
@@ -16,7 +16,7 @@ against `main`.
 ## Demo flow
 
 1. Sign in with GitHub and choose the GitHub App installation.
-2. Create a workspace from the disposable public repository.
+2. Create a workspace from the disposable repository.
 3. Start the sandbox. Bare-metal wake and guest provisioning can take roughly
    one to three minutes. If it exceeds three minutes, refresh runtime status;
    after five minutes, abort and inspect readiness/logs.

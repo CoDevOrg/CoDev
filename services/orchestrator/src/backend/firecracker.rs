@@ -1,13 +1,14 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::OpenOptions,
     os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Stdio,
     sync::{Arc, RwLock},
     time::Duration,
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{DateTime, Utc};
 use serde_json::json;
 use tokio::{
@@ -21,8 +22,8 @@ use crate::{
     guest_client::GuestClient,
     model::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
-        PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-        TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+        PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
+        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
         WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
         WorktreeReviewResponse, WriteFileRequest,
@@ -488,14 +489,17 @@ impl FirecrackerBackend {
             .await
             .map_err(RuntimeError::internal)?;
 
-        let result = self
+        let head_sha = match self
             .prepare_resources(request, &workspace_dir, &jail_root, guest_cid)
-            .await;
-        if let Err(error) = result {
-            let _ = remove_directory_if_present(&workspace_dir).await;
-            let _ = remove_directory_if_present(&jail_dir).await;
-            return Err(error);
-        }
+            .await
+        {
+            Ok(head_sha) => head_sha,
+            Err(error) => {
+                let _ = remove_directory_if_present(&workspace_dir).await;
+                let _ = remove_directory_if_present(&jail_dir).await;
+                return Err(error);
+            }
+        };
 
         let paths = [
             jail_root.join("vmlinux"),
@@ -547,6 +551,7 @@ impl FirecrackerBackend {
                 id: format!("fc-{id}"),
                 workspace_id: request.workspace_id.clone(),
                 status: "ready".into(),
+                head_sha,
                 created_at: Utc::now(),
                 last_activity_at: Utc::now(),
                 expires_at: request.expires_at,
@@ -599,31 +604,41 @@ impl FirecrackerBackend {
         workspace_dir: &Path,
         jail_root: &Path,
         guest_cid: u32,
-    ) -> Result<()> {
+    ) -> Result<String> {
         let repository = workspace_dir.join("repository");
         let mut init = Command::new("git");
         init.arg("init").arg("--quiet").arg(&repository);
         run_command(init, "initialize repository").await?;
-        let mut remote = Command::new("git");
-        remote
-            .arg("-C")
-            .arg(&repository)
-            .args(["remote", "add", "origin"])
-            .arg(&request.repository_url);
-        run_command(remote, "configure repository remote").await?;
-        let mut fetch = Command::new("git");
-        fetch
-            .arg("-C")
-            .arg(&repository)
-            .args(["fetch", "--quiet", "--depth=1", "origin"])
-            .arg(&request.base_sha);
-        run_command(fetch, "fetch repository revision").await?;
-        let mut checkout = Command::new("git");
-        checkout
-            .arg("-C")
-            .arg(&repository)
-            .args(["checkout", "--quiet", "--detach", "FETCH_HEAD"]);
-        run_command(checkout, "checkout repository revision").await?;
+        let head_sha = if let Some(repository_url) = &request.repository_url {
+            let mut remote = Command::new("git");
+            remote
+                .arg("-C")
+                .arg(&repository)
+                .args(["remote", "add", "origin"])
+                .arg(repository_url);
+            run_command(remote, "configure repository remote").await?;
+            let mut fetch = Command::new("git");
+            fetch
+                .arg("-C")
+                .arg(&repository)
+                .args(["fetch", "--quiet", "--depth=1", "origin"])
+                .arg(&request.base_sha);
+            run_command(fetch, "fetch repository revision").await?;
+            let mut checkout = Command::new("git");
+            checkout.arg("-C").arg(&repository).args([
+                "checkout",
+                "--quiet",
+                "--detach",
+                "FETCH_HEAD",
+            ]);
+            run_command(checkout, "checkout repository revision").await?;
+            request.base_sha.clone()
+        } else {
+            let snapshot = request.repository_snapshot.as_ref().ok_or_else(|| {
+                RuntimeError::BadRequest("repository snapshot is required".into())
+            })?;
+            materialize_snapshot(&repository, snapshot).await?
+        };
 
         let workspace_disk = jail_root.join("workspace.ext4");
         let mut truncate = Command::new("truncate");
@@ -685,7 +700,8 @@ impl FirecrackerBackend {
             serde_json::to_vec(&config).map_err(RuntimeError::internal)?,
         )
         .await
-        .map_err(RuntimeError::internal)
+        .map_err(RuntimeError::internal)?;
+        Ok(head_sha)
     }
 
     async fn cleanup_failed_machine(&self, machine: &RunningMachine) {
@@ -719,6 +735,133 @@ async fn run_command(mut command: Command, description: &str) -> Result<()> {
             String::from_utf8_lossy(&output.stderr).trim()
         )))
     }
+}
+
+async fn run_command_stdout(mut command: Command, description: &str) -> Result<String> {
+    let output = timeout(Duration::from_secs(90), command.output())
+        .await
+        .map_err(|_| RuntimeError::Timeout(format!("{description} timed out")))?
+        .map_err(RuntimeError::internal)?;
+    if !output.status.success() {
+        return Err(RuntimeError::Internal(format!(
+            "{description} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn safe_snapshot_path(value: &str) -> Result<&Path> {
+    if value.is_empty() || value.len() > 4_096 || value.contains('\0') {
+        return Err(RuntimeError::BadRequest(
+            "repository snapshot contains an invalid path".into(),
+        ));
+    }
+    let path = Path::new(value);
+    if path.is_absolute()
+        || path.components().any(|component| match component {
+            Component::Normal(segment) => segment.eq_ignore_ascii_case(".git"),
+            _ => true,
+        })
+    {
+        return Err(RuntimeError::BadRequest(
+            "repository snapshot contains an unsafe path".into(),
+        ));
+    }
+    Ok(path)
+}
+
+async fn materialize_snapshot(repository: &Path, snapshot: &RepositorySnapshot) -> Result<String> {
+    let mut paths = HashSet::new();
+    let mut total_bytes = 0usize;
+    for file in &snapshot.files {
+        let relative_path = safe_snapshot_path(&file.path)?;
+        if !paths.insert(file.path.clone()) {
+            return Err(RuntimeError::BadRequest(
+                "repository snapshot contains duplicate paths".into(),
+            ));
+        }
+        let contents = BASE64
+            .decode(&file.content_base64)
+            .map_err(|_| RuntimeError::BadRequest("invalid snapshot base64".into()))?;
+        total_bytes = total_bytes
+            .checked_add(contents.len())
+            .ok_or_else(|| RuntimeError::BadRequest("snapshot size overflow".into()))?;
+        if contents.len() > 1_024 * 1_024 || total_bytes > 3 * 1_024 * 1_024 {
+            return Err(RuntimeError::BadRequest(
+                "repository snapshot exceeds its size limit".into(),
+            ));
+        }
+        let destination = repository.join(relative_path);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(RuntimeError::internal)?;
+        }
+        match file.mode.as_str() {
+            "100644" | "100755" => {
+                fs::write(&destination, contents)
+                    .await
+                    .map_err(RuntimeError::internal)?;
+                if file.mode == "100755" {
+                    fs::set_permissions(&destination, std::fs::Permissions::from_mode(0o755))
+                        .await
+                        .map_err(RuntimeError::internal)?;
+                }
+            }
+            "120000" => {
+                let target = String::from_utf8(contents)
+                    .map_err(|_| RuntimeError::BadRequest("invalid symlink target".into()))?;
+                fs::symlink(target, &destination)
+                    .await
+                    .map_err(RuntimeError::internal)?;
+            }
+            _ => {
+                return Err(RuntimeError::BadRequest(
+                    "repository snapshot contains an unsupported file mode".into(),
+                ));
+            }
+        }
+    }
+    if total_bytes != snapshot.total_bytes {
+        return Err(RuntimeError::BadRequest(
+            "repository snapshot size does not match its contents".into(),
+        ));
+    }
+
+    for (key, value) in [
+        ("user.name", "CoDev Snapshot"),
+        ("user.email", "snapshot@codev.invalid"),
+    ] {
+        let mut config = Command::new("git");
+        config
+            .arg("-C")
+            .arg(repository)
+            .args(["config", key, value]);
+        run_command(config, "configure snapshot repository").await?;
+    }
+    let mut add = Command::new("git");
+    add.arg("-C").arg(repository).args(["add", "--all"]);
+    run_command(add, "stage repository snapshot").await?;
+    let mut commit = Command::new("git");
+    commit.arg("-C").arg(repository).args([
+        "commit",
+        "--quiet",
+        "--no-gpg-sign",
+        "--allow-empty",
+        "-m",
+        "Import private repository snapshot",
+    ]);
+    run_command(commit, "commit repository snapshot").await?;
+    let mut head = Command::new("git");
+    head.arg("-C").arg(repository).args(["rev-parse", "HEAD"]);
+    let head_sha = run_command_stdout(head, "read snapshot revision").await?;
+    if head_sha.len() != 40 || !head_sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(RuntimeError::Internal(
+            "snapshot repository returned an invalid revision".into(),
+        ));
+    }
+    Ok(head_sha)
 }
 
 async fn remove_directory_if_present(path: &Path) -> Result<()> {

@@ -57,6 +57,13 @@
       "when": 1785366075969,
       "tag": "0007_flashy_sphinx",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785376024618,
+      "tag": "0008_launch_design_partners",
+      "breakpoints": true
     }
   ]
 }

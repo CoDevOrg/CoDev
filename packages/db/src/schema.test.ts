@@ -6,6 +6,7 @@ import {
   agentSessions,
   collaborationConflictResolutions,
   coordinationMessages,
+  designPartnerFeedback,
   githubIssueAssignments,
   pathClaims,
   publishedBranches,
@@ -18,6 +19,8 @@ import {
 describe("database schema", () => {
   it("defines the core workspace tables", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
+    expect(workspaces.repositoryVisibility.name).toBe("repository_visibility");
+    expect(getTableName(designPartnerFeedback)).toBe("design_partner_feedback");
     expect(getTableName(workspaceMembers)).toBe("workspace_members");
     expect(getTableName(agentSessions)).toBe("agent_sessions");
     expect(getTableName(agentEvents)).toBe("agent_events");

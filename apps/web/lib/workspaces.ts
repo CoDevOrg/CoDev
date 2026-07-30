@@ -6,7 +6,7 @@ import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
-import { getPublicRepository } from "./github";
+import { getRepository } from "./github";
 import { assertWorkspaceQuota } from "./quotas";
 
 const workspaceRuntimeTtlMs = (4 * 60 - 5) * 60 * 1000;
@@ -26,6 +26,7 @@ export async function listWorkspacesForUser(userId: string) {
     .select({
       id: schema.workspaces.id,
       repository: schema.workspaces.repository,
+      repositoryVisibility: schema.workspaces.repositoryVisibility,
       defaultBranch: schema.workspaces.defaultBranch,
       baseSha: schema.workspaces.baseSha,
       status: schema.workspaces.status,
@@ -49,7 +50,7 @@ export async function createWorkspace(
   repositoryId: number,
 ) {
   await assertWorkspaceQuota(userId);
-  const { repository, baseSha } = await getPublicRepository(
+  const { repository, baseSha } = await getRepository(
     userId,
     installationId,
     repositoryId,
@@ -64,6 +65,7 @@ export async function createWorkspace(
         githubInstallationId: BigInt(installationId),
         githubRepositoryId: BigInt(repository.id),
         repository: repository.full_name,
+        repositoryVisibility: repository.private ? "private" : "public",
         defaultBranch: repository.default_branch,
         baseSha,
         expiresAt,
@@ -101,6 +103,9 @@ export async function getWorkspaceForMember(
     .select({
       id: schema.workspaces.id,
       repository: schema.workspaces.repository,
+      repositoryVisibility: schema.workspaces.repositoryVisibility,
+      githubInstallationId: schema.workspaces.githubInstallationId,
+      githubRepositoryId: schema.workspaces.githubRepositoryId,
       defaultBranch: schema.workspaces.defaultBranch,
       baseSha: schema.workspaces.baseSha,
       status: schema.workspaces.status,
@@ -180,6 +185,7 @@ export async function beginWorkspaceProvisioning(
 export async function markWorkspaceReady(
   workspaceId: string,
   sandboxId: string,
+  headSha: string,
 ) {
   const now = new Date();
   await getDatabase().transaction(async (transaction) => {
@@ -197,6 +203,15 @@ export async function markWorkspaceReady(
       .update(schema.workspaces)
       .set({ status: "ready", lastActivityAt: now, updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
+    await transaction
+      .update(schema.worktrees)
+      .set({ headSha, updatedAt: now })
+      .where(
+        and(
+          eq(schema.worktrees.workspaceId, workspaceId),
+          eq(schema.worktrees.kind, "integration"),
+        ),
+      );
   });
 }
 

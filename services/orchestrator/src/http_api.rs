@@ -1,4 +1,6 @@
-use std::{sync::OnceLock, time::Instant};
+use std::{
+    collections::HashSet, path::Component, path::Path as FilePath, sync::OnceLock, time::Instant,
+};
 
 use axum::{
     Json, Router,
@@ -9,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{Duration, Utc};
 use regex::Regex;
 use serde::Deserialize;
@@ -24,7 +27,7 @@ use crate::{
     },
 };
 
-const MAX_REQUEST_BYTES: usize = 1 << 20;
+const MAX_REQUEST_BYTES: usize = 5 << 20;
 
 #[derive(Deserialize)]
 struct FileRequest {
@@ -449,19 +452,68 @@ fn validate_create(request: &CreateRequest) -> Result<()> {
     if !commit_sha_pattern().is_match(&request.base_sha) {
         return Err(RuntimeError::BadRequest("invalid base SHA".into()));
     }
-    let repository = request
-        .repository_url
-        .strip_prefix("https://github.com/")
-        .and_then(|value| value.strip_suffix(".git"));
-    if repository.is_none()
-        || repository
-            .expect("checked")
-            .split('/')
-            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
-    {
+    if request.repository_url.is_some() == request.repository_snapshot.is_some() {
         return Err(RuntimeError::BadRequest(
-            "repository URL must be a public GitHub HTTPS clone URL".into(),
+            "provide exactly one repository source".into(),
         ));
+    }
+    if let Some(repository_url) = &request.repository_url {
+        let repository = repository_url
+            .strip_prefix("https://github.com/")
+            .and_then(|value| value.strip_suffix(".git"));
+        if repository.is_none()
+            || repository
+                .expect("checked")
+                .split('/')
+                .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+        {
+            return Err(RuntimeError::BadRequest(
+                "repository URL must be a public GitHub HTTPS clone URL".into(),
+            ));
+        }
+    }
+    if let Some(snapshot) = &request.repository_snapshot {
+        if snapshot.files.len() > 500 || snapshot.total_bytes > 3 * 1_024 * 1_024 {
+            return Err(RuntimeError::BadRequest(
+                "repository snapshot exceeds its limits".into(),
+            ));
+        }
+        let mut paths = HashSet::new();
+        let mut total_bytes = 0usize;
+        for file in &snapshot.files {
+            let path = FilePath::new(&file.path);
+            if file.path.is_empty()
+                || file.path.len() > 4_096
+                || file.path.contains('\0')
+                || path.is_absolute()
+                || path.components().any(|component| match component {
+                    Component::Normal(segment) => segment.eq_ignore_ascii_case(".git"),
+                    _ => true,
+                })
+                || !paths.insert(file.path.as_str())
+                || !matches!(file.mode.as_str(), "100644" | "100755" | "120000")
+            {
+                return Err(RuntimeError::BadRequest(
+                    "repository snapshot contains an unsafe entry".into(),
+                ));
+            }
+            let decoded = BASE64
+                .decode(&file.content_base64)
+                .map_err(|_| RuntimeError::BadRequest("invalid snapshot base64".into()))?;
+            if decoded.len() > 1_024 * 1_024 {
+                return Err(RuntimeError::BadRequest(
+                    "repository snapshot file exceeds 1 MiB".into(),
+                ));
+            }
+            total_bytes = total_bytes
+                .checked_add(decoded.len())
+                .ok_or_else(|| RuntimeError::BadRequest("snapshot size overflow".into()))?;
+        }
+        if total_bytes != snapshot.total_bytes {
+            return Err(RuntimeError::BadRequest(
+                "repository snapshot size does not match its contents".into(),
+            ));
+        }
     }
     let now = Utc::now();
     if request.expires_at <= now || request.expires_at > now + Duration::hours(4) {
@@ -552,6 +604,35 @@ mod tests {
 
     use super::*;
     use crate::backend::Backend;
+    use crate::model::{CreateRequest, RepositorySnapshot, RepositorySnapshotFile};
+
+    #[test]
+    fn validates_credential_free_private_snapshots() {
+        let request = CreateRequest {
+            workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
+            repository_url: None,
+            repository_snapshot: Some(RepositorySnapshot {
+                files: vec![RepositorySnapshotFile {
+                    path: "README.md".into(),
+                    mode: "100644".into(),
+                    content_base64: BASE64.encode(b"# Private"),
+                }],
+                total_bytes: 9,
+            }),
+            base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
+            expires_at: Utc::now() + Duration::hours(1),
+        };
+        assert!(validate_create(&request).is_ok());
+
+        let mut unsafe_request = request;
+        unsafe_request
+            .repository_snapshot
+            .as_mut()
+            .expect("snapshot")
+            .files[0]
+            .path = "../credential".into();
+        assert!(validate_create(&unsafe_request).is_err());
+    }
 
     #[tokio::test]
     async fn health_and_lifecycle() {

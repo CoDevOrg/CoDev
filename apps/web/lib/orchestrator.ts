@@ -8,6 +8,7 @@ import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
 import { getAwsConfiguration } from "./aws";
+import type { RepositorySnapshot } from "./github";
 
 const errorSchema = z.object({
   error: z.string(),
@@ -27,7 +28,8 @@ export class OrchestratorError extends Error {
 
 export interface ProvisionSandboxInput {
   workspaceId: string;
-  repositoryUrl: string;
+  repositoryUrl: string | null;
+  repositorySnapshot?: RepositorySnapshot;
   baseSha: string;
   expiresAt: string;
 }

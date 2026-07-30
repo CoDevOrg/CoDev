@@ -1,4 +1,5 @@
 import { apiError, getApiUser } from "@/lib/api";
+import { getRepositorySnapshot } from "@/lib/github";
 import { getHostState, requestHostWake } from "@/lib/host";
 import {
   destroySandbox,
@@ -82,13 +83,25 @@ export async function POST(
     }
     const expiresAt = await beginWorkspaceProvisioning(workspaceId, user.id);
     await waitForOrchestrator();
+    const repositorySnapshot =
+      workspace.repositoryVisibility === "private"
+        ? await getRepositorySnapshot(
+            user.id,
+            workspace.repository,
+            workspace.baseSha,
+          )
+        : undefined;
     const sandbox = await provisionSandbox({
       workspaceId,
-      repositoryUrl: `https://github.com/${workspace.repository}.git`,
+      repositoryUrl:
+        workspace.repositoryVisibility === "public"
+          ? `https://github.com/${workspace.repository}.git`
+          : null,
+      ...(repositorySnapshot ? { repositorySnapshot } : {}),
       baseSha: workspace.baseSha,
       expiresAt: expiresAt.toISOString(),
     });
-    await markWorkspaceReady(workspaceId, sandbox.id);
+    await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
     return Response.json({ sandbox }, { status: 201 });
   } catch (error) {
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);

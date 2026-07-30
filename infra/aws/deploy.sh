@@ -10,6 +10,8 @@ readonly instance_type="${CODEV_INSTANCE_TYPE:-a1.metal}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
 readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-0713df58d0d8b3c1c}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-40}"
+readonly monthly_budget_usd="${CODEV_MONTHLY_BUDGET_USD:-75}"
+readonly budget_alert_email="${CODEV_BUDGET_ALERT_EMAIL:-}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
 readonly artifact_bucket="${CODEV_ARTIFACT_BUCKET:-codev-runtime-${account_id}-${region}}"
 readonly artifacts_stack="${CODEV_ARTIFACTS_STACK:-codev-runtime-artifacts}"
@@ -67,6 +69,8 @@ aws cloudformation deploy \
     "AvailabilityZone=${availability_zone}" \
     "UbuntuAmi=${host_ami_id}" \
     "HostVolumeSizeGiB=${host_volume_size_gib}" \
+    "MonthlyBudgetUsd=${monthly_budget_usd}" \
+    "BudgetAlertEmail=${budget_alert_email}" \
   --no-fail-on-empty-changeset
 
 api_id="$(aws cloudformation describe-stacks \

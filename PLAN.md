@@ -19,16 +19,17 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 
 ## Status
 
-| Phase | Name                              | Status   |
-| ----- | --------------------------------- | -------- |
-| 1     | Foundation and Live Website       | Complete |
-| 2     | GitHub Identity and Workspaces    | Complete |
-| 3     | Firecracker Runtime               | Complete |
-| 4     | Browser IDE and Terminal          | Complete |
-| 5     | Realtime Collaboration            | Complete |
-| 6     | Parallel Agent Runtime            | Complete |
-| 7     | Collision Coordination and Review | Complete |
-| 8     | GitHub Publication and Hardening  | Complete |
+| Phase | Name                                  | Status      |
+| ----- | ------------------------------------- | ----------- |
+| 1     | Foundation and Live Website           | Complete    |
+| 2     | GitHub Identity and Workspaces        | Complete    |
+| 3     | Firecracker Runtime                   | Complete    |
+| 4     | Browser IDE and Terminal              | Complete    |
+| 5     | Realtime Collaboration                | Complete    |
+| 6     | Parallel Agent Runtime                | Complete    |
+| 7     | Collision Coordination and Review     | Complete    |
+| 8     | GitHub Publication and Hardening      | Complete    |
+| 9     | Launch Validation and Design Partners | In progress |
 
 ## Phase 1: Foundation and Live Website
 
@@ -227,9 +228,43 @@ Publish approved integration branches without exposing GitHub tokens to sandboxe
 - Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
 - Completed: July 30, 2026
 
+## Phase 9: Launch Validation and Design Partners
+
+**Goal:** Make the complete CoDev workflow safe and repeatable for early design
+partners, including private repositories, structured product feedback, and
+visible infrastructure cost controls.
+
+### Acceptance Criteria
+
+- GitHub App installations expose eligible public and private repositories,
+  with visibility identified before workspace creation.
+- Private repository source reaches AWS as a bounded, credential-free snapshot;
+  GitHub credentials never enter the orchestrator, microVM, terminal, logs, or
+  clone configuration.
+- Private and public workspaces support the same IDE, collaboration, agent,
+  review, publication, and lifecycle flows.
+- Signed-in users can submit categorized design-partner feedback from CoDev,
+  and submissions retain enough product context for follow-up without storing
+  prompts, source code, diffs, terminal output, or provider credentials.
+- Launch preflight reports website, database, realtime, orchestrator, GitHub,
+  runtime, and scale-to-zero state with actionable recovery guidance.
+- AWS infrastructure declares a configurable monthly budget alert and keeps
+  the Firecracker host stopped when no workspace requires it.
+- Automated tests cover repository visibility, private snapshot validation,
+  feedback authorization/validation, launch preflight, and anonymous access.
+- The complete design-partner runbook is exercised against production without
+  moving the repository default branch.
+
+### Phase 9 Delivery
+
+- Wave 1: roadmap, launch preflight, and end-to-end validation coverage.
+- Wave 2: private repository discovery and credential-free source snapshots.
+- Wave 3: in-product design-partner feedback and operational context.
+- Wave 4: AWS budget guardrails, production verification, and launch handoff.
+- Started: July 30, 2026
+
 ## Deferred Beyond the Demo
 
-- Private repositories
 - Browser preview-port forwarding
 - Native desktop or mobile applications
 - Semantic duplicate-task matching
