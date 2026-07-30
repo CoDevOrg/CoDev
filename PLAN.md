@@ -334,13 +334,14 @@ the product outcomes defined in the PRD.
   returned `200 ready` for release `5efe9a5` with database and realtime ready
   and the orchestrator sleeping, the anonymous pilot API returned `401`, and
   `/pilot` returned a `307` redirect to `/sign-in`.
-- **Done in Vercel (production):** deployment
-  `dpl_Cdce2pPf5F9Q596Myvw7pMPGFeVK` was built with the production environment
-  and is live on `codev-xi.vercel.app`. The production alias serves release
-  `5efe9a5` with `/api/health` `200`, `/api/ready` `200` (database and realtime
-  ready, orchestrator sleeping), anonymous `POST /api/pilot/sessions` `401`, and
-  `/pilot` and `/dashboard` both redirecting unauthenticated requests to
-  `/sign-in`.
+- **Done in Vercel (production):** the Phase 10 application code shipped in
+  commit `5efe9a5` and is live on `codev-xi.vercel.app`. Production tracks
+  `origin/main` through Vercel's Git integration, so documentation-only commits
+  after `5efe9a5` (including this release-state update) redeploy identical
+  application behavior. On the production alias `/api/health` returned `200`,
+  `/api/ready` returned `200` (database and realtime ready, orchestrator
+  sleeping), anonymous `POST /api/pilot/sessions` returned `401`, and `/pilot`
+  and `/dashboard` both redirected unauthenticated requests to `/sign-in`.
 - **Done in AWS:** the Firecracker host `i-0c4d61ad38518be40`
   (`codev-firecracker-host`, `us-east-2`) is `stopped`, confirming
   scale-to-zero; the ready endpoint reports the orchestrator as sleeping.
