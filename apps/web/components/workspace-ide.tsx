@@ -20,6 +20,10 @@ import {
   type WorkspaceFile,
 } from "@/lib/ide";
 import { AgentPanel } from "@/components/agent-panel";
+import { PreviewPane } from "@/components/preview-pane";
+import { WorkspaceShareButton } from "@/components/workspace-share-button";
+
+type IdeView = "chat" | "files" | "code" | "preview" | "terminal";
 
 interface OpenFile {
   path: string;
@@ -56,6 +60,7 @@ export interface WorkspaceIdeProps {
   branch: string;
   canTerminal: boolean;
   canMerge: boolean;
+  isOwner: boolean;
   integrationHeadSha: string;
   user: {
     id: string;
@@ -71,6 +76,7 @@ export function WorkspaceIde({
   branch,
   canTerminal,
   canMerge,
+  isOwner,
   integrationHeadSha,
   user,
 }: WorkspaceIdeProps) {
@@ -81,6 +87,8 @@ export function WorkspaceIde({
   const [saving, setSaving] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [view, setView] = useState<IdeView>("chat");
+  const [terminalCollapsed, setTerminalCollapsed] = useState(true);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [searching, setSearching] = useState(false);
@@ -408,6 +416,14 @@ export function WorkspaceIde({
     };
   }, [apiBase, canTerminal, writeTerminal]);
 
+  useEffect(() => {
+    if (view !== "terminal" || terminalCollapsed) return;
+    const frame = window.requestAnimationFrame(() => {
+      fitAddon.current?.fit();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [terminalCollapsed, view]);
+
   async function openPath(path: string, line?: number) {
     if (openFile?.path === path) return;
     setError("");
@@ -638,6 +654,7 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
+          <WorkspaceShareButton workspaceId={workspaceId} isOwner={isOwner} />
           {canMerge ? (
             <div className="publication-control">
               {publishedUrl ? (
@@ -732,23 +749,77 @@ export function WorkspaceIde({
         </div>
       </header>
 
-      <div className="live-ide-grid">
+      <div
+        className={[
+          "live-ide-grid",
+          `view-${view}`,
+          view === "terminal" && terminalCollapsed ? "terminal-collapsed" : "",
+          view === "terminal" && !terminalCollapsed ? "terminal-open" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <aside className="activity-rail" aria-label="IDE views">
           <button
-            className={`rail-button ${searchOpen ? "" : "active"}`}
+            className={`rail-button agent-rail ${view === "chat" ? "active" : ""}`}
             type="button"
-            aria-label="Explorer"
-            onClick={() => setSearchOpen(false)}
+            aria-label="Chat"
+            aria-pressed={view === "chat"}
+            onClick={() => {
+              setView("chat");
+              setTerminalCollapsed(true);
+            }}
+          >
+            ✦
+          </button>
+          <button
+            className={`rail-button ${view === "files" ? "active" : ""}`}
+            type="button"
+            aria-label="Files"
+            aria-pressed={view === "files"}
+            onClick={() => {
+              setView("files");
+              setSearchOpen(false);
+              setTerminalCollapsed(true);
+            }}
           >
             ◫
           </button>
           <button
-            className={`rail-button ${searchOpen ? "active" : ""}`}
+            className={`rail-button ${view === "code" ? "active" : ""}`}
             type="button"
-            aria-label="Search"
-            onClick={() => setSearchOpen(true)}
+            aria-label="Code"
+            aria-pressed={view === "code"}
+            onClick={() => {
+              setView("code");
+              setTerminalCollapsed(true);
+            }}
           >
-            ⌕
+            ⌘
+          </button>
+          <button
+            className={`rail-button ${view === "preview" ? "active" : ""}`}
+            type="button"
+            aria-label="Preview focus"
+            aria-pressed={view === "preview"}
+            onClick={() => {
+              setView("preview");
+              setTerminalCollapsed(true);
+            }}
+          >
+            ▣
+          </button>
+          <button
+            className={`rail-button ${view === "terminal" ? "active" : ""}`}
+            type="button"
+            aria-label="Terminal"
+            aria-pressed={view === "terminal"}
+            onClick={() => {
+              setView("terminal");
+              setTerminalCollapsed(false);
+            }}
+          >
+            ▹
           </button>
           <span className="rail-spacer" />
           <Link className="rail-button" href={`/workspaces/${workspaceId}`}>
@@ -756,231 +827,284 @@ export function WorkspaceIde({
           </Link>
         </aside>
 
-        <aside className="file-sidebar">
-          <div className="panel-title">
-            <span>{searchOpen ? "Search" : "Explorer"}</span>
-            <button type="button" onClick={() => void refreshFiles()}>
-              ↻
-            </button>
-          </div>
-          {searchOpen ? (
-            <>
-              <div className="ide-search">
-                <input
-                  aria-label="Search workspace"
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    if (!event.target.value.trim()) setMatches([]);
-                  }}
-                  placeholder="Search files"
-                  autoFocus
-                />
-              </div>
-              <div className="search-results">
-                {searching ? <p>Searching…</p> : null}
-                {matches.map((match) => (
+        <div className="ide-main-stage">
+          <AgentPanel workspaceId={workspaceId} canMerge={canMerge} />
+          <PreviewPane className={view === "preview" ? "preview-focus" : ""} />
+
+          {view === "files" ? (
+            <aside
+              className="file-sidebar ide-drawer ide-drawer-files"
+              aria-label="Files"
+            >
+              <div className="panel-title">
+                <span>{searchOpen ? "Search" : "Explorer"}</span>
+                <div className="ide-drawer-actions">
                   <button
-                    key={`${match.path}:${match.line}`}
                     type="button"
-                    onClick={() => void openPath(match.path, match.line)}
+                    className={searchOpen ? "active" : ""}
+                    aria-label="Search"
+                    onClick={() => setSearchOpen((open) => !open)}
                   >
-                    <strong>{fileName(match.path)}</strong>
-                    <span>
-                      {match.path}:{match.line}
-                    </span>
-                    <small>{match.preview}</small>
+                    ⌕
                   </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="repository-heading">
-                <span>⌄</span>
-                <strong>{repository.split("/").at(-1)?.toUpperCase()}</strong>
-              </div>
-              <div className="file-tree">
-                {loading ? <p className="ide-empty">Loading files…</p> : null}
-                {files.map((file) => (
+                  <button type="button" onClick={() => void refreshFiles()}>
+                    ↻
+                  </button>
                   <button
-                    className={`file-row ${openFile?.path === file.path ? "active" : ""}`}
-                    key={file.path}
                     type="button"
-                    style={
-                      {
-                        "--file-depth": file.path.split("/").length - 1,
-                      } as React.CSSProperties
-                    }
-                    onClick={() => void openPath(file.path)}
-                    title={file.path}
+                    aria-label="Close files"
+                    onClick={() => setView("chat")}
                   >
-                    <span className="file-kind">◇</span>
-                    <span>{fileName(file.path)}</span>
-                    {file.status ? <i>{file.status}</i> : null}
-                    {(presenceByPath.get(file.path) ?? []).length > 0 ? (
-                      <span
-                        className="file-presence"
-                        aria-label="Active editors"
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {searchOpen ? (
+                <>
+                  <div className="ide-search">
+                    <input
+                      aria-label="Search workspace"
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        if (!event.target.value.trim()) setMatches([]);
+                      }}
+                      placeholder="Search files"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="search-results">
+                    {searching ? <p>Searching…</p> : null}
+                    {matches.map((match) => (
+                      <button
+                        key={`${match.path}:${match.line}`}
+                        type="button"
+                        onClick={() => {
+                          void openPath(match.path, match.line);
+                          setView("code");
+                        }}
                       >
-                        {(presenceByPath.get(file.path) ?? [])
-                          .slice(0, 3)
-                          .map((collaborator) => (
-                            <b
-                              key={collaborator.id}
-                              title={`${collaboratorLabel(collaborator)} is editing`}
-                              style={
-                                {
-                                  "--presence-color": collaborator.color,
-                                } as React.CSSProperties
-                              }
-                            />
-                          ))}
-                      </span>
+                        <strong>{fileName(match.path)}</strong>
+                        <span>
+                          {match.path}:{match.line}
+                        </span>
+                        <small>{match.preview}</small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="repository-heading">
+                    <span>⌄</span>
+                    <strong>
+                      {repository.split("/").at(-1)?.toUpperCase()}
+                    </strong>
+                  </div>
+                  <div className="file-tree">
+                    {loading ? (
+                      <p className="ide-empty">Loading files…</p>
                     ) : null}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </aside>
-
-        <section className="ide-editor">
-          <div className="editor-tabbar">
-            {openFile ? (
-              <div className="editor-tab active">
-                <span>
-                  {openFile.dirty ? "● " : ""}
-                  {fileName(openFile.path)}
-                </span>
-              </div>
-            ) : null}
-            <div className="editor-tab-actions">
-              <button
-                type="button"
-                disabled={!openFile}
-                className={diffOpen ? "active" : ""}
-                onClick={() => setDiffOpen((value) => !value)}
-              >
-                Diff
-              </button>
-              <button
-                type="button"
-                disabled={
-                  collaborationStatus === "online" || !openFile?.dirty || saving
-                }
-                onClick={() => void save()}
-              >
-                {collaborationStatus === "online"
-                  ? openFile?.dirty
-                    ? "Syncing…"
-                    : "Synced"
-                  : saving
-                    ? "Saving…"
-                    : "Save"}
-              </button>
-            </div>
-          </div>
-          {error ? <div className="ide-error">{error}</div> : null}
-          {collaborationConflict ? (
-            <div className="collaboration-conflict" role="alert">
-              <div>
-                <strong>
-                  Filesystem conflict in {collaborationConflict.path}
-                </strong>
-                <span>{collaborationConflict.message}</span>
-              </div>
-              <div className="collaboration-conflict-actions">
-                <button
-                  type="button"
-                  disabled={resolvingConflict}
-                  onClick={() =>
-                    void resolveCollaborationConflict("collaboration")
-                  }
-                >
-                  Keep editor version
-                </button>
-                <button
-                  type="button"
-                  disabled={resolvingConflict}
-                  onClick={() =>
-                    void resolveCollaborationConflict("filesystem")
-                  }
-                >
-                  Use sandbox version
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {openFile ? (
-            diffOpen ? (
-              <DiffEditor
-                original={openFile.original}
-                modified={openFile.contents}
-                language={languageForPath(openFile.path)}
-                theme="vs-dark"
-                options={{
-                  automaticLayout: true,
-                  fontFamily: "var(--font-geist-mono)",
-                  fontSize: 13,
-                  minimap: { enabled: false },
-                  renderSideBySide: true,
-                  readOnly: true,
-                }}
-              />
-            ) : (
-              <Editor
-                path={openFile.path}
-                value={openFile.contents}
-                language={languageForPath(openFile.path)}
-                theme="vs-dark"
-                onMount={editorMount}
-                onChange={(contents) =>
-                  setOpenFile((current) =>
-                    current
-                      ? {
-                          ...current,
-                          contents: contents ?? "",
-                          dirty: (contents ?? "") !== current.savedContents,
+                    {files.map((file) => (
+                      <button
+                        className={`file-row ${openFile?.path === file.path ? "active" : ""}`}
+                        key={file.path}
+                        type="button"
+                        style={
+                          {
+                            "--file-depth": file.path.split("/").length - 1,
+                          } as React.CSSProperties
                         }
-                      : null,
-                  )
-                }
-                options={{
-                  automaticLayout: true,
-                  fontFamily: "var(--font-geist-mono)",
-                  fontSize: 13,
-                  minimap: { enabled: false },
-                  padding: { top: 14 },
-                  smoothScrolling: true,
-                  tabSize: 2,
-                }}
-              />
-            )
-          ) : (
-            <div className="ide-welcome">
-              <span className="wordmark-mark" aria-hidden="true">
-                <span />
-                <span />
-              </span>
-              <h1>Open a file to start building.</h1>
-              <p>
-                Files are read from the isolated Firecracker workspace. Saves
-                use revision checks to prevent silent overwrites.
-              </p>
-              <kbd>⌘ S</kbd>
-              <span>Save active file</span>
-              <kbd>⌘ F</kbd>
-              <span>Find in active file</span>
-            </div>
-          )}
-        </section>
+                        onClick={() => {
+                          void openPath(file.path);
+                          setView("code");
+                        }}
+                        title={file.path}
+                      >
+                        <span className="file-kind">◇</span>
+                        <span>{fileName(file.path)}</span>
+                        {file.status ? <i>{file.status}</i> : null}
+                        {(presenceByPath.get(file.path) ?? []).length > 0 ? (
+                          <span
+                            className="file-presence"
+                            aria-label="Active editors"
+                          >
+                            {(presenceByPath.get(file.path) ?? [])
+                              .slice(0, 3)
+                              .map((collaborator) => (
+                                <b
+                                  key={collaborator.id}
+                                  title={`${collaboratorLabel(collaborator)} is editing`}
+                                  style={
+                                    {
+                                      "--presence-color": collaborator.color,
+                                    } as React.CSSProperties
+                                  }
+                                />
+                              ))}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </aside>
+          ) : null}
 
-        <AgentPanel workspaceId={workspaceId} canMerge={canMerge} />
+          {view === "code" ? (
+            <section
+              className="ide-editor ide-drawer ide-drawer-code"
+              aria-label="Code editor"
+            >
+              <div className="editor-tabbar">
+                {openFile ? (
+                  <div className="editor-tab active">
+                    <span>
+                      {openFile.dirty ? "● " : ""}
+                      {fileName(openFile.path)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="editor-tab-actions">
+                  <button
+                    type="button"
+                    disabled={!openFile}
+                    className={diffOpen ? "active" : ""}
+                    onClick={() => setDiffOpen((value) => !value)}
+                  >
+                    Diff
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      collaborationStatus === "online" ||
+                      !openFile?.dirty ||
+                      saving
+                    }
+                    onClick={() => void save()}
+                  >
+                    {collaborationStatus === "online"
+                      ? openFile?.dirty
+                        ? "Syncing…"
+                        : "Synced"
+                      : saving
+                        ? "Saving…"
+                        : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Close code"
+                    onClick={() => setView("chat")}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              {error ? <div className="ide-error">{error}</div> : null}
+              {collaborationConflict ? (
+                <div className="collaboration-conflict" role="alert">
+                  <div>
+                    <strong>
+                      Filesystem conflict in {collaborationConflict.path}
+                    </strong>
+                    <span>{collaborationConflict.message}</span>
+                  </div>
+                  <div className="collaboration-conflict-actions">
+                    <button
+                      type="button"
+                      disabled={resolvingConflict}
+                      onClick={() =>
+                        void resolveCollaborationConflict("collaboration")
+                      }
+                    >
+                      Keep editor version
+                    </button>
+                    <button
+                      type="button"
+                      disabled={resolvingConflict}
+                      onClick={() =>
+                        void resolveCollaborationConflict("filesystem")
+                      }
+                    >
+                      Use sandbox version
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {openFile ? (
+                diffOpen ? (
+                  <DiffEditor
+                    original={openFile.original}
+                    modified={openFile.contents}
+                    language={languageForPath(openFile.path)}
+                    theme="vs-dark"
+                    options={{
+                      automaticLayout: true,
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 13,
+                      minimap: { enabled: false },
+                      renderSideBySide: true,
+                      readOnly: true,
+                    }}
+                  />
+                ) : (
+                  <Editor
+                    path={openFile.path}
+                    value={openFile.contents}
+                    language={languageForPath(openFile.path)}
+                    theme="vs-dark"
+                    onMount={editorMount}
+                    onChange={(contents) =>
+                      setOpenFile((current) =>
+                        current
+                          ? {
+                              ...current,
+                              contents: contents ?? "",
+                              dirty: (contents ?? "") !== current.savedContents,
+                            }
+                          : null,
+                      )
+                    }
+                    options={{
+                      automaticLayout: true,
+                      fontFamily: "var(--font-geist-mono)",
+                      fontSize: 13,
+                      minimap: { enabled: false },
+                      padding: { top: 14 },
+                      smoothScrolling: true,
+                      tabSize: 2,
+                    }}
+                  />
+                )
+              ) : (
+                <div className="ide-welcome">
+                  <span className="wordmark-mark" aria-hidden="true">
+                    <span />
+                    <span />
+                  </span>
+                  <h1>Open a file to start building.</h1>
+                  <p>
+                    Use the Files rail to browse the Firecracker workspace, then
+                    edit here.
+                  </p>
+                </div>
+              )}
+            </section>
+          ) : null}
+        </div>
 
         <section
-          className="terminal-panel live-terminal"
+          className={[
+            "terminal-panel",
+            "live-terminal",
+            view === "terminal" ? "terminal-drawer" : "terminal-hidden",
+            terminalCollapsed ? "is-collapsed" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           aria-label="Sandbox terminal"
+          aria-hidden={view !== "terminal"}
         >
           <div className="terminal-head">
             <div>
@@ -988,10 +1112,29 @@ export function WorkspaceIde({
                 Terminal <span>1</span>
               </button>
             </div>
-            <div>
+            <div className="terminal-head-actions">
               <span>
                 {canTerminal ? "authenticated" : "capability required"}
               </span>
+              <button
+                type="button"
+                aria-label={
+                  terminalCollapsed ? "Expand terminal" : "Collapse terminal"
+                }
+                onClick={() => setTerminalCollapsed((value) => !value)}
+              >
+                {terminalCollapsed ? "▴" : "▾"}
+              </button>
+              <button
+                type="button"
+                aria-label="Close terminal"
+                onClick={() => {
+                  setView("chat");
+                  setTerminalCollapsed(true);
+                }}
+              >
+                ✕
+              </button>
             </div>
           </div>
           {canTerminal ? (

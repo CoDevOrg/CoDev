@@ -28,6 +28,7 @@ export default async function WorkspaceIdePage({
       branch={workspace.defaultBranch}
       canTerminal={workspace.canTerminal}
       canMerge={workspace.canMerge}
+      isOwner={workspace.role === "owner"}
       integrationHeadSha={workspace.integrationHeadSha}
       user={{
         id: user.id,
