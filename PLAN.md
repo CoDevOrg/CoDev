@@ -317,22 +317,42 @@ the product outcomes defined in the PRD.
   constraints, and one-active-session-per-workspace enforcement. A direct
   verification returned `rls=true`, both public role checks `false`, six
   constraints, and four indexes.
-- **Verified so far:** monorepo TypeScript type checking passed. Contracts,
-  database, configuration, and web unit suites passed (47 tests total).
-- **Not done:** full formatting check, lint, complete monorepo test command,
-  production build, Playwright suite, Rust checks, and `git diff --check`.
-- **Not done:** `PILOT_ADMIN_GITHUB_LOGINS` is not configured in Vercel
-  development, preview, or production. The intended initial allowlist is
-  `yousef20920`.
-- **Not done:** Phase 10 source is uncommitted, has not been pushed, previewed,
-  promoted, or verified on production. Production still runs release
-  `0543b47168…` from the Phase 9 lifecycle fix.
+- **Verified:** `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`
+  (47 unit tests), `pnpm build`, `pnpm rust:check` (8 Rust tests), and
+  `git diff --check` all pass on the committed source.
+- **Verified:** the full Playwright smoke suite passes locally against a
+  production build, including the anonymous `POST /api/pilot/sessions` check
+  that returns `401`.
+- **Done in Vercel:** `PILOT_ADMIN_GITHUB_LOGINS=yousef20920` is configured
+  independently in Development, Preview (all preview branches), and Production.
+- **Done in Git:** Phase 10 source is committed as `5efe9a5` (`Implement Phase
+10 closed beta operations console`) and pushed to `origin/main`.
+- **Done in Vercel (preview):** deployment
+  `dpl_8eifH3A8MwPGqfLMWb8A6K4o9yJ7`
+  (`codev-f1whloqwj-yousef20920s-projects.vercel.app`) built `READY`. Behind the
+  automation-bypass header, `/api/health` returned `200 ok`, `/api/ready`
+  returned `200 ready` for release `5efe9a5` with database and realtime ready
+  and the orchestrator sleeping, the anonymous pilot API returned `401`, and
+  `/pilot` returned a `307` redirect to `/sign-in`.
+- **Done in Vercel (production):** deployment
+  `dpl_Cdce2pPf5F9Q596Myvw7pMPGFeVK` was built with the production environment
+  and is live on `codev-xi.vercel.app`. The production alias serves release
+  `5efe9a5` with `/api/health` `200`, `/api/ready` `200` (database and realtime
+  ready, orchestrator sleeping), anonymous `POST /api/pilot/sessions` `401`, and
+  `/pilot` and `/dashboard` both redirecting unauthenticated requests to
+  `/sign-in`.
+- **Done in AWS:** the Firecracker host `i-0c4d61ad38518be40`
+  (`codev-firecracker-host`, `us-east-2`) is `stopped`, confirming
+  scale-to-zero; the ready endpoint reports the orchestrator as sleeping.
 - **Not done:** authenticated browser verification of the pilot console,
-  session mutations, feedback triage, and mobile panel collapse.
-- **Not done:** the complete two-identity design-partner exercise. This also
-  keeps Phase 9 in progress.
+  session mutations, feedback triage, and mobile panel collapse. This requires
+  an interactive GitHub sign-in for `yousef20920` (an allowlisted operator).
+- **Not done:** the complete two-identity design-partner exercise, which needs
+  a second GitHub identity to sign in. This also keeps Phase 9 in progress.
+  Phases 9 and 10 remain open until this exercise succeeds.
 - Started: July 30, 2026
 - Paused: July 30, 2026
+- Resumed and deployed to production: July 30, 2026
 
 ### Phase 10 Resume Handoff
 
@@ -341,8 +361,10 @@ the product outcomes defined in the PRD.
 - Branch: `main`.
 - Last committed source at pause: `0543b47` (`Fix private workspace lifecycle
 baseline`).
-- The Phase 10 worktree is intentionally uncommitted. Preserve every existing
-  modification and untracked file; do not reset or check out over it.
+- **Update (resume):** the Phase 10 worktree has since been committed as
+  `5efe9a5` and pushed to `origin/main`; production runs release `5efe9a5` on
+  `codev-xi.vercel.app`. Any remaining edits (for example an authenticated-
+  verification fix) should be new commits on top of `5efe9a5`; do not reset it.
 - The main Phase 10 files are `apps/web/app/pilot/page.tsx`,
   `apps/web/components/pilot-console.tsx`, `apps/web/lib/pilot.ts`,
   `apps/web/lib/pilot-access.ts`, `apps/web/app/api/pilot/**`,
@@ -378,19 +400,33 @@ baseline`).
 
 #### First actions in the next chat
 
-1. Run `git status --short` and review the Phase 10 diff without discarding it.
-2. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
-   `pnpm build`, `pnpm rust:check`, and `git diff --check`; fix failures.
-3. Run Playwright locally or against a preview, including the new anonymous
-   pilot API check.
-4. Configure `PILOT_ADMIN_GITHUB_LOGINS=yousef20920` independently in Vercel
-   development, preview, and production.
-5. Commit the exact verified source, push it, deploy a preview, and verify
-   `/api/health`, `/api/ready`, authentication, `/pilot`, pilot mutations,
-   feedback triage, and browser console errors.
-6. Promote the verified source to production, repeat smoke checks, confirm the
-   AWS host returns to stopped, and update this plan with the release SHA/URL.
-7. Run the two-identity pilot and only then mark Phases 9 and 10 complete.
+Steps 1–6 below are complete as of release `5efe9a5` (see Phase 10 Delivery for
+evidence). The only remaining work is interactive and needs GitHub sign-in:
+
+1. ~~Run `git status --short` and review the Phase 10 diff without discarding
+   it.~~ Done.
+2. ~~Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+   `pnpm build`, `pnpm rust:check`, and `git diff --check`; fix failures.~~
+   Done — all pass.
+3. ~~Run Playwright locally or against a preview, including the new anonymous
+   pilot API check.~~ Done — smoke suite passes.
+4. ~~Configure `PILOT_ADMIN_GITHUB_LOGINS=yousef20920` independently in Vercel
+   development, preview, and production.~~ Done.
+5. ~~Commit the exact verified source, push it, deploy a preview, and verify
+   `/api/health`, `/api/ready`, authentication, and the anonymous pilot API.~~
+   Done — committed `5efe9a5`, preview verified via automation bypass.
+6. ~~Promote the verified source to production, repeat smoke checks, confirm the
+   AWS host returns to stopped, and update this plan with the release
+   SHA/URL.~~ Done — production runs `5efe9a5` on `codev-xi.vercel.app`; host
+   `i-0c4d61ad38518be40` is `stopped`.
+7. **Remaining:** sign in to production as an allowlisted operator
+   (`yousef20920`) and verify the `/pilot` console renders, session
+   create/checkpoint/blocker/completion mutations work, feedback triage works,
+   and there are no browser console errors (including mobile panel collapse).
+8. **Remaining:** run the two-identity design-partner pilot end to end, then and
+   only then mark Phases 9 and 10 complete. These require interactive GitHub
+   authentication (and a second identity) that could not be performed
+   non-interactively during this resume.
 
 #### Tools, connectors, and CLIs
 
