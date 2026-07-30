@@ -213,6 +213,7 @@ export const workspaceRuntimes = pgTable(
     sandboxId: text("sandbox_id").unique(),
     backend: text("backend").default("firecracker").notNull(),
     status: sandboxRuntimeStatus("status").default("provisioning").notNull(),
+    provisionedHeadSha: text("provisioned_head_sha"),
     lastError: text("last_error"),
     provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),

@@ -257,10 +257,20 @@ visible infrastructure cost controls.
 
 ### Phase 9 Delivery
 
-- Wave 1: roadmap, launch preflight, and end-to-end validation coverage.
-- Wave 2: private repository discovery and credential-free source snapshots.
-- Wave 3: in-product design-partner feedback and operational context.
-- Wave 4: AWS budget guardrails, production verification, and launch handoff.
+- Launch preflight: authenticated website, database, realtime, orchestrator,
+  GitHub, host-state, and scale-to-zero checks with recovery guidance.
+- Private repositories: visibility-aware discovery and bounded,
+  credential-free GitHub tree snapshots materialized by the Rust orchestrator.
+- Feedback: authenticated, rate-limited design-partner submissions with
+  category, rating, page, release, and optional workspace context.
+- Database: migration `0008_launch_design_partners.sql`; feedback has RLS
+  enabled and no `anon` or `authenticated` Data API grants.
+- Cost controls: configurable `codev-runtime-monthly` AWS budget, set to
+  USD 75, plus the existing wake-on-demand and idle host shutdown behavior.
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app),
+  release `be04164fae9b`.
+- Automated production verification and a private-repository sandbox smoke
+  test passed; the two-identity design-partner session remains to be exercised.
 - Started: July 30, 2026
 
 ## Deferred Beyond the Demo

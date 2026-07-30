@@ -64,6 +64,13 @@
       "when": 1785376024618,
       "tag": "0008_launch_design_partners",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785378112556,
+      "tag": "0009_late_moon_knight",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getRepository } from "./github";
 import { assertWorkspaceQuota } from "./quotas";
+import { hasUnpublishedRuntimeChanges } from "./workspace-lifecycle";
 
 const workspaceRuntimeTtlMs = (4 * 60 - 5) * 60 * 1000;
 
@@ -194,6 +195,7 @@ export async function markWorkspaceReady(
       .set({
         sandboxId,
         status: "ready",
+        provisionedHeadSha: headSha,
         provisionedAt: now,
         lastError: null,
         updatedAt: now,
@@ -241,8 +243,13 @@ export async function beginWorkspaceStop(workspaceId: string, userId: string) {
       .select({
         baseSha: schema.workspaces.baseSha,
         integrationHeadSha: schema.worktrees.headSha,
+        provisionedHeadSha: schema.workspaceRuntimes.provisionedHeadSha,
       })
       .from(schema.workspaces)
+      .innerJoin(
+        schema.workspaceRuntimes,
+        eq(schema.workspaceRuntimes.workspaceId, schema.workspaces.id),
+      )
       .innerJoin(
         schema.worktrees,
         and(
@@ -271,7 +278,13 @@ export async function beginWorkspaceStop(workspaceId: string, userId: string) {
         "Merge or discard active agent worktrees before stopping.",
       );
     }
-    if (state.integrationHeadSha !== state.baseSha) {
+    if (
+      hasUnpublishedRuntimeChanges(
+        state.integrationHeadSha,
+        state.provisionedHeadSha,
+        state.baseSha,
+      )
+    ) {
       const [publication] = await transaction
         .select({ id: schema.publishedBranches.id })
         .from(schema.publishedBranches)
@@ -312,8 +325,13 @@ export async function markWorkspaceStopped(workspaceId: string) {
         baseSha: schema.workspaces.baseSha,
         integrationHeadSha: schema.worktrees.headSha,
         integrationId: schema.worktrees.id,
+        provisionedHeadSha: schema.workspaceRuntimes.provisionedHeadSha,
       })
       .from(schema.workspaces)
+      .innerJoin(
+        schema.workspaceRuntimes,
+        eq(schema.workspaceRuntimes.workspaceId, schema.workspaces.id),
+      )
       .innerJoin(
         schema.worktrees,
         and(
@@ -324,29 +342,31 @@ export async function markWorkspaceStopped(workspaceId: string) {
       .where(eq(schema.workspaces.id, workspaceId))
       .limit(1)
       .for("update");
-    const [publication] =
-      state && state.integrationHeadSha !== state.baseSha
-        ? await transaction
-            .select({ commitSha: schema.publishedBranches.commitSha })
-            .from(schema.publishedBranches)
-            .where(
-              and(
-                eq(schema.publishedBranches.workspaceId, workspaceId),
-                eq(schema.publishedBranches.status, "published"),
-                eq(
-                  schema.publishedBranches.sourceHeadSha,
-                  state.integrationHeadSha,
-                ),
-              ),
-            )
-            .orderBy(desc(schema.publishedBranches.publishedAt))
-            .limit(1)
-        : [];
-    if (
+    const hasUnpublishedChanges =
       state &&
-      state.integrationHeadSha !== state.baseSha &&
-      !publication?.commitSha
-    ) {
+      hasUnpublishedRuntimeChanges(
+        state.integrationHeadSha,
+        state.provisionedHeadSha,
+        state.baseSha,
+      );
+    const [publication] = hasUnpublishedChanges
+      ? await transaction
+          .select({ commitSha: schema.publishedBranches.commitSha })
+          .from(schema.publishedBranches)
+          .where(
+            and(
+              eq(schema.publishedBranches.workspaceId, workspaceId),
+              eq(schema.publishedBranches.status, "published"),
+              eq(
+                schema.publishedBranches.sourceHeadSha,
+                state.integrationHeadSha,
+              ),
+            ),
+          )
+          .orderBy(desc(schema.publishedBranches.publishedAt))
+          .limit(1)
+      : [];
+    if (state && hasUnpublishedChanges && !publication?.commitSha) {
       const message =
         "The sandbox disappeared before its integration revision was published.";
       await transaction

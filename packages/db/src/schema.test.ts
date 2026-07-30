@@ -11,6 +11,7 @@ import {
   pathClaims,
   publishedBranches,
   workspaceMembers,
+  workspaceRuntimes,
   workspaces,
   worktrees,
   yjsSnapshots,
@@ -20,6 +21,9 @@ describe("database schema", () => {
   it("defines the core workspace tables", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
     expect(workspaces.repositoryVisibility.name).toBe("repository_visibility");
+    expect(workspaceRuntimes.provisionedHeadSha.name).toBe(
+      "provisioned_head_sha",
+    );
     expect(getTableName(designPartnerFeedback)).toBe("design_partner_feedback");
     expect(getTableName(workspaceMembers)).toBe("workspace_members");
     expect(getTableName(agentSessions)).toBe("agent_sessions");
