@@ -3182,10 +3182,46 @@ footer > span {
 }
 
 .preview-pane-badge {
+  max-width: 160px;
+  overflow: hidden;
   color: #66706c;
   font-family: var(--font-geist-mono), monospace;
   font-size: 8px;
   letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-pane-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-pane-refresh {
+  border: 0;
+  background: transparent;
+  color: #8b9591;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.preview-pane-refresh:hover {
+  color: #d7ddd9;
+}
+
+.preview-pane-frame {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: #ffffff;
 }
 
 .preview-pane-empty {
@@ -3195,6 +3231,12 @@ footer > span {
   gap: 8px;
   color: #6f7875;
   text-align: center;
+}
+
+.preview-pane-empty code {
+  color: #9aa39f;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
 }
 
 .preview-pane-empty strong {

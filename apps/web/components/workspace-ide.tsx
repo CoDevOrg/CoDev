@@ -19,6 +19,7 @@ import {
   type SearchMatch,
   type WorkspaceFile,
 } from "@/lib/ide";
+import { isPreviewExtensionAllowed } from "@/lib/preview";
 import { AgentPanel } from "@/components/agent-panel";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
@@ -113,6 +114,8 @@ export function WorkspaceIde({
   const terminalInput = useRef("");
   const terminalInputTimer = useRef<number | null>(null);
   const terminalSendChain = useRef<Promise<void>>(Promise.resolve());
+  const previewRefreshTimer = useRef<number | null>(null);
+  const [previewRevision, setPreviewRevision] = useState(0);
 
   const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
 
@@ -178,6 +181,34 @@ export function WorkspaceIde({
     }).then((response) => payload<{ files: WorkspaceFile[] }>(response));
     setFiles(filePayload.files);
   }, [apiBase]);
+
+  const refreshPreviewNow = useCallback(() => {
+    if (previewRefreshTimer.current !== null) {
+      window.clearTimeout(previewRefreshTimer.current);
+      previewRefreshTimer.current = null;
+    }
+    setPreviewRevision((current) => current + 1);
+    void refreshFiles().catch(() => undefined);
+  }, [refreshFiles]);
+
+  const schedulePreviewRefresh = useCallback(() => {
+    if (previewRefreshTimer.current !== null) {
+      window.clearTimeout(previewRefreshTimer.current);
+    }
+    previewRefreshTimer.current = window.setTimeout(() => {
+      previewRefreshTimer.current = null;
+      setPreviewRevision((current) => current + 1);
+      void refreshFiles().catch(() => undefined);
+    }, 2_000);
+  }, [refreshFiles]);
+
+  useEffect(() => {
+    return () => {
+      if (previewRefreshTimer.current !== null) {
+        window.clearTimeout(previewRefreshTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const client = new WorkspaceCollaboration(
@@ -558,6 +589,9 @@ export function WorkspaceIde({
           : null,
       );
       await refreshFiles();
+      if (isPreviewExtensionAllowed(openFile.path)) {
+        schedulePreviewRefresh();
+      }
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Could not save file.",
@@ -565,7 +599,7 @@ export function WorkspaceIde({
     } finally {
       setSaving(false);
     }
-  }, [apiBase, openFile, refreshFiles, saving]);
+  }, [apiBase, openFile, refreshFiles, saving, schedulePreviewRefresh]);
 
   useEffect(() => {
     saveRef.current = save;
@@ -828,8 +862,18 @@ export function WorkspaceIde({
         </aside>
 
         <div className="ide-main-stage">
-          <AgentPanel workspaceId={workspaceId} canMerge={canMerge} />
-          <PreviewPane className={view === "preview" ? "preview-focus" : ""} />
+          <AgentPanel
+            workspaceId={workspaceId}
+            canMerge={canMerge}
+            onTurnCompleted={schedulePreviewRefresh}
+          />
+          <PreviewPane
+            workspaceId={workspaceId}
+            files={files}
+            revisionToken={String(previewRevision)}
+            onRefresh={refreshPreviewNow}
+            className={view === "preview" ? "preview-focus" : ""}
+          />
 
           {view === "files" ? (
             <aside

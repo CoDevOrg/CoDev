@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AgentChatTranscript } from "@/components/agent-chat-transcript";
 import { mapSessionToChatItems } from "@/lib/agent-chat";
@@ -72,9 +72,11 @@ async function json<T>(response: Response) {
 export function AgentPanel({
   workspaceId,
   canMerge,
+  onTurnCompleted,
 }: {
   workspaceId: string;
   canMerge: boolean;
+  onTurnCompleted?: () => void;
 }) {
   const endpoint = `/api/workspaces/${workspaceId}/agents`;
   const [sessions, setSessions] = useState<AgentSession[]>([]);
@@ -89,6 +91,12 @@ export function AgentPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [composingNew, setComposingNew] = useState(false);
+  const turnStatusRef = useRef(new Map<string, string>());
+  const onTurnCompletedRef = useRef(onTurnCompleted);
+
+  useEffect(() => {
+    onTurnCompletedRef.current = onTurnCompleted;
+  }, [onTurnCompleted]);
 
   const activeSessionCount = sessions.filter(
     (session) =>
@@ -141,6 +149,24 @@ export function AgentPanel({
       stopped = true;
     };
   }, [refresh]);
+
+  useEffect(() => {
+    let sawCompletion = false;
+    for (const session of sessions) {
+      for (const turn of session.turns) {
+        const previous = turnStatusRef.current.get(turn.id);
+        if (
+          previous !== undefined &&
+          previous !== "completed" &&
+          turn.status === "completed"
+        ) {
+          sawCompletion = true;
+        }
+        turnStatusRef.current.set(turn.id, turn.status);
+      }
+    }
+    if (sawCompletion) onTurnCompletedRef.current?.();
+  }, [sessions]);
 
   async function createSession() {
     if (!prompt.trim()) return;
