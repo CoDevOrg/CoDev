@@ -28,6 +28,24 @@ interface PublicationTarget {
   requestId: string;
 }
 
+type PublishedBranch = typeof schema.publishedBranches.$inferSelect;
+
+function publicationResponse(publication: PublishedBranch) {
+  return {
+    id: publication.id,
+    workspaceId: publication.workspaceId,
+    branchName: publication.branchName,
+    status: publication.status,
+    sourceHeadSha: publication.sourceHeadSha,
+    baseSha: publication.baseSha,
+    commitSha: publication.commitSha,
+    htmlUrl: publication.htmlUrl,
+    lastError: publication.lastError,
+    publishedAt: publication.publishedAt?.toISOString() ?? null,
+    updatedAt: publication.updatedAt.toISOString(),
+  };
+}
+
 function refPath(branchName: string) {
   return branchName.split("/").map(encodeURIComponent).join("/");
 }
@@ -258,7 +276,9 @@ async function ensureGitHubRef(
 export async function publishWorkspaceBranch(input: PublicationTarget) {
   const startedAt = Date.now();
   const reservation = await reservePublication(input);
-  if (reservation.completed) return reservation.publication;
+  if (reservation.completed) {
+    return publicationResponse(reservation.publication);
+  }
 
   try {
     const { repository } = await getPublicRepository(
@@ -338,7 +358,10 @@ export async function publishWorkspaceBranch(input: PublicationTarget) {
       workspaceId: input.workspaceId,
       durationMs: Date.now() - startedAt,
     });
-    return publication;
+    if (!publication) {
+      throw new PublicationError("Could not finalize the publication.", 502);
+    }
+    return publicationResponse(publication);
   } catch (error) {
     const message =
       error instanceof Error
