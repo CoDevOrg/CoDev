@@ -93,10 +93,21 @@ export function AgentPanel({
   const [composingNew, setComposingNew] = useState(false);
   const turnStatusRef = useRef(new Map<string, string>());
   const onTurnCompletedRef = useRef(onTurnCompleted);
+  const composerFocusedRef = useRef(false);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     onTurnCompletedRef.current = onTurnCompleted;
   }, [onTurnCompleted]);
+
+  useEffect(() => {
+    if (composerFocusedRef.current) return;
+    const node = composerTextareaRef.current;
+    if (!node) return;
+    composerFocusedRef.current = true;
+    const frame = window.requestAnimationFrame(() => node.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [sessions, composingNew, selectedSessionId]);
 
   const activeSessionCount = sessions.filter(
     (session) =>
@@ -389,28 +400,6 @@ export function AgentPanel({
       {selectedSession && !composingNew ? (
         <details className="agent-review-disclosure">
           <summary>Review &amp; merge</summary>
-          {selectedSession.claims.length > 0 ? (
-            <div className="agent-claims">
-              <small>Path claims</small>
-              {selectedSession.claims.map((claim) => (
-                <p key={claim.id}>
-                  <code>{claim.pathGlob}</code>
-                  <span>{claim.status}</span>
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {selectedSession.messages.length > 0 ? (
-            <div className="agent-coordination">
-              <small>Coordination</small>
-              {selectedSession.messages.slice(-3).map((message) => (
-                <p key={message.id}>
-                  <b>{message.kind.replaceAll("_", " ")}</b>
-                  <span>{message.status}</span>
-                </p>
-              ))}
-            </div>
-          ) : null}
           {canMerge &&
           selectedSession.worktreeStatus !== "merged" &&
           selectedSession.worktreeStatus !== "discarded" ? (
@@ -486,6 +475,7 @@ export function AgentPanel({
         {followUpMode && selectedSession ? (
           <>
             <textarea
+              ref={composerTextareaRef}
               aria-label={`Follow up with ${selectedSession.name}`}
               value={followUp}
               onChange={(event) => setFollowUp(event.target.value)}
@@ -536,6 +526,7 @@ export function AgentPanel({
               </label>
             </div>
             <textarea
+              ref={composerTextareaRef}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               placeholder="Describe a repository change…"

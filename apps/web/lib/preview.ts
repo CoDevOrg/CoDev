@@ -3,6 +3,9 @@
  *
  * Live port proxy (`PreviewSource` kind `"live"`) is deferred — see PLAN.md
  * "Browser preview-port forwarding". Do not wire guest networking here.
+ *
+ * Follow-up: optional `?worktreeId=` so Preview can read an agent worktree
+ * before merge (today reads the integration sandbox only).
  */
 
 const PREVIEW_EXTENSIONS = new Set([

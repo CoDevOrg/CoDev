@@ -2999,6 +2999,20 @@ footer > span {
   background: #ef8e8e;
 }
 
+.presence-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.presence-copy {
+  color: #8b9591;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 .presence-stack {
   display: flex;
   padding-left: 8px;
@@ -3094,6 +3108,7 @@ footer > span {
   flex-direction: column;
   background: #121514;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  animation: ide-drawer-in 170ms ease;
 }
 
 .ide-drawer-files {
@@ -3102,12 +3117,38 @@ footer > span {
   left: 0;
   width: min(300px, 88%);
   border-right: 1px solid #242927;
+  transform-origin: left center;
 }
 
 .ide-drawer-code {
   inset: 12px 12px 12px max(12px, 28%);
   border: 1px solid #2a312e;
   border-radius: 8px;
+  animation-name: ide-drawer-code-in;
+}
+
+@keyframes ide-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ide-drawer-code-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .ide-drawer-actions {
@@ -3145,15 +3186,40 @@ footer > span {
   top: calc(100% + 8px);
   right: 0;
   z-index: 8;
-  min-width: 160px;
-  padding: 8px 10px;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 9px 11px;
   border: 1px solid #2f3834;
   border-radius: 6px;
   background: #171b19;
   color: #d5dcd9;
   font-size: 10px;
-  white-space: nowrap;
+  line-height: 1.4;
+  white-space: normal;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  animation: share-toast-in 160ms ease;
+}
+
+.workspace-share-toast-success {
+  border-color: rgba(70, 230, 193, 0.35);
+  color: #c9ebe0;
+}
+
+.workspace-share-toast-error {
+  border-color: rgba(239, 142, 142, 0.4);
+  color: #f0c4c4;
+}
+
+@keyframes share-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .preview-pane {
@@ -3169,11 +3235,12 @@ footer > span {
 
 .preview-pane-head {
   display: flex;
-  height: 39px;
+  min-height: 39px;
   padding: 0 12px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   border-bottom: 1px solid #242927;
   color: #8b9591;
   font-size: 10px;
@@ -3181,8 +3248,24 @@ footer > span {
   text-transform: uppercase;
 }
 
+.preview-pane-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preview-pane-title small {
+  color: #66706c;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 .preview-pane-badge {
-  max-width: 160px;
+  max-width: 120px;
   overflow: hidden;
   color: #66706c;
   font-family: var(--font-geist-mono), monospace;
@@ -3195,8 +3278,18 @@ footer > span {
 .preview-pane-actions {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.preview-export-control {
+  height: 26px;
+}
+
+.preview-export-control input {
+  width: min(120px, 28vw);
 }
 
 .preview-pane-refresh {
@@ -3500,8 +3593,6 @@ footer > span {
   border-bottom: 1px solid #222826;
 }
 
-.agent-review-disclosure .agent-claims,
-.agent-review-disclosure .agent-coordination,
 .agent-review-disclosure .agent-review,
 .agent-review-disclosure .agent-review-result {
   margin: 10px 12px;
@@ -4253,8 +4344,12 @@ footer > span {
     margin-left: auto;
   }
 
-  .publication-control,
-  .connection-state {
+  .connection-state,
+  .presence-copy {
+    display: none;
+  }
+
+  .preview-pane-title small {
     display: none;
   }
 }

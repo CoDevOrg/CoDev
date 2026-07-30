@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type { WorkspaceFile } from "@/lib/ide";
@@ -15,12 +16,15 @@ export function PreviewPane({
   revisionToken,
   onRefresh,
   className = "",
+  exportActions,
 }: {
   workspaceId: string;
   files: WorkspaceFile[];
   revisionToken: string;
   onRefresh: () => void;
   className?: string;
+  /** Publish / Published ↗ controls — “share what you built” next to Preview. */
+  exportActions?: ReactNode;
 }) {
   const source = useMemo<PreviewSource | null>(
     () =>
@@ -43,8 +47,12 @@ export function PreviewPane({
       aria-label="Site preview"
     >
       <div className="preview-pane-head">
-        <span>Preview</span>
+        <div className="preview-pane-title">
+          <span>Preview</span>
+          <small>Share what you built</small>
+        </div>
         <div className="preview-pane-actions">
+          {exportActions}
           {entryLabel ? (
             <span className="preview-pane-badge" title={entryLabel}>
               {entryLabel}

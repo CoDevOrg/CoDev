@@ -19,6 +19,7 @@ import {
   type SearchMatch,
   type WorkspaceFile,
 } from "@/lib/ide";
+import { formatPresenceCopy } from "@/lib/presence-copy";
 import { isPreviewExtensionAllowed } from "@/lib/preview";
 import { AgentPanel } from "@/components/agent-panel";
 import { PreviewPane } from "@/components/preview-pane";
@@ -689,48 +690,6 @@ export function WorkspaceIde({
         </div>
         <div className="topbar-actions">
           <WorkspaceShareButton workspaceId={workspaceId} isOwner={isOwner} />
-          {canMerge ? (
-            <div className="publication-control">
-              {publishedUrl ? (
-                <>
-                  <a href={publishedUrl} target="_blank" rel="noreferrer">
-                    Published ↗
-                  </a>
-                  {pullRequestUrl ? (
-                    <a href={pullRequestUrl} target="_blank" rel="noreferrer">
-                      Pull request ↗
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={openingPullRequest}
-                      onClick={() => void openPullRequest()}
-                    >
-                      {openingPullRequest ? "Opening PR…" : "Open pull request"}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <input
-                    aria-label="GitHub publication branch"
-                    value={publicationBranch}
-                    onChange={(event) =>
-                      setPublicationBranch(event.target.value.toLowerCase())
-                    }
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    disabled={publishing || openFile?.dirty}
-                    onClick={() => void publishBranch()}
-                  >
-                    {publishing ? "Publishing…" : "Publish"}
-                  </button>
-                </>
-              )}
-            </div>
-          ) : null}
           <span
             className={`connection-state collaboration-${collaborationStatus}`}
           >
@@ -744,34 +703,39 @@ export function WorkspaceIde({
                   : "Realtime offline"}
           </span>
           <div
-            className="presence-stack"
-            aria-label={`${distinctCollaborators.length} collaborators present`}
+            className="presence-group"
+            aria-label={formatPresenceCopy(distinctCollaborators.length)}
           >
-            {distinctCollaborators.slice(0, 4).map((collaborator) =>
-              collaborator.image ? (
-                <Image
-                  key={collaborator.id}
-                  src={collaborator.image}
-                  alt={collaboratorLabel(collaborator)}
-                  title={collaboratorLabel(collaborator)}
-                  width={26}
-                  height={26}
-                  unoptimized
-                />
-              ) : (
-                <span
-                  key={collaborator.id}
-                  title={collaboratorLabel(collaborator)}
-                  style={
-                    {
-                      "--presence-color": collaborator.color,
-                    } as React.CSSProperties
-                  }
-                >
-                  {collaborator.login.slice(0, 1).toUpperCase()}
-                </span>
-              ),
-            )}
+            <span className="presence-copy">
+              {formatPresenceCopy(distinctCollaborators.length)}
+            </span>
+            <div className="presence-stack">
+              {distinctCollaborators.slice(0, 4).map((collaborator) =>
+                collaborator.image ? (
+                  <Image
+                    key={collaborator.id}
+                    src={collaborator.image}
+                    alt={collaboratorLabel(collaborator)}
+                    title={collaboratorLabel(collaborator)}
+                    width={26}
+                    height={26}
+                    unoptimized
+                  />
+                ) : (
+                  <span
+                    key={collaborator.id}
+                    title={collaboratorLabel(collaborator)}
+                    style={
+                      {
+                        "--presence-color": collaborator.color,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {collaborator.login.slice(0, 1).toUpperCase()}
+                  </span>
+                ),
+              )}
+            </div>
           </div>
           {user.image ? (
             <Image src={user.image} alt="" width={26} height={26} unoptimized />
@@ -873,6 +837,61 @@ export function WorkspaceIde({
             revisionToken={String(previewRevision)}
             onRefresh={refreshPreviewNow}
             className={view === "preview" ? "preview-focus" : ""}
+            exportActions={
+              canMerge ? (
+                <div
+                  className="publication-control preview-export-control"
+                  aria-label="Share what you built"
+                >
+                  {publishedUrl ? (
+                    <>
+                      <a href={publishedUrl} target="_blank" rel="noreferrer">
+                        Published ↗
+                      </a>
+                      {pullRequestUrl ? (
+                        <a
+                          href={pullRequestUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Pull request ↗
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={openingPullRequest}
+                          onClick={() => void openPullRequest()}
+                        >
+                          {openingPullRequest
+                            ? "Opening PR…"
+                            : "Open pull request"}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        aria-label="GitHub publication branch"
+                        value={publicationBranch}
+                        onChange={(event) =>
+                          setPublicationBranch(
+                            event.target.value.toLowerCase(),
+                          )
+                        }
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        disabled={publishing || openFile?.dirty}
+                        onClick={() => void publishBranch()}
+                      >
+                        {publishing ? "Publishing…" : "Publish"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : undefined
+            }
           />
 
           {view === "files" ? (

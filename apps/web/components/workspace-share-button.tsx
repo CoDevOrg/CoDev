@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+type ShareToast = {
+  kind: "success" | "error";
+  message: string;
+};
+
 export function WorkspaceShareButton({
   workspaceId,
   isOwner,
@@ -10,11 +15,12 @@ export function WorkspaceShareButton({
   isOwner: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<ShareToast | null>(null);
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(""), 2_800);
+    const duration = toast.kind === "success" ? 3_600 : 4_200;
+    const timer = window.setTimeout(() => setToast(null), duration);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -22,7 +28,7 @@ export function WorkspaceShareButton({
 
   async function share() {
     setBusy(true);
-    setToast("");
+    setToast(null);
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/invites`, {
         method: "POST",
@@ -32,13 +38,30 @@ export function WorkspaceShareButton({
         error?: string;
       };
       if (!response.ok || !payload.inviteUrl) {
-        setToast(payload.error ?? "Invite could not be created.");
+        setToast({
+          kind: "error",
+          message: payload.error ?? "Couldn't create an invite link.",
+        });
         return;
       }
-      await navigator.clipboard.writeText(payload.inviteUrl);
-      setToast("Invite link copied.");
+
+      try {
+        await navigator.clipboard.writeText(payload.inviteUrl);
+        setToast({
+          kind: "success",
+          message: "Invite link copied — share it to collaborate.",
+        });
+      } catch {
+        setToast({
+          kind: "error",
+          message: "Invite ready, but clipboard copy failed. Try again.",
+        });
+      }
     } catch {
-      setToast("Invite could not be created.");
+      setToast({
+        kind: "error",
+        message: "Couldn't create an invite link.",
+      });
     } finally {
       setBusy(false);
     }
@@ -51,12 +74,17 @@ export function WorkspaceShareButton({
         type="button"
         disabled={busy}
         onClick={() => void share()}
+        aria-busy={busy}
       >
         {busy ? "Sharing…" : "Share"}
       </button>
       {toast ? (
-        <div className="workspace-share-toast" role="status">
-          {toast}
+        <div
+          className={`workspace-share-toast workspace-share-toast-${toast.kind}`}
+          role={toast.kind === "error" ? "alert" : "status"}
+          aria-live={toast.kind === "error" ? "assertive" : "polite"}
+        >
+          {toast.message}
         </div>
       ) : null}
     </div>
