@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { WorkspaceIde } from "@/components/workspace-ide";
+import { WorkspaceIdeLoader } from "@/components/workspace-ide-loader";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember, getWorkspaceRuntime } from "@/lib/workspaces";
 
@@ -22,7 +22,7 @@ export default async function WorkspaceIdePage({
   if (runtime?.status !== "ready") redirect(`/workspaces/${workspaceId}`);
 
   return (
-    <WorkspaceIde
+    <WorkspaceIdeLoader
       workspaceId={workspaceId}
       repository={workspace.repository}
       branch={workspace.defaultBranch}

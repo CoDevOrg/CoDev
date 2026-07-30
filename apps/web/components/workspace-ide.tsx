@@ -50,15 +50,7 @@ function collaboratorLabel(collaborator: CollaborationUser) {
   return collaborator.name ?? collaborator.login;
 }
 
-export function WorkspaceIde({
-  workspaceId,
-  repository,
-  branch,
-  canTerminal,
-  canMerge,
-  integrationHeadSha,
-  user,
-}: {
+export interface WorkspaceIdeProps {
   workspaceId: string;
   repository: string;
   branch: string;
@@ -71,7 +63,17 @@ export function WorkspaceIde({
     login?: string;
     image?: string | null;
   };
-}) {
+}
+
+export function WorkspaceIde({
+  workspaceId,
+  repository,
+  branch,
+  canTerminal,
+  canMerge,
+  integrationHeadSha,
+  user,
+}: WorkspaceIdeProps) {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loading, setLoading] = useState(true);
