@@ -3318,12 +3318,44 @@ footer > span {
 }
 
 .preview-pane-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  background:
+    radial-gradient(
+      ellipse at 50% 30%,
+      rgba(70, 230, 193, 0.05),
+      transparent 55%
+    ),
+    linear-gradient(180deg, rgba(15, 18, 17, 0.2), transparent 40%);
+}
+
+.preview-pane-empty-panel {
   display: grid;
-  width: min(360px, calc(100% - 48px));
-  margin: auto;
-  gap: 8px;
+  width: min(340px, 100%);
+  padding: 28px 24px 26px;
+  justify-items: center;
+  gap: 10px;
+  border: 1px solid rgba(70, 230, 193, 0.12);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      165deg,
+      rgba(70, 230, 193, 0.05),
+      rgba(15, 18, 17, 0.55) 45%,
+      rgba(13, 16, 15, 0.85)
+    );
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
   color: #6f7875;
   text-align: center;
+}
+
+.preview-pane-empty-art {
+  margin-bottom: 4px;
+  opacity: 0.95;
 }
 
 .preview-pane-empty code {
@@ -3334,13 +3366,14 @@ footer > span {
 
 .preview-pane-empty strong {
   color: #c9d1cd;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 550;
   letter-spacing: -0.03em;
 }
 
 .preview-pane-empty p {
   margin: 0;
+  max-width: 280px;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -3608,39 +3641,22 @@ footer > span {
   background: #0e1110;
 }
 
-.agent-compose-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.agent-compose-fields label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  color: #79827f;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
-.agent-chat-composer textarea,
-.agent-compose-fields input {
+.agent-chat-composer textarea {
   width: 100%;
-  padding: 8px;
+  padding: 10px 11px;
   resize: vertical;
   border: 1px solid #303633;
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
   background: #0d100f;
   color: #d7dddb;
   font:
-    11px/1.45 var(--font-geist-mono),
-    monospace;
+    12px/1.45 var(--font-geist-sans),
+    system-ui,
+    sans-serif;
 }
 
-.agent-chat-composer textarea:focus,
-.agent-compose-fields input:focus {
+.agent-chat-composer textarea:focus {
   border-color: rgba(70, 230, 193, 0.65);
   box-shadow: 0 0 0 2px rgba(70, 230, 193, 0.08);
 }

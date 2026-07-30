@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import { AgentChatTranscript } from "@/components/agent-chat-transcript";
 import { mapSessionToChatItems } from "@/lib/agent-chat";
+import { deriveAgentSessionName } from "@/lib/agent-session-name";
 
 type AgentSession = {
   id: string;
@@ -83,9 +91,7 @@ export function AgentPanel({
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
-  const [name, setName] = useState("Atlas");
   const [prompt, setPrompt] = useState("");
-  const [issueNumber, setIssueNumber] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [reviews, setReviews] = useState<Record<string, WorktreeReview>>({});
   const [busy, setBusy] = useState(false);
@@ -180,7 +186,8 @@ export function AgentPanel({
   }, [sessions]);
 
   async function createSession() {
-    if (!prompt.trim()) return;
+    const value = prompt.trim();
+    if (!value) return;
     setBusy(true);
     setError("");
     try {
@@ -188,14 +195,11 @@ export function AgentPanel({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name,
-          prompt,
-          ...(issueNumber ? { issueNumber: Number(issueNumber) } : {}),
+          name: deriveAgentSessionName(value),
+          prompt: value,
         }),
       }).then((response) => json<{ sessionId?: string }>(response));
       setPrompt("");
-      setIssueNumber("");
-      setName(name === "Atlas" ? "Nova" : name);
       setComposingNew(false);
       if (result.sessionId) setSelectedSessionId(result.sessionId);
       await refresh();
@@ -206,6 +210,15 @@ export function AgentPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  function onComposerKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>,
+    submit: () => void,
+  ) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (!busy) submit();
   }
 
   async function sendFollowUp() {
@@ -386,10 +399,10 @@ export function AgentPanel({
       <div className="agent-chat-body">
         {composingNew || !selectedSession ? (
           <div className="agent-chat-welcome">
-            <strong>Shared agent canvas</strong>
+            <strong>What should we build?</strong>
             <p>
-              Start an isolated agent session. Everyone in the workspace sees
-              the same transcript.
+              Describe a change below. The agent works in an isolated worktree;
+              everyone in this workspace sees the same chat.
             </p>
           </div>
         ) : (
@@ -476,10 +489,13 @@ export function AgentPanel({
           <>
             <textarea
               ref={composerTextareaRef}
-              aria-label={`Follow up with ${selectedSession.name}`}
+              aria-label={`Message ${selectedSession.name}`}
               value={followUp}
               onChange={(event) => setFollowUp(event.target.value)}
-              placeholder="Send a follow-up…"
+              onKeyDown={(event) =>
+                onComposerKeyDown(event, () => void sendFollowUp())
+              }
+              placeholder="Message the agent…"
               rows={3}
             />
             <div className="agent-chat-composer-actions">
@@ -504,34 +520,16 @@ export function AgentPanel({
           </>
         ) : showNewComposer && activeSessionCount < 2 ? (
           <>
-            <div className="agent-compose-fields">
-              <label>
-                Agent name
-                <input
-                  value={name}
-                  maxLength={32}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <label>
-                GitHub issue
-                <input
-                  inputMode="numeric"
-                  min={1}
-                  type="number"
-                  value={issueNumber}
-                  onChange={(event) => setIssueNumber(event.target.value)}
-                  placeholder="optional"
-                />
-              </label>
-            </div>
             <textarea
               ref={composerTextareaRef}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Describe a repository change…"
+              onKeyDown={(event) =>
+                onComposerKeyDown(event, () => void createSession())
+              }
+              placeholder="Ask the agent to build something…"
               rows={3}
-              aria-label="New agent task"
+              aria-label="Message the agent"
             />
             <div className="agent-chat-composer-actions">
               <button
@@ -539,7 +537,7 @@ export function AgentPanel({
                 disabled={busy || !prompt.trim()}
                 onClick={() => void createSession()}
               >
-                Start session
+                Send
               </button>
               {selectedSession ? (
                 <button
