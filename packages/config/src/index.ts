@@ -29,6 +29,7 @@ export const serverEnvironmentSchema = z.object({
     .optional(),
   ORCHESTRATOR_URL: optionalUrl,
   CRON_SECRET: z.string().min(32).optional(),
+  PILOT_ADMIN_GITHUB_LOGINS: z.string().min(1).optional(),
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

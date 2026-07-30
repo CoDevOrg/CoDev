@@ -7,10 +7,13 @@ import {
   conflictResolutionInputSchema,
   coordinationMessageInputSchema,
   createPathClaimSchema,
+  createPilotSessionSchema,
   designPartnerFeedbackInputSchema,
   FakeSandboxBackend,
+  pilotCheckpointKeys,
   createPublicationSchema,
   terminalPollSchema,
+  updatePilotSessionSchema,
   workspaceEventSchema,
   workspaceSchema,
 } from "./index";
@@ -51,6 +54,25 @@ describe("workspace contracts", () => {
         message: "too short",
         page: null,
         workspaceId: null,
+      }),
+    ).toThrow();
+  });
+
+  it("bounds pilot evidence to named operational checkpoints", () => {
+    expect(pilotCheckpointKeys).toHaveLength(10);
+    expect(
+      createPilotSessionSchema.parse({ workspaceId: id }).workspaceId,
+    ).toBe(id);
+    expect(
+      updatePilotSessionSchema.parse({
+        checkpoint: "realtime",
+        checked: true,
+      }).checkpoint,
+    ).toBe("realtime");
+    expect(() =>
+      updatePilotSessionSchema.parse({
+        checkpoint: "sourceCode",
+        checked: true,
       }),
     ).toThrow();
   });

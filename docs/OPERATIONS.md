@@ -26,6 +26,20 @@
    production environment so production-scoped credentials are applied.
 7. Re-run the verification script and scan Vercel error logs.
 
+## Closed-beta pilot operations
+
+The `/pilot` console is available only to GitHub logins listed in the
+server-only `PILOT_ADMIN_GITHUB_LOGINS` environment variable. Keep the
+development, preview, and production allowlists independently scoped. Removing
+a login takes effect on its next request and does not require a database role
+change.
+
+Use one pilot session per workspace validation run. Complete the ten
+checkpoints in order, triage any resulting feedback, and only mark the session
+complete after teardown is confirmed. A blocked session must include a blocker
+category. See [PILOT_OPERATIONS.md](./PILOT_OPERATIONS.md) for metric
+definitions and the privacy boundary.
+
 ## Lifecycle recovery
 
 Vercel invokes `/api/cron/lifecycle` daily with `Authorization: Bearer

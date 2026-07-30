@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { signOut } from "@/auth";
+import { isPilotAdminLogin } from "@/lib/pilot-access";
 
 export function Brand() {
   return (
@@ -28,6 +29,9 @@ export function AppChrome({
         <Brand />
         <nav aria-label="Application navigation">
           <Link href="/dashboard">Workspaces</Link>
+          {isPilotAdminLogin(user.githubLogin) ? (
+            <Link href="/pilot">Pilot</Link>
+          ) : null}
           <Link href="/settings">Settings</Link>
         </nav>
         <div className="user-menu">

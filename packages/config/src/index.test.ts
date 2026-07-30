@@ -52,4 +52,14 @@ describe("server environment", () => {
       SUPABASE_URL: "https://example.supabase.co",
     });
   });
+
+  it("accepts a comma-separated pilot administrator allowlist", () => {
+    expect(
+      readServerEnvironment({
+        PILOT_ADMIN_GITHUB_LOGINS: "yousef20920,codev-operator",
+      }),
+    ).toMatchObject({
+      PILOT_ADMIN_GITHUB_LOGINS: "yousef20920,codev-operator",
+    });
+  });
 });

@@ -77,6 +77,9 @@ test("protected workspace routes require GitHub identity", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Open your CoDev workspace." }),
   ).toBeVisible();
+
+  await page.goto("/pilot");
+  await expect(page).toHaveURL(/\/sign-in/);
 });
 
 test("workspace APIs reject anonymous requests", async ({ request }) => {
@@ -131,6 +134,14 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
         : await request.get(endpoint);
     expect(protectedResponse.status()).toBe(401);
   }
+
+  const pilotSession = await request.post("/api/pilot/sessions", {
+    data: { workspaceId: "e010bd2c-a3c1-438f-acef-166287a3b1cb" },
+  });
+  expect(pilotSession.status()).toBe(401);
+  await expect(pilotSession.json()).resolves.toEqual({
+    error: "Authentication required.",
+  });
 
   for (const endpoint of [
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/review",

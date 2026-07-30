@@ -30,6 +30,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 7     | Collision Coordination and Review     | Complete    |
 | 8     | GitHub Publication and Hardening      | Complete    |
 | 9     | Launch Validation and Design Partners | In progress |
+| 10    | Closed Beta Operations and Analytics  | Paused      |
 
 ## Phase 1: Foundation and Live Website
 
@@ -272,6 +273,158 @@ visible infrastructure cost controls.
 - Automated production verification and a private-repository sandbox smoke
   test passed; the two-identity design-partner session remains to be exercised.
 - Started: July 30, 2026
+
+## Phase 10: Closed Beta Operations and Analytics
+
+**Goal:** Give CoDev operators a private control surface for running repeatable
+design-partner sessions, recording non-sensitive launch evidence, and measuring
+the product outcomes defined in the PRD.
+
+### Acceptance Criteria
+
+- Only explicitly configured GitHub logins can access pilot APIs and the pilot
+  console; ordinary authenticated users receive no cross-tenant operational
+  data.
+- Operators can start a validation session for a workspace, record each
+  launch-checklist checkpoint, mark blockers, and complete only a fully
+  verified session.
+- Pilot evidence stores booleans and operational metadata only—not source code,
+  prompts, diffs, terminal output, repository contents, or provider secrets.
+- The console reports weekly multi-user workspaces, co-steering rate,
+  contested path claims, publication count, feedback count, and returning-user
+  rate from durable product events.
+- Feedback can be triaged as new, reviewing, planned, or resolved without
+  exposing it outside the pilot-admin boundary.
+- Pilot tables have RLS enabled and no Supabase Data API grants for `anon` or
+  `authenticated`.
+- Contracts, authorization tests, migration checks, browser smoke tests, and
+  production readiness pass.
+- The AWS host returns to scale-to-zero after validation, lifecycle
+  reconciliation is idempotent, and the monthly budget remains active.
+
+### Phase 10 Delivery
+
+- **Done locally:** roadmap and acceptance criteria; typed pilot checkpoint,
+  session, feedback-status, and environment contracts; GitHub-login allowlist
+  helper; pilot session schema and tests.
+- **Done locally:** admin-only `/pilot` console, session creation/checkpoint/
+  blocker/completion APIs, feedback triage, seven-day product signals,
+  conditional Pilot navigation, responsive styling, anonymous-access smoke
+  coverage, and the pilot/operations documentation.
+- **Done in Supabase:** migration `0010_jittery_praxagora.sql` was applied to
+  the connected production database. `pilot_sessions` has RLS enabled,
+  `anon`/`authenticated` Data API access revoked, status/checkpoint/blocker
+  constraints, and one-active-session-per-workspace enforcement. A direct
+  verification returned `rls=true`, both public role checks `false`, six
+  constraints, and four indexes.
+- **Verified so far:** monorepo TypeScript type checking passed. Contracts,
+  database, configuration, and web unit suites passed (47 tests total).
+- **Not done:** full formatting check, lint, complete monorepo test command,
+  production build, Playwright suite, Rust checks, and `git diff --check`.
+- **Not done:** `PILOT_ADMIN_GITHUB_LOGINS` is not configured in Vercel
+  development, preview, or production. The intended initial allowlist is
+  `yousef20920`.
+- **Not done:** Phase 10 source is uncommitted, has not been pushed, previewed,
+  promoted, or verified on production. Production still runs release
+  `0543b47168…` from the Phase 9 lifecycle fix.
+- **Not done:** authenticated browser verification of the pilot console,
+  session mutations, feedback triage, and mobile panel collapse.
+- **Not done:** the complete two-identity design-partner exercise. This also
+  keeps Phase 9 in progress.
+- Started: July 30, 2026
+- Paused: July 30, 2026
+
+### Phase 10 Resume Handoff
+
+#### Current repository state
+
+- Branch: `main`.
+- Last committed source at pause: `0543b47` (`Fix private workspace lifecycle
+baseline`).
+- The Phase 10 worktree is intentionally uncommitted. Preserve every existing
+  modification and untracked file; do not reset or check out over it.
+- The main Phase 10 files are `apps/web/app/pilot/page.tsx`,
+  `apps/web/components/pilot-console.tsx`, `apps/web/lib/pilot.ts`,
+  `apps/web/lib/pilot-access.ts`, `apps/web/app/api/pilot/**`,
+  `packages/contracts/src/domain.ts`, `packages/db/src/schema.ts`,
+  `packages/db/drizzle/0010_jittery_praxagora.sql`, and
+  `docs/PILOT_OPERATIONS.md`; related tests, configuration, navigation, CSS,
+  README, operations docs, and Drizzle metadata are also modified.
+- The database migration is already applied even though its source file is not
+  committed. On resume, do not manually re-run its SQL. Drizzle migration
+  tracking should make `pnpm db:migrate` idempotent, but inspect migration
+  status before doing so.
+- No development server, watcher, migration, or deployment process was left
+  running when work paused.
+- No Phase 10 AWS infrastructure change was made. Keep the scale-to-zero host
+  stopped unless a deliberate sandbox validation needs it.
+
+#### Important implementation decisions
+
+- Phase 10 is a closed-beta operations layer, not a new end-user workflow.
+- Access is a case-insensitive, comma-separated GitHub-login allowlist in the
+  server-only `PILOT_ADMIN_GITHUB_LOGINS` variable. The page and every mutation
+  API authorize independently.
+- Pilot records contain operational booleans and metadata only. Do not add
+  source, prompts, model output, diffs, terminal output, repository contents,
+  GitHub tokens, OpenAI keys, or encrypted credential values.
+- Feedback text is visible to allowlisted operators because users explicitly
+  submitted it for review.
+- Metrics are computed from existing operational tables and bounded to 10,000
+  recent event/turn rows during closed beta. Before broad access, replace this
+  with durable aggregates or materialized reporting.
+- The Supabase table remains server-only: RLS is defense in depth and no
+  `anon` or `authenticated` grants should be added.
+
+#### First actions in the next chat
+
+1. Run `git status --short` and review the Phase 10 diff without discarding it.
+2. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+   `pnpm build`, `pnpm rust:check`, and `git diff --check`; fix failures.
+3. Run Playwright locally or against a preview, including the new anonymous
+   pilot API check.
+4. Configure `PILOT_ADMIN_GITHUB_LOGINS=yousef20920` independently in Vercel
+   development, preview, and production.
+5. Commit the exact verified source, push it, deploy a preview, and verify
+   `/api/health`, `/api/ready`, authentication, `/pilot`, pilot mutations,
+   feedback triage, and browser console errors.
+6. Promote the verified source to production, repeat smoke checks, confirm the
+   AWS host returns to stopped, and update this plan with the release SHA/URL.
+7. Run the two-identity pilot and only then mark Phases 9 and 10 complete.
+
+#### Tools, connectors, and CLIs
+
+- **Codex file tools:** `apply_patch` was used for source and documentation
+  edits; shell commands were used read-only or for project verification. In a
+  new chat, open this repository and ask Codex to resume from this handoff.
+- **pnpm:** the monorepo task runner. Common commands are `pnpm typecheck`,
+  `pnpm test`, `pnpm build`, `pnpm test:e2e`, and `pnpm rust:check`.
+- **Drizzle Kit:** schema/migration CLI behind `pnpm db:generate` and
+  `pnpm db:migrate`. Migration `0010` is already generated and applied.
+- **PostgreSQL `pg` client:** used once through Node.js to verify RLS,
+  privileges, constraints, and indexes without printing connection secrets.
+- **Supabase skill/docs:** used to review the current changelog and Data API/RLS
+  guidance. The Phase 10 migration used the repo's direct PostgreSQL/Drizzle
+  connection; no Supabase MCP mutation was used in this paused work.
+- **Vercel plugin/MCP and CLI:** used in earlier phases for project inspection,
+  Marketplace resources, environment variables, previews, promotion, and
+  logs. Resume with the connected Vercel plugin when possible; use
+  `vercel env ls`, `vercel env add`, `vercel deploy`, and deployment inspection
+  from the linked project. Never print secret values.
+- **Supabase on Vercel:** `codev-db` is the connected Marketplace PostgreSQL
+  resource. Use the Supabase connector for project inspection/advisors and
+  Drizzle for committed application migrations.
+- **AWS CLI and CloudFormation scripts:** earlier runtime phases used the local
+  AWS account (`014576992564`, `us-east-2`) and `infra/aws/deploy.sh`. Use
+  `aws sts get-caller-identity` before AWS work and keep changes scoped to the
+  CoDev stack. No AWS CLI action is needed for the first Phase 10 resume step.
+- **GitHub App / Chrome computer control:** earlier phases used authenticated
+  Chrome for GitHub App registration, permission approval, and installation.
+  Use browser control only for manual authenticated checks that APIs/CLIs
+  cannot complete, and pause for any new consent or permission grant.
+- **Git:** use `git diff`, `git status`, and non-destructive commits/pushes.
+  Do not reset the paused worktree. The expected deployment flow is verified
+  commit → push → preview → production.
 
 ## Deferred Beyond the Demo
 
