@@ -343,17 +343,43 @@ the product outcomes defined in the PRD.
   sleeping), anonymous `POST /api/pilot/sessions` returned `401`, and `/pilot`
   and `/dashboard` both redirected unauthenticated requests to `/sign-in`.
 - **Done in AWS:** the Firecracker host `i-0c4d61ad38518be40`
-  (`codev-firecracker-host`, `us-east-2`) is `stopped`, confirming
-  scale-to-zero; the ready endpoint reports the orchestrator as sleeping.
-- **Not done:** authenticated browser verification of the pilot console,
-  session mutations, feedback triage, and mobile panel collapse. This requires
-  an interactive GitHub sign-in for `yousef20920` (an allowlisted operator).
-- **Not done:** the complete two-identity design-partner exercise, which needs
-  a second GitHub identity to sign in. This also keeps Phase 9 in progress.
-  Phases 9 and 10 remain open until this exercise succeeds.
+  (`codev-firecracker-host`, `us-east-2`) was `stopped` at deploy-verification
+  time, then woken on demand for the solo pilot sandbox, and afterwards returned
+  to `stopped` (scale-to-zero). Note: the graceful `stop-instances` hung in
+  `stopping` for ~13 minutes and required a `--force` stop to complete — a
+  runtime/host-shutdown issue worth investigating. The app itself never stops
+  the host (only `requestHostWake` starts it), so scale-to-zero is an operator
+  action, as the launch preflight guidance states.
+- **Verified (authenticated browser, production):** signed in as the
+  allowlisted operator `yousef20920` and confirmed the `/pilot` console renders
+  product signals, workspaces, sessions, and feedback. Exercised every console
+  mutation successfully: creating a pilot session, toggling checkpoints on and
+  off, feedback triage (new → reviewing → new), and the completion guard
+  ("Complete pilot" stays disabled until all ten checkpoints are checked). No
+  browser console errors were observed.
+- **Partial (solo) two-identity pilot on `yousef20920/Yousefs_resume`:** with
+  the user's approval, ran the single-identity-achievable steps live on
+  production. Genuinely satisfied and recorded six checkpoints: launch preflight
+  passes, authenticated terminal works (sandbox `exec` returned exit 0), a
+  `codev/*` branch is published (`codev/pilot-2026-07-30`, commit `20e5ba5`),
+  the default branch remains unchanged (publication used a distinct ref off the
+  base SHA), design-partner feedback is submitted, and sandbox teardown is
+  confirmed. One agent session (`pilot-check`) also completed a turn.
+- **Observation:** preparing an agent review returned "Sandbox service returned
+  HTTP 403" from the guest microVM, so the agent's change was discarded rather
+  than merged and the published branch reflects the integration base. This is a
+  runtime-layer (Phase 3–8) issue to investigate separately; it did not affect
+  the Phase 10 console.
+- **Not done (needs a second GitHub identity):** four checkpoints remain
+  unchecked and the pilot session is intentionally left `RUNNING`, not
+  completed — "Second GitHub identity joins", "Realtime presence and editing
+  work" (meaningful only with two participants), "Two agent sessions complete
+  turns" (needs two distinct authors), and "A contested path claim is resolved"
+  (needs two actors). Phases 9 and 10 remain open until a two-identity session
+  satisfies these and the pilot is completed.
 - Started: July 30, 2026
 - Paused: July 30, 2026
-- Resumed and deployed to production: July 30, 2026
+- Resumed, deployed to production, and ran the solo partial pilot: July 30, 2026
 
 ### Phase 10 Resume Handoff
 
