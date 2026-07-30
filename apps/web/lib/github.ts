@@ -171,7 +171,7 @@ export async function githubRequest<T>(
     }
     if (response.status === 403) {
       throw new GitHubApiError(
-        "The CoDev GitHub App needs Contents: Read and write permission before it can publish.",
+        "The CoDev GitHub App needs Contents: Read and write and Pull requests: Read and write before it can publish or open pull requests.",
         response.status,
       );
     }

@@ -7,8 +7,9 @@ Use a disposable public or bounded private repository and a branch under
 
 1. Confirm `https://codev-xi.vercel.app/api/health` is `ok`.
 2. Run Settings → **Launch preflight** and confirm every dependency passes.
-3. Confirm the GitHub App has Contents **Read and write** permission and the
-   repository installation is approved.
+3. Confirm the GitHub App has Contents **Read and write**, Pull requests
+   **Read and write**, and Metadata **Read-only** permissions, and that the
+   installation covers the demo repositories.
 4. Confirm the presenter has a saved OpenAI key in CoDev settings.
 5. Run the lifecycle reconciler and verify the EC2 host is stopped.
 6. Keep the AWS EC2 and Vercel logs pages available as recovery views.
@@ -39,8 +40,8 @@ Use a disposable public or bounded private repository and a branch under
 
 - Dirty integration tree: save/checkpoint before publication.
 - Active agent worktrees: merge or discard them before publication or stop.
-- GitHub 403: approve the App's Contents write permission; do not use a PAT or
-  put a token in the sandbox.
+- GitHub 403: approve the App's Contents write and Pull requests write
+  permissions; do not use a PAT or put a token in the sandbox.
 - Existing publication ref: choose a new immutable `codev/` branch. CoDev never
   overwrites it.
 - Realtime disconnect: wait for reconnect and state-vector resubscription.

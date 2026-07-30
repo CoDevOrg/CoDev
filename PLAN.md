@@ -73,7 +73,7 @@ Implement GitHub sign-in and installation discovery, public-repository selection
 
 - GitHub App: [CoDev Web Workspace](https://github.com/apps/codev-web-workspace)
 - Installation scope: `yousef20920/CoDev`
-- Repository permission: read/write contents and read-only metadata
+- Repository permission: read/write contents, read/write pull requests, and read-only metadata
 - OAuth user tokens: expiring, with encrypted refresh-token support
 - Database: 14 migrated tables with RLS and server-only privileges
 - Completed: July 28, 2026
