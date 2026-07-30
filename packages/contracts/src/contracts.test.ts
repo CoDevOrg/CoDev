@@ -12,6 +12,7 @@ import {
   FakeSandboxBackend,
   pilotCheckpointKeys,
   createPublicationSchema,
+  createPullRequestSchema,
   terminalPollSchema,
   updatePilotSessionSchema,
   workspaceEventSchema,
@@ -239,6 +240,31 @@ describe("publication contracts", () => {
         }),
       ).toThrow();
     }
+  });
+
+  it("requires a titled pull request from an immutable CoDev branch", () => {
+    expect(
+      createPullRequestSchema.parse({
+        branchName: "codev/design-partner-demo",
+        title: "CoDev: design partner demo",
+      }),
+    ).toEqual({
+      branchName: "codev/design-partner-demo",
+      title: "CoDev: design partner demo",
+    });
+
+    expect(() =>
+      createPullRequestSchema.parse({
+        branchName: "main",
+        title: "Ship",
+      }),
+    ).toThrow();
+    expect(() =>
+      createPullRequestSchema.parse({
+        branchName: "codev/demo",
+        title: "",
+      }),
+    ).toThrow();
   });
 });
 

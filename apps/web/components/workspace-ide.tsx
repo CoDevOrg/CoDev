@@ -93,6 +93,8 @@ export function WorkspaceIde({
   const [publicationBranch, setPublicationBranch] = useState("codev/demo");
   const [publishing, setPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [openingPullRequest, setOpeningPullRequest] = useState(false);
+  const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
   const collaboration = useRef<WorkspaceCollaboration | null>(null);
   const editor = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -130,6 +132,35 @@ export function WorkspaceIde({
       );
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function openPullRequest() {
+    setOpeningPullRequest(true);
+    setError("");
+    try {
+      const result = await fetch(
+        `/api/workspaces/${workspaceId}/pull-requests`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            branchName: publicationBranch,
+            title: `CoDev: ${publicationBranch}`,
+          }),
+        },
+      ).then((response) =>
+        payload<{ pullRequest: { htmlUrl: string } }>(response),
+      );
+      setPullRequestUrl(result.pullRequest.htmlUrl);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Opening the pull request failed.",
+      );
+    } finally {
+      setOpeningPullRequest(false);
     }
   }
 
@@ -610,9 +641,24 @@ export function WorkspaceIde({
           {canMerge ? (
             <div className="publication-control">
               {publishedUrl ? (
-                <a href={publishedUrl} target="_blank" rel="noreferrer">
-                  Published ↗
-                </a>
+                <>
+                  <a href={publishedUrl} target="_blank" rel="noreferrer">
+                    Published ↗
+                  </a>
+                  {pullRequestUrl ? (
+                    <a href={pullRequestUrl} target="_blank" rel="noreferrer">
+                      Pull request ↗
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={openingPullRequest}
+                      onClick={() => void openPullRequest()}
+                    >
+                      {openingPullRequest ? "Opening PR…" : "Open pull request"}
+                    </button>
+                  )}
+                </>
               ) : (
                 <>
                   <input

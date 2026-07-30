@@ -627,6 +627,8 @@ export const publishedBranches = pgTable(
     repositoryId: bigint("repository_id", { mode: "bigint" }).notNull(),
     remoteRef: text("remote_ref").notNull(),
     htmlUrl: text("html_url"),
+    pullRequestNumber: integer("pull_request_number"),
+    pullRequestUrl: text("pull_request_url"),
     requestId: text("request_id").notNull(),
     lastError: text("last_error"),
     publishedAt: timestamp("published_at", { withTimezone: true }),

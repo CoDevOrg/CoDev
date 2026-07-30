@@ -51,6 +51,10 @@ describe("database schema", () => {
     expect(getTableName(publishedBranches)).toBe("published_branches");
     expect(publishedBranches.sourceHeadSha.name).toBe("source_head_sha");
     expect(publishedBranches.remoteRef.name).toBe("remote_ref");
+    expect(publishedBranches.pullRequestNumber.name).toBe(
+      "pull_request_number",
+    );
+    expect(publishedBranches.pullRequestUrl.name).toBe("pull_request_url");
     expect(yjsSnapshots.conflictResolvedBy.name).toBe("conflict_resolved_by");
   });
 });

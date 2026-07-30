@@ -268,6 +268,18 @@ export const createPublicationSchema = z.object({
   expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/),
 });
 
+export const createPullRequestSchema = z.object({
+  branchName: publicationBranchNameSchema,
+  title: z.string().trim().min(1).max(256),
+  body: z.string().trim().max(10_000).optional(),
+});
+
+export const workspacePullRequestSchema = z.object({
+  number: z.number().int().positive(),
+  htmlUrl: z.url(),
+  state: z.enum(["open", "closed"]),
+});
+
 export const designPartnerFeedbackInputSchema = z.object({
   category: z.enum(["bug", "workflow", "feature", "other"]),
   rating: z.number().int().min(1).max(5).nullable(),
@@ -370,3 +382,5 @@ export type ConflictResolutionInput = z.infer<
   typeof conflictResolutionInputSchema
 >;
 export type Publication = z.infer<typeof publicationSchema>;
+export type CreatePullRequest = z.infer<typeof createPullRequestSchema>;
+export type WorkspacePullRequest = z.infer<typeof workspacePullRequestSchema>;

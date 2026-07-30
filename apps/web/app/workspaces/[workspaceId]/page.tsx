@@ -65,6 +65,7 @@ export default async function WorkspacePage({
               : null
           }
           isOwner={workspace.role === "owner"}
+          defaultBranch={workspace.defaultBranch}
         />
 
         <div className="workspace-stats">

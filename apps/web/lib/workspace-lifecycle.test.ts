@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { hasUnpublishedRuntimeChanges } from "./workspace-lifecycle";
+import {
+  hasUnpublishedRuntimeChanges,
+  workspaceSyncBlockReason,
+} from "./workspace-lifecycle";
 
 describe("workspace lifecycle baselines", () => {
   it("treats an untouched credential-free snapshot as clean", () => {
@@ -31,5 +34,23 @@ describe("workspace lifecycle baselines", () => {
         "github-base-head",
       ),
     ).toBe(false);
+  });
+});
+
+describe("workspaceSyncBlockReason", () => {
+  it("allows an owner to sync a stopped workspace", () => {
+    expect(workspaceSyncBlockReason("owner", "stopped")).toBeNull();
+  });
+
+  it("blocks non-owners", () => {
+    expect(workspaceSyncBlockReason("collaborator", "stopped")).toBe(
+      "not_owner",
+    );
+  });
+
+  it("blocks syncing while a sandbox is live", () => {
+    for (const status of ["ready", "provisioning", "stopping", "failed"]) {
+      expect(workspaceSyncBlockReason("owner", status)).toBe("not_stopped");
+    }
   });
 });

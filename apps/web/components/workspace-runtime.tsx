@@ -21,15 +21,44 @@ export function WorkspaceRuntime({
   workspaceId,
   runtime,
   isOwner,
+  defaultBranch,
 }: {
   workspaceId: string;
   runtime: RuntimeSummary | null;
   isOwner: boolean;
+  defaultBranch: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const status = runtime?.status ?? "stopped";
+
+  async function sync() {
+    setSyncing(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/sync`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(await readError(response));
+      }
+      const { sync: result } = (await response.json()) as {
+        sync: { updated: boolean; baseSha: string };
+      };
+      setMessage(
+        result.updated
+          ? `Synced to ${defaultBranch} at ${result.baseSha.slice(0, 12)}. Start the sandbox to work on the latest code.`
+          : `Already up to date with ${defaultBranch}.`,
+      );
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function mutate(method: "POST" | "DELETE") {
     setBusy(true);
@@ -108,16 +137,28 @@ export function WorkspaceRuntime({
             </button>
           </div>
         ) : (
-          <button
-            className="primary-button"
-            type="button"
-            disabled={busy || status === "provisioning"}
-            onClick={() => void mutate("POST")}
-          >
-            {busy || status === "provisioning"
-              ? "Waking host…"
-              : "Start sandbox"}
-          </button>
+          <div className="runtime-actions">
+            <button
+              className="primary-button"
+              type="button"
+              disabled={busy || status === "provisioning"}
+              onClick={() => void mutate("POST")}
+            >
+              {busy || status === "provisioning"
+                ? "Waking host…"
+                : "Start sandbox"}
+            </button>
+            {status === "stopped" ? (
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={busy || syncing}
+                onClick={() => void sync()}
+              >
+                {syncing ? "Syncing…" : `Sync to latest ${defaultBranch}`}
+              </button>
+            ) : null}
+          </div>
         )
       ) : status === "ready" ? (
         <Link

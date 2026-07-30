@@ -4,11 +4,15 @@ import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import { appendWorkspaceEvent } from "./audit";
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getRepository } from "./github";
 import { assertWorkspaceQuota } from "./quotas";
-import { hasUnpublishedRuntimeChanges } from "./workspace-lifecycle";
+import {
+  hasUnpublishedRuntimeChanges,
+  workspaceSyncBlockReason,
+} from "./workspace-lifecycle";
 
 const workspaceRuntimeTtlMs = (4 * 60 - 5) * 60 * 1000;
 
@@ -138,6 +142,75 @@ export async function getWorkspaceForMember(
     .limit(1);
 
   return workspace;
+}
+
+export async function syncWorkspaceToDefaultBranch(
+  workspaceId: string,
+  userId: string,
+) {
+  const workspace = await getWorkspaceForMember(workspaceId, userId);
+  if (!workspace) {
+    throw new WorkspaceLifecycleError("Workspace not found.", 404);
+  }
+  const blocked = workspaceSyncBlockReason(workspace.role, workspace.status);
+  if (blocked === "not_owner") {
+    throw new WorkspaceLifecycleError(
+      "Only the workspace owner can sync the repository.",
+      403,
+    );
+  }
+  if (blocked === "not_stopped") {
+    throw new WorkspaceLifecycleError(
+      "Stop the sandbox before syncing to the latest default branch.",
+    );
+  }
+
+  const { repository, baseSha } = await getRepository(
+    userId,
+    Number(workspace.githubInstallationId),
+    Number(workspace.githubRepositoryId),
+  );
+  if (baseSha === workspace.baseSha) {
+    return {
+      updated: false as const,
+      baseSha,
+      defaultBranch: repository.default_branch,
+    };
+  }
+
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.workspaces)
+      .set({
+        baseSha,
+        defaultBranch: repository.default_branch,
+        updatedAt: now,
+      })
+      .where(eq(schema.workspaces.id, workspaceId));
+    await transaction
+      .update(schema.worktrees)
+      .set({ headSha: baseSha, updatedAt: now })
+      .where(
+        and(
+          eq(schema.worktrees.workspaceId, workspaceId),
+          eq(schema.worktrees.kind, "integration"),
+        ),
+      );
+  });
+  await appendWorkspaceEvent({
+    workspaceId,
+    actorId: userId,
+    type: "workspace.synced",
+    payload: { previousBaseSha: workspace.baseSha, baseSha },
+  }).catch(() => undefined);
+
+  return {
+    updated: true as const,
+    baseSha,
+    previousBaseSha: workspace.baseSha,
+    defaultBranch: repository.default_branch,
+  };
 }
 
 export async function getWorkspaceRuntime(workspaceId: string) {
