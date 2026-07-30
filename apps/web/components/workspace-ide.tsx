@@ -56,6 +56,7 @@ export function WorkspaceIde({
   branch,
   canTerminal,
   canMerge,
+  integrationHeadSha,
   user,
 }: {
   workspaceId: string;
@@ -63,6 +64,7 @@ export function WorkspaceIde({
   branch: string;
   canTerminal: boolean;
   canMerge: boolean;
+  integrationHeadSha: string;
   user: {
     id: string;
     name?: string | null;
@@ -86,6 +88,9 @@ export function WorkspaceIde({
   const [collaborationConflict, setCollaborationConflict] =
     useState<CollaborationConflict | null>(null);
   const [resolvingConflict, setResolvingConflict] = useState(false);
+  const [publicationBranch, setPublicationBranch] = useState("codev/demo");
+  const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const collaboration = useRef<WorkspaceCollaboration | null>(null);
   const editor = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -98,6 +103,33 @@ export function WorkspaceIde({
   const terminalSendChain = useRef<Promise<void>>(Promise.resolve());
 
   const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
+
+  async function publishBranch() {
+    setPublishing(true);
+    setError("");
+    try {
+      const result = await fetch(
+        `/api/workspaces/${workspaceId}/publications`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            branchName: publicationBranch,
+            expectedHeadSha: integrationHeadSha,
+          }),
+        },
+      ).then((response) =>
+        payload<{ publication: { htmlUrl: string | null } }>(response),
+      );
+      setPublishedUrl(result.publication.htmlUrl);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Publication failed.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   const refreshFiles = useCallback(async () => {
     const filePayload = await fetch(`${apiBase}/files`, {
@@ -573,6 +605,33 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
+          {canMerge ? (
+            <div className="publication-control">
+              {publishedUrl ? (
+                <a href={publishedUrl} target="_blank" rel="noreferrer">
+                  Published ↗
+                </a>
+              ) : (
+                <>
+                  <input
+                    aria-label="GitHub publication branch"
+                    value={publicationBranch}
+                    onChange={(event) =>
+                      setPublicationBranch(event.target.value.toLowerCase())
+                    }
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    disabled={publishing || openFile?.dirty}
+                    onClick={() => void publishBranch()}
+                  >
+                    {publishing ? "Publishing…" : "Publish"}
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
           <span
             className={`connection-state collaboration-${collaborationStatus}`}
           >

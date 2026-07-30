@@ -28,6 +28,7 @@ export const serverEnvironmentSchema = z.object({
     .regex(/^i-[0-9a-f]+$/)
     .optional(),
   ORCHESTRATOR_URL: optionalUrl,
+  CRON_SECRET: z.string().min(32).optional(),
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

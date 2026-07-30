@@ -243,6 +243,46 @@ export const conflictResolutionInputSchema = z
     }
   });
 
+export const publicationBranchNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .regex(
+    /^codev\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?:\/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*$/,
+    "Publication branches must start with codev/ and contain safe lowercase Git ref segments.",
+  )
+  .refine(
+    (branch) =>
+      !branch.includes("..") &&
+      !branch.includes("@{") &&
+      !branch.endsWith(".lock") &&
+      !branch.split("/").some((segment) => segment.startsWith(".")),
+    "Invalid Git reference.",
+  );
+
+export const createPublicationSchema = z.object({
+  branchName: publicationBranchNameSchema,
+  expectedHeadSha: z.string().regex(/^[0-9a-f]{40}$/),
+});
+
+export const publicationSchema = z.object({
+  id: identifierSchema,
+  workspaceId: identifierSchema,
+  branchName: publicationBranchNameSchema,
+  status: z.enum(["pending", "published", "failed"]),
+  sourceHeadSha: z.string().regex(/^[0-9a-f]{40}$/),
+  baseSha: z.string().regex(/^[0-9a-f]{40}$/),
+  commitSha: z
+    .string()
+    .regex(/^[0-9a-f]{40}$/)
+    .nullable(),
+  htmlUrl: z.url().nullable(),
+  lastError: z.string().nullable(),
+  publishedAt: timestampSchema.nullable(),
+  updatedAt: timestampSchema,
+});
+
 export type User = z.infer<typeof userSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
 export type SandboxInstance = z.infer<typeof sandboxInstanceSchema>;
@@ -259,3 +299,4 @@ export type CoordinationMessageInput = z.infer<
 export type ConflictResolutionInput = z.infer<
   typeof conflictResolutionInputSchema
 >;
+export type Publication = z.infer<typeof publicationSchema>;

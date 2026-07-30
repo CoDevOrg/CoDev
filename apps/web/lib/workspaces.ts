@@ -1,12 +1,23 @@
 import "server-only";
 
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getPublicRepository } from "./github";
+import { assertWorkspaceQuota } from "./quotas";
+
+export class WorkspaceLifecycleError extends Error {
+  constructor(
+    message: string,
+    readonly status = 409,
+  ) {
+    super(message);
+    this.name = "WorkspaceLifecycleError";
+  }
+}
 
 export async function listWorkspacesForUser(userId: string) {
   return getDatabase()
@@ -35,6 +46,7 @@ export async function createWorkspace(
   installationId: number,
   repositoryId: number,
 ) {
+  await assertWorkspaceQuota(userId);
   const { repository, baseSha } = await getPublicRepository(
     userId,
     installationId,
@@ -95,11 +107,19 @@ export async function getWorkspaceForMember(
       role: schema.workspaceMembers.role,
       canTerminal: schema.workspaceMembers.canTerminal,
       canMerge: schema.workspaceMembers.canMerge,
+      integrationHeadSha: schema.worktrees.headSha,
     })
     .from(schema.workspaceMembers)
     .innerJoin(
       schema.workspaces,
       eq(schema.workspaceMembers.workspaceId, schema.workspaces.id),
+    )
+    .innerJoin(
+      schema.worktrees,
+      and(
+        eq(schema.worktrees.workspaceId, schema.workspaces.id),
+        eq(schema.worktrees.kind, "integration"),
+      ),
     )
     .where(
       and(
@@ -200,6 +220,62 @@ export async function beginWorkspaceStop(workspaceId: string, userId: string) {
   await requireOwner(workspaceId, userId);
   const now = new Date();
   await getDatabase().transaction(async (transaction) => {
+    const [state] = await transaction
+      .select({
+        baseSha: schema.workspaces.baseSha,
+        integrationHeadSha: schema.worktrees.headSha,
+      })
+      .from(schema.workspaces)
+      .innerJoin(
+        schema.worktrees,
+        and(
+          eq(schema.worktrees.workspaceId, schema.workspaces.id),
+          eq(schema.worktrees.kind, "integration"),
+        ),
+      )
+      .where(eq(schema.workspaces.id, workspaceId))
+      .limit(1)
+      .for("update");
+    if (!state) throw new WorkspaceLifecycleError("Workspace not found.", 404);
+
+    const activeAgents = await transaction
+      .select({ id: schema.worktrees.id })
+      .from(schema.worktrees)
+      .where(
+        and(
+          eq(schema.worktrees.workspaceId, workspaceId),
+          eq(schema.worktrees.kind, "agent"),
+          inArray(schema.worktrees.status, ["active", "frozen"]),
+        ),
+      )
+      .limit(1);
+    if (activeAgents.length > 0) {
+      throw new WorkspaceLifecycleError(
+        "Merge or discard active agent worktrees before stopping.",
+      );
+    }
+    if (state.integrationHeadSha !== state.baseSha) {
+      const [publication] = await transaction
+        .select({ id: schema.publishedBranches.id })
+        .from(schema.publishedBranches)
+        .where(
+          and(
+            eq(schema.publishedBranches.workspaceId, workspaceId),
+            eq(schema.publishedBranches.status, "published"),
+            eq(
+              schema.publishedBranches.sourceHeadSha,
+              state.integrationHeadSha,
+            ),
+          ),
+        )
+        .orderBy(desc(schema.publishedBranches.publishedAt))
+        .limit(1);
+      if (!publication) {
+        throw new WorkspaceLifecycleError(
+          "Publish the current integration revision before stopping so it is not lost.",
+        );
+      }
+    }
     await transaction
       .update(schema.workspaceRuntimes)
       .set({ status: "stopping", updatedAt: now })
@@ -214,6 +290,74 @@ export async function beginWorkspaceStop(workspaceId: string, userId: string) {
 export async function markWorkspaceStopped(workspaceId: string) {
   const now = new Date();
   await getDatabase().transaction(async (transaction) => {
+    const [state] = await transaction
+      .select({
+        baseSha: schema.workspaces.baseSha,
+        integrationHeadSha: schema.worktrees.headSha,
+        integrationId: schema.worktrees.id,
+      })
+      .from(schema.workspaces)
+      .innerJoin(
+        schema.worktrees,
+        and(
+          eq(schema.worktrees.workspaceId, schema.workspaces.id),
+          eq(schema.worktrees.kind, "integration"),
+        ),
+      )
+      .where(eq(schema.workspaces.id, workspaceId))
+      .limit(1)
+      .for("update");
+    const [publication] =
+      state && state.integrationHeadSha !== state.baseSha
+        ? await transaction
+            .select({ commitSha: schema.publishedBranches.commitSha })
+            .from(schema.publishedBranches)
+            .where(
+              and(
+                eq(schema.publishedBranches.workspaceId, workspaceId),
+                eq(schema.publishedBranches.status, "published"),
+                eq(
+                  schema.publishedBranches.sourceHeadSha,
+                  state.integrationHeadSha,
+                ),
+              ),
+            )
+            .orderBy(desc(schema.publishedBranches.publishedAt))
+            .limit(1)
+        : [];
+    if (
+      state &&
+      state.integrationHeadSha !== state.baseSha &&
+      !publication?.commitSha
+    ) {
+      const message =
+        "The sandbox disappeared before its integration revision was published.";
+      await transaction
+        .update(schema.workspaceRuntimes)
+        .set({
+          sandboxId: null,
+          status: "failed",
+          lastError: message,
+          stoppedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
+      await transaction
+        .update(schema.workspaces)
+        .set({ status: "failed", updatedAt: now })
+        .where(eq(schema.workspaces.id, workspaceId));
+      return;
+    }
+    if (state && publication?.commitSha) {
+      await transaction
+        .update(schema.worktrees)
+        .set({ headSha: publication.commitSha, updatedAt: now })
+        .where(eq(schema.worktrees.id, state.integrationId));
+      await transaction
+        .update(schema.workspaces)
+        .set({ baseSha: publication.commitSha, updatedAt: now })
+        .where(eq(schema.workspaces.id, workspaceId));
+    }
     await transaction
       .update(schema.workspaceRuntimes)
       .set({

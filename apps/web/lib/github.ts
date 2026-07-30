@@ -125,28 +125,65 @@ export async function getGitHubUserToken(userId: string) {
   return decryptSecret(connection.encryptedAccessToken);
 }
 
-async function githubRequest<T>(userId: string, path: string): Promise<T> {
+export class GitHubApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "GitHubApiError";
+  }
+}
+
+export async function githubRequest<T>(
+  userId: string,
+  path: string,
+  options: {
+    method?: "GET" | "POST";
+    body?: unknown;
+  } = {},
+): Promise<T> {
   const token = await getGitHubUserToken(userId);
   const response = await fetch(`https://api.github.com${path}`, {
+    method: options.method ?? "GET",
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
+      ...(options.body === undefined
+        ? {}
+        : { "Content-Type": "application/json" }),
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
       "User-Agent": "CoDev",
     },
+    ...(options.body === undefined
+      ? {}
+      : { body: JSON.stringify(options.body) }),
     cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error(
+      throw new GitHubApiError(
         "GitHub authorization is no longer valid. Sign in again.",
+        response.status,
       );
     }
-    throw new Error(`GitHub request failed with status ${response.status}.`);
+    if (response.status === 403) {
+      throw new GitHubApiError(
+        "The CoDev GitHub App needs Contents: Read and write permission before it can publish.",
+        response.status,
+      );
+    }
+    throw new GitHubApiError(
+      `GitHub request failed with status ${response.status}.`,
+      response.status,
+    );
   }
 
-  return (await response.json()) as T;
+  return response.status === 204
+    ? (undefined as T)
+    : ((await response.json()) as T);
 }
 
 export async function listGitHubInstallations(userId: string) {

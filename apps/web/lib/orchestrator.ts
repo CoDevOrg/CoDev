@@ -53,6 +53,24 @@ const terminalPollSchema = z.object({
   exitCode: z.number().int().nullable(),
 });
 
+const publicationExportSchema = z.object({
+  headSha: z.string().regex(/^[0-9a-f]{40}$/),
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(4_096),
+        mode: z.enum(["100644", "100755", "120000"]),
+        contentBase64: z.string(),
+      }),
+    )
+    .max(500),
+  totalBytes: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(5 * 1_024 * 1_024),
+});
+
 function getOrchestratorConfiguration() {
   const environment = readServerEnvironment();
   if (!environment.AWS_REGION) {
@@ -78,6 +96,7 @@ async function orchestratorRequest(
   const headers: Record<string, string> = {
     accept: "application/json",
     host: url.host,
+    "x-codev-request-id": crypto.randomUUID(),
   };
   if (encodedBody !== undefined) {
     headers["content-type"] = "application/json";
@@ -275,6 +294,18 @@ export async function mergeSandboxWorktree(
   return z
     .object({ headSha: z.string().regex(/^[0-9a-f]{40}$/) })
     .parse(await response.json());
+}
+
+export async function exportSandboxPublication(
+  workspaceId: string,
+  expectedHeadSha: string,
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/publication/export`,
+    { expectedHeadSha },
+  );
+  return publicationExportSchema.parse(await response.json());
 }
 
 export async function readSandboxFile(

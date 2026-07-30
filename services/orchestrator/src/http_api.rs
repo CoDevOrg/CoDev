@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Instant};
 
 use axum::{
     Json, Router,
@@ -12,12 +12,13 @@ use axum::{
 use chrono::{Duration, Utc};
 use regex::Regex;
 use serde::Deserialize;
+use tracing::info;
 
 use crate::{
     backend::SharedBackend,
     model::{
-        CreateRequest, ExecRequest, Result, RuntimeError, TerminalInputRequest,
-        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
+        CreateRequest, ExecRequest, PublicationExportRequest, Result, RuntimeError,
+        TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
         WorktreeRebaseRequest, WriteFileRequest,
     },
@@ -102,9 +103,40 @@ pub fn router(backend: SharedBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
+        .route(
+            "/v1/sandboxes/{workspace_id}/publication/export",
+            post(export_publication),
+        )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(middleware::from_fn(no_store))
+        .layer(middleware::from_fn(observe_request))
         .with_state(backend)
+}
+
+async fn observe_request(request: Request<Body>, next: Next) -> Response {
+    let started_at = Instant::now();
+    let request_id = request
+        .headers()
+        .get("x-codev-request-id")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| value.len() <= 128)
+        .unwrap_or("missing")
+        .to_owned();
+    let method = request.method().to_string();
+    let path = request.uri().path().to_owned();
+    let mut response = next.run(request).await;
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert("x-codev-request-id", value);
+    }
+    info!(
+        event = "http.request",
+        %request_id,
+        %method,
+        %path,
+        status = response.status().as_u16(),
+        duration_ms = started_at.elapsed().as_millis() as u64
+    );
+    response
 }
 
 async fn no_store(request: Request<Body>, next: Next) -> Response {
@@ -306,6 +338,19 @@ async fn merge_worktree(
     let response = backend
         .merge_worktree(&workspace_id, &worktree_id, request)
         .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
+async fn export_publication(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<PublicationExportRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_sha(&request.expected_head_sha, "expected integration head SHA")?;
+    let response = backend.export_publication(&workspace_id, request).await?;
     Ok(Json(
         serde_json::to_value(response).map_err(RuntimeError::internal)?,
     ))

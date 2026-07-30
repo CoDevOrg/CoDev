@@ -2714,6 +2714,48 @@ footer > span {
   border-radius: 50%;
 }
 
+.publication-control {
+  display: flex;
+  height: 28px;
+  align-items: stretch;
+  border: 1px solid #303735;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #0b0e0d;
+}
+
+.publication-control input {
+  width: 142px;
+  padding: 0 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #b9c1be;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+}
+
+.publication-control button,
+.publication-control a {
+  display: inline-flex;
+  padding: 0 10px;
+  align-items: center;
+  border: 0;
+  border-left: 1px solid #303735;
+  background: rgba(70, 230, 193, 0.11);
+  color: var(--teal);
+  font:
+    600 10px var(--font-geist-mono),
+    monospace;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.publication-control button:disabled {
+  color: #65706c;
+  cursor: not-allowed;
+}
+
 .connection-state.collaboration-online i {
   background: var(--teal);
   box-shadow: 0 0 8px rgba(70, 230, 193, 0.45);
@@ -3449,6 +3491,11 @@ footer > span {
 
   .live-ide-topbar .topbar-actions {
     margin-left: auto;
+  }
+
+  .publication-control,
+  .connection-state {
+    display: none;
   }
 }
 

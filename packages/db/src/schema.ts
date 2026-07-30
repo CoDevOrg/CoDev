@@ -71,6 +71,11 @@ export const messageStatus = pgEnum("coordination_message_status", [
   "delivered",
   "resolved",
 ]);
+export const publicationStatus = pgEnum("publication_status", [
+  "pending",
+  "published",
+  "failed",
+]);
 
 export const users = pgTable(
   "users",
@@ -541,15 +546,31 @@ export const publishedBranches = pgTable(
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
     branchName: text("branch_name").notNull(),
-    commitSha: text("commit_sha").notNull(),
-    publishedAt: timestamp("published_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    status: publicationStatus("status").default("pending").notNull(),
+    sourceHeadSha: text("source_head_sha").notNull(),
+    baseSha: text("base_sha").notNull(),
+    commitSha: text("commit_sha"),
+    repositoryId: bigint("repository_id", { mode: "bigint" }).notNull(),
+    remoteRef: text("remote_ref").notNull(),
+    htmlUrl: text("html_url"),
+    requestId: text("request_id").notNull(),
+    lastError: text("last_error"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    ...timestamps,
   },
   (table) => [
     uniqueIndex("published_branches_workspace_name_idx").on(
       table.workspaceId,
       table.branchName,
+    ),
+    uniqueIndex("published_branches_workspace_request_idx").on(
+      table.workspaceId,
+      table.requestId,
+    ),
+    index("published_branches_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.updatedAt,
     ),
   ],
 );

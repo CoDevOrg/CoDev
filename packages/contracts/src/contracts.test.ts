@@ -8,6 +8,7 @@ import {
   coordinationMessageInputSchema,
   createPathClaimSchema,
   FakeSandboxBackend,
+  createPublicationSchema,
   terminalPollSchema,
   workspaceEventSchema,
   workspaceSchema,
@@ -166,6 +167,32 @@ describe("agent coordination contracts", () => {
         mergedContents: "resolved",
       }).strategy,
     ).toBe("merged");
+  });
+});
+
+describe("publication contracts", () => {
+  it("accepts only immutable CoDev branch refs", () => {
+    expect(
+      createPublicationSchema.parse({
+        branchName: "codev/design-partner-demo",
+        expectedHeadSha: "a".repeat(40),
+      }).branchName,
+    ).toBe("codev/design-partner-demo");
+
+    for (const branchName of [
+      "main",
+      "codev/../main",
+      "codev/.hidden",
+      "codev/demo.lock",
+      "codev/Demo",
+    ]) {
+      expect(() =>
+        createPublicationSchema.parse({
+          branchName,
+          expectedHeadSha: "a".repeat(40),
+        }),
+      ).toThrow();
+    }
   });
 });
 

@@ -28,6 +28,7 @@ export default async function WorkspaceIdePage({
       branch={workspace.defaultBranch}
       canTerminal={workspace.canTerminal}
       canMerge={workspace.canMerge}
+      integrationHeadSha={workspace.integrationHeadSha}
       user={{
         id: user.id,
         name: user.name ?? null,

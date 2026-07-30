@@ -12,17 +12,18 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
 use crate::model::{
-    ExecRequest, ExecResponse, FileResponse, RuntimeError, TerminalChunk, TerminalInputRequest,
-    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
+    PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -94,6 +95,7 @@ impl GuestService {
             ("POST", "/v1/pty/exec") => self.exec(body),
             ("POST", "/v1/terminals") => self.start_terminal(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
+            ("POST", "/v1/publication/export") => self.export_publication(body),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -169,6 +171,12 @@ impl GuestService {
         let request: FileRequest = decode(body)?;
         let root = self.target_root(request.worktree_id.as_deref())?;
         let path = self.resolve_existing(&root, &request.path)?;
+        let metadata = fs::metadata(&path).map_err(RuntimeError::internal)?;
+        if metadata.len() > MAX_BODY_BYTES as u64 {
+            return Err(RuntimeError::BadRequest(
+                "file exceeds the two MiB limit".into(),
+            ));
+        }
         let contents = fs::read(path).map_err(RuntimeError::internal)?;
         if contents.len() > MAX_BODY_BYTES {
             return Err(RuntimeError::BadRequest(
@@ -302,6 +310,16 @@ impl GuestService {
     fn start_terminal(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: TerminalStartRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        {
+            let mut terminals = self.terminals.lock().expect("terminal map lock");
+            terminals.retain(|_, session| {
+                let output = session.output.lock().expect("terminal output lock");
+                !(output.reader_closed && output.exit_code.is_some())
+            });
+            if terminals.len() >= 4 {
+                return Err(RuntimeError::CapacityExceeded);
+            }
+        }
         let size = validated_terminal_size(request.rows, request.columns)?;
         let pty = native_pty_system()
             .openpty(size)
@@ -698,6 +716,89 @@ impl GuestService {
         serde_json::to_value(WorktreeMergeResponse { head_sha }).map_err(RuntimeError::internal)
     }
 
+    fn export_publication(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        const MAX_FILES: usize = 500;
+        const MAX_FILE_BYTES: usize = 1 << 20;
+        const MAX_TOTAL_BYTES: usize = 5 << 20;
+
+        let request: PublicationExportRequest = decode(body)?;
+        validate_commit_sha(&request.expected_head_sha)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.require_clean(&self.workspace_root, "integration worktree is dirty")?;
+        self.require_head(
+            &self.workspace_root,
+            &request.expected_head_sha,
+            "integration",
+        )?;
+
+        let tree = self.git_output(
+            &self.workspace_root,
+            &["ls-tree", "-r", "-z", "--full-tree", "HEAD"],
+        )?;
+        if !tree.status.success() {
+            return Err(git_failure("enumerate publication tree", &tree));
+        }
+
+        let mut files = Vec::new();
+        let mut total_bytes = 0usize;
+        for raw in tree
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|row| !row.is_empty())
+        {
+            if files.len() >= MAX_FILES {
+                return Err(RuntimeError::BadRequest(
+                    "publication tree exceeds 500 files".into(),
+                ));
+            }
+            let row = std::str::from_utf8(raw)
+                .map_err(|_| RuntimeError::BadRequest("publication paths must be UTF-8".into()))?;
+            let (metadata, path) = row
+                .split_once('\t')
+                .ok_or_else(|| RuntimeError::Internal("invalid Git tree entry".into()))?;
+            let mut fields = metadata.split_whitespace();
+            let mode = fields.next().unwrap_or_default();
+            let kind = fields.next().unwrap_or_default();
+            let sha = fields.next().unwrap_or_default();
+            if kind != "blob" || !matches!(mode, "100644" | "100755" | "120000") {
+                return Err(RuntimeError::BadRequest(
+                    "publication contains an unsupported Git object".into(),
+                ));
+            }
+            validate_publication_path(path)?;
+            validate_commit_sha(sha)?;
+            let blob = self.git_output(&self.workspace_root, &["cat-file", "blob", sha])?;
+            if !blob.status.success() {
+                return Err(git_failure("read publication blob", &blob));
+            }
+            if blob.stdout.len() > MAX_FILE_BYTES {
+                return Err(RuntimeError::BadRequest(
+                    "publication file exceeds one MiB".into(),
+                ));
+            }
+            total_bytes = total_bytes
+                .checked_add(blob.stdout.len())
+                .ok_or_else(|| RuntimeError::BadRequest("publication is too large".into()))?;
+            if total_bytes > MAX_TOTAL_BYTES {
+                return Err(RuntimeError::BadRequest(
+                    "publication exceeds five MiB".into(),
+                ));
+            }
+            files.push(PublicationFile {
+                path: path.into(),
+                mode: mode.into(),
+                content_base64: BASE64.encode(blob.stdout),
+            });
+        }
+
+        serde_json::to_value(PublicationExportResponse {
+            head_sha: request.expected_head_sha,
+            files,
+            total_bytes,
+        })
+        .map_err(RuntimeError::internal)
+    }
+
     fn require_head(&self, root: &Path, expected: &str, label: &str) -> crate::model::Result<()> {
         let actual = self.head_sha(root)?;
         if actual == expected {
@@ -925,6 +1026,23 @@ fn validate_worktree_id(worktree_id: &str) -> crate::model::Result<()> {
         Ok(())
     } else {
         Err(RuntimeError::BadRequest("invalid worktree ID".into()))
+    }
+}
+
+fn validate_publication_path(path: &str) -> crate::model::Result<()> {
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains('\\')
+        || path.chars().any(char::is_control)
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        Err(RuntimeError::BadRequest(
+            "publication contains an unsafe path".into(),
+        ))
+    } else {
+        Ok(())
     }
 }
 

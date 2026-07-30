@@ -174,6 +174,28 @@ pub struct WorktreeMergeResponse {
     pub head_sha: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationExportRequest {
+    pub expected_head_sha: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationFile {
+    pub path: String,
+    pub mode: String,
+    pub content_base64: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationExportResponse {
+    pub head_sha: String,
+    pub files: Vec<PublicationFile>,
+    pub total_bytes: usize,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecResponse {

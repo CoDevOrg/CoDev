@@ -135,6 +135,18 @@ Resources:
                 Condition:
                   StringLike:
                     s3:prefix: releases/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: !Sub "${HostLogGroup.Arn}:*"
+
+  HostLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /codev/orchestrator/${AWS::StackName}
+      RetentionInDays: 14
 
   HostInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -165,7 +177,7 @@ Resources:
               sleep 10
             done
             chmod 0700 /tmp/codev-bootstrap-host.sh
-            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} /tmp/codev-bootstrap-host.sh
+            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_LOG_GROUP=${HostLogGroup} /tmp/codev-bootstrap-host.sh
       TagSpecifications:
         - ResourceType: launch-template
           Tags:
@@ -233,6 +245,7 @@ Resources:
     DependsOn:
       - ProxyLambdaToHostEgress
       - HostFromProxyLambdaIngress
+      - RuntimeProxyLogGroup
     Properties:
       Architectures:
         - arm64
@@ -305,6 +318,9 @@ Resources:
         Variables:
           ORCHESTRATOR_ORIGIN: !Sub http://${FirecrackerHost.PrivateIp}:8080
       Handler: index.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref RuntimeProxyLogGroup
       MemorySize: 128
       Role: !GetAtt RuntimeProxyRole.Arn
       Runtime: python3.13
@@ -314,6 +330,18 @@ Resources:
           - !GetAtt ProxyLambdaSecurityGroup.GroupId
         SubnetIds:
           - !Ref RuntimeSubnet
+
+  RuntimeProxyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/codev-runtime-managed-${AWS::StackName}
+      RetentionInDays: 14
+
+  RuntimeApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/codev-runtime-${AWS::StackName}
+      RetentionInDays: 14
 
   RuntimeApi:
     Type: AWS::ApiGatewayV2::Api
@@ -357,7 +385,99 @@ Resources:
         DetailedMetricsEnabled: true
         ThrottlingBurstLimit: 10
         ThrottlingRateLimit: 5
+      AccessLogSettings:
+        DestinationArn: !GetAtt RuntimeApiAccessLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLatency":"$context.responseLatency","integrationError":"$context.integrationErrorMessage"}
       StageName: $default
+
+  RuntimeApiServerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CoDev runtime API returned server errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: 5xx
+      Namespace: AWS/ApiGateway
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref RuntimeApi
+        - Name: Stage
+          Value: $default
+
+  RuntimeProxyErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CoDev runtime proxy Lambda failed
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RuntimeProxyFunction
+
+  FirecrackerHostStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CoDev Firecracker host failed an EC2 status check
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref FirecrackerHost
+
+  RuntimeDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub codev-runtime-${AWS::StackName}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Runtime API and Lambda",
+                "region": "${AWS::Region}",
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiId", "${RuntimeApi}", "Stage", "$default"],
+                  [".", "5xx", ".", ".", ".", "."],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${RuntimeProxyFunction}"],
+                  [".", "Duration", ".", ".", {"stat": "p95"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Firecracker host",
+                "region": "${AWS::Region}",
+                "metrics": [
+                  ["AWS/EC2", "StatusCheckFailed", "InstanceId", "${FirecrackerHost}"],
+                  [".", "CPUUtilization", ".", "."]
+                ]
+              }
+            }
+          ]
+        }
 
 Outputs:
   ApiId:
@@ -370,3 +490,5 @@ Outputs:
     Value: !GetAtt FirecrackerHost.PublicIp
   RuntimeVpcId:
     Value: !Ref RuntimeVpc
+  RuntimeDashboardName:
+    Value: !Ref RuntimeDashboard

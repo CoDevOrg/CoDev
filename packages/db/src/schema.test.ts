@@ -8,6 +8,7 @@ import {
   coordinationMessages,
   githubIssueAssignments,
   pathClaims,
+  publishedBranches,
   workspaceMembers,
   workspaces,
   worktrees,
@@ -37,6 +38,9 @@ describe("database schema", () => {
     expect(coordinationMessages.correlationId.name).toBe("correlation_id");
     expect(worktrees.reviewDiffDigest.name).toBe("review_diff_digest");
     expect(worktrees.mergedAt.name).toBe("merged_at");
+    expect(getTableName(publishedBranches)).toBe("published_branches");
+    expect(publishedBranches.sourceHeadSha.name).toBe("source_head_sha");
+    expect(publishedBranches.remoteRef.name).toBe("remote_ref");
     expect(yjsSnapshots.conflictResolvedBy.name).toBe("conflict_resolved_by");
   });
 });

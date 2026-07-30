@@ -8,14 +8,14 @@ use tokio::{
 };
 
 use crate::model::{
-    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, TerminalInputRequest,
-    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
+    Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
-const MAX_RESPONSE_BYTES: usize = 3 << 20;
+const MAX_RESPONSE_BYTES: usize = 10 << 20;
 
 pub struct GuestClient {
     socket_path: PathBuf,
@@ -187,6 +187,14 @@ impl GuestClient {
             Some(request),
         )
         .await
+    }
+
+    pub async fn export_publication(
+        &self,
+        request: &PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        self.request("POST", "/v1/publication/export", Some(request))
+            .await
     }
 
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {

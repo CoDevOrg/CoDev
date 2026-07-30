@@ -6,5 +6,11 @@
     "app/api/**/*.ts": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/lifecycle",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

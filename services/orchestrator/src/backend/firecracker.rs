@@ -20,11 +20,12 @@ use tokio::{
 use crate::{
     guest_client::GuestClient,
     model::{
-        CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-        TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-        WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+        CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
+        PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
+        TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
@@ -99,6 +100,7 @@ struct RunningMachine {
     guest: GuestClient,
     workspace_dir: PathBuf,
     jail_dir: PathBuf,
+    slot: u32,
 }
 
 pub struct FirecrackerBackend {
@@ -389,6 +391,17 @@ impl FirecrackerBackend {
         Ok(result)
     }
 
+    pub async fn export_publication(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.export_publication(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
     pub async fn git_status(
         &self,
         workspace_id: &str,
@@ -408,12 +421,26 @@ impl FirecrackerBackend {
     }
 
     async fn machine(&self, workspace_id: &str) -> Result<Arc<RunningMachine>> {
-        self.machines
+        let machine = self
+            .machines
             .read()
             .await
             .get(workspace_id)
             .cloned()
-            .ok_or(RuntimeError::SandboxNotFound)
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        let exited = machine
+            .child
+            .lock()
+            .await
+            .try_wait()
+            .map_err(RuntimeError::internal)?
+            .is_some();
+        if exited {
+            self.machines.write().await.remove(workspace_id);
+            self.cleanup_failed_machine(&machine).await;
+            return Err(RuntimeError::SandboxNotFound);
+        }
+        Ok(machine)
     }
 
     fn mark_activity(&self, machine: &RunningMachine) {
@@ -425,6 +452,16 @@ impl FirecrackerBackend {
     }
 
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
+        let slot = {
+            let machines = self.machines.read().await;
+            first_available_slot(
+                machines.values().map(|machine| machine.slot),
+                self.config.max_sandboxes,
+            )
+            .ok_or(RuntimeError::CapacityExceeded)?
+        };
+        let uid = 20_000 + slot;
+        let guest_cid = 3 + slot;
         let id = request.workspace_id.replace('-', "");
         let workspace_dir = self
             .config
@@ -452,7 +489,7 @@ impl FirecrackerBackend {
             .map_err(RuntimeError::internal)?;
 
         let result = self
-            .prepare_resources(request, &workspace_dir, &jail_root)
+            .prepare_resources(request, &workspace_dir, &jail_root, guest_cid)
             .await;
         if let Err(error) = result {
             let _ = remove_directory_if_present(&workspace_dir).await;
@@ -460,7 +497,6 @@ impl FirecrackerBackend {
             return Err(error);
         }
 
-        let uid = 20_000 + self.machines.read().await.len() as u32;
         let paths = [
             jail_root.join("vmlinux"),
             jail_root.join("rootfs.ext4"),
@@ -519,6 +555,7 @@ impl FirecrackerBackend {
             guest,
             workspace_dir,
             jail_dir,
+            slot,
         };
 
         let ready = timeout(Duration::from_secs(45), async {
@@ -561,6 +598,7 @@ impl FirecrackerBackend {
         request: &CreateRequest,
         workspace_dir: &Path,
         jail_root: &Path,
+        guest_cid: u32,
     ) -> Result<()> {
         let repository = workspace_dir.join("repository");
         let mut init = Command::new("git");
@@ -638,7 +676,7 @@ impl FirecrackerBackend {
                 "smt": false
             },
             "vsock": {
-                "guest_cid": 3,
+                "guest_cid": guest_cid,
                 "uds_path": "/guest.vsock"
             }
         });
@@ -691,6 +729,16 @@ async fn remove_directory_if_present(path: &Path) -> Result<()> {
     }
 }
 
+fn first_available_slot(
+    occupied: impl IntoIterator<Item = u32>,
+    max_sandboxes: usize,
+) -> Option<u32> {
+    let occupied = occupied
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    (0..max_sandboxes as u32).find(|slot| !occupied.contains(slot))
+}
+
 fn environment_path(name: &str, fallback: &str) -> PathBuf {
     std::env::var_os(name)
         .map(PathBuf::from)
@@ -741,12 +789,19 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_duration;
+    use super::{first_available_slot, parse_duration};
 
     #[test]
     fn parses_runtime_durations() {
         assert_eq!(parse_duration("15m").expect("duration").as_secs(), 900);
         assert_eq!(parse_duration("4h").expect("duration").as_secs(), 14_400);
         assert!(parse_duration("soon").is_none());
+    }
+
+    #[test]
+    fn allocates_unique_slots_during_churn() {
+        assert_eq!(first_available_slot([0, 1], 3), Some(2));
+        assert_eq!(first_available_slot([1], 3), Some(0));
+        assert_eq!(first_available_slot([0, 1], 2), None);
     }
 }

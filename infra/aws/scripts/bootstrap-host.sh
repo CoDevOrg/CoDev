@@ -10,6 +10,7 @@ readonly firecracker_ci_prefix="firecracker-ci/20260723-ae5bf5b68fc4-0/aarch64"
 readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecracker_ci_prefix}"
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
+readonly host_log_group="${CODEV_HOST_LOG_GROUP:-/codev/orchestrator/codev-runtime}"
 
 # Bare-metal instances can initially inherit the AMI build clock. Wait for the
 # EC2 time source before making signed AWS requests or validating apt metadata.
@@ -31,6 +32,11 @@ apt-get install -y \
   git \
   jq \
   squashfs-tools
+
+curl -fsSL \
+  https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb \
+  -o /tmp/amazon-cloudwatch-agent.deb
+dpkg -i /tmp/amazon-cloudwatch-agent.deb
 
 install -d -m 0700 "${runtime_dir}/workspaces"
 install -d -m 0755 "${base_dir}" /srv/jailer
@@ -155,12 +161,43 @@ RestartSec=2
 KillMode=control-group
 LimitNOFILE=65536
 TasksMax=4096
+StandardOutput=append:/var/log/codev-orchestrator.log
+StandardError=append:/var/log/codev-orchestrator.log
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<AGENT
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "root"
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/codev-orchestrator.log",
+            "log_group_name": "${host_log_group}",
+            "log_stream_name": "{instance_id}",
+            "retention_in_days": 14
+          }
+        ]
+      }
+    }
+  }
+}
+AGENT
+
 systemctl daemon-reload
 systemctl enable codev-orchestrator.service
+systemctl enable amazon-cloudwatch-agent.service
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 systemctl restart codev-orchestrator.service
 systemctl --no-pager --full status codev-orchestrator.service

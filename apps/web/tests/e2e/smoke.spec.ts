@@ -106,6 +106,17 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   });
 
   for (const endpoint of [
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/publications",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/events",
+  ]) {
+    const response = await request.get(endpoint);
+    expect(response.status()).toBe(401);
+  }
+
+  const lifecycle = await request.get("/api/cron/lifecycle");
+  expect(lifecycle.status()).toBe(401);
+
+  for (const endpoint of [
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/review",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/merge",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/discard",

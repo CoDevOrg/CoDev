@@ -15,6 +15,7 @@ import {
   markWorkspaceFailed,
   markWorkspaceReady,
   markWorkspaceStopped,
+  WorkspaceLifecycleError,
 } from "@/lib/workspaces";
 
 export async function GET(
@@ -91,7 +92,10 @@ export async function POST(
     return Response.json({ sandbox }, { status: 201 });
   } catch (error) {
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
-    return apiError(error, 502);
+    return apiError(
+      error,
+      error instanceof WorkspaceLifecycleError ? error.status : 502,
+    );
   }
 }
 
@@ -118,6 +122,9 @@ export async function DELETE(
     await markWorkspaceStopped(workspaceId);
     return new Response(null, { status: 204 });
   } catch (error) {
+    if (error instanceof WorkspaceLifecycleError) {
+      return apiError(error, error.status);
+    }
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
     return apiError(error, 502);
   }

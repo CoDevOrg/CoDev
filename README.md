@@ -4,11 +4,10 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 7 adds exact issue ownership, expiring path claims, structured agent
-> negotiation, explicit collaboration-conflict resolution, and a guarded
-> review/rebase/merge/discard lifecycle. Each turn still uses its author's
-> encrypted provider credential server-side; keys are never sent to the
-> browser or Firecracker guest.
+> Phase 8 publishes immutable `codev/` integration branches through Vercel,
+> adds recoverable stop/cleanup behavior, quotas, structured telemetry,
+> security tests, and production runbooks. GitHub and provider credentials
+> remain server-side and are never sent to the browser or Firecracker guest.
 
 ## Website
 
@@ -16,6 +15,7 @@ the website source; CoDev is not a downloadable desktop application.
 - Local landing page: `http://localhost:3000`
 - Fixture workspace: `http://localhost:3000/workspaces/demo`
 - Health endpoint: `http://localhost:3000/api/health`
+- Aggregate readiness: `http://localhost:3000/api/ready`
 - Database health: `http://localhost:3000/api/health/database`
 - Orchestrator health: `http://localhost:3000/api/health/orchestrator`
 - Realtime health: `http://localhost:3000/api/health/realtime`
@@ -93,5 +93,7 @@ sandbox and stops itself after 15 minutes without an active microVM.
 See [infra/aws/README.md](./infra/aws/README.md) for the architecture, quotas,
 deployment command, diagnostics, and cost-sensitive resources.
 
-See [PRD.md](./PRD.md) for the product specification and [PLAN.md](./PLAN.md)
-for the eight-phase delivery roadmap.
+See [OPERATIONS.md](./docs/OPERATIONS.md), [SECURITY.md](./docs/SECURITY.md),
+and [DEMO_RUNBOOK.md](./docs/DEMO_RUNBOOK.md) for production operations and
+design-partner proof. See [PRD.md](./PRD.md) and [PLAN.md](./PLAN.md) for the
+product specification and eight-phase delivery roadmap.

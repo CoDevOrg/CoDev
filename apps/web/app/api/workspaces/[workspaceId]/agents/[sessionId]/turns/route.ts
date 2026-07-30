@@ -7,6 +7,7 @@ import { kickAgentSession } from "@/lib/agent-service";
 import { apiError, getApiUser } from "@/lib/api";
 import { getOpenAICredentialStatus } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
+import { assertTurnQuota, QuotaError, quotaResponse } from "@/lib/quotas";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
 const inputSchema = z.object({
@@ -44,6 +45,7 @@ export async function POST(
       )
       .limit(1);
     if (!session) return apiError(new Error("Agent session not found."), 404);
+    await assertTurnQuota(user.id, sessionId);
 
     const [turn] = await getDatabase()
       .insert(schema.agentTurns)
@@ -52,6 +54,7 @@ export async function POST(
     await kickAgentSession(sessionId);
     return Response.json({ turnId: turn?.id }, { status: 202 });
   } catch (error) {
+    if (error instanceof QuotaError) return quotaResponse(error);
     return apiError(error);
   }
 }

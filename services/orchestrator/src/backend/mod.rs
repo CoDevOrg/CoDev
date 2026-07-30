@@ -6,11 +6,11 @@ use std::{
 use chrono::{DateTime, Utc};
 
 use crate::model::{
-    CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
+    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
@@ -283,6 +283,18 @@ impl Backend {
         }
     }
 
+    pub async fn export_publication(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        match self {
+            Self::Fake(backend) => backend.export_publication(workspace_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.export_publication(workspace_id, request).await,
+        }
+    }
+
     pub async fn git_status(
         &self,
         workspace_id: &str,
@@ -512,6 +524,19 @@ impl FakeBackend {
         self.get(workspace_id)?;
         Ok(WorktreeMergeResponse {
             head_sha: request.expected_worktree_head_sha,
+        })
+    }
+
+    fn export_publication(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        self.get(workspace_id)?;
+        Ok(PublicationExportResponse {
+            head_sha: request.expected_head_sha,
+            files: Vec::new(),
+            total_bytes: 0,
         })
     }
 

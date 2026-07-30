@@ -19,16 +19,16 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 
 ## Status
 
-| Phase | Name                              | Status      |
-| ----- | --------------------------------- | ----------- |
-| 1     | Foundation and Live Website       | Complete    |
-| 2     | GitHub Identity and Workspaces    | Complete    |
-| 3     | Firecracker Runtime               | Complete    |
-| 4     | Browser IDE and Terminal          | Complete    |
-| 5     | Realtime Collaboration            | Complete    |
-| 6     | Parallel Agent Runtime            | Complete    |
-| 7     | Collision Coordination and Review | Complete    |
-| 8     | GitHub Publication and Hardening  | Not started |
+| Phase | Name                              | Status   |
+| ----- | --------------------------------- | -------- |
+| 1     | Foundation and Live Website       | Complete |
+| 2     | GitHub Identity and Workspaces    | Complete |
+| 3     | Firecracker Runtime               | Complete |
+| 4     | Browser IDE and Terminal          | Complete |
+| 5     | Realtime Collaboration            | Complete |
+| 6     | Parallel Agent Runtime            | Complete |
+| 7     | Collision Coordination and Review | Complete |
+| 8     | GitHub Publication and Hardening  | Complete |
 
 ## Phase 1: Foundation and Live Website
 
@@ -71,7 +71,7 @@ Implement GitHub sign-in and installation discovery, public-repository selection
 
 - GitHub App: [CoDev Web Workspace](https://github.com/apps/codev-web-workspace)
 - Installation scope: `yousef20920/CoDev`
-- Repository permission: read-only contents and metadata
+- Repository permission: read/write contents and read-only metadata
 - OAuth user tokens: expiring, with encrypted refresh-token support
 - Database: 14 migrated tables with RLS and server-only privileges
 - Completed: July 28, 2026
@@ -201,6 +201,31 @@ Add exact GitHub-issue duplicate detection, path claims, structured agent negoti
 ## Phase 8: GitHub Publication and Hardening
 
 Publish approved integration branches without exposing GitHub tokens to sandboxes. Add observability, lifecycle cleanup, security tests, quotas, recovery behavior, and the complete design-partner demo runbook.
+
+### Acceptance Criteria
+
+- A member with merge capability can publish the exact clean integration tree to a new immutable `codev/` GitHub branch, while the default branch and existing refs are never updated.
+- GitHub tokens remain encrypted at rest and exist only in Vercel server memory; the browser, AWS proxy, Rust orchestrator, guest daemon, terminal, and sandbox disk never receive them.
+- Publication revalidates the GitHub installation and repository, rejects unsafe paths and refs, enforces bounded binary-safe export limits, and converges after partial failure without duplicate refs.
+- A sandbox with active agent worktrees or unpublished integration changes cannot be stopped. A published workspace restarts from its remote publication commit.
+- Scheduled lifecycle reconciliation is authenticated, idempotent, interrupts turns, expires claims, discards physical worktrees, reconciles missing runtimes, expires invitations, and does not wake a sleeping EC2 host.
+- Per-user workspace and turn quotas, distributed request limits, terminal caps, payload ceilings, and `429` responses bound abuse and cost.
+- Vercel and Rust emit structured, request-correlated, redacted logs; aggregate readiness treats a stopped scale-to-zero host as healthy; AWS retains access/function logs and alarms on API, Lambda, and EC2 failures.
+- Anonymous/security browser checks, TypeScript and Rust tests, migration checks, builds, preview verification, and production verification pass.
+- Operations, security, rollback, incident, deployment-verification, and design-partner demo runbooks cover the complete publication-to-scale-to-zero journey.
+
+### Phase 8 Delivery
+
+- Publication: immutable `codev/` GitHub branches created through the server-side Git Database API
+- Recovery: publication-aware stop guards, durable restart baselines, and authenticated daily lifecycle reconciliation
+- Cost controls: workspace and turn quotas, distributed request limits, terminal caps, and scale-to-zero reconciliation
+- Observability: request-correlated redacted logs, aggregate readiness, 14-day AWS logs, alarms, and a CloudWatch dashboard
+- Runtime: Rust release `phase8-58fc306a2431` with collision-free Firecracker slots and supervised guest cleanup
+- Database: Supabase migration `0007_flashy_sphinx.sql` with RLS and server-only privileges
+- Security: GitHub App Contents read/write approved for installation `149706596`
+- Runbooks: security boundary, operations/rollback, deployment verification, and design-partner demo
+- Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
+- Completed: July 30, 2026
 
 ## Deferred Beyond the Demo
 

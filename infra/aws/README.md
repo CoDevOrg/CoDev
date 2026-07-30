@@ -5,6 +5,11 @@ reaches it through an IAM-authorized API Gateway HTTP API and a usage-based
 Lambda proxy attached to the runtime VPC. The host has no public inbound rules
 and is administered through AWS Systems Manager.
 
+Phase 8 adds 14-day API Gateway, Lambda, and structured Rust host log
+retention, request-ID propagation, CloudWatch alarms for API/Lambda/EC2
+failures, and a compact `codev-runtime-*` dashboard. See
+[Operations](../../docs/OPERATIONS.md) for incident and rollback procedures.
+
 Current production endpoint:
 `https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com`.
 
