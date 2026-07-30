@@ -41,7 +41,7 @@ export const demoAgents = [
     task: "Build workspace shell",
     branch: "agent/atlas-shell",
     state: "Working",
-    tone: "teal",
+    tone: "gold",
   },
   {
     initials: "NV",

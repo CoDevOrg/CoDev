@@ -20,7 +20,10 @@ import {
   type WorkspaceFile,
 } from "@/lib/ide";
 import { formatPresenceCopy } from "@/lib/presence-copy";
-import { isPreviewExtensionAllowed } from "@/lib/preview";
+import {
+  isPreviewExtensionAllowed,
+  resolvePreviewEntry,
+} from "@/lib/preview";
 import { AgentPanel } from "@/components/agent-panel";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
@@ -211,6 +214,17 @@ export function WorkspaceIde({
     };
   }, []);
 
+  const hasPreview = useMemo(
+    () => Boolean(resolvePreviewEntry(files.map((file) => file.path))),
+    [files],
+  );
+
+  useEffect(() => {
+    if (!hasPreview && view === "preview") {
+      setView("chat");
+    }
+  }, [hasPreview, view]);
+
   useEffect(() => {
     const client = new WorkspaceCollaboration(
       workspaceId,
@@ -295,10 +309,10 @@ export function WorkspaceIde({
       fontFamily: "var(--font-geist-mono), monospace",
       fontSize: 12,
       theme: {
-        background: "#0b0e0d",
+        background: "#081221",
         foreground: "#b9c1be",
-        cursor: "#46e6c1",
-        cyan: "#46e6c1",
+        cursor: "#d4af37",
+        cyan: "#d4af37",
         blue: "#64b7d0",
         red: "#ef8e8e",
         green: "#79cea9",
@@ -751,6 +765,7 @@ export function WorkspaceIde({
         className={[
           "live-ide-grid",
           `view-${view}`,
+          hasPreview ? "has-preview" : "preview-hidden",
           view === "terminal" && terminalCollapsed ? "terminal-collapsed" : "",
           view === "terminal" && !terminalCollapsed ? "terminal-open" : "",
         ]
@@ -795,18 +810,20 @@ export function WorkspaceIde({
           >
             ⌘
           </button>
-          <button
-            className={`rail-button ${view === "preview" ? "active" : ""}`}
-            type="button"
-            aria-label="Preview focus"
-            aria-pressed={view === "preview"}
-            onClick={() => {
-              setView("preview");
-              setTerminalCollapsed(true);
-            }}
-          >
-            ▣
-          </button>
+          {hasPreview ? (
+            <button
+              className={`rail-button ${view === "preview" ? "active" : ""}`}
+              type="button"
+              aria-label="Preview focus"
+              aria-pressed={view === "preview"}
+              onClick={() => {
+                setView("preview");
+                setTerminalCollapsed(true);
+              }}
+            >
+              ▣
+            </button>
+          ) : null}
           <button
             className={`rail-button ${view === "terminal" ? "active" : ""}`}
             type="button"
@@ -825,74 +842,88 @@ export function WorkspaceIde({
           </Link>
         </aside>
 
-        <div className="ide-main-stage">
+        <div
+          className={[
+            "ide-main-stage",
+            hasPreview ? "has-preview" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <AgentPanel
             workspaceId={workspaceId}
             canMerge={canMerge}
             onTurnCompleted={schedulePreviewRefresh}
           />
-          <PreviewPane
-            workspaceId={workspaceId}
-            files={files}
-            revisionToken={String(previewRevision)}
-            onRefresh={refreshPreviewNow}
-            className={view === "preview" ? "preview-focus" : ""}
-            exportActions={
-              canMerge ? (
-                <div
-                  className="publication-control preview-export-control"
-                  aria-label="Share what you built"
-                >
-                  {publishedUrl ? (
-                    <>
-                      <a href={publishedUrl} target="_blank" rel="noreferrer">
-                        Published ↗
-                      </a>
-                      {pullRequestUrl ? (
-                        <a
-                          href={pullRequestUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Pull request ↗
+          {hasPreview ? (
+            <PreviewPane
+              workspaceId={workspaceId}
+              files={files}
+              revisionToken={String(previewRevision)}
+              onRefresh={refreshPreviewNow}
+              className={[
+                "preview-pane-enter",
+                view === "preview" ? "preview-focus" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              exportActions={
+                canMerge ? (
+                  <div
+                    className="publication-control preview-export-control"
+                    aria-label="Share what you built"
+                  >
+                    {publishedUrl ? (
+                      <>
+                        <a href={publishedUrl} target="_blank" rel="noreferrer">
+                          Published ↗
                         </a>
-                      ) : (
+                        {pullRequestUrl ? (
+                          <a
+                            href={pullRequestUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Pull request ↗
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={openingPullRequest}
+                            onClick={() => void openPullRequest()}
+                          >
+                            {openingPullRequest
+                              ? "Opening PR…"
+                              : "Open pull request"}
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          aria-label="GitHub publication branch"
+                          value={publicationBranch}
+                          onChange={(event) =>
+                            setPublicationBranch(
+                              event.target.value.toLowerCase(),
+                            )
+                          }
+                          spellCheck={false}
+                        />
                         <button
                           type="button"
-                          disabled={openingPullRequest}
-                          onClick={() => void openPullRequest()}
+                          disabled={publishing || openFile?.dirty}
+                          onClick={() => void publishBranch()}
                         >
-                          {openingPullRequest
-                            ? "Opening PR…"
-                            : "Open pull request"}
+                          {publishing ? "Publishing…" : "Publish"}
                         </button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        aria-label="GitHub publication branch"
-                        value={publicationBranch}
-                        onChange={(event) =>
-                          setPublicationBranch(
-                            event.target.value.toLowerCase(),
-                          )
-                        }
-                        spellCheck={false}
-                      />
-                      <button
-                        type="button"
-                        disabled={publishing || openFile?.dirty}
-                        onClick={() => void publishBranch()}
-                      >
-                        {publishing ? "Publishing…" : "Publish"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              ) : undefined
-            }
-          />
+                      </>
+                    )}
+                  </div>
+                ) : undefined
+              }
+            />
+          ) : null}
 
           {view === "files" ? (
             <aside

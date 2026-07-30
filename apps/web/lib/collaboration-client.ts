@@ -93,7 +93,7 @@ function presenceUser(entry: CollaborationPresenceEntry): CollaborationUser {
 }
 
 function userColor(value: string) {
-  const palette = ["#46e6c1", "#64b7d0", "#c69df5", "#efb16d", "#f07f95"];
+  const palette = ["#d4af37", "#7d93c4", "#c9a84a", "#8fa3c8", "#e0b84a"];
   let hash = 0;
   for (const character of value) {
     hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
