@@ -1,6 +1,11 @@
 import "server-only";
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 
 import type { AuthProvider, ScopeType } from "@codev/shared-types";
 
@@ -38,9 +43,12 @@ export function oauthCallbackPath(provider: OAuthProvider) {
 }
 
 function cookieSecret() {
-  const secret = process.env.AUTH_SECRET ?? process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const secret =
+    process.env.AUTH_SECRET ?? process.env.CREDENTIAL_ENCRYPTION_KEY;
   if (!secret) {
-    throw new Error("AUTH_SECRET or CREDENTIAL_ENCRYPTION_KEY is required for OAuth state.");
+    throw new Error(
+      "AUTH_SECRET or CREDENTIAL_ENCRYPTION_KEY is required for OAuth state.",
+    );
   }
   return secret;
 }
@@ -89,7 +97,9 @@ export function openOAuthState(value: string): OAuthState {
   return parsed as OAuthState;
 }
 
-export function createOAuthState(input: Omit<OAuthState, "state" | "codeVerifier">) {
+export function createOAuthState(
+  input: Omit<OAuthState, "state" | "codeVerifier">,
+) {
   return {
     ...input,
     state: randomBytes(32).toString("base64url"),
@@ -208,7 +218,9 @@ export async function exchangeOAuthCode(
     cache: "no-store",
   });
   if (!response.ok) {
-    throw new Error(`OAuth token exchange failed with status ${response.status}.`);
+    throw new Error(
+      `OAuth token exchange failed with status ${response.status}.`,
+    );
   }
   const payload = (await response.json()) as Record<string, unknown>;
   if (typeof payload.access_token !== "string") {

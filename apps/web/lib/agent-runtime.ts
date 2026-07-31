@@ -1,13 +1,14 @@
 import "server-only";
 
+import { generateText, jsonSchema, stepCountIs, tool, type ToolSet } from "ai";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 
 import { schema } from "@codev/db";
 import { createAgentEvent } from "@codev/shared-types";
 
-import { getAgentModel, getAgentProvider } from "./ai-model";
-import { getOpenAIApiKeyForAgent } from "./credentials";
+import { createAgentModel, getAgentModel, getAgentProvider } from "./ai-model";
+import { resolveAgentCredential } from "./credentials";
 import { getDatabase } from "./database";
 import {
   createCoordinationMessage,
@@ -27,7 +28,6 @@ import {
 } from "./orchestrator";
 import { appendWorkspaceStateEvent } from "./workspace-state";
 
-const MODEL = getAgentModel("openai");
 const MAX_TOOL_ROUNDS = 12;
 
 const tools: OpenAI.Responses.Tool[] = [
@@ -676,15 +676,84 @@ async function executeTool(
   }
 }
 
+function createAgentTools(context: AgentContext): ToolSet {
+  const functionTools = tools.filter(
+    (
+      definition,
+    ): definition is Extract<OpenAI.Responses.Tool, { type: "function" }> =>
+      definition.type === "function",
+  );
+  return Object.fromEntries(
+    functionTools.map((definition) => [
+      definition.name,
+      tool<Record<string, unknown>, string, never>({
+        description: definition.description ?? "",
+        inputSchema: jsonSchema<Record<string, unknown>>(
+          definition.parameters as never,
+        ),
+        execute: async (input: Record<string, unknown>, options) => {
+          await addEvent(
+            context,
+            `${options.toolCallId}:called`,
+            "tool.called",
+            {
+              callId: options.toolCallId,
+              name: definition.name,
+              arguments: JSON.stringify(input),
+            },
+          );
+          try {
+            const output = await executeTool(
+              context,
+              definition.name,
+              JSON.stringify(input),
+            );
+            await addEvent(
+              context,
+              `${options.toolCallId}:completed`,
+              "tool.completed",
+              {
+                callId: options.toolCallId,
+                name: definition.name,
+                output: output.slice(0, 4_000),
+              },
+            );
+            return output;
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Tool execution failed.";
+            await addEvent(
+              context,
+              `${options.toolCallId}:failed`,
+              "tool.failed",
+              {
+                callId: options.toolCallId,
+                name: definition.name,
+                error: message,
+              },
+            );
+            throw error;
+          }
+        },
+      }),
+    ]),
+  ) as ToolSet;
+}
+
 export async function runAgentTurn(turnId: string) {
   "use step";
 
   const context = await loadAgentContext(turnId);
-  const { apiKey } = await getOpenAIApiKeyForAgent(
+  const provider = getAgentProvider();
+  const credential = await resolveAgentCredential(
     context.authorId,
     context.workspaceId,
+    provider,
   );
-  const client = new OpenAI({ apiKey });
+  const model = createAgentModel(
+    credential,
+    context.model || getAgentModel(provider),
+  );
   const history = await getDatabase()
     .select({
       prompt: schema.agentTurns.prompt,
@@ -710,86 +779,33 @@ export async function runAgentTurn(turnId: string) {
     model: context.model,
   });
 
-  let input: OpenAI.Responses.ResponseInput = [
-    {
-      role: "user",
-      content: `Repository session transcript:\n${transcript}\n\nComplete the latest request. Inspect the repository before editing.`,
-    },
-  ];
-  let previousResponseId: string | undefined;
   let finalOutput = "";
-
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    if (await turnWasInterrupted(turnId)) return;
-    const response = await client.responses.create({
-      model: context.model || MODEL,
-      max_output_tokens: 4096,
-      reasoning: { effort: "medium" },
-      instructions:
-        "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",
-      input,
-      tools,
-      ...(previousResponseId
-        ? { previous_response_id: previousResponseId }
-        : {}),
-    });
-    previousResponseId = response.id;
-    finalOutput = response.output_text || finalOutput;
-    if (response.output_text) {
-      await addEvent(context, `${response.id}:output`, "agent.output", {
-        text: response.output_text,
-      });
-    }
-    const calls = response.output.filter(
-      (item): item is OpenAI.Responses.ResponseFunctionToolCall =>
-        item.type === "function_call",
-    );
-    if (calls.length === 0) break;
-
-    const toolOutputs: OpenAI.Responses.ResponseInputItem[] = [];
-    for (const call of calls) {
-      if (await turnWasInterrupted(turnId)) return;
-      await addEvent(context, `${call.call_id}:called`, "tool.called", {
-        callId: call.call_id,
-        name: call.name,
-        arguments: call.arguments,
-      });
-      try {
-        const output = await executeTool(context, call.name, call.arguments);
-        await addEvent(context, `${call.call_id}:completed`, "tool.completed", {
-          callId: call.call_id,
-          name: call.name,
-          output: output.slice(0, 4_000),
-        });
-        toolOutputs.push({
-          type: "function_call_output",
-          call_id: call.call_id,
-          output,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Tool execution failed.";
-        await addEvent(context, `${call.call_id}:failed`, "tool.failed", {
-          callId: call.call_id,
-          name: call.name,
-          error: message,
-        });
-        toolOutputs.push({
-          type: "function_call_output",
-          call_id: call.call_id,
-          output: JSON.stringify({ error: message }),
+  if (await turnWasInterrupted(turnId)) return;
+  const response = await generateText({
+    model,
+    maxOutputTokens: 4096,
+    stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
+    system:
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",
+    prompt: `Repository session transcript:\n${transcript}\n\nComplete the latest request. Inspect the repository before editing.`,
+    tools: createAgentTools(context),
+    onStepEnd: async ({ text, response: stepResponse }) => {
+      if (text) {
+        finalOutput = text;
+        await addEvent(context, `${stepResponse.id}:output`, "agent.output", {
+          text,
         });
       }
-    }
-    input = toolOutputs;
-  }
+    },
+  });
+  finalOutput = response.text || finalOutput;
 
   if (await turnWasInterrupted(turnId)) return;
   await getDatabase()
     .update(schema.agentTurns)
     .set({
       status: "completed",
-      responseId: previousResponseId,
+      responseId: response.response.id,
       output: finalOutput || "Completed without a textual summary.",
       finishedAt: new Date(),
       updatedAt: new Date(),

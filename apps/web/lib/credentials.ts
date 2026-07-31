@@ -383,14 +383,36 @@ export async function saveProviderCredential(input: {
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
 
-  const encryptedApiKey = input.apiKey
-    ? await encryptSecret(input.apiKey, providerContext())
+  if (credentialType === "API_KEY" && !input.apiKey?.trim()) {
+    throw new Error("An API key is required for this credential type.");
+  }
+  if (credentialType === "OAUTH_TOKEN" && !input.accessToken?.trim()) {
+    throw new Error(
+      "An OAuth access token is required for this credential type.",
+    );
+  }
+  if (credentialType === "AWS_BEDROCK_ROLE" && !input.awsRoleArn?.trim()) {
+    throw new Error(
+      "An AWS Bedrock role ARN is required for this credential type.",
+    );
+  }
+  if (
+    credentialType === "AZURE_ENDPOINT" &&
+    (!input.apiKey?.trim() || !input.endpointUrl?.trim())
+  ) {
+    throw new Error(
+      "An Azure endpoint and API key are required for this credential type.",
+    );
+  }
+
+  const encryptedApiKey = input.apiKey?.trim()
+    ? await encryptSecret(input.apiKey.trim(), providerContext())
     : null;
-  const encryptedAccessToken = input.accessToken
-    ? await encryptSecret(input.accessToken, providerContext())
+  const encryptedAccessToken = input.accessToken?.trim()
+    ? await encryptSecret(input.accessToken.trim(), providerContext())
     : null;
-  const encryptedRefreshToken = input.refreshToken
-    ? await encryptSecret(input.refreshToken, providerContext())
+  const encryptedRefreshToken = input.refreshToken?.trim()
+    ? await encryptSecret(input.refreshToken.trim(), providerContext())
     : null;
 
   await getDatabase()
@@ -447,6 +469,54 @@ export async function saveOpenAICredential(userId: string, apiKey: string) {
     apiKey: normalized,
     lastFour: normalized.slice(-4),
   });
+}
+
+export async function saveAnthropicCredential(userId: string, apiKey: string) {
+  const normalized = apiKey.trim();
+  if (!normalized.startsWith("sk-ant-") || normalized.length < 20) {
+    throw new Error("Enter a valid Anthropic API key.");
+  }
+  await saveProviderCredential({
+    scopeType: "USER",
+    scopeId: userId,
+    provider: "anthropic",
+    credentialType: "API_KEY",
+    apiKey: normalized,
+    lastFour: normalized.slice(-4),
+  });
+}
+
+export async function getProviderCredentialStatus(
+  scopeType: ScopeType,
+  scopeId: string,
+  provider: AuthProvider,
+) {
+  const credential = await findCredential(scopeType, scopeId, provider);
+  return credential
+    ? {
+        credentialType: credential.credentialType as CredentialType,
+        lastFour: credential.lastFour ?? undefined,
+        endpointUrl: credential.endpointUrl ?? undefined,
+        awsRoleArn: credential.awsRoleArn ?? undefined,
+        updatedAt: credential.updatedAt,
+      }
+    : null;
+}
+
+export async function deleteProviderCredential(
+  scopeType: ScopeType,
+  scopeId: string,
+  provider: AuthProvider,
+) {
+  await getDatabase()
+    .delete(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
+        eq(schema.providerCredentials.scopeId, scopeId),
+        eq(schema.providerCredentials.provider, parseProvider(provider)),
+      ),
+    );
 }
 
 export async function getOpenAICredentialStatus(userId: string) {
