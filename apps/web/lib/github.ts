@@ -65,7 +65,7 @@ async function refreshGitHubToken(
       client_id: clientId,
       client_secret: clientSecret,
       grant_type: "refresh_token",
-      refresh_token: decryptSecret(connection.encryptedRefreshToken),
+      refresh_token: await decryptSecret(connection.encryptedRefreshToken),
     }),
     cache: "no-store",
   });
@@ -88,9 +88,9 @@ async function refreshGitHubToken(
   await getDatabase()
     .update(schema.githubConnections)
     .set({
-      encryptedAccessToken: encryptSecret(payload.access_token),
+      encryptedAccessToken: await encryptSecret(payload.access_token),
       encryptedRefreshToken: payload.refresh_token
-        ? encryptSecret(payload.refresh_token)
+        ? await encryptSecret(payload.refresh_token)
         : connection.encryptedRefreshToken,
       accessTokenExpiresAt: payload.expires_in
         ? new Date(now + payload.expires_in * 1000)
@@ -98,6 +98,7 @@ async function refreshGitHubToken(
       refreshTokenExpiresAt: payload.refresh_token_expires_in
         ? new Date(now + payload.refresh_token_expires_in * 1000)
         : connection.refreshTokenExpiresAt,
+      keyVersion: 2,
       updatedAt: new Date(),
     })
     .where(eq(schema.githubConnections.userId, userId));

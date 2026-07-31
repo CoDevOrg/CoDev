@@ -8,9 +8,9 @@ import { schema } from "@codev/db";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { apiError, getApiUser } from "@/lib/api";
-import { getOpenAIModel } from "@/lib/ai-model";
+import { getAgentModel, getAgentProvider } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
-import { getOpenAICredentialStatus } from "@/lib/credentials";
+import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
 import { getGitHubUserToken } from "@/lib/github";
 import {
@@ -23,6 +23,10 @@ import {
 } from "@/lib/workspaces";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { readWorkspaceStateEvents } from "@/lib/workspace-state";
+import {
+  AgentPromptRateLimitError,
+  enforceAgentPromptRateLimit,
+} from "@/lib/agent-rate-limit";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(32),
@@ -126,14 +130,9 @@ export async function POST(
 
   try {
     const input = createSchema.parse(await request.json());
-    if (!(await getOpenAICredentialStatus(user.id))) {
-      return apiError(
-        new Error(
-          "Add an OpenAI API key in Settings before starting an agent.",
-        ),
-        409,
-      );
-    }
+    const provider = getAgentProvider();
+    await resolveAgentCredential(user.id, workspaceId, provider);
+    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const issue = input.issueNumber
       ? await getExactGitHubIssue(
@@ -232,7 +231,7 @@ export async function POST(
             createdBy: user.id,
             issueNumber: issue?.number,
             name: input.name,
-            model: getOpenAIModel(),
+            model: getAgentModel(provider),
           })
           .returning({ id: schema.agentSessions.id });
         if (!session) throw new Error("Could not create the agent session.");
@@ -293,6 +292,15 @@ export async function POST(
       throw error;
     }
   } catch (error) {
+    if (error instanceof AgentPromptRateLimitError) {
+      return Response.json(
+        { error: error.message, code: "agent_prompt_rate_limit" },
+        {
+          status: 429,
+          headers: { "Retry-After": String(error.retryAfterSeconds) },
+        },
+      );
+    }
     return apiError(
       error,
       error instanceof DuplicateIssueError ||

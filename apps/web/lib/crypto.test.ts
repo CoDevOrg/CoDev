@@ -15,11 +15,11 @@ describe("secret protection", () => {
     );
   });
 
-  it("encrypts values with authenticated encryption", () => {
-    const encrypted = encryptSecret("sk-test-secret");
+  it("encrypts values with authenticated encryption", async () => {
+    const encrypted = await encryptSecret("sk-test-secret");
 
     expect(encrypted).not.toContain("sk-test-secret");
-    expect(decryptSecret(encrypted)).toBe("sk-test-secret");
+    await expect(decryptSecret(encrypted)).resolves.toBe("sk-test-secret");
   });
 
   it("hashes invite tokens before persistence", () => {

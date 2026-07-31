@@ -1,13 +1,20 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
 
 import { createAgentEvent, type AgentEvent } from "@codev/shared-types";
 
 import { apiError, getApiUser } from "@/lib/api";
-import { getOpenAIModel } from "@/lib/ai-model";
+import {
+  createAgentModel,
+  getAgentModel,
+  getAgentProvider,
+} from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
-import { getOpenAIApiKey } from "@/lib/credentials";
+import { resolveAgentCredential } from "@/lib/credentials";
+import {
+  AgentPromptRateLimitError,
+  enforceAgentPromptRateLimit,
+} from "@/lib/agent-rate-limit";
 import { readSandboxFile, searchSandboxFiles } from "@/lib/orchestrator";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { appendWorkspaceStateEvent } from "@/lib/workspace-state";
@@ -76,13 +83,20 @@ function eventFor(
   type: AgentEvent["type"],
   payload: AgentEvent["payload"],
 ) {
+  const provider = getAgentProvider();
+  const modelProvider: AgentEvent["modelProvider"] =
+    provider === "openai"
+      ? "openai"
+      : provider === "anthropic" || provider === "bedrock"
+        ? "anthropic"
+        : "custom";
   return createAgentEvent({
     workspaceId,
     sessionId,
     turnId,
     actor,
-    modelProvider: "openai",
-    modelName: getOpenAIModel(),
+    modelProvider,
+    modelName: getAgentModel(provider),
     type,
     payload,
   });
@@ -122,10 +136,17 @@ export async function POST(
             : "CoDev user",
       avatarUrl: safeAvatar(user.image),
     };
-    const apiKey = await getOpenAIApiKey(user.id);
-    const model = createOpenAI({ apiKey })(getOpenAIModel());
+    const provider = getAgentProvider();
+    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
+    const credential = await resolveAgentCredential(
+      user.id,
+      workspaceId,
+      provider,
+    );
+    const model = createAgentModel(credential, getAgentModel(provider));
     const result = streamText({
       model,
+      maxOutputTokens: 4096,
       abortSignal: request.signal,
       stopWhen: stepCountIs(3),
       system:
@@ -391,6 +412,15 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof AgentPromptRateLimitError) {
+      return Response.json(
+        { error: error.message, code: "agent_prompt_rate_limit" },
+        {
+          status: 429,
+          headers: { "Retry-After": String(error.retryAfterSeconds) },
+        },
+      );
+    }
     return apiError(error);
   }
 }

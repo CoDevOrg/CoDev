@@ -54,3 +54,5 @@ minimumReleaseAgeExclude:
   - "@ai-sdk/openai@4.0.25"
   - "@ai-sdk/provider-utils@5.0.16"
   - ai@7.0.44
+  - '@ai-sdk/amazon-bedrock@5.0.38'
+  - '@ai-sdk/anthropic@4.0.25'

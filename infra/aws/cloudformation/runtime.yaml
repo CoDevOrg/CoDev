@@ -136,6 +136,27 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref RuntimeVpc
 
+  CredentialEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Envelope encryption key for CoDev provider credentials
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnableRootAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+
+  CredentialEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/codev-credentials
+      TargetKeyId: !Ref CredentialEncryptionKey
+
   ProxyLambdaToHostEgress:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -535,6 +556,9 @@ Resources:
         }
 
 Outputs:
+  CredentialEncryptionKeyArn:
+    Description: Configure this ARN as CREDENTIAL_KMS_KEY_ID in the Vercel control-plane environment.
+    Value: !GetAtt CredentialEncryptionKey.Arn
   ApiId:
     Value: !Ref RuntimeApi
   ApiUrl:

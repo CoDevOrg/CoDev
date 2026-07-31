@@ -31,6 +31,7 @@ apt-get install -y \
   curl \
   e2fsprogs \
   git \
+  iptables \
   jq \
   squashfs-tools \
   xfsprogs
@@ -180,6 +181,43 @@ fs.protected_symlinks=1
 SYSCTL
 sysctl --system
 
+# Every microVM packet traverses the host FORWARD chain. Do not rely only on
+# IMDSv2's hop limit: an escaped or misconfigured guest must never obtain the
+# host instance profile credentials. The remaining rules limit guest egress to
+# package/repository HTTPS and HTTP traffic and prevent SSH/SMTP abuse.
+cat >/usr/local/sbin/codev-firecracker-network-isolation <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+add_rule() {
+  iptables -C FORWARD "$@" 2>/dev/null || iptables -A FORWARD "$@"
+}
+
+add_rule -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+add_rule -d 169.254.169.254/32 -j DROP
+add_rule -p tcp --dport 22 -j DROP
+add_rule -p tcp --dport 25 -j DROP
+add_rule -p tcp -m multiport --dports 80,443 -j ACCEPT
+add_rule -j DROP
+SCRIPT
+chmod 0700 /usr/local/sbin/codev-firecracker-network-isolation
+
+cat >/etc/systemd/system/codev-firecracker-network-isolation.service <<'UNIT'
+[Unit]
+Description=CoDev Firecracker guest network isolation
+After=network-online.target
+Wants=network-online.target
+Before=codev-orchestrator.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/codev-firecracker-network-isolation
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 modprobe kvm
 test -r /dev/kvm
 test -w /dev/kvm
@@ -189,6 +227,8 @@ cat >/etc/systemd/system/codev-orchestrator.service <<'UNIT'
 Description=CoDev Firecracker orchestrator
 After=network-online.target
 Wants=network-online.target
+Requires=codev-firecracker-network-isolation.service
+After=codev-firecracker-network-isolation.service
 
 [Service]
 Type=simple
@@ -237,6 +277,8 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<AGENT
 AGENT
 
 systemctl daemon-reload
+systemctl enable codev-firecracker-network-isolation.service
+systemctl start codev-firecracker-network-isolation.service
 systemctl enable codev-orchestrator.service
 systemctl enable amazon-cloudwatch-agent.service
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \

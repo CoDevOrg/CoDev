@@ -87,9 +87,9 @@ impl FirecrackerConfig {
                 "CODEV_VM_MEMORY_MIB must be between 256 and 8192".into(),
             ));
         }
-        if !(1..=20).contains(&config.workspace_disk_gib) {
+        if !(1..=10).contains(&config.workspace_disk_gib) {
             return Err(RuntimeError::BadRequest(
-                "CODEV_VM_DISK_GIB must be between 1 and 20".into(),
+                "CODEV_VM_DISK_GIB must be between 1 and 10".into(),
             ));
         }
         if config.idle_timeout < Duration::from_secs(60)
@@ -163,25 +163,46 @@ impl FirecrackerApiClient {
             .write_all(&body)
             .await
             .map_err(RuntimeError::internal)?;
-        let mut response = Vec::new();
-        timeout(Duration::from_secs(30), stream.read_to_end(&mut response))
+        // A full snapshot includes the guest memory file and can exceed the
+        // normal control-plane request budget on a cold host. Keep the short
+        // timeout for interactive API calls while allowing snapshot creation
+        // enough time to finish; restore is still measured independently.
+        let request_timeout = if path == "/snapshot/create" {
+            Duration::from_secs(600)
+        } else {
+            Duration::from_secs(30)
+        };
+        let headers = timeout(
+            request_timeout,
+            read_until_sequence(&mut stream, b"\r\n\r\n", 64 << 10),
+        )
+        .await
+        .map_err(|_| RuntimeError::Timeout("Firecracker API request timed out".into()))?
+        .map_err(RuntimeError::internal)?;
+        let header_text = String::from_utf8_lossy(&headers);
+        let content_length = header_text
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+            .unwrap_or(0);
+        let mut response_body = vec![0; content_length];
+        timeout(request_timeout, stream.read_exact(&mut response_body))
             .await
             .map_err(|_| RuntimeError::Timeout("Firecracker API request timed out".into()))?
             .map_err(RuntimeError::internal)?;
 
-        let header_end = response
-            .windows(4)
-            .position(|window| window == b"\r\n\r\n")
-            .ok_or_else(|| RuntimeError::Internal("invalid Firecracker API response".into()))?;
-        let headers = String::from_utf8_lossy(&response[..header_end]);
-        let status = headers
+        let status = header_text
             .lines()
             .next()
             .and_then(|line| line.split_whitespace().nth(1))
             .and_then(|value| value.parse::<u16>().ok())
             .ok_or_else(|| RuntimeError::Internal("invalid Firecracker API status".into()))?;
         if !(200..300).contains(&status) {
-            let body = String::from_utf8_lossy(&response[header_end + 4..]);
+            let body = String::from_utf8_lossy(&response_body);
             return Err(RuntimeError::Internal(format!(
                 "Firecracker API {method} {path} failed with HTTP {status}: {}",
                 body.trim()
@@ -218,7 +239,6 @@ impl FirecrackerApiClient {
                     "backend_path": "/mem_file",
                     "backend_type": "File"
                 },
-                "vsock_override": { "uds_path": "/guest.vsock" },
                 "resume_vm": true
             }),
         )
@@ -229,6 +249,28 @@ impl FirecrackerApiClient {
         self.request("PATCH", "/vm", json!({ "state": "Resumed" }))
             .await
     }
+}
+
+async fn read_until_sequence(
+    stream: &mut UnixStream,
+    sequence: &[u8],
+    limit: usize,
+) -> Result<Vec<u8>> {
+    let mut output = Vec::new();
+    while output.len() < limit {
+        let mut byte = [0_u8; 1];
+        stream
+            .read_exact(&mut byte)
+            .await
+            .map_err(RuntimeError::internal)?;
+        output.push(byte[0]);
+        if output.ends_with(sequence) {
+            return Ok(output);
+        }
+    }
+    Err(RuntimeError::Internal(
+        "Firecracker response headers exceed 64 KiB".into(),
+    ))
 }
 
 pub struct FirecrackerBackend {
@@ -1246,7 +1288,7 @@ async fn link_or_copy(source: &Path, destination: &Path) -> Result<()> {
 /// an incorrectly configured host.
 async fn clone_or_copy(source: &Path, destination: &Path) -> Result<()> {
     let output = Command::new("cp")
-        .args(["--reflink=always", "--sparse=always"])
+        .args(["--reflink=always", "--sparse=auto"])
         .arg(source)
         .arg(destination)
         .output()

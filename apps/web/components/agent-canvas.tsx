@@ -11,7 +11,9 @@ import {
   type ToolCallMessagePartProps,
   useLocalRuntime,
 } from "@assistant-ui/react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+
+import { ReportAgentBug, type AgentBugReportContext } from "./report-agent-bug";
 
 type WireEvent = {
   kind: "text" | "tool-call" | "tool-result" | "error";
@@ -33,7 +35,11 @@ function textFromMessage(message: ThreadMessage) {
     .join("\n");
 }
 
-function createAgentModel(workspaceId: string): ChatModelAdapter {
+function createAgentModel(
+  workspaceId: string,
+  addCycle: (cycle: { prompt: string; response: string }) => void,
+  addTerminalError: (error: string) => void,
+): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       const prompt = textFromMessage(messages.at(-1) as ThreadMessage);
@@ -50,9 +56,10 @@ function createAgentModel(workspaceId: string): ChatModelAdapter {
         const body = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(
-          body?.error ?? `Agent request failed (${response.status}).`,
-        );
+        const message =
+          body?.error ?? `Agent request failed (${response.status}).`;
+        addTerminalError(message);
+        throw new Error(message);
       }
 
       const reader = response.body.getReader();
@@ -90,7 +97,9 @@ function createAgentModel(workspaceId: string): ChatModelAdapter {
             });
           }
         } else if (event.kind === "error") {
-          throw new Error(event.message ?? "Agent stream failed.");
+          const message = event.message ?? "Agent stream failed.";
+          addTerminalError(message);
+          throw new Error(message);
         }
       };
 
@@ -111,6 +120,7 @@ function createAgentModel(workspaceId: string): ChatModelAdapter {
         consume(JSON.parse(buffer) as WireEvent);
         yield { content: parts() };
       }
+      addCycle({ prompt, response: text });
     },
   };
 }
@@ -165,7 +175,23 @@ function AssistantMessage() {
 }
 
 export function AgentCanvas({ workspaceId }: { workspaceId: string }) {
-  const model = useMemo(() => createAgentModel(workspaceId), [workspaceId]);
+  const [cycles, setCycles] = useState<AgentBugReportContext["cycles"]>([]);
+  const [terminalErrors, setTerminalErrors] = useState<
+    AgentBugReportContext["terminalErrors"]
+  >([]);
+  const addCycle = useCallback(
+    (cycle: AgentBugReportContext["cycles"][number]) => {
+      setCycles((current) => [...current, cycle].slice(-5));
+    },
+    [],
+  );
+  const addTerminalError = useCallback((error: string) => {
+    setTerminalErrors((current) => [...current, error].slice(-20));
+  }, []);
+  const model = useMemo(
+    () => createAgentModel(workspaceId, addCycle, addTerminalError),
+    [addCycle, addTerminalError, workspaceId],
+  );
   const runtime = useLocalRuntime(model);
 
   return (
@@ -176,7 +202,15 @@ export function AgentCanvas({ workspaceId }: { workspaceId: string }) {
             <span className="eyebrow">Agent-first canvas</span>
             <h2>Build with the workspace agent</h2>
           </div>
-          <span className="agent-canvas-status">streaming · tools · diffs</span>
+          <div className="agent-canvas-header-actions">
+            <span className="agent-canvas-status">
+              streaming · tools · diffs
+            </span>
+            <ReportAgentBug
+              workspaceId={workspaceId}
+              getContext={() => ({ cycles, terminalErrors })}
+            />
+          </div>
         </div>
         <ThreadPrimitive.Root className="agent-canvas-thread">
           <ThreadPrimitive.Viewport autoScroll>
