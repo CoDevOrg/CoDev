@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chrono::{DateTime, Utc};
+use chrono::{Duration, Utc};
 
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
@@ -18,6 +18,7 @@ mod firecracker;
 #[cfg(target_os = "linux")]
 pub use firecracker::{FirecrackerBackend, FirecrackerConfig};
 
+#[allow(clippy::large_enum_variant)]
 pub enum Backend {
     Fake(FakeBackend),
     #[cfg(target_os = "linux")]
@@ -77,11 +78,19 @@ impl Backend {
         }
     }
 
-    pub async fn reap_idle(&self, cutoff: DateTime<Utc>) -> Result<Vec<String>> {
+    pub async fn resume(&self, workspace_id: &str) -> Result<()> {
         match self {
-            Self::Fake(backend) => backend.reap_idle(cutoff),
+            Self::Fake(backend) => backend.resume(workspace_id),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.reap_idle(cutoff).await,
+            Self::Firecracker(backend) => backend.resume(workspace_id).await,
+        }
+    }
+
+    pub async fn discard_snapshot(&self, workspace_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.discard_snapshot(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.discard_snapshot(workspace_id).await,
         }
     }
 
@@ -295,6 +304,18 @@ impl Backend {
         }
     }
 
+    pub async fn snapshot_workspace(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        match self {
+            Self::Fake(backend) => backend.snapshot_workspace(workspace_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.snapshot_workspace(workspace_id, request).await,
+        }
+    }
+
     pub async fn git_status(
         &self,
         workspace_id: &str,
@@ -381,7 +402,9 @@ impl FakeBackend {
         let instance = instances
             .get_mut(workspace_id)
             .ok_or(RuntimeError::SandboxNotFound)?;
-        instance.last_activity_at = Utc::now();
+        let now = Utc::now();
+        instance.last_activity_at = now;
+        instance.expires_at = now + Duration::hours(4);
         Ok(instance.clone())
     }
 
@@ -394,20 +417,12 @@ impl FakeBackend {
             .ok_or(RuntimeError::SandboxNotFound)
     }
 
-    fn reap_idle(&self, cutoff: DateTime<Utc>) -> Result<Vec<String>> {
-        let now = Utc::now();
-        let mut instances = self.instances.write().expect("fake backend lock");
-        let ids: Vec<_> = instances
-            .iter()
-            .filter(|(_, instance)| {
-                instance.last_activity_at < cutoff || instance.expires_at <= now
-            })
-            .map(|(id, _)| id.clone())
-            .collect();
-        for id in &ids {
-            instances.remove(id);
-        }
-        Ok(ids)
+    fn resume(&self, workspace_id: &str) -> Result<()> {
+        self.get(workspace_id).map(|_| ())
+    }
+
+    fn discard_snapshot(&self, _workspace_id: &str) -> Result<()> {
+        Ok(())
     }
 
     fn read_file(
@@ -541,6 +556,19 @@ impl FakeBackend {
         })
     }
 
+    fn snapshot_workspace(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        self.get(workspace_id)?;
+        Ok(PublicationExportResponse {
+            head_sha: request.expected_head_sha,
+            files: Vec::new(),
+            total_bytes: 0,
+        })
+    }
+
     fn git_diff(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {
         self.get(workspace_id)?;
         Ok(String::new())
@@ -552,6 +580,7 @@ mod tests {
     use chrono::Duration;
 
     use super::*;
+    use crate::model::{SandboxLifecycleHooks, SandboxLifecycleOptions};
 
     #[tokio::test]
     async fn fake_backend_lifecycle() {
@@ -562,6 +591,14 @@ mod tests {
             repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
+            resume_from_snapshot: false,
+            lifecycle: SandboxLifecycleOptions {
+                timeout_ms: 14_400_000,
+                lifecycle: SandboxLifecycleHooks {
+                    on_timeout: "pause".into(),
+                    auto_resume: true,
+                },
+            },
         };
         let instance = backend.create(request).await.expect("create");
         assert_eq!(backend.active_count().await, 1);

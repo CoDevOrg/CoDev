@@ -2,13 +2,17 @@ import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
 import {
+  requireWorkspacePermission,
+  type WorkspacePermission,
+} from "@/lib/access";
+import {
   closeSandboxTerminal,
   pollSandboxTerminal,
   resizeSandboxTerminal,
   sendSandboxTerminalInput,
   startSandboxTerminal,
 } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 
 const sessionIdSchema = z.string().regex(/^term-[0-9]+-[0-9]+$/);
 const dimensionsSchema = z.object({
@@ -34,31 +38,53 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-async function authorizedWorkspace(workspaceId: string) {
+async function authorizedWorkspace(
+  workspaceId: string,
+  permission: WorkspacePermission,
+) {
   const user = await getApiUser();
   if (!user)
     return { response: apiError(new Error("Authentication required."), 401) };
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace)
-    return { response: apiError(new Error("Workspace not found."), 404) };
-  if (!workspace.canTerminal) {
+  try {
+    const access = await requireWorkspacePermission(
+      workspaceId,
+      user.id,
+      permission,
+    );
+    return { access, userId: user.id };
+  } catch (error) {
     return {
-      response: apiError(new Error("Terminal capability is required."), 403),
+      response: apiError(
+        error,
+        error instanceof Error && "status" in error
+          ? Number(error.status)
+          : 403,
+      ),
     };
   }
-  return { workspace };
 }
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
-  const { workspaceId } = await params;
-  const authorization = await authorizedWorkspace(workspaceId);
-  if ("response" in authorization) return authorization.response;
-
   try {
     const input = actionSchema.parse(await request.json());
+    const { workspaceId } = await params;
+    const authorization = await authorizedWorkspace(
+      workspaceId,
+      input.action === "input" || input.action === "resize"
+        ? "terminalWrite"
+        : "terminal",
+    );
+    if ("response" in authorization) return authorization.response;
+    if (input.action !== "poll") {
+      await ensureWorkspaceRuntimeReady(
+        workspaceId,
+        authorization.userId,
+        authorization.access.permissions.terminalWrite ? "coSteer" : "review",
+      );
+    }
     switch (input.action) {
       case "start": {
         const sessionId = await startSandboxTerminal(workspaceId, input);
@@ -93,7 +119,7 @@ export async function DELETE(
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
   const { workspaceId } = await params;
-  const authorization = await authorizedWorkspace(workspaceId);
+  const authorization = await authorizedWorkspace(workspaceId, "terminalWrite");
   if ("response" in authorization) return authorization.response;
 
   try {

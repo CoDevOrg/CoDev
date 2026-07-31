@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
+import { requireWorkspacePermission } from "@/lib/access";
 import { updateCoordinationMessageStatus } from "@/lib/agent-coordination";
-import { getWorkspaceForMember } from "@/lib/workspaces";
 
 const inputSchema = z.object({
   status: z.enum(["delivered", "resolved"]),
@@ -23,8 +23,13 @@ export async function PATCH(
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId, sessionId, messageId } = await params;
-  if (!(await getWorkspaceForMember(workspaceId, user.id))) {
-    return apiError(new Error("Workspace not found."), 404);
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
   }
   try {
     const input = inputSchema.parse(await request.json());

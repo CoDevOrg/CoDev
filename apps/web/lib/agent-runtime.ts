@@ -4,9 +4,11 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 
 import { schema } from "@codev/db";
+import { createAgentEvent } from "@codev/shared-types";
 
 import { getOpenAIApiKey } from "./credentials";
 import { getDatabase } from "./database";
+import { getOpenAIModel } from "./ai-model";
 import {
   createCoordinationMessage,
   createPathClaim,
@@ -23,8 +25,9 @@ import {
   readSandboxFile,
   writeSandboxFile,
 } from "./orchestrator";
+import { appendWorkspaceStateEvent } from "./workspace-state";
 
-const MODEL = "gpt-5.6-sol";
+const MODEL = getOpenAIModel();
 const MAX_TOOL_ROUNDS = 12;
 
 const tools: OpenAI.Responses.Tool[] = [
@@ -221,15 +224,74 @@ type AgentContext = {
 };
 
 async function addEvent(
-  context: Pick<AgentContext, "workspaceId" | "sessionId" | "turnId">,
+  context: AgentContext,
   idempotencyKey: string,
   type: string,
   payload: Record<string, unknown>,
 ) {
-  await getDatabase()
+  const toolName =
+    typeof payload.name === "string" ? payload.name : "workspace tool";
+  const toolCallId =
+    typeof payload.callId === "string" ? payload.callId : idempotencyKey;
+  const output =
+    typeof payload.text === "string"
+      ? payload.text
+      : typeof payload.output === "string"
+        ? payload.output
+        : undefined;
+  const error = typeof payload.error === "string" ? payload.error : undefined;
+  const canonicalType =
+    type === "turn.started"
+      ? "USER_PROMPT"
+      : type === "agent.output" || type === "turn.completed"
+        ? "AGENT_THOUGHT"
+        : type === "tool.called"
+          ? "TOOL_CALL_INIT"
+          : "TOOL_CALL_RESULT";
+  const agentEvent = createAgentEvent({
+    workspaceId: context.workspaceId,
+    sessionId: context.sessionId,
+    turnId: context.turnId,
+    actor: {
+      userId: context.authorId,
+      userName: "CoDev workspace agent",
+      avatarUrl: null,
+    },
+    modelProvider: "openai",
+    modelName: context.model || MODEL,
+    type: canonicalType,
+    payload:
+      canonicalType === "USER_PROMPT"
+        ? { promptText: context.prompt }
+        : canonicalType === "AGENT_THOUGHT"
+          ? { outputStream: output ?? context.prompt }
+          : canonicalType === "TOOL_CALL_INIT"
+            ? {
+                toolName,
+                toolCallId,
+                metadata: { arguments: payload.arguments ?? null },
+              }
+            : {
+                toolName,
+                toolCallId,
+                outputStream: output,
+                status: error ? "failed" : "completed",
+                error,
+              },
+  });
+  const [inserted] = await getDatabase()
     .insert(schema.agentEvents)
-    .values({ ...context, idempotencyKey, type, payload })
-    .onConflictDoNothing({ target: schema.agentEvents.idempotencyKey });
+    .values({
+      workspaceId: context.workspaceId,
+      sessionId: context.sessionId,
+      turnId: context.turnId,
+      idempotencyKey,
+      type,
+      payload: { ...payload, agentEvent },
+    })
+    .onConflictDoNothing({ target: schema.agentEvents.idempotencyKey })
+    .returning({ id: schema.agentEvents.id });
+  if (inserted) await appendWorkspaceStateEvent(agentEvent);
 }
 
 export async function claimNextAgentTurn(sessionId: string) {
@@ -675,12 +737,14 @@ export async function runAgentTurn(turnId: string) {
     for (const call of calls) {
       if (await turnWasInterrupted(turnId)) return;
       await addEvent(context, `${call.call_id}:called`, "tool.called", {
+        callId: call.call_id,
         name: call.name,
         arguments: call.arguments,
       });
       try {
         const output = await executeTool(context, call.name, call.arguments);
         await addEvent(context, `${call.call_id}:completed`, "tool.completed", {
+          callId: call.call_id,
           name: call.name,
           output: output.slice(0, 4_000),
         });
@@ -693,6 +757,7 @@ export async function runAgentTurn(turnId: string) {
         const message =
           error instanceof Error ? error.message : "Tool execution failed.";
         await addEvent(context, `${call.call_id}:failed`, "tool.failed", {
+          callId: call.call_id,
           name: call.name,
           error: message,
         });
@@ -784,42 +849,42 @@ export async function listAgentSessions(workspaceId: string) {
     )
     .where(eq(schema.agentSessions.workspaceId, workspaceId))
     .orderBy(asc(schema.agentSessions.createdAt));
-  const result = [];
-  for (const session of sessions) {
-    const turns = await getDatabase()
-      .select({
-        id: schema.agentTurns.id,
-        prompt: schema.agentTurns.prompt,
-        status: schema.agentTurns.status,
-        output: schema.agentTurns.output,
-        lastError: schema.agentTurns.lastError,
-        createdAt: schema.agentTurns.createdAt,
-      })
-      .from(schema.agentTurns)
-      .where(eq(schema.agentTurns.sessionId, session.id))
-      .orderBy(asc(schema.agentTurns.createdAt));
-    const events = await getDatabase()
-      .select({
-        id: schema.agentEvents.id,
-        type: schema.agentEvents.type,
-        payload: schema.agentEvents.payload,
-        createdAt: schema.agentEvents.createdAt,
-      })
-      .from(schema.agentEvents)
-      .where(eq(schema.agentEvents.sessionId, session.id))
-      .orderBy(desc(schema.agentEvents.createdAt))
-      .limit(80);
-    const [claims, messages] = await Promise.all([
-      listPathClaims(workspaceId, session.id),
-      listCoordinationMessages(workspaceId, session.id),
-    ]);
-    result.push({
-      ...session,
-      turns,
-      events: events.reverse(),
-      claims,
-      messages,
-    });
-  }
-  return result;
+  return Promise.all(
+    sessions.map(async (session) => {
+      const [turns, events, claims, messages] = await Promise.all([
+        getDatabase()
+          .select({
+            id: schema.agentTurns.id,
+            prompt: schema.agentTurns.prompt,
+            status: schema.agentTurns.status,
+            output: schema.agentTurns.output,
+            lastError: schema.agentTurns.lastError,
+            createdAt: schema.agentTurns.createdAt,
+          })
+          .from(schema.agentTurns)
+          .where(eq(schema.agentTurns.sessionId, session.id))
+          .orderBy(asc(schema.agentTurns.createdAt)),
+        getDatabase()
+          .select({
+            id: schema.agentEvents.id,
+            type: schema.agentEvents.type,
+            payload: schema.agentEvents.payload,
+            createdAt: schema.agentEvents.createdAt,
+          })
+          .from(schema.agentEvents)
+          .where(eq(schema.agentEvents.sessionId, session.id))
+          .orderBy(desc(schema.agentEvents.createdAt))
+          .limit(80),
+        listPathClaims(workspaceId, session.id),
+        listCoordinationMessages(workspaceId, session.id),
+      ]);
+      return {
+        ...session,
+        turns,
+        events: events.reverse(),
+        claims,
+        messages,
+      };
+    }),
+  );
 }

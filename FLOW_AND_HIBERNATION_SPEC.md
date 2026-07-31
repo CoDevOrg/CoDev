@@ -39,13 +39,13 @@ The goal of CoDev is to make software development with AI agents as smooth and i
 
 ### Step 1: Onboarding & Instant Landing
 
-* User lands on `codev.ai` and clicks **"Sign In with GitHub"** or **"Sign In with Google"** (handled via **Clerk**).
-* Zero local keys, SSH setup, or desktop installations required.
+- User lands on `codev.ai` and clicks **"Sign In with GitHub"** or **"Sign In with Google"** (handled via **Clerk**).
+- Zero local keys, SSH setup, or desktop installations required.
 
 ### Step 2: One-Click Workspace Creation
 
-* Click **"New CoDev Workspace"**. Select a GitHub repository or template.
-* In <2s, an isolated AWS Firecracker cloud sandbox boots with pre-installed repository dependencies, environment variables, and pre-warmed agent contexts.
+- Click **"New CoDev Workspace"**. Select a GitHub repository or template.
+- In <2s, an isolated AWS Firecracker cloud sandbox boots with pre-installed repository dependencies, environment variables, and pre-warmed agent contexts.
 
 ### Step 3: Google Docs-Style Sharing & Invitations
 
@@ -90,21 +90,21 @@ type workspace
 
 ```
 
-* **Co-Steer (Editor):** Full permission to send prompts, interrupt runaway agents, run cloud terminal commands, and edit code.
-* **Reviewer (Commenter):** Can view agent timelines, inspect live terminals, and leave inline comments/diff reviews without triggering agent runs.
-* **Viewer:** Read-only access to live execution streams and previews.
+- **Co-Steer (Editor):** Full permission to send prompts, interrupt runaway agents, run cloud terminal commands, and edit code.
+- **Reviewer (Commenter):** Can view agent timelines, inspect live terminals, and leave inline comments/diff reviews without triggering agent runs.
+- **Viewer:** Read-only access to live execution streams and previews.
 
 ### Step 4: Co-Steering & Collaboration
 
-* **Multiplayer Cursors:** Yjs CRDTs track live cursors, active file views, and presence avatars in real-time.
-* **Cross-Provider Co-Steering:** User A prompts an agent using **Claude 3.5 Sonnet**. User B sees the live output stream and sends a prompt using **GPT-4o**—both execute inside the **same shared agent thread and microVM context**.
+- **Multiplayer Cursors:** Yjs CRDTs track live cursors, active file views, and presence avatars in real-time.
+- **Cross-Provider Co-Steering:** User A prompts an agent using **Claude 3.5 Sonnet**. User B sees the live output stream and sends a prompt using **GPT-4o**—both execute inside the **same shared agent thread and microVM context**.
 
 ### Step 5: Export / Finishing the Project ("The Google Doc Export")
 
 When the task is complete, users export their work directly from the browser:
 
-* **1-Click GitHub PR Creation:** Clicking **"Create PR"** invokes `@octokit/rest` to commit file diffs, create a new branch, and open a Pull Request with an auto-generated AI summary of all agent actions.
-* **1-Click Cloud Deployment:** Instantly deploy workspace builds directly to Vercel, Supabase, or AWS using the team's linked OAuth credentials.
+- **1-Click GitHub PR Creation:** Clicking **"Create PR"** invokes `@octokit/rest` to commit file diffs, create a new branch, and open a Pull Request with an auto-generated AI summary of all agent actions.
+- **1-Click Cloud Deployment:** Instantly deploy workspace builds directly to Vercel, Supabase, or AWS using the team's linked OAuth credentials.
 
 ---
 
@@ -171,31 +171,30 @@ To guarantee **zero lost context or state**, state persistence is split into two
 
 #### 1. Layer A: UI & Conversation State (Database Layer)
 
-* **Technology:** **Yjs CRDTs + PostgreSQL + `@hocuspocus/extension-database`**
-* **Mechanism:** Every prompt, tool card, code comment, and agent action is continuously written as binary CRDT updates (`Uint8Array`) to PostgreSQL.
-* **Instant Load Guarantee:** When a user clicks a hibernated workspace link (`codev.ai/ws/session-123`), the Next.js frontend fetches the Yjs binary state from PostgreSQL and **renders the entire agent history, chat thread, and code diffs in <100ms**, even before the execution VM wakes up.
+- **Technology:** **Yjs CRDTs + PostgreSQL + `@hocuspocus/extension-database`**
+- **Mechanism:** Every prompt, tool card, code comment, and agent action is continuously written as binary CRDT updates (`Uint8Array`) to PostgreSQL.
+- **Instant Load Guarantee:** When a user clicks a hibernated workspace link (`codev.ai/ws/session-123`), the Next.js frontend fetches the Yjs binary state from PostgreSQL and **renders the entire agent history, chat thread, and code diffs in <100ms**, even before the execution VM wakes up.
 
 #### 2. Layer B: Compute & Execution State (Sandbox Snapshot Layer)
 
-* **Technology:** **E2B Auto-Pause Engine / AWS Firecracker MicroVM Snapshots**
-* **Configuration:** Sandboxes are instantiated with a 4-hour timeout and auto-resume hooks:
+- **Technology:** **E2B Auto-Pause Engine / AWS Firecracker MicroVM Snapshots**
+- **Configuration:** Sandboxes are instantiated with a 4-hour timeout and auto-resume hooks:
+
 ```typescript
-import { Sandbox } from 'e2b';
+import { Sandbox } from "e2b";
 
 // Instantiate Cloud Sandbox with 4-Hour Inactivity Timeout
 const sandbox = await Sandbox.create({
   timeoutMs: 4 * 60 * 60 * 1000, // 4 hours in ms
   lifecycle: {
-    onTimeout: 'pause', // Freezes process RAM + Filesystem to NVMe/S3
-    autoResume: true,   // Wakes sandbox up in <500ms upon incoming traffic
+    onTimeout: "pause", // Freezes process RAM + Filesystem to NVMe/S3
+    autoResume: true, // Wakes sandbox up in <500ms upon incoming traffic
   },
 });
-
 ```
 
-
-* **Hibernate Logic:** When 4 hours pass without a WebSocket heartbeat, the E2B daemon executes a complete Firecracker RAM freeze and destroys the vCPU compute allocation.
-* **Rehydration Logic:** When a user or agent executes an action on a hibernated workspace, the backend issues `sandbox.connect()` (or auto-resume intercepts the WebSocket), restoring memory and running terminal processes in **<500ms**.
+- **Hibernate Logic:** When 4 hours pass without a WebSocket heartbeat, the E2B daemon executes a complete Firecracker RAM freeze and destroys the vCPU compute allocation.
+- **Rehydration Logic:** When a user or agent executes an action on a hibernated workspace, the backend issues `sandbox.connect()` (or auto-resume intercepts the WebSocket), restoring memory and running terminal processes in **<500ms**.
 
 ---
 
@@ -204,7 +203,7 @@ const sandbox = await Sandbox.create({
 ### 1. Workspace State & Heartbeat Schema (`/packages/shared-types/src/workspace.ts`)
 
 ```typescript
-export type WorkspaceStatus = 'ACTIVE' | 'HIBERNATED' | 'CREATING';
+export type WorkspaceStatus = "ACTIVE" | "HIBERNATED" | "CREATING";
 
 export interface WorkspaceMetadata {
   id: string;
@@ -212,18 +211,17 @@ export interface WorkspaceMetadata {
   ownerId: string;
   githubRepo: string;
   status: WorkspaceStatus;
-  sandboxId: string;           // E2B / Firecracker Sandbox Identifier
-  lastActivityAt: string;      // ISO Timestamp for heartbeat tracking
-  hibernateAt: string;         // Expected timeout timestamp (lastActivityAt + 4 hours)
+  sandboxId: string; // E2B / Firecracker Sandbox Identifier
+  lastActivityAt: string; // ISO Timestamp for heartbeat tracking
+  hibernateAt: string; // Expected timeout timestamp (lastActivityAt + 4 hours)
   createdAt: string;
 }
-
 ```
 
 ### 2. Share Invitation Schema (`/packages/shared-types/src/share.ts`)
 
 ```typescript
-export type WorkspaceRole = 'CO_STEER' | 'REVIEWER' | 'VIEWER';
+export type WorkspaceRole = "CO_STEER" | "REVIEWER" | "VIEWER";
 
 export interface WorkspaceInvite {
   id: string;
@@ -236,7 +234,6 @@ export interface WorkspaceInvite {
   acceptedAt?: string;
   expiresAt: string;
 }
-
 ```
 
 ---
@@ -245,22 +242,24 @@ export interface WorkspaceInvite {
 
 ### Step 1: Implement OpenFGA Authorization & Clerk Share Modal
 
-* [ ] Create OpenFGA DSL model for `workspace` relations (`owner`, `editor`, `reviewer`, `viewer`).
-* [ ] Build `ShareDialog.tsx` using `shadcn/ui` with inputs for email, GitHub handles, and a public link generator.
-* [ ] Wire share API routes (`/api/workspace/share`) to write OpenFGA tuple relationships.
+- [x] Create OpenFGA DSL model for `workspace` relations (`owner`, `editor`, `reviewer`, `viewer`).
+- [x] Build `ShareDialog.tsx` with inputs for email, GitHub handles, and a single-use link generator.
+- [x] Wire workspace invite/member routes to write and enforce OpenFGA tuple relationships.
 
 ### Step 2: Implement Hocuspocus DB Persistence
 
-* [ ] Add `@hocuspocus/extension-database` to the `hocuspocus-server` app.
-* [ ] Implement `fetch` and `store` hooks to serialize binary Yjs document state directly to the PostgreSQL `workspace_states` table on every client update.
+- [x] Add `@hocuspocus/extension-database` to the `hocuspocus-server` app.
+- [x] Implement `fetch` and `store` hooks to serialize binary Yjs document state directly to PostgreSQL `workspace_state_documents` on every client update.
 
 ### Step 3: Implement 4-Hour Idle Hibernation Engine
 
-* [ ] Configure `Sandbox.create()` with `timeoutMs: 14400000` (4 hours) and `lifecycle: { onTimeout: 'pause', autoResume: true }`.
-* [ ] Implement WebSocket heartbeat endpoint (`/api/workspace/heartbeat`) that invokes `sandbox.setTimeout(14400000)` whenever user activity or agent streams are active.
-* [ ] Test scale-to-zero: verify that `sandbox.pause()` frees EC2 compute resources while preserving active terminal states and uncommitted git diffs.
+- [x] Propagate `timeoutMs: 14400000` and `lifecycle: { onTimeout: 'pause', autoResume: true }` through the Firecracker sandbox lifecycle contract.
+- [x] Implement the workspace heartbeat endpoint and Redis liveness monitor, with PostgreSQL fallback.
+- [x] Snapshot the guest filesystem plus Firecracker RAM/process state before destroying the VM; restore from the snapshot on the next action.
 
 ### Step 4: Implement 1-Click Export & PR Engine
 
-* [ ] Integrate `@octokit/rest` inside `/api/workspace/export`.
-* [ ] On export trigger: pull git diffs from the active microVM, push a clean branch to the user's GitHub repository, and open a Pull Request with an AI-generated change summary.
+- [x] Integrate `@octokit/rest` inside the workspace export route.
+- [x] On export trigger: pull git diffs from the active microVM, push a clean branch to the user's GitHub repository, and open a Pull Request with an AI-generated change summary.
+
+The remaining validation step is environment-specific: run a Linux/KVM Firecracker smoke test on the AWS host to measure snapshot-restore latency and verify host power-off after the final sandbox is destroyed. The repository checks validate the control-plane behavior and Linux-target compilation, but this Mac workspace cannot exercise `/dev/kvm` or EC2 power-state transitions.

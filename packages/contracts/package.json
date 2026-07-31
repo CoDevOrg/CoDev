@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codev/shared-types": "workspace:*",
     "zod": "4.4.3"
   },
   "devDependencies": {

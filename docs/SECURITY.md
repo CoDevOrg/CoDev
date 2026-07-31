@@ -25,15 +25,18 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
 - Existing remote refs are never updated or force-pushed.
 - The installation, repository ID, and repository name are revalidated
   immediately before GitHub mutation.
-- The guest exports a clean, exact integration tree guarded by its expected
-  SHA. Submodules, unsafe paths, unsupported modes, more than 500 files, files
-  over 1 MiB, and trees over 5 MiB are rejected.
+- The guest export is guarded by the expected integration SHA and bounded to
+  safe tracked/untracked files. Submodules, unsafe paths, unsupported modes,
+  more than 500 files, files over 1 MiB, and exports over 5 MiB are rejected.
 - Every attempt has durable `pending`, `published`, or `failed` state and a
   workspace audit event.
 
 ## Lifecycle
 
 - A sandbox cannot be stopped while agent worktrees are active.
+- Automatic hibernation is separate from manual stop: it snapshots the complete
+  guest VM, including active agent worktrees, running processes, and PTY state,
+  before destroying compute.
 - A changed integration tree cannot be stopped until its exact source SHA has
   been published. After destruction, CoDev advances the durable baseline to the
   remote publication commit so reprovisioning is recoverable.

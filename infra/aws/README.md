@@ -43,30 +43,34 @@ Defaults:
 - Host: `a1.metal`
 - Host image: `ami-0713df58d0d8b3c1c` (Ubuntu 24.04 ARM64 with a generic kernel)
 - Host root volume: 40 GiB encrypted gp3
+- Snapshot jailer volume: 40 GiB encrypted gp3 by default
 - Firecracker: `v1.13.2`
 - Maximum concurrent microVMs: 2
 - Per microVM: 2 vCPU, 2 GiB memory, 10 GiB sparse disk
-- Idle timeout: 30 minutes
-- Hard workspace expiry: 4 hours
+- Snapshot jailer storage: a dedicated XFS gp3 volume with reflinks enabled;
+  Firecracker writable disks are cloned with metadata-only copy-on-write so
+  restore does not copy multi-GiB images
+- Workspace idle timeout: 4 hours before automatic Firecracker hibernation
 - Host shutdown: 15 minutes after the final microVM stops
 - Monthly cost budget: $75 by default (`CODEV_MONTHLY_BUDGET_USD`)
 
 The script cross-compiles both statically linked Rust binaries for Linux ARM64, uploads an immutable release
-to private S3, deploys the CloudFormation stacks, and creates or updates the
+plus the lifecycle smoke-test script to private S3, deploys the CloudFormation stacks, and creates or updates the
 Vercel OIDC roles. It prints the API URL and role ARNs needed by Vercel.
 Each release creates a new launch-template version, which makes CloudFormation
 replace the host instead of merely updating EC2 user data that would not rerun.
 
 Set `CODEV_HOST_AMI_ID` when deploying into another account or region because
 the default AMI is account- and region-specific.
+Set `CODEV_JAILER_VOLUME_SIZE_GIB` to change the dedicated reflink-enabled
+snapshot volume size.
 
-## Verified lifecycle
+## Lifecycle validation
 
-The Phase 3 delivery was exercised from a clean host on July 29, 2026. A real
-Firecracker guest cloned CoDev, returned the checked-out Git revision, read
-`README.md`, reported Git status, executed `uname` through its PTY API, and was
-then destroyed with no workspace runtime directory left behind. Two concurrent
-guests were also created to verify the host limit.
+The repository ships `/opt/codev-verify-lifecycle.sh` for the current
+snapshot/restore path. It must be run on the deployed Linux/KVM host after a
+release change; this Mac workspace cannot validate `/dev/kvm` or EC2 power
+transitions directly.
 
 ## Access and diagnostics
 
@@ -81,6 +85,17 @@ Host logs:
 ```sh
 sudo journalctl -u codev-orchestrator -f
 ```
+
+After deploying a Rust or Firecracker change, validate the real pause/restore
+path on the host:
+
+```sh
+sudo /opt/codev-verify-lifecycle.sh
+```
+
+The script requires a running local orchestrator, verifies dirty-file
+preservation across a Firecracker snapshot and restore, enforces the 500 ms
+restore target, and confirms zero active sandboxes after destruction.
 
 The encrypted 40 GiB host volume and all workspace disks are deleted with the
 instance when the runtime stack is deleted. The artifact bucket is retained so

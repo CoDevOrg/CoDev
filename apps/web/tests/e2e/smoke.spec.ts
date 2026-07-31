@@ -108,6 +108,32 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
     error: "Authentication required.",
   });
 
+  const protectedStreamingEndpoints = [
+    {
+      method: "post" as const,
+      endpoint:
+        "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/stream",
+      data: { prompt: "anonymous requests must be rejected" },
+    },
+    {
+      method: "get" as const,
+      endpoint:
+        "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/collaboration/hocuspocus-token",
+    },
+    {
+      method: "get" as const,
+      endpoint:
+        "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/sandbox/terminal/stream",
+    },
+  ];
+  for (const { method, endpoint, data } of protectedStreamingEndpoints) {
+    const response = await request[method](endpoint, data ? { data } : {});
+    expect(response.status()).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Authentication required.",
+    });
+  }
+
   for (const endpoint of [
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/publications",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/events",

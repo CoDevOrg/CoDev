@@ -37,6 +37,8 @@ AWS host is returning to `stopped`.
 2. Run lifecycle reconciliation twice; the second call must be a no-op.
 3. Confirm the workspace is stopped and the Firecracker host transitions to
    `stopped`.
-4. Confirm Vercel has no new error logs and AWS alarms remain `OK`.
-5. Preserve the publication URL, request IDs for failures, preflight result,
+4. On the AWS host, run `sudo /opt/codev-verify-lifecycle.sh` and preserve its
+   snapshot/restore timings as deployment evidence.
+5. Confirm Vercel has no new error logs and AWS alarms remain `OK`.
+6. Preserve the publication URL, request IDs for failures, preflight result,
    feedback identifier, and test results in the session notes.

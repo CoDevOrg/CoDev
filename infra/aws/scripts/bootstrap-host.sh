@@ -10,6 +10,7 @@ readonly firecracker_ci_prefix="firecracker-ci/20260723-ae5bf5b68fc4-0/aarch64"
 readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecracker_ci_prefix}"
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
+readonly jailer_dir="/srv/jailer"
 readonly host_log_group="${CODEV_HOST_LOG_GROUP:-/codev/orchestrator/codev-runtime}"
 
 # Bare-metal instances can initially inherit the AMI build clock. Wait for the
@@ -31,7 +32,8 @@ apt-get install -y \
   e2fsprogs \
   git \
   jq \
-  squashfs-tools
+  squashfs-tools \
+  xfsprogs
 
 curl -fsSL \
   https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb \
@@ -39,11 +41,54 @@ curl -fsSL \
 dpkg -i /tmp/amazon-cloudwatch-agent.deb
 
 install -d -m 0700 "${runtime_dir}/workspaces"
-install -d -m 0755 "${base_dir}" /srv/jailer
+install -d -m 0755 "${base_dir}" "${jailer_dir}"
+
+# Snapshot restore depends on metadata-only reflink clones for the writable
+# Firecracker block devices. The root AMI filesystem is not guaranteed to
+# support reflinks, so the launch template attaches a dedicated data volume.
+# Discover the non-root EBS disk instead of relying on Nitro's device name.
+root_source="$(findmnt -no SOURCE /)"
+root_disk="$(lsblk -sno NAME "${root_source}" | tail -n 1)"
+if [[ -z "${root_disk}" ]]; then
+  root_disk="$(lsblk -ndo NAME "${root_source}" | head -n 1)"
+fi
+jailer_device=""
+for _ in {1..60}; do
+  jailer_device="$(lsblk -dpno NAME,TYPE | awk -v root="/dev/${root_disk}" '$2 == "disk" && $1 != root { print $1; exit }')"
+  [[ -n "${jailer_device}" ]] && break
+  sleep 2
+  done
+if [[ -z "${jailer_device}" ]]; then
+  echo "No dedicated jailer data volume was found." >&2
+  exit 1
+fi
+
+if ! blkid "${jailer_device}" >/dev/null 2>&1; then
+  mkfs.xfs -f -m reflink=1 "${jailer_device}"
+fi
+if [[ "$(blkid -o value -s TYPE "${jailer_device}")" != "xfs" ]]; then
+  echo "The jailer data volume must use XFS." >&2
+  exit 1
+fi
+if ! xfs_info "${jailer_device}" 2>/dev/null | grep -q 'reflink=1'; then
+  echo "The jailer data volume must have XFS reflinks enabled." >&2
+  exit 1
+fi
+jailer_uuid="$(blkid -o value -s UUID "${jailer_device}")"
+if ! grep -q "UUID=${jailer_uuid} ${jailer_dir} " /etc/fstab; then
+  echo "UUID=${jailer_uuid} ${jailer_dir} xfs noatime,nofail 0 2" >>/etc/fstab
+fi
+mountpoint -q "${jailer_dir}" || mount "${jailer_dir}"
+if ! xfs_info "${jailer_dir}" 2>/dev/null | grep -q 'reflink=1'; then
+  echo "Mounted jailer storage does not support reflinks." >&2
+  exit 1
+fi
 
 aws s3 cp "${release_prefix}/codev-orchestrator-linux-arm64" /usr/local/bin/codev-orchestrator
 aws s3 cp "${release_prefix}/codev-guestd-linux-arm64" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
+aws s3 cp "${release_prefix}/verify-lifecycle.sh" /opt/codev-verify-lifecycle.sh
+chmod 0755 /opt/codev-verify-lifecycle.sh
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
@@ -154,7 +199,7 @@ Environment=CODEV_MAX_SANDBOXES=2
 Environment=CODEV_VM_VCPU=2
 Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
-Environment=CODEV_IDLE_TIMEOUT=30m
+Environment=CODEV_IDLE_TIMEOUT=4h
 Environment=CODEV_HOST_IDLE_TIMEOUT=15m
 Restart=always
 RestartSec=2

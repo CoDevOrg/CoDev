@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mapSessionToChatItems, type AgentChatSession } from "./agent-chat";
+import {
+  mapAgentEventToChatEvent,
+  mapSessionToChatItems,
+  type AgentChatSession,
+} from "./agent-chat";
 
 function session(
   partial: Partial<AgentChatSession> &
@@ -188,5 +192,72 @@ describe("mapSessionToChatItems", () => {
         text: "OpenAI key missing",
       },
     ]);
+  });
+
+  it("renders reviewer comments with their file location", () => {
+    const items = mapSessionToChatItems(
+      session({
+        turns: [],
+        events: [
+          {
+            id: "comment-1",
+            type: "comment.added",
+            payload: {
+              text: "Please add a regression test.",
+              author: "Reviewer",
+              filePath: "src/auth.ts",
+              lineNumber: 42,
+            },
+            createdAt: "2026-07-30T16:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(items).toEqual([
+      {
+        kind: "comment",
+        id: "comment:comment-1",
+        text: "Please add a regression test.",
+        author: "Reviewer",
+        filePath: "src/auth.ts",
+        lineNumber: 42,
+      },
+    ]);
+  });
+});
+
+describe("mapAgentEventToChatEvent", () => {
+  it("maps a durable reviewer comment to a timeline event", () => {
+    const event = mapAgentEventToChatEvent({
+      id: "comment-2",
+      workspaceId: "2f2387ed-4a63-4b05-88cc-266d65f7b82b",
+      sessionId: "8f4dd3e4-63a9-4b64-a9e7-97e0c25c77c5",
+      turnId: null,
+      actor: {
+        userId: "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+        userName: "Reviewer",
+        avatarUrl: null,
+      },
+      modelProvider: "custom",
+      modelName: "human-review",
+      type: "COMMENT_ADDED",
+      payload: {
+        commentText: "Please add a regression test.",
+        filePath: "src/auth.ts",
+        metadata: { lineNumber: 42 },
+      },
+      timestamp: 1,
+    });
+
+    expect(event).toMatchObject({
+      type: "comment.added",
+      payload: {
+        text: "Please add a regression test.",
+        author: "Reviewer",
+        filePath: "src/auth.ts",
+        lineNumber: 42,
+      },
+    });
   });
 });

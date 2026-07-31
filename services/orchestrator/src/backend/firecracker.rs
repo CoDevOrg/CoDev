@@ -1,22 +1,27 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::OpenOptions,
+    io::ErrorKind,
     os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::Stdio,
     sync::{Arc, RwLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::{
     fs,
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::UnixStream,
     process::{Child, Command},
     sync::{Mutex, RwLock as AsyncRwLock},
     time::{sleep, timeout},
 };
+use tracing::{info, warn};
 
 use crate::{
     guest_client::GuestClient,
@@ -62,7 +67,10 @@ impl FirecrackerConfig {
             vcpu_count: environment_number("CODEV_VM_VCPU", 2)?,
             memory_mib: environment_number("CODEV_VM_MEMORY_MIB", 2048)?,
             workspace_disk_gib: environment_number("CODEV_VM_DISK_GIB", 10)?,
-            idle_timeout: environment_duration("CODEV_IDLE_TIMEOUT", Duration::from_secs(30 * 60))?,
+            idle_timeout: environment_duration(
+                "CODEV_IDLE_TIMEOUT",
+                Duration::from_secs(4 * 60 * 60),
+            )?,
         };
         if !(1..=8).contains(&config.max_sandboxes) {
             return Err(RuntimeError::BadRequest(
@@ -99,9 +107,128 @@ struct RunningMachine {
     instance: RwLock<Instance>,
     child: Mutex<Child>,
     guest: GuestClient,
+    api_socket: PathBuf,
     workspace_dir: PathBuf,
     jail_dir: PathBuf,
     slot: u32,
+}
+
+impl RunningMachine {
+    fn workspace_id(&self) -> String {
+        self.instance
+            .read()
+            .expect("machine lock")
+            .workspace_id
+            .clone()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct MicroVmSnapshotMetadata {
+    head_sha: String,
+    slot: u32,
+}
+
+struct FirecrackerApiClient {
+    socket_path: PathBuf,
+}
+
+impl FirecrackerApiClient {
+    fn new(socket_path: PathBuf) -> Self {
+        Self { socket_path }
+    }
+
+    async fn request(&self, method: &str, path: &str, payload: serde_json::Value) -> Result<()> {
+        let body = serde_json::to_vec(&payload).map_err(RuntimeError::internal)?;
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: localhost\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let mut stream =
+            UnixStream::connect(&self.socket_path)
+                .await
+                .map_err(|error| match error.kind() {
+                    ErrorKind::NotFound | ErrorKind::ConnectionRefused => {
+                        RuntimeError::Unavailable(format!(
+                            "Firecracker API socket is not ready: {error}"
+                        ))
+                    }
+                    _ => RuntimeError::internal(error),
+                })?;
+        stream
+            .write_all(request.as_bytes())
+            .await
+            .map_err(RuntimeError::internal)?;
+        stream
+            .write_all(&body)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let mut response = Vec::new();
+        timeout(Duration::from_secs(30), stream.read_to_end(&mut response))
+            .await
+            .map_err(|_| RuntimeError::Timeout("Firecracker API request timed out".into()))?
+            .map_err(RuntimeError::internal)?;
+
+        let header_end = response
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .ok_or_else(|| RuntimeError::Internal("invalid Firecracker API response".into()))?;
+        let headers = String::from_utf8_lossy(&response[..header_end]);
+        let status = headers
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|value| value.parse::<u16>().ok())
+            .ok_or_else(|| RuntimeError::Internal("invalid Firecracker API status".into()))?;
+        if !(200..300).contains(&status) {
+            let body = String::from_utf8_lossy(&response[header_end + 4..]);
+            return Err(RuntimeError::Internal(format!(
+                "Firecracker API {method} {path} failed with HTTP {status}: {}",
+                body.trim()
+            )));
+        }
+        Ok(())
+    }
+
+    async fn pause(&self) -> Result<()> {
+        self.request("PATCH", "/vm", json!({ "state": "Paused" }))
+            .await
+    }
+
+    async fn create_full_snapshot(&self) -> Result<()> {
+        self.request(
+            "PUT",
+            "/snapshot/create",
+            json!({
+                "snapshot_type": "Full",
+                "snapshot_path": "/snapshot_file",
+                "mem_file_path": "/mem_file"
+            }),
+        )
+        .await
+    }
+
+    async fn load_snapshot(&self) -> Result<()> {
+        self.request(
+            "PUT",
+            "/snapshot/load",
+            json!({
+                "snapshot_path": "/snapshot_file",
+                "mem_backend": {
+                    "backend_path": "/mem_file",
+                    "backend_type": "File"
+                },
+                "vsock_override": { "uds_path": "/guest.vsock" },
+                "resume_vm": true
+            }),
+        )
+        .await
+    }
+
+    async fn resume(&self) -> Result<()> {
+        self.request("PATCH", "/vm", json!({ "state": "Resumed" }))
+            .await
+    }
 }
 
 pub struct FirecrackerBackend {
@@ -203,40 +330,38 @@ impl FirecrackerBackend {
             .get(workspace_id)
             .ok_or(RuntimeError::SandboxNotFound)?;
         let mut instance = machine.instance.write().expect("machine lock");
-        instance.last_activity_at = Utc::now();
+        let now = Utc::now();
+        instance.last_activity_at = now;
+        instance.expires_at = now
+            + chrono::Duration::from_std(self.config.idle_timeout)
+                .map_err(RuntimeError::internal)?;
         Ok(instance.clone())
     }
 
     pub async fn destroy(&self, workspace_id: &str) -> Result<()> {
+        let _guard = self.provision.lock().await;
         let machine = self
-            .machines
-            .write()
-            .await
-            .remove(workspace_id)
-            .ok_or(RuntimeError::SandboxNotFound)?;
-        self.stop_machine(machine).await
-    }
-
-    pub async fn reap_idle(&self, cutoff: DateTime<Utc>) -> Result<Vec<String>> {
-        let now = Utc::now();
-        let ids: Vec<_> = self
             .machines
             .read()
             .await
-            .iter()
-            .filter_map(|(id, machine)| {
-                let instance = machine.instance.read().expect("machine lock");
-                (instance.last_activity_at < cutoff || instance.expires_at <= now)
-                    .then(|| id.clone())
-            })
-            .collect();
-        let mut destroyed = Vec::new();
-        for id in ids {
-            if self.destroy(&id).await.is_ok() {
-                destroyed.push(id);
-            }
-        }
-        Ok(destroyed)
+            .get(workspace_id)
+            .cloned()
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        self.stop_machine(machine).await?;
+        self.machines.write().await.remove(workspace_id);
+        Ok(())
+    }
+
+    pub async fn resume(&self, workspace_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        FirecrackerApiClient::new(machine.api_socket.clone())
+            .resume()
+            .await
+    }
+
+    pub async fn discard_snapshot(&self, workspace_id: &str) -> Result<()> {
+        let _guard = self.provision.lock().await;
+        remove_directory_if_present(&self.snapshot_dir(workspace_id)).await
     }
 
     pub async fn read_file(
@@ -403,6 +528,17 @@ impl FirecrackerBackend {
         Ok(result)
     }
 
+    pub async fn snapshot_workspace(
+        &self,
+        workspace_id: &str,
+        request: PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.snapshot_workspace(&request).await?;
+        self.snapshot_machine(&machine, &result.head_sha).await?;
+        Ok(result)
+    }
+
     pub async fn git_status(
         &self,
         workspace_id: &str,
@@ -452,14 +588,124 @@ impl FirecrackerBackend {
             .last_activity_at = Utc::now();
     }
 
+    fn snapshot_dir(&self, workspace_id: &str) -> PathBuf {
+        self.config.jailer_dir.join("snapshots").join(workspace_id)
+    }
+
+    async fn snapshot_metadata(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Option<MicroVmSnapshotMetadata>> {
+        let directory = self.snapshot_dir(workspace_id);
+        let metadata_path = directory.join("metadata.json");
+        let metadata = match fs::read(&metadata_path).await {
+            Ok(contents) => serde_json::from_slice(&contents).map_err(|error| {
+                RuntimeError::Internal(format!(
+                    "invalid Firecracker snapshot metadata for {workspace_id}: {error}"
+                ))
+            })?,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(RuntimeError::internal(error)),
+        };
+        for name in ["snapshot_file", "mem_file", "rootfs.ext4", "workspace.ext4"] {
+            if !directory.join(name).is_file() {
+                return Err(RuntimeError::Unavailable(format!(
+                    "Firecracker snapshot for {workspace_id} is incomplete"
+                )));
+            }
+        }
+        Ok(Some(metadata))
+    }
+
+    async fn snapshot_machine(&self, machine: &RunningMachine, head_sha: &str) -> Result<()> {
+        let started_at = Instant::now();
+        let api = FirecrackerApiClient::new(machine.api_socket.clone());
+        api.pause().await?;
+        if let Err(error) = api.create_full_snapshot().await {
+            let _ = api
+                .request("PATCH", "/vm", json!({ "state": "Resumed" }))
+                .await;
+            return Err(error);
+        }
+
+        let snapshots_root = self.config.jailer_dir.join("snapshots");
+        let staging = snapshots_root.join(format!(".{}.next", machine.workspace_id()));
+        let files = [
+            ("snapshot_file", machine.jail_dir.join("root/snapshot_file")),
+            ("mem_file", machine.jail_dir.join("root/mem_file")),
+            ("rootfs.ext4", machine.jail_dir.join("root/rootfs.ext4")),
+            (
+                "workspace.ext4",
+                machine.jail_dir.join("root/workspace.ext4"),
+            ),
+        ];
+        let persist_result = async {
+            fs::create_dir_all(&snapshots_root)
+                .await
+                .map_err(RuntimeError::internal)?;
+            remove_directory_if_present(&staging).await?;
+            fs::create_dir_all(&staging)
+                .await
+                .map_err(RuntimeError::internal)?;
+            for (name, source) in files {
+                link_or_copy(&source, &staging.join(name)).await?;
+            }
+            let metadata = serde_json::to_vec(&MicroVmSnapshotMetadata {
+                head_sha: head_sha.to_owned(),
+                slot: machine.slot,
+            })
+            .map_err(RuntimeError::internal)?;
+            fs::write(staging.join("metadata.json"), metadata)
+                .await
+                .map_err(RuntimeError::internal)?;
+            let destination = self.snapshot_dir(&machine.workspace_id());
+            remove_directory_if_present(&destination).await?;
+            fs::rename(&staging, &destination)
+                .await
+                .map_err(RuntimeError::internal)?;
+            Ok::<(), RuntimeError>(())
+        }
+        .await;
+        if let Err(error) = persist_result {
+            let _ = api
+                .request("PATCH", "/vm", json!({ "state": "Resumed" }))
+                .await;
+            let _ = remove_directory_if_present(&staging).await;
+            return Err(error);
+        }
+        info!(
+            workspace_id = %machine.workspace_id(),
+            snapshot_ms = started_at.elapsed().as_millis() as u64,
+            "firecracker snapshot persisted"
+        );
+        Ok(())
+    }
+
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
+        let snapshot_metadata = if request.resume_from_snapshot {
+            self.snapshot_metadata(&request.workspace_id).await?
+        } else {
+            None
+        };
+        let restore_snapshot = snapshot_metadata.is_some();
         let slot = {
             let machines = self.machines.read().await;
-            first_available_slot(
-                machines.values().map(|machine| machine.slot),
-                self.config.max_sandboxes,
-            )
-            .ok_or(RuntimeError::CapacityExceeded)?
+            if let Some(metadata) = snapshot_metadata.as_ref() {
+                if metadata.slot >= self.config.max_sandboxes as u32
+                    || machines
+                        .values()
+                        .any(|machine| machine.slot == metadata.slot)
+                {
+                    return Err(RuntimeError::CapacityExceeded);
+                }
+                metadata.slot
+            } else {
+                first_available_slot(
+                    machines.values().map(|machine| machine.slot),
+                    self.config.max_sandboxes,
+                )
+                .ok_or(RuntimeError::CapacityExceeded)?
+            }
         };
         let uid = 20_000 + slot;
         let guest_cid = 3 + slot;
@@ -489,10 +735,24 @@ impl FirecrackerBackend {
             .await
             .map_err(RuntimeError::internal)?;
 
-        let head_sha = match self
-            .prepare_resources(request, &workspace_dir, &jail_root, guest_cid)
+        let head_sha = match if restore_snapshot {
+            self.prepare_snapshot_resources(
+                &self.snapshot_dir(&request.workspace_id),
+                &jail_root,
+                uid,
+            )
             .await
-        {
+            .map(|_| {
+                snapshot_metadata
+                    .as_ref()
+                    .expect("snapshot metadata")
+                    .head_sha
+                    .clone()
+            })
+        } else {
+            self.prepare_resources(request, &workspace_dir, &jail_root, guest_cid)
+                .await
+        } {
             Ok(head_sha) => head_sha,
             Err(error) => {
                 let _ = remove_directory_if_present(&workspace_dir).await;
@@ -501,12 +761,17 @@ impl FirecrackerBackend {
             }
         };
 
-        let paths = [
-            jail_root.join("vmlinux"),
+        let mut paths = vec![
             jail_root.join("rootfs.ext4"),
             jail_root.join("workspace.ext4"),
-            jail_root.join("config.json"),
         ];
+        if !restore_snapshot {
+            paths.push(jail_root.join("vmlinux"));
+            paths.push(jail_root.join("config.json"));
+        } else {
+            paths.push(jail_root.join("snapshot_file"));
+            paths.push(jail_root.join("mem_file"));
+        }
         let mut chown = Command::new("chown");
         chown.arg(format!("{uid}:{uid}")).args(&paths);
         run_command(chown, "chown jail resources").await?;
@@ -515,9 +780,14 @@ impl FirecrackerBackend {
                 .await
                 .map_err(RuntimeError::internal)?;
         }
-        fs::set_permissions(&paths[0], std::fs::Permissions::from_mode(0o644))
+        if !restore_snapshot {
+            fs::set_permissions(
+                jail_root.join("vmlinux"),
+                std::fs::Permissions::from_mode(0o644),
+            )
             .await
             .map_err(RuntimeError::internal)?;
+        }
 
         let mut command = Command::new(&self.config.jailer_bin);
         command
@@ -537,15 +807,18 @@ impl FirecrackerBackend {
             .arg("no-file=4096")
             .arg("--")
             .arg("--api-sock")
-            .arg("/api.socket")
-            .arg("--config-file")
-            .arg("/config.json")
+            .arg("/api.socket");
+        if !restore_snapshot {
+            command.arg("--config-file").arg("/config.json");
+        }
+        command
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .kill_on_drop(true);
         let child = command.spawn().map_err(RuntimeError::internal)?;
         let guest = GuestClient::new(jail_root.join("guest.vsock"), GUEST_PORT);
+        let api_socket = jail_root.join("api.socket");
         let machine = RunningMachine {
             instance: RwLock::new(Instance {
                 id: format!("fc-{id}"),
@@ -558,10 +831,59 @@ impl FirecrackerBackend {
             }),
             child: Mutex::new(child),
             guest,
+            api_socket,
             workspace_dir,
             jail_dir,
             slot,
         };
+
+        if restore_snapshot {
+            let restore_started_at = Instant::now();
+            let restore = timeout(Duration::from_secs(45), async {
+                loop {
+                    match FirecrackerApiClient::new(machine.api_socket.clone())
+                        .load_snapshot()
+                        .await
+                    {
+                        Ok(()) => break Ok(()),
+                        Err(RuntimeError::Unavailable(_)) => {
+                            sleep(Duration::from_millis(100)).await
+                        }
+                        Err(error) => break Err(error),
+                    }
+                }
+            })
+            .await;
+            match restore {
+                Ok(Ok(())) => {
+                    let restore_ms = restore_started_at.elapsed().as_millis() as u64;
+                    if restore_ms > 500 {
+                        warn!(
+                            workspace_id = %request.workspace_id,
+                            restore_ms,
+                            target_ms = 500,
+                            "firecracker snapshot restore exceeded target"
+                        );
+                    } else {
+                        info!(
+                            workspace_id = %request.workspace_id,
+                            restore_ms,
+                            "firecracker snapshot restored"
+                        );
+                    }
+                }
+                Ok(Err(error)) => {
+                    self.cleanup_failed_machine(&machine).await;
+                    return Err(error);
+                }
+                Err(_) => {
+                    self.cleanup_failed_machine(&machine).await;
+                    return Err(RuntimeError::Timeout(
+                        "Firecracker snapshot restore timed out".into(),
+                    ));
+                }
+            }
+        }
 
         let ready = timeout(Duration::from_secs(45), async {
             loop {
@@ -584,7 +906,12 @@ impl FirecrackerBackend {
         })
         .await;
         match ready {
-            Ok(Ok(())) => Ok(machine),
+            Ok(Ok(())) => {
+                if restore_snapshot {
+                    remove_directory_if_present(&self.snapshot_dir(&request.workspace_id)).await?;
+                }
+                Ok(machine)
+            }
             Ok(Err(error)) => {
                 self.cleanup_failed_machine(&machine).await;
                 Err(error)
@@ -702,6 +1029,33 @@ impl FirecrackerBackend {
         .await
         .map_err(RuntimeError::internal)?;
         Ok(head_sha)
+    }
+
+    async fn prepare_snapshot_resources(
+        &self,
+        snapshot_dir: &Path,
+        jail_root: &Path,
+        uid: u32,
+    ) -> Result<()> {
+        // Firecracker maps the memory snapshot read-only and releases the VM
+        // state snapshot after loading. Hard-linking these immutable files
+        // avoids copying guest RAM during the sub-second restore path.
+        for name in ["snapshot_file", "mem_file"] {
+            link_or_copy(&snapshot_dir.join(name), &jail_root.join(name)).await?;
+        }
+        // The guest can write both block devices after resume, so they must
+        // not share inodes with the durable recovery snapshot.
+        for name in ["rootfs.ext4", "workspace.ext4"] {
+            clone_or_copy(&snapshot_dir.join(name), &jail_root.join(name)).await?;
+        }
+        let mut chown = Command::new("chown");
+        chown.arg(format!("{uid}:{uid}")).args([
+            jail_root.join("snapshot_file"),
+            jail_root.join("mem_file"),
+            jail_root.join("rootfs.ext4"),
+            jail_root.join("workspace.ext4"),
+        ]);
+        run_command(chown, "chown snapshot resources").await
     }
 
     async fn cleanup_failed_machine(&self, machine: &RunningMachine) {
@@ -872,6 +1226,41 @@ async fn remove_directory_if_present(path: &Path) -> Result<()> {
     }
 }
 
+async fn link_or_copy(source: &Path, destination: &Path) -> Result<()> {
+    match fs::hard_link(source, destination).await {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(source, destination)
+                .await
+                .map_err(RuntimeError::internal)?;
+            Ok(())
+        }
+    }
+}
+
+/// Restore writable VM resources without hard-linking them to the durable
+/// snapshot. A resumed guest can mutate its disk images; a filesystem reflink
+/// keeps a failed restore from corrupting the only recovery artifact without
+/// copying multi-GiB block devices. AWS provisions `/srv/jailer` as XFS with
+/// reflinks enabled; fail rather than silently taking a slow full-copy path on
+/// an incorrectly configured host.
+async fn clone_or_copy(source: &Path, destination: &Path) -> Result<()> {
+    let output = Command::new("cp")
+        .args(["--reflink=always", "--sparse=always"])
+        .arg(source)
+        .arg(destination)
+        .output()
+        .await
+        .map_err(RuntimeError::internal)?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(RuntimeError::Unavailable(format!(
+        "snapshot storage does not support reflink restore: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
 fn first_available_slot(
     occupied: impl IntoIterator<Item = u32>,
     max_sandboxes: usize,
@@ -918,10 +1307,8 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
         (value, 1_000)
     } else if let Some(value) = value.strip_suffix('m') {
         (value, 60_000)
-    } else if let Some(value) = value.strip_suffix('h') {
-        (value, 3_600_000)
     } else {
-        return None;
+        (value.strip_suffix('h')?, 3_600_000)
     };
     number
         .parse::<u64>()

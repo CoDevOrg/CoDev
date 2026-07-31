@@ -4,8 +4,8 @@ import { getRun } from "workflow/api";
 import { schema } from "@codev/db";
 
 import { apiError, getApiUser } from "@/lib/api";
+import { requireWorkspacePermission } from "@/lib/access";
 import { getDatabase } from "@/lib/database";
-import { getWorkspaceForMember } from "@/lib/workspaces";
 
 export async function POST(
   _request: Request,
@@ -18,8 +18,13 @@ export async function POST(
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId, sessionId } = await params;
-  if (!(await getWorkspaceForMember(workspaceId, user.id))) {
-    return apiError(new Error("Workspace not found."), 404);
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
   }
 
   try {

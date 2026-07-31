@@ -1,11 +1,15 @@
 import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
-import { updateMemberCapabilities } from "@/lib/workspaces";
+import {
+  updateMemberAccessRole,
+  updateMemberCapabilities,
+} from "@/lib/workspaces";
 
 const requestSchema = z.object({
-  canTerminal: z.boolean(),
-  canMerge: z.boolean(),
+  accessRole: z.enum(["co_steer", "reviewer", "viewer"]).optional(),
+  canTerminal: z.boolean().optional(),
+  canMerge: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -18,7 +22,24 @@ export async function PATCH(
   try {
     const { workspaceId, userId } = await context.params;
     const capabilities = requestSchema.parse(await request.json());
-    await updateMemberCapabilities(workspaceId, userId, user.id, capabilities);
+    if (capabilities.accessRole) {
+      await updateMemberAccessRole(
+        workspaceId,
+        userId,
+        user.id,
+        capabilities.accessRole,
+      );
+    } else if (
+      capabilities.canTerminal !== undefined &&
+      capabilities.canMerge !== undefined
+    ) {
+      await updateMemberCapabilities(workspaceId, userId, user.id, {
+        canTerminal: capabilities.canTerminal,
+        canMerge: capabilities.canMerge,
+      });
+    } else {
+      return apiError(new Error("A member role is required."), 400);
+    }
     return Response.json({ ok: true });
   } catch (error) {
     return apiError(error);

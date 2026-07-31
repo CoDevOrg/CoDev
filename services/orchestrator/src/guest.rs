@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
+    os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -96,6 +97,7 @@ impl GuestService {
             ("POST", "/v1/terminals") => self.start_terminal(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
+            ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -717,6 +719,22 @@ impl GuestService {
     }
 
     fn export_publication(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        // Publications intentionally include the dirty integration tree. The
+        // expected commit head still guards against a concurrent merge, while
+        // the exported file list carries the uncommitted edits that GitHub
+        // needs for the resulting branch and pull request.
+        self.export_workspace(body, false)
+    }
+
+    fn snapshot_workspace(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        self.export_workspace(body, false)
+    }
+
+    fn export_workspace(
+        &self,
+        body: &[u8],
+        require_clean: bool,
+    ) -> crate::model::Result<serde_json::Value> {
         const MAX_FILES: usize = 500;
         const MAX_FILE_BYTES: usize = 1 << 20;
         const MAX_TOTAL_BYTES: usize = 5 << 20;
@@ -724,60 +742,123 @@ impl GuestService {
         let request: PublicationExportRequest = decode(body)?;
         validate_commit_sha(&request.expected_head_sha)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
-        self.require_clean(&self.workspace_root, "integration worktree is dirty")?;
         self.require_head(
             &self.workspace_root,
             &request.expected_head_sha,
             "integration",
         )?;
-
-        let tree = self.git_output(
-            &self.workspace_root,
-            &["ls-tree", "-r", "-z", "--full-tree", "HEAD"],
-        )?;
-        if !tree.status.success() {
-            return Err(git_failure("enumerate publication tree", &tree));
+        if require_clean {
+            self.require_clean(&self.workspace_root, "integration worktree is dirty")?;
         }
+
+        let entries: Vec<(String, String, Vec<u8>)> = if require_clean {
+            let tree = self.git_output(
+                &self.workspace_root,
+                &["ls-tree", "-r", "-z", "--full-tree", "HEAD"],
+            )?;
+            if !tree.status.success() {
+                return Err(git_failure("enumerate publication tree", &tree));
+            }
+            tree.stdout
+                .split(|byte| *byte == 0)
+                .filter(|row| !row.is_empty())
+                .map(|raw| {
+                    let row = std::str::from_utf8(raw).map_err(|_| {
+                        RuntimeError::BadRequest("publication paths must be UTF-8".into())
+                    })?;
+                    let (metadata, path) = row
+                        .split_once('\t')
+                        .ok_or_else(|| RuntimeError::Internal("invalid Git tree entry".into()))?;
+                    let mut fields = metadata.split_whitespace();
+                    let mode = fields.next().unwrap_or_default();
+                    let kind = fields.next().unwrap_or_default();
+                    let sha = fields.next().unwrap_or_default();
+                    if kind != "blob" || !matches!(mode, "100644" | "100755" | "120000") {
+                        return Err(RuntimeError::BadRequest(
+                            "publication contains an unsupported Git object".into(),
+                        ));
+                    }
+                    validate_publication_path(path)?;
+                    validate_commit_sha(sha)?;
+                    let blob = self.git_output(&self.workspace_root, &["cat-file", "blob", sha])?;
+                    if !blob.status.success() {
+                        return Err(git_failure("read publication blob", &blob));
+                    }
+                    Ok((path.into(), mode.into(), blob.stdout))
+                })
+                .collect::<crate::model::Result<Vec<_>>>()?
+        } else {
+            let listing = self.git_output(
+                &self.workspace_root,
+                &["ls-files", "-co", "--exclude-standard", "-z"],
+            )?;
+            if !listing.status.success() {
+                return Err(git_failure("enumerate workspace snapshot", &listing));
+            }
+            listing
+                .stdout
+                .split(|byte| *byte == 0)
+                .filter(|row| !row.is_empty())
+                .map(|raw| {
+                    let path = std::str::from_utf8(raw).map_err(|_| {
+                        RuntimeError::BadRequest("workspace snapshot paths must be UTF-8".into())
+                    })?;
+                    validate_publication_path(path)?;
+                    let file_path = self.workspace_root.join(path);
+                    let metadata = match fs::symlink_metadata(&file_path) {
+                        Ok(metadata) => metadata,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(RuntimeError::internal(error)),
+                    };
+                    let (mode, contents) = if metadata.file_type().is_symlink() {
+                        (
+                            "120000".to_owned(),
+                            fs::read_link(&file_path)
+                                .map_err(RuntimeError::internal)?
+                                .to_string_lossy()
+                                .as_bytes()
+                                .to_vec(),
+                        )
+                    } else if metadata.file_type().is_file() {
+                        let mode = if metadata.permissions().mode() & 0o111 != 0 {
+                            "100755"
+                        } else {
+                            "100644"
+                        };
+                        (
+                            mode.to_owned(),
+                            fs::read(&file_path).map_err(RuntimeError::internal)?,
+                        )
+                    } else {
+                        return Err(RuntimeError::BadRequest(
+                            "workspace snapshot contains a non-file entry".into(),
+                        ));
+                    };
+                    Ok(Some((path.into(), mode, contents)))
+                })
+                .collect::<crate::model::Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect()
+        };
 
         let mut files = Vec::new();
         let mut total_bytes = 0usize;
-        for raw in tree
-            .stdout
-            .split(|byte| *byte == 0)
-            .filter(|row| !row.is_empty())
-        {
+        for (path, mode, contents) in entries {
             if files.len() >= MAX_FILES {
                 return Err(RuntimeError::BadRequest(
                     "publication tree exceeds 500 files".into(),
                 ));
             }
-            let row = std::str::from_utf8(raw)
-                .map_err(|_| RuntimeError::BadRequest("publication paths must be UTF-8".into()))?;
-            let (metadata, path) = row
-                .split_once('\t')
-                .ok_or_else(|| RuntimeError::Internal("invalid Git tree entry".into()))?;
-            let mut fields = metadata.split_whitespace();
-            let mode = fields.next().unwrap_or_default();
-            let kind = fields.next().unwrap_or_default();
-            let sha = fields.next().unwrap_or_default();
-            if kind != "blob" || !matches!(mode, "100644" | "100755" | "120000") {
-                return Err(RuntimeError::BadRequest(
-                    "publication contains an unsupported Git object".into(),
-                ));
-            }
-            validate_publication_path(path)?;
-            validate_commit_sha(sha)?;
-            let blob = self.git_output(&self.workspace_root, &["cat-file", "blob", sha])?;
-            if !blob.status.success() {
-                return Err(git_failure("read publication blob", &blob));
-            }
-            if blob.stdout.len() > MAX_FILE_BYTES {
+            if contents.len() > MAX_FILE_BYTES {
                 return Err(RuntimeError::BadRequest(
                     "publication file exceeds one MiB".into(),
                 ));
             }
             total_bytes = total_bytes
-                .checked_add(blob.stdout.len())
+                .checked_add(contents.len())
                 .ok_or_else(|| RuntimeError::BadRequest("publication is too large".into()))?;
             if total_bytes > MAX_TOTAL_BYTES {
                 return Err(RuntimeError::BadRequest(
@@ -785,9 +866,9 @@ impl GuestService {
                 ));
             }
             files.push(PublicationFile {
-                path: path.into(),
-                mode: mode.into(),
-                content_base64: BASE64.encode(blob.stdout),
+                path,
+                mode,
+                content_base64: BASE64.encode(contents),
             });
         }
 
@@ -1547,6 +1628,61 @@ mod tests {
 
         let close = service.handle("DELETE", &format!("/v1/terminals/{session_id}"), b"");
         assert_eq!(close.status, 200);
+    }
+
+    #[test]
+    fn workspace_snapshot_preserves_dirty_files_and_deletions() {
+        let directory = tempdir().expect("tempdir");
+        git(directory.path(), &["init", "--quiet"]);
+        git(
+            directory.path(),
+            &["config", "user.email", "codev@example.com"],
+        );
+        git(directory.path(), &["config", "user.name", "CoDev Test"]);
+        fs::write(directory.path().join("changed.txt"), "before\n").expect("changed");
+        fs::write(directory.path().join("deleted.txt"), "remove me\n").expect("deleted");
+        git(directory.path(), &["add", "--all"]);
+        git(directory.path(), &["commit", "--quiet", "-m", "seed"]);
+        let head_sha = git_stdout(directory.path(), &["rev-parse", "HEAD"]);
+        fs::write(directory.path().join("changed.txt"), "after\n").expect("dirty change");
+        fs::remove_file(directory.path().join("deleted.txt")).expect("remove");
+        fs::write(directory.path().join("new.txt"), "new\n").expect("new");
+
+        let service = GuestService::new(directory.path()).expect("service");
+        for endpoint in ["/v1/workspace/snapshot", "/v1/publication/export"] {
+            let response = service.handle(
+                "POST",
+                endpoint,
+                serde_json::to_string(&PublicationExportRequest {
+                    expected_head_sha: head_sha.clone(),
+                })
+                .expect("export request")
+                .as_bytes(),
+            );
+            assert_eq!(
+                response.status,
+                200,
+                "{}: {}",
+                endpoint,
+                String::from_utf8_lossy(&response.body)
+            );
+            let export: PublicationExportResponse =
+                serde_json::from_slice(&response.body).expect("export");
+            let files = export
+                .files
+                .iter()
+                .map(|file| (file.path.as_str(), file.content_base64.as_str()))
+                .collect::<HashMap<_, _>>();
+            assert_eq!(
+                BASE64.decode(files["changed.txt"]).expect("changed base64"),
+                b"after\n"
+            );
+            assert_eq!(
+                BASE64.decode(files["new.txt"]).expect("new base64"),
+                b"new\n"
+            );
+            assert!(!files.contains_key("deleted.txt"));
+        }
     }
 
     fn git(root: &Path, arguments: &[&str]) {

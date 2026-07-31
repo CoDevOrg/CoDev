@@ -8,6 +8,8 @@ import { schema } from "@codev/db";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { apiError, getApiUser } from "@/lib/api";
+import { getOpenAIModel } from "@/lib/ai-model";
+import { requireWorkspacePermission } from "@/lib/access";
 import { getOpenAICredentialStatus } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
 import { getGitHubUserToken } from "@/lib/github";
@@ -15,7 +17,12 @@ import {
   createSandboxWorktree,
   deleteSandboxWorktree,
 } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+import {
+  getWorkspaceForMember,
+  WorkspaceLifecycleError,
+} from "@/lib/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { readWorkspaceStateEvents } from "@/lib/workspace-state";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(32),
@@ -83,10 +90,19 @@ export async function GET(
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId } = await params;
-  if (!(await getWorkspaceForMember(workspaceId, user.id))) {
-    return apiError(new Error("Workspace not found."), 404);
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "view");
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
   }
-  return Response.json({ sessions: await listAgentSessions(workspaceId) });
+  const [sessions, stateEvents] = await Promise.all([
+    listAgentSessions(workspaceId),
+    readWorkspaceStateEvents(workspaceId),
+  ]);
+  return Response.json({ sessions, stateEvents });
 }
 
 export async function POST(
@@ -96,7 +112,16 @@ export async function POST(
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
+  let workspace;
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
+    workspace = await getWorkspaceForMember(workspaceId, user.id);
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
+  }
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
 
   try {
@@ -109,6 +134,7 @@ export async function POST(
         409,
       );
     }
+    await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const issue = input.issueNumber
       ? await getExactGitHubIssue(
           user.id,
@@ -122,6 +148,17 @@ export async function POST(
         await transaction.execute(
           sql`select pg_advisory_xact_lock(hashtext(${`agent-slot:${workspaceId}`}))`,
         );
+        const [workspaceState] = await transaction
+          .select({ status: schema.workspaces.status })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.id, workspaceId))
+          .limit(1)
+          .for("update");
+        if (workspaceState?.status !== "ready") {
+          throw new WorkspaceLifecycleError(
+            "The workspace is not ready for a new agent. Try again after it resumes.",
+          );
+        }
         const [sessionCount] = await transaction
           .select({ value: count() })
           .from(schema.agentSessions)
@@ -195,7 +232,7 @@ export async function POST(
             createdBy: user.id,
             issueNumber: issue?.number,
             name: input.name,
-            model: "gpt-5.6-sol",
+            model: getOpenAIModel(),
           })
           .returning({ id: schema.agentSessions.id });
         if (!session) throw new Error("Could not create the agent session.");

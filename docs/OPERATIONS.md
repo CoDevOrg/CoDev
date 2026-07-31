@@ -42,7 +42,7 @@ definitions and the privacy boundary.
 
 ## Lifecycle recovery
 
-Vercel invokes `/api/cron/lifecycle` daily with `Authorization: Bearer
+Vercel invokes `/api/cron/lifecycle` every five minutes with `Authorization: Bearer
 $CRON_SECRET`. A manual retry is safe:
 
 ```sh
@@ -53,6 +53,20 @@ curl -fsS \
 
 Run it twice when validating idempotency. The second response should report
 zero newly cleaned workspaces.
+
+For real Linux/KVM lifecycle validation, run the host-local smoke test after
+deploying a Rust or Firecracker change:
+
+```sh
+sudo /opt/codev-verify-lifecycle.sh
+```
+
+It creates a dirty integration file, an agent-worktree file, and a PTY session;
+snapshots and destroys the VM; restores it from the Firecracker snapshot; checks
+all three state types; measures restore latency against the 500 ms target; and
+verifies that the orchestrator reports zero active sandboxes. Set
+`CODEV_EC2_INSTANCE_ID` to have the script also poll the EC2 state until it is
+`stopped`; host power-off is intentionally asynchronous.
 
 Run the authenticated launch preflight from Settings before every
 design-partner session. With zero active workspaces, any host state other than

@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
+import { requireWorkspacePermission } from "@/lib/access";
 import { executeInSandbox } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 
 const requestSchema = z.object({
   command: z.array(z.string().min(1).max(4_096)).min(1).max(32),
@@ -20,14 +21,18 @@ export async function POST(
   if (!user) return apiError(new Error("Authentication required."), 401);
 
   const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-  if (!workspace.canTerminal) {
-    return apiError(new Error("Terminal capability is required."), 403);
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "terminalWrite");
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
   }
 
   try {
     const input = requestSchema.parse(await request.json());
+    await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const result = await executeInSandbox(workspaceId, input);
     return Response.json({ result });
   } catch (error) {

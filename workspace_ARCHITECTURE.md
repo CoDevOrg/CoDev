@@ -6,18 +6,18 @@
 
 ## 1. Complete Tech Stack & Open-Source Repositories
 
-| Component | Technology / Tool | Repository / Package | Primary Function |
-| --- | --- | --- | --- |
-| **Frontend Framework** | Next.js 14+ (App Router) | [`vercel/next.js`](https://github.com/vercel/next.js) | Main application shell, route handling, and server-side link rendering. |
-| **Agent UI & Canvas** | Assistant-UI | [`assistant-ui/assistant-ui`](https://github.com/assistant-ui/assistant-ui) | Streaming agent thought streams, tool execution cards, and generative UI. |
-| **Multiplayer Sync** | Yjs + Hocuspocus | [`yjs/yjs`](https://github.com/yjs/yjs) / [`ueberdosis/hocuspocus`](https://github.com/ueberdosis/hocuspocus) | CRDT state synchronization for presence, cursor sync, and shared session state. |
-| **Code Editor** | Monaco Editor | [`suren-atoyan/monaco-react`](https://github.com/suren-atoyan/monaco-react) | Embedded VS Code editor inside the collapsible workspace drawer. |
-| **Terminal Emulator** | xterm.js | [`xtermjs/xterm.js`](https://github.com/xtermjs/xterm.js) | Browser terminal streaming raw PTY output over WebSockets from microVMs. |
-| **Code Diff Viewer** | Git Diff View | [`Will-In-Wi/git-diff-view`](https://github.com/Will-In-Wi/git-diff-view) | Renders side-by-side or unified code diff cards inside the agent thread. |
-| **AI Router & Normalizer** | Vercel AI SDK | [`vercel/ai`](https://github.com/vercel/ai) | Provider-agnostic LLM streaming, function calling, and BYO API key routing. |
-| **Sandbox Engine** | E2B / AWS Firecracker | [`e2b-dev/E2B`](https://github.com/e2b-dev/E2B) / [`firecracker-microvm/firecracker`](https://github.com/firecracker-microvm/firecracker) | Sub-second isolated cloud microVM runtimes hosted on AWS EC2 Metal. |
-| **OAuth Integration Vault** | Nango | [`NangoHQ/nango`](https://github.com/NangoHQ/nango) | Secure OAuth token lifecycle management for team APIs (GitHub, Supabase, Vercel). |
-| **Cache & Pub/Sub** | Redis | `ioredis` / Amazon ElastiCache | WebSocket room state coordination across backend instances. |
+| Component                   | Technology / Tool        | Repository / Package                                                                                                                      | Primary Function                                                                  |
+| --------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Frontend Framework**      | Next.js 14+ (App Router) | [`vercel/next.js`](https://github.com/vercel/next.js)                                                                                     | Main application shell, route handling, and server-side link rendering.           |
+| **Agent UI & Canvas**       | Assistant-UI             | [`assistant-ui/assistant-ui`](https://github.com/assistant-ui/assistant-ui)                                                               | Streaming agent thought streams, tool execution cards, and generative UI.         |
+| **Multiplayer Sync**        | Yjs + Hocuspocus         | [`yjs/yjs`](https://github.com/yjs/yjs) / [`ueberdosis/hocuspocus`](https://github.com/ueberdosis/hocuspocus)                             | CRDT state synchronization for presence, cursor sync, and shared session state.   |
+| **Code Editor**             | Monaco Editor            | [`suren-atoyan/monaco-react`](https://github.com/suren-atoyan/monaco-react)                                                               | Embedded VS Code editor inside the collapsible workspace drawer.                  |
+| **Terminal Emulator**       | xterm.js                 | [`xtermjs/xterm.js`](https://github.com/xtermjs/xterm.js)                                                                                 | Browser terminal streaming raw PTY output over WebSockets from microVMs.          |
+| **Code Diff Viewer**        | Git Diff View            | [`Will-In-Wi/git-diff-view`](https://github.com/Will-In-Wi/git-diff-view)                                                                 | Renders side-by-side or unified code diff cards inside the agent thread.          |
+| **AI Router & Normalizer**  | Vercel AI SDK            | [`vercel/ai`](https://github.com/vercel/ai)                                                                                               | Provider-agnostic LLM streaming, function calling, and BYO API key routing.       |
+| **Sandbox Engine**          | E2B / AWS Firecracker    | [`e2b-dev/E2B`](https://github.com/e2b-dev/E2B) / [`firecracker-microvm/firecracker`](https://github.com/firecracker-microvm/firecracker) | Sub-second isolated cloud microVM runtimes hosted on AWS EC2 Metal.               |
+| **OAuth Integration Vault** | Nango                    | [`NangoHQ/nango`](https://github.com/NangoHQ/nango)                                                                                       | Secure OAuth token lifecycle management for team APIs (GitHub, Supabase, Vercel). |
+| **Cache & Pub/Sub**         | Redis                    | `ioredis` / Amazon ElastiCache                                                                                                            | WebSocket room state coordination across backend instances.                       |
 
 ---
 
@@ -60,14 +60,14 @@ To ensure multi-agent tools (Claude, Cursor, Codex) operate within a single shar
 ### Unified Event Data Schema (`/packages/shared-types/src/agent-event.ts`)
 
 ```typescript
-export type AgentEventType = 
-  | 'USER_PROMPT'
-  | 'AGENT_THOUGHT'
-  | 'TOOL_CALL_INIT'
-  | 'FILE_DIFF_PROPOSED'
-  | 'TERMINAL_EXEC_START'
-  | 'TERMINAL_EXEC_END'
-  | 'INTERVENTION_PAUSE';
+export type AgentEventType =
+  | "USER_PROMPT"
+  | "AGENT_THOUGHT"
+  | "TOOL_CALL_INIT"
+  | "FILE_DIFF_PROPOSED"
+  | "TERMINAL_EXEC_START"
+  | "TERMINAL_EXEC_END"
+  | "INTERVENTION_PAUSE";
 
 export interface AgentEvent {
   id: string;
@@ -77,7 +77,7 @@ export interface AgentEvent {
     userName: string;
     avatarUrl: string;
   };
-  modelProvider: 'anthropic' | 'openai' | 'custom';
+  modelProvider: "anthropic" | "openai" | "custom";
   modelName: string;
   type: AgentEventType;
   payload: {
@@ -91,7 +91,6 @@ export interface AgentEvent {
   };
   timestamp: number;
 }
-
 ```
 
 ---
@@ -159,9 +158,9 @@ codev/
 
 1. Build the Next.js workspace page utilizing **Assistant-UI** as the primary center canvas.
 2. Render generative cards inside the thread:
-* **Diff Cards:** Using `git-diff-view` for side-by-side proposed file changes.
-* **Terminal Execution Badges:** Displaying real-time command execution state and logs.
 
+- **Diff Cards:** Using `git-diff-view` for side-by-side proposed file changes.
+- **Terminal Execution Badges:** Displaying real-time command execution state and logs.
 
 3. Add a **"Pause / Re-steer"** control button thathalts the active agent event stream and injects human guidance into the shared context.
 

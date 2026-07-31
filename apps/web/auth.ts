@@ -46,26 +46,49 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const githubProfile = profile as unknown as GitHubProfile;
       const now = new Date();
-      const [localUser] = await getDatabase()
-        .insert(schema.users)
-        .values({
-          githubUserId: BigInt(githubProfile.id),
-          login: githubProfile.login,
-          name: githubProfile.name,
-          email: githubProfile.email,
-          avatarUrl: githubProfile.avatar_url,
-        })
-        .onConflictDoUpdate({
-          target: schema.users.githubUserId,
-          set: {
-            login: githubProfile.login,
-            name: githubProfile.name,
-            email: githubProfile.email,
-            avatarUrl: githubProfile.avatar_url,
-            updatedAt: now,
-          },
-        })
-        .returning({ id: schema.users.id });
+      const database = getDatabase();
+      const githubUserId = BigInt(githubProfile.id);
+      const [existingByGithub] = await database
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.githubUserId, githubUserId))
+        .limit(1);
+      const [existingByEmail] = githubProfile.email
+        ? await database
+            .select({ id: schema.users.id })
+            .from(schema.users)
+            .where(eq(schema.users.email, githubProfile.email))
+            .limit(1)
+        : [];
+      const [localUser] =
+        existingByGithub?.id || existingByEmail?.id
+          ? await database
+              .update(schema.users)
+              .set({
+                githubUserId,
+                login: githubProfile.login,
+                name: githubProfile.name,
+                email: githubProfile.email,
+                avatarUrl: githubProfile.avatar_url,
+                updatedAt: now,
+              })
+              .where(
+                eq(
+                  schema.users.id,
+                  existingByGithub?.id ?? existingByEmail!.id,
+                ),
+              )
+              .returning({ id: schema.users.id })
+          : await database
+              .insert(schema.users)
+              .values({
+                githubUserId,
+                login: githubProfile.login,
+                name: githubProfile.name,
+                email: githubProfile.email,
+                avatarUrl: githubProfile.avatar_url,
+              })
+              .returning({ id: schema.users.id });
 
       if (!localUser) {
         return false;

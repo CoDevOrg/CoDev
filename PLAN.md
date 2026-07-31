@@ -158,7 +158,7 @@ Run up to two durable agent sessions in separate Git worktrees. Stream tool call
 
 - Authenticated workspace members can run at most two agent sessions, each in a detached Git worktree isolated from the integration checkout and the other agent.
 - Vercel Workflow DevKit durably drains queued turns and can resume after function restarts or step retries.
-- OpenAI Responses API calls use `gpt-5.6-sol`, bounded repository tools, and the prompt author's encrypted key without persisting plaintext credentials in workflow state or exposing them to the browser or sandbox.
+- OpenAI Responses API calls use the configured `CODEV_OPENAI_MODEL` (default `gpt-5`), bounded repository tools, and the prompt author's encrypted key without persisting plaintext credentials in workflow state or exposing them to the browser or sandbox.
 - The IDE displays agent status, tool activity, results, queued follow-ups, failures, and interruption controls.
 - Agent file and command tools are path-confined, timeout-bounded, and cannot publish, merge, or access host credentials.
 - Schema, web, workflow, browser, and Rust checks pass against the deployed database and runtime.
@@ -166,7 +166,7 @@ Run up to two durable agent sessions in separate Git worktrees. Stream tool call
 ### Phase 6 Delivery
 
 - Agents: two app-level durable sessions with queue-draining Vercel workflows
-- Model: OpenAI Responses API using `gpt-5.6-sol` with medium reasoning
+- Model: OpenAI Responses API using the configured `CODEV_OPENAI_MODEL` (default `gpt-5`)
 - Isolation: detached Git worktrees inside each Firecracker workspace
 - Persistence: Supabase-backed turns, workflow run IDs, results, and idempotent activity events
 - Controls: queue follow-up and interrupt from the browser IDE

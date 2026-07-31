@@ -1,8 +1,7 @@
-import { auth } from "@/auth";
+import { getCurrentAppUser } from "@/lib/identity";
 
 export async function getApiUser() {
-  const session = await auth();
-  return session?.user ?? null;
+  return getCurrentAppUser();
 }
 
 export function apiError(error: unknown, status = 400) {

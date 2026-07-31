@@ -1,0 +1,34 @@
+{
+  "name": "@codev/hocuspocus-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "4.0.25",
+    "@codev/db": "workspace:*",
+    "@codev/shared-types": "workspace:*",
+    "@hocuspocus/extension-database": "4.4.0",
+    "@hocuspocus/extension-logger": "4.4.0",
+    "@hocuspocus/server": "4.4.0",
+    "ai": "7.0.44",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "5.11.1",
+    "pg": "8.22.0",
+    "yjs": "13.6.31",
+    "y-protocols": "1.0.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "4.4.0",
+    "@types/node": "24.10.13",
+    "tsx": "4.21.0",
+    "vitest": "4.1.10"
+  }
+}

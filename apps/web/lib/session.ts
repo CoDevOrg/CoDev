@@ -2,13 +2,13 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { auth } from "@/auth";
+import { getCurrentAppUser } from "@/lib/identity";
 
 export async function requireUser() {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const user = await getCurrentAppUser();
+  if (!user?.id) {
     redirect("/sign-in");
   }
 
-  return session.user;
+  return user;
 }

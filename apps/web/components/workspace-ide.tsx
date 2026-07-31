@@ -15,18 +15,22 @@ import {
   WorkspaceCollaboration,
 } from "@/lib/collaboration-client";
 import {
+  hocuspocusConfigured,
+  HocuspocusWorkspaceCollaboration,
+} from "@/lib/hocuspocus-client";
+import {
   languageForPath,
   type SearchMatch,
   type WorkspaceFile,
 } from "@/lib/ide";
 import { formatPresenceCopy } from "@/lib/presence-copy";
-import {
-  isPreviewExtensionAllowed,
-  resolvePreviewEntry,
-} from "@/lib/preview";
-import { AgentPanel } from "@/components/agent-panel";
+import { isPreviewExtensionAllowed, resolvePreviewEntry } from "@/lib/preview";
+import { AgentPanel, type AgentSession } from "@/components/agent-panel";
+import { AgentCanvas } from "@/components/agent-canvas";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
+import type { WorkspaceShareMember } from "@/components/share-dialog";
+import type { AgentEvent } from "@codev/shared-types";
 
 type IdeView = "chat" | "files" | "code" | "preview" | "terminal";
 
@@ -63,8 +67,16 @@ export interface WorkspaceIdeProps {
   workspaceId: string;
   repository: string;
   branch: string;
+  workspaceName: string;
+  members: WorkspaceShareMember[];
+  initialAgentSessions: AgentSession[];
+  initialStateEvents: AgentEvent[];
+  runtimeStatus: "ready" | "hibernated";
+  canResume: boolean;
+  canEdit: boolean;
   canTerminal: boolean;
   canMerge: boolean;
+  canReview: boolean;
   isOwner: boolean;
   integrationHeadSha: string;
   user: {
@@ -79,12 +91,21 @@ export function WorkspaceIde({
   workspaceId,
   repository,
   branch,
+  workspaceName,
+  members,
+  initialAgentSessions,
+  initialStateEvents,
+  runtimeStatus,
+  canResume,
+  canEdit,
   canTerminal,
   canMerge,
+  canReview,
   isOwner,
   integrationHeadSha,
   user,
 }: WorkspaceIdeProps) {
+  const isHibernated = runtimeStatus === "hibernated";
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,21 +126,28 @@ export function WorkspaceIde({
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const [publicationBranch, setPublicationBranch] = useState("codev/demo");
   const [publishing, setPublishing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [openingPullRequest, setOpeningPullRequest] = useState(false);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
-  const collaboration = useRef<WorkspaceCollaboration | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const [resumeMessage, setResumeMessage] = useState("");
+  const resumeInFlight = useRef(false);
+  const collaboration = useRef<
+    WorkspaceCollaboration | HocuspocusWorkspaceCollaboration | null
+  >(null);
   const editor = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
   const terminalElement = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
   const terminalSession = useRef<string | null>(null);
-  const terminalInput = useRef("");
-  const terminalInputTimer = useRef<number | null>(null);
-  const terminalSendChain = useRef<Promise<void>>(Promise.resolve());
+  const terminalSocket = useRef<WebSocket | null>(null);
   const previewRefreshTimer = useRef<number | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
+  const displayedCollaborationStatus: CollaborationStatus = isHibernated
+    ? "offline"
+    : collaborationStatus;
 
   const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
 
@@ -179,6 +207,77 @@ export function WorkspaceIde({
     }
   }
 
+  async function exportPullRequest() {
+    setExporting(true);
+    setError("");
+    try {
+      const result = await fetch(`/api/workspaces/${workspaceId}/export`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          branchName: publicationBranch,
+          expectedHeadSha: integrationHeadSha,
+        }),
+      }).then((response) =>
+        payload<{
+          publication: { htmlUrl: string | null };
+          pullRequest: { htmlUrl: string };
+        }>(response),
+      );
+      setPublishedUrl(result.publication.htmlUrl);
+      setPullRequestUrl(result.pullRequest.htmlUrl);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "GitHub export failed.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const resumeWorkspace = useCallback(async () => {
+    if (resumeInFlight.current) return;
+    resumeInFlight.current = true;
+    setResuming(true);
+    setResumeMessage("Waking the workspace…");
+    try {
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        const response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
+          method: "POST",
+        });
+        if (response.status !== 202) {
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(
+              body?.error ?? `Resume failed with HTTP ${response.status}.`,
+            );
+          }
+          window.location.reload();
+          return;
+        }
+        setResumeMessage("The AWS host is starting; preparing the microVM…");
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      throw new Error("The workspace is still starting. Try again shortly.");
+    } catch (caught) {
+      setResumeMessage(
+        caught instanceof Error ? caught.message : "Resume failed.",
+      );
+    } finally {
+      resumeInFlight.current = false;
+      setResuming(false);
+    }
+  }, [workspaceId]);
+
+  const autoResumeAttempted = useRef(false);
+  useEffect(() => {
+    if (!isHibernated || !canResume || autoResumeAttempted.current) return;
+    autoResumeAttempted.current = true;
+    void resumeWorkspace();
+  }, [canResume, isHibernated, resumeWorkspace]);
+
   const refreshFiles = useCallback(async () => {
     const filePayload = await fetch(`${apiBase}/files`, {
       cache: "no-store",
@@ -221,12 +320,19 @@ export function WorkspaceIde({
 
   useEffect(() => {
     if (!hasPreview && view === "preview") {
+      // The preview rail can disappear after a file refresh; keep the active
+      // view valid when that external state changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setView("chat");
     }
   }, [hasPreview, view]);
 
   useEffect(() => {
-    const client = new WorkspaceCollaboration(
+    if (isHibernated) return;
+    const CollaborationClient = hocuspocusConfigured()
+      ? HocuspocusWorkspaceCollaboration
+      : WorkspaceCollaboration;
+    const client = new CollaborationClient(
       workspaceId,
       {
         id: user.id,
@@ -272,7 +378,35 @@ export function WorkspaceIde({
       client.destroy();
       collaboration.current = null;
     };
-  }, [refreshFiles, user.id, user.image, user.login, user.name, workspaceId]);
+  }, [
+    isHibernated,
+    refreshFiles,
+    user.id,
+    user.image,
+    user.login,
+    user.name,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (isHibernated) return;
+    let stopped = false;
+    const sendHeartbeat = () => {
+      if (stopped || document.visibilityState === "hidden") return;
+      void fetch(`/api/workspaces/${workspaceId}/heartbeat`, {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 30_000);
+    window.addEventListener("focus", sendHeartbeat);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", sendHeartbeat);
+    };
+  }, [isHibernated, workspaceId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -297,11 +431,15 @@ export function WorkspaceIde({
   }, []);
 
   useEffect(() => {
-    if (!canTerminal || !terminalElement.current || terminal.current) return;
+    if (
+      !canTerminal ||
+      isHibernated ||
+      !terminalElement.current ||
+      terminal.current
+    )
+      return;
     let stopped = false;
-    let pollTimer: number | null = null;
     let resizeTimer: number | null = null;
-    let acknowledged = 0;
     const instance = new Terminal({
       convertEol: true,
       cursorBlink: true,
@@ -324,143 +462,82 @@ export function WorkspaceIde({
     fit.fit();
     instance.writeln("\x1b[33mConnecting to the Firecracker PTY…\x1b[0m");
 
-    async function flushInput() {
-      terminalInputTimer.current = null;
-      const sessionId = terminalSession.current;
-      const data = terminalInput.current;
-      terminalInput.current = "";
-      if (!sessionId || !data || stopped) return;
-      terminalSendChain.current = terminalSendChain.current
-        .then(async () => {
-          await fetch(`${apiBase}/terminal`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "input", sessionId, data }),
-          }).then((response) => payload<Record<string, never>>(response));
-        })
-        .catch(async (caught) => {
-          await writeTerminal(
-            `\r\n\x1b[31m${caught instanceof Error ? caught.message : "Terminal input failed."}\x1b[0m\r\n`,
-          );
-        });
-      await terminalSendChain.current;
-    }
-
-    function queueInput(data: string) {
-      terminalInput.current += data;
-      if (terminalInputTimer.current === null) {
-        terminalInputTimer.current = window.setTimeout(() => {
-          void flushInput();
-        }, 20);
-      }
-    }
-
-    async function poll(sessionId: string) {
-      if (stopped) return;
-      try {
-        const response = await fetch(`${apiBase}/terminal`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "poll",
-            sessionId,
-            after: acknowledged,
-          }),
-        }).then((result) =>
-          payload<{
-            result: {
-              chunks: { sequence: number; data: string }[];
-              exited: boolean;
-              exitCode: number | null;
-            };
-          }>(result),
-        );
-        for (const chunk of response.result.chunks) {
-          await writeTerminal(chunk.data);
-          acknowledged = Math.max(acknowledged, chunk.sequence);
-        }
-        if (response.result.exited) {
-          await writeTerminal(
-            `\r\n\x1b[33mPTY exited (${response.result.exitCode ?? "unknown"}). Reload to reconnect.\x1b[0m\r\n`,
-          );
-          return;
-        }
-      } catch (caught) {
-        await writeTerminal(
-          `\r\n\x1b[31m${caught instanceof Error ? caught.message : "Terminal stream interrupted."}\x1b[0m\r\n`,
-        );
-      }
-      if (!stopped)
-        pollTimer = window.setTimeout(() => void poll(sessionId), 0);
-    }
-
-    async function connect() {
-      try {
-        const result = await fetch(`${apiBase}/terminal`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "start",
-            rows: instance.rows,
-            columns: instance.cols,
-          }),
-        }).then((response) => payload<{ sessionId: string }>(response));
-        if (stopped) return;
-        terminalSession.current = result.sessionId;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(
+      `${protocol}//${window.location.host}/api/workspaces/${encodeURIComponent(workspaceId)}/sandbox/terminal/stream`,
+    );
+    terminalSocket.current = socket;
+    socket.onopen = () => {
+      socket.send(
+        JSON.stringify({
+          type: "start",
+          rows: instance.rows,
+          columns: instance.cols,
+        }),
+      );
+    };
+    socket.onmessage = (message) => {
+      const event = JSON.parse(String(message.data)) as {
+        type: "ready" | "data" | "exit" | "error";
+        sessionId?: string;
+        data?: string;
+        exitCode?: number | null;
+        message?: string;
+      };
+      if (event.type === "ready") {
+        terminalSession.current = event.sessionId ?? null;
         instance.clear();
-        void poll(result.sessionId);
-      } catch (caught) {
-        await writeTerminal(
-          `\x1b[31m${caught instanceof Error ? caught.message : "Could not start terminal."}\x1b[0m\r\n`,
+      } else if (event.type === "data" && event.data) {
+        void writeTerminal(event.data);
+      } else if (event.type === "exit") {
+        void writeTerminal(
+          `\r\n\x1b[33mPTY exited (${event.exitCode ?? "unknown"}). Reload to reconnect.\x1b[0m\r\n`,
+        );
+      } else if (event.type === "error") {
+        void writeTerminal(
+          `\r\n\x1b[31m${event.message ?? "Terminal stream interrupted."}\x1b[0m\r\n`,
         );
       }
-    }
-
-    const dataSubscription = instance.onData(queueInput);
+    };
+    socket.onerror = () => {
+      void writeTerminal("\r\n\x1b[31mTerminal WebSocket failed.\x1b[0m\r\n");
+    };
+    const dataSubscription = instance.onData((data) => {
+      if (canEdit && !stopped && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "input", data }));
+      }
+    });
     const observer = new ResizeObserver(() => {
       fit.fit();
-      const sessionId = terminalSession.current;
-      if (!sessionId) return;
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
-        void fetch(`${apiBase}/terminal`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "resize",
-            sessionId,
-            rows: instance.rows,
-            columns: instance.cols,
-          }),
-        });
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              type: "resize",
+              rows: instance.rows,
+              columns: instance.cols,
+            }),
+          );
+        }
       }, 100);
     });
     observer.observe(terminalElement.current);
     terminal.current = instance;
     fitAddon.current = fit;
-    void connect();
     return () => {
       stopped = true;
       observer.disconnect();
       dataSubscription.dispose();
-      if (pollTimer !== null) window.clearTimeout(pollTimer);
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
-      if (terminalInputTimer.current !== null) {
-        window.clearTimeout(terminalInputTimer.current);
-      }
-      const sessionId = terminalSession.current;
-      if (sessionId) {
-        void fetch(
-          `${apiBase}/terminal?sessionId=${encodeURIComponent(sessionId)}`,
-          { method: "DELETE", keepalive: true },
-        );
-      }
+      socket.close();
+      terminalSocket.current = null;
       instance.dispose();
       terminal.current = null;
       fitAddon.current = null;
       terminalSession.current = null;
     };
-  }, [apiBase, canTerminal, writeTerminal]);
+  }, [canEdit, canTerminal, isHibernated, workspaceId, writeTerminal]);
 
   useEffect(() => {
     if (view !== "terminal" || terminalCollapsed) return;
@@ -580,7 +657,7 @@ export function WorkspaceIde({
   }
 
   const save = useCallback(async () => {
-    if (!openFile?.dirty || saving) return;
+    if (!canEdit || !openFile?.dirty || saving) return;
     setSaving(true);
     setError("");
     try {
@@ -614,7 +691,14 @@ export function WorkspaceIde({
     } finally {
       setSaving(false);
     }
-  }, [apiBase, openFile, refreshFiles, saving, schedulePreviewRefresh]);
+  }, [
+    apiBase,
+    canEdit,
+    openFile,
+    refreshFiles,
+    saving,
+    schedulePreviewRefresh,
+  ]);
 
   useEffect(() => {
     saveRef.current = save;
@@ -703,16 +787,21 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
-          <WorkspaceShareButton workspaceId={workspaceId} isOwner={isOwner} />
+          <WorkspaceShareButton
+            workspaceId={workspaceId}
+            isOwner={isOwner}
+            workspaceName={workspaceName}
+            members={members}
+          />
           <span
-            className={`connection-state collaboration-${collaborationStatus}`}
+            className={`connection-state collaboration-${displayedCollaborationStatus}`}
           >
             <i />{" "}
-            {collaborationStatus === "online"
+            {displayedCollaborationStatus === "online"
               ? "Realtime online"
-              : collaborationStatus === "reconnecting"
+              : displayedCollaborationStatus === "reconnecting"
                 ? "Reconnecting…"
-                : collaborationStatus === "connecting"
+                : displayedCollaborationStatus === "connecting"
                   ? "Connecting…"
                   : "Realtime offline"}
           </span>
@@ -760,6 +849,31 @@ export function WorkspaceIde({
           )}
         </div>
       </header>
+
+      {isHibernated ? (
+        <section className="hibernation-banner" role="status">
+          <div>
+            <strong>Workspace hibernated</strong>
+            <span>
+              Conversation history and uncommitted files were restored from
+              PostgreSQL. The microVM is resuming in the background.
+            </span>
+            {resumeMessage ? <small>{resumeMessage}</small> : null}
+          </div>
+          {canResume ? (
+            <button
+              className="primary-button"
+              type="button"
+              disabled={resuming}
+              onClick={() => void resumeWorkspace()}
+            >
+              {resuming ? "Resuming…" : "Resume sandbox"}
+            </button>
+          ) : (
+            <span className="runtime-state">Owner action required</span>
+          )}
+        </section>
+      ) : null}
 
       <div
         className={[
@@ -843,18 +957,20 @@ export function WorkspaceIde({
         </aside>
 
         <div
-          className={[
-            "ide-main-stage",
-            hasPreview ? "has-preview" : "",
-          ]
+          className={["ide-main-stage", hasPreview ? "has-preview" : ""]
             .filter(Boolean)
             .join(" ")}
         >
           <AgentPanel
             workspaceId={workspaceId}
             canMerge={canMerge}
+            canReview={canReview}
+            canSteer={canEdit && !isHibernated}
+            initialSessions={initialAgentSessions}
+            initialStateEvents={initialStateEvents}
             onTurnCompleted={schedulePreviewRefresh}
           />
+          {!isHibernated ? <AgentCanvas workspaceId={workspaceId} /> : null}
           {hasPreview ? (
             <PreviewPane
               workspaceId={workspaceId}
@@ -912,10 +1028,20 @@ export function WorkspaceIde({
                         />
                         <button
                           type="button"
-                          disabled={publishing || openFile?.dirty}
+                          disabled={
+                            exporting || publishing || Boolean(openFile?.dirty)
+                          }
+                          onClick={() => void exportPullRequest()}
+                        >
+                          {exporting ? "Creating PR…" : "Create pull request"}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={publishing || Boolean(openFile?.dirty)}
                           onClick={() => void publishBranch()}
                         >
-                          {publishing ? "Publishing…" : "Publish"}
+                          {publishing ? "Publishing…" : "Publish branch"}
                         </button>
                       </>
                     )}
@@ -1072,13 +1198,14 @@ export function WorkspaceIde({
                   <button
                     type="button"
                     disabled={
-                      collaborationStatus === "online" ||
+                      !canEdit ||
+                      displayedCollaborationStatus === "online" ||
                       !openFile?.dirty ||
                       saving
                     }
                     onClick={() => void save()}
                   >
-                    {collaborationStatus === "online"
+                    {displayedCollaborationStatus === "online"
                       ? openFile?.dirty
                         ? "Syncing…"
                         : "Synced"
@@ -1168,6 +1295,7 @@ export function WorkspaceIde({
                       padding: { top: 14 },
                       smoothScrolling: true,
                       tabSize: 2,
+                      readOnly: !canEdit,
                     }}
                   />
                 )
