@@ -1,6 +1,5 @@
 import type { AppUser } from "@/lib/identity";
 import type { OrganizationSettingsContext } from "@/lib/settings-access";
-
 export function SettingsPageHeader({
   eyebrow,
   title,
