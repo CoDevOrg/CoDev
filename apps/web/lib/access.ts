@@ -17,6 +17,12 @@ export type WorkspacePermission =
   | "merge"
   | "invite";
 
+export type OpenFgaWorkspaceRelation =
+  | "viewer"
+  | "reviewer"
+  | "editor"
+  | "owner";
+
 export function openFgaRelationForPermission(
   permission: WorkspacePermission,
 ): "viewer" | "reviewer" | "editor" | "owner" {
@@ -193,7 +199,7 @@ export async function writeWorkspaceTuple(input: {
 async function checkOpenFga(
   workspaceId: string,
   userId: string,
-  relation: "viewer" | "reviewer" | "editor" | "owner",
+  relation: OpenFgaWorkspaceRelation,
 ) {
   const result = await openFgaRequest("/check", {
     tuple_key: {
@@ -203,6 +209,14 @@ async function checkOpenFga(
     },
   });
   return result?.allowed ?? true;
+}
+
+export async function checkWorkspaceRelation(
+  workspaceId: string,
+  userId: string,
+  relation: OpenFgaWorkspaceRelation,
+) {
+  return checkOpenFga(workspaceId, userId, relation);
 }
 
 export async function getWorkspaceAccess(workspaceId: string, userId: string) {

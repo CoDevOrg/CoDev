@@ -102,9 +102,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         .insert(schema.githubConnections)
         .values({
           userId: localUser.id,
-          encryptedAccessToken: encryptSecret(account.access_token),
+          encryptedAccessToken: await encryptSecret(account.access_token),
           encryptedRefreshToken: account.refresh_token
-            ? encryptSecret(account.refresh_token)
+            ? await encryptSecret(account.refresh_token)
             : null,
           accessTokenExpiresAt: account.expires_at
             ? new Date(account.expires_at * 1000)
@@ -114,13 +114,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             : null,
           tokenType: account.token_type ?? "bearer",
           scope: account.scope ?? null,
+          keyVersion: 2,
         })
         .onConflictDoUpdate({
           target: schema.githubConnections.userId,
           set: {
-            encryptedAccessToken: encryptSecret(account.access_token),
+            encryptedAccessToken: await encryptSecret(account.access_token),
             encryptedRefreshToken: account.refresh_token
-              ? encryptSecret(account.refresh_token)
+              ? await encryptSecret(account.refresh_token)
               : undefined,
             accessTokenExpiresAt: account.expires_at
               ? new Date(account.expires_at * 1000)
@@ -130,6 +131,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               : null,
             tokenType: account.token_type ?? "bearer",
             scope: account.scope ?? null,
+            keyVersion: 2,
             updatedAt: now,
           },
         });

@@ -16,6 +16,7 @@
     "db:migrate": "dotenv -e ../../.env.local -- drizzle-kit migrate"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "drizzle-orm": "0.45.2",
     "pg": "8.22.0"
   },

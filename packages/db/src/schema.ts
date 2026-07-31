@@ -94,6 +94,24 @@ export const pilotSessionStatus = pgEnum("pilot_session_status", [
   "blocked",
   "completed",
 ]);
+export const credentialScopeType = pgEnum("credential_scope_type", [
+  "USER",
+  "WORKSPACE",
+]);
+export const credentialProvider = pgEnum("credential_provider", [
+  "anthropic",
+  "openai",
+  "bedrock",
+  "azure_foundry",
+  "cursor",
+  "custom",
+]);
+export const credentialType = pgEnum("credential_type", [
+  "API_KEY",
+  "OAUTH_TOKEN",
+  "AWS_BEDROCK_ROLE",
+  "AZURE_ENDPOINT",
+]);
 
 export const users = pgTable(
   "users",
@@ -144,19 +162,34 @@ export const providerCredentials = pgTable(
   "provider_credentials",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
-    provider: text("provider").notNull(),
-    encryptedValue: text("encrypted_value").notNull(),
+    scopeType: credentialScopeType("scope_type").notNull(),
+    scopeId: uuid("scope_id").notNull(),
+    provider: credentialProvider("provider").notNull(),
+    credentialType: credentialType("credential_type").notNull(),
+    priorityOrder: integer("priority_order").default(0).notNull(),
+    encryptedApiKey: text("encrypted_api_key"),
+    encryptedAccessToken: text("encrypted_access_token"),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    endpointUrl: text("endpoint_url"),
+    awsRoleArn: text("aws_role_arn"),
+    isConnected: boolean("is_connected").default(true).notNull(),
     keyVersion: integer("key_version").default(1).notNull(),
-    lastFour: text("last_four").notNull(),
+    lastFour: text("last_four"),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("provider_credentials_user_provider_idx").on(
-      table.userId,
+    uniqueIndex("provider_credentials_scope_provider_type_idx").on(
+      table.scopeType,
+      table.scopeId,
       table.provider,
+      table.credentialType,
+    ),
+    index("provider_credentials_scope_provider_priority_idx").on(
+      table.scopeType,
+      table.scopeId,
+      table.provider,
+      table.priorityOrder,
     ),
   ],
 );

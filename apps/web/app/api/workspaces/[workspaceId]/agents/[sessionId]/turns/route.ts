@@ -5,11 +5,16 @@ import { schema } from "@codev/db";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import { apiError, getApiUser } from "@/lib/api";
+import { getAgentProvider } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
-import { getOpenAICredentialStatus } from "@/lib/credentials";
+import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
 import { assertTurnQuota, QuotaError, quotaResponse } from "@/lib/quotas";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import {
+  AgentPromptRateLimitError,
+  enforceAgentPromptRateLimit,
+} from "@/lib/agent-rate-limit";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),
@@ -37,9 +42,9 @@ export async function POST(
 
   try {
     const input = inputSchema.parse(await request.json());
-    if (!(await getOpenAICredentialStatus(user.id))) {
-      return apiError(new Error("Add an OpenAI API key in Settings."), 409);
-    }
+    const provider = getAgentProvider();
+    await resolveAgentCredential(user.id, workspaceId, provider);
+    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const [session] = await getDatabase()
       .select({ id: schema.agentSessions.id })
@@ -61,6 +66,15 @@ export async function POST(
     await kickAgentSession(sessionId);
     return Response.json({ turnId: turn?.id }, { status: 202 });
   } catch (error) {
+    if (error instanceof AgentPromptRateLimitError) {
+      return Response.json(
+        { error: error.message, code: "agent_prompt_rate_limit" },
+        {
+          status: 429,
+          headers: { "Retry-After": String(error.retryAfterSeconds) },
+        },
+      );
+    }
     if (error instanceof QuotaError) return quotaResponse(error);
     return apiError(error);
   }

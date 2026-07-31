@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, eq, gte, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -51,49 +51,20 @@ export async function assertWorkspaceQuota(userId: string) {
 }
 
 export async function assertTurnQuota(userId: string, sessionId: string) {
-  const rate = await consumeRateLimit(userId, "agent-turn", 30, 3_600);
-  if (!rate.allowed) {
-    throw new QuotaError(
-      "Agent turn rate limit reached.",
-      "turn_rate_limit",
-      rate.retryAfterSeconds,
+  const [queued] = await getDatabase()
+    .select({ value: count() })
+    .from(schema.agentTurns)
+    .where(
+      and(
+        eq(schema.agentTurns.sessionId, sessionId),
+        inArray(schema.agentTurns.status, ["queued", "running"]),
+      ),
     );
-  }
-  const [queued, daily] = await Promise.all([
-    getDatabase()
-      .select({ value: count() })
-      .from(schema.agentTurns)
-      .where(
-        and(
-          eq(schema.agentTurns.sessionId, sessionId),
-          inArray(schema.agentTurns.status, ["queued", "running"]),
-        ),
-      ),
-    getDatabase()
-      .select({ value: count() })
-      .from(schema.agentTurns)
-      .where(
-        and(
-          eq(schema.agentTurns.authorId, userId),
-          gte(
-            schema.agentTurns.createdAt,
-            new Date(Date.now() - 24 * 60 * 60 * 1_000),
-          ),
-        ),
-      ),
-  ]);
-  if ((queued[0]?.value ?? 0) >= 2) {
+  if ((queued?.value ?? 0) >= 2) {
     throw new QuotaError(
       "This agent already has two queued or running turns.",
       "queued_turn_limit",
       30,
-    );
-  }
-  if ((daily[0]?.value ?? 0) >= 100) {
-    throw new QuotaError(
-      "The daily agent turn budget is exhausted.",
-      "daily_turn_limit",
-      3_600,
     );
   }
 }

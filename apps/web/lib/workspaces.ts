@@ -15,6 +15,7 @@ import {
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getRepository } from "./github";
+import { requireOrganizationSettingsWrite } from "./settings-access";
 import { assertWorkspaceQuota } from "./quotas";
 import {
   hasUnpublishedRuntimeChanges,
@@ -604,7 +605,7 @@ export async function createWorkspaceInvite(
     allowLink?: boolean;
   } = {},
 ) {
-  await requireOwner(workspaceId, userId);
+  await requireOrganizationSettingsWrite(userId, workspaceId);
   const token = createInviteToken();
   const accessRole = options.accessRole ?? "co_steer";
   const [invite] = await getDatabase()
@@ -630,7 +631,7 @@ export async function revokeWorkspaceInvite(
   inviteId: string,
   userId: string,
 ) {
-  await requireOwner(workspaceId, userId);
+  await requireOrganizationSettingsWrite(userId, workspaceId);
   await getDatabase()
     .update(schema.workspaceInvites)
     .set({ revokedAt: new Date() })
@@ -711,7 +712,7 @@ export async function updateMemberAccessRole(
   ownerUserId: string,
   accessRole: Exclude<WorkspaceAccessRole, "owner">,
 ) {
-  await requireOwner(workspaceId, ownerUserId);
+  await requireOrganizationSettingsWrite(ownerUserId, workspaceId);
   if (memberUserId === ownerUserId) {
     throw new Error("Owner capabilities cannot be removed.");
   }
@@ -756,7 +757,7 @@ export async function updateMemberCapabilities(
   ownerUserId: string,
   capabilities: { canTerminal: boolean; canMerge: boolean },
 ) {
-  await requireOwner(workspaceId, ownerUserId);
+  await requireOrganizationSettingsWrite(ownerUserId, workspaceId);
   if (memberUserId === ownerUserId) {
     throw new Error("Owner capabilities cannot be removed.");
   }

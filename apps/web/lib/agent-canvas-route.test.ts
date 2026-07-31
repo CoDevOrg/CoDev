@@ -7,9 +7,11 @@ const mocks = vi.hoisted(() => ({
       { status },
     ),
   ),
-  createOpenAI: vi.fn(),
+  createAgentModel: vi.fn(),
+  getAgentModel: vi.fn(() => "gpt-5"),
+  getAgentProvider: vi.fn(() => "openai"),
   getApiUser: vi.fn(),
-  getOpenAIApiKey: vi.fn(),
+  enforceAgentPromptRateLimit: vi.fn(),
   readSandboxFile: vi.fn(),
   requireWorkspacePermission: vi.fn(),
   searchSandboxFiles: vi.fn(),
@@ -18,9 +20,14 @@ const mocks = vi.hoisted(() => ({
   streamText: vi.fn(),
   tool: vi.fn((definition: unknown) => definition),
   appendWorkspaceStateEvent: vi.fn(),
+  resolveAgentCredential: vi.fn(),
+  AgentPromptRateLimitError: class AgentPromptRateLimitError extends Error {
+    constructor(readonly retryAfterSeconds: number) {
+      super("Agent prompt limit reached.");
+    }
+  },
 }));
 
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI: mocks.createOpenAI }));
 vi.mock("ai", () => ({
   stepCountIs: mocks.stepCountIs,
   streamText: mocks.streamText,
@@ -30,11 +37,20 @@ vi.mock("@/lib/api", () => ({
   apiError: mocks.apiError,
   getApiUser: mocks.getApiUser,
 }));
+vi.mock("@/lib/ai-model", () => ({
+  createAgentModel: mocks.createAgentModel,
+  getAgentModel: mocks.getAgentModel,
+  getAgentProvider: mocks.getAgentProvider,
+}));
 vi.mock("@/lib/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
 }));
 vi.mock("@/lib/credentials", () => ({
-  getOpenAIApiKey: mocks.getOpenAIApiKey,
+  resolveAgentCredential: mocks.resolveAgentCredential,
+}));
+vi.mock("@/lib/agent-rate-limit", () => ({
+  AgentPromptRateLimitError: mocks.AgentPromptRateLimitError,
+  enforceAgentPromptRateLimit: mocks.enforceAgentPromptRateLimit,
 }));
 vi.mock("@/lib/runtime-resume", () => ({
   ensureWorkspaceRuntimeReady: mocks.ensureWorkspaceRuntimeReady,
@@ -93,8 +109,13 @@ describe("agent canvas stream route", () => {
       image: null,
     });
     mocks.requireWorkspacePermission.mockResolvedValue(undefined);
-    mocks.getOpenAIApiKey.mockResolvedValue("test-key");
-    mocks.createOpenAI.mockReturnValue(() => "mock-model");
+    mocks.resolveAgentCredential.mockResolvedValue({
+      provider: "openai",
+      source: "USER",
+      authType: "API_KEY",
+      apiKeyOrToken: "test-key",
+    });
+    mocks.createAgentModel.mockReturnValue("mock-model");
     mocks.readSandboxFile.mockImplementation(
       async (_workspaceId: string, path: string) => {
         if (path !== "README.md") throw new Error("file not found");
@@ -143,6 +164,7 @@ describe("agent canvas stream route", () => {
         };
       };
       abortSignal: AbortSignal;
+      maxOutputTokens: number;
     };
     await expect(
       options.tools.inspectWorkspace.execute({ query: "README.md" }),
@@ -161,6 +183,7 @@ describe("agent canvas stream route", () => {
       }),
     ).resolves.toMatchObject({ status: "proposal ready for review" });
     expect(options.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(options.maxOutputTokens).toBe(4096);
   });
 
   it("emits a pause event when the request is already aborted", async () => {
@@ -181,5 +204,21 @@ describe("agent canvas stream route", () => {
       .split("\n")
       .map((line) => JSON.parse(line) as { event: { type: string } });
     expect(events.at(-1)?.event.type).toBe("INTERVENTION_PAUSE");
+  });
+
+  it("returns 429 and Retry-After when the prompt limit is exceeded", async () => {
+    mocks.enforceAgentPromptRateLimit.mockRejectedValue(
+      new mocks.AgentPromptRateLimitError(73),
+    );
+
+    const response = await POST(request({ prompt: "Inspect README.md." }), {
+      params: Promise.resolve({ workspaceId }),
+    });
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("73");
+    await expect(response.json()).resolves.toMatchObject({
+      code: "agent_prompt_rate_limit",
+    });
   });
 });

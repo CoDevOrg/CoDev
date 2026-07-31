@@ -6,9 +6,9 @@ import OpenAI from "openai";
 import { schema } from "@codev/db";
 import { createAgentEvent } from "@codev/shared-types";
 
-import { getOpenAIApiKey } from "./credentials";
+import { getAgentModel, getAgentProvider } from "./ai-model";
+import { getOpenAIApiKeyForAgent } from "./credentials";
 import { getDatabase } from "./database";
-import { getOpenAIModel } from "./ai-model";
 import {
   createCoordinationMessage,
   createPathClaim,
@@ -27,7 +27,7 @@ import {
 } from "./orchestrator";
 import { appendWorkspaceStateEvent } from "./workspace-state";
 
-const MODEL = getOpenAIModel();
+const MODEL = getAgentModel("openai");
 const MAX_TOOL_ROUNDS = 12;
 
 const tools: OpenAI.Responses.Tool[] = [
@@ -223,6 +223,14 @@ type AgentContext = {
   prompt: string;
 };
 
+function eventProvider(provider: ReturnType<typeof getAgentProvider>) {
+  return provider === "openai"
+    ? ("openai" as const)
+    : provider === "anthropic" || provider === "bedrock"
+      ? ("anthropic" as const)
+      : ("custom" as const);
+}
+
 async function addEvent(
   context: AgentContext,
   idempotencyKey: string,
@@ -248,6 +256,7 @@ async function addEvent(
         : type === "tool.called"
           ? "TOOL_CALL_INIT"
           : "TOOL_CALL_RESULT";
+  const provider = getAgentProvider();
   const agentEvent = createAgentEvent({
     workspaceId: context.workspaceId,
     sessionId: context.sessionId,
@@ -257,8 +266,8 @@ async function addEvent(
       userName: "CoDev workspace agent",
       avatarUrl: null,
     },
-    modelProvider: "openai",
-    modelName: context.model || MODEL,
+    modelProvider: eventProvider(provider),
+    modelName: context.model || getAgentModel(provider),
     type: canonicalType,
     payload:
       canonicalType === "USER_PROMPT"
@@ -671,7 +680,10 @@ export async function runAgentTurn(turnId: string) {
   "use step";
 
   const context = await loadAgentContext(turnId);
-  const apiKey = await getOpenAIApiKey(context.authorId);
+  const { apiKey } = await getOpenAIApiKeyForAgent(
+    context.authorId,
+    context.workspaceId,
+  );
   const client = new OpenAI({ apiKey });
   const history = await getDatabase()
     .select({
@@ -711,6 +723,7 @@ export async function runAgentTurn(turnId: string) {
     if (await turnWasInterrupted(turnId)) return;
     const response = await client.responses.create({
       model: context.model || MODEL,
+      max_output_tokens: 4096,
       reasoning: { effort: "medium" },
       instructions:
         "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",

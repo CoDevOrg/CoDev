@@ -17,12 +17,13 @@
     "@hocuspocus/extension-database": "4.4.0",
     "@hocuspocus/extension-logger": "4.4.0",
     "@hocuspocus/server": "4.4.0",
+    "@upstash/redis": "^1.38.0",
     "ai": "7.0.44",
     "drizzle-orm": "0.45.2",
     "ioredis": "5.11.1",
     "pg": "8.22.0",
-    "yjs": "13.6.31",
     "y-protocols": "1.0.7",
+    "yjs": "13.6.31",
     "zod": "4.4.3"
   },
   "devDependencies": {
