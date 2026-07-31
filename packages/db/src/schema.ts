@@ -38,6 +38,12 @@ export const sandboxRuntimeStatus = pgEnum("sandbox_runtime_status", [
   "failed",
 ]);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
+export const workspaceAccessRole = pgEnum("workspace_access_role", [
+  "owner",
+  "co_steer",
+  "reviewer",
+  "viewer",
+]);
 export const worktreeKind = pgEnum("worktree_kind", ["integration", "agent"]);
 export const worktreeStatus = pgEnum("worktree_status", [
   "active",
@@ -277,6 +283,7 @@ export const workspaceMembers = pgTable(
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     role: memberRole("role").default("member").notNull(),
+    accessRole: workspaceAccessRole("access_role").default("viewer").notNull(),
     canTerminal: boolean("can_terminal").default(false).notNull(),
     canMerge: boolean("can_merge").default(false).notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true })
