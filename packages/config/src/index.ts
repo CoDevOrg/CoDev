@@ -28,8 +28,21 @@ export const serverEnvironmentSchema = z.object({
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   CREDENTIAL_KMS_KEY_ID: z.string().min(1).optional(),
   PLATFORM_FALLBACK_API_KEY: z.string().min(1).optional(),
+  PLATFORM_FALLBACK_BEDROCK_ROLE_ARN: z
+    .string()
+    .startsWith("arn:aws:iam::")
+    .optional(),
   CODEV_PLATFORM_OPENAI_API_KEY: z.string().min(1).optional(),
   CODEV_PLATFORM_ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  CODEV_PLATFORM_AZURE_FOUNDRY_API_KEY: z.string().min(1).optional(),
+  CODEV_PLATFORM_AZURE_FOUNDRY_ENDPOINT: optionalUrl,
+  CODEV_AGENT_PROVIDER: z
+    .enum(["openai", "anthropic", "bedrock", "azure_foundry"])
+    .optional(),
+  CODEV_ANTHROPIC_MODEL: z.string().min(1).optional(),
+  CODEV_BEDROCK_MODEL: z.string().min(1).optional(),
+  CODEV_AZURE_FOUNDRY_MODEL: z.string().min(1).optional(),
+  CLAUDE_OAUTH_SCOPE: z.string().min(1).optional(),
   CLAUDE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   CLAUDE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   CLAUDE_OAUTH_AUTHORIZE_URL: optionalUrl,
@@ -40,6 +53,7 @@ export const serverEnvironmentSchema = z.object({
   CODEX_OAUTH_AUTHORIZE_URL: optionalUrl,
   CODEX_OAUTH_TOKEN_URL: optionalUrl,
   CODEX_OAUTH_REDIRECT_URI: optionalUrl,
+  CODEX_OAUTH_SCOPE: z.string().min(1).optional(),
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,

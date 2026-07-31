@@ -1,65 +1,65 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-export function CredentialForm({
+export function WorkspaceCredentialForm({
+  workspaceId,
+  provider,
   currentLastFour,
-  provider = "openai",
 }: {
-  currentLastFour: string | undefined;
-  provider?: "openai" | "anthropic";
+  workspaceId: string;
+  provider: "openai" | "anthropic";
+  currentLastFour?: string | undefined;
 }) {
   const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const providerName = provider === "openai" ? "OpenAI" : "Anthropic";
+  const endpoint = `/api/workspaces/${workspaceId}/credentials`;
 
   async function save() {
     setSaving(true);
     setMessage("");
-    const response = await fetch(
-      provider === "openai"
-        ? "/api/settings/openai-key"
-        : "/api/settings/anthropic-key",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey }),
-      },
-    );
-    const payload = (await response.json()) as { error?: string };
+    const response = await fetch(endpoint, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        credentialType: "API_KEY",
+        apiKey: apiKey.trim(),
+      }),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    setSaving(false);
     if (!response.ok) {
-      setMessage(payload.error ?? "The key could not be saved.");
-      setSaving(false);
+      setMessage(payload?.error ?? "The workspace key could not be saved.");
       return;
     }
     setApiKey("");
-    setMessage(
-      `${provider === "openai" ? "OpenAI" : "Anthropic"} key saved securely.`,
-    );
-    setSaving(false);
+    setMessage(`${providerName} workspace key saved securely.`);
     router.refresh();
   }
 
   async function remove() {
     setSaving(true);
     setMessage("");
-    const response = await fetch(
-      provider === "openai"
-        ? "/api/settings/openai-key"
-        : "/api/settings/anthropic-key",
-      { method: "DELETE" },
-    );
-    if (!response.ok) {
-      const payload = (await response.json()) as { error?: string };
-      setMessage(payload.error ?? "The key could not be removed.");
-    } else {
-      setMessage(`${providerName} key removed.`);
-      router.refresh();
-    }
+    const response = await fetch(`${endpoint}?provider=${provider}`, {
+      method: "DELETE",
+    });
     setSaving(false);
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setMessage(payload?.error ?? "The workspace key could not be removed.");
+      return;
+    }
+    setMessage(`${providerName} workspace key removed.`);
+    router.refresh();
   }
 
   return (
@@ -70,17 +70,13 @@ export function CredentialForm({
           <strong>
             {currentLastFour
               ? `Key ending in ${currentLastFour}`
-              : "No key connected"}
+              : "No shared key connected"}
           </strong>
-          <small>
-            {currentLastFour
-              ? "Encrypted and ready for your future agent turns."
-              : `Add your own ${providerName} API key to prepare for agent sessions.`}
-          </small>
+          <small>Encrypted before storage and used as teammate fallback.</small>
         </div>
       </div>
       <label>
-        <span>{providerName} API key</span>
+        <span>{providerName} workspace API key</span>
         <input
           type="password"
           value={apiKey}

@@ -33,9 +33,7 @@ export async function getAgentKeySource(
   if (workspaceId) {
     return getCredentialAgentKeySource(userId, workspaceId, provider);
   }
-  return (await getOpenAICredentialStatus(userId))
-    ? "byok"
-    : "platform";
+  return (await getOpenAICredentialStatus(userId)) ? "byok" : "platform";
 }
 
 export async function enforceAgentPromptRateLimit(

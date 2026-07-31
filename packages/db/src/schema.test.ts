@@ -11,6 +11,7 @@ import {
   pathClaims,
   pilotSessions,
   publishedBranches,
+  providerCredentials,
   workspaceMembers,
   workspaceRuntimes,
   workspaces,
@@ -49,6 +50,12 @@ describe("database schema", () => {
     expect(worktrees.reviewDiffDigest.name).toBe("review_diff_digest");
     expect(worktrees.mergedAt.name).toBe("merged_at");
     expect(getTableName(publishedBranches)).toBe("published_branches");
+    expect(getTableName(providerCredentials)).toBe("provider_credentials");
+    expect(providerCredentials.scopeType.name).toBe("scope_type");
+    expect(providerCredentials.encryptedAccessToken.name).toBe(
+      "encrypted_access_token",
+    );
+    expect(providerCredentials.awsRoleArn.name).toBe("aws_role_arn");
     expect(publishedBranches.sourceHeadSha.name).toBe("source_head_sha");
     expect(publishedBranches.remoteRef.name).toBe("remote_ref");
     expect(publishedBranches.pullRequestNumber.name).toBe(
