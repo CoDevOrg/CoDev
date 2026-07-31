@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef } from "react";
 
 interface RuntimeSummary {
-  status: "provisioning" | "ready" | "stopping" | "stopped" | "failed";
+  status:
+    | "provisioning"
+    | "ready"
+    | "hibernated"
+    | "stopping"
+    | "stopped"
+    | "failed";
   sandboxId: string | null;
   lastError: string | null;
 }
@@ -21,11 +28,15 @@ export function WorkspaceRuntime({
   workspaceId,
   runtime,
   isOwner,
+  canProvision,
+  canResume = canProvision,
   defaultBranch,
 }: {
   workspaceId: string;
   runtime: RuntimeSummary | null;
   isOwner: boolean;
+  canProvision?: boolean;
+  canResume?: boolean;
   defaultBranch: string;
 }) {
   const router = useRouter();
@@ -33,6 +44,7 @@ export function WorkspaceRuntime({
   const [message, setMessage] = useState("");
   const [syncing, setSyncing] = useState(false);
   const status = runtime?.status ?? "stopped";
+  const autoResumeStarted = useRef(false);
 
   async function sync() {
     setSyncing(true);
@@ -60,43 +72,54 @@ export function WorkspaceRuntime({
     }
   }
 
-  async function mutate(method: "POST" | "DELETE") {
-    setBusy(true);
-    setMessage(
-      method === "POST"
-        ? "Waking the AWS host and preparing your isolated microVM…"
-        : "",
-    );
-    try {
-      let response: Response | undefined;
-      for (let attempt = 0; attempt < 90; attempt += 1) {
-        response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
-          method,
-        });
-        if (method !== "POST" || response.status !== 202) {
-          break;
+  const mutate = useCallback(
+    async (method: "POST" | "DELETE") => {
+      setBusy(true);
+      setMessage(
+        method === "POST"
+          ? "Waking the AWS host and preparing your isolated microVM…"
+          : "",
+      );
+      try {
+        let response: Response | undefined;
+        for (let attempt = 0; attempt < 90; attempt += 1) {
+          response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
+            method,
+          });
+          if (method !== "POST" || response.status !== 202) {
+            break;
+          }
+          setMessage(
+            "The bare-metal AWS host is starting. Your microVM will be prepared automatically…",
+          );
+          await new Promise((resolve) => setTimeout(resolve, 10_000));
         }
-        setMessage(
-          "The bare-metal AWS host is starting. Your microVM will be prepared automatically…",
-        );
-        await new Promise((resolve) => setTimeout(resolve, 10_000));
+        if (!response || response.status === 202) {
+          throw new Error(
+            "The AWS host is still starting. Try again in a few minutes.",
+          );
+        }
+        if (!response.ok) {
+          throw new Error(await readError(response));
+        }
+        setMessage("");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Request failed.");
+      } finally {
+        setBusy(false);
       }
-      if (!response || response.status === 202) {
-        throw new Error(
-          "The AWS host is still starting. Try again in a few minutes.",
-        );
-      }
-      if (!response.ok) {
-        throw new Error(await readError(response));
-      }
-      setMessage("");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Request failed.");
-    } finally {
-      setBusy(false);
+    },
+    [router, workspaceId],
+  );
+
+  useEffect(() => {
+    if (status !== "hibernated" || !canResume || autoResumeStarted.current) {
+      return;
     }
-  }
+    autoResumeStarted.current = true;
+    void mutate("POST");
+  }, [canResume, mutate, status]);
 
   return (
     <section className="phase-note runtime-note">
@@ -105,20 +128,26 @@ export function WorkspaceRuntime({
         <strong>
           {status === "ready"
             ? "Firecracker sandbox ready."
-            : "AWS sandbox runtime."}
+            : status === "hibernated"
+              ? "Workspace hibernated to durable storage."
+              : "AWS sandbox runtime."}
         </strong>
         <p>
           {status === "ready"
             ? `Isolated microVM ${runtime?.sandboxId ?? ""} is running. The browser IDE is ready.`
             : status === "provisioning"
               ? "The repository is being prepared inside an isolated Firecracker microVM."
-              : status === "failed"
-                ? (runtime?.lastError ?? "Sandbox provisioning failed.")
-                : "Provision a disposable Firecracker microVM for this repository."}
+              : status === "hibernated"
+                ? "Your files and conversation state are persisted. Resume to restore the isolated microVM."
+                : status === "failed"
+                  ? (runtime?.lastError ?? "Sandbox provisioning failed.")
+                  : "Provision a disposable Firecracker microVM for this repository."}
         </p>
         {message ? <p className="error-copy">{message}</p> : null}
       </div>
-      {isOwner ? (
+      {isOwner ||
+      (canProvision && status !== "ready") ||
+      (canResume && status === "hibernated") ? (
         status === "ready" ? (
           <div className="runtime-actions">
             <Link
@@ -146,7 +175,9 @@ export function WorkspaceRuntime({
             >
               {busy || status === "provisioning"
                 ? "Waking host…"
-                : "Start sandbox"}
+                : status === "hibernated"
+                  ? "Resume sandbox"
+                  : "Start sandbox"}
             </button>
             {status === "stopped" ? (
               <button

@@ -10,10 +10,14 @@ import {
 } from "react";
 
 import { AgentChatTranscript } from "@/components/agent-chat-transcript";
-import { mapSessionToChatItems } from "@/lib/agent-chat";
+import {
+  mapAgentEventToChatEvent,
+  mapSessionToChatItems,
+} from "@/lib/agent-chat";
 import { deriveAgentSessionName } from "@/lib/agent-session-name";
+import type { AgentEvent } from "@codev/shared-types";
 
-type AgentSession = {
+export type AgentSession = {
   id: string;
   name: string;
   model: string;
@@ -26,9 +30,9 @@ type AgentSession = {
   reviewHeadSha: string | null;
   reviewBaseSha: string | null;
   reviewDiffDigest: string | null;
-  reviewedAt: string | null;
-  mergedAt: string | null;
-  discardedAt: string | null;
+  reviewedAt: string | Date | null;
+  mergedAt: string | Date | null;
+  discardedAt: string | Date | null;
   lastError: string | null;
   claims: {
     id: string;
@@ -80,14 +84,25 @@ async function json<T>(response: Response) {
 export function AgentPanel({
   workspaceId,
   canMerge,
+  canReview = canMerge,
+  canSteer = true,
+  initialSessions = [],
+  initialStateEvents = [],
   onTurnCompleted,
 }: {
   workspaceId: string;
   canMerge: boolean;
+  canReview?: boolean;
+  canSteer?: boolean;
+  initialSessions?: AgentSession[];
+  initialStateEvents?: AgentEvent[];
   onTurnCompleted?: () => void;
 }) {
   const endpoint = `/api/workspaces/${workspaceId}/agents`;
-  const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [sessions, setSessions] = useState<AgentSession[]>(initialSessions);
+  const [stateEvents, setStateEvents] = useState<AgentEvent[]>(
+    initialStateEvents ?? [],
+  );
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
@@ -96,6 +111,9 @@ export function AgentPanel({
   const [reviews, setReviews] = useState<Record<string, WorktreeReview>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [commentPath, setCommentPath] = useState("");
+  const [commentLine, setCommentLine] = useState("");
   const [composingNew, setComposingNew] = useState(false);
   const turnStatusRef = useRef(new Map<string, string>());
   const onTurnCompletedRef = useRef(onTurnCompleted);
@@ -126,16 +144,27 @@ export function AgentPanel({
     sessions[0] ??
     null;
 
-  const chatItems = useMemo(
-    () => (selectedSession ? mapSessionToChatItems(selectedSession) : []),
-    [selectedSession],
-  );
+  const chatItems = useMemo(() => {
+    if (!selectedSession) return [];
+    const durableEvents = stateEvents
+      .filter((event) => event.sessionId === selectedSession.id)
+      .map(mapAgentEventToChatEvent);
+    return mapSessionToChatItems(
+      durableEvents.length > 0
+        ? { ...selectedSession, events: durableEvents }
+        : selectedSession,
+    );
+  }, [selectedSession, stateEvents]);
 
   const refresh = useCallback(async () => {
     const result = await fetch(endpoint, { cache: "no-store" }).then(
-      (response) => json<{ sessions: AgentSession[] }>(response),
+      (response) =>
+        json<{ sessions: AgentSession[]; stateEvents?: AgentEvent[] }>(
+          response,
+        ),
     );
     setSessions(result.sessions);
+    setStateEvents(result.stateEvents ?? []);
     setSelectedSessionId((current) => {
       if (
         current &&
@@ -186,6 +215,7 @@ export function AgentPanel({
   }, [sessions]);
 
   async function createSession() {
+    if (!canSteer) return;
     const value = prompt.trim();
     if (!value) return;
     setBusy(true);
@@ -222,6 +252,7 @@ export function AgentPanel({
   }
 
   async function sendFollowUp() {
+    if (!canSteer) return;
     if (!selectedSession) return;
     const value = followUp.trim();
     if (!value) return;
@@ -245,6 +276,7 @@ export function AgentPanel({
   }
 
   async function interrupt(sessionId: string) {
+    if (!canSteer) return;
     setBusy(true);
     setError("");
     try {
@@ -273,6 +305,46 @@ export function AgentPanel({
       await refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addComment() {
+    if (!canReview || !selectedSession || !commentBody.trim()) return;
+    const lineNumber = commentLine.trim()
+      ? Number.parseInt(commentLine.trim(), 10)
+      : undefined;
+    if (
+      lineNumber !== undefined &&
+      (!Number.isInteger(lineNumber) || lineNumber < 1)
+    ) {
+      setError("A comment line must be a positive integer.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          body: commentBody.trim(),
+          filePath: commentPath.trim() || undefined,
+          lineNumber,
+          sessionId: selectedSession.id,
+        }),
+      }).then((response) => json(response));
+      setCommentBody("");
+      setCommentPath("");
+      setCommentLine("");
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Comment could not be saved.",
+      );
     } finally {
       setBusy(false);
     }
@@ -309,7 +381,7 @@ export function AgentPanel({
   }
 
   const showNewComposer =
-    composingNew || !selectedSession || activeSessionCount < 2;
+    canSteer && (composingNew || !selectedSession || activeSessionCount < 2);
   const followUpMode = Boolean(selectedSession) && !composingNew;
 
   return (
@@ -410,10 +482,10 @@ export function AgentPanel({
         )}
       </div>
 
-      {selectedSession && !composingNew ? (
+      {selectedSession && !composingNew && (canReview || canMerge) ? (
         <details className="agent-review-disclosure">
           <summary>Review &amp; merge</summary>
-          {canMerge &&
+          {canReview &&
           selectedSession.worktreeStatus !== "merged" &&
           selectedSession.worktreeStatus !== "discarded" ? (
             <div className="agent-review">
@@ -427,7 +499,7 @@ export function AgentPanel({
                     ? "Refresh review"
                     : "Prepare review"}
                 </button>
-                {selectedSession.reviewedAt ? (
+                {canMerge && selectedSession.reviewedAt ? (
                   <>
                     <button
                       type="button"
@@ -449,16 +521,18 @@ export function AgentPanel({
                     </button>
                   </>
                 ) : null}
-                <button
-                  type="button"
-                  className="agent-discard"
-                  disabled={busy}
-                  onClick={() =>
-                    void reviewAction(selectedSession.id, "discard")
-                  }
-                >
-                  Discard
-                </button>
+                {canMerge ? (
+                  <button
+                    type="button"
+                    className="agent-discard"
+                    disabled={busy}
+                    onClick={() =>
+                      void reviewAction(selectedSession.id, "discard")
+                    }
+                  >
+                    Discard
+                  </button>
+                ) : null}
               </div>
               {reviews[selectedSession.id] ? (
                 <details>
@@ -471,6 +545,40 @@ export function AgentPanel({
                   </pre>
                 </details>
               ) : null}
+              {canReview ? (
+                <div className="agent-review-comment">
+                  <strong>Leave a review note</strong>
+                  <div className="agent-review-comment-location">
+                    <input
+                      aria-label="Comment file path"
+                      value={commentPath}
+                      onChange={(event) => setCommentPath(event.target.value)}
+                      placeholder="src/file.ts (optional)"
+                    />
+                    <input
+                      aria-label="Comment line number"
+                      inputMode="numeric"
+                      value={commentLine}
+                      onChange={(event) => setCommentLine(event.target.value)}
+                      placeholder="Line"
+                    />
+                  </div>
+                  <textarea
+                    aria-label="Review comment"
+                    value={commentBody}
+                    onChange={(event) => setCommentBody(event.target.value)}
+                    placeholder="Leave an inline review note without running an agent…"
+                    rows={3}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !commentBody.trim()}
+                    onClick={() => void addComment()}
+                  >
+                    {busy ? "Saving note…" : "Add review note"}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="agent-review-result">
@@ -478,14 +586,19 @@ export function AgentPanel({
                 ? "Merged into the integration worktree."
                 : selectedSession.worktreeStatus === "discarded"
                   ? "Worktree discarded."
-                  : "Merge capability is required to review this worktree."}
+                  : "Reviewer capability is required to inspect this worktree."}
             </div>
           )}
         </details>
       ) : null}
 
       <div className="agent-chat-composer">
-        {followUpMode && selectedSession ? (
+        {!canSteer ? (
+          <p className="agent-chat-composer-full">
+            Read-only workspace access. A Co-Steer member can send prompts or
+            interrupt an agent.
+          </p>
+        ) : followUpMode && selectedSession ? (
           <>
             <textarea
               ref={composerTextareaRef}

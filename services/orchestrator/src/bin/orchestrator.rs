@@ -4,7 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::{Duration as ChronoDuration, Utc};
 use codev_runtime::{
     backend::{Backend, SharedBackend},
     http_api,
@@ -25,11 +24,10 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let (backend, sandbox_idle_timeout) = configure_backend().await?;
+    let backend = configure_backend().await?;
     let backend = Arc::new(backend);
     let host_idle_timeout = environment_duration("CODEV_HOST_IDLE_TIMEOUT", Duration::ZERO)?;
 
-    tokio::spawn(reap_idle_sandboxes(backend.clone(), sandbox_idle_timeout));
     if !host_idle_timeout.is_zero() {
         tokio::spawn(stop_idle_host(backend.clone(), host_idle_timeout));
     }
@@ -45,20 +43,19 @@ async fn main() -> Result<()> {
         .map_err(RuntimeError::internal)
 }
 
-async fn configure_backend() -> Result<(Backend, Duration)> {
+async fn configure_backend() -> Result<Backend> {
     match env::var("SANDBOX_BACKEND")
         .unwrap_or_else(|_| "fake".into())
         .as_str()
     {
-        "fake" => Ok((Backend::fake(), Duration::from_secs(30 * 60))),
+        "fake" => Ok(Backend::fake()),
         "firecracker" => {
             #[cfg(target_os = "linux")]
             {
                 use codev_runtime::backend::{FirecrackerBackend, FirecrackerConfig};
                 let config = FirecrackerConfig::from_environment()?;
-                let idle_timeout = config.idle_timeout;
                 let backend = FirecrackerBackend::new(config).await?;
-                Ok((Backend::Firecracker(backend), idle_timeout))
+                Ok(Backend::Firecracker(backend))
             }
             #[cfg(not(target_os = "linux"))]
             {
@@ -70,25 +67,6 @@ async fn configure_backend() -> Result<(Backend, Duration)> {
         _ => Err(RuntimeError::BadRequest(
             "SANDBOX_BACKEND must be fake or firecracker".into(),
         )),
-    }
-}
-
-async fn reap_idle_sandboxes(backend: SharedBackend, idle_timeout: Duration) {
-    let mut interval = time::interval(Duration::from_secs(60));
-    interval.tick().await;
-    loop {
-        interval.tick().await;
-        let cutoff = Utc::now()
-            - ChronoDuration::from_std(idle_timeout)
-                .unwrap_or_else(|_| ChronoDuration::minutes(30));
-        match backend.reap_idle(cutoff).await {
-            Ok(ids) => {
-                for workspace_id in ids {
-                    info!(%workspace_id, "destroyed idle sandbox");
-                }
-            }
-            Err(error) => error!(%error, "failed to reap idle sandboxes"),
-        }
     }
 }
 

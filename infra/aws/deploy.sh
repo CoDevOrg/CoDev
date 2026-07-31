@@ -10,6 +10,7 @@ readonly instance_type="${CODEV_INSTANCE_TYPE:-a1.metal}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
 readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-0713df58d0d8b3c1c}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-40}"
+readonly jailer_volume_size_gib="${CODEV_JAILER_VOLUME_SIZE_GIB:-40}"
 readonly monthly_budget_usd="${CODEV_MONTHLY_BUDGET_USD:-75}"
 readonly budget_alert_email="${CODEV_BUDGET_ALERT_EMAIL:-}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
@@ -56,6 +57,12 @@ aws s3 cp \
   --region "${region}" \
   --sse AES256 \
   --only-show-errors
+aws s3 cp \
+  "${repo_root}/infra/aws/scripts/verify-lifecycle.sh" \
+  "s3://${artifact_bucket}/releases/${release_version}/verify-lifecycle.sh" \
+  --region "${region}" \
+  --sse AES256 \
+  --only-show-errors
 
 aws cloudformation deploy \
   --region "${region}" \
@@ -69,6 +76,7 @@ aws cloudformation deploy \
     "AvailabilityZone=${availability_zone}" \
     "UbuntuAmi=${host_ami_id}" \
     "HostVolumeSizeGiB=${host_volume_size_gib}" \
+    "JailerVolumeSizeGiB=${jailer_volume_size_gib}" \
     "MonthlyBudgetUsd=${monthly_budget_usd}" \
     "BudgetAlertEmail=${budget_alert_email}" \
   --no-fail-on-empty-changeset

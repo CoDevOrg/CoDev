@@ -1,5 +1,6 @@
 import "server-only";
 
+import { Octokit } from "@octokit/rest";
 import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
@@ -123,6 +124,15 @@ export async function getGitHubUserToken(userId: string) {
   }
 
   return decryptSecret(connection.encryptedAccessToken);
+}
+
+export async function getGitHubOctokit(userId: string) {
+  const token = await getGitHubUserToken(userId);
+  return new Octokit({
+    auth: token,
+    userAgent: "CoDev",
+    request: { timeout: 30_000 },
+  });
 }
 
 export class GitHubApiError extends Error {

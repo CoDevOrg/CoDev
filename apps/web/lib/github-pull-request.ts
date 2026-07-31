@@ -5,8 +5,9 @@ import { and, eq } from "drizzle-orm";
 import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
+import { requireWorkspacePermission } from "./access";
 import { getDatabase } from "./database";
-import { GitHubApiError, githubRequest } from "./github";
+import { getGitHubOctokit, GitHubApiError } from "./github";
 import { logEvent } from "./observability";
 import { getWorkspaceForMember } from "./workspaces";
 
@@ -68,6 +69,7 @@ export function buildCreatePullRequestBody(input: {
 
 export async function openWorkspacePullRequest(input: OpenPullRequestInput) {
   const startedAt = Date.now();
+  await requireWorkspacePermission(input.workspaceId, input.userId, "merge");
   const workspace = await getWorkspaceForMember(
     input.workspaceId,
     input.userId,
@@ -112,24 +114,43 @@ export async function openWorkspacePullRequest(input: OpenPullRequestInput) {
 
   let pullRequest: GitHubPullRequest;
   try {
-    pullRequest = await githubRequest<GitHubPullRequest>(
-      input.userId,
-      `/repos/${workspace.repository}/pulls`,
-      { method: "POST", body },
-    );
+    const [owner, repo] = workspace.repository.split("/");
+    if (!owner || !repo)
+      throw new PullRequestError("Invalid GitHub repository.");
+    const octokit = await getGitHubOctokit(input.userId);
+    const response = await octokit.rest.pulls.create({ owner, repo, ...body });
+    pullRequest = {
+      number: response.data.number,
+      html_url: response.data.html_url,
+      state: response.data.state,
+    };
   } catch (error) {
     // 422 means an open pull request already exists for this head branch.
-    if (error instanceof GitHubApiError && error.status === 422) {
+    const status =
+      error instanceof GitHubApiError
+        ? error.status
+        : typeof error === "object" && error !== null && "status" in error
+          ? Number(error.status)
+          : 0;
+    if (status === 422) {
       const owner = workspace.repository.split("/")[0];
-      const existing = await githubRequest<GitHubPullRequest[]>(
-        input.userId,
-        `/repos/${workspace.repository}/pulls?state=open&head=${owner}:${encodeURIComponent(
-          input.branchName,
-        )}`,
-      );
-      const [first] = existing;
+      const repo = workspace.repository.split("/")[1];
+      if (!owner || !repo)
+        throw new PullRequestError("Invalid GitHub repository.");
+      const octokit = await getGitHubOctokit(input.userId);
+      const existing = await octokit.rest.pulls.list({
+        owner,
+        repo,
+        state: "open",
+        head: `${owner}:${input.branchName}`,
+      });
+      const first = existing.data[0];
       if (!first) throw error;
-      pullRequest = first;
+      pullRequest = {
+        number: first.number,
+        html_url: first.html_url,
+        state: first.state === "open" ? "open" : "closed",
+      };
     } else {
       throw error;
     }

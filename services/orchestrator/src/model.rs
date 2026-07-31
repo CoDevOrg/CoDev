@@ -74,6 +74,23 @@ pub struct CreateRequest {
     pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,
     pub expires_at: DateTime<Utc>,
+    #[serde(default)]
+    pub resume_from_snapshot: bool,
+    pub lifecycle: SandboxLifecycleOptions,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxLifecycleOptions {
+    pub timeout_ms: u64,
+    pub lifecycle: SandboxLifecycleHooks,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxLifecycleHooks {
+    pub on_timeout: String,
+    pub auto_resume: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

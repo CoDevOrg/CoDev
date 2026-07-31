@@ -4,6 +4,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "@xterm/xterm/css/xterm.css";
 import "./globals.css";
 
+import { clerkAuthConfigured } from "@/lib/identity";
+import { AppClerkProvider } from "@/components/clerk-provider";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,11 +31,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+  const content = (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
       </body>
     </html>
+  );
+  return clerkAuthConfigured() ? (
+    <AppClerkProvider>{content}</AppClerkProvider>
+  ) : (
+    content
   );
 }

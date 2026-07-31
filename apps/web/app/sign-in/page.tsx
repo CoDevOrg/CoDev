@@ -6,6 +6,8 @@ import { isGitHubAuthConfigured } from "@codev/config";
 
 import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/app-chrome";
+import { ClerkSignIn } from "@/components/clerk-sign-in";
+import { clerkAuthConfigured } from "@/lib/identity";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -16,7 +18,8 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
-  const session = await auth();
+  const clerkEnabled = clerkAuthConfigured();
+  const session = clerkEnabled ? null : await auth();
   if (session?.user) redirect("/dashboard");
 
   const { callbackUrl, error } = await searchParams;
@@ -36,11 +39,11 @@ export default async function SignInPage({
         <span className="auth-glyph" aria-hidden="true">
           ⑂
         </span>
-        <p className="eyebrow">GitHub identity</p>
+        <p className="eyebrow">Secure SSO</p>
         <h1>Open your CoDev workspace.</h1>
         <p>
-          Sign in with the CoDev GitHub App to discover installations and choose
-          a repository. CoDev never sends your GitHub token to a sandbox.
+          Sign in with Google or GitHub. GitHub repository access is connected
+          separately, and CoDev never sends your GitHub token to a sandbox.
         </p>
 
         {error ? (
@@ -49,7 +52,9 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {configured ? (
+        {clerkEnabled ? (
+          <ClerkSignIn redirectUrl={safeCallback} />
+        ) : configured ? (
           <form
             action={async () => {
               "use server";

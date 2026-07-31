@@ -46,6 +46,20 @@ export function AgentChatTranscript({
             </div>
           );
         }
+        if (item.kind === "comment") {
+          return (
+            <div className="agent-chat-comment" key={item.id}>
+              <span className="agent-chat-role">{item.author}</span>
+              {item.filePath ? (
+                <code>
+                  {item.filePath}
+                  {item.lineNumber ? `:${item.lineNumber}` : ""}
+                </code>
+              ) : null}
+              <p>{item.text}</p>
+            </div>
+          );
+        }
         return (
           <details className="agent-chat-tools" key={item.id}>
             <summary>

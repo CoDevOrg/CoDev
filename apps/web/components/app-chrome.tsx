@@ -1,7 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { signOut } from "@/auth";
+import { isGitHubAuthConfigured } from "@codev/config";
+
+import { signIn, signOut } from "@/auth";
+import { ClerkSignOut } from "@/components/clerk-sign-out";
+import { clerkAuthConfigured } from "@/lib/identity";
 import { isPilotAdminLogin } from "@/lib/pilot-access";
 
 export function Brand() {
@@ -43,16 +47,32 @@ export function AppChrome({
             </span>
           )}
           <span>{user.githubLogin ?? user.name ?? "GitHub user"}</span>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/" });
-            }}
-          >
-            <button className="quiet-button" type="submit">
-              Sign out
-            </button>
-          </form>
+          {!user.githubLogin && isGitHubAuthConfigured() ? (
+            <form
+              action={async () => {
+                "use server";
+                await signIn("github", { redirectTo: "/dashboard" });
+              }}
+            >
+              <button className="quiet-button" type="submit">
+                Connect GitHub
+              </button>
+            </form>
+          ) : null}
+          {clerkAuthConfigured() ? (
+            <ClerkSignOut />
+          ) : (
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/" });
+              }}
+            >
+              <button className="quiet-button" type="submit">
+                Sign out
+              </button>
+            </form>
+          )}
         </div>
       </header>
       {children}

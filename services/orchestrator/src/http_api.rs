@@ -56,6 +56,7 @@ pub fn router(backend: SharedBackend) -> Router {
             "/v1/sandboxes/{workspace_id}",
             get(get_sandbox).delete(destroy_sandbox),
         )
+        .route("/v1/sandboxes/{workspace_id}/resume", post(resume_sandbox))
         .route("/v1/sandboxes/{workspace_id}/activity", post(touch_sandbox))
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
@@ -110,6 +111,10 @@ pub fn router(backend: SharedBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/publication/export",
             post(export_publication),
         )
+        .route(
+            "/v1/sandboxes/{workspace_id}/snapshot",
+            post(snapshot_workspace).delete(discard_snapshot),
+        )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .layer(middleware::from_fn(no_store))
         .layer(middleware::from_fn(observe_request))
@@ -154,7 +159,8 @@ async fn health(State(backend): State<SharedBackend>) -> Result<Json<serde_json:
     backend.health().await?;
     Ok(Json(serde_json::json!({
         "status": "ok",
-        "service": "codev-orchestrator"
+        "service": "codev-orchestrator",
+        "activeSandboxes": backend.active_count().await,
     })))
 }
 
@@ -194,6 +200,24 @@ async fn destroy_sandbox(
 ) -> Result<StatusCode> {
     validate_workspace_id(&workspace_id)?;
     backend.destroy(&workspace_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn resume_sandbox(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    backend.resume(&workspace_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn discard_snapshot(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    backend.discard_snapshot(&workspace_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -359,6 +383,19 @@ async fn export_publication(
     ))
 }
 
+async fn snapshot_workspace(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<PublicationExportRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_sha(&request.expected_head_sha, "expected integration head SHA")?;
+    let response = backend.snapshot_workspace(&workspace_id, request).await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
 async fn start_terminal(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -455,6 +492,15 @@ fn validate_create(request: &CreateRequest) -> Result<()> {
     if request.repository_url.is_some() == request.repository_snapshot.is_some() {
         return Err(RuntimeError::BadRequest(
             "provide exactly one repository source".into(),
+        ));
+    }
+    let lifecycle = &request.lifecycle;
+    if lifecycle.timeout_ms != 14_400_000
+        || lifecycle.lifecycle.on_timeout != "pause"
+        || !lifecycle.lifecycle.auto_resume
+    {
+        return Err(RuntimeError::BadRequest(
+            "sandbox lifecycle must pause and auto-resume after four hours".into(),
         ));
     }
     if let Some(repository_url) = &request.repository_url {
@@ -604,7 +650,10 @@ mod tests {
 
     use super::*;
     use crate::backend::Backend;
-    use crate::model::{CreateRequest, RepositorySnapshot, RepositorySnapshotFile};
+    use crate::model::{
+        CreateRequest, RepositorySnapshot, RepositorySnapshotFile, SandboxLifecycleHooks,
+        SandboxLifecycleOptions,
+    };
 
     #[test]
     fn validates_credential_free_private_snapshots() {
@@ -621,8 +670,33 @@ mod tests {
             }),
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
+            resume_from_snapshot: false,
+            lifecycle: SandboxLifecycleOptions {
+                timeout_ms: 14_400_000,
+                lifecycle: SandboxLifecycleHooks {
+                    on_timeout: "pause".into(),
+                    auto_resume: true,
+                },
+            },
         };
         assert!(validate_create(&request).is_ok());
+
+        let mut lifecycle_request = request.clone();
+        lifecycle_request.lifecycle.lifecycle.auto_resume = false;
+        assert!(validate_create(&lifecycle_request).is_err());
+
+        let missing_lifecycle = serde_json::json!({
+            "workspaceId": "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+            "repositoryUrl": null,
+            "repositorySnapshot": {
+                "files": [],
+                "totalBytes": 0
+            },
+            "baseSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
+            "expiresAt": (Utc::now() + Duration::hours(1)).to_rfc3339(),
+            "resumeFromSnapshot": false
+        });
+        assert!(serde_json::from_value::<CreateRequest>(missing_lifecycle).is_err());
 
         let mut unsafe_request = request;
         unsafe_request
@@ -648,6 +722,13 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(health.status(), StatusCode::OK);
+        let health_body = to_bytes(health.into_body(), 1 << 20)
+            .await
+            .expect("health body");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&health_body).expect("health json")["activeSandboxes"],
+            0
+        );
 
         let create = app
             .clone()
@@ -661,7 +742,11 @@ mod tests {
                             "workspaceId": "e010bd2c-a3c1-438f-acef-166287a3b1cb",
                             "repositoryUrl": "https://github.com/yousef20920/CoDev.git",
                             "baseSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
-                            "expiresAt": (Utc::now() + Duration::hours(1)).to_rfc3339()
+                            "expiresAt": (Utc::now() + Duration::hours(1)).to_rfc3339(),
+                            "lifecycle": {
+                                "timeoutMs": 14400000,
+                                "lifecycle": { "onTimeout": "pause", "autoResume": true }
+                            }
                         })
                         .to_string(),
                     ))
@@ -672,6 +757,32 @@ mod tests {
         assert_eq!(create.status(), StatusCode::CREATED);
         let body = to_bytes(create.into_body(), 1 << 20).await.expect("body");
         assert!(String::from_utf8_lossy(&body).contains("sandbox-e010bd2c"));
+
+        let resume = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/resume")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(resume.status(), StatusCode::NO_CONTENT);
+
+        let discard_snapshot = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/snapshot")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(discard_snapshot.status(), StatusCode::NO_CONTENT);
 
         let worktree = app
             .clone()

@@ -23,9 +23,9 @@ describe("resolvePreviewEntry", () => {
     expect(resolvePreviewEntry(["index.html", "public/index.html"])).toBe(
       "index.html",
     );
-    expect(resolvePreviewEntry(["zeta.html", "alpha.html", "nested/x.html"])).toBe(
-      "alpha.html",
-    );
+    expect(
+      resolvePreviewEntry(["zeta.html", "alpha.html", "nested/x.html"]),
+    ).toBe("alpha.html");
   });
 });
 

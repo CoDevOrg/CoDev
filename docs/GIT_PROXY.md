@@ -43,12 +43,12 @@ Status: design only. PR creation and stopped-workspace sync already shipped
 
 ## Goals
 
-| User action | Required behavior |
-| --- | --- |
-| `git commit` | Already works (local object DB in the guest). |
+| User action              | Required behavior                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `git commit`             | Already works (local object DB in the guest).                                                                       |
 | `git pull` / `git fetch` | Bring commits from the GitHub default branch (and optionally other refs) into the guest without a guest-held token. |
-| `git push` | Publish local commits to an allowed remote ref (default: `codev/*` only) without a guest-held token. |
-| Make a PR | Already shipped: open PR from a published `codev/*` branch (requires GitHub App **Pull requests: Read and write**). |
+| `git push`               | Publish local commits to an allowed remote ref (default: `codev/*` only) without a guest-held token.                |
+| Make a PR                | Already shipped: open PR from a published `codev/*` branch (requires GitHub App **Pull requests: Read and write**). |
 
 Non-goals for v1:
 
@@ -127,11 +127,11 @@ network. Users get real git UX; the security boundary stays intact.
 
 ### Ref policy (v1)
 
-| Ref | Fetch | Push |
-| --- | --- | --- |
-| `refs/heads/<defaultBranch>` | yes | no |
-| `refs/heads/codev/*` | yes (own) | yes (workspace-owned) |
-| other heads / tags | no | no |
+| Ref                          | Fetch     | Push                  |
+| ---------------------------- | --------- | --------------------- |
+| `refs/heads/<defaultBranch>` | yes       | no                    |
+| `refs/heads/codev/*`         | yes (own) | yes (workspace-owned) |
+| other heads / tags           | no        | no                    |
 
 This preserves "never push to main from CoDev" while unlocking real
 branch iteration.
@@ -185,12 +185,12 @@ branch iteration.
 
 ## Alternatives rejected
 
-| Alternative | Why not |
-| --- | --- |
-| Inject a GitHub token into the guest | Breaks the credential-free security model; agent code could exfiltrate it. |
-| Give the guest egress + HTTPS to GitHub | Requires TAP/CNI, egress allowlists, and still needs credentials in-guest or a network MITM. |
+| Alternative                                                        | Why not                                                                                      |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Inject a GitHub token into the guest                               | Breaks the credential-free security model; agent code could exfiltrate it.                   |
+| Give the guest egress + HTTPS to GitHub                            | Requires TAP/CNI, egress allowlists, and still needs credentials in-guest or a network MITM. |
 | Run Smart HTTP git on the orchestrator host with a host-held token | Moves secrets onto the long-lived EC2 host; worse blast radius than Vercel-held user tokens. |
-| Only keep Publish + Sync (no terminal git) | Does not meet the requested UX; kept as the interim. |
+| Only keep Publish + Sync (no terminal git)                         | Does not meet the requested UX; kept as the interim.                                         |
 
 ## Prerequisites / follow-ups discovered during live verification
 
@@ -202,7 +202,7 @@ branch iteration.
    trips throttling. Proxy RPCs must be coarse-grained.
 3. **Publication export cost.** Exporting a ~2 MiB / 200-file tree through
    vsock + API Gateway can fail as `Firecracker host unavailable` under
-   load; push should prefer pack transfer of *delta* commits, not a full
+   load; push should prefer pack transfer of _delta_ commits, not a full
    tree re-export when possible.
 
 ## Success criteria

@@ -5,6 +5,13 @@ import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
+import {
+  getWorkspaceAccess,
+  requireWorkspacePermission,
+  WorkspaceAccessError,
+  type WorkspaceAccessRole,
+  writeWorkspaceTuple,
+} from "./access";
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getRepository } from "./github";
@@ -14,7 +21,24 @@ import {
   workspaceSyncBlockReason,
 } from "./workspace-lifecycle";
 
-const workspaceRuntimeTtlMs = (4 * 60 - 5) * 60 * 1000;
+export const workspaceRuntimeTtlMs = 4 * 60 * 60 * 1000;
+
+export function inviteAllowsUser(
+  invite: {
+    allowLink: boolean;
+    inviteeEmail: string | null;
+    inviteeLogin: string | null;
+  },
+  user: { email: string | null; login: string },
+) {
+  if (invite.allowLink) return true;
+  return Boolean(
+    (invite.inviteeEmail &&
+      invite.inviteeEmail.toLowerCase() === user.email?.toLowerCase()) ||
+    (invite.inviteeLogin &&
+      invite.inviteeLogin.toLowerCase() === user.login.toLowerCase()),
+  );
+}
 
 export class WorkspaceLifecycleError extends Error {
   constructor(
@@ -27,7 +51,7 @@ export class WorkspaceLifecycleError extends Error {
 }
 
 export async function listWorkspacesForUser(userId: string) {
-  return getDatabase()
+  const workspaces = await getDatabase()
     .select({
       id: schema.workspaces.id,
       repository: schema.workspaces.repository,
@@ -36,6 +60,7 @@ export async function listWorkspacesForUser(userId: string) {
       baseSha: schema.workspaces.baseSha,
       status: schema.workspaces.status,
       role: schema.workspaceMembers.role,
+      accessRole: schema.workspaceMembers.accessRole,
       canTerminal: schema.workspaceMembers.canTerminal,
       canMerge: schema.workspaceMembers.canMerge,
       updatedAt: schema.workspaces.updatedAt,
@@ -47,6 +72,22 @@ export async function listWorkspacesForUser(userId: string) {
     )
     .where(eq(schema.workspaceMembers.userId, userId))
     .orderBy(desc(schema.workspaces.updatedAt));
+
+  const visible = await Promise.all(
+    workspaces.map(async (workspace) => {
+      try {
+        return (await getWorkspaceAccess(workspace.id, userId))
+          ? workspace
+          : null;
+      } catch (error) {
+        if (error instanceof WorkspaceAccessError && error.status === 403) {
+          return null;
+        }
+        throw error;
+      }
+    }),
+  );
+  return visible.filter((workspace) => workspace !== null);
 }
 
 export async function createWorkspace(
@@ -62,7 +103,7 @@ export async function createWorkspace(
   );
   const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
 
-  return getDatabase().transaction(async (transaction) => {
+  const workspace = await getDatabase().transaction(async (transaction) => {
     const [workspace] = await transaction
       .insert(schema.workspaces)
       .values({
@@ -73,6 +114,7 @@ export async function createWorkspace(
         repositoryVisibility: repository.private ? "private" : "public",
         defaultBranch: repository.default_branch,
         baseSha,
+        hibernateAt: expiresAt,
         expiresAt,
       })
       .returning();
@@ -85,6 +127,7 @@ export async function createWorkspace(
       workspaceId: workspace.id,
       userId,
       role: "owner",
+      accessRole: "owner",
       canTerminal: true,
       canMerge: true,
     });
@@ -98,6 +141,13 @@ export async function createWorkspace(
 
     return workspace;
   });
+
+  await writeWorkspaceTuple({
+    workspaceId: workspace.id,
+    userId,
+    role: "owner",
+  });
+  return workspace;
 }
 
 export async function getWorkspaceForMember(
@@ -117,6 +167,7 @@ export async function getWorkspaceForMember(
       ownerId: schema.workspaces.ownerId,
       expiresAt: schema.workspaces.expiresAt,
       role: schema.workspaceMembers.role,
+      accessRole: schema.workspaceMembers.accessRole,
       canTerminal: schema.workspaceMembers.canTerminal,
       canMerge: schema.workspaceMembers.canMerge,
       integrationHeadSha: schema.worktrees.headSha,
@@ -148,6 +199,7 @@ export async function syncWorkspaceToDefaultBranch(
   workspaceId: string,
   userId: string,
 ) {
+  await requireOwner(workspaceId, userId);
   const workspace = await getWorkspaceForMember(workspaceId, userId);
   if (!workspace) {
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
@@ -225,10 +277,33 @@ export async function getWorkspaceRuntime(workspaceId: string) {
 export async function beginWorkspaceProvisioning(
   workspaceId: string,
   userId: string,
+  permission: "coSteer" | "review" = "coSteer",
 ) {
-  await requireOwner(workspaceId, userId);
+  await requireWorkspacePermission(workspaceId, userId, permission);
   const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
   await getDatabase().transaction(async (transaction) => {
+    const [current] = await transaction
+      .select({
+        workspaceStatus: schema.workspaces.status,
+        runtimeStatus: schema.workspaceRuntimes.status,
+      })
+      .from(schema.workspaces)
+      .leftJoin(
+        schema.workspaceRuntimes,
+        eq(schema.workspaceRuntimes.workspaceId, schema.workspaces.id),
+      )
+      .where(eq(schema.workspaces.id, workspaceId))
+      .limit(1)
+      .for("update");
+    if (
+      current?.workspaceStatus === "stopping" ||
+      current?.runtimeStatus === "stopping"
+    ) {
+      throw new WorkspaceLifecycleError(
+        "The workspace is being hibernated. Try again after it finishes.",
+        409,
+      );
+    }
     await transaction
       .insert(schema.workspaceRuntimes)
       .values({
@@ -262,6 +337,7 @@ export async function markWorkspaceReady(
   headSha: string,
 ) {
   const now = new Date();
+  const hibernateAt = new Date(now.getTime() + workspaceRuntimeTtlMs);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaceRuntimes)
@@ -270,13 +346,21 @@ export async function markWorkspaceReady(
         status: "ready",
         provisionedHeadSha: headSha,
         provisionedAt: now,
+        lastHeartbeatAt: now,
+        hibernatedAt: null,
+        snapshotRef: null,
         lastError: null,
         updatedAt: now,
       })
       .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
     await transaction
       .update(schema.workspaces)
-      .set({ status: "ready", lastActivityAt: now, updatedAt: now })
+      .set({
+        status: "ready",
+        lastActivityAt: now,
+        hibernateAt,
+        updatedAt: now,
+      })
       .where(eq(schema.workspaces.id, workspaceId));
     await transaction
       .update(schema.worktrees)
@@ -492,6 +576,7 @@ export async function listWorkspaceMembers(workspaceId: string) {
       name: schema.users.name,
       avatarUrl: schema.users.avatarUrl,
       role: schema.workspaceMembers.role,
+      accessRole: schema.workspaceMembers.accessRole,
       canTerminal: schema.workspaceMembers.canTerminal,
       canMerge: schema.workspaceMembers.canMerge,
       joinedAt: schema.workspaceMembers.joinedAt,
@@ -506,34 +591,33 @@ export async function listWorkspaceMembers(workspaceId: string) {
 }
 
 async function requireOwner(workspaceId: string, userId: string) {
-  const [membership] = await getDatabase()
-    .select({ role: schema.workspaceMembers.role })
-    .from(schema.workspaceMembers)
-    .where(
-      and(
-        eq(schema.workspaceMembers.workspaceId, workspaceId),
-        eq(schema.workspaceMembers.userId, userId),
-      ),
-    )
-    .limit(1);
-
-  if (membership?.role !== "owner") {
-    throw new Error("Only the workspace owner can perform this action.");
-  }
+  await requireWorkspacePermission(workspaceId, userId, "invite");
 }
 
 export async function createWorkspaceInvite(
   workspaceId: string,
   userId: string,
+  options: {
+    accessRole?: Exclude<WorkspaceAccessRole, "owner">;
+    inviteeEmail?: string | null;
+    inviteeLogin?: string | null;
+    allowLink?: boolean;
+  } = {},
 ) {
   await requireOwner(workspaceId, userId);
   const token = createInviteToken();
+  const accessRole = options.accessRole ?? "co_steer";
   const [invite] = await getDatabase()
     .insert(schema.workspaceInvites)
     .values({
       workspaceId,
       createdBy: userId,
       tokenHash: hashInviteToken(token),
+      accessRole,
+      inviteeEmail: options.inviteeEmail ?? null,
+      inviteeLogin: options.inviteeLogin ?? null,
+      allowLink:
+        options.allowLink ?? (!options.inviteeEmail && !options.inviteeLogin),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
     .returning({ id: schema.workspaceInvites.id });
@@ -562,7 +646,7 @@ export async function revokeWorkspaceInvite(
 export async function acceptWorkspaceInvite(token: string, userId: string) {
   const tokenHash = hashInviteToken(token);
 
-  return getDatabase().transaction(async (transaction) => {
+  const accepted = await getDatabase().transaction(async (transaction) => {
     const [invite] = await transaction
       .select()
       .from(schema.workspaceInvites)
@@ -581,9 +665,25 @@ export async function acceptWorkspaceInvite(token: string, userId: string) {
       throw new Error("This invite is invalid, expired, or already used.");
     }
 
+    const [user] = await transaction
+      .select({ email: schema.users.email, login: schema.users.login })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+    if (!user) throw new Error("User not found.");
+    if (!inviteAllowsUser(invite, user)) {
+      throw new Error("This invitation was issued to a different person.");
+    }
+
     await transaction
       .insert(schema.workspaceMembers)
-      .values({ workspaceId: invite.workspaceId, userId })
+      .values({
+        workspaceId: invite.workspaceId,
+        userId,
+        accessRole: invite.accessRole,
+        canTerminal: invite.accessRole !== "viewer",
+        canMerge: invite.accessRole === "co_steer",
+      })
       .onConflictDoNothing();
 
     await transaction
@@ -591,7 +691,62 @@ export async function acceptWorkspaceInvite(token: string, userId: string) {
       .set({ acceptedAt: new Date(), acceptedBy: userId })
       .where(eq(schema.workspaceInvites.id, invite.id));
 
-    return invite.workspaceId;
+    return {
+      workspaceId: invite.workspaceId,
+      accessRole: invite.accessRole,
+    };
+  });
+
+  await writeWorkspaceTuple({
+    workspaceId: accepted.workspaceId,
+    userId,
+    role: accepted.accessRole,
+  });
+  return accepted.workspaceId;
+}
+
+export async function updateMemberAccessRole(
+  workspaceId: string,
+  memberUserId: string,
+  ownerUserId: string,
+  accessRole: Exclude<WorkspaceAccessRole, "owner">,
+) {
+  await requireOwner(workspaceId, ownerUserId);
+  if (memberUserId === ownerUserId) {
+    throw new Error("Owner capabilities cannot be removed.");
+  }
+
+  const [membership] = await getDatabase()
+    .select({ accessRole: schema.workspaceMembers.accessRole })
+    .from(schema.workspaceMembers)
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, workspaceId),
+        eq(schema.workspaceMembers.userId, memberUserId),
+        eq(schema.workspaceMembers.role, "member"),
+      ),
+    )
+    .limit(1);
+  if (!membership) throw new Error("Workspace member was not found.");
+
+  await getDatabase()
+    .update(schema.workspaceMembers)
+    .set({
+      accessRole,
+      canTerminal: accessRole !== "viewer",
+      canMerge: accessRole === "co_steer",
+    })
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, workspaceId),
+        eq(schema.workspaceMembers.userId, memberUserId),
+      ),
+    );
+  await writeWorkspaceTuple({
+    workspaceId,
+    userId: memberUserId,
+    role: accessRole,
+    deleteRole: membership.accessRole,
   });
 }
 

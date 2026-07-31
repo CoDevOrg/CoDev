@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { auth } from "@/auth";
 import { AcceptInvite } from "@/components/accept-invite";
 import { Brand } from "@/components/app-chrome";
+import { getCurrentAppUser } from "@/lib/identity";
 
 export const metadata: Metadata = { title: "Workspace invitation" };
 
@@ -13,7 +13,7 @@ export default async function InvitePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const session = await auth();
+  const user = await getCurrentAppUser();
 
   return (
     <main className="auth-page">
@@ -31,14 +31,14 @@ export default async function InvitePage({
           Join this CoDev workspace. The owner controls terminal and merge
           capabilities after you arrive.
         </p>
-        {session?.user ? (
+        {user ? (
           <AcceptInvite token={token} />
         ) : (
           <Link
             className="github-button"
             href={`/sign-in?callbackUrl=${encodeURIComponent(`/invites/${token}`)}`}
           >
-            Sign in with GitHub to continue
+            Sign in with Google or GitHub to continue
           </Link>
         )}
         <small>Invitation links expire after 24 hours and work once.</small>

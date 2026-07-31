@@ -38,7 +38,9 @@ Use a disposable public or bounded private repository and a branch under
 
 ## Expected recovery points
 
-- Dirty integration tree: save/checkpoint before publication.
+- Publication includes the dirty integration tree, but still requires the
+  expected integration SHA to match and the agent worktrees to be merged or
+  discarded.
 - Active agent worktrees: merge or discard them before publication or stop.
 - GitHub 403: approve the App's Contents write and Pull requests write
   permissions; do not use a PAT or put a token in the sandbox.

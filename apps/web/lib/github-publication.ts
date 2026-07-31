@@ -5,8 +5,9 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
+import { requireWorkspacePermission } from "./access";
 import { getDatabase } from "./database";
-import { getRepository, GitHubApiError, githubRequest } from "./github";
+import { getGitHubOctokit, getRepository } from "./github";
 import { logEvent } from "./observability";
 import { exportSandboxPublication } from "./orchestrator";
 
@@ -26,6 +27,47 @@ interface PublicationTarget {
   branchName: string;
   expectedHeadSha: string;
   requestId: string;
+}
+
+type GitHubTreeEntry = {
+  path: string;
+  mode: "100644" | "100755" | "120000";
+  type: "blob";
+  sha: string | null;
+};
+
+export function buildCreateTreeRequest(input: {
+  owner: string;
+  repo: string;
+  baseTreeSha: string;
+  tree: GitHubTreeEntry[];
+}) {
+  return {
+    owner: input.owner,
+    repo: input.repo,
+    base_tree: input.baseTreeSha,
+    tree: input.tree,
+  };
+}
+
+export function buildDeletedTreeEntries(
+  baseTree: ReadonlyArray<{
+    path?: string;
+    mode?: string;
+    type?: string;
+  }>,
+  exportedPaths: ReadonlySet<string>,
+): GitHubTreeEntry[] {
+  return baseTree.flatMap((entry) => {
+    if (entry.type !== "blob" || !entry.path || exportedPaths.has(entry.path)) {
+      return [];
+    }
+    const mode =
+      entry.mode === "100755" || entry.mode === "120000"
+        ? entry.mode
+        : "100644";
+    return [{ path: entry.path, mode, type: "blob" as const, sha: null }];
+  });
 }
 
 type PublishedBranch = typeof schema.publishedBranches.$inferSelect;
@@ -51,6 +93,7 @@ function refPath(branchName: string) {
 }
 
 async function reservePublication(input: PublicationTarget) {
+  await requireWorkspacePermission(input.workspaceId, input.userId, "merge");
   return getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${input.workspaceId}))`,
@@ -197,24 +240,20 @@ async function createGitHubCommit(
     contentBase64: string;
   }[],
 ) {
-  const treeEntries: {
-    path: string;
-    mode: string;
-    type: "blob";
-    sha: string;
-  }[] = [];
+  const octokit = await getGitHubOctokit(userId);
+  const [owner, repo] = repository.split("/");
+  if (!owner || !repo) throw new PublicationError("Invalid GitHub repository.");
+  const treeEntries: GitHubTreeEntry[] = [];
   for (let offset = 0; offset < files.length; offset += 10) {
     const batch = files.slice(offset, offset + 10);
     const blobs = await Promise.all(
       batch.map((file) =>
-        githubRequest<{ sha: string }>(
-          userId,
-          `/repos/${repository}/git/blobs`,
-          {
-            method: "POST",
-            body: { content: file.contentBase64, encoding: "base64" },
-          },
-        ),
+        octokit.rest.git.createBlob({
+          owner,
+          repo,
+          content: file.contentBase64,
+          encoding: "base64",
+        }),
       ),
     );
     treeEntries.push(
@@ -222,30 +261,49 @@ async function createGitHubCommit(
         path: file.path,
         mode: file.mode,
         type: "blob" as const,
-        sha: blobs[index]?.sha ?? "",
+        sha: blobs[index]?.data.sha ?? "",
       })),
     );
   }
 
-  const tree = await githubRequest<{ sha: string }>(
-    userId,
-    `/repos/${repository}/git/trees`,
-    { method: "POST", body: { tree: treeEntries } },
+  const baseCommit = await octokit.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: baseSha,
+  });
+  const baseTree = await octokit.rest.git.getTree({
+    owner,
+    repo,
+    tree_sha: baseCommit.data.tree.sha,
+    recursive: "1",
+  });
+  if (baseTree.data.truncated) {
+    throw new PublicationError(
+      "The GitHub base tree is too large for a CoDev publication.",
+    );
+  }
+  const exportedPaths = new Set(files.map((file) => file.path));
+  const deletedEntries = buildDeletedTreeEntries(
+    baseTree.data.tree,
+    exportedPaths,
   );
-  const commit = await githubRequest<{ sha: string }>(
-    userId,
-    `/repos/${repository}/git/commits`,
-    {
-      method: "POST",
-      body: {
-        message: `Publish ${branchName} from CoDev`,
-        tree: tree.sha,
-        parents: [baseSha],
-      },
-    },
+  const tree = await octokit.rest.git.createTree(
+    buildCreateTreeRequest({
+      owner,
+      repo,
+      baseTreeSha: baseCommit.data.tree.sha,
+      tree: [...treeEntries, ...deletedEntries],
+    }),
   );
+  const commit = await octokit.rest.git.createCommit({
+    owner,
+    repo,
+    message: `Publish ${branchName} from CoDev`,
+    tree: tree.data.sha,
+    parents: [baseSha],
+  });
 
-  return commit.sha;
+  return commit.data.sha;
 }
 
 async function ensureGitHubRef(
@@ -254,18 +312,28 @@ async function ensureGitHubRef(
   branchName: string,
   commitSha: string,
 ) {
+  const octokit = await getGitHubOctokit(userId);
+  const [owner, repo] = repository.split("/");
+  if (!owner || !repo) throw new PublicationError("Invalid GitHub repository.");
   try {
-    await githubRequest(userId, `/repos/${repository}/git/refs`, {
-      method: "POST",
-      body: { ref: `refs/heads/${branchName}`, sha: commitSha },
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: commitSha,
     });
   } catch (error) {
-    if (!(error instanceof GitHubApiError) || error.status !== 422) throw error;
-    const existing = await githubRequest<{ object: { sha: string } }>(
-      userId,
-      `/repos/${repository}/git/ref/heads/${refPath(branchName)}`,
-    );
-    if (existing.object.sha !== commitSha) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? Number(error.status)
+        : 0;
+    if (status !== 422) throw error;
+    const existing = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${refPath(branchName)}`,
+    });
+    if (existing.data.object.sha !== commitSha) {
       throw new PublicationError(
         "The remote branch already exists and CoDev will not overwrite it.",
       );

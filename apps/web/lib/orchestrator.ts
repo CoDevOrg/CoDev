@@ -32,6 +32,11 @@ export interface ProvisionSandboxInput {
   repositorySnapshot?: RepositorySnapshot;
   baseSha: string;
   expiresAt: string;
+  resumeFromSnapshot: boolean;
+  lifecycle: {
+    timeoutMs: number;
+    lifecycle: { onTimeout: "pause"; autoResume: true };
+  };
 }
 
 export interface SandboxExecInput {
@@ -205,6 +210,49 @@ export async function destroySandbox(workspaceId: string) {
     }
     throw error;
   }
+}
+
+export async function resumeSandbox(workspaceId: string) {
+  try {
+    await orchestratorRequest("POST", `/v1/sandboxes/${workspaceId}/resume`);
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 404) return;
+    throw error;
+  }
+}
+
+export async function discardSandboxSnapshot(workspaceId: string) {
+  try {
+    await orchestratorRequest(
+      "DELETE",
+      `/v1/sandboxes/${workspaceId}/snapshot`,
+    );
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 404) return;
+    throw error;
+  }
+}
+
+export async function touchSandbox(workspaceId: string) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/activity`,
+  );
+  return z
+    .object({ sandbox: sandboxInstanceSchema })
+    .parse(await response.json()).sandbox;
+}
+
+export async function snapshotWorkspace(
+  workspaceId: string,
+  expectedHeadSha: string,
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/snapshot`,
+    { expectedHeadSha },
+  );
+  return publicationExportSchema.parse(await response.json());
 }
 
 export async function createSandboxWorktree(

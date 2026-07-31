@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
 allowBuilds:
+  "@clerk/shared": set this to true or false
   "@swc/core": true
   cbor-extract: true
   esbuild: true
@@ -49,3 +50,7 @@ minimumReleaseAgeExclude:
   - postcss@8.5.25
   - workflow@4.7.0
   - "@smithy/protocol-http@5.5.16"
+  - "@ai-sdk/gateway@4.0.33"
+  - "@ai-sdk/openai@4.0.25"
+  - "@ai-sdk/provider-utils@5.0.16"
+  - ai@7.0.44

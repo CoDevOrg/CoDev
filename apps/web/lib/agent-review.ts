@@ -6,6 +6,7 @@ import { getRun } from "workflow/api";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
+import { requireWorkspacePermission, type WorkspacePermission } from "./access";
 import {
   checkpointSandboxWorktree,
   deleteSandboxWorktree,
@@ -33,13 +34,20 @@ async function requireReviewTarget(
   workspaceId: string,
   sessionId: string,
   userId: string,
+  permission: WorkspacePermission = "merge",
 ): Promise<ReviewTarget> {
   const workspace = await getWorkspaceForMember(workspaceId, userId);
   if (!workspace) throw new ReviewActionError("Workspace not found.", 404);
-  if (!workspace.canMerge) {
+  try {
+    await requireWorkspacePermission(workspaceId, userId, permission);
+  } catch (error) {
     throw new ReviewActionError(
-      "Merge capability is required for worktree decisions.",
-      403,
+      error instanceof Error
+        ? error.message
+        : permission === "review"
+          ? "Reviewer capability is required to inspect this worktree."
+          : "Merge capability is required for worktree decisions.",
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
     );
   }
   const [session] = await getDatabase()
@@ -191,7 +199,12 @@ export async function prepareAgentReview(
   sessionId: string,
   userId: string,
 ) {
-  const target = await requireReviewTarget(workspaceId, sessionId, userId);
+  const target = await requireReviewTarget(
+    workspaceId,
+    sessionId,
+    userId,
+    "review",
+  );
   await assertReviewable(target);
   await stopAgentForReview(target);
   try {

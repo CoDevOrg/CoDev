@@ -21,6 +21,11 @@ Parameters:
     Default: 40
     MinValue: 40
     MaxValue: 200
+  JailerVolumeSizeGiB:
+    Type: Number
+    Default: 40
+    MinValue: 20
+    MaxValue: 200
   MonthlyBudgetUsd:
     Type: Number
     Default: 75
@@ -260,6 +265,13 @@ Resources:
             DeleteOnTermination: true
             Encrypted: true
             VolumeSize: !Ref HostVolumeSizeGiB
+            VolumeType: gp3
+            Iops: 3000
+        - DeviceName: /dev/sdf
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: !Ref JailerVolumeSizeGiB
             VolumeType: gp3
             Iops: 3000
       Tags:

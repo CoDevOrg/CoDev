@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -12,6 +13,10 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const binary = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -26,6 +31,7 @@ export const workspaceStatus = pgEnum("workspace_status", [
   "pending",
   "provisioning",
   "ready",
+  "hibernated",
   "stopping",
   "stopped",
   "failed",
@@ -33,11 +39,18 @@ export const workspaceStatus = pgEnum("workspace_status", [
 export const sandboxRuntimeStatus = pgEnum("sandbox_runtime_status", [
   "provisioning",
   "ready",
+  "hibernated",
   "stopping",
   "stopped",
   "failed",
 ]);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
+export const workspaceAccessRole = pgEnum("workspace_access_role", [
+  "owner",
+  "co_steer",
+  "reviewer",
+  "viewer",
+]);
 export const worktreeKind = pgEnum("worktree_kind", ["integration", "agent"]);
 export const worktreeStatus = pgEnum("worktree_status", [
   "active",
@@ -86,7 +99,8 @@ export const users = pgTable(
   "users",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    githubUserId: bigint("github_user_id", { mode: "bigint" }).notNull(),
+    githubUserId: bigint("github_user_id", { mode: "bigint" }),
+    clerkUserId: text("clerk_user_id"),
     login: text("login").notNull(),
     name: text("name"),
     email: text("email"),
@@ -95,6 +109,7 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_github_user_id_idx").on(table.githubUserId),
+    uniqueIndex("users_clerk_user_id_idx").on(table.clerkUserId),
     uniqueIndex("users_login_idx").on(table.login),
   ],
 );
@@ -199,6 +214,7 @@ export const workspaces = pgTable(
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    hibernateAt: timestamp("hibernate_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     ...timestamps,
   },
@@ -219,6 +235,9 @@ export const workspaceRuntimes = pgTable(
     backend: text("backend").default("firecracker").notNull(),
     status: sandboxRuntimeStatus("status").default("provisioning").notNull(),
     provisionedHeadSha: text("provisioned_head_sha"),
+    snapshotRef: text("snapshot_ref"),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+    hibernatedAt: timestamp("hibernated_at", { withTimezone: true }),
     lastError: text("last_error"),
     provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),
@@ -277,6 +296,7 @@ export const workspaceMembers = pgTable(
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     role: memberRole("role").default("member").notNull(),
+    accessRole: workspaceAccessRole("access_role").default("viewer").notNull(),
     canTerminal: boolean("can_terminal").default(false).notNull(),
     canMerge: boolean("can_merge").default(false).notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true })
@@ -300,6 +320,10 @@ export const workspaceInvites = pgTable(
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     tokenHash: text("token_hash").notNull(),
+    inviteeEmail: text("invitee_email"),
+    inviteeLogin: text("invitee_login"),
+    accessRole: workspaceAccessRole("access_role").default("viewer").notNull(),
+    allowLink: boolean("allow_link").default(false).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
@@ -362,7 +386,7 @@ export const agentSessions = pgTable(
       .notNull(),
     issueNumber: integer("issue_number"),
     name: text("name").notNull().default("Agent"),
-    model: text("model").notNull().default("gpt-5.6-sol"),
+    model: text("model").notNull().default("gpt-5"),
     status: agentSessionStatus("status").default("idle").notNull(),
     workflowRunId: text("workflow_run_id"),
     lastError: text("last_error"),
@@ -579,6 +603,46 @@ export const yjsSnapshots = pgTable(
       table.path,
     ),
   ],
+);
+
+export const workspaceStateDocuments = pgTable(
+  "workspace_state_documents",
+  {
+    documentName: text("document_name").primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    state: binary("state").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workspace_state_documents_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export const workspaceSnapshots = pgTable(
+  "workspace_snapshots",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    headSha: text("head_sha").notNull(),
+    snapshot: jsonb("snapshot")
+      .$type<{
+        files: Array<{
+          path: string;
+          mode: "100644" | "100755" | "120000";
+          contentBase64: string;
+        }>;
+        totalBytes: number;
+      }>()
+      .notNull(),
+    totalBytes: integer("total_bytes").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("workspace_snapshots_updated_idx").on(table.updatedAt)],
 );
 
 export const collaborationConflictResolutions = pgTable(

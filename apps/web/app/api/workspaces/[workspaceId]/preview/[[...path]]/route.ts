@@ -1,4 +1,6 @@
 import { apiError, getApiUser } from "@/lib/api";
+import { getWorkspaceSnapshot, readSnapshotFile } from "@/lib/hibernation";
+import { requireWorkspacePermission } from "@/lib/access";
 import { parseFileList } from "@/lib/ide";
 import {
   PREVIEW_CSP,
@@ -14,7 +16,6 @@ import {
   listSandboxFiles,
   readSandboxFile,
 } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
 
 function previewHeaders(contentType: string) {
   return {
@@ -28,10 +29,14 @@ function previewHeaders(contentType: string) {
 async function resolveRequestedPath(
   workspaceId: string,
   segments: string[] | undefined,
+  snapshot: Awaited<ReturnType<typeof getWorkspaceSnapshot>>,
 ) {
   if (!segments || segments.length === 0) {
-    const listing = await listSandboxFiles(workspaceId);
-    const files = parseFileList(listing).map((file) => file.path);
+    const files = snapshot
+      ? snapshot.snapshot.files.map((file) => file.path)
+      : parseFileList(await listSandboxFiles(workspaceId)).map(
+          (file) => file.path,
+        );
     const entry = resolvePreviewEntry(files);
     if (!entry) {
       throw new OrchestratorError(
@@ -56,12 +61,24 @@ export async function GET(
   if (!user) return apiError(new Error("Authentication required."), 401);
 
   const { workspaceId, path: segments } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
+  try {
+    await requireWorkspacePermission(workspaceId, user.id, "view");
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
+  }
 
   try {
-    const path = await resolveRequestedPath(workspaceId, segments);
-    const file = await readSandboxFile(workspaceId, path);
+    const snapshot = await getWorkspaceSnapshot(workspaceId);
+    const path = await resolveRequestedPath(workspaceId, segments, snapshot);
+    const file = snapshot
+      ? readSnapshotFile(snapshot, path)
+      : await readSandboxFile(workspaceId, path);
+    if (!file) {
+      throw new OrchestratorError("Preview file not found.", 404);
+    }
     const contentType = contentTypeForPreviewPath(path);
     const extension = extensionOf(path);
 
@@ -83,10 +100,7 @@ export async function GET(
     if (error instanceof OrchestratorError) {
       return apiError(error, error.status);
     }
-    if (
-      error instanceof Error &&
-      /not allowed/i.test(error.message)
-    ) {
+    if (error instanceof Error && /not allowed/i.test(error.message)) {
       return apiError(error, 400);
     }
     return apiError(error);

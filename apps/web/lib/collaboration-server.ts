@@ -45,6 +45,7 @@ interface Connection {
   resumeFrom: string | null;
   replayedPaths: Set<string>;
   alive: boolean;
+  canEdit: boolean;
 }
 
 interface LocalRoom {
@@ -955,6 +956,16 @@ async function handleMessage(
         message.stateVector,
       );
     } else if (message.type === "update") {
+      if (!connection.canEdit) {
+        sendError(
+          connection,
+          "forbidden",
+          "Edit permission is required to change workspace files.",
+          false,
+          message.path,
+        );
+        return;
+      }
       await applyDocumentUpdate(
         workspaceId,
         connection,
@@ -987,6 +998,7 @@ export async function handleCollaborationSocket(
   workspaceId: string,
   socket: WebSocket,
   user: CollaborationUser,
+  options: { canEdit: boolean },
 ) {
   const room = await startRoom(workspaceId);
   const connection: Connection = {
@@ -1000,6 +1012,7 @@ export async function handleCollaborationSocket(
     resumeFrom: null,
     replayedPaths: new Set(),
     alive: true,
+    canEdit: options.canEdit,
   };
   room.connections.add(connection);
 

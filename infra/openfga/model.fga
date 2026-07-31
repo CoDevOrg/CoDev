@@ -1,0 +1,12 @@
+model
+  schema 1.1
+
+type user
+
+type workspace
+  relations
+    define owner: [user]
+    define editor: [user] or owner
+    define reviewer: [user] or editor
+    define viewer: [user] or reviewer or viewer_from_link
+    define viewer_from_link: [user]

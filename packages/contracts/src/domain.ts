@@ -7,6 +7,7 @@ export const workspaceStatusSchema = z.enum([
   "pending",
   "provisioning",
   "ready",
+  "hibernated",
   "stopping",
   "stopped",
   "failed",
@@ -14,7 +15,7 @@ export const workspaceStatusSchema = z.enum([
 
 export const userSchema = z.object({
   id: identifierSchema,
-  githubUserId: z.string().min(1),
+  githubUserId: z.string().min(1).nullable(),
   login: z.string().min(1),
   avatarUrl: z.url().nullable(),
 });
@@ -29,6 +30,7 @@ export const workspaceMemberSchema = z.object({
   userId: identifierSchema,
   role: z.enum(["owner", "member"]),
   capabilities: memberCapabilitiesSchema,
+  accessRole: z.enum(["owner", "co_steer", "reviewer", "viewer"]).optional(),
   joinedAt: timestampSchema,
 });
 
@@ -46,7 +48,14 @@ export const workspaceSchema = z.object({
 export const sandboxInstanceSchema = z.object({
   id: z.string().min(1),
   workspaceId: identifierSchema,
-  status: z.enum(["provisioning", "ready", "stopping", "stopped", "failed"]),
+  status: z.enum([
+    "provisioning",
+    "ready",
+    "hibernated",
+    "stopping",
+    "stopped",
+    "failed",
+  ]),
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   createdAt: timestampSchema,
   lastActivityAt: timestampSchema,

@@ -81,8 +81,8 @@ export default function HomePage() {
             agents plan, build, and review software side by side.
           </p>
           <div className="hero-actions">
-            <Link className="primary-button" href="/workspaces/demo">
-              Explore the demo shell
+            <Link className="primary-button" href="/sign-in">
+              Sign in and open a workspace
               <span aria-hidden="true">↗</span>
             </Link>
             <a className="text-link" href="#workflow">
@@ -268,14 +268,14 @@ export default function HomePage() {
       </section>
 
       <section className="closing-cta">
-        <p className="eyebrow">Phase 1 preview</p>
+        <p className="eyebrow">From idea to pull request</p>
         <h2>Step into the workspace.</h2>
         <p>
-          Explore the fixture shell that sets the visual foundation for CoDev.
-          Live repositories and agents arrive in later phases.
+          Sign in, choose a GitHub repository, invite collaborators, steer
+          agents, and hand the finished work back to GitHub from your browser.
         </p>
-        <Link className="primary-button" href="/workspaces/demo">
-          Launch browser demo <span aria-hidden="true">→</span>
+        <Link className="primary-button" href="/sign-in">
+          Open CoDev <span aria-hidden="true">→</span>
         </Link>
       </section>
 

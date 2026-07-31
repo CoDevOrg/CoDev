@@ -145,6 +145,7 @@ const errorMessageSchema = z.object({
     "not_joined",
     "not_subscribed",
     "not_found",
+    "forbidden",
     "payload_too_large",
     "conflict",
     "internal_error",

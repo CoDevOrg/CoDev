@@ -197,6 +197,14 @@ impl GuestClient {
             .await
     }
 
+    pub async fn snapshot_workspace(
+        &self,
+        request: &PublicationExportRequest,
+    ) -> Result<PublicationExportResponse> {
+        self.request("POST", "/v1/workspace/snapshot", Some(request))
+            .await
+    }
+
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {
         self.git(&git_path("status", worktree_id)).await
     }

@@ -3,14 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AppChrome } from "@/components/app-chrome";
-import { WorkspaceAccess } from "@/components/workspace-access";
+import { AgentPanel } from "@/components/agent-panel";
+import { ShareDialog } from "@/components/share-dialog";
 import { WorkspaceRuntime } from "@/components/workspace-runtime";
 import { requireUser } from "@/lib/session";
+import { requireWorkspacePermission } from "@/lib/access";
 import {
   getWorkspaceForMember,
   getWorkspaceRuntime,
   listWorkspaceMembers,
 } from "@/lib/workspaces";
+import { listAgentSessions } from "@/lib/agent-runtime";
+import { readWorkspaceStateEvents } from "@/lib/workspace-state";
 
 export const metadata: Metadata = { title: "Workspace" };
 
@@ -21,12 +25,15 @@ export default async function WorkspacePage({
 }) {
   const user = await requireUser();
   const { workspaceId } = await params;
+  await requireWorkspacePermission(workspaceId, user.id, "view");
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) notFound();
 
-  const [members, runtime] = await Promise.all([
+  const [members, runtime, sessions, stateEvents] = await Promise.all([
     listWorkspaceMembers(workspaceId),
     getWorkspaceRuntime(workspaceId),
+    listAgentSessions(workspaceId),
+    readWorkspaceStateEvents(workspaceId),
   ]);
 
   return (
@@ -65,8 +72,39 @@ export default async function WorkspacePage({
               : null
           }
           isOwner={workspace.role === "owner"}
+          canProvision={
+            workspace.accessRole === "owner" ||
+            workspace.accessRole === "co_steer"
+          }
+          canResume={workspace.accessRole !== "viewer"}
           defaultBranch={workspace.defaultBranch}
         />
+
+        <section
+          className="workspace-state-preview"
+          aria-label="Workspace conversation"
+        >
+          <div className="workspace-state-preview-heading">
+            <p className="eyebrow">Durable workspace state</p>
+            <h2>Conversation and agent history</h2>
+            <p>
+              This timeline is loaded from PostgreSQL before the compute sandbox
+              resumes.
+            </p>
+          </div>
+          <AgentPanel
+            workspaceId={workspaceId}
+            canMerge={workspace.canMerge}
+            canReview={workspace.accessRole !== "viewer"}
+            canSteer={
+              (workspace.accessRole === "owner" ||
+                workspace.accessRole === "co_steer") &&
+              runtime?.status === "ready"
+            }
+            initialSessions={sessions}
+            initialStateEvents={stateEvents}
+          />
+        </section>
 
         <div className="workspace-stats">
           <div>
@@ -87,8 +125,9 @@ export default async function WorkspacePage({
           </div>
         </div>
 
-        <WorkspaceAccess
+        <ShareDialog
           workspaceId={workspaceId}
+          workspaceName={workspace.repository}
           members={members}
           isOwner={workspace.role === "owner"}
         />

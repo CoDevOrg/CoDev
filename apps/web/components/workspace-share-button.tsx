@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+import {
+  ShareDialog,
+  type WorkspaceShareMember,
+} from "@/components/share-dialog";
+
 type ShareToast = {
   kind: "success" | "error";
   message: string;
@@ -10,9 +15,13 @@ type ShareToast = {
 export function WorkspaceShareButton({
   workspaceId,
   isOwner,
+  workspaceName,
+  members,
 }: {
   workspaceId: string;
   isOwner: boolean;
+  workspaceName?: string;
+  members?: WorkspaceShareMember[];
 }) {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<ShareToast | null>(null);
@@ -25,6 +34,17 @@ export function WorkspaceShareButton({
   }, [toast]);
 
   if (!isOwner) return null;
+
+  if (workspaceName && members) {
+    return (
+      <ShareDialog
+        workspaceId={workspaceId}
+        workspaceName={workspaceName}
+        members={members}
+        isOwner={isOwner}
+      />
+    );
+  }
 
   async function share() {
     setBusy(true);

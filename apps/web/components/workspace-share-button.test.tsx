@@ -18,10 +18,13 @@ describe("WorkspaceShareButton", () => {
 
   it("copies an invite link and shows a success toast", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ inviteUrl: "https://codev.example/invite/abc" }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ inviteUrl: "https://codev.example/invite/abc" }),
+      }),
+    );
     vi.stubGlobal("navigator", {
       clipboard: { writeText },
     });
@@ -34,16 +37,17 @@ describe("WorkspaceShareButton", () => {
         screen.getByText("Invite link copied — share it to collaborate."),
       ).toBeInTheDocument();
     });
-    expect(writeText).toHaveBeenCalledWith(
-      "https://codev.example/invite/abc",
-    );
+    expect(writeText).toHaveBeenCalledWith("https://codev.example/invite/abc");
   });
 
   it("shows an error toast when invite creation fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: "Invite rate limited." }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: "Invite rate limited." }),
+      }),
+    );
     vi.stubGlobal("navigator", {
       clipboard: { writeText: vi.fn() },
     });

@@ -1,4 +1,10 @@
 import { apiError, getApiUser } from "@/lib/api";
+import { requireWorkspacePermission } from "@/lib/access";
+import {
+  clearWorkspaceSnapshot,
+  E2B_LIFECYCLE_OPTIONS,
+  getWorkspaceSnapshot,
+} from "@/lib/hibernation";
 import { getRepositorySnapshot } from "@/lib/github";
 import { getHostState, requestHostWake } from "@/lib/host";
 import {
@@ -31,6 +37,7 @@ export async function GET(
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
 
   try {
+    await requireWorkspacePermission(workspaceId, user.id, "view");
     const runtime = await getWorkspaceRuntime(workspaceId);
     if (runtime?.status !== "ready") {
       return Response.json({ runtime });
@@ -69,10 +76,24 @@ export async function POST(
   const { workspaceId } = await params;
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
-  if (workspace.role !== "owner") {
+  let resumePermission: "coSteer" | "review";
+  try {
+    const access = await requireWorkspacePermission(
+      workspaceId,
+      user.id,
+      "view",
+    );
+    if (!access.permissions.coSteer && !access.permissions.review) {
+      return apiError(
+        new Error("Only workspace editors or reviewers can resume a sandbox."),
+        403,
+      );
+    }
+    resumePermission = access.permissions.coSteer ? "coSteer" : "review";
+  } catch (error) {
     return apiError(
-      new Error("Only the workspace owner can provision a sandbox."),
-      403,
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
     );
   }
 
@@ -81,10 +102,16 @@ export async function POST(
     if (hostState === "starting") {
       return Response.json({ state: "starting" }, { status: 202 });
     }
-    const expiresAt = await beginWorkspaceProvisioning(workspaceId, user.id);
+    const expiresAt = await beginWorkspaceProvisioning(
+      workspaceId,
+      user.id,
+      resumePermission,
+    );
     await waitForOrchestrator();
-    const repositorySnapshot =
-      workspace.repositoryVisibility === "private"
+    const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
+    const repositorySnapshot = persistedSnapshot?.snapshot
+      ? persistedSnapshot.snapshot
+      : workspace.repositoryVisibility === "private"
         ? await getRepositorySnapshot(
             user.id,
             workspace.repository,
@@ -93,15 +120,17 @@ export async function POST(
         : undefined;
     const sandbox = await provisionSandbox({
       workspaceId,
-      repositoryUrl:
-        workspace.repositoryVisibility === "public"
-          ? `https://github.com/${workspace.repository}.git`
-          : null,
+      repositoryUrl: repositorySnapshot
+        ? null
+        : `https://github.com/${workspace.repository}.git`,
       ...(repositorySnapshot ? { repositorySnapshot } : {}),
       baseSha: workspace.baseSha,
       expiresAt: expiresAt.toISOString(),
+      resumeFromSnapshot: Boolean(persistedSnapshot),
+      lifecycle: E2B_LIFECYCLE_OPTIONS,
     });
     await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
+    if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);
     return Response.json({ sandbox }, { status: 201 });
   } catch (error) {
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
