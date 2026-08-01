@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("landing page presents CoDev as a hosted browser workspace", async ({
+test("landing page explains CoDev and offers a clear start", async ({
   page,
 }) => {
   const consoleErrors: string[] = [];
@@ -13,36 +13,22 @@ test("landing page presents CoDev as a hosted browser workspace", async ({
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", {
-      name: /One workspace. Two kinds of builders./,
-    }),
+    page.getByRole("heading", { name: /Build software together/ }),
   ).toBeVisible();
   await expect(
-    page.getByText(/browser-based engineering workspace/),
+    page.getByText(/CoDev brings your team and AI agents/),
   ).toBeVisible();
-  await expect(page.getByText(/No download. No local app./)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Start building/ }),
+  ).toHaveAttribute("href", "/sign-in");
+  await expect(page.getByText("Open demo")).toHaveCount(0);
   expect(consoleErrors).toEqual([]);
 });
 
-test("fixture workspace renders and exposes honest connection states", async ({
-  page,
-}) => {
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      consoleErrors.push(message.text());
-    }
-  });
+test("the old demo route is no longer available", async ({ request }) => {
+  const response = await request.get("/workspaces/demo");
 
-  await page.goto("/workspaces/demo");
-
-  await expect(page.getByText("Demo shell", { exact: true })).toBeVisible();
-  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Terminal unavailable in demo shell"),
-  ).toBeVisible();
-  await expect(page.getByLabel("Fixture TypeScript source")).toBeVisible();
-  expect(consoleErrors).toEqual([]);
+  expect(response.status()).toBe(404);
 });
 
 test("health endpoint reports the web service", async ({ request }) => {
@@ -74,6 +60,9 @@ test("protected workspace routes require GitHub identity", async ({ page }) => {
   await page.goto("/dashboard");
 
   await expect(page).toHaveURL(/\/sign-in/);
+  await expect(
+    page.getByRole("button", { name: "Continue with Google" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Open your CoDev workspace." }),
   ).toBeVisible();

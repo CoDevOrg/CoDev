@@ -29,6 +29,7 @@ import { AgentPanel, type AgentSession } from "@/components/agent-panel";
 import { AgentCanvas } from "@/components/agent-canvas";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { WorkspaceShareMember } from "@/components/share-dialog";
 import type { AgentEvent } from "@codev/shared-types";
 
@@ -787,6 +788,7 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
+          <ThemeToggle />
           <WorkspaceShareButton
             workspaceId={workspaceId}
             isOwner={isOwner}

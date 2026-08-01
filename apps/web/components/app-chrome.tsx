@@ -5,16 +5,20 @@ import { isGitHubAuthConfigured } from "@codev/config";
 
 import { signIn, signOut } from "@/auth";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { clerkAuthConfigured } from "@/lib/identity";
 import { isPilotAdminLogin } from "@/lib/pilot-access";
 
 export function Brand() {
   return (
     <Link className="wordmark" href="/" aria-label="CoDev home">
-      <span className="wordmark-mark" aria-hidden="true">
-        <span />
-        <span />
-      </span>
+      <Image
+        className="brand-image"
+        src="/brand/codev-mark-v3.png"
+        alt=""
+        width={28}
+        height={28}
+      />
       <span>CoDev</span>
     </Link>
   );
@@ -47,6 +51,7 @@ export function AppChrome({
             </span>
           )}
           <span>{user.githubLogin ?? user.name ?? "GitHub user"}</span>
+          <ThemeToggle />
           {!user.githubLogin && isGitHubAuthConfigured() ? (
             <form
               action={async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readServerEnvironment } from "./index";
+import { isGoogleAuthConfigured, readServerEnvironment } from "./index";
 
 describe("server environment", () => {
   it("allows an empty Phase 1 environment", () => {
@@ -61,5 +61,21 @@ describe("server environment", () => {
     ).toMatchObject({
       PILOT_ADMIN_GITHUB_LOGINS: "yousef20920,codev-operator",
     });
+  });
+
+  it("recognizes complete Google OAuth configuration", () => {
+    expect(
+      isGoogleAuthConfigured({
+        AUTH_SECRET: "a-secret",
+        AUTH_GOOGLE_ID: "google-client-id",
+        AUTH_GOOGLE_SECRET: "google-client-secret",
+      }),
+    ).toBe(true);
+    expect(
+      isGoogleAuthConfigured({
+        AUTH_SECRET: "a-secret",
+        AUTH_GOOGLE_ID: "google-client-id",
+      }),
+    ).toBe(false);
   });
 });

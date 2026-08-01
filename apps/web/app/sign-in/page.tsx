@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { isGitHubAuthConfigured } from "@codev/config";
+import { isGitHubAuthConfigured, isGoogleAuthConfigured } from "@codev/config";
 
 import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/app-chrome";
@@ -23,7 +23,8 @@ export default async function SignInPage({
   if (session?.user) redirect("/dashboard");
 
   const { callbackUrl, error } = await searchParams;
-  const configured = isGitHubAuthConfigured();
+  const githubConfigured = isGitHubAuthConfigured();
+  const googleConfigured = isGoogleAuthConfigured();
   const safeCallback =
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
@@ -33,7 +34,7 @@ export default async function SignInPage({
     <main className="auth-page">
       <div className="auth-nav">
         <Brand />
-        <Link href="/workspaces/demo">View demo</Link>
+        <Link href="/">Back</Link>
       </div>
       <section className="auth-card">
         <span className="auth-glyph" aria-hidden="true">
@@ -48,31 +49,62 @@ export default async function SignInPage({
 
         {error ? (
           <div className="inline-alert error" role="alert">
-            GitHub sign-in did not complete. Please try again.
+            Sign-in did not complete. Please try again.
           </div>
         ) : null}
 
         {clerkEnabled ? (
           <ClerkSignIn redirectUrl={safeCallback} />
-        ) : configured ? (
-          <form
-            action={async () => {
-              "use server";
-              await signIn("github", { redirectTo: safeCallback });
-            }}
-          >
-            <button className="github-button" type="submit">
-              <span aria-hidden="true">⑂</span>
-              Continue with GitHub
-            </button>
-          </form>
         ) : (
-          <div className="setup-panel">
-            <strong>GitHub App setup pending</strong>
-            <p>
-              The website is live, but an owner must add the GitHub App client
-              ID and secret before sign-in can begin.
-            </p>
+          <div className="auth-provider-stack">
+            <form
+              action={async () => {
+                "use server";
+                await signIn("google", { redirectTo: safeCallback });
+              }}
+            >
+              <button
+                className="google-button"
+                type="submit"
+                disabled={!googleConfigured}
+              >
+                <span className="google-mark" aria-hidden="true">
+                  G
+                </span>
+                Continue with Google
+              </button>
+            </form>
+
+            <div className="auth-divider" aria-hidden="true">
+              <span>or</span>
+            </div>
+
+            <form
+              action={async () => {
+                "use server";
+                await signIn("github", { redirectTo: safeCallback });
+              }}
+            >
+              <button
+                className="github-button"
+                type="submit"
+                disabled={!githubConfigured}
+              >
+                <span aria-hidden="true">⑂</span>
+                Continue with GitHub
+              </button>
+            </form>
+
+            {!googleConfigured || !githubConfigured ? (
+              <div className="setup-panel">
+                <strong>OAuth setup pending</strong>
+                <p>
+                  Add the provider credentials to enable the corresponding
+                  sign-in option. Google accounts do not need GitHub access;
+                  repository access can be connected afterward.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
 

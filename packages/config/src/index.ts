@@ -24,6 +24,8 @@ export const serverEnvironmentSchema = z.object({
   AUTH_SECRET: z.string().min(32).optional(),
   AUTH_GITHUB_ID: z.string().min(1).optional(),
   AUTH_GITHUB_SECRET: z.string().min(1).optional(),
+  AUTH_GOOGLE_ID: z.string().min(1).optional(),
+  AUTH_GOOGLE_SECRET: z.string().min(1).optional(),
   GITHUB_APP_SLUG: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   CREDENTIAL_KMS_KEY_ID: z.string().min(1).optional(),
@@ -85,5 +87,13 @@ export function isGitHubAuthConfigured(
     input.AUTH_GITHUB_ID &&
     input.AUTH_GITHUB_SECRET &&
     input.CREDENTIAL_ENCRYPTION_KEY,
+  );
+}
+
+export function isGoogleAuthConfigured(
+  input: Record<string, string | undefined> = process.env,
+) {
+  return Boolean(
+    input.AUTH_SECRET && input.AUTH_GOOGLE_ID && input.AUTH_GOOGLE_SECRET,
   );
 }

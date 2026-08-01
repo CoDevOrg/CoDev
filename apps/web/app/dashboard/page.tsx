@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { AppChrome } from "@/components/app-chrome";
 import { RepositoryPicker } from "@/components/repository-picker";
-import { getOpenAICredentialStatus } from "@/lib/credentials";
 import { requireUser } from "@/lib/session";
 import { listWorkspacesForUser } from "@/lib/workspaces";
 
@@ -11,27 +10,19 @@ export const metadata: Metadata = { title: "Workspaces" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [workspaces, credential] = await Promise.all([
-    listWorkspacesForUser(user.id),
-    getOpenAICredentialStatus(user.id),
-  ]);
+  const workspaces = await listWorkspacesForUser(user.id);
 
   return (
     <AppChrome user={user}>
       <main className="dashboard-shell">
         <header className="dashboard-heading">
           <div>
-            <p className="eyebrow">Workspace control</p>
-            <h1>Build together, from the browser.</h1>
+            <p className="eyebrow">Your workspace</p>
+            <h1>Create a workspace.</h1>
             <p>
-              Open a GitHub repository, invite collaborators, and decide who can
-              use terminal and merge controls.
+              Choose a GitHub repository to start building. You can invite
+              collaborators and review work together in the browser.
             </p>
-          </div>
-          <div className="credential-chip">
-            <span className={credential ? "dot-ready" : "dot-muted"} />
-            OpenAI key {credential ? `••••${credential.lastFour}` : "not added"}
-            <Link href="/settings">Manage</Link>
           </div>
         </header>
 

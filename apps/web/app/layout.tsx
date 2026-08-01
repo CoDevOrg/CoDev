@@ -19,11 +19,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "CoDev — One workspace. Two builders.",
+    default: "CoDev",
     template: "%s · CoDev",
   },
   description:
-    "A hosted, browser-based engineering workspace where people and AI agents build together.",
+    "A hosted browser workspace where people and AI agents build together.",
 };
 
 export default function RootLayout({
