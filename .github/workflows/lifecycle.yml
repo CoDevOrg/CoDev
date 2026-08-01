@@ -1,0 +1,23 @@
+name: Workspace lifecycle reconciliation
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Reconcile workspaces
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --retry-delay 5 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            https://codev-xi.vercel.app/api/cron/lifecycle

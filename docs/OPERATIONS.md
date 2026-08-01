@@ -42,8 +42,9 @@ definitions and the privacy boundary.
 
 ## Lifecycle recovery
 
-Vercel invokes `/api/cron/lifecycle` every five minutes with `Authorization: Bearer
-$CRON_SECRET`. A manual retry is safe:
+GitHub Actions invokes `/api/cron/lifecycle` every five minutes with
+`Authorization: Bearer $CRON_SECRET`. The repository secret must be named
+`CRON_SECRET`. A manual retry is safe:
 
 ```sh
 curl -fsS \
