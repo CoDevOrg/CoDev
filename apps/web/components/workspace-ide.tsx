@@ -7,6 +7,14 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Code2,
+  Files,
+  GitBranch,
+  MonitorPlay,
+  PanelRightClose,
+  TerminalSquare,
+} from "lucide-react";
 
 import {
   type CollaborationConflict,
@@ -372,6 +380,11 @@ export function WorkspaceIde({
     () => Boolean(resolvePreviewEntry(files.map((file) => file.path))),
     [files],
   );
+
+  const handleTurnCompleted = useCallback(() => {
+    schedulePreviewRefresh();
+    if (hasPreview) setView("preview");
+  }, [hasPreview, schedulePreviewRefresh]);
 
   useEffect(() => {
     if (!hasPreview && view === "preview") {
@@ -839,16 +852,81 @@ export function WorkspaceIde({
         </Link>
         <span className="topbar-divider" />
         <div className="repo-crumbs">
-          <span className="github-glyph">⑂</span>
+          <GitBranch className="github-glyph" aria-hidden="true" />
           <strong>{repository}</strong>
           <i>/</i>
           <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
         </div>
         <div className="topbar-center">
-          <span className="branch-icon">⑂</span>
+          <GitBranch className="branch-icon" aria-hidden="true" />
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
+          <nav className="workspace-canvas-tools" aria-label="Workspace canvas">
+            <button
+              type="button"
+              className={view === "files" ? "active" : ""}
+              aria-label="Open files"
+              aria-pressed={view === "files"}
+              onClick={() => {
+                setView("files");
+                setSearchOpen(false);
+                setTerminalCollapsed(true);
+              }}
+            >
+              <Files aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={view === "code" ? "active" : ""}
+              aria-label="Open code editor"
+              aria-pressed={view === "code"}
+              onClick={() => {
+                setView("code");
+                setTerminalCollapsed(true);
+              }}
+            >
+              <Code2 aria-hidden="true" />
+            </button>
+            {hasPreview ? (
+              <button
+                type="button"
+                className={view === "preview" ? "active" : ""}
+                aria-label="Open app preview"
+                aria-pressed={view === "preview"}
+                onClick={() => {
+                  setView("preview");
+                  setTerminalCollapsed(true);
+                }}
+              >
+                <MonitorPlay aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={view === "terminal" ? "active" : ""}
+              aria-label="Open terminal"
+              aria-pressed={view === "terminal"}
+              onClick={() => {
+                setView("terminal");
+                setTerminalCollapsed(false);
+              }}
+            >
+              <TerminalSquare aria-hidden="true" />
+            </button>
+            {view !== "chat" ? (
+              <button
+                type="button"
+                aria-label="Close canvas"
+                onClick={() => {
+                  setView("chat");
+                  setTerminalCollapsed(true);
+                }}
+              >
+                <PanelRightClose aria-hidden="true" />
+              </button>
+            ) : null}
+          </nav>
           <ThemeToggle />
           <WorkspaceShareButton
             workspaceId={workspaceId}
@@ -955,78 +1033,8 @@ export function WorkspaceIde({
           .filter(Boolean)
           .join(" ")}
       >
-        <aside className="activity-rail" aria-label="IDE views">
-          <button
-            className={`rail-button agent-rail ${view === "chat" ? "active" : ""}`}
-            type="button"
-            aria-label="Chat"
-            aria-pressed={view === "chat"}
-            onClick={() => {
-              setView("chat");
-              setTerminalCollapsed(true);
-            }}
-          >
-            ✦
-          </button>
-          <button
-            className={`rail-button ${view === "files" ? "active" : ""}`}
-            type="button"
-            aria-label="Files"
-            aria-pressed={view === "files"}
-            onClick={() => {
-              setView("files");
-              setSearchOpen(false);
-              setTerminalCollapsed(true);
-            }}
-          >
-            ◫
-          </button>
-          <button
-            className={`rail-button ${view === "code" ? "active" : ""}`}
-            type="button"
-            aria-label="Code"
-            aria-pressed={view === "code"}
-            onClick={() => {
-              setView("code");
-              setTerminalCollapsed(true);
-            }}
-          >
-            ⌘
-          </button>
-          {hasPreview ? (
-            <button
-              className={`rail-button ${view === "preview" ? "active" : ""}`}
-              type="button"
-              aria-label="Preview focus"
-              aria-pressed={view === "preview"}
-              onClick={() => {
-                setView("preview");
-                setTerminalCollapsed(true);
-              }}
-            >
-              ▣
-            </button>
-          ) : null}
-          <button
-            className={`rail-button ${view === "terminal" ? "active" : ""}`}
-            type="button"
-            aria-label="Terminal"
-            aria-pressed={view === "terminal"}
-            onClick={() => {
-              setView("terminal");
-              setTerminalCollapsed(false);
-            }}
-          >
-            ▹
-          </button>
-          <span className="rail-spacer" />
-          <Link className="rail-button" href="/dashboard">
-            ⚙
-          </Link>
-        </aside>
-
         <div
-          className={["ide-main-stage", hasPreview ? "has-preview" : ""]
+          className={["ide-main-stage", view !== "chat" ? "canvas-open" : ""]
             .filter(Boolean)
             .join(" ")}
         >
@@ -1037,9 +1045,9 @@ export function WorkspaceIde({
             canSteer={canEdit && hasRepository}
             initialSessions={initialAgentSessions}
             initialStateEvents={initialStateEvents}
-            onTurnCompleted={schedulePreviewRefresh}
+            onTurnCompleted={handleTurnCompleted}
           />
-          {hasPreview ? (
+          {hasPreview && view === "preview" ? (
             <PreviewPane
               workspaceId={workspaceId}
               files={files}

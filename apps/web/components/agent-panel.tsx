@@ -8,6 +8,15 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import {
+  GitBranch,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Square,
+} from "lucide-react";
 
 import { AgentChatTranscript } from "@/components/agent-chat-transcript";
 import {
@@ -385,291 +394,360 @@ export function AgentPanel({
   const followUpMode = Boolean(selectedSession) && !composingNew;
 
   return (
-    <aside
-      className="ide-changes agent-runtime-panel agent-chat-panel"
-      aria-label="Agent chat"
-    >
-      <div className="agent-panel-head">
-        <div>
-          <span>Agent chat</span>
-          <b>{activeSessionCount}/2 active</b>
-        </div>
-        <div className="agent-panel-head-actions">
-          {activeSessionCount < 2 ? (
-            <button
-              type="button"
-              className={composingNew ? "active" : ""}
-              onClick={() => setComposingNew(true)}
-              aria-label="New session"
-            >
-              +
-            </button>
-          ) : null}
+    <section className="agent-panel-layout" aria-label="Workspace chat">
+      <aside className="agent-session-sidebar" aria-label="Chat sessions">
+        <div className="agent-sidebar-title">
+          <span className="agent-sidebar-mark" aria-hidden="true">
+            <Sparkles />
+          </span>
+          <div>
+            <strong>Chats</strong>
+            <span>{activeSessionCount} active</span>
+          </div>
           <button
             type="button"
             onClick={() => void refresh()}
-            aria-label="Refresh"
+            aria-label="Refresh chats"
           >
-            ↻
+            <RefreshCw />
           </button>
         </div>
-      </div>
 
-      {sessions.length > 0 ? (
-        <div
-          className="agent-session-tabs"
-          role="tablist"
-          aria-label="Sessions"
-        >
-          {sessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              role="tab"
-              aria-selected={
-                session.id === selectedSession?.id && !composingNew
-              }
-              className={
-                session.id === selectedSession?.id && !composingNew
-                  ? "active"
-                  : ""
-              }
-              onClick={() => {
-                setSelectedSessionId(session.id);
-                setComposingNew(false);
-              }}
-            >
-              <strong>{session.name}</strong>
-              <span>{session.status}</span>
-            </button>
-          ))}
+        {canSteer && activeSessionCount < 2 ? (
+          <button
+            type="button"
+            className={`agent-new-session ${composingNew ? "active" : ""}`}
+            onClick={() => setComposingNew(true)}
+          >
+            <Plus aria-hidden="true" />
+            <span>New session</span>
+          </button>
+        ) : null}
+
+        <div className="agent-session-group-label">
+          <span>Recent</span>
+          <b>{sessions.length}</b>
         </div>
-      ) : null}
 
-      {error ? <div className="ide-error">{error}</div> : null}
-
-      {selectedSession && !composingNew ? (
-        <div className="agent-chat-meta">
-          <span>⑂ {selectedSession.worktreeName}</span>
-          {selectedSession.issueNumber ? (
-            <a
-              href={selectedSession.issueUrl ?? "#"}
-              target="_blank"
-              rel="noreferrer"
-            >
-              #{selectedSession.issueNumber}
-            </a>
-          ) : null}
-          {selectedSession.lastError ? (
-            <span className="agent-chat-meta-error">
-              {selectedSession.lastError}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="agent-chat-body">
-        {composingNew || !selectedSession ? (
-          <div className="agent-chat-welcome">
-            <strong>What should we build?</strong>
-            <p>
-              Describe a change below. The agent works in an isolated worktree;
-              everyone in this workspace sees the same chat.
-            </p>
+        {sessions.length > 0 ? (
+          <div
+            className="agent-session-list"
+            role="tablist"
+            aria-label="Sessions"
+          >
+            {sessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                role="tab"
+                aria-selected={
+                  session.id === selectedSession?.id && !composingNew
+                }
+                className={
+                  session.id === selectedSession?.id && !composingNew
+                    ? "active"
+                    : ""
+                }
+                onClick={() => {
+                  setSelectedSessionId(session.id);
+                  setComposingNew(false);
+                }}
+              >
+                <MessageSquare aria-hidden="true" />
+                <span>
+                  <strong>{session.name}</strong>
+                  <small>{session.status}</small>
+                </span>
+                <i className={`session-status status-${session.status}`} />
+              </button>
+            ))}
           </div>
         ) : (
-          <AgentChatTranscript items={chatItems} />
+          <p className="agent-sidebar-empty">Your chats will appear here.</p>
         )}
-      </div>
 
-      {selectedSession && !composingNew && (canReview || canMerge) ? (
-        <details className="agent-review-disclosure">
-          <summary>Review &amp; merge</summary>
-          {canReview &&
-          selectedSession.worktreeStatus !== "merged" &&
-          selectedSession.worktreeStatus !== "discarded" ? (
-            <div className="agent-review">
-              <div className="agent-review-actions">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void review(selectedSession.id)}
-                >
-                  {selectedSession.reviewedAt
-                    ? "Refresh review"
-                    : "Prepare review"}
-                </button>
-                {canMerge && selectedSession.reviewedAt ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void reviewAction(selectedSession.id, "rebase")
-                      }
-                    >
-                      Rebase
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void reviewAction(selectedSession.id, "merge")
-                      }
-                    >
-                      Merge
-                    </button>
-                  </>
-                ) : null}
-                {canMerge ? (
+        <div className="agent-sidebar-foot">
+          <GitBranch aria-hidden="true" />
+          <span>Up to 2 parallel sessions</span>
+        </div>
+      </aside>
+
+      <section
+        className="ide-changes agent-runtime-panel agent-chat-panel agent-conversation"
+        aria-label="Agent conversation"
+      >
+        <header className="agent-conversation-head">
+          <div>
+            <strong>
+              {composingNew || !selectedSession
+                ? "New session"
+                : selectedSession.name}
+            </strong>
+            <span>
+              {composingNew || !selectedSession
+                ? "Describe what you want to build"
+                : `${selectedSession.model} · ${selectedSession.status}`}
+            </span>
+          </div>
+          {selectedSession && !composingNew ? (
+            <span
+              className={`conversation-status status-${selectedSession.status}`}
+            >
+              <i />
+              {selectedSession.status}
+            </span>
+          ) : null}
+        </header>
+
+        {error ? <div className="ide-error">{error}</div> : null}
+
+        {selectedSession && !composingNew ? (
+          <div className="agent-chat-meta">
+            <span>
+              <GitBranch aria-hidden="true" />
+              {selectedSession.worktreeName}
+            </span>
+            {selectedSession.issueNumber ? (
+              <a
+                href={selectedSession.issueUrl ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                #{selectedSession.issueNumber}
+              </a>
+            ) : null}
+            {selectedSession.lastError ? (
+              <span className="agent-chat-meta-error">
+                {selectedSession.lastError}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="agent-chat-body">
+          {composingNew || !selectedSession ? (
+            <div className="agent-chat-welcome">
+              <strong>What should we build?</strong>
+              <p>
+                Describe a change below. The agent works in an isolated
+                worktree; everyone in this workspace sees the same chat.
+              </p>
+            </div>
+          ) : (
+            <AgentChatTranscript items={chatItems} />
+          )}
+        </div>
+
+        {selectedSession && !composingNew && (canReview || canMerge) ? (
+          <details className="agent-review-disclosure">
+            <summary>Review &amp; merge</summary>
+            {canReview &&
+            selectedSession.worktreeStatus !== "merged" &&
+            selectedSession.worktreeStatus !== "discarded" ? (
+              <div className="agent-review">
+                <div className="agent-review-actions">
                   <button
                     type="button"
-                    className="agent-discard"
                     disabled={busy}
-                    onClick={() =>
-                      void reviewAction(selectedSession.id, "discard")
-                    }
+                    onClick={() => void review(selectedSession.id)}
                   >
-                    Discard
+                    {selectedSession.reviewedAt
+                      ? "Refresh review"
+                      : "Prepare review"}
+                  </button>
+                  {canMerge && selectedSession.reviewedAt ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void reviewAction(selectedSession.id, "rebase")
+                        }
+                      >
+                        Rebase
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void reviewAction(selectedSession.id, "merge")
+                        }
+                      >
+                        Merge
+                      </button>
+                    </>
+                  ) : null}
+                  {canMerge ? (
+                    <button
+                      type="button"
+                      className="agent-discard"
+                      disabled={busy}
+                      onClick={() =>
+                        void reviewAction(selectedSession.id, "discard")
+                      }
+                    >
+                      Discard
+                    </button>
+                  ) : null}
+                </div>
+                {reviews[selectedSession.id] ? (
+                  <details>
+                    <summary>
+                      Reviewed diff ·{" "}
+                      {reviews[selectedSession.id]?.diffDigest.slice(0, 10)}
+                    </summary>
+                    <pre>
+                      {reviews[selectedSession.id]?.diff || "No file changes."}
+                    </pre>
+                  </details>
+                ) : null}
+                {canReview ? (
+                  <div className="agent-review-comment">
+                    <strong>Leave a review note</strong>
+                    <div className="agent-review-comment-location">
+                      <input
+                        aria-label="Comment file path"
+                        value={commentPath}
+                        onChange={(event) => setCommentPath(event.target.value)}
+                        placeholder="src/file.ts (optional)"
+                      />
+                      <input
+                        aria-label="Comment line number"
+                        inputMode="numeric"
+                        value={commentLine}
+                        onChange={(event) => setCommentLine(event.target.value)}
+                        placeholder="Line"
+                      />
+                    </div>
+                    <textarea
+                      aria-label="Review comment"
+                      value={commentBody}
+                      onChange={(event) => setCommentBody(event.target.value)}
+                      placeholder="Leave an inline review note without running an agent…"
+                      rows={3}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !commentBody.trim()}
+                      onClick={() => void addComment()}
+                    >
+                      {busy ? "Saving note…" : "Add review note"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="agent-review-result">
+                {selectedSession.worktreeStatus === "merged"
+                  ? "Merged into the integration worktree."
+                  : selectedSession.worktreeStatus === "discarded"
+                    ? "Worktree discarded."
+                    : "Reviewer capability is required to inspect this worktree."}
+              </div>
+            )}
+          </details>
+        ) : null}
+
+        <div className="agent-chat-composer">
+          {!canSteer ? (
+            <p className="agent-chat-composer-full">
+              Read-only workspace access. A Co-Steer member can send prompts or
+              interrupt an agent.
+            </p>
+          ) : followUpMode && selectedSession ? (
+            <>
+              <textarea
+                ref={composerTextareaRef}
+                aria-label={`Message ${selectedSession.name}`}
+                value={followUp}
+                onChange={(event) => setFollowUp(event.target.value)}
+                onKeyDown={(event) =>
+                  onComposerKeyDown(event, () => void sendFollowUp())
+                }
+                placeholder="Message the agent…"
+                rows={3}
+              />
+              <div className="agent-chat-composer-actions">
+                <div className="agent-composer-tools">
+                  <button
+                    type="button"
+                    onClick={() => setComposingNew(true)}
+                    aria-label="Start a new session"
+                    title="New session"
+                  >
+                    <Plus />
+                  </button>
+                  <span>{selectedSession.model}</span>
+                  <kbd>⌘ Enter</kbd>
+                </div>
+                <button
+                  type="button"
+                  className="agent-send"
+                  disabled={busy || !followUp.trim()}
+                  onClick={() => void sendFollowUp()}
+                  aria-label="Send message"
+                >
+                  <Send />
+                </button>
+                {selectedSession.status === "running" ? (
+                  <button
+                    className="agent-interrupt"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void interrupt(selectedSession.id)}
+                  >
+                    <Square />
+                    Stop
                   </button>
                 ) : null}
               </div>
-              {reviews[selectedSession.id] ? (
-                <details>
-                  <summary>
-                    Reviewed diff ·{" "}
-                    {reviews[selectedSession.id]?.diffDigest.slice(0, 10)}
-                  </summary>
-                  <pre>
-                    {reviews[selectedSession.id]?.diff || "No file changes."}
-                  </pre>
-                </details>
-              ) : null}
-              {canReview ? (
-                <div className="agent-review-comment">
-                  <strong>Leave a review note</strong>
-                  <div className="agent-review-comment-location">
-                    <input
-                      aria-label="Comment file path"
-                      value={commentPath}
-                      onChange={(event) => setCommentPath(event.target.value)}
-                      placeholder="src/file.ts (optional)"
-                    />
-                    <input
-                      aria-label="Comment line number"
-                      inputMode="numeric"
-                      value={commentLine}
-                      onChange={(event) => setCommentLine(event.target.value)}
-                      placeholder="Line"
-                    />
-                  </div>
-                  <textarea
-                    aria-label="Review comment"
-                    value={commentBody}
-                    onChange={(event) => setCommentBody(event.target.value)}
-                    placeholder="Leave an inline review note without running an agent…"
-                    rows={3}
-                  />
+            </>
+          ) : showNewComposer && activeSessionCount < 2 ? (
+            <>
+              <textarea
+                ref={composerTextareaRef}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={(event) =>
+                  onComposerKeyDown(event, () => void createSession())
+                }
+                placeholder="Ask the agent to build something…"
+                rows={3}
+                aria-label="Message the agent"
+              />
+              <div className="agent-chat-composer-actions">
+                <div className="agent-composer-tools">
+                  <span>Auto</span>
+                  <kbd>⌘ Enter</kbd>
+                </div>
+                <button
+                  type="button"
+                  className="agent-send"
+                  disabled={busy || !prompt.trim()}
+                  onClick={() => void createSession()}
+                  aria-label="Start session"
+                >
+                  <Send />
+                </button>
+                {selectedSession ? (
                   <button
                     type="button"
-                    disabled={busy || !commentBody.trim()}
-                    onClick={() => void addComment()}
+                    className="agent-composer-cancel"
+                    onClick={() => setComposingNew(false)}
                   >
-                    {busy ? "Saving note…" : "Add review note"}
+                    Cancel
                   </button>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            </>
           ) : (
-            <div className="agent-review-result">
-              {selectedSession.worktreeStatus === "merged"
-                ? "Merged into the integration worktree."
-                : selectedSession.worktreeStatus === "discarded"
-                  ? "Worktree discarded."
-                  : "Reviewer capability is required to inspect this worktree."}
-            </div>
+            <p className="agent-chat-composer-full">
+              Two active worktrees are running. Review or discard one to start
+              another session.
+            </p>
           )}
-        </details>
-      ) : null}
-
-      <div className="agent-chat-composer">
-        {!canSteer ? (
-          <p className="agent-chat-composer-full">
-            Read-only workspace access. A Co-Steer member can send prompts or
-            interrupt an agent.
-          </p>
-        ) : followUpMode && selectedSession ? (
-          <>
-            <textarea
-              ref={composerTextareaRef}
-              aria-label={`Message ${selectedSession.name}`}
-              value={followUp}
-              onChange={(event) => setFollowUp(event.target.value)}
-              onKeyDown={(event) =>
-                onComposerKeyDown(event, () => void sendFollowUp())
-              }
-              placeholder="Message the agent…"
-              rows={3}
-            />
-            <div className="agent-chat-composer-actions">
-              <button
-                type="button"
-                disabled={busy || !followUp.trim()}
-                onClick={() => void sendFollowUp()}
-              >
-                Send
-              </button>
-              {selectedSession.status === "running" ? (
-                <button
-                  className="agent-interrupt"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void interrupt(selectedSession.id)}
-                >
-                  Interrupt
-                </button>
-              ) : null}
-            </div>
-          </>
-        ) : showNewComposer && activeSessionCount < 2 ? (
-          <>
-            <textarea
-              ref={composerTextareaRef}
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) =>
-                onComposerKeyDown(event, () => void createSession())
-              }
-              placeholder="Ask the agent to build something…"
-              rows={3}
-              aria-label="Message the agent"
-            />
-            <div className="agent-chat-composer-actions">
-              <button
-                type="button"
-                disabled={busy || !prompt.trim()}
-                onClick={() => void createSession()}
-              >
-                Send
-              </button>
-              {selectedSession ? (
-                <button
-                  type="button"
-                  className="agent-composer-cancel"
-                  onClick={() => setComposingNew(false)}
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <p className="agent-chat-composer-full">
-            Two active worktrees are running. Review or discard one to start
-            another session.
-          </p>
-        )}
-      </div>
-    </aside>
+        </div>
+      </section>
+    </section>
   );
 }
