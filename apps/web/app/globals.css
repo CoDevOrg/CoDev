@@ -2288,7 +2288,7 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.hibernation-banner {
+.runtime-banner {
   display: flex;
   margin: 20px 0;
   padding: 14px 16px;
@@ -2300,13 +2300,13 @@ button:disabled {
   background: rgba(212, 175, 55, 0.06);
 }
 
-.hibernation-banner > div {
+.runtime-banner > div {
   display: grid;
   gap: 4px;
 }
 
-.hibernation-banner span,
-.hibernation-banner small {
+.runtime-banner span,
+.runtime-banner small {
   color: #a7b0c6;
   font-size: 11px;
   line-height: 1.45;
@@ -7600,7 +7600,7 @@ html .live-ide .presence-stack > span {
   background: var(--workspace-surface-raised);
 }
 
-html .live-ide > .hibernation-banner {
+html .live-ide > .runtime-banner {
   min-height: 68px;
   margin: 0;
   padding: 12px 20px;
@@ -7613,22 +7613,20 @@ html .live-ide > .hibernation-banner {
   color: var(--workspace-ink);
 }
 
-html .live-ide > .hibernation-banner strong {
+html .live-ide > .runtime-banner strong {
   font-size: 12px;
   font-weight: 750;
 }
 
-html .live-ide > .hibernation-banner span,
-html .live-ide > .hibernation-banner small {
+html .live-ide > .runtime-banner span,
+html .live-ide > .runtime-banner small {
   color: var(--workspace-muted);
 }
 
-html .live-ide > .hibernation-banner .primary-button {
-  border-color: var(--workspace-accent);
-  border-radius: 8px;
-  background: var(--workspace-accent);
-  color: #ffffff;
-  font-weight: 700;
+html .live-ide > .runtime-banner .runtime-state {
+  color: var(--workspace-accent);
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 html .live-ide-grid,

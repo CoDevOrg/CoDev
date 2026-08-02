@@ -79,7 +79,8 @@ export interface WorkspaceIdeProps {
   initialAgentSessions: AgentSession[];
   initialStateEvents: AgentEvent[];
   runtimeStatus: RuntimeStatus;
-  canResume: boolean;
+  runtimeError?: string | null;
+  canStartRuntime: boolean;
   canEdit: boolean;
   canTerminal: boolean;
   canMerge: boolean;
@@ -103,7 +104,8 @@ export function WorkspaceIde({
   initialAgentSessions,
   initialStateEvents,
   runtimeStatus,
-  canResume,
+  runtimeError,
+  canStartRuntime,
   canEdit,
   canTerminal,
   canMerge,
@@ -141,9 +143,9 @@ export function WorkspaceIde({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [openingPullRequest, setOpeningPullRequest] = useState(false);
   const [pullRequestUrl, setPullRequestUrl] = useState<string | null>(null);
-  const [resuming, setResuming] = useState(false);
-  const [resumeMessage, setResumeMessage] = useState("");
-  const resumeInFlight = useRef(false);
+  const [startingRuntime, setStartingRuntime] = useState(false);
+  const [runtimeMessage, setRuntimeMessage] = useState("");
+  const startInFlight = useRef(false);
   const collaboration = useRef<
     WorkspaceCollaboration | HocuspocusWorkspaceCollaboration | null
   >(null);
@@ -246,11 +248,11 @@ export function WorkspaceIde({
     }
   }
 
-  const resumeWorkspace = useCallback(async () => {
-    if (resumeInFlight.current) return;
-    resumeInFlight.current = true;
-    setResuming(true);
-    setResumeMessage("Waking the workspace…");
+  const startWorkspace = useCallback(async () => {
+    if (startInFlight.current) return;
+    startInFlight.current = true;
+    setStartingRuntime(true);
+    setRuntimeMessage("Starting your workspace…");
     try {
       for (let attempt = 0; attempt < 90; attempt += 1) {
         const response = await fetch(`/api/workspaces/${workspaceId}/sandbox`, {
@@ -262,44 +264,45 @@ export function WorkspaceIde({
               error?: string;
             } | null;
             throw new Error(
-              body?.error ?? `Resume failed with HTTP ${response.status}.`,
+              body?.error ??
+                `Workspace startup failed with HTTP ${response.status}.`,
             );
           }
           window.location.reload();
           return;
         }
-        setResumeMessage("The AWS host is starting; preparing the microVM…");
+        setRuntimeMessage("Preparing your workspace in the background…");
         await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
       throw new Error("The workspace is still starting. Try again shortly.");
     } catch (caught) {
-      setResumeMessage(
-        caught instanceof Error ? caught.message : "Resume failed.",
+      setRuntimeMessage(
+        caught instanceof Error ? caught.message : "Workspace startup failed.",
       );
     } finally {
-      resumeInFlight.current = false;
-      setResuming(false);
+      startInFlight.current = false;
+      setStartingRuntime(false);
     }
   }, [workspaceId]);
 
-  const autoResumeAttempted = useRef(false);
+  const autoStartAttempted = useRef(false);
   useEffect(() => {
     if (
       !hasRepository ||
-      !canResume ||
+      !canStartRuntime ||
       isRuntimeReady ||
       isRuntimeStarting ||
-      autoResumeAttempted.current
+      autoStartAttempted.current
     )
       return;
-    autoResumeAttempted.current = true;
-    void resumeWorkspace();
+    autoStartAttempted.current = true;
+    void startWorkspace();
   }, [
-    canResume,
+    canStartRuntime,
     hasRepository,
     isRuntimeReady,
     isRuntimeStarting,
-    resumeWorkspace,
+    startWorkspace,
   ]);
 
   useEffect(() => {
@@ -911,34 +914,33 @@ export function WorkspaceIde({
       </header>
 
       {!isRuntimeReady ? (
-        <section className="hibernation-banner" role="status">
+        <section className="runtime-banner" role="status">
           <div>
             <strong>
-              {isHibernated ? "Workspace hibernated" : "Starting workspace"}
+              {isHibernated ? "Restoring workspace" : "Starting workspace"}
             </strong>
             <span>
               {isHibernated
-                ? "Conversation history and uncommitted files are ready while the microVM resumes in the background."
+                ? "Your files, conversations, and agent history are safe while the workspace restores in the background."
                 : hasRepository
-                  ? "Your agent chat is ready while the isolated microVM starts in the background."
-                  : "Connect a GitHub repository when you are ready to start the sandbox."}
+                  ? "Your conversations are ready while the workspace starts in the background."
+                  : "Connect a GitHub repository to enable live coding."}
             </span>
-            {resumeMessage ? <small>{resumeMessage}</small> : null}
+            {runtimeMessage || runtimeError ? (
+              <small>{runtimeMessage || runtimeError}</small>
+            ) : null}
           </div>
-          {hasRepository && canResume && !isRuntimeStarting ? (
-            <button
-              className="primary-button"
-              type="button"
-              disabled={resuming}
-              onClick={() => void resumeWorkspace()}
-            >
-              {resuming ? "Resuming…" : "Resume sandbox"}
-            </button>
-          ) : (
-            <span className="runtime-state">
-              {isRuntimeStarting ? "Starting…" : "Owner action required"}
-            </span>
-          )}
+          <span className="runtime-state">
+            {isRuntimeStarting
+              ? "Starting…"
+              : isHibernated
+                ? "Restoring…"
+                : hasRepository
+                  ? startingRuntime
+                    ? "Preparing…"
+                    : "Queued"
+                  : "Repository needed"}
+          </span>
         </section>
       ) : null}
 

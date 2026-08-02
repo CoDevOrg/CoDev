@@ -8,7 +8,6 @@ import {
 import { getRepositorySnapshot } from "@/lib/github";
 import { getHostState, requestHostWake } from "@/lib/host";
 import {
-  destroySandbox,
   getSandbox,
   OrchestratorError,
   provisionSandbox,
@@ -16,7 +15,6 @@ import {
 } from "@/lib/orchestrator";
 import {
   beginWorkspaceProvisioning,
-  beginWorkspaceStop,
   getWorkspaceForMember,
   getWorkspaceRuntime,
   markWorkspaceFailed,
@@ -78,7 +76,7 @@ export async function POST(
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
   if (!workspace.repository || !workspace.baseSha) {
     return apiError(
-      new Error("Connect a GitHub repository before starting the sandbox."),
+      new Error("Connect a GitHub repository before this workspace can run."),
       409,
     );
   }
@@ -91,7 +89,9 @@ export async function POST(
     );
     if (!access.permissions.coSteer && !access.permissions.review) {
       return apiError(
-        new Error("Only workspace editors or reviewers can resume a sandbox."),
+        new Error(
+          "Only workspace editors or reviewers can start the workspace runtime.",
+        ),
         403,
       );
     }
@@ -104,6 +104,13 @@ export async function POST(
   }
 
   try {
+    const runtime = await getWorkspaceRuntime(workspaceId);
+    if (runtime?.status === "ready") {
+      return Response.json({ runtime });
+    }
+    if (runtime?.status === "provisioning" || runtime?.status === "stopping") {
+      return Response.json({ state: runtime.status }, { status: 202 });
+    }
     const hostState = await requestHostWake();
     if (hostState === "starting") {
       return Response.json({ state: "starting" }, { status: 202 });
@@ -144,36 +151,5 @@ export async function POST(
       error,
       error instanceof WorkspaceLifecycleError ? error.status : 502,
     );
-  }
-}
-
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-  if (workspace.role !== "owner") {
-    return apiError(
-      new Error("Only the workspace owner can stop a sandbox."),
-      403,
-    );
-  }
-
-  try {
-    await beginWorkspaceStop(workspaceId, user.id);
-    await destroySandbox(workspaceId);
-    await markWorkspaceStopped(workspaceId);
-    return new Response(null, { status: 204 });
-  } catch (error) {
-    if (error instanceof WorkspaceLifecycleError) {
-      return apiError(error, error.status);
-    }
-    await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
-    return apiError(error, 502);
   }
 }

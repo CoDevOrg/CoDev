@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -412,88 +412,6 @@ export async function markWorkspaceFailed(workspaceId: string, error: unknown) {
     await transaction
       .update(schema.workspaces)
       .set({ status: "failed", updatedAt: now })
-      .where(eq(schema.workspaces.id, workspaceId));
-  });
-}
-
-export async function beginWorkspaceStop(workspaceId: string, userId: string) {
-  await requireOwner(workspaceId, userId);
-  const now = new Date();
-  await getDatabase().transaction(async (transaction) => {
-    const [state] = await transaction
-      .select({
-        baseSha: schema.workspaces.baseSha,
-        integrationHeadSha: schema.worktrees.headSha,
-        provisionedHeadSha: schema.workspaceRuntimes.provisionedHeadSha,
-      })
-      .from(schema.workspaces)
-      .innerJoin(
-        schema.workspaceRuntimes,
-        eq(schema.workspaceRuntimes.workspaceId, schema.workspaces.id),
-      )
-      .innerJoin(
-        schema.worktrees,
-        and(
-          eq(schema.worktrees.workspaceId, schema.workspaces.id),
-          eq(schema.worktrees.kind, "integration"),
-        ),
-      )
-      .where(eq(schema.workspaces.id, workspaceId))
-      .limit(1)
-      .for("update");
-    if (!state) throw new WorkspaceLifecycleError("Workspace not found.", 404);
-
-    const activeAgents = await transaction
-      .select({ id: schema.worktrees.id })
-      .from(schema.worktrees)
-      .where(
-        and(
-          eq(schema.worktrees.workspaceId, workspaceId),
-          eq(schema.worktrees.kind, "agent"),
-          inArray(schema.worktrees.status, ["active", "frozen"]),
-        ),
-      )
-      .limit(1);
-    if (activeAgents.length > 0) {
-      throw new WorkspaceLifecycleError(
-        "Merge or discard active agent worktrees before stopping.",
-      );
-    }
-    if (
-      hasUnpublishedRuntimeChanges(
-        state.integrationHeadSha,
-        state.provisionedHeadSha,
-        state.baseSha,
-      )
-    ) {
-      const [publication] = await transaction
-        .select({ id: schema.publishedBranches.id })
-        .from(schema.publishedBranches)
-        .where(
-          and(
-            eq(schema.publishedBranches.workspaceId, workspaceId),
-            eq(schema.publishedBranches.status, "published"),
-            eq(
-              schema.publishedBranches.sourceHeadSha,
-              state.integrationHeadSha,
-            ),
-          ),
-        )
-        .orderBy(desc(schema.publishedBranches.publishedAt))
-        .limit(1);
-      if (!publication) {
-        throw new WorkspaceLifecycleError(
-          "Publish the current integration revision before stopping so it is not lost.",
-        );
-      }
-    }
-    await transaction
-      .update(schema.workspaceRuntimes)
-      .set({ status: "stopping", updatedAt: now })
-      .where(eq(schema.workspaceRuntimes.workspaceId, workspaceId));
-    await transaction
-      .update(schema.workspaces)
-      .set({ status: "stopping", updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
   });
 }

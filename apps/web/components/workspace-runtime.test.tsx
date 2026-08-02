@@ -3,27 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WorkspaceRuntime } from "./workspace-runtime";
 
-const refresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh }),
-}));
-
-vi.mock("next/link", () => ({
-  default: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<{ href: string }>) => <a {...props}>{children}</a>,
-}));
-
 describe("WorkspaceRuntime", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    refresh.mockReset();
   });
 
-  it("auto-resumes a hibernated workspace for a resumable member", async () => {
+  it("automatically starts a hibernated workspace for an eligible member", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       status: 201,
       ok: true,
@@ -35,10 +21,7 @@ describe("WorkspaceRuntime", () => {
       <WorkspaceRuntime
         workspaceId="workspace-1"
         runtime={{ status: "hibernated", sandboxId: null, lastError: null }}
-        isOwner={false}
-        canProvision={false}
-        canResume
-        defaultBranch="main"
+        canStartRuntime
       />,
     );
 
@@ -47,7 +30,6 @@ describe("WorkspaceRuntime", () => {
         "/api/workspaces/workspace-1/sandbox",
         { method: "POST" },
       );
-      expect(refresh).toHaveBeenCalled();
     });
   });
 
@@ -59,10 +41,7 @@ describe("WorkspaceRuntime", () => {
       <WorkspaceRuntime
         workspaceId="workspace-1"
         runtime={{ status: "hibernated", sandboxId: null, lastError: null }}
-        isOwner={false}
-        canProvision={false}
-        canResume={false}
-        defaultBranch="main"
+        canStartRuntime={false}
       />,
     );
 

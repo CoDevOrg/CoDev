@@ -41,7 +41,8 @@ export default async function WorkspaceIdePage({
       initialAgentSessions={sessions}
       initialStateEvents={stateEvents}
       runtimeStatus={runtime?.status ?? "stopped"}
-      canResume={workspace.accessRole !== "viewer"}
+      runtimeError={runtime?.lastError ?? null}
+      canStartRuntime={workspace.accessRole !== "viewer"}
       canEdit={
         workspace.accessRole === "owner" || workspace.accessRole === "co_steer"
       }
