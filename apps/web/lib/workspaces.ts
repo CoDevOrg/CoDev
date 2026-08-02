@@ -318,7 +318,7 @@ export async function beginWorkspaceProvisioning(
       )
       .where(eq(schema.workspaces.id, workspaceId))
       .limit(1)
-      .for("update");
+      .for("update", { of: schema.workspaces });
     if (
       current?.workspaceStatus === "stopping" ||
       current?.runtimeStatus === "stopping"
