@@ -107,6 +107,52 @@ describe("AgentPanel", () => {
     );
   });
 
+  it("filters recent chats by name, model, or status", () => {
+    const secondSession: AgentSession = {
+      ...session,
+      id: "session-2",
+      name: "Run the test suite",
+      model: "gpt-5.6-luna",
+      status: "idle",
+      worktreeName: "agent/tests",
+      worktreeStatus: "frozen",
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          sessions: [session, secondSession],
+          stateEvents: [],
+        }),
+      }),
+    );
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[session, secondSession]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("tab", { name: /Run the test suite/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search chats" }), {
+      target: { value: "tests" },
+    });
+
+    expect(
+      screen.queryByRole("tab", { name: /Improve workspace navigation/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /Run the test suite/i }),
+    ).toBeInTheDocument();
+  });
+
   it("includes dropped or selected text files in a new agent prompt", async () => {
     const fetchMock = vi.fn().mockImplementation((_input, init) =>
       Promise.resolve({

@@ -18,6 +18,7 @@ import {
   Paperclip,
   Plus,
   RefreshCw,
+  Search,
   Send,
   Square,
   Trash2,
@@ -175,6 +176,7 @@ export function AgentPanel({
   const [commentPath, setCommentPath] = useState("");
   const [commentLine, setCommentLine] = useState("");
   const [composingNew, setComposingNew] = useState(false);
+  const [sessionQuery, setSessionQuery] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>(() => [
@@ -222,6 +224,17 @@ export function AgentPanel({
     sessions.find((session) => session.id === selectedSessionId) ??
     sessions[0] ??
     null;
+
+  const filteredSessions = useMemo(() => {
+    const query = sessionQuery.trim().toLowerCase();
+    if (!query) return sessions;
+
+    return sessions.filter((session) =>
+      [session.name, session.model, session.worktreeName, session.status].some(
+        (value) => value.toLowerCase().includes(query),
+      ),
+    );
+  }, [sessionQuery, sessions]);
 
   const chatItems = useMemo(() => {
     if (!selectedSession) return [];
@@ -703,18 +716,42 @@ export function AgentPanel({
             </button>
           ) : null}
 
-          <div className="agent-session-group-label">
-            <span>Recent</span>
-            <b>{sessions.length}</b>
+          <div className="agent-session-toolbar">
+            <div className="agent-session-group-label">
+              <span>Recent sessions</span>
+              <b>
+                {filteredSessions.length}/{sessions.length}
+              </b>
+            </div>
+            <label className="agent-session-search">
+              <Search aria-hidden="true" />
+              <span className="sr-only">Search chats</span>
+              <input
+                type="search"
+                aria-label="Search chats"
+                value={sessionQuery}
+                onChange={(event) => setSessionQuery(event.target.value)}
+                placeholder="Search chats"
+              />
+              {sessionQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear chat search"
+                  onClick={() => setSessionQuery("")}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              ) : null}
+            </label>
           </div>
 
-          {sessions.length > 0 ? (
+          {filteredSessions.length > 0 ? (
             <div
               className="agent-session-list"
               role="tablist"
               aria-label="Sessions"
             >
-              {sessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <button
                   key={session.id}
                   type="button"
@@ -733,22 +770,36 @@ export function AgentPanel({
                     setComposingNew(false);
                   }}
                 >
-                  <MessageSquare aria-hidden="true" />
+                  <span className="agent-session-icon" aria-hidden="true">
+                    <MessageSquare />
+                  </span>
                   <span>
                     <strong>{session.name}</strong>
-                    <small>{session.status}</small>
+                    <small>
+                      {formatAgentModelLabel(session.model)} / {session.status}
+                    </small>
                   </span>
                   <i className={`session-status status-${session.status}`} />
                 </button>
               ))}
             </div>
+          ) : sessions.length > 0 ? (
+            <div className="agent-sidebar-empty">
+              <strong>No matching chats</strong>
+              <span>Try a different name, model, or status.</span>
+            </div>
           ) : (
-            <p className="agent-sidebar-empty">Your chats will appear here.</p>
+            <div className="agent-sidebar-empty">
+              <strong>No conversations yet</strong>
+              <span>Start a session to keep the work here.</span>
+            </div>
           )}
 
           <div className="agent-sidebar-foot">
             <GitBranch aria-hidden="true" />
-            <span>Up to 2 parallel sessions</span>
+            <span>
+              <strong>{activeSessionCount}/2</strong> parallel slots used
+            </span>
           </div>
         </aside>
 

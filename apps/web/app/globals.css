@@ -9566,3 +9566,287 @@ html .live-ide .agent-sidebar-foot {
     grid-template-columns: 1fr;
   }
 }
+
+/* Conversation navigator refresh */
+html .live-ide .agent-panel-layout {
+  grid-template-columns: minmax(252px, 280px) minmax(0, 1fr);
+}
+
+html .live-ide .agent-session-sidebar {
+  padding: 18px 14px 14px;
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .agent-sidebar-title {
+  min-height: 44px;
+  padding: 0 2px 16px;
+  grid-template-columns: 36px minmax(0, 1fr) 30px;
+  gap: 10px;
+}
+
+html .live-ide .agent-sidebar-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-accent);
+  box-shadow: inset 0 0 0 1px var(--workspace-line-strong);
+}
+
+html .live-ide .agent-sidebar-mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+html .live-ide .agent-sidebar-title strong {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+html .live-ide .agent-sidebar-title > div > span {
+  color: var(--workspace-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+html .live-ide .agent-sidebar-title > button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+html .live-ide .agent-new-session {
+  min-height: 42px;
+  margin: 16px 0 16px;
+  border-color: var(--workspace-accent);
+  border-radius: 10px;
+  background: var(--workspace-accent);
+  color: var(--workspace-surface);
+  box-shadow: 0 5px 12px rgba(8, 24, 17, 0.1);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html .live-ide .agent-new-session:hover,
+html .live-ide .agent-new-session.active {
+  background: var(--workspace-accent);
+  color: var(--workspace-surface);
+}
+
+html .live-ide .agent-session-toolbar {
+  display: grid;
+  gap: 10px;
+  margin: 2px 0 10px;
+}
+
+html .live-ide .agent-session-group-label {
+  padding: 0 2px;
+  align-items: center;
+  color: var(--workspace-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+html .live-ide .agent-session-group-label b {
+  min-width: 31px;
+  padding: 3px 6px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 999px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+html .live-ide .agent-session-search {
+  display: flex;
+  min-height: 36px;
+  padding: 0 7px 0 10px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 9px;
+  background: var(--workspace-surface);
+  color: var(--workspace-muted);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+html .live-ide .agent-session-search:focus-within {
+  border-color: var(--workspace-accent);
+  box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-session-search > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+html .live-ide .agent-session-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--workspace-ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+html .live-ide .agent-session-search input::placeholder {
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-session-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+html .live-ide .agent-session-search > button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workspace-muted);
+  cursor: pointer;
+}
+
+html .live-ide .agent-session-search > button:hover {
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-session-search > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+html .live-ide .agent-session-list {
+  gap: 6px;
+  padding: 2px 0;
+}
+
+html .live-ide .agent-session-list button {
+  min-height: 68px;
+  padding: 10px;
+  grid-template-columns: 30px minmax(0, 1fr) 7px;
+  gap: 10px;
+  border-radius: 12px;
+}
+
+html .live-ide .agent-session-list button > .agent-session-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  place-items: center;
+  border: 1px solid var(--workspace-line);
+  border-radius: 9px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-session-list button > .agent-session-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+html .live-ide .agent-session-list button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 5px;
+}
+
+html .live-ide .agent-session-list button > span:nth-child(2) strong {
+  overflow: hidden;
+  color: var(--workspace-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html .live-ide .agent-session-list button > span:nth-child(2) small {
+  overflow: hidden;
+  color: var(--workspace-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html .live-ide .agent-session-list button:hover > .agent-session-icon,
+html .live-ide .agent-session-list button.active > .agent-session-icon {
+  border-color: var(--workspace-accent-soft);
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-session-list button.active > span:nth-child(2) strong {
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-sidebar-empty {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 16px 14px;
+  border-radius: 11px;
+  background: var(--workspace-surface-raised);
+  line-height: 1.45;
+}
+
+html .live-ide .agent-sidebar-empty strong {
+  color: var(--workspace-ink);
+  font-size: 11px;
+}
+
+html .live-ide .agent-sidebar-empty span {
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+
+html .live-ide .agent-sidebar-foot {
+  display: flex;
+  min-height: 30px;
+  margin-top: auto;
+  padding: 14px 2px 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+
+html .live-ide .agent-sidebar-foot > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+html .live-ide .agent-sidebar-foot strong {
+  color: var(--workspace-ink);
+  font-weight: 700;
+}
+
+@media (max-width: 860px) {
+  html .live-ide .agent-session-search {
+    display: none;
+  }
+
+  html .live-ide .agent-session-list button > .agent-session-icon {
+    display: grid;
+  }
+
+  html .live-ide .agent-sidebar-empty {
+    display: none;
+  }
+}
