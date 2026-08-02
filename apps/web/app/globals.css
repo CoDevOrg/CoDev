@@ -9850,3 +9850,46 @@ html .live-ide .agent-sidebar-foot strong {
     display: none;
   }
 }
+
+@media (max-width: 640px) {
+  html .live-ide .agent-panel-layout {
+    grid-template-columns: 66px minmax(0, 1fr);
+  }
+
+  html .live-ide .agent-session-sidebar {
+    padding: 14px 8px 10px;
+  }
+
+  html .live-ide .agent-sidebar-title {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  html .live-ide .agent-sidebar-title > div,
+  html .live-ide .agent-sidebar-title > button,
+  html .live-ide .agent-new-session span,
+  html .live-ide .agent-session-group-label,
+  html .live-ide .agent-session-list button > span:nth-child(2),
+  html .live-ide .agent-session-list .session-status,
+  html .live-ide .agent-sidebar-foot > span {
+    display: none;
+  }
+
+  html .live-ide .agent-new-session,
+  html .live-ide .agent-session-list button {
+    display: grid;
+    width: 42px;
+    min-height: 42px;
+    margin-inline: auto;
+    padding: 0;
+    place-items: center;
+  }
+
+  html .live-ide .agent-session-list button {
+    grid-template-columns: 1fr;
+  }
+
+  html .live-ide .agent-sidebar-foot {
+    justify-content: center;
+  }
+}
