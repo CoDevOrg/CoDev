@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type AccessRole = "owner" | "co_steer" | "reviewer" | "viewer";
 
@@ -35,6 +35,20 @@ export function ShareDialog({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [updatingMember, setUpdatingMember] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   if (!isOwner) return null;
 
@@ -119,7 +133,13 @@ export function ShareDialog({
         {triggerLabel}
       </button>
       {open ? (
-        <div className="share-dialog-backdrop" role="presentation">
+        <div
+          className="share-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
           <section
             className="share-dialog"
             role="dialog"
@@ -148,6 +168,7 @@ export function ShareDialog({
                   onChange={(event) => setInvitee(event.target.value)}
                   placeholder="alex@company.com or @octocat"
                   autoComplete="off"
+                  autoFocus
                 />
                 <button
                   className="primary-button"
@@ -230,7 +251,11 @@ export function ShareDialog({
                 </button>
               </div>
             ) : null}
-            {message ? <p className="form-message">{message}</p> : null}
+            {message ? (
+              <p className="form-message" role="status" aria-live="polite">
+                {message}
+              </p>
+            ) : null}
           </section>
         </div>
       ) : null}

@@ -65,4 +65,22 @@ describe("ShareDialog", () => {
     expect(refresh).toHaveBeenCalled();
     expect(screen.getByText("Member permissions updated.")).toBeInTheDocument();
   });
+
+  it("closes when escape is pressed", () => {
+    render(
+      <ShareDialog
+        workspaceId="workspace-1"
+        workspaceName="acme/demo"
+        isOwner
+        members={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });

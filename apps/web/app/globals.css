@@ -7865,3 +7865,327 @@ html .live-ide .preview-pane-frame {
 html[data-theme="dark"] .live-ide .preview-pane-frame {
   background: #ffffff;
 }
+
+/* Share dialog */
+
+.share-dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  padding: 24px;
+  place-items: center;
+  background: rgba(11, 31, 23, 0.34);
+  backdrop-filter: blur(6px);
+  animation: share-dialog-fade-in 160ms ease-out;
+}
+
+.share-dialog {
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--workspace-line-strong, rgba(23, 59, 45, 0.24));
+  border-radius: 18px;
+  background: var(--workspace-surface, #faf8f4);
+  color: var(--workspace-ink, #173b2d);
+  box-shadow: 0 28px 90px rgba(8, 24, 17, 0.28);
+  animation: share-dialog-rise-in 180ms ease-out;
+}
+
+.share-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--workspace-line, rgba(23, 59, 45, 0.14));
+}
+
+.share-dialog-heading .eyebrow {
+  margin: 0 0 6px;
+  color: var(--workspace-accent, #d9652d);
+}
+
+.share-dialog-heading h2 {
+  margin: 0;
+  color: var(--workspace-ink, #173b2d);
+  font-size: clamp(20px, 3vw, 26px);
+  letter-spacing: -0.04em;
+}
+
+.share-dialog-heading > button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--workspace-line, rgba(23, 59, 45, 0.14));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--workspace-muted, #5e7067);
+  cursor: pointer;
+}
+
+.share-dialog-heading > button:hover {
+  border-color: var(--workspace-accent, #d9652d);
+  color: var(--workspace-accent, #d9652d);
+}
+
+.share-dialog-invite,
+.share-dialog-role {
+  display: grid;
+  margin-top: 20px;
+  gap: 8px;
+}
+
+.share-dialog-invite > span,
+.share-dialog-role > span {
+  color: var(--workspace-muted, #5e7067);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.share-dialog-invite > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.share-dialog input,
+.share-dialog select {
+  min-height: 42px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--workspace-line-strong, rgba(23, 59, 45, 0.24));
+  border-radius: 9px;
+  outline: none;
+  background: var(--workspace-surface-raised, #ffffff);
+  color: var(--workspace-ink, #173b2d);
+  font: inherit;
+  font-size: 13px;
+}
+
+.share-dialog input:focus,
+.share-dialog select:focus {
+  border-color: var(--workspace-accent, #d9652d);
+  box-shadow: 0 0 0 3px var(--workspace-accent-soft, rgba(217, 101, 45, 0.12));
+}
+
+.share-dialog-invite button {
+  min-height: 42px;
+  padding-inline: 18px;
+  border: 1px solid var(--workspace-accent, #d9652d);
+  border-radius: 9px;
+  background: var(--workspace-accent, #d9652d);
+  color: #ffffff;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.share-dialog-invite button:disabled,
+.share-dialog-link button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.share-dialog-members {
+  display: grid;
+  margin-top: 24px;
+  padding-top: 20px;
+  gap: 8px;
+  border-top: 1px solid var(--workspace-line, rgba(23, 59, 45, 0.14));
+}
+
+.share-dialog-members > strong {
+  margin-bottom: 4px;
+  color: var(--workspace-ink, #173b2d);
+  font-size: 13px;
+}
+
+.share-dialog-member {
+  display: grid;
+  min-height: 52px;
+  padding: 8px 10px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--workspace-line, rgba(23, 59, 45, 0.14));
+  border-radius: 10px;
+  background: var(--workspace-surface-muted, #ebe4d9);
+}
+
+.share-dialog-member .member-avatar {
+  width: 32px;
+  height: 32px;
+  border-color: var(--workspace-line-strong, rgba(23, 59, 45, 0.24));
+  background: var(--workspace-surface-raised, #ffffff);
+  color: var(--workspace-accent, #d9652d);
+}
+
+.share-dialog-member > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.share-dialog-member > span:nth-child(2) strong {
+  overflow: hidden;
+  color: var(--workspace-ink, #173b2d);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-dialog-member > span:nth-child(2) small,
+.share-dialog-member .role-label {
+  overflow: hidden;
+  color: var(--workspace-muted, #5e7067);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-dialog-member select {
+  min-height: 34px;
+  width: auto;
+  min-width: 124px;
+  padding-block: 0;
+  font-size: 11px;
+}
+
+.share-dialog-link {
+  display: flex;
+  margin-top: 20px;
+  padding-top: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--workspace-line, rgba(23, 59, 45, 0.14));
+}
+
+.share-dialog-link > div {
+  display: grid;
+  gap: 4px;
+}
+
+.share-dialog-link strong {
+  color: var(--workspace-ink, #173b2d);
+  font-size: 12px;
+}
+
+.share-dialog-link small {
+  color: var(--workspace-muted, #5e7067);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.share-dialog-link button {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+  border: 1px solid var(--workspace-line-strong, rgba(23, 59, 45, 0.24));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--workspace-ink, #173b2d);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.share-dialog-link button:hover {
+  border-color: var(--workspace-accent, #d9652d);
+  color: var(--workspace-accent, #d9652d);
+}
+
+.share-dialog .invite-result {
+  margin: 16px 0 0;
+  border-color: var(--workspace-line-strong, rgba(23, 59, 45, 0.24));
+  border-radius: 9px;
+  background: var(--workspace-accent-soft, rgba(217, 101, 45, 0.12));
+}
+
+.share-dialog .invite-result code {
+  color: var(--workspace-ink, #173b2d);
+}
+
+.share-dialog .invite-result button {
+  color: var(--workspace-accent, #d9652d);
+  font-weight: 700;
+}
+
+.share-dialog .form-message {
+  margin: 12px 0 0;
+  color: var(--workspace-muted, #5e7067);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+html[data-theme="dark"] .share-dialog-backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+html[data-theme="dark"] .share-dialog {
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+}
+
+@keyframes share-dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes share-dialog-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .share-dialog-backdrop {
+    padding: 12px;
+    place-items: end center;
+  }
+
+  .share-dialog {
+    max-height: calc(100dvh - 24px);
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .share-dialog-invite > div {
+    grid-template-columns: 1fr;
+  }
+
+  .share-dialog-invite button {
+    width: 100%;
+  }
+
+  .share-dialog-link {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .share-dialog-link button {
+    width: 100%;
+  }
+
+  .share-dialog-member {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .share-dialog-member select,
+  .share-dialog-member .role-label {
+    grid-column: 2;
+  }
+}
