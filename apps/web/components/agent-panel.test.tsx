@@ -63,5 +63,8 @@ describe("AgentPanel", () => {
         name: "Message Improve workspace navigation",
       }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Agent model" })).toHaveValue(
+      "Codex",
+    );
   });
 });

@@ -8869,3 +8869,336 @@ html .live-ide .terminal-head {
     width: calc(100% - 48px);
   }
 }
+
+/* Workspace conversation polish. */
+
+html .live-ide .workspace-brand-logo {
+  display: block;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+html .live-ide .agent-chat-bubble {
+  border: 0;
+  box-shadow: none;
+  animation: chat-message-in 180ms ease-out;
+}
+
+html .live-ide .agent-chat-bubble.assistant {
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 2px 14px;
+  background: transparent;
+}
+
+html .live-ide .agent-chat-bubble.user {
+  max-width: min(78%, 620px);
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 16px 16px 5px 16px;
+  background: var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-chat-role {
+  margin-bottom: 6px;
+  color: var(--workspace-faint);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+html .live-ide .agent-chat-bubble.assistant p {
+  color: var(--workspace-ink);
+  font-size: 14px;
+  line-height: 1.68;
+}
+
+@keyframes chat-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html .live-ide .agent-model-select {
+  position: relative;
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+}
+
+html .live-ide .agent-model-select select {
+  height: 30px;
+  min-width: 92px;
+  padding: 0 27px 0 9px;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--workspace-muted);
+  font:
+    600 10px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+html .live-ide .agent-model-select select:hover,
+html .live-ide .agent-model-select select:focus {
+  border-color: var(--workspace-line-strong);
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-model-select > svg {
+  position: absolute;
+  right: 7px;
+  width: 13px;
+  height: 13px;
+  pointer-events: none;
+}
+
+html .live-ide .agent-review-disclosure {
+  overflow: hidden;
+  border-color: var(--workspace-line-strong);
+  border-radius: 14px;
+  background: var(--workspace-surface-raised);
+  box-shadow: 0 5px 18px rgba(8, 24, 17, 0.06);
+}
+
+html .live-ide .agent-review-disclosure > summary {
+  display: grid;
+  min-height: 64px;
+  padding: 11px 14px;
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: normal;
+  text-transform: none;
+  list-style: none;
+}
+
+html .live-ide .agent-review-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+html .live-ide .agent-review-summary-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-review-summary-icon svg,
+html .live-ide .agent-review-intro svg,
+html .live-ide .agent-review-comment-title svg,
+html .live-ide .agent-review-actions svg,
+html .live-ide .agent-review-comment > button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+html .live-ide .agent-review-disclosure > summary > span:nth-child(2),
+html .live-ide .agent-review-intro span,
+html .live-ide .agent-review-comment-title span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+html .live-ide .agent-review-disclosure > summary strong,
+html .live-ide .agent-review-intro strong,
+html .live-ide .agent-review-comment-title strong {
+  color: var(--workspace-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+html .live-ide .agent-review-disclosure > summary small,
+html .live-ide .agent-review-intro small,
+html .live-ide .agent-review-comment-title small {
+  color: var(--workspace-muted);
+  font-size: 10px;
+  font-weight: 450;
+  line-height: 1.35;
+}
+
+html .live-ide .agent-review-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--workspace-faint);
+  transition: transform 160ms ease;
+}
+
+html .live-ide .agent-review-disclosure[open] .agent-review-chevron {
+  transform: rotate(180deg);
+}
+
+html .live-ide .agent-review-disclosure[open] > summary {
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+html .live-ide .agent-review-disclosure .agent-review {
+  display: grid;
+  margin: 0;
+  padding: 16px;
+  gap: 14px;
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-review-intro > div,
+html .live-ide .agent-review-comment-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+html .live-ide .agent-review-intro svg,
+html .live-ide .agent-review-comment-title svg {
+  margin-top: 1px;
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html .live-ide .agent-review-actions button,
+html .live-ide .agent-review-comment > button {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 9px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+  font:
+    650 10px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+html .live-ide .agent-review-actions .agent-review-primary,
+html .live-ide .agent-review-actions .agent-review-merge,
+html .live-ide .agent-review-comment > button {
+  border-color: var(--workspace-ink);
+  background: var(--workspace-ink);
+  color: var(--workspace-surface);
+}
+
+html .live-ide .agent-review-actions .agent-discard {
+  margin-left: auto;
+  border-color: rgba(190, 67, 67, 0.25);
+  background: rgba(190, 67, 67, 0.07);
+  color: #b33f3f;
+}
+
+html .live-ide .agent-review-actions button:disabled,
+html .live-ide .agent-review-comment > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+html .live-ide .agent-review > details {
+  overflow: hidden;
+  border: 1px solid var(--workspace-line);
+  border-radius: 9px;
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .agent-review > details > summary {
+  padding: 10px 12px;
+  color: var(--workspace-ink);
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+html .live-ide .agent-review > details pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--workspace-line);
+  background: #111923;
+  color: #dce6e1;
+  font:
+    10px/1.55 var(--font-geist-mono),
+    monospace;
+}
+
+html .live-ide .agent-review-comment {
+  display: grid;
+  padding-top: 14px;
+  gap: 9px;
+  border-top: 1px solid var(--workspace-line);
+}
+
+html .live-ide .agent-review-comment-location {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 8px;
+}
+
+html .live-ide .agent-review-comment input,
+html .live-ide .agent-review-comment textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 8px;
+  outline: none;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+  font:
+    11px/1.45 var(--font-geist-sans),
+    system-ui,
+    sans-serif;
+}
+
+html .live-ide .agent-review-comment textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+html .live-ide .agent-review-comment input:focus,
+html .live-ide .agent-review-comment textarea:focus {
+  border-color: var(--workspace-accent);
+  box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-review-comment > button {
+  width: fit-content;
+}
+
+@media (max-width: 640px) {
+  html .live-ide .agent-review-actions .agent-discard {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  html .live-ide .agent-review-comment-location {
+    grid-template-columns: 1fr;
+  }
+}

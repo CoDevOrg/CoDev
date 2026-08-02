@@ -5,7 +5,7 @@ import { schema } from "@codev/db";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import { apiError, getApiUser } from "@/lib/api";
-import { getAgentProvider } from "@/lib/ai-model";
+import { getAgentProvider, resolveSelectableAgentModel } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
@@ -18,6 +18,7 @@ import {
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),
+  model: z.string().trim().min(1).max(120).optional(),
 });
 
 export async function POST(
@@ -47,7 +48,10 @@ export async function POST(
     await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const [session] = await getDatabase()
-      .select({ id: schema.agentSessions.id })
+      .select({
+        id: schema.agentSessions.id,
+        model: schema.agentSessions.model,
+      })
       .from(schema.agentSessions)
       .where(
         and(
@@ -58,6 +62,17 @@ export async function POST(
       .limit(1);
     if (!session) return apiError(new Error("Agent session not found."), 404);
     await assertTurnQuota(user.id, sessionId);
+    const model =
+      !input.model || input.model === session.model
+        ? session.model
+        : resolveSelectableAgentModel(input.model, provider);
+
+    if (session.model !== model) {
+      await getDatabase()
+        .update(schema.agentSessions)
+        .set({ model })
+        .where(eq(schema.agentSessions.id, sessionId));
+    }
 
     const [turn] = await getDatabase()
       .insert(schema.agentTurns)

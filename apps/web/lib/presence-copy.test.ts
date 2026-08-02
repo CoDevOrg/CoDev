@@ -5,7 +5,7 @@ import { formatPresenceCopy } from "./presence-copy";
 describe("formatPresenceCopy", () => {
   it("describes empty and single-person rooms", () => {
     expect(formatPresenceCopy(0)).toBe("Just you");
-    expect(formatPresenceCopy(1)).toBe("1 person here");
+    expect(formatPresenceCopy(1)).toBe("Just you");
   });
 
   it("pluralizes multi-person rooms", () => {

@@ -8,7 +8,11 @@ import { schema } from "@codev/db";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { apiError, getApiUser } from "@/lib/api";
-import { getAgentModel, getAgentProvider } from "@/lib/ai-model";
+import {
+  getAgentProvider,
+  getSelectableAgentModels,
+  resolveSelectableAgentModel,
+} from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
@@ -31,6 +35,7 @@ import {
 const createSchema = z.object({
   name: z.string().trim().min(1).max(32),
   prompt: z.string().trim().min(1).max(20_000),
+  model: z.string().trim().min(1).max(120).optional(),
   issueNumber: z.number().int().positive().optional(),
 });
 
@@ -106,7 +111,16 @@ export async function GET(
     listAgentSessions(workspaceId),
     readWorkspaceStateEvents(workspaceId),
   ]);
-  return Response.json({ sessions, stateEvents });
+  return Response.json({
+    sessions,
+    stateEvents,
+    models: [
+      ...new Set([
+        ...sessions.map((session) => session.model),
+        ...getSelectableAgentModels(),
+      ]),
+    ],
+  });
 }
 
 export async function POST(
@@ -137,6 +151,7 @@ export async function POST(
   try {
     const input = createSchema.parse(await request.json());
     const provider = getAgentProvider();
+    const model = resolveSelectableAgentModel(input.model, provider);
     await resolveAgentCredential(user.id, workspaceId, provider);
     await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
@@ -239,7 +254,7 @@ export async function POST(
             createdBy: user.id,
             issueNumber: issue?.number,
             name: input.name,
-            model: getAgentModel(provider),
+            model,
           })
           .returning({ id: schema.agentSessions.id });
         if (!session) throw new Error("Could not create the agent session.");

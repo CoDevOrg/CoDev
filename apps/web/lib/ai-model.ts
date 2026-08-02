@@ -10,6 +10,7 @@ import type { AuthProvider } from "@codev/shared-types";
 import type { ResolvedCredential } from "./credentials";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5";
+const DEFAULT_OPENAI_MODELS = ["gpt-5", "gpt-5-mini", "gpt-5-nano"];
 
 export function getOpenAIModel() {
   const configured = process.env.CODEV_OPENAI_MODEL?.trim();
@@ -54,6 +55,33 @@ export function getAgentModel(provider: AuthProvider = getAgentProvider()) {
     default:
       throw new Error(`Provider ${provider} is not configured for agents.`);
   }
+}
+
+export function getSelectableAgentModels(
+  provider: AuthProvider = getAgentProvider(),
+) {
+  const configured = process.env.CODEV_AGENT_MODELS?.split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  if (configured?.length) return [...new Set(configured)];
+
+  const current = getAgentModel(provider);
+  if (provider === "openai") {
+    return [...new Set([current, ...DEFAULT_OPENAI_MODELS])];
+  }
+  return [current];
+}
+
+export function resolveSelectableAgentModel(
+  requested: string | undefined,
+  provider: AuthProvider = getAgentProvider(),
+) {
+  const available = getSelectableAgentModels(provider);
+  const selected = requested?.trim() || getAgentModel(provider);
+  if (!available.includes(selected)) {
+    throw new Error(`Model ${selected} is not available for this workspace.`);
+  }
+  return selected;
 }
 
 /** Initialize the Vercel AI SDK provider from the already-resolved secret. */

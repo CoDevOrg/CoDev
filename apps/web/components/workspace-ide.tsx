@@ -825,6 +825,11 @@ export function WorkspaceIde({
     ],
     [collaborators],
   );
+  const remoteCollaborators = useMemo(
+    () => distinctCollaborators.filter((member) => member.id !== user.id),
+    [distinctCollaborators, user.id],
+  );
+  const peopleHere = remoteCollaborators.length + 1;
   const presenceByPath = useMemo(() => {
     const paths = new Map<string, CollaborationUser[]>();
     for (const member of distinctCollaborators) {
@@ -841,13 +846,14 @@ export function WorkspaceIde({
     <main className="live-ide" aria-label="CoDev browser IDE">
       <header className="live-ide-topbar">
         <Link className="workspace-brand" href="/dashboard">
-          <span
-            className="wordmark-mark workspace-brand-mark"
-            aria-hidden="true"
-          >
-            <span />
-            <span />
-          </span>
+          <Image
+            className="workspace-brand-logo"
+            src="/brand/codev-mark-v3.png"
+            alt=""
+            width={28}
+            height={28}
+            priority
+          />
           <strong>CoDev</strong>
         </Link>
         <span className="topbar-divider" />
@@ -948,13 +954,13 @@ export function WorkspaceIde({
           </span>
           <div
             className="presence-group"
-            aria-label={formatPresenceCopy(distinctCollaborators.length)}
+            aria-label={formatPresenceCopy(peopleHere)}
           >
             <span className="presence-copy">
-              {formatPresenceCopy(distinctCollaborators.length)}
+              {formatPresenceCopy(peopleHere)}
             </span>
             <div className="presence-stack">
-              {distinctCollaborators.slice(0, 4).map((collaborator) =>
+              {remoteCollaborators.slice(0, 4).map((collaborator) =>
                 collaborator.image ? (
                   <Image
                     key={collaborator.id}

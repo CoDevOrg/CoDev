@@ -9,13 +9,18 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
+  ChevronDown,
+  FileCode2,
   GitBranch,
+  GitPullRequest,
   MessageSquare,
+  MessageSquareText,
   Plus,
   RefreshCw,
   Send,
   Sparkles,
   Square,
+  Trash2,
 } from "lucide-react";
 
 import { AgentChatTranscript } from "@/components/agent-chat-transcript";
@@ -124,6 +129,12 @@ export function AgentPanel({
   const [commentPath, setCommentPath] = useState("");
   const [commentLine, setCommentLine] = useState("");
   const [composingNew, setComposingNew] = useState(false);
+  const [modelOptions, setModelOptions] = useState<string[]>(() => [
+    ...new Set([initialSessions[0]?.model ?? "gpt-5"]),
+  ]);
+  const [selectedModel, setSelectedModel] = useState(
+    initialSessions[0]?.model ?? "gpt-5",
+  );
   const turnStatusRef = useRef(new Map<string, string>());
   const onTurnCompletedRef = useRef(onTurnCompleted);
   const composerFocusedRef = useRef(false);
@@ -168,12 +179,15 @@ export function AgentPanel({
   const refresh = useCallback(async () => {
     const result = await fetch(endpoint, { cache: "no-store" }).then(
       (response) =>
-        json<{ sessions: AgentSession[]; stateEvents?: AgentEvent[] }>(
-          response,
-        ),
+        json<{
+          sessions: AgentSession[];
+          stateEvents?: AgentEvent[];
+          models?: string[];
+        }>(response),
     );
     setSessions(result.sessions);
     setStateEvents(result.stateEvents ?? []);
+    if (result.models?.length) setModelOptions(result.models);
     setSelectedSessionId((current) => {
       if (
         current &&
@@ -236,6 +250,7 @@ export function AgentPanel({
         body: JSON.stringify({
           name: deriveAgentSessionName(value),
           prompt: value,
+          model: selectedModel,
         }),
       }).then((response) => json<{ sessionId?: string }>(response));
       setPrompt("");
@@ -271,7 +286,7 @@ export function AgentPanel({
       await fetch(`${endpoint}/${selectedSession.id}/turns`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: value }),
+        body: JSON.stringify({ prompt: value, model: selectedModel }),
       }).then((response) => json(response));
       setFollowUp("");
       await refresh();
@@ -450,6 +465,7 @@ export function AgentPanel({
                 }
                 onClick={() => {
                   setSelectedSessionId(session.id);
+                  setSelectedModel(session.model);
                   setComposingNew(false);
                 }}
               >
@@ -540,17 +556,43 @@ export function AgentPanel({
 
         {selectedSession && !composingNew && (canReview || canMerge) ? (
           <details className="agent-review-disclosure">
-            <summary>Review &amp; merge</summary>
+            <summary>
+              <span className="agent-review-summary-icon">
+                <GitPullRequest aria-hidden="true" />
+              </span>
+              <span>
+                <strong>Review changes</strong>
+                <small>Inspect the agent&apos;s work before merging</small>
+              </span>
+              <ChevronDown
+                className="agent-review-chevron"
+                aria-hidden="true"
+              />
+            </summary>
             {canReview &&
             selectedSession.worktreeStatus !== "merged" &&
             selectedSession.worktreeStatus !== "discarded" ? (
               <div className="agent-review">
+                <div className="agent-review-intro">
+                  <div>
+                    <FileCode2 aria-hidden="true" />
+                    <span>
+                      <strong>Check the proposed changes</strong>
+                      <small>
+                        Generate a diff, leave notes, then merge when it looks
+                        right.
+                      </small>
+                    </span>
+                  </div>
+                </div>
                 <div className="agent-review-actions">
                   <button
                     type="button"
+                    className="agent-review-primary"
                     disabled={busy}
                     onClick={() => void review(selectedSession.id)}
                   >
+                    <GitPullRequest aria-hidden="true" />
                     {selectedSession.reviewedAt
                       ? "Refresh review"
                       : "Prepare review"}
@@ -559,6 +601,7 @@ export function AgentPanel({
                     <>
                       <button
                         type="button"
+                        className="agent-review-secondary"
                         disabled={busy}
                         onClick={() =>
                           void reviewAction(selectedSession.id, "rebase")
@@ -568,6 +611,7 @@ export function AgentPanel({
                       </button>
                       <button
                         type="button"
+                        className="agent-review-merge"
                         disabled={busy}
                         onClick={() =>
                           void reviewAction(selectedSession.id, "merge")
@@ -586,7 +630,8 @@ export function AgentPanel({
                         void reviewAction(selectedSession.id, "discard")
                       }
                     >
-                      Discard
+                      <Trash2 aria-hidden="true" />
+                      Discard changes
                     </button>
                   ) : null}
                 </div>
@@ -603,7 +648,15 @@ export function AgentPanel({
                 ) : null}
                 {canReview ? (
                   <div className="agent-review-comment">
-                    <strong>Leave a review note</strong>
+                    <div className="agent-review-comment-title">
+                      <MessageSquareText aria-hidden="true" />
+                      <span>
+                        <strong>Leave a review note</strong>
+                        <small>
+                          Point to a file or line when the feedback is specific.
+                        </small>
+                      </span>
+                    </div>
                     <div className="agent-review-comment-location">
                       <input
                         aria-label="Comment file path"
@@ -631,7 +684,8 @@ export function AgentPanel({
                       disabled={busy || !commentBody.trim()}
                       onClick={() => void addComment()}
                     >
-                      {busy ? "Saving note…" : "Add review note"}
+                      <MessageSquareText aria-hidden="true" />
+                      {busy ? "Saving note…" : "Add note"}
                     </button>
                   </div>
                 ) : null}
@@ -677,7 +731,21 @@ export function AgentPanel({
                   >
                     <Plus />
                   </button>
-                  <span>{selectedSession.model}</span>
+                  <label className="agent-model-select">
+                    <span className="sr-only">Agent model</span>
+                    <select
+                      aria-label="Agent model"
+                      value={selectedModel}
+                      onChange={(event) => setSelectedModel(event.target.value)}
+                    >
+                      {modelOptions.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" />
+                  </label>
                   <kbd>⌘ Enter</kbd>
                 </div>
                 <button
@@ -717,7 +785,21 @@ export function AgentPanel({
               />
               <div className="agent-chat-composer-actions">
                 <div className="agent-composer-tools">
-                  <span>Auto</span>
+                  <label className="agent-model-select">
+                    <span className="sr-only">Agent model</span>
+                    <select
+                      aria-label="Agent model"
+                      value={selectedModel}
+                      onChange={(event) => setSelectedModel(event.target.value)}
+                    >
+                      {modelOptions.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden="true" />
+                  </label>
                   <kbd>⌘ Enter</kbd>
                 </div>
                 <button
