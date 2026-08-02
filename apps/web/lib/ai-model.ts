@@ -10,7 +10,26 @@ import type { AuthProvider } from "@codev/shared-types";
 import type { ResolvedCredential } from "./credentials";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5";
-const DEFAULT_OPENAI_MODELS = ["gpt-5", "gpt-5-mini", "gpt-5-nano"];
+const DEFAULT_OPENAI_MODELS = [
+  "gpt-5.2",
+  "gpt-5.2-pro",
+  "gpt-5.2-codex",
+  "gpt-5.1",
+  "gpt-5.1-codex",
+  "gpt-5.1-codex-mini",
+  "gpt-5-pro",
+  "gpt-5",
+  "gpt-5-mini",
+  "gpt-5-nano",
+  "gpt-4.1",
+  "gpt-4.1-mini",
+  "gpt-4.1-nano",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-4-turbo",
+  "gpt-4",
+  "gpt-3.5-turbo",
+];
 
 export function getOpenAIModel() {
   const configured = process.env.CODEV_OPENAI_MODEL?.trim();
