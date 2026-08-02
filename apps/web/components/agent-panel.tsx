@@ -31,6 +31,8 @@ import {
 import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
 
+const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
+
 function formatAgentModelLabel(model: string) {
   if (!model.startsWith("gpt-")) return model;
   return model
@@ -139,10 +141,10 @@ export function AgentPanel({
   const [commentLine, setCommentLine] = useState("");
   const [composingNew, setComposingNew] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>(() => [
-    ...new Set([initialSessions[0]?.model ?? "gpt-5.6-luna"]),
+    ...new Set([initialSessions[0]?.model ?? DEFAULT_AGENT_MODEL]),
   ]);
   const [selectedModel, setSelectedModel] = useState(
-    initialSessions[0]?.model ?? "gpt-5.6-luna",
+    initialSessions[0]?.model ?? DEFAULT_AGENT_MODEL,
   );
   const turnStatusRef = useRef(new Map<string, string>());
   const modelOptionsLoadedRef = useRef(false);
@@ -206,7 +208,9 @@ export function AgentPanel({
       setSelectedModel((current) =>
         result.models?.includes(current)
           ? current
-          : (result.models?.[0] ?? current),
+          : result.models?.includes(DEFAULT_AGENT_MODEL)
+            ? DEFAULT_AGENT_MODEL
+            : (result.models?.[0] ?? current),
       );
     }
     setSelectedSessionId((current) => {

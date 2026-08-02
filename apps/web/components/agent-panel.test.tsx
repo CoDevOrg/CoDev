@@ -88,7 +88,13 @@ describe("AgentPanel", () => {
       }),
     );
 
-    render(<AgentPanel workspaceId="workspace-1" canMerge />);
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[{ ...session, model: "gpt-5" }]}
+      />,
+    );
 
     expect(
       await screen.findByRole("option", { name: "5.6 Sol" }),
@@ -96,5 +102,8 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("option", { name: "5.6 Terra" })).toBeVisible();
     expect(screen.getByRole("option", { name: "5.6 Luna" })).toBeVisible();
     expect(screen.getByRole("option", { name: "5.4 Mini" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Agent model" })).toHaveValue(
+      "gpt-5.6-luna",
+    );
   });
 });
