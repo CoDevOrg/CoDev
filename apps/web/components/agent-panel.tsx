@@ -136,6 +136,7 @@ export function AgentPanel({
     initialSessions[0]?.model ?? "gpt-5",
   );
   const turnStatusRef = useRef(new Map<string, string>());
+  const modelOptionsLoadedRef = useRef(false);
   const onTurnCompletedRef = useRef(onTurnCompleted);
   const composerFocusedRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -177,17 +178,28 @@ export function AgentPanel({
   }, [selectedSession, stateEvents]);
 
   const refresh = useCallback(async () => {
-    const result = await fetch(endpoint, { cache: "no-store" }).then(
-      (response) =>
-        json<{
-          sessions: AgentSession[];
-          stateEvents?: AgentEvent[];
-          models?: string[];
-        }>(response),
+    const includeModels = !modelOptionsLoadedRef.current;
+    const result = await fetch(
+      `${endpoint}${includeModels ? "?includeModels=true" : ""}`,
+      { cache: "no-store" },
+    ).then((response) =>
+      json<{
+        sessions: AgentSession[];
+        stateEvents?: AgentEvent[];
+        models?: string[];
+      }>(response),
     );
     setSessions(result.sessions);
     setStateEvents(result.stateEvents ?? []);
-    if (result.models?.length) setModelOptions(result.models);
+    if (includeModels) modelOptionsLoadedRef.current = true;
+    if (result.models?.length) {
+      setModelOptions(result.models);
+      setSelectedModel((current) =>
+        result.models?.includes(current)
+          ? current
+          : (result.models?.[0] ?? current),
+      );
+    }
     setSelectedSessionId((current) => {
       if (
         current &&

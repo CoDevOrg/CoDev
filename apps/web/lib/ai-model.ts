@@ -10,7 +10,7 @@ import type { AuthProvider } from "@codev/shared-types";
 import type { ResolvedCredential } from "./credentials";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5";
-const DEFAULT_OPENAI_MODELS = [
+const RECENT_OPENAI_FALLBACK_MODELS = [
   "gpt-5.2",
   "gpt-5.2-pro",
   "gpt-5.2-codex",
@@ -21,15 +21,12 @@ const DEFAULT_OPENAI_MODELS = [
   "gpt-5",
   "gpt-5-mini",
   "gpt-5-nano",
-  "gpt-4.1",
-  "gpt-4.1-mini",
-  "gpt-4.1-nano",
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4-turbo",
-  "gpt-4",
-  "gpt-3.5-turbo",
 ];
+const OPENAI_MODEL_CACHE_TTL_MS = 5 * 60 * 1_000;
+const openAIModelCache = new Map<
+  string,
+  { expiresAt: number; models: string[] }
+>();
 
 export function getOpenAIModel() {
   const configured = process.env.CODEV_OPENAI_MODEL?.trim();
@@ -76,8 +73,69 @@ export function getAgentModel(provider: AuthProvider = getAgentProvider()) {
   }
 }
 
-export function getSelectableAgentModels(
+function isRecentAgentGPTModel(id: string, created: number, cutoff: Date) {
+  return (
+    /^gpt-\d/.test(id) &&
+    created * 1_000 >= cutoff.getTime() &&
+    !/(audio|realtime|transcribe|tts|image|embedding|moderation|search-preview|computer-use|instruct|chat-latest)/i.test(
+      id,
+    )
+  );
+}
+
+function openAIModelsUrl(endpointUrl?: string) {
+  const baseUrl = (endpointUrl || "https://api.openai.com/v1").replace(
+    /\/+$/,
+    "",
+  );
+  return baseUrl.endsWith("/v1") ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
+}
+
+async function fetchRecentOpenAIModels(credential?: ResolvedCredential) {
+  if (!credential?.apiKeyOrToken) return RECENT_OPENAI_FALLBACK_MODELS;
+
+  const cacheKey =
+    credential.credentialId ?? openAIModelsUrl(credential.endpointUrl);
+  const cached = openAIModelCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.models;
+
+  const cutoff = new Date();
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
+  try {
+    const response = await fetch(openAIModelsUrl(credential.endpointUrl), {
+      headers: { Authorization: `Bearer ${credential.apiKeyOrToken}` },
+      cache: "no-store",
+    });
+    if (!response.ok)
+      throw new Error(`OpenAI models request failed with ${response.status}.`);
+    const payload = (await response.json()) as {
+      data?: Array<{ id?: unknown; created?: unknown }>;
+    };
+    const models = (payload.data ?? [])
+      .filter(
+        (model): model is { id: string; created: number } =>
+          typeof model.id === "string" &&
+          typeof model.created === "number" &&
+          isRecentAgentGPTModel(model.id, model.created, cutoff),
+      )
+      .sort((left, right) => right.created - left.created)
+      .map((model) => model.id);
+    const available = models.length
+      ? [...new Set(models)]
+      : RECENT_OPENAI_FALLBACK_MODELS;
+    openAIModelCache.set(cacheKey, {
+      expiresAt: Date.now() + OPENAI_MODEL_CACHE_TTL_MS,
+      models: available,
+    });
+    return available;
+  } catch {
+    return RECENT_OPENAI_FALLBACK_MODELS;
+  }
+}
+
+export async function getSelectableAgentModels(
   provider: AuthProvider = getAgentProvider(),
+  credential?: ResolvedCredential,
 ) {
   const configured = process.env.CODEV_AGENT_MODELS?.split(",")
     .map((model) => model.trim())
@@ -85,17 +143,19 @@ export function getSelectableAgentModels(
   if (configured?.length) return [...new Set(configured)];
 
   const current = getAgentModel(provider);
-  if (provider === "openai") {
-    return [...new Set([current, ...DEFAULT_OPENAI_MODELS])];
-  }
-  return [current];
+  if (provider !== "openai") return [current];
+  const models = await fetchRecentOpenAIModels(credential);
+  return [
+    ...new Set([...(models.includes(current) ? [current] : []), ...models]),
+  ];
 }
 
-export function resolveSelectableAgentModel(
+export async function resolveSelectableAgentModel(
   requested: string | undefined,
   provider: AuthProvider = getAgentProvider(),
+  credential?: ResolvedCredential,
 ) {
-  const available = getSelectableAgentModels(provider);
+  const available = await getSelectableAgentModels(provider, credential);
   const selected = requested?.trim() || getAgentModel(provider);
   if (!available.includes(selected)) {
     throw new Error(`Model ${selected} is not available for this workspace.`);

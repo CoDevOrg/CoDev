@@ -44,7 +44,11 @@ export async function POST(
   try {
     const input = inputSchema.parse(await request.json());
     const provider = getAgentProvider();
-    await resolveAgentCredential(user.id, workspaceId, provider);
+    const credential = await resolveAgentCredential(
+      user.id,
+      workspaceId,
+      provider,
+    );
     await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const [session] = await getDatabase()
@@ -65,7 +69,7 @@ export async function POST(
     const model =
       !input.model || input.model === session.model
         ? session.model
-        : resolveSelectableAgentModel(input.model, provider);
+        : await resolveSelectableAgentModel(input.model, provider, credential);
 
     if (session.model !== model) {
       await getDatabase()

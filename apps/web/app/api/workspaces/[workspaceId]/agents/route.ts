@@ -93,7 +93,7 @@ async function getExactGitHubIssue(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
   const user = await getApiUser();
@@ -111,15 +111,23 @@ export async function GET(
     listAgentSessions(workspaceId),
     readWorkspaceStateEvents(workspaceId),
   ]);
+  const includeModels =
+    new URL(request.url).searchParams.get("includeModels") === "true";
+  const models = includeModels
+    ? await (async () => {
+        const provider = getAgentProvider();
+        const credential = await resolveAgentCredential(
+          user.id,
+          workspaceId,
+          provider,
+        ).catch(() => undefined);
+        return getSelectableAgentModels(provider, credential);
+      })()
+    : undefined;
   return Response.json({
     sessions,
     stateEvents,
-    models: [
-      ...new Set([
-        ...sessions.map((session) => session.model),
-        ...getSelectableAgentModels(),
-      ]),
-    ],
+    ...(models ? { models } : {}),
   });
 }
 
@@ -151,8 +159,16 @@ export async function POST(
   try {
     const input = createSchema.parse(await request.json());
     const provider = getAgentProvider();
-    const model = resolveSelectableAgentModel(input.model, provider);
-    await resolveAgentCredential(user.id, workspaceId, provider);
+    const credential = await resolveAgentCredential(
+      user.id,
+      workspaceId,
+      provider,
+    );
+    const model = await resolveSelectableAgentModel(
+      input.model,
+      provider,
+      credential,
+    );
     await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const issue = input.issueNumber
