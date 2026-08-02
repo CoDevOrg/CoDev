@@ -68,6 +68,25 @@ export class WorkspaceAccessError extends Error {
   }
 }
 
+type OpenFgaConfiguration = {
+  apiUrl: string;
+  storeId: string;
+  authorizationModelId: string;
+  clientToken: string | undefined;
+  apiTokenIssuer: string;
+  apiAudience: string;
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+};
+
+type OpenFgaTokenCache = {
+  key: string;
+  token: string;
+  expiresAt: number;
+};
+
+let openFgaTokenCache: OpenFgaTokenCache | null = null;
+
 export function permissionsForRole(role: WorkspaceAccessRole) {
   switch (role) {
     case "owner":
@@ -117,7 +136,13 @@ function openFgaConfiguration() {
     storeId,
     authorizationModelId,
     clientToken: process.env.OPENFGA_CLIENT_TOKEN,
-  };
+    apiTokenIssuer: (
+      process.env.OPENFGA_API_TOKEN_ISSUER ?? "https://auth.fga.dev"
+    ).replace(/\/$/, ""),
+    apiAudience: process.env.OPENFGA_API_AUDIENCE ?? apiUrl + "/",
+    clientId: process.env.OPENFGA_CLIENT_ID,
+    clientSecret: process.env.OPENFGA_CLIENT_SECRET,
+  } satisfies OpenFgaConfiguration;
 }
 
 function fgaObject(workspaceId: string) {
@@ -139,6 +164,7 @@ async function openFgaRequest(path: string, body: Record<string, unknown>) {
     }
     return null;
   }
+  const bearerToken = await openFgaBearerToken(configuration);
   const response = await fetch(
     `${configuration.apiUrl}/stores/${configuration.storeId}${path}`,
     {
@@ -146,9 +172,7 @@ async function openFgaRequest(path: string, body: Record<string, unknown>) {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        ...(configuration.clientToken
-          ? { Authorization: `Bearer ${configuration.clientToken}` }
-          : {}),
+        ...(bearerToken ? { Authorization: "Bearer " + bearerToken } : {}),
       },
       body: JSON.stringify({
         authorization_model_id: configuration.authorizationModelId,
@@ -165,6 +189,66 @@ async function openFgaRequest(path: string, body: Record<string, unknown>) {
     );
   }
   return (await response.json()) as { allowed?: boolean };
+}
+
+async function openFgaBearerToken(configuration: OpenFgaConfiguration) {
+  if (configuration.clientToken) return configuration.clientToken;
+  if (!configuration.clientId || !configuration.clientSecret) return null;
+
+  const cacheKey = [
+    configuration.apiTokenIssuer,
+    configuration.apiAudience,
+    configuration.clientId,
+  ].join("|");
+  if (
+    openFgaTokenCache?.key === cacheKey &&
+    openFgaTokenCache.expiresAt > Date.now() + 60_000
+  ) {
+    return openFgaTokenCache.token;
+  }
+
+  const response = await fetch(configuration.apiTokenIssuer + "/oauth/token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      client_id: configuration.clientId,
+      client_secret: configuration.clientSecret,
+      audience: configuration.apiAudience,
+      grant_type: "client_credentials",
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) {
+    throw new WorkspaceAccessError(
+      "OpenFGA token request failed with HTTP " + response.status + ".",
+      503,
+    );
+  }
+  const payload = (await response.json()) as {
+    access_token?: unknown;
+    expires_in?: unknown;
+  };
+  if (typeof payload.access_token !== "string") {
+    throw new WorkspaceAccessError(
+      "OpenFGA token response did not include an access token.",
+      503,
+    );
+  }
+
+  const expiresIn =
+    typeof payload.expires_in === "number" && payload.expires_in > 60
+      ? payload.expires_in
+      : 3_600;
+  openFgaTokenCache = {
+    key: cacheKey,
+    token: payload.access_token,
+    expiresAt: Date.now() + (expiresIn - 60) * 1_000,
+  };
+  return payload.access_token;
 }
 
 export async function writeWorkspaceTuple(input: {

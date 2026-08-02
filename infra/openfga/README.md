@@ -12,6 +12,20 @@ OPENFGA_AUTHORIZATION_MODEL_ID=<authorization model id>
 OPENFGA_CLIENT_TOKEN=<optional client token>
 ```
 
+For the hosted Auth0 FGA service, use client credentials instead of a
+pre-shared client token:
+
+```
+OPENFGA_API_TOKEN_ISSUER=https://auth.fga.dev
+OPENFGA_API_AUDIENCE=https://api.us1.fga.dev/
+OPENFGA_CLIENT_ID=<client id>
+OPENFGA_CLIENT_SECRET=<client secret>
+```
+
+CoDev exchanges the client credentials for a short-lived bearer token and
+caches it in the server runtime. The client only needs tuple write/delete and
+read/query permissions.
+
 Create the store and publish the checked-in model before enabling those
 variables. The API calls below use the OpenFGA HTTP API and work with a local
 or hosted OpenFGA service:
