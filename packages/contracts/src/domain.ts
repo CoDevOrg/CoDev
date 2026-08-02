@@ -297,66 +297,6 @@ export const designPartnerFeedbackInputSchema = z.object({
   workspaceId: identifierSchema.nullable(),
 });
 
-export const pilotCheckpointSchema = z.enum([
-  "preflight",
-  "secondIdentity",
-  "realtime",
-  "terminal",
-  "twoAgents",
-  "collision",
-  "publication",
-  "defaultBranchUnchanged",
-  "feedback",
-  "teardown",
-]);
-
-export const pilotCheckpointKeys = pilotCheckpointSchema.options;
-
-export const createPilotSessionSchema = z.object({
-  workspaceId: identifierSchema,
-});
-
-export const updatePilotSessionSchema = z
-  .object({
-    checkpoint: pilotCheckpointSchema.optional(),
-    checked: z.boolean().optional(),
-    status: z.enum(["running", "blocked", "completed"]).optional(),
-    blockerCategory: z
-      .enum([
-        "access",
-        "collaboration",
-        "agent",
-        "publication",
-        "runtime",
-        "cost",
-        "other",
-      ])
-      .nullable()
-      .optional(),
-  })
-  .superRefine((input, context) => {
-    if ((input.checkpoint === undefined) !== (input.checked === undefined)) {
-      context.addIssue({
-        code: "custom",
-        message: "Checkpoint and checked must be provided together.",
-      });
-    }
-    if (
-      input.checkpoint === undefined &&
-      input.status === undefined &&
-      input.blockerCategory === undefined
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "At least one pilot session change is required.",
-      });
-    }
-  });
-
-export const updatePilotFeedbackSchema = z.object({
-  status: z.enum(["new", "reviewing", "planned", "resolved"]),
-});
-
 export const publicationSchema = z.object({
   id: identifierSchema,
   workspaceId: identifierSchema,

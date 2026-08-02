@@ -141,6 +141,13 @@
       "when": 1785574343804,
       "tag": "0019_low_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785654183313,
+      "tag": "0020_productive_gauntlet",
+      "breakpoints": true
     }
   ]
 }

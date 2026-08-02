@@ -72,7 +72,6 @@ export const serverEnvironmentSchema = z.object({
   ORCHESTRATOR_URL: optionalUrl,
   HOCUSPOCUS_TOKEN_SECRET: z.string().min(32).optional(),
   CRON_SECRET: z.string().min(32).optional(),
-  PILOT_ADMIN_GITHUB_LOGINS: z.string().min(1).optional(),
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

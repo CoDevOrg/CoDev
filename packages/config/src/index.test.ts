@@ -57,16 +57,6 @@ describe("server environment", () => {
     });
   });
 
-  it("accepts a comma-separated pilot administrator allowlist", () => {
-    expect(
-      readServerEnvironment({
-        PILOT_ADMIN_GITHUB_LOGINS: "yousef20920,codev-operator",
-      }),
-    ).toMatchObject({
-      PILOT_ADMIN_GITHUB_LOGINS: "yousef20920,codev-operator",
-    });
-  });
-
   it("recognizes complete Google OAuth configuration", () => {
     expect(
       isGoogleAuthConfigured({

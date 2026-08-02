@@ -89,11 +89,6 @@ export const publicationStatus = pgEnum("publication_status", [
   "published",
   "failed",
 ]);
-export const pilotSessionStatus = pgEnum("pilot_session_status", [
-  "running",
-  "blocked",
-  "completed",
-]);
 export const credentialScopeType = pgEnum("credential_scope_type", [
   "USER",
   "WORKSPACE",
@@ -281,41 +276,6 @@ export const workspaceRuntimes = pgTable(
     index("workspace_runtimes_status_updated_idx").on(
       table.status,
       table.updatedAt,
-    ),
-  ],
-);
-
-export const pilotSessions = pgTable(
-  "pilot_sessions",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    workspaceId: uuid("workspace_id")
-      .references(() => workspaces.id, { onDelete: "cascade" })
-      .notNull(),
-    createdBy: uuid("created_by")
-      .references(() => users.id, { onDelete: "restrict" })
-      .notNull(),
-    status: pilotSessionStatus("status").default("running").notNull(),
-    checkpoints: jsonb("checkpoints")
-      .$type<Record<string, boolean>>()
-      .default({})
-      .notNull(),
-    blockerCategory: text("blocker_category"),
-    release: text("release").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    index("pilot_sessions_workspace_created_idx").on(
-      table.workspaceId,
-      table.createdAt,
-    ),
-    index("pilot_sessions_status_created_idx").on(
-      table.status,
-      table.createdAt,
     ),
   ],
 );

@@ -7,7 +7,6 @@ import { signIn, signOut } from "@/auth";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { clerkAuthConfigured } from "@/lib/identity";
-import { isPilotAdminLogin } from "@/lib/pilot-access";
 
 export function Brand() {
   return (
@@ -37,9 +36,6 @@ export function AppChrome({
         <Brand />
         <nav aria-label="Application navigation">
           <Link href="/dashboard">Workspaces</Link>
-          {isPilotAdminLogin(user.githubLogin) ? (
-            <Link href="/pilot">Pilot</Link>
-          ) : null}
         </nav>
         <div className="user-menu">
           <details className="profile-menu">

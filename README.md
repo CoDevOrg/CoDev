@@ -4,11 +4,6 @@ CoDev is a hosted, browser-based engineering workspace where people and AI
 agents plan, build, and review software side by side. This repository contains
 the website source; CoDev is not a downloadable desktop application.
 
-> Phase 10 adds a closed-beta operations console for repeatable pilot sessions,
-> aggregate product signals, and feedback triage. GitHub and provider
-> credentials remain server-side and are never sent to the browser or
-> Firecracker guest.
-
 ## Website
 
 - Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
@@ -20,7 +15,6 @@ the website source; CoDev is not a downloadable desktop application.
 - Orchestrator health: `http://localhost:3000/api/health/orchestrator`
 - Realtime health: `http://localhost:3000/api/health/realtime`
 - Signed-in dashboard: `http://localhost:3000/dashboard`
-- Pilot operations (allowlisted): `http://localhost:3000/pilot`
 
 ## Repository
 
@@ -95,7 +89,6 @@ See [infra/aws/README.md](./infra/aws/README.md) for the architecture, quotas,
 deployment command, diagnostics, and cost-sensitive resources.
 
 See [OPERATIONS.md](./docs/OPERATIONS.md), [SECURITY.md](./docs/SECURITY.md),
-[DEMO_RUNBOOK.md](./docs/DEMO_RUNBOOK.md), and
-[PILOT_OPERATIONS.md](./docs/PILOT_OPERATIONS.md) for production operations and
-design-partner proof. See [PRD.md](./PRD.md) and [PLAN.md](./PLAN.md) for the
-product specification and delivery roadmap.
+and [DEMO_RUNBOOK.md](./docs/DEMO_RUNBOOK.md) for production operations.
+See [PRD.md](./PRD.md) and [PLAN.md](./PLAN.md) for the product specification
+and delivery roadmap.

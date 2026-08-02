@@ -9,7 +9,6 @@ import {
   designPartnerFeedback,
   githubIssueAssignments,
   pathClaims,
-  pilotSessions,
   publishedBranches,
   providerCredentials,
   users,
@@ -37,8 +36,6 @@ describe("database schema", () => {
       "github_issue_assignments",
     );
     expect(getTableName(pathClaims)).toBe("path_claims");
-    expect(getTableName(pilotSessions)).toBe("pilot_sessions");
-    expect(pilotSessions.checkpoints.name).toBe("checkpoints");
     expect(getTableName(coordinationMessages)).toBe("coordination_messages");
     expect(getTableName(yjsSnapshots)).toBe("yjs_snapshots");
     expect(yjsSnapshots.stateVector.name).toBe("state_vector_base64");
