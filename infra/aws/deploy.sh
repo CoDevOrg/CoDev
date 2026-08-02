@@ -142,6 +142,7 @@ ensure_vercel_role() {
   invoke_policy="$(jq -cn \
     --arg resource "arn:aws:execute-api:${region}:${account_id}:${api_id}/*/*/*" \
     --arg instance "arn:aws:ec2:${region}:${account_id}:instance/${instance_id}" \
+    --arg credential_key_arn "${credential_key_arn}" \
     '{
       Version: "2012-10-17",
       Statement: [
