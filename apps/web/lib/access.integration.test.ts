@@ -176,6 +176,23 @@ describe("OpenFGA workspace authorization", () => {
     ]);
   });
 
+  it("omits empty tuple deletes for Auth0 FGA writes", async () => {
+    vi.stubEnv("OPENFGA_API_URL", "https://fga.test");
+    vi.stubEnv("OPENFGA_STORE_ID", "store-1");
+    vi.stubEnv("OPENFGA_AUTHORIZATION_MODEL_ID", "model-1");
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await writeWorkspaceTuple({
+      workspaceId: "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+      userId: "2f2387ed-4a63-4b05-88cc-266d65f7b82b",
+      role: "owner",
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody.deletes).toBeUndefined();
+  });
+
   it("exchanges Auth0 FGA client credentials before calling the API", async () => {
     vi.stubEnv("OPENFGA_API_URL", "https://api.us1.fga.dev");
     vi.stubEnv("OPENFGA_STORE_ID", "store-1");

@@ -276,7 +276,7 @@ export async function writeWorkspaceTuple(input: {
     : [];
   await openFgaRequest("/write", {
     writes: { tuple_keys: writes },
-    deletes: { tuple_keys: deletes },
+    ...(deletes.length > 0 ? { deletes: { tuple_keys: deletes } } : {}),
   });
 }
 
