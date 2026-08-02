@@ -28,7 +28,7 @@
 
 ## Lifecycle recovery
 
-GitHub Actions invokes `/api/cron/lifecycle` every five minutes with
+GitHub Actions invokes `/api/cron/lifecycle` every 45 minutes with
 `Authorization: Bearer $CRON_SECRET`. The repository secret must be named
 `CRON_SECRET`. A manual retry is safe:
 

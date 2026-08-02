@@ -7,6 +7,8 @@ import {
 } from "@aws-sdk/client-kms";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+import { getAwsConfiguration } from "./aws";
+
 const ALGORITHM = "aes-256-gcm";
 const LEGACY_VERSION = "v1";
 const KMS_VERSION = "kms-v1";
@@ -24,9 +26,7 @@ function getKmsKeyId() {
 }
 
 function getKmsClient() {
-  return (kms ??= process.env.AWS_REGION
-    ? new KMSClient({ region: process.env.AWS_REGION })
-    : new KMSClient());
+  return (kms ??= new KMSClient(getAwsConfiguration()));
 }
 
 function getDevelopmentKey() {
