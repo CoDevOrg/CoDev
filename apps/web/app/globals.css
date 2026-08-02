@@ -7047,6 +7047,24 @@ html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
   margin-top: 22px;
 }
 
+.workspace-create-github-help {
+  display: grid;
+  margin-bottom: 11px;
+  gap: 3px;
+}
+
+.workspace-create-github-help strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.workspace-create-github-help span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .workspace-create-footer .security-note {
   margin-top: 18px;
 }
@@ -7214,4 +7232,19 @@ html[data-theme="dark"] .app-page .workspace-card:hover {
   .workspace-create-modal .picker-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Use a clearer product label style; reserve monospace for code and metadata. */
+
+.app-page .eyebrow,
+.auth-page .eyebrow {
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.workspace-create-heading h2 {
+  font-weight: 700;
 }

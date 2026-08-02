@@ -17,22 +17,20 @@ export default async function DashboardPage() {
       <main className="dashboard-shell">
         <header className="dashboard-heading">
           <div>
-            <p className="eyebrow">Workspace home</p>
+            <p className="eyebrow">Home</p>
             <h1>Workspaces</h1>
-            <p>
-              Keep your projects, plans, and collaborative coding spaces in one
-              place. Create a blank workspace or start from a GitHub repository.
-            </p>
+            <p>Create a blank space or start from a GitHub repository.</p>
           </div>
         </header>
 
         <section className="workspace-list">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Your documents</p>
-              <h2>All workspaces</h2>
+              <h2>Your spaces</h2>
             </div>
-            <span>{workspaces.length} total</span>
+            <span>
+              {workspaces.length} {workspaces.length === 1 ? "space" : "spaces"}
+            </span>
           </div>
           <div className="workspace-cards">
             <RepositoryPicker appSlug={process.env.GITHUB_APP_SLUG} />
@@ -64,7 +62,7 @@ export default async function DashboardPage() {
           </div>
           {!workspaces.length ? (
             <p className="workspace-list-hint">
-              Your new workspace will appear here as soon as you create it.
+              Create your first one to get started.
             </p>
           ) : null}
         </section>

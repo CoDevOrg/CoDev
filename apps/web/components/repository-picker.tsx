@@ -237,8 +237,20 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
               </p>
             ) : null}
             <div className="workspace-create-footer">
-              <a className="secondary-button" href={installUrl} target="_blank">
-                Manage GitHub App ↗
+              <div className="workspace-create-github-help">
+                <strong>Need to change repository access?</strong>
+                <span>
+                  This opens your existing CoDev installation settings on
+                  GitHub.
+                </span>
+              </div>
+              <a
+                className="secondary-button"
+                href={installUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Manage repository access ↗
               </a>
               <p className="security-note">
                 Private source is transferred as a bounded, credential-free
