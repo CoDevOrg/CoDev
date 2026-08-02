@@ -21,4 +21,11 @@ describe("agent command boundary", () => {
     expect(() => validateAgentCommand(["cat", "../../secret"])).toThrow();
     expect(() => validateAgentCommand(["python", "script.py"])).toThrow();
   });
+
+  it("keeps optional repository search commands inside the boundary", () => {
+    expect(validateAgentCommand(["rg", "workspace"])).toEqual([
+      "rg",
+      "workspace",
+    ]);
+  });
 });

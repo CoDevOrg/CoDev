@@ -33,6 +33,7 @@ apt-get install -y \
   git \
   iptables \
   jq \
+  ripgrep \
   squashfs-tools \
   xfsprogs
 
@@ -116,6 +117,7 @@ unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
 
 install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/codev-guestd"
 install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
+install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 install -d -m 0755 "${work_dir}/rootfs/workspace"

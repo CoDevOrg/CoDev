@@ -193,7 +193,7 @@ const tools: OpenAI.Responses.Tool[] = [
     type: "function",
     name: "run_command",
     description:
-      "Run a bounded non-interactive command in the isolated worktree. Pass argv without a shell.",
+      "Run a bounded non-interactive command in the isolated worktree. Pass argv without a shell. Prefer find and grep for repository searches; optional tools such as rg may not be installed in every guest image.",
     parameters: {
       type: "object",
       properties: {
@@ -661,11 +661,26 @@ async function executeTool(
         throw new Error("run_command requires 1-16 string arguments.");
       }
       const command = validateAgentCommand(input.command as string[]);
-      const result = await executeInSandbox(context.workspaceId, {
-        worktreeId: context.worktreeId,
-        command,
-        timeoutSeconds: 30,
-      });
+      let result;
+      try {
+        result = await executeInSandbox(context.workspaceId, {
+          worktreeId: context.worktreeId,
+          command,
+          timeoutSeconds: 30,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Command execution failed.";
+        if (
+          /unable to spawn .*? because:.*(?:path|no such file)/i.test(message)
+        ) {
+          return JSON.stringify({
+            output: `${message}\nUse find or grep when the requested executable is unavailable.`,
+            exitCode: 127,
+          });
+        }
+        throw error;
+      }
       return JSON.stringify({
         output: result.output.slice(0, 80_000),
         exitCode: result.exitCode,
@@ -786,7 +801,7 @@ export async function runAgentTurn(turnId: string) {
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Never publish, merge, access credentials, or escape the worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. Never publish, merge, access credentials, or escape the worktree.",
     prompt: `Repository session transcript:\n${transcript}\n\nComplete the latest request. Inspect the repository before editing.`,
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse }) => {

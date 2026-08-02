@@ -31,6 +31,7 @@ const MAX_BODY_BYTES: usize = 2 << 20;
 const MAX_OUTPUT_BYTES: usize = 2 << 20;
 const MAX_TERMINAL_BUFFER_BYTES: usize = 1 << 20;
 const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
+const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 pub struct GuestResponse {
@@ -262,11 +263,18 @@ impl GuestService {
             command.arg(argument);
         }
         command.cwd(working_directory);
+        command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
-        let mut child = pty
-            .slave
-            .spawn_command(command)
-            .map_err(RuntimeError::internal)?;
+        let mut child = match pty.slave.spawn_command(command) {
+            Ok(child) => child,
+            Err(error) => {
+                return serde_json::to_value(ExecResponse {
+                    output: format!("Unable to spawn {}: {}\n", request.command[0], error),
+                    exit_code: 127,
+                })
+                .map_err(RuntimeError::internal);
+            }
+        };
         drop(pty.slave);
         let mut reader = pty
             .master
@@ -329,6 +337,7 @@ impl GuestService {
         let mut command = CommandBuilder::new("/bin/sh");
         command.arg("-l");
         command.cwd(&self.workspace_root);
+        command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         let mut child = pty
@@ -1255,6 +1264,21 @@ mod tests {
         let service = GuestService::new(directory.path()).expect("service");
         let response = service.handle("POST", "/v1/files/read", br#"{"path":"../outside"}"#);
         assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn missing_command_returns_a_normal_process_failure() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle(
+            "POST",
+            "/v1/pty/exec",
+            br#"{"command":["codev-command-that-is-not-installed"]}"#,
+        );
+        assert_eq!(response.status, 200);
+        let result: ExecResponse = serde_json::from_slice(&response.body).expect("exec");
+        assert_eq!(result.exit_code, 127);
+        assert!(result.output.contains("Unable to spawn"));
     }
 
     #[test]
