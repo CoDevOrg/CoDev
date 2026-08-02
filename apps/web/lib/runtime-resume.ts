@@ -9,13 +9,19 @@ import { getRepositorySnapshot } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import { recordWorkspaceHeartbeat } from "./heartbeat";
 import { requireWorkspacePermission } from "./access";
-import { provisionSandbox, waitForOrchestrator } from "./orchestrator";
+import {
+  getSandbox,
+  OrchestratorError,
+  provisionSandbox,
+  waitForOrchestrator,
+} from "./orchestrator";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
   getWorkspaceRuntime,
   markWorkspaceFailed,
   markWorkspaceReady,
+  markWorkspaceStopped,
   WorkspaceLifecycleError,
 } from "./workspaces";
 const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
@@ -48,8 +54,19 @@ export async function ensureWorkspaceRuntimeReady(
   await requireWorkspacePermission(workspaceId, userId, permission);
   const runtime = await getWorkspaceRuntime(workspaceId);
   if (runtime?.status === "ready") {
-    await recordWorkspaceHeartbeat(workspaceId);
-    return;
+    try {
+      await getSandbox(workspaceId);
+      await recordWorkspaceHeartbeat(workspaceId);
+      return;
+    } catch (error) {
+      if (!(error instanceof OrchestratorError && error.status === 404)) {
+        throw error;
+      }
+      // The host may have been replaced while the database still says the
+      // runtime is ready. Treat the missing in-memory sandbox as stopped so
+      // this mutating action can provision it again.
+      await markWorkspaceStopped(workspaceId);
+    }
   }
 
   const workspace = await getWorkspaceForMember(workspaceId, userId);
