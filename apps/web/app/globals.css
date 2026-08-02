@@ -8191,6 +8191,8 @@ html[data-theme="dark"] .share-dialog {
 /* Workspace shell: sessions, conversation, and an on-demand canvas. */
 
 html .live-ide {
+  height: 100dvh;
+  min-height: 0;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
@@ -8200,8 +8202,8 @@ html .live-ide-grid.terminal-collapsed {
   position: relative;
   display: block;
   min-height: 0;
-  height: auto;
-  flex: 1 1 auto;
+  height: 0;
+  flex: 1 1 0%;
   overflow: hidden;
   background: var(--workspace-bg);
 }
