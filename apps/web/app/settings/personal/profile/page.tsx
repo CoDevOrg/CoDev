@@ -6,8 +6,13 @@ import {
 } from "@/components/settings/settings-content";
 import { requireUser } from "@/lib/session";
 
-export default async function PersonalProfilePage() {
+export default async function PersonalProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ github?: string }>;
+}) {
   const user = await requireUser();
+  const params = await searchParams;
 
   return (
     <div className="settings-page">
@@ -16,7 +21,10 @@ export default async function PersonalProfilePage() {
         eyebrow="Personal settings"
         title="Profile"
       />
-      <ProfileSettings user={user} />
+      <ProfileSettings
+        githubStatus={params.github === "connected" ? "connected" : undefined}
+        user={user}
+      />
       <SettingsCard
         description="Help prioritize the design-partner experience."
         title="Design-partner feedback"

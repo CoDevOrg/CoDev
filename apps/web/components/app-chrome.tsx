@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
-import { signIn, signOut } from "@/auth";
+import { signOut } from "@/auth";
+import { connectGitHubAccount } from "@/app/actions/github";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { clerkAuthConfigured } from "@/lib/identity";
@@ -81,12 +82,7 @@ export function AppChrome({
               <div className="profile-menu-divider" />
               <ThemeToggle />
               {!user.githubLogin && isGitHubAuthConfigured() ? (
-                <form
-                  action={async () => {
-                    "use server";
-                    await signIn("github", { redirectTo: "/dashboard" });
-                  }}
-                >
+                <form action={connectGitHubAccount.bind(null, "/dashboard")}>
                   <button className="profile-menu-action" type="submit">
                     Connect GitHub
                   </button>

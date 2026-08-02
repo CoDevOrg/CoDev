@@ -1,3 +1,6 @@
+import { isGitHubAuthConfigured } from "@codev/config";
+
+import { connectGitHubAccount } from "@/app/actions/github";
 import type { AppUser } from "@/lib/identity";
 import type { OrganizationSettingsContext } from "@/lib/settings-access";
 export function SettingsPageHeader({
@@ -62,9 +65,20 @@ export function SettingsPlaceholder({
   );
 }
 
-export function ProfileSettings({ user }: { user: AppUser }) {
+export function ProfileSettings({
+  user,
+  githubStatus,
+}: {
+  user: AppUser;
+  githubStatus: "connected" | undefined;
+}) {
   return (
     <>
+      {githubStatus === "connected" ? (
+        <div className="settings-status-banner" role="status">
+          GitHub account connected to this CoDev account.
+        </div>
+      ) : null}
       <SettingsCard
         description="The identity and contact details connected to your CoDev account."
         title="Profile"
@@ -80,9 +94,28 @@ export function ProfileSettings({ user }: { user: AppUser }) {
           </div>
           <div>
             <span className="settings-field-label">GitHub handle</span>
-            <strong>
-              {user.githubLogin ? `@${user.githubLogin}` : "Not connected"}
-            </strong>
+            {user.githubLogin ? (
+              <strong>@{user.githubLogin}</strong>
+            ) : (
+              <>
+                <strong>Not connected</strong>
+                {isGitHubAuthConfigured() ? (
+                  <form
+                    action={connectGitHubAccount.bind(
+                      null,
+                      "/settings/personal/profile?github=connected",
+                    )}
+                  >
+                    <button
+                      className="secondary-button settings-connect-button"
+                      type="submit"
+                    >
+                      Connect GitHub account
+                    </button>
+                  </form>
+                ) : null}
+              </>
+            )}
           </div>
           <div>
             <span className="settings-field-label">Security</span>

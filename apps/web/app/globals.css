@@ -1292,6 +1292,24 @@ html[data-theme="dark"] .workspace-page {
   font-weight: 520;
 }
 
+.settings-status-banner {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 13px;
+}
+
+.settings-connect-button {
+  width: fit-content;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
 .settings-muted-copy {
   margin: 22px 0 0;
   color: #8b9690;

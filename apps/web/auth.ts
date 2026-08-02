@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
@@ -9,6 +10,7 @@ import { schema } from "@codev/db";
 
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
+import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
 
 interface GitHubProfile {
   id: number;
@@ -35,6 +37,23 @@ const googleClientId =
   process.env.AUTH_GOOGLE_ID ?? "google-auth-not-configured";
 const googleClientSecret =
   process.env.AUTH_GOOGLE_SECRET ?? "google-auth-not-configured";
+
+async function getGithubLinkCookie() {
+  try {
+    return (await cookies()).get(GITHUB_LINK_COOKIE)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function clearGithubLinkCookie() {
+  try {
+    (await cookies()).delete(GITHUB_LINK_COOKIE);
+  } catch {
+    // Cookie mutation is best effort; the short-lived state cannot be reused
+    // after the callback has completed successfully or been rejected.
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -178,47 +197,95 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const now = new Date();
       const database = getDatabase();
       const githubUserId = BigInt(githubProfile.id);
+      let githubLinkState: ReturnType<typeof openGithubLinkState> = null;
+      const linkCookie = await getGithubLinkCookie();
+      if (linkCookie) {
+        githubLinkState = openGithubLinkState(linkCookie);
+        if (!githubLinkState) {
+          await clearGithubLinkCookie();
+          return false;
+        }
+      }
       const [existingByGithub] = await database
         .select({ id: schema.users.id })
         .from(schema.users)
         .where(eq(schema.users.githubUserId, githubUserId))
         .limit(1);
-      const [existingByEmail] = githubProfile.email
-        ? await database
-            .select({ id: schema.users.id })
-            .from(schema.users)
-            .where(eq(schema.users.email, githubProfile.email))
-            .limit(1)
-        : [];
-      const [localUser] =
-        existingByGithub?.id || existingByEmail?.id
+      let localUser;
+
+      if (githubLinkState) {
+        const [linkTarget] = await database
+          .select({
+            id: schema.users.id,
+            githubUserId: schema.users.githubUserId,
+            name: schema.users.name,
+            email: schema.users.email,
+            avatarUrl: schema.users.avatarUrl,
+          })
+          .from(schema.users)
+          .where(eq(schema.users.id, githubLinkState.userId))
+          .limit(1);
+
+        if (
+          !linkTarget ||
+          (linkTarget.githubUserId !== null &&
+            linkTarget.githubUserId !== githubUserId) ||
+          (existingByGithub && existingByGithub.id !== linkTarget.id)
+        ) {
+          await clearGithubLinkCookie();
+          return false;
+        }
+
+        [localUser] = await database
+          .update(schema.users)
+          .set({
+            githubUserId,
+            login: githubProfile.login,
+            name: linkTarget.name ?? githubProfile.name,
+            email: linkTarget.email ?? githubProfile.email,
+            avatarUrl: linkTarget.avatarUrl ?? githubProfile.avatar_url,
+            updatedAt: now,
+          })
+          .where(eq(schema.users.id, linkTarget.id))
+          .returning({ id: schema.users.id });
+      } else {
+        const [existingByEmail] = githubProfile.email
           ? await database
-              .update(schema.users)
-              .set({
-                githubUserId,
-                login: githubProfile.login,
-                name: githubProfile.name,
-                email: githubProfile.email,
-                avatarUrl: githubProfile.avatar_url,
-                updatedAt: now,
-              })
-              .where(
-                eq(
-                  schema.users.id,
-                  existingByGithub?.id ?? existingByEmail!.id,
-                ),
-              )
-              .returning({ id: schema.users.id })
-          : await database
-              .insert(schema.users)
-              .values({
-                githubUserId,
-                login: githubProfile.login,
-                name: githubProfile.name,
-                email: githubProfile.email,
-                avatarUrl: githubProfile.avatar_url,
-              })
-              .returning({ id: schema.users.id });
+              .select({ id: schema.users.id })
+              .from(schema.users)
+              .where(eq(schema.users.email, githubProfile.email))
+              .limit(1)
+          : [];
+        [localUser] =
+          existingByGithub?.id || existingByEmail?.id
+            ? await database
+                .update(schema.users)
+                .set({
+                  githubUserId,
+                  login: githubProfile.login,
+                  name: githubProfile.name,
+                  email: githubProfile.email,
+                  avatarUrl: githubProfile.avatar_url,
+                  updatedAt: now,
+                })
+                .where(
+                  eq(
+                    schema.users.id,
+                    existingByGithub?.id ?? existingByEmail!.id,
+                  ),
+                )
+                .returning({ id: schema.users.id })
+            : await database
+                .insert(schema.users)
+                .values({
+                  githubUserId,
+                  login: githubProfile.login,
+                  name: githubProfile.name,
+                  email: githubProfile.email,
+                  avatarUrl: githubProfile.avatar_url,
+                })
+                .returning({ id: schema.users.id });
+      }
 
       if (!localUser) {
         return false;
@@ -265,6 +332,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             updatedAt: now,
           },
         });
+
+      if (githubLinkState) await clearGithubLinkCookie();
 
       return true;
     },
