@@ -11,6 +11,7 @@ import { schema } from "@codev/db";
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
+import { mergeUserIntoCanonical } from "@/lib/user-merge";
 
 interface GitHubProfile {
   id: number;
@@ -229,11 +230,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (
           !linkTarget ||
           (linkTarget.githubUserId !== null &&
-            linkTarget.githubUserId !== githubUserId) ||
-          (existingByGithub && existingByGithub.id !== linkTarget.id)
+            linkTarget.githubUserId !== githubUserId)
         ) {
           await clearGithubLinkCookie();
           return false;
+        }
+
+        const canonicalUserId = existingByGithub?.id ?? linkTarget.id;
+        if (canonicalUserId !== linkTarget.id) {
+          await mergeUserIntoCanonical(
+            database,
+            canonicalUserId,
+            linkTarget.id,
+          );
         }
 
         [localUser] = await database
@@ -246,7 +255,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             avatarUrl: linkTarget.avatarUrl ?? githubProfile.avatar_url,
             updatedAt: now,
           })
-          .where(eq(schema.users.id, linkTarget.id))
+          .where(eq(schema.users.id, canonicalUserId))
           .returning({ id: schema.users.id });
       } else {
         const [existingByEmail] = githubProfile.email
