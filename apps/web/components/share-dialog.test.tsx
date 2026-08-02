@@ -27,6 +27,7 @@ describe("ShareDialog", () => {
       <ShareDialog
         workspaceId="workspace-1"
         workspaceName="acme/demo"
+        canShare
         isOwner
         members={[
           {
@@ -71,6 +72,7 @@ describe("ShareDialog", () => {
       <ShareDialog
         workspaceId="workspace-1"
         workspaceName="acme/demo"
+        canShare
         isOwner
         members={[]}
       />,
@@ -82,5 +84,53 @@ describe("ShareDialog", () => {
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("lets Co-Steer members share viewer-only invitations", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ inviteUrl: "https://codev.example/invite/viewer" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ShareDialog
+        workspaceId="workspace-1"
+        workspaceName="acme/demo"
+        canShare
+        isOwner={false}
+        members={[
+          {
+            userId: "admin-1",
+            login: "admin",
+            name: "Admin",
+            role: "owner",
+            accessRole: "owner",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(
+      screen.getByText(/People you add receive Viewer access/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Permission for new invitations"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/alex@company.com/), {
+      target: { value: "viewer@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workspaces/workspace-1/invites",
+        expect.objectContaining({
+          body: expect.stringContaining('"accessRole":"viewer"'),
+        }),
+      );
+    });
   });
 });

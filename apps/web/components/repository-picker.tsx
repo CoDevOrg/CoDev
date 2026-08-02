@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 
 import type { GitHubInstallation, GitHubRepository } from "@/lib/github";
 
@@ -147,7 +148,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
                 aria-label="Close workspace creation"
                 onClick={() => setOpen(false)}
               >
-                ×
+                <X aria-hidden="true" />
               </button>
             </div>
             <div className="workspace-create-options">
@@ -200,7 +201,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
                   <option value="">Select a repository</option>
                   {repositories.map((repository) => (
                     <option key={repository.id} value={repository.id}>
-                      {repository.private ? "🔒 " : ""}
+                      {repository.private ? "Private · " : ""}
                       {repository.full_name}
                     </option>
                   ))}

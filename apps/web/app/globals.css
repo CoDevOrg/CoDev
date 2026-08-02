@@ -9210,6 +9210,300 @@ html .live-ide .agent-review-comment > button {
   width: fit-content;
 }
 
+/* Workspace navigation and review controls. */
+
+html .live-ide .topbar-review-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+html .live-ide .topbar-review-actions > .agent-review-disclosure {
+  width: auto;
+  margin: 0;
+  overflow: visible;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 8px;
+  background: var(--workspace-surface-raised);
+  box-shadow: none;
+}
+
+html .live-ide .topbar-review-actions .agent-review-disclosure > summary {
+  min-height: 30px;
+  padding: 4px 8px;
+  grid-template-columns: 22px auto 14px;
+  gap: 6px;
+  color: var(--workspace-ink);
+  font-size: 10px;
+}
+
+html .live-ide .topbar-review-actions .agent-review-summary-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+html .live-ide .topbar-review-actions .agent-review-summary-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+html .live-ide .topbar-review-actions .agent-review-disclosure > summary small {
+  display: none;
+}
+
+html .live-ide .topbar-review-actions .agent-review-disclosure[open] {
+  z-index: 40;
+}
+
+html
+  .live-ide
+  .topbar-review-actions
+  .agent-review-disclosure[open]
+  .agent-review {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(460px, calc(100vw - 28px));
+  max-height: calc(100dvh - 90px);
+  overflow: auto;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 14px;
+  background: var(--workspace-surface);
+  box-shadow: 0 18px 45px rgba(8, 24, 17, 0.18);
+}
+
+html
+  .live-ide
+  .topbar-review-actions
+  .agent-review-disclosure[open]
+  .agent-review-result {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(460px, calc(100vw - 28px));
+  padding: 16px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 14px;
+  background: var(--workspace-surface);
+  box-shadow: 0 18px 45px rgba(8, 24, 17, 0.18);
+}
+
+html .live-ide-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+
+html .live-ide-grid > .ide-main-stage {
+  grid-area: stage;
+}
+
+html .live-ide-grid.view-files {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-areas: "files stage";
+}
+
+html .live-ide-grid.view-code {
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr) minmax(
+      360px,
+      440px
+    );
+  grid-template-areas: "files editor stage";
+}
+
+html .live-ide-grid.view-preview {
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 52%);
+  grid-template-areas: "stage preview";
+}
+
+html .live-ide-grid.view-files > .ide-main-stage,
+html .live-ide-grid.view-code > .ide-main-stage,
+html .live-ide-grid.view-preview > .ide-main-stage {
+  display: contents;
+}
+
+html .live-ide-grid.view-files .agent-panel-layout,
+html .live-ide-grid.view-code .agent-panel-layout,
+html .live-ide-grid.view-preview .agent-panel-layout {
+  grid-area: stage;
+  min-width: 0;
+  min-height: 0;
+}
+
+html .live-ide-grid.view-files .file-sidebar,
+html .live-ide-grid.view-code .file-sidebar {
+  grid-area: files;
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 100%;
+  border-right: 1px solid var(--workspace-line);
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html .live-ide-grid.view-code .ide-editor {
+  grid-area: editor;
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 100%;
+  border-left: 1px solid var(--workspace-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html .live-ide-grid.view-preview .preview-pane {
+  grid-area: preview;
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 100%;
+  border-left: 1px solid var(--workspace-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html .live-ide .agent-chat-composer.is-dragging {
+  border-color: var(--workspace-accent);
+  background: var(--workspace-accent-soft);
+  box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-attachment-input {
+  display: none;
+}
+
+html .live-ide .agent-attachments {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px 4px;
+}
+
+html .live-ide .agent-attachment {
+  display: inline-flex;
+  max-width: 220px;
+  min-height: 26px;
+  padding: 0 5px 0 8px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 7px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+  font-size: 10px;
+}
+
+html .live-ide .agent-attachment > svg {
+  width: 12px;
+  height: 12px;
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-attachment > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html .live-ide .agent-attachment button {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-muted);
+  cursor: pointer;
+}
+
+html .live-ide .agent-attachment button svg {
+  width: 12px;
+  height: 12px;
+}
+
+html .live-ide .agent-sidebar-title {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+html .live-ide .agent-session-list button {
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+}
+
+html .live-ide .agent-session-list button:hover {
+  border-color: var(--workspace-line-strong);
+  background: var(--workspace-surface-raised);
+}
+
+html .live-ide .agent-session-list button.active {
+  border-color: var(--workspace-accent);
+  background: var(--workspace-surface-raised);
+  box-shadow: 0 5px 14px rgba(8, 24, 17, 0.06);
+}
+
+html .live-ide .agent-sidebar-empty {
+  margin: 20px 8px;
+  padding: 14px 12px;
+  border: 1px dashed var(--workspace-line-strong);
+  border-radius: 10px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+html .live-ide .agent-sidebar-foot {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--workspace-line);
+}
+
+@media (max-width: 1120px) {
+  html .live-ide-grid.view-code {
+    grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(
+        320px,
+        40vw
+      );
+  }
+
+  html .live-ide-grid.view-preview {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 48%);
+  }
+}
+
+@media (max-width: 860px) {
+  html .live-ide-grid.view-code,
+  html .live-ide-grid.view-files,
+  html .live-ide-grid.view-preview {
+    display: block;
+  }
+
+  html .live-ide-grid.view-code > .ide-main-stage,
+  html .live-ide-grid.view-files > .ide-main-stage,
+  html .live-ide-grid.view-preview > .ide-main-stage {
+    display: grid;
+  }
+
+  html .live-ide-grid.view-code .file-sidebar,
+  html .live-ide-grid.view-files .file-sidebar,
+  html .live-ide-grid.view-code .ide-editor,
+  html .live-ide-grid.view-preview .preview-pane {
+    position: absolute;
+    z-index: 12;
+    inset: 0 0 0 auto;
+    width: min(620px, calc(100% - 48px));
+    height: 100%;
+  }
+}
+
 @media (max-width: 640px) {
   html .live-ide .agent-review-actions .agent-discard {
     width: 100%;

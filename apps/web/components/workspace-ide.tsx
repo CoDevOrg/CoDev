@@ -8,12 +8,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
   Code2,
+  FileCode2,
   Files,
   GitBranch,
   MonitorPlay,
   PanelRightClose,
+  RefreshCw,
+  Search,
   TerminalSquare,
+  X,
 } from "lucide-react";
 
 import {
@@ -93,6 +98,7 @@ export interface WorkspaceIdeProps {
   canTerminal: boolean;
   canMerge: boolean;
   canReview: boolean;
+  canShare: boolean;
   isOwner: boolean;
   integrationHeadSha: string;
   user: {
@@ -118,6 +124,7 @@ export function WorkspaceIde({
   canTerminal,
   canMerge,
   canReview,
+  canShare,
   isOwner,
   integrationHeadSha,
   user,
@@ -933,9 +940,11 @@ export function WorkspaceIde({
               </button>
             ) : null}
           </nav>
+          <div id="topbar-review-actions" className="topbar-review-actions" />
           <ThemeToggle />
           <WorkspaceShareButton
             workspaceId={workspaceId}
+            canShare={canShare}
             isOwner={isOwner}
             workspaceName={workspaceName}
             members={members}
@@ -1133,7 +1142,7 @@ export function WorkspaceIde({
             />
           ) : null}
 
-          {view === "files" ? (
+          {view === "files" || view === "code" ? (
             <aside
               className="file-sidebar ide-drawer ide-drawer-files"
               aria-label="Files"
@@ -1147,17 +1156,17 @@ export function WorkspaceIde({
                     aria-label="Search"
                     onClick={() => setSearchOpen((open) => !open)}
                   >
-                    ⌕
+                    <Search aria-hidden="true" />
                   </button>
                   <button type="button" onClick={() => void refreshFiles()}>
-                    ↻
+                    <RefreshCw aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     aria-label="Close files"
                     onClick={() => setView("chat")}
                   >
-                    ✕
+                    <X aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -1198,7 +1207,7 @@ export function WorkspaceIde({
               ) : (
                 <>
                   <div className="repository-heading">
-                    <span>⌄</span>
+                    <ChevronDown aria-hidden="true" />
                     <strong>
                       {repository.split("/").at(-1)?.toUpperCase()}
                     </strong>
@@ -1223,7 +1232,7 @@ export function WorkspaceIde({
                         }}
                         title={file.path}
                       >
-                        <span className="file-kind">◇</span>
+                        <FileCode2 className="file-kind" aria-hidden="true" />
                         <span>{fileName(file.path)}</span>
                         {file.status ? <i>{file.status}</i> : null}
                         {(presenceByPath.get(file.path) ?? []).length > 0 ? (
@@ -1300,7 +1309,7 @@ export function WorkspaceIde({
                     aria-label="Close code"
                     onClick={() => setView("chat")}
                   >
-                    ✕
+                    <X aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -1437,7 +1446,7 @@ export function WorkspaceIde({
                   setTerminalCollapsed(true);
                 }}
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
           </div>

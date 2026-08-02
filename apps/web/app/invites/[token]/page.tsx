@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Link2 } from "lucide-react";
 
 import { AcceptInvite } from "@/components/accept-invite";
 import { Brand } from "@/components/app-chrome";
@@ -23,7 +24,7 @@ export default async function InvitePage({
       </div>
       <section className="auth-card invite-card">
         <span className="auth-glyph" aria-hidden="true">
-          ✦
+          <Link2 aria-hidden="true" />
         </span>
         <p className="eyebrow">Workspace invitation</p>
         <h1>You’ve been invited to build together.</h1>

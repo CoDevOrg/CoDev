@@ -546,9 +546,16 @@ export async function createWorkspaceInvite(
     allowLink?: boolean;
   } = {},
 ) {
+  const access = await requireWorkspacePermission(workspaceId, userId, "view");
+  if (access.role !== "owner" && access.role !== "co_steer") {
+    throw new WorkspaceAccessError(
+      "Only workspace owners and Co-Steer members can share this workspace.",
+    );
+  }
   await requireOrganizationSettingsWrite(userId, workspaceId);
   const token = createInviteToken();
-  const accessRole = options.accessRole ?? "co_steer";
+  const accessRole =
+    access.role === "owner" ? (options.accessRole ?? "co_steer") : "viewer";
   const [invite] = await getDatabase()
     .insert(schema.workspaceInvites)
     .values({
@@ -653,7 +660,7 @@ export async function updateMemberAccessRole(
   ownerUserId: string,
   accessRole: Exclude<WorkspaceAccessRole, "owner">,
 ) {
-  await requireOrganizationSettingsWrite(ownerUserId, workspaceId);
+  await requireOwner(workspaceId, ownerUserId);
   if (memberUserId === ownerUserId) {
     throw new Error("Owner capabilities cannot be removed.");
   }
@@ -698,7 +705,7 @@ export async function updateMemberCapabilities(
   ownerUserId: string,
   capabilities: { canTerminal: boolean; canMerge: boolean },
 ) {
-  await requireOrganizationSettingsWrite(ownerUserId, workspaceId);
+  await requireOwner(workspaceId, ownerUserId);
   if (memberUserId === ownerUserId) {
     throw new Error("Owner capabilities cannot be removed.");
   }

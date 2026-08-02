@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentPanel, type AgentSession } from "./agent-panel";
@@ -105,5 +105,39 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("combobox", { name: "Agent model" })).toHaveValue(
       "gpt-5.6-luna",
     );
+  });
+
+  it("includes dropped or selected text files in a new agent prompt", async () => {
+    const fetchMock = vi.fn().mockImplementation((_input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          init?.method === "POST"
+            ? { sessionId: "session-2" }
+            : { sessions: [], stateEvents: [], models: [] },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(
+      <AgentPanel workspaceId="workspace-1" canMerge initialSessions={[]} />,
+    );
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    const file = new File(["const answer = 42;"], "draft.ts", {
+      type: "text/typescript",
+    });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    expect(await screen.findByText("draft.ts")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start session" }));
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        ([, options]) => options?.method === "POST",
+      );
+      expect(postCall?.[1]?.body).toContain("const answer = 42;");
+    });
   });
 });

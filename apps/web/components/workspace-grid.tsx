@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  ChevronDown,
+  Grid2X2,
+  List,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 
 import { RepositoryPicker } from "@/components/repository-picker";
 
@@ -72,7 +79,7 @@ export function WorkspaceGrid({
     <section className="workspace-browser" aria-label="Workspace browser">
       <div className="workspace-toolbar">
         <label className="workspace-search">
-          <span aria-hidden="true">⌕</span>
+          <Search aria-hidden="true" />
           <input
             type="search"
             value={query}
@@ -115,9 +122,9 @@ export function WorkspaceGrid({
         </span>
         <div className="workspace-view-controls">
           <button className="workspace-scope" type="button">
-            <span aria-hidden="true">□</span>
+            <SlidersHorizontal aria-hidden="true" />
             All workspaces
-            <span aria-hidden="true">⌄</span>
+            <ChevronDown aria-hidden="true" />
           </button>
           <div className="workspace-view-toggle" aria-label="Workspace view">
             <button
@@ -127,7 +134,7 @@ export function WorkspaceGrid({
               aria-pressed={view === "grid"}
               onClick={() => setView("grid")}
             >
-              <span aria-hidden="true">▦</span>
+              <Grid2X2 aria-hidden="true" />
             </button>
             <button
               className={view === "list" ? "is-active" : ""}
@@ -136,7 +143,7 @@ export function WorkspaceGrid({
               aria-pressed={view === "list"}
               onClick={() => setView("list")}
             >
-              <span aria-hidden="true">☷</span>
+              <List aria-hidden="true" />
             </button>
           </div>
         </div>

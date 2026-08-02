@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
@@ -59,9 +60,10 @@ export function AppChrome({
               <span className="profile-menu-name">
                 {user.githubLogin ?? user.name ?? "Your account"}
               </span>
-              <span className="profile-menu-chevron" aria-hidden="true">
-                ⌄
-              </span>
+              <ChevronDown
+                className="profile-menu-chevron"
+                aria-hidden="true"
+              />
             </summary>
             <div className="profile-menu-popover">
               <div className="profile-menu-heading">

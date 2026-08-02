@@ -14,11 +14,13 @@ type ShareToast = {
 
 export function WorkspaceShareButton({
   workspaceId,
+  canShare,
   isOwner,
   workspaceName,
   members,
 }: {
   workspaceId: string;
+  canShare: boolean;
   isOwner: boolean;
   workspaceName?: string;
   members?: WorkspaceShareMember[];
@@ -33,7 +35,7 @@ export function WorkspaceShareButton({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  if (!isOwner) return null;
+  if (!canShare) return null;
 
   if (workspaceName && members) {
     return (
@@ -41,6 +43,7 @@ export function WorkspaceShareButton({
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         members={members}
+        canShare={canShare}
         isOwner={isOwner}
       />
     );

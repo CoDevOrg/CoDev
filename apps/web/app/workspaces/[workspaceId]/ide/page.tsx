@@ -49,6 +49,9 @@ export default async function WorkspaceIdePage({
       canTerminal={workspace.canTerminal}
       canMerge={workspace.canMerge}
       canReview={workspace.accessRole !== "viewer"}
+      canShare={
+        workspace.accessRole === "owner" || workspace.accessRole === "co_steer"
+      }
       isOwner={workspace.role === "owner"}
       integrationHeadSha={workspace.integrationHeadSha}
       user={{

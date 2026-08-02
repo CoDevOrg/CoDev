@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 
 type AccessRole = "owner" | "co_steer" | "reviewer" | "viewer";
 
@@ -17,12 +18,14 @@ export function ShareDialog({
   workspaceId,
   workspaceName,
   members,
+  canShare,
   isOwner,
   triggerLabel = "Share",
 }: {
   workspaceId: string;
   workspaceName: string;
   members: WorkspaceShareMember[];
+  canShare: boolean;
   isOwner: boolean;
   triggerLabel?: string;
 }) {
@@ -50,7 +53,7 @@ export function ShareDialog({
     };
   }, [open]);
 
-  if (!isOwner) return null;
+  if (!canShare) return null;
 
   async function createInvite(allowLink: boolean) {
     setBusy(true);
@@ -61,7 +64,7 @@ export function ShareDialog({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           invitee: allowLink ? undefined : invitee,
-          accessRole,
+          accessRole: isOwner ? accessRole : "viewer",
           allowLink,
         }),
       });
@@ -156,7 +159,7 @@ export function ShareDialog({
                 aria-label="Close"
                 onClick={() => setOpen(false)}
               >
-                ✕
+                <X aria-hidden="true" />
               </button>
             </div>
 
@@ -181,19 +184,30 @@ export function ShareDialog({
               </div>
             </label>
 
-            <label className="share-dialog-role">
-              <span>Permission for new invitations</span>
-              <select
-                value={accessRole}
-                onChange={(event) =>
-                  setAccessRole(event.target.value as typeof accessRole)
-                }
-              >
-                <option value="co_steer">Co-Steer · edit and run agents</option>
-                <option value="reviewer">Reviewer · inspect and comment</option>
-                <option value="viewer">Viewer · read-only</option>
-              </select>
-            </label>
+            {isOwner ? (
+              <label className="share-dialog-role">
+                <span>Permission for new invitations</span>
+                <select
+                  value={accessRole}
+                  onChange={(event) =>
+                    setAccessRole(event.target.value as typeof accessRole)
+                  }
+                >
+                  <option value="co_steer">
+                    Co-Steer · edit and run agents
+                  </option>
+                  <option value="reviewer">
+                    Reviewer · inspect and comment
+                  </option>
+                  <option value="viewer">Viewer · read-only</option>
+                </select>
+              </label>
+            ) : (
+              <p className="share-dialog-policy">
+                People you add receive Viewer access. Workspace admins control
+                elevated permissions.
+              </p>
+            )}
 
             <div className="share-dialog-members">
               <strong>People with access</strong>
@@ -206,8 +220,10 @@ export function ShareDialog({
                     <strong>{member.name ?? member.login}</strong>
                     <small>@{member.login}</small>
                   </span>
-                  {member.role === "owner" ? (
-                    <span className="role-label">Owner</span>
+                  {member.role === "owner" || !isOwner ? (
+                    <span className="role-label">
+                      {member.role === "owner" ? "Owner" : member.accessRole}
+                    </span>
                   ) : (
                     <select
                       aria-label={`Permission for ${member.login}`}

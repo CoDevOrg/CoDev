@@ -11,7 +11,11 @@ describe("WorkspaceShareButton", () => {
 
   it("renders nothing for non-owners", () => {
     const { container } = render(
-      <WorkspaceShareButton workspaceId="ws-1" isOwner={false} />,
+      <WorkspaceShareButton
+        workspaceId="ws-1"
+        canShare={false}
+        isOwner={false}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -29,7 +33,7 @@ describe("WorkspaceShareButton", () => {
       clipboard: { writeText },
     });
 
-    render(<WorkspaceShareButton workspaceId="ws-1" isOwner />);
+    render(<WorkspaceShareButton workspaceId="ws-1" canShare isOwner />);
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
 
     await waitFor(() => {
@@ -52,7 +56,7 @@ describe("WorkspaceShareButton", () => {
       clipboard: { writeText: vi.fn() },
     });
 
-    render(<WorkspaceShareButton workspaceId="ws-1" isOwner />);
+    render(<WorkspaceShareButton workspaceId="ws-1" canShare isOwner />);
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
 
     await waitFor(() => {
