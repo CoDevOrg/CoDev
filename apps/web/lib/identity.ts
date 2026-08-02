@@ -18,6 +18,50 @@ export type AppUser = {
   githubLogin?: string;
 };
 
+export type ConnectedAccounts = {
+  google: {
+    connected: boolean;
+  };
+  github: {
+    connected: boolean;
+    login: string | null;
+  };
+  sameCoDevUser: boolean;
+};
+
+export async function getConnectedAccounts(
+  userId: string,
+): Promise<ConnectedAccounts> {
+  const [record] = await getDatabase()
+    .select({
+      googleUserId: schema.users.googleUserId,
+      githubUserId: schema.users.githubUserId,
+      githubLogin: schema.users.login,
+      githubConnectionUserId: schema.githubConnections.userId,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.githubConnections,
+      eq(schema.githubConnections.userId, schema.users.id),
+    )
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  const googleConnected = Boolean(record?.googleUserId);
+  const githubConnected = Boolean(
+    record?.githubUserId !== null && record?.githubConnectionUserId,
+  );
+
+  return {
+    google: { connected: googleConnected },
+    github: {
+      connected: githubConnected,
+      login: githubConnected ? (record?.githubLogin ?? null) : null,
+    },
+    sameCoDevUser: googleConnected && githubConnected,
+  };
+}
+
 export function clerkAuthConfigured() {
   return Boolean(
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&

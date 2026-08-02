@@ -1317,6 +1317,58 @@ html[data-theme="dark"] .workspace-page {
   line-height: 1.6;
 }
 
+.settings-connected-accounts {
+  display: grid;
+  margin-top: 24px;
+  gap: 10px;
+}
+
+.settings-connected-account {
+  display: flex;
+  min-height: 68px;
+  padding: 14px 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-connected-account > div {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-connected-account strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 520;
+}
+
+.settings-connection-status {
+  color: var(--muted-2);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-connection-status.is-connected {
+  color: var(--teal);
+}
+
+.settings-account-match {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .settings-placeholder {
   display: grid;
   margin-top: 24px;

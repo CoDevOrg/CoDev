@@ -1,7 +1,7 @@
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { connectGitHubAccount } from "@/app/actions/github";
-import type { AppUser } from "@/lib/identity";
+import type { AppUser, ConnectedAccounts } from "@/lib/identity";
 import type { OrganizationSettingsContext } from "@/lib/settings-access";
 export function SettingsPageHeader({
   eyebrow,
@@ -68,9 +68,11 @@ export function SettingsPlaceholder({
 export function ProfileSettings({
   user,
   githubStatus,
+  connectedAccounts,
 }: {
   user: AppUser;
   githubStatus: "connected" | undefined;
+  connectedAccounts: ConnectedAccounts;
 }) {
   return (
     <>
@@ -94,8 +96,12 @@ export function ProfileSettings({
           </div>
           <div>
             <span className="settings-field-label">GitHub handle</span>
-            {user.githubLogin ? (
-              <strong>@{user.githubLogin}</strong>
+            {connectedAccounts.github.connected ? (
+              <strong>
+                {connectedAccounts.github.login
+                  ? `@${connectedAccounts.github.login}`
+                  : "Connected"}
+              </strong>
             ) : (
               <>
                 <strong>Not connected</strong>
@@ -122,6 +128,50 @@ export function ProfileSettings({
             <strong>Managed by your sign-in provider</strong>
           </div>
         </div>
+      </SettingsCard>
+      <SettingsCard
+        description="These provider identities are linked to your single CoDev profile."
+        title="Connected accounts"
+      >
+        <div className="settings-connected-accounts">
+          <div className="settings-connected-account">
+            <div>
+              <span className="settings-field-label">Google</span>
+              <strong>
+                {connectedAccounts.google.connected
+                  ? "Connected"
+                  : "Not connected"}
+              </strong>
+            </div>
+            <span
+              className={`settings-connection-status ${connectedAccounts.google.connected ? "is-connected" : ""}`}
+            >
+              {connectedAccounts.google.connected ? "Active" : "—"}
+            </span>
+          </div>
+          <div className="settings-connected-account">
+            <div>
+              <span className="settings-field-label">GitHub</span>
+              <strong>
+                {connectedAccounts.github.connected
+                  ? connectedAccounts.github.login
+                    ? `@${connectedAccounts.github.login}`
+                    : "Connected"
+                  : "Not connected"}
+              </strong>
+            </div>
+            <span
+              className={`settings-connection-status ${connectedAccounts.github.connected ? "is-connected" : ""}`}
+            >
+              {connectedAccounts.github.connected ? "Active" : "—"}
+            </span>
+          </div>
+        </div>
+        {connectedAccounts.sameCoDevUser ? (
+          <p className="settings-account-match" role="status">
+            Google and GitHub are connected to this same CoDev account.
+          </p>
+        ) : null}
       </SettingsCard>
       <SettingsCard
         description="Authentication and SSO controls are kept with your configured identity provider."

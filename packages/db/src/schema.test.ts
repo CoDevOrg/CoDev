@@ -50,6 +50,7 @@ describe("database schema", () => {
     expect(getTableName(publishedBranches)).toBe("published_branches");
     expect(getTableName(providerCredentials)).toBe("provider_credentials");
     expect(users.passwordHash.name).toBe("password_hash");
+    expect(users.googleUserId.name).toBe("google_user_id");
     expect(providerCredentials.scopeType.name).toBe("scope_type");
     expect(providerCredentials.encryptedAccessToken.name).toBe(
       "encrypted_access_token",

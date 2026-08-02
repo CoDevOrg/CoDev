@@ -113,6 +113,7 @@ export const users = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     githubUserId: bigint("github_user_id", { mode: "bigint" }),
+    googleUserId: text("google_user_id"),
     clerkUserId: text("clerk_user_id"),
     login: text("login").notNull(),
     name: text("name"),
@@ -123,6 +124,7 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_github_user_id_idx").on(table.githubUserId),
+    uniqueIndex("users_google_user_id_idx").on(table.googleUserId),
     uniqueIndex("users_clerk_user_id_idx").on(table.clerkUserId),
     uniqueIndex("users_login_idx").on(table.login),
   ],

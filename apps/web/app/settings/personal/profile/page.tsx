@@ -4,6 +4,7 @@ import {
   SettingsCard,
   SettingsPageHeader,
 } from "@/components/settings/settings-content";
+import { getConnectedAccounts } from "@/lib/identity";
 import { requireUser } from "@/lib/session";
 
 export default async function PersonalProfilePage({
@@ -12,6 +13,7 @@ export default async function PersonalProfilePage({
   searchParams: Promise<{ github?: string }>;
 }) {
   const user = await requireUser();
+  const connectedAccounts = await getConnectedAccounts(user.id);
   const params = await searchParams;
 
   return (
@@ -22,7 +24,12 @@ export default async function PersonalProfilePage({
         title="Profile"
       />
       <ProfileSettings
-        githubStatus={params.github === "connected" ? "connected" : undefined}
+        githubStatus={
+          params.github === "connected" && connectedAccounts.github.connected
+            ? "connected"
+            : undefined
+        }
+        connectedAccounts={connectedAccounts}
         user={user}
       />
       <SettingsCard

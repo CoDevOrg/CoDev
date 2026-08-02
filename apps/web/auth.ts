@@ -150,7 +150,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ account, profile }) {
       if (account?.provider === "google") {
         const googleProfile = profile as unknown as GoogleProfile | undefined;
-        if (!googleProfile?.email || googleProfile.email_verified === false) {
+        const googleUserId = googleProfile?.sub ?? googleProfile?.id;
+        if (
+          !googleProfile?.email ||
+          !googleUserId ||
+          googleProfile.email_verified === false
+        ) {
           return false;
         }
 
@@ -165,6 +170,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           ? await database
               .update(schema.users)
               .set({
+                googleUserId,
                 name: googleProfile.name ?? null,
                 email: googleProfile.email,
                 avatarUrl: googleProfile.picture ?? null,
@@ -176,6 +182,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               .insert(schema.users)
               .values({
                 login: `google-${googleProfile.sub ?? googleProfile.id ?? "user"}`,
+                googleUserId,
                 name: googleProfile.name ?? null,
                 email: googleProfile.email,
                 avatarUrl: googleProfile.picture ?? null,
