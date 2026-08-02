@@ -26,7 +26,6 @@ import {
 import { formatPresenceCopy } from "@/lib/presence-copy";
 import { isPreviewExtensionAllowed, resolvePreviewEntry } from "@/lib/preview";
 import { AgentPanel, type AgentSession } from "@/components/agent-panel";
-import { AgentCanvas } from "@/components/agent-canvas";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1038,7 +1037,6 @@ export function WorkspaceIde({
             initialStateEvents={initialStateEvents}
             onTurnCompleted={schedulePreviewRefresh}
           />
-          {hasRepository ? <AgentCanvas workspaceId={workspaceId} /> : null}
           {hasPreview ? (
             <PreviewPane
               workspaceId={workspaceId}

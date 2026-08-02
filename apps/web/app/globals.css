@@ -7475,3 +7475,393 @@ html[data-theme="dark"] .app-page .workspace-card:hover {
 .workspace-create-heading h2 {
   font-weight: 700;
 }
+
+/* Unified workspace surface: one focused chat, one coherent visual system. */
+
+html .live-ide {
+  --workspace-bg: #f3eee6;
+  --workspace-surface: #faf8f4;
+  --workspace-surface-muted: #ebe4d9;
+  --workspace-surface-raised: #ffffff;
+  --workspace-ink: #173b2d;
+  --workspace-muted: #5e7067;
+  --workspace-faint: #839089;
+  --workspace-line: rgba(23, 59, 45, 0.14);
+  --workspace-line-strong: rgba(23, 59, 45, 0.24);
+  --workspace-accent: #d9652d;
+  --workspace-accent-soft: rgba(217, 101, 45, 0.12);
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--workspace-bg);
+  color: var(--workspace-ink);
+  color-scheme: light;
+}
+
+html[data-theme="dark"] .live-ide {
+  --workspace-bg: #0f1317;
+  --workspace-surface: #151a20;
+  --workspace-surface-muted: #1c232b;
+  --workspace-surface-raised: #202a33;
+  --workspace-ink: #edf2f0;
+  --workspace-muted: #99a6a4;
+  --workspace-faint: #72807e;
+  --workspace-line: rgba(255, 255, 255, 0.1);
+  --workspace-line-strong: rgba(212, 175, 55, 0.24);
+  --workspace-accent: #d4af37;
+  --workspace-accent-soft: rgba(212, 175, 55, 0.14);
+  background: var(--workspace-bg);
+  color: var(--workspace-ink);
+  color-scheme: dark;
+}
+
+html .live-ide-topbar {
+  height: 56px;
+  padding: 0 18px;
+  flex: 0 0 56px;
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+  box-shadow: 0 1px 0 var(--workspace-line);
+}
+
+html .live-ide-topbar .workspace-brand {
+  color: var(--workspace-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+html .live-ide .workspace-brand-mark {
+  background: var(--workspace-accent-soft);
+}
+
+html .live-ide .workspace-brand-mark span {
+  border-color: var(--workspace-accent);
+}
+
+html .live-ide .topbar-divider {
+  height: 20px;
+  margin-inline: 14px;
+  border-color: var(--workspace-line-strong);
+}
+
+html .live-ide .repo-crumbs,
+html .live-ide .connection-state,
+html .live-ide .presence-copy {
+  color: var(--workspace-muted);
+}
+
+html .live-ide .repo-crumbs strong,
+html .live-ide .repo-crumbs i {
+  color: var(--workspace-ink);
+}
+
+html .live-ide .topbar-center {
+  min-width: 150px;
+  min-height: 32px;
+  border-color: var(--workspace-line);
+  border-radius: 8px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-muted);
+}
+
+html .live-ide .theme-toggle {
+  min-height: 32px;
+  padding-inline: 9px;
+  border-color: var(--workspace-line);
+  border-radius: 8px;
+  color: var(--workspace-muted);
+}
+
+html .live-ide .theme-toggle:hover {
+  border-color: var(--workspace-line-strong);
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .workspace-share-button {
+  height: 32px;
+  border-color: var(--workspace-line-strong);
+  border-radius: 8px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+html .live-ide .workspace-share-button:hover {
+  border-color: var(--workspace-accent);
+  color: var(--workspace-accent);
+}
+
+html .live-ide .presence-stack img,
+html .live-ide .presence-stack > span {
+  border-color: var(--workspace-surface);
+  background: var(--workspace-surface-raised);
+}
+
+html .live-ide > .hibernation-banner {
+  min-height: 68px;
+  margin: 0;
+  padding: 12px 20px;
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 1px solid var(--workspace-line);
+  border-left: 3px solid var(--workspace-accent);
+  border-radius: 0;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+}
+
+html .live-ide > .hibernation-banner strong {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+html .live-ide > .hibernation-banner span,
+html .live-ide > .hibernation-banner small {
+  color: var(--workspace-muted);
+}
+
+html .live-ide > .hibernation-banner .primary-button {
+  border-color: var(--workspace-accent);
+  border-radius: 8px;
+  background: var(--workspace-accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html .live-ide-grid,
+html .live-ide-grid.terminal-open,
+html .live-ide-grid.terminal-collapsed {
+  min-height: 0;
+  height: auto;
+  flex: 1 1 auto;
+  grid-template:
+    "rail stage" minmax(0, 1fr)
+    "rail terminal" 0
+    / 56px minmax(0, 1fr);
+  background: var(--workspace-bg);
+}
+
+html .live-ide-grid.terminal-open {
+  grid-template:
+    "rail stage" minmax(0, 1fr)
+    "rail terminal" minmax(180px, 28vh)
+    / 56px minmax(0, 1fr);
+}
+
+html .live-ide-grid.terminal-collapsed {
+  grid-template:
+    "rail stage" minmax(0, 1fr)
+    "rail terminal" 34px
+    / 56px minmax(0, 1fr);
+}
+
+html .live-ide .activity-rail {
+  padding: 10px 8px;
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .rail-button {
+  width: 40px;
+  height: 40px;
+  margin: 2px 0;
+  border-radius: 9px;
+  color: var(--workspace-faint);
+  font-size: 16px;
+}
+
+html .live-ide .rail-button:hover,
+html .live-ide .rail-button.active {
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .rail-button.active::before {
+  left: -8px;
+  width: 3px;
+  height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--workspace-accent);
+}
+
+html .live-ide .rail-button.agent-rail {
+  color: var(--workspace-accent);
+}
+
+html .live-ide .ide-main-stage {
+  min-height: 0;
+  background: var(--workspace-bg);
+}
+
+html .live-ide .agent-runtime-panel,
+html .live-ide .agent-chat-panel {
+  min-height: 0;
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-panel-head {
+  height: 64px;
+  padding: 0 22px;
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-panel-head span {
+  color: var(--workspace-ink);
+  font-size: 13px;
+  font-weight: 750;
+  text-transform: none;
+}
+
+html .live-ide .agent-panel-head b {
+  color: var(--workspace-faint);
+  font-size: 9px;
+}
+
+html .live-ide .agent-panel-head button,
+html .live-ide .agent-chat-meta,
+html .live-ide .agent-review-disclosure > summary {
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-panel-head button:hover,
+html .live-ide .agent-review-disclosure > summary:hover {
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-session-tabs,
+html .live-ide .agent-review-disclosure {
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .agent-session-tabs button {
+  border-color: var(--workspace-line);
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-session-tabs button.active {
+  border-top-color: var(--workspace-accent);
+  background: var(--workspace-surface);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-chat-meta {
+  border-color: var(--workspace-line);
+}
+
+html .live-ide .agent-chat-meta a,
+html .live-ide .agent-chat-tools .tool-status.completed {
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-chat-body {
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-chat-welcome {
+  width: min(520px, calc(100% - 48px));
+  margin: auto;
+  padding: 28px 0;
+}
+
+html .live-ide .agent-chat-welcome strong {
+  color: var(--workspace-ink);
+  font-size: 22px;
+  font-weight: 750;
+}
+
+html .live-ide .agent-chat-welcome p,
+html .live-ide .agent-chat-empty,
+html .live-ide .agent-chat-composer-full {
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-chat-bubble {
+  border-color: var(--workspace-line);
+  border-radius: 10px;
+  background: var(--workspace-surface-raised);
+}
+
+html .live-ide .agent-chat-bubble.user {
+  border-color: var(--workspace-accent);
+  background: var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-chat-role {
+  color: var(--workspace-faint);
+}
+
+html .live-ide .agent-chat-bubble p {
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-chat-tools {
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-chat-composer {
+  padding: 16px 20px 18px;
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-chat-composer textarea,
+html .live-ide .agent-compose input,
+html .live-ide .agent-compose textarea,
+html .live-ide .agent-follow-up textarea {
+  border-color: var(--workspace-line-strong);
+  border-radius: 9px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-chat-composer textarea:focus,
+html .live-ide .agent-compose input:focus,
+html .live-ide .agent-compose textarea:focus,
+html .live-ide .agent-follow-up textarea:focus {
+  border-color: var(--workspace-accent);
+  box-shadow: 0 0 0 3px var(--workspace-accent-soft);
+}
+
+html .live-ide .agent-chat-composer-actions button,
+html .live-ide .agent-compose > button,
+html .live-ide .agent-follow-up button {
+  border-color: var(--workspace-accent);
+  border-radius: 8px;
+  background: var(--workspace-accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html .live-ide .agent-chat-composer .agent-interrupt,
+html .live-ide .agent-chat-composer .agent-composer-cancel {
+  border-color: var(--workspace-line-strong);
+  background: transparent;
+  color: var(--workspace-muted);
+}
+
+html .live-ide .file-sidebar,
+html .live-ide .ide-drawer,
+html .live-ide .editor-tabbar,
+html .live-ide .editor-status,
+html .live-ide .terminal-panel,
+html .live-ide .preview-pane {
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .preview-pane-frame {
+  background: var(--workspace-surface-raised);
+}
+
+html[data-theme="dark"] .live-ide .preview-pane-frame {
+  background: #ffffff;
+}
