@@ -82,11 +82,15 @@ export function readServerEnvironment(
 export function isGitHubAuthConfigured(
   input: Record<string, string | undefined> = process.env,
 ) {
+  const productionStorageReady =
+    input.NODE_ENV !== "production" || input.CREDENTIAL_KMS_KEY_ID;
+
   return Boolean(
     input.AUTH_SECRET &&
     input.AUTH_GITHUB_ID &&
     input.AUTH_GITHUB_SECRET &&
-    input.CREDENTIAL_ENCRYPTION_KEY,
+    input.CREDENTIAL_ENCRYPTION_KEY &&
+    productionStorageReady,
   );
 }
 

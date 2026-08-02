@@ -56,6 +56,11 @@ export async function ensureWorkspaceRuntimeReady(
   if (!workspace) {
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
   }
+  if (!workspace.repository || !workspace.baseSha) {
+    throw new WorkspaceLifecycleError(
+      "Connect a GitHub repository before using the sandbox.",
+    );
+  }
   const expiresAt = await beginWorkspaceProvisioning(
     workspaceId,
     userId,

@@ -31,6 +31,7 @@ export function WorkspaceRuntime({
   canProvision,
   canResume = canProvision,
   defaultBranch,
+  hasRepository = true,
 }: {
   workspaceId: string;
   runtime: RuntimeSummary | null;
@@ -38,6 +39,7 @@ export function WorkspaceRuntime({
   canProvision?: boolean;
   canResume?: boolean;
   defaultBranch: string;
+  hasRepository?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -114,40 +116,58 @@ export function WorkspaceRuntime({
   );
 
   useEffect(() => {
-    if (status !== "hibernated" || !canResume || autoResumeStarted.current) {
+    if (
+      !hasRepository ||
+      status !== "hibernated" ||
+      !canResume ||
+      autoResumeStarted.current
+    ) {
       return;
     }
     autoResumeStarted.current = true;
     void mutate("POST");
-  }, [canResume, mutate, status]);
+  }, [canResume, hasRepository, mutate, status]);
 
   return (
     <section className="phase-note runtime-note">
       <span>Phase 3</span>
       <div>
-        <strong>
-          {status === "ready"
-            ? "Firecracker sandbox ready."
-            : status === "hibernated"
-              ? "Workspace hibernated to durable storage."
-              : "AWS sandbox runtime."}
-        </strong>
-        <p>
-          {status === "ready"
-            ? `Isolated microVM ${runtime?.sandboxId ?? ""} is running. The browser IDE is ready.`
-            : status === "provisioning"
-              ? "The repository is being prepared inside an isolated Firecracker microVM."
-              : status === "hibernated"
-                ? "Your files and conversation state are persisted. Resume to restore the isolated microVM."
-                : status === "failed"
-                  ? (runtime?.lastError ?? "Sandbox provisioning failed.")
-                  : "Provision a disposable Firecracker microVM for this repository."}
-        </p>
-        {message ? <p className="error-copy">{message}</p> : null}
+        {!hasRepository ? (
+          <>
+            <strong>Workspace ready for a repository.</strong>
+            <p>
+              Connect a GitHub repository when you are ready to start a sandbox
+              and open the IDE.
+            </p>
+          </>
+        ) : (
+          <>
+            <strong>
+              {status === "ready"
+                ? "Firecracker sandbox ready."
+                : status === "hibernated"
+                  ? "Workspace hibernated to durable storage."
+                  : "AWS sandbox runtime."}
+            </strong>
+            <p>
+              {status === "ready"
+                ? `Isolated microVM ${runtime?.sandboxId ?? ""} is running. The browser IDE is ready.`
+                : status === "provisioning"
+                  ? "The repository is being prepared inside an isolated Firecracker microVM."
+                  : status === "hibernated"
+                    ? "Your files and conversation state are persisted. Resume to restore the isolated microVM."
+                    : status === "failed"
+                      ? (runtime?.lastError ?? "Sandbox provisioning failed.")
+                      : "Provision a disposable Firecracker microVM for this repository."}
+            </p>
+            {message ? <p className="error-copy">{message}</p> : null}
+          </>
+        )}
       </div>
-      {isOwner ||
-      (canProvision && status !== "ready") ||
-      (canResume && status === "hibernated") ? (
+      {hasRepository &&
+      (isOwner ||
+        (canProvision && status !== "ready") ||
+        (canResume && status === "hibernated")) ? (
         status === "ready" ? (
           <div className="runtime-actions">
             <Link
@@ -191,16 +211,16 @@ export function WorkspaceRuntime({
             ) : null}
           </div>
         )
-      ) : status === "ready" ? (
+      ) : hasRepository && status === "ready" ? (
         <Link
           className="primary-button"
           href={`/workspaces/${workspaceId}/ide`}
         >
           Open IDE
         </Link>
-      ) : (
+      ) : hasRepository ? (
         <span className="runtime-state">{status}</span>
-      )}
+      ) : null}
     </section>
   );
 }

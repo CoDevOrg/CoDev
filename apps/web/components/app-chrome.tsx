@@ -40,44 +40,78 @@ export function AppChrome({
           {isPilotAdminLogin(user.githubLogin) ? (
             <Link href="/pilot">Pilot</Link>
           ) : null}
-          <Link href="/settings">Settings</Link>
         </nav>
         <div className="user-menu">
-          {user.image ? (
-            <Image src={user.image} alt="" width={28} height={28} unoptimized />
-          ) : (
-            <span className="user-fallback" aria-hidden="true">
-              {(user.githubLogin ?? user.name ?? "U").slice(0, 1).toUpperCase()}
-            </span>
-          )}
-          <span>{user.githubLogin ?? user.name ?? "GitHub user"}</span>
-          <ThemeToggle />
-          {!user.githubLogin && isGitHubAuthConfigured() ? (
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github", { redirectTo: "/dashboard" });
-              }}
-            >
-              <button className="quiet-button" type="submit">
-                Connect GitHub
-              </button>
-            </form>
-          ) : null}
-          {clerkAuthConfigured() ? (
-            <ClerkSignOut />
-          ) : (
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/" });
-              }}
-            >
-              <button className="quiet-button" type="submit">
-                Sign out
-              </button>
-            </form>
-          )}
+          <details className="profile-menu">
+            <summary className="profile-menu-trigger">
+              {user.image ? (
+                <Image
+                  src={user.image}
+                  alt=""
+                  width={30}
+                  height={30}
+                  unoptimized
+                />
+              ) : (
+                <span className="user-fallback" aria-hidden="true">
+                  {(user.githubLogin ?? user.name ?? "U")
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </span>
+              )}
+              <span className="profile-menu-name">
+                {user.githubLogin ?? user.name ?? "Your account"}
+              </span>
+              <span className="profile-menu-chevron" aria-hidden="true">
+                ⌄
+              </span>
+            </summary>
+            <div className="profile-menu-popover">
+              <div className="profile-menu-heading">
+                <span>Account</span>
+                <strong>
+                  {user.name ?? user.githubLogin ?? "Your account"}
+                </strong>
+              </div>
+              <Link
+                className="profile-menu-link"
+                href="/settings/personal/profile"
+              >
+                Profile
+              </Link>
+              <Link className="profile-menu-link" href="/settings">
+                Settings
+              </Link>
+              <div className="profile-menu-divider" />
+              <ThemeToggle />
+              {!user.githubLogin && isGitHubAuthConfigured() ? (
+                <form
+                  action={async () => {
+                    "use server";
+                    await signIn("github", { redirectTo: "/dashboard" });
+                  }}
+                >
+                  <button className="profile-menu-action" type="submit">
+                    Connect GitHub
+                  </button>
+                </form>
+              ) : null}
+              {clerkAuthConfigured() ? (
+                <ClerkSignOut />
+              ) : (
+                <form
+                  action={async () => {
+                    "use server";
+                    await signOut({ redirectTo: "/" });
+                  }}
+                >
+                  <button className="profile-menu-action" type="submit">
+                    Sign out
+                  </button>
+                </form>
+              )}
+            </div>
+          </details>
         </div>
       </header>
       {children}

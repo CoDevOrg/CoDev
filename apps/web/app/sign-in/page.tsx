@@ -37,14 +37,11 @@ export default async function SignInPage({
         <Link href="/">Back</Link>
       </div>
       <section className="auth-card">
-        <span className="auth-glyph" aria-hidden="true">
-          ⑂
-        </span>
-        <p className="eyebrow">Secure SSO</p>
-        <h1>Open your CoDev workspace.</h1>
+        <p className="eyebrow">Sign in</p>
+        <h1>Welcome to CoDev.</h1>
         <p>
-          Sign in with Google or GitHub. GitHub repository access is connected
-          separately, and CoDev never sends your GitHub token to a sandbox.
+          Sign in with your name, email, and password, or continue with Google
+          or GitHub.
         </p>
 
         {error ? (
@@ -58,6 +55,58 @@ export default async function SignInPage({
         ) : (
           <div className="auth-provider-stack">
             <form
+              className="auth-credentials-form"
+              action={async (formData) => {
+                "use server";
+                await signIn("credentials", {
+                  name: String(formData.get("name") ?? ""),
+                  email: String(formData.get("email") ?? ""),
+                  password: String(formData.get("password") ?? ""),
+                  redirectTo: safeCallback,
+                });
+              }}
+            >
+              <label>
+                <span>Name</span>
+                <input
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Your name"
+                  required
+                />
+              </label>
+              <label>
+                <span>Email</span>
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  required
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="At least 8 characters"
+                  minLength={8}
+                  required
+                />
+              </label>
+              <button className="auth-submit" type="submit">
+                Continue with email
+              </button>
+            </form>
+
+            <div className="auth-divider" aria-hidden="true">
+              <span>or</span>
+            </div>
+
+            <form
               action={async () => {
                 "use server";
                 await signIn("google", { redirectTo: safeCallback });
@@ -68,16 +117,9 @@ export default async function SignInPage({
                 type="submit"
                 disabled={!googleConfigured}
               >
-                <span className="google-mark" aria-hidden="true">
-                  G
-                </span>
                 Continue with Google
               </button>
             </form>
-
-            <div className="auth-divider" aria-hidden="true">
-              <span>or</span>
-            </div>
 
             <form
               action={async () => {
@@ -90,7 +132,6 @@ export default async function SignInPage({
                 type="submit"
                 disabled={!githubConfigured}
               >
-                <span aria-hidden="true">⑂</span>
                 Continue with GitHub
               </button>
             </form>
@@ -99,9 +140,9 @@ export default async function SignInPage({
               <div className="setup-panel">
                 <strong>OAuth setup pending</strong>
                 <p>
-                  Add the provider credentials to enable the corresponding
-                  sign-in option. Google accounts do not need GitHub access;
-                  repository access can be connected afterward.
+                  Add the provider credentials and secure token-storage key to
+                  enable the corresponding sign-in option. Repository access can
+                  be connected afterward.
                 </p>
               </div>
             ) : null}
@@ -109,8 +150,7 @@ export default async function SignInPage({
         )}
 
         <small>
-          Requested access is limited by the repositories selected during GitHub
-          App installation.
+          GitHub repository access can be connected after you sign in.
         </small>
       </section>
     </main>

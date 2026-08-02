@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isGoogleAuthConfigured, readServerEnvironment } from "./index";
+import {
+  isGitHubAuthConfigured,
+  isGoogleAuthConfigured,
+  readServerEnvironment,
+} from "./index";
 
 describe("server environment", () => {
   it("allows an empty Phase 1 environment", () => {
@@ -77,5 +81,23 @@ describe("server environment", () => {
         AUTH_GOOGLE_ID: "google-client-id",
       }),
     ).toBe(false);
+  });
+
+  it("requires KMS-backed token storage for production GitHub OAuth", () => {
+    const base = {
+      NODE_ENV: "production",
+      AUTH_SECRET: "a-secret",
+      AUTH_GITHUB_ID: "github-client-id",
+      AUTH_GITHUB_SECRET: "github-client-secret",
+      CREDENTIAL_ENCRYPTION_KEY: "development-fallback-key",
+    };
+
+    expect(isGitHubAuthConfigured(base)).toBe(false);
+    expect(
+      isGitHubAuthConfigured({
+        ...base,
+        CREDENTIAL_KMS_KEY_ID: "arn:aws:kms:us-east-2:014576992564:key/example",
+      }),
+    ).toBe(true);
   });
 });

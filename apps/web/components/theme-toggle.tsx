@@ -37,8 +37,10 @@ export function ThemeToggle() {
       aria-pressed={theme === "dark"}
       onClick={toggleTheme}
     >
-      <span aria-hidden="true">{theme === "dark" ? "☼" : "☾"}</span>
-      {theme === "dark" ? "Light" : "Dark"}
+      <span className="theme-toggle-track" aria-hidden="true">
+        <span className="theme-toggle-thumb" />
+      </span>
+      <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
     </button>
   );
 }

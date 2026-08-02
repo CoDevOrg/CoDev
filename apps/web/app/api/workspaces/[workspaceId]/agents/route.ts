@@ -127,6 +127,12 @@ export async function POST(
     );
   }
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
+  if (!workspace.repository || workspace.githubRepositoryId === null) {
+    return apiError(
+      new Error("Connect a GitHub repository before creating an agent."),
+      409,
+    );
+  }
 
   try {
     const input = createSchema.parse(await request.json());
@@ -181,7 +187,9 @@ export async function POST(
           .from(schema.workspaces)
           .where(eq(schema.workspaces.id, workspaceId))
           .limit(1);
-        if (!repository) throw new Error("Workspace repository not found.");
+        if (!repository || repository.id === null) {
+          throw new Error("Workspace repository not found.");
+        }
         if (issue) {
           const [existingAssignment] = await transaction
             .select({ id: schema.githubIssueAssignments.id })

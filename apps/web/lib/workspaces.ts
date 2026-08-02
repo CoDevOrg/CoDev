@@ -93,15 +93,22 @@ export async function listWorkspacesForUser(userId: string) {
 
 export async function createWorkspace(
   userId: string,
-  installationId: number,
-  repositoryId: number,
+  installationId?: number,
+  repositoryId?: number,
 ) {
   await assertWorkspaceQuota(userId);
-  const { repository, baseSha } = await getRepository(
-    userId,
-    installationId,
-    repositoryId,
-  );
+  if ((installationId === undefined) !== (repositoryId === undefined)) {
+    throw new Error(
+      "Choose a repository installation and repository together, or create an empty workspace.",
+    );
+  }
+
+  const repositoryData =
+    installationId === undefined || repositoryId === undefined
+      ? null
+      : await getRepository(userId, installationId, repositoryId);
+  const repository = repositoryData?.repository ?? null;
+  const baseSha = repositoryData?.baseSha ?? "";
   const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
 
   const workspace = await getDatabase().transaction(async (transaction) => {
@@ -109,11 +116,17 @@ export async function createWorkspace(
       .insert(schema.workspaces)
       .values({
         ownerId: userId,
-        githubInstallationId: BigInt(installationId),
-        githubRepositoryId: BigInt(repository.id),
-        repository: repository.full_name,
-        repositoryVisibility: repository.private ? "private" : "public",
-        defaultBranch: repository.default_branch,
+        githubInstallationId:
+          installationId === undefined ? null : BigInt(installationId),
+        githubRepositoryId:
+          repositoryId === undefined ? null : BigInt(repositoryId),
+        repository: repository?.full_name ?? "",
+        repositoryVisibility: repository
+          ? repository.private
+            ? "private"
+            : "public"
+          : "none",
+        defaultBranch: repository?.default_branch ?? "",
         baseSha,
         hibernateAt: expiresAt,
         expiresAt,
@@ -204,6 +217,16 @@ export async function syncWorkspaceToDefaultBranch(
   const workspace = await getWorkspaceForMember(workspaceId, userId);
   if (!workspace) {
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
+  }
+  if (
+    !workspace.repository ||
+    !workspace.baseSha ||
+    workspace.githubInstallationId === null ||
+    workspace.githubRepositoryId === null
+  ) {
+    throw new WorkspaceLifecycleError(
+      "Connect a GitHub repository before syncing this workspace.",
+    );
   }
   const blocked = workspaceSyncBlockReason(workspace.role, workspace.status);
   if (blocked === "not_owner") {

@@ -128,6 +128,16 @@ async function reservePublication(input: PublicationTarget) {
       .limit(1);
 
     if (!target) throw new PublicationError("Workspace not found.", 404);
+    if (
+      !target.repository ||
+      target.repositoryId === null ||
+      target.installationId === null ||
+      !target.baseSha
+    ) {
+      throw new PublicationError(
+        "Connect a GitHub repository before publishing.",
+      );
+    }
     if (!target.canMerge) {
       throw new PublicationError(
         "Merge capability is required to publish.",

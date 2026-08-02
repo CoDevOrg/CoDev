@@ -28,6 +28,7 @@ export default async function WorkspacePage({
   await requireWorkspacePermission(workspaceId, user.id, "view");
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) notFound();
+  const hasRepository = Boolean(workspace.repository && workspace.baseSha);
 
   const [members, runtime, sessions, stateEvents] = await Promise.all([
     listWorkspaceMembers(workspaceId),
@@ -47,14 +48,22 @@ export default async function WorkspacePage({
             ⑂
           </div>
           <div>
-            <p className="eyebrow">GitHub workspace</p>
+            <p className="eyebrow">
+              {hasRepository ? "GitHub workspace" : "Empty workspace"}
+            </p>
             <h1>
-              {workspace.repositoryVisibility === "private" ? "🔒 " : ""}
-              {workspace.repository}
+              {hasRepository && workspace.repositoryVisibility === "private"
+                ? "🔒 "
+                : ""}
+              {workspace.repository || "Untitled workspace"}
             </h1>
             <p>
-              {workspace.defaultBranch} at{" "}
-              <code>{workspace.baseSha.slice(0, 12)}</code>
+              {hasRepository
+                ? `${workspace.defaultBranch} at `
+                : "No repository connected yet"}
+              {hasRepository ? (
+                <code>{workspace.baseSha.slice(0, 12)}</code>
+              ) : null}
             </p>
           </div>
           <span className="status-pill">{workspace.status}</span>
@@ -73,11 +82,13 @@ export default async function WorkspacePage({
           }
           isOwner={workspace.role === "owner"}
           canProvision={
-            workspace.accessRole === "owner" ||
-            workspace.accessRole === "co_steer"
+            hasRepository &&
+            (workspace.accessRole === "owner" ||
+              workspace.accessRole === "co_steer")
           }
           canResume={workspace.accessRole !== "viewer"}
           defaultBranch={workspace.defaultBranch}
+          hasRepository={hasRepository}
         />
 
         <section
@@ -127,7 +138,7 @@ export default async function WorkspacePage({
 
         <ShareDialog
           workspaceId={workspaceId}
-          workspaceName={workspace.repository}
+          workspaceName={workspace.repository || "Untitled workspace"}
           members={members}
           isOwner={workspace.role === "owner"}
         />

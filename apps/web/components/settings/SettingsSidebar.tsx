@@ -75,10 +75,8 @@ function SettingsNavGroup({
           return (
             <Link
               aria-current={isActive ? "page" : undefined}
-              className={`settings-sidebar-link flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "settings-sidebar-link-active bg-emerald-950/50 text-emerald-400"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+              className={`settings-sidebar-link ${
+                isActive ? "settings-sidebar-link-active" : ""
               }`}
               href={item.href}
               key={item.href}
@@ -97,14 +95,8 @@ export function SettingsSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside
-      aria-label="Settings navigation"
-      className="settings-sidebar bg-zinc-950 text-zinc-300"
-    >
-      <Link
-        className="settings-sidebar-back flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white"
-        href="/dashboard"
-      >
+    <aside aria-label="Settings navigation" className="settings-sidebar">
+      <Link className="settings-sidebar-back" href="/dashboard">
         <ArrowLeft aria-hidden="true" className="settings-sidebar-icon" />
         <span>Back to Dashboard</span>
       </Link>

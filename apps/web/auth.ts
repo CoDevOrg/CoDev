@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 
 import { schema } from "@codev/db";
 
-import { encryptSecret } from "@/lib/crypto";
+import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 
 interface GitHubProfile {
@@ -42,6 +44,79 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/sign-in",
   },
   providers: [
+    Credentials({
+      name: "Email and password",
+      credentials: {
+        name: { label: "Name", type: "text" },
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const name =
+          typeof credentials?.name === "string" ? credentials.name.trim() : "";
+        const email =
+          typeof credentials?.email === "string"
+            ? credentials.email.trim().toLowerCase()
+            : "";
+        const password =
+          typeof credentials?.password === "string" ? credentials.password : "";
+
+        if (!name || !email || password.length < 8) return null;
+
+        const database = getDatabase();
+        const [existingUser] = await database
+          .select({
+            id: schema.users.id,
+            name: schema.users.name,
+            email: schema.users.email,
+            avatarUrl: schema.users.avatarUrl,
+            passwordHash: schema.users.passwordHash,
+          })
+          .from(schema.users)
+          .where(eq(schema.users.email, email))
+          .limit(1);
+
+        if (existingUser) {
+          if (
+            !existingUser.passwordHash ||
+            !(await verifyPassword(password, existingUser.passwordHash))
+          ) {
+            return null;
+          }
+
+          return {
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            image: existingUser.avatarUrl,
+          };
+        }
+
+        const [localUser] = await database
+          .insert(schema.users)
+          .values({
+            login: `local-${randomBytes(8).toString("hex")}`,
+            name,
+            email,
+            passwordHash: await hashPassword(password),
+          })
+          .returning({
+            id: schema.users.id,
+            name: schema.users.name,
+            email: schema.users.email,
+            avatarUrl: schema.users.avatarUrl,
+          });
+
+        return localUser
+          ? {
+              id: localUser.id,
+              name: localUser.name,
+              email: localUser.email,
+              image: localUser.avatarUrl,
+            }
+          : null;
+      },
+    }),
     GitHub({
       clientId: githubClientId,
       clientSecret: githubClientSecret,
@@ -193,7 +268,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, user }) {
+      if (account?.provider === "credentials" && user?.id) {
+        token.localUserId = user.id;
+        return token;
+      }
+
       if (account?.provider === "google" && !token.localUserId && token.email) {
         const [localUser] = await getDatabase()
           .select({ id: schema.users.id })

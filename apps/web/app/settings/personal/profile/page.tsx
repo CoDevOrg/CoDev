@@ -1,5 +1,4 @@
 import { FeedbackForm } from "@/components/feedback-form";
-import { LaunchPreflight } from "@/components/launch-preflight";
 import {
   ProfileSettings,
   SettingsCard,
@@ -23,12 +22,6 @@ export default async function PersonalProfilePage() {
         title="Design-partner feedback"
       >
         <FeedbackForm />
-      </SettingsCard>
-      <SettingsCard
-        description="Verify design-partner dependencies and scale-to-zero behavior."
-        title="Launch preflight"
-      >
-        <LaunchPreflight />
       </SettingsCard>
     </div>
   );

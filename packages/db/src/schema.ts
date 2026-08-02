@@ -122,6 +122,7 @@ export const users = pgTable(
     login: text("login").notNull(),
     name: text("name"),
     email: text("email"),
+    passwordHash: text("password_hash"),
     avatarUrl: text("avatar_url"),
     ...timestamps,
   },
@@ -233,10 +234,10 @@ export const workspaces = pgTable(
       .notNull(),
     githubInstallationId: bigint("github_installation_id", {
       mode: "bigint",
-    }).notNull(),
+    }),
     githubRepositoryId: bigint("github_repository_id", {
       mode: "bigint",
-    }).notNull(),
+    }),
     repository: text("repository").notNull(),
     repositoryVisibility: text("repository_visibility")
       .default("public")

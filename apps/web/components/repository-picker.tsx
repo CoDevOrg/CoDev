@@ -24,8 +24,10 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     let active = true;
     fetch("/api/github/installations")
       .then((response) =>
@@ -44,7 +46,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [open]);
 
   async function loadRepositories(value: string) {
     setInstallationId(value);
@@ -71,8 +73,15 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
     }
   }
 
-  async function createWorkspace() {
-    if (!installationId || !repositoryId) return;
+  async function createWorkspace(
+    options: { installationId?: number; repositoryId?: number } = {},
+  ) {
+    if (
+      (options.installationId === undefined) !==
+      (options.repositoryId === undefined)
+    ) {
+      return;
+    }
     setCreating(true);
     setMessage("");
     try {
@@ -80,10 +89,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
         await fetch("/api/workspaces", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            installationId: Number(installationId),
-            repositoryId: Number(repositoryId),
-          }),
+          body: JSON.stringify(options),
         }),
       );
       router.push(`/workspaces/${payload.workspace.id}`);
@@ -99,74 +105,149 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
     : "https://github.com/settings/installations";
 
   return (
-    <section className="panel repository-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">New workspace</p>
-          <h2>Choose a repository</h2>
-        </div>
-        <a className="secondary-button" href={installUrl} target="_blank">
-          Manage GitHub App ↗
-        </a>
-      </div>
-      <div className="picker-grid">
-        <label>
-          <span>Installation</span>
-          <select
-            value={installationId}
-            onChange={(event) => void loadRepositories(event.target.value)}
-            disabled={state === "loading" && installations.length === 0}
-          >
-            <option value="">Select an account</option>
-            {installations.map((installation) => (
-              <option key={installation.id} value={installation.id}>
-                {installation.account.login} · {installation.account.type}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Repository</span>
-          <select
-            value={repositoryId}
-            onChange={(event) => setRepositoryId(event.target.value)}
-            disabled={!installationId || state === "loading"}
-          >
-            <option value="">Select a repository</option>
-            {repositories.map((repository) => (
-              <option key={repository.id} value={repository.id}>
-                {repository.private ? "🔒 " : ""}
-                {repository.full_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="primary-button picker-submit"
-          type="button"
-          disabled={!repositoryId || creating}
-          onClick={() => void createWorkspace()}
+    <>
+      <button
+        className="new-workspace-tile"
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
+        <span className="new-workspace-plus" aria-hidden="true">
+          +
+        </span>
+        <strong>New workspace</strong>
+        <span>Start with a blank document or a GitHub repository.</span>
+      </button>
+      {open ? (
+        <div
+          className="workspace-create-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setOpen(false);
+          }}
         >
-          {creating ? "Creating…" : "Create workspace"}
-        </button>
-      </div>
-      {state === "loading" ? (
-        <p className="panel-status">Loading GitHub access…</p>
+          <section
+            className="workspace-create-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-create-title"
+          >
+            <div className="workspace-create-heading">
+              <div>
+                <p className="eyebrow">New workspace</p>
+                <h2 id="workspace-create-title">Choose how to begin.</h2>
+                <p>
+                  Start with a blank workspace for planning, or connect a
+                  repository when you are ready to build.
+                </p>
+              </div>
+              <button
+                className="modal-close-button"
+                type="button"
+                aria-label="Close workspace creation"
+                onClick={() => setOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="workspace-create-options">
+              <button
+                className="workspace-create-blank"
+                type="button"
+                disabled={creating}
+                onClick={() => void createWorkspace()}
+              >
+                <span
+                  className="workspace-create-option-icon"
+                  aria-hidden="true"
+                >
+                  +
+                </span>
+                <span>
+                  <strong>{creating ? "Creating…" : "Blank workspace"}</strong>
+                  <small>Create a document now and connect GitHub later.</small>
+                </span>
+              </button>
+            </div>
+            <div className="workspace-create-divider">
+              <span>or connect GitHub</span>
+            </div>
+            <div className="picker-grid">
+              <label>
+                <span>Installation</span>
+                <select
+                  value={installationId}
+                  onChange={(event) =>
+                    void loadRepositories(event.target.value)
+                  }
+                  disabled={state === "loading" && installations.length === 0}
+                >
+                  <option value="">Select an account</option>
+                  {installations.map((installation) => (
+                    <option key={installation.id} value={installation.id}>
+                      {installation.account.login} · {installation.account.type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Repository</span>
+                <select
+                  value={repositoryId}
+                  onChange={(event) => setRepositoryId(event.target.value)}
+                  disabled={!installationId || state === "loading"}
+                >
+                  <option value="">Select a repository</option>
+                  {repositories.map((repository) => (
+                    <option key={repository.id} value={repository.id}>
+                      {repository.private ? "🔒 " : ""}
+                      {repository.full_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="primary-button picker-submit"
+                type="button"
+                disabled={!repositoryId || creating}
+                onClick={() =>
+                  void createWorkspace({
+                    installationId: Number(installationId),
+                    repositoryId: Number(repositoryId),
+                  })
+                }
+              >
+                {creating ? "Creating…" : "Create workspace"}
+              </button>
+            </div>
+            {state === "loading" ? (
+              <p className="panel-status">Loading GitHub access…</p>
+            ) : null}
+            {state === "empty" && !message ? (
+              <p className="panel-status">
+                Install CoDev on a GitHub account to make repositories
+                available.
+              </p>
+            ) : null}
+            {message ? (
+              <p
+                className={`panel-status ${state === "error" ? "error-copy" : ""}`}
+              >
+                {message}
+              </p>
+            ) : null}
+            <div className="workspace-create-footer">
+              <a className="secondary-button" href={installUrl} target="_blank">
+                Manage GitHub App ↗
+              </a>
+              <p className="security-note">
+                Private source is transferred as a bounded, credential-free
+                snapshot. GitHub tokens never enter the sandbox.
+              </p>
+            </div>
+          </section>
+        </div>
       ) : null}
-      {state === "empty" && !message ? (
-        <p className="panel-status">
-          Install CoDev on a GitHub account to make repositories available.
-        </p>
-      ) : null}
-      {message ? (
-        <p className={`panel-status ${state === "error" ? "error-copy" : ""}`}>
-          {message}
-        </p>
-      ) : null}
-      <p className="security-note">
-        Private source is transferred as a bounded, credential-free snapshot.
-        GitHub tokens never enter the sandbox.
-      </p>
-    </section>
+    </>
   );
 }

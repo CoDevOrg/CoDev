@@ -12,6 +12,7 @@ import {
   pilotSessions,
   publishedBranches,
   providerCredentials,
+  users,
   workspaceMembers,
   workspaceRuntimes,
   workspaces,
@@ -51,6 +52,7 @@ describe("database schema", () => {
     expect(worktrees.mergedAt.name).toBe("merged_at");
     expect(getTableName(publishedBranches)).toBe("published_branches");
     expect(getTableName(providerCredentials)).toBe("provider_credentials");
+    expect(users.passwordHash.name).toBe("password_hash");
     expect(providerCredentials.scopeType.name).toBe("scope_type");
     expect(providerCredentials.encryptedAccessToken.name).toBe(
       "encrypted_access_token",

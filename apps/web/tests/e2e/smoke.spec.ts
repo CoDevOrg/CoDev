@@ -64,8 +64,11 @@ test("protected workspace routes require GitHub identity", async ({ page }) => {
     page.getByRole("button", { name: "Continue with Google" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Open your CoDev workspace." }),
+    page.getByRole("heading", { name: "Welcome to CoDev." }),
   ).toBeVisible();
+  await expect(page.getByLabel("Name")).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
 
   await page.goto("/pilot");
   await expect(page).toHaveURL(/\/sign-in/);
@@ -134,21 +137,16 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   const lifecycle = await request.get("/api/cron/lifecycle");
   expect(lifecycle.status()).toBe(401);
 
-  for (const endpoint of ["/api/feedback", "/api/launch/preflight"]) {
-    const protectedResponse =
-      endpoint === "/api/feedback"
-        ? await request.post(endpoint, {
-            data: {
-              category: "workflow",
-              rating: 5,
-              message: "Anonymous feedback must not be accepted.",
-              page: "/",
-              workspaceId: null,
-            },
-          })
-        : await request.get(endpoint);
-    expect(protectedResponse.status()).toBe(401);
-  }
+  const protectedFeedback = await request.post("/api/feedback", {
+    data: {
+      category: "workflow",
+      rating: 5,
+      message: "Anonymous feedback must not be accepted.",
+      page: "/",
+      workspaceId: null,
+    },
+  });
+  expect(protectedFeedback.status()).toBe(401);
 
   const pilotSession = await request.post("/api/pilot/sessions", {
     data: { workspaceId: "e010bd2c-a3c1-438f-acef-166287a3b1cb" },

@@ -76,6 +76,12 @@ export async function POST(
   const { workspaceId } = await params;
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
+  if (!workspace.repository || !workspace.baseSha) {
+    return apiError(
+      new Error("Connect a GitHub repository before starting the sandbox."),
+      409,
+    );
+  }
   let resumePermission: "coSteer" | "review";
   try {
     const access = await requireWorkspacePermission(
