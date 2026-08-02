@@ -34,6 +34,13 @@ import type { WorkspaceShareMember } from "@/components/share-dialog";
 import type { AgentEvent } from "@codev/shared-types";
 
 type IdeView = "chat" | "files" | "code" | "preview" | "terminal";
+type RuntimeStatus =
+  | "provisioning"
+  | "ready"
+  | "hibernated"
+  | "stopping"
+  | "stopped"
+  | "failed";
 
 interface OpenFile {
   path: string;
@@ -72,7 +79,7 @@ export interface WorkspaceIdeProps {
   members: WorkspaceShareMember[];
   initialAgentSessions: AgentSession[];
   initialStateEvents: AgentEvent[];
-  runtimeStatus: "ready" | "hibernated";
+  runtimeStatus: RuntimeStatus;
   canResume: boolean;
   canEdit: boolean;
   canTerminal: boolean;
@@ -107,6 +114,10 @@ export function WorkspaceIde({
   user,
 }: WorkspaceIdeProps) {
   const isHibernated = runtimeStatus === "hibernated";
+  const isRuntimeReady = runtimeStatus === "ready";
+  const isRuntimeStarting =
+    runtimeStatus === "provisioning" || runtimeStatus === "stopping";
+  const hasRepository = Boolean(repository);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +157,7 @@ export function WorkspaceIde({
   const terminalSocket = useRef<WebSocket | null>(null);
   const previewRefreshTimer = useRef<number | null>(null);
   const [previewRevision, setPreviewRevision] = useState(0);
-  const displayedCollaborationStatus: CollaborationStatus = isHibernated
+  const displayedCollaborationStatus: CollaborationStatus = !isRuntimeReady
     ? "offline"
     : collaborationStatus;
 
@@ -274,10 +285,51 @@ export function WorkspaceIde({
 
   const autoResumeAttempted = useRef(false);
   useEffect(() => {
-    if (!isHibernated || !canResume || autoResumeAttempted.current) return;
+    if (
+      !hasRepository ||
+      !canResume ||
+      isRuntimeReady ||
+      isRuntimeStarting ||
+      autoResumeAttempted.current
+    )
+      return;
     autoResumeAttempted.current = true;
     void resumeWorkspace();
-  }, [canResume, isHibernated, resumeWorkspace]);
+  }, [
+    canResume,
+    hasRepository,
+    isRuntimeReady,
+    isRuntimeStarting,
+    resumeWorkspace,
+  ]);
+
+  useEffect(() => {
+    if (!isRuntimeStarting) return;
+    let stopped = false;
+    const checkRuntime = async () => {
+      try {
+        const response = await fetch(apiBase, { cache: "no-store" });
+        if (!response.ok || stopped) return;
+        const result = (await response.json()) as {
+          runtime?: { status?: RuntimeStatus } | null;
+        };
+        if (
+          result.runtime?.status === "ready" ||
+          result.runtime?.status === "hibernated"
+        ) {
+          window.location.reload();
+        }
+      } catch {
+        // The next poll will retry while the workspace is starting.
+      }
+    };
+    void checkRuntime();
+    const timer = window.setInterval(() => void checkRuntime(), 2_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [apiBase, isRuntimeStarting]);
 
   const refreshFiles = useCallback(async () => {
     const filePayload = await fetch(`${apiBase}/files`, {
@@ -329,7 +381,7 @@ export function WorkspaceIde({
   }, [hasPreview, view]);
 
   useEffect(() => {
-    if (isHibernated) return;
+    if (!isRuntimeReady) return;
     const CollaborationClient = hocuspocusConfigured()
       ? HocuspocusWorkspaceCollaboration
       : WorkspaceCollaboration;
@@ -380,7 +432,7 @@ export function WorkspaceIde({
       collaboration.current = null;
     };
   }, [
-    isHibernated,
+    isRuntimeReady,
     refreshFiles,
     user.id,
     user.image,
@@ -390,7 +442,7 @@ export function WorkspaceIde({
   ]);
 
   useEffect(() => {
-    if (isHibernated) return;
+    if (!isRuntimeReady) return;
     let stopped = false;
     const sendHeartbeat = () => {
       if (stopped || document.visibilityState === "hidden") return;
@@ -407,9 +459,16 @@ export function WorkspaceIde({
       window.clearInterval(timer);
       window.removeEventListener("focus", sendHeartbeat);
     };
-  }, [isHibernated, workspaceId]);
+  }, [isRuntimeReady, workspaceId]);
 
   useEffect(() => {
+    if (!isRuntimeReady && !isHibernated) {
+      // Durable chat can render while the compute sandbox starts. File reads
+      // wait until the sandbox is ready instead of surfacing a noisy error.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
     const timer = window.setTimeout(() => {
       void refreshFiles()
         .catch((caught) =>
@@ -420,7 +479,7 @@ export function WorkspaceIde({
         .finally(() => setLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [refreshFiles]);
+  }, [isHibernated, isRuntimeReady, refreshFiles]);
 
   const writeTerminal = useCallback(async (value: string) => {
     const instance = terminal.current;
@@ -434,7 +493,7 @@ export function WorkspaceIde({
   useEffect(() => {
     if (
       !canTerminal ||
-      isHibernated ||
+      !isRuntimeReady ||
       !terminalElement.current ||
       terminal.current
     )
@@ -538,7 +597,7 @@ export function WorkspaceIde({
       fitAddon.current = null;
       terminalSession.current = null;
     };
-  }, [canEdit, canTerminal, isHibernated, workspaceId, writeTerminal]);
+  }, [canEdit, canTerminal, isRuntimeReady, workspaceId, writeTerminal]);
 
   useEffect(() => {
     if (view !== "terminal" || terminalCollapsed) return;
@@ -766,7 +825,7 @@ export function WorkspaceIde({
   return (
     <main className="live-ide" aria-label="CoDev browser IDE">
       <header className="live-ide-topbar">
-        <Link className="workspace-brand" href={`/workspaces/${workspaceId}`}>
+        <Link className="workspace-brand" href="/dashboard">
           <span
             className="wordmark-mark workspace-brand-mark"
             aria-hidden="true"
@@ -852,17 +911,22 @@ export function WorkspaceIde({
         </div>
       </header>
 
-      {isHibernated ? (
+      {!isRuntimeReady ? (
         <section className="hibernation-banner" role="status">
           <div>
-            <strong>Workspace hibernated</strong>
+            <strong>
+              {isHibernated ? "Workspace hibernated" : "Starting workspace"}
+            </strong>
             <span>
-              Conversation history and uncommitted files were restored from
-              PostgreSQL. The microVM is resuming in the background.
+              {isHibernated
+                ? "Conversation history and uncommitted files are ready while the microVM resumes in the background."
+                : hasRepository
+                  ? "Your agent chat is ready while the isolated microVM starts in the background."
+                  : "Connect a GitHub repository when you are ready to start the sandbox."}
             </span>
             {resumeMessage ? <small>{resumeMessage}</small> : null}
           </div>
-          {canResume ? (
+          {hasRepository && canResume && !isRuntimeStarting ? (
             <button
               className="primary-button"
               type="button"
@@ -872,7 +936,9 @@ export function WorkspaceIde({
               {resuming ? "Resuming…" : "Resume sandbox"}
             </button>
           ) : (
-            <span className="runtime-state">Owner action required</span>
+            <span className="runtime-state">
+              {isRuntimeStarting ? "Starting…" : "Owner action required"}
+            </span>
           )}
         </section>
       ) : null}
@@ -953,7 +1019,7 @@ export function WorkspaceIde({
             ▹
           </button>
           <span className="rail-spacer" />
-          <Link className="rail-button" href={`/workspaces/${workspaceId}`}>
+          <Link className="rail-button" href="/dashboard">
             ⚙
           </Link>
         </aside>
@@ -967,12 +1033,12 @@ export function WorkspaceIde({
             workspaceId={workspaceId}
             canMerge={canMerge}
             canReview={canReview}
-            canSteer={canEdit && !isHibernated}
+            canSteer={canEdit && hasRepository}
             initialSessions={initialAgentSessions}
             initialStateEvents={initialStateEvents}
             onTurnCompleted={schedulePreviewRefresh}
           />
-          {!isHibernated ? <AgentCanvas workspaceId={workspaceId} /> : null}
+          {hasRepository ? <AgentCanvas workspaceId={workspaceId} /> : null}
           {hasPreview ? (
             <PreviewPane
               workspaceId={workspaceId}

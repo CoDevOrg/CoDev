@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { WorkspaceIdeLoader } from "@/components/workspace-ide-loader";
 import { requireUser } from "@/lib/session";
@@ -31,20 +31,16 @@ export default async function WorkspaceIdePage({
       readWorkspaceStateEvents(workspaceId),
     ]);
   if (!workspace) notFound();
-  if (runtime?.status !== "ready" && runtime?.status !== "hibernated") {
-    redirect(`/workspaces/${workspaceId}`);
-  }
-
   return (
     <WorkspaceIdeLoader
       workspaceId={workspaceId}
       repository={workspace.repository}
       branch={workspace.defaultBranch}
-      workspaceName={workspace.repository}
+      workspaceName={workspace.repository || "Untitled workspace"}
       members={members}
       initialAgentSessions={sessions}
       initialStateEvents={stateEvents}
-      runtimeStatus={runtime.status}
+      runtimeStatus={runtime?.status ?? "stopped"}
       canResume={workspace.accessRole !== "viewer"}
       canEdit={
         workspace.accessRole === "owner" || workspace.accessRole === "co_steer"
