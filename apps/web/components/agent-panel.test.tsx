@@ -67,4 +67,34 @@ describe("AgentPanel", () => {
       "Codex",
     );
   });
+
+  it("shows readable labels for the recent GPT model catalog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          sessions: [],
+          stateEvents: [],
+          models: [
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+          ],
+        }),
+      }),
+    );
+
+    render(<AgentPanel workspaceId="workspace-1" canMerge />);
+
+    expect(
+      await screen.findByRole("option", { name: "5.6 Sol" }),
+    ).toBeVisible();
+    expect(screen.getByRole("option", { name: "5.6 Terra" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "5.6 Luna" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "5.4 Mini" })).toBeVisible();
+  });
 });

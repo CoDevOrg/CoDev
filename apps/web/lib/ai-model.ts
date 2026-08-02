@@ -9,18 +9,14 @@ import type { AuthProvider } from "@codev/shared-types";
 
 import type { ResolvedCredential } from "./credentials";
 
-export const DEFAULT_OPENAI_MODEL = "gpt-5";
+export const DEFAULT_OPENAI_MODEL = "gpt-5.6-luna";
 const RECENT_OPENAI_FALLBACK_MODELS = [
-  "gpt-5.2",
-  "gpt-5.2-pro",
-  "gpt-5.2-codex",
-  "gpt-5.1",
-  "gpt-5.1-codex",
-  "gpt-5.1-codex-mini",
-  "gpt-5-pro",
-  "gpt-5",
-  "gpt-5-mini",
-  "gpt-5-nano",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
 ];
 const OPENAI_MODEL_CACHE_TTL_MS = 5 * 60 * 1_000;
 const openAIModelCache = new Map<
@@ -145,9 +141,7 @@ export async function getSelectableAgentModels(
   const current = getAgentModel(provider);
   if (provider !== "openai") return [current];
   const models = await fetchRecentOpenAIModels(credential);
-  return [
-    ...new Set([...(models.includes(current) ? [current] : []), ...models]),
-  ];
+  return [...new Set(models)];
 }
 
 export async function resolveSelectableAgentModel(

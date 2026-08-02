@@ -31,6 +31,15 @@ import {
 import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
 
+function formatAgentModelLabel(model: string) {
+  if (!model.startsWith("gpt-")) return model;
+  return model
+    .slice(4)
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export type AgentSession = {
   id: string;
   name: string;
@@ -130,10 +139,10 @@ export function AgentPanel({
   const [commentLine, setCommentLine] = useState("");
   const [composingNew, setComposingNew] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>(() => [
-    ...new Set([initialSessions[0]?.model ?? "gpt-5"]),
+    ...new Set([initialSessions[0]?.model ?? "gpt-5.6-luna"]),
   ]);
   const [selectedModel, setSelectedModel] = useState(
-    initialSessions[0]?.model ?? "gpt-5",
+    initialSessions[0]?.model ?? "gpt-5.6-luna",
   );
   const turnStatusRef = useRef(new Map<string, string>());
   const modelOptionsLoadedRef = useRef(false);
@@ -752,7 +761,7 @@ export function AgentPanel({
                     >
                       {modelOptions.map((model) => (
                         <option key={model} value={model}>
-                          {model}
+                          {formatAgentModelLabel(model)}
                         </option>
                       ))}
                     </select>
@@ -806,7 +815,7 @@ export function AgentPanel({
                     >
                       {modelOptions.map((model) => (
                         <option key={model} value={model}>
-                          {model}
+                          {formatAgentModelLabel(model)}
                         </option>
                       ))}
                     </select>
