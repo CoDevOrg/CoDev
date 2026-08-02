@@ -565,8 +565,6 @@ Outputs:
     Value: !GetAtt RuntimeApi.ApiEndpoint
   HostInstanceId:
     Value: !Ref FirecrackerHost
-  HostPublicIp:
-    Value: !GetAtt FirecrackerHost.PublicIp
   RuntimeVpcId:
     Value: !Ref RuntimeVpc
   RuntimeDashboardName:

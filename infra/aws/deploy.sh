@@ -96,6 +96,11 @@ instance_id="$(aws cloudformation describe-stacks \
   --stack-name "${runtime_stack}" \
   --query "Stacks[0].Outputs[?OutputKey=='HostInstanceId'].OutputValue" \
   --output text)"
+credential_key_arn="$(aws cloudformation describe-stacks \
+  --region "${region}" \
+  --stack-name "${runtime_stack}" \
+  --query "Stacks[0].Outputs[?OutputKey=='CredentialEncryptionKeyArn'].OutputValue" \
+  --output text)"
 
 oidc_provider_arn="arn:aws:iam::${account_id}:oidc-provider/${oidc_host}"
 if ! aws iam get-open-id-connect-provider \
@@ -119,6 +124,7 @@ ensure_vercel_role() {
     --arg subject_key "${oidc_host}:sub" \
     --arg audience "${oidc_audience}" \
     --arg subject "${subject}" \
+    --arg credential_key_arn "${credential_key_arn}" \
     '{
       Version: "2012-10-17",
       Statement: [{
@@ -153,6 +159,11 @@ ensure_vercel_role() {
           Effect: "Allow",
           Action: "ec2:DescribeInstances",
           Resource: "*"
+        },
+        {
+          Effect: "Allow",
+          Action: ["kms:Decrypt", "kms:GenerateDataKey"],
+          Resource: $credential_key_arn
         }
       ]
     }')"
