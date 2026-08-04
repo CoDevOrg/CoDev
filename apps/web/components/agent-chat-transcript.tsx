@@ -1,6 +1,39 @@
 "use client";
 
-import type { ChatItem } from "@/lib/agent-chat";
+import {
+  FileText,
+  GitBranch,
+  ListTree,
+  LoaderCircle,
+  MessageSquare,
+  PencilLine,
+  TerminalSquare,
+  Wrench,
+  XCircle,
+} from "lucide-react";
+
+import type { ChatActivity, ChatItem } from "@/lib/agent-chat";
+
+function ActivityIcon({ activity }: { activity: ChatActivity }) {
+  const Icon =
+    activity.status === "failed"
+      ? XCircle
+      : activity.category === "file"
+        ? activity.label.includes("Edit")
+          ? PencilLine
+          : activity.label.includes("Inspect")
+            ? ListTree
+            : FileText
+        : activity.category === "command"
+          ? TerminalSquare
+          : activity.category === "git"
+            ? GitBranch
+            : activity.category === "coordination"
+              ? MessageSquare
+              : Wrench;
+
+  return <Icon aria-hidden="true" />;
+}
 
 export function AgentChatTranscript({
   items,
@@ -60,25 +93,35 @@ export function AgentChatTranscript({
             </div>
           );
         }
-        return (
-          <details className="agent-chat-tools" key={item.id}>
-            <summary>
-              {item.tools.length} tool
-              {item.tools.length === 1 ? "" : "s"}
-            </summary>
-            <ul>
-              {item.tools.map((tool) => (
-                <li key={tool.id}>
-                  <code>{tool.name}</code>
-                  <span className={`tool-status ${tool.status}`}>
-                    {tool.status}
+        if (item.kind === "activities") {
+          return (
+            <div className="agent-chat-activities" key={item.id}>
+              {item.activities.map((activity) => (
+                <div
+                  className={`agent-chat-activity ${activity.status}`}
+                  key={activity.id}
+                  aria-label={`${activity.label}${activity.detail ? ` ${activity.detail}` : ""}`}
+                  aria-busy={activity.status === "running"}
+                >
+                  <span className="agent-chat-activity-icon">
+                    <ActivityIcon activity={activity} />
                   </span>
-                  {tool.detail ? <small>{tool.detail}</small> : null}
-                </li>
+                  <span className="agent-chat-activity-copy">
+                    <span>{activity.label}</span>
+                    {activity.detail ? <code>{activity.detail}</code> : null}
+                  </span>
+                  {activity.status === "running" ? (
+                    <LoaderCircle
+                      className="agent-chat-activity-spinner"
+                      aria-label="In progress"
+                    />
+                  ) : null}
+                </div>
               ))}
-            </ul>
-          </details>
-        );
+            </div>
+          );
+        }
+        return null;
       })}
       {streamingText ? (
         <div className="agent-chat-bubble assistant streaming">

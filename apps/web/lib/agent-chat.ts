@@ -23,17 +23,19 @@ export type AgentChatSession = {
   events: AgentChatEvent[];
 };
 
-export type ChatToolCall = {
+export type ChatActivity = {
   id: string;
   name: string;
-  status: "running" | "completed" | "failed";
+  category: "file" | "command" | "git" | "coordination" | "workspace";
+  label: string;
   detail?: string;
+  status: "running" | "completed" | "failed";
 };
 
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string }
-  | { kind: "tools"; id: string; tools: ChatToolCall[] }
+  | { kind: "activities"; id: string; activities: ChatActivity[] }
   | {
       kind: "comment";
       id: string;
@@ -132,6 +134,9 @@ export function mapAgentEventToChatEvent(event: AgentEvent): AgentChatEvent {
         payload: {
           name: "terminal",
           callId: event.id,
+          ...(event.payload.command
+            ? { arguments: JSON.stringify({ command: event.payload.command }) }
+            : {}),
         },
         createdAt: new Date(event.timestamp),
       };
@@ -143,6 +148,9 @@ export function mapAgentEventToChatEvent(event: AgentEvent): AgentChatEvent {
         payload: {
           name: "terminal",
           callId: event.id,
+          ...(event.payload.command
+            ? { arguments: JSON.stringify({ command: event.payload.command }) }
+            : {}),
           output: event.payload.outputStream,
           error: event.payload.error,
         },
@@ -165,16 +173,151 @@ function payloadString(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function flushTools(
+function parseArguments(value: unknown) {
+  if (typeof value !== "string" || !value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function readableName(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function shorten(value: string, maxLength = 120) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength - 1)}…`
+    : normalized;
+}
+
+function activityCopy(
+  active: string,
+  complete: string,
+  failed: string,
+  status: ChatActivity["status"],
+) {
+  return status === "running"
+    ? active
+    : status === "failed"
+      ? failed
+      : complete;
+}
+
+export function describeAgentActivity(
+  name: string,
+  argumentText: unknown,
+  status: ChatActivity["status"],
+  filePath?: string,
+): Pick<ChatActivity, "category" | "label" | "detail"> {
+  const input = parseArguments(argumentText);
+  const path =
+    typeof input.path === "string" && input.path.trim()
+      ? shorten(input.path)
+      : filePath && filePath.trim()
+        ? shorten(filePath)
+        : undefined;
+  const command = Array.isArray(input.command)
+    ? input.command
+        .filter((part): part is string => typeof part === "string")
+        .map((part) => (part.includes(" ") ? JSON.stringify(part) : part))
+        .join(" ")
+    : typeof input.command === "string"
+      ? input.command
+      : undefined;
+
+  switch (name) {
+    case "list_files":
+      return {
+        category: "file",
+        label: activityCopy(
+          "Inspecting",
+          "Inspected",
+          "Could not inspect",
+          status,
+        ),
+        detail: "project files",
+      };
+    case "read_file":
+      return {
+        category: "file",
+        label: activityCopy("Reading", "Read", "Could not read", status),
+        detail: path ?? "file",
+      };
+    case "write_file":
+      return {
+        category: "file",
+        label: activityCopy("Editing", "Edited", "Could not edit", status),
+        detail: path ?? "file",
+      };
+    case "run_command":
+    case "terminal":
+      return {
+        category: "command",
+        label: activityCopy("Running", "Ran", "Command failed", status),
+        detail: command ? `$ ${shorten(command)}` : "command",
+      };
+    case "git_status":
+      return {
+        category: "git",
+        label: activityCopy("Checking", "Checked", "Could not check", status),
+        detail: "Git status",
+      };
+    case "claim_path":
+    case "contest_path":
+      return {
+        category: "coordination",
+        label: activityCopy("Claiming", "Claimed", "Could not claim", status),
+        detail: path ?? "a workspace path",
+      };
+    case "release_claim":
+      return {
+        category: "coordination",
+        label: activityCopy(
+          "Releasing",
+          "Released",
+          "Could not release",
+          status,
+        ),
+        detail: "a workspace claim",
+      };
+    case "proposed diff":
+      return {
+        category: "workspace",
+        label: activityCopy(
+          "Preparing",
+          "Prepared",
+          "Could not prepare",
+          status,
+        ),
+        detail: path ?? "file changes",
+      };
+    default:
+      return {
+        category: "workspace",
+        label: activityCopy("Using", "Finished", "Could not finish", status),
+        detail: readableName(name),
+      };
+  }
+}
+
+function flushActivities(
   items: ChatItem[],
-  pending: ChatToolCall[],
+  pending: ChatActivity[],
   groupId: string,
 ) {
   if (pending.length === 0) return;
   items.push({
-    kind: "tools",
-    id: `tools:${groupId}`,
-    tools: pending.map((tool) => ({ ...tool })),
+    kind: "activities",
+    id: `activities:${groupId}`,
+    activities: pending.map((activity) => ({ ...activity })),
   });
   pending.length = 0;
 }
@@ -183,7 +326,7 @@ function flushTools(
  * Map a listAgentSessions session (turns + events) into chronological chat items.
  * - turns → user bubbles
  * - agent.output → assistant bubbles
- * - tool.* → collapsed tool trails
+ * - tool.* → readable activity rows
  */
 export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
   type Node =
@@ -206,13 +349,13 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
   ].sort((left, right) => left.at - right.at || left.seq - right.seq);
 
   const items: ChatItem[] = [];
-  const pendingTools: ChatToolCall[] = [];
-  let toolsGroupId = "";
+  const pendingActivities: ChatActivity[] = [];
+  let activityGroupId = "";
   const assistantTexts = new Set<string>();
 
   for (const node of nodes) {
     if (node.kind === "turn") {
-      flushTools(items, pendingTools, toolsGroupId);
+      flushActivities(items, pendingActivities, activityGroupId);
       items.push({
         kind: "user",
         id: `turn:${node.turn.id}`,
@@ -243,40 +386,50 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
       event.type === "tool.failed"
     ) {
       const name = payloadString(event.payload, "name") ?? "tool";
-      if (pendingTools.length === 0) toolsGroupId = event.id;
+      if (pendingActivities.length === 0) activityGroupId = event.id;
 
       if (event.type === "tool.called") {
-        pendingTools.push({
+        pendingActivities.push({
           id: event.id,
           name,
+          ...describeAgentActivity(
+            name,
+            event.payload.arguments,
+            "running",
+            payloadString(event.payload, "filePath"),
+          ),
           status: "running",
         });
         continue;
       }
 
       const status = event.type === "tool.completed" ? "completed" : "failed";
-      const detail =
-        payloadString(event.payload, "output") ??
-        payloadString(event.payload, "error");
-      const existing = [...pendingTools]
+      const existing = [...pendingActivities]
         .reverse()
         .find((tool) => tool.name === name && tool.status === "running");
       if (existing) {
         existing.status = status;
-        if (detail) existing.detail = detail;
+        const previousDetail = existing.detail;
+        Object.assign(existing, describeAgentActivity(name, undefined, status));
+        if (previousDetail) existing.detail = previousDetail;
       } else {
-        pendingTools.push({
+        pendingActivities.push({
           id: event.id,
           name,
+          ...describeAgentActivity(
+            name,
+            undefined,
+            status,
+            payloadString(event.payload, "filePath"),
+          ),
           status,
-          ...(detail ? { detail } : {}),
         });
       }
       continue;
     }
 
     if (event.type === "agent.output") {
-      flushTools(items, pendingTools, toolsGroupId);
+      flushActivities(items, pendingActivities, activityGroupId);
       const text = payloadString(event.payload, "text");
       if (!text || assistantTexts.has(text)) continue;
       assistantTexts.add(text);
@@ -289,7 +442,7 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
     }
 
     if (event.type === "comment.added") {
-      flushTools(items, pendingTools, toolsGroupId);
+      flushActivities(items, pendingActivities, activityGroupId);
       const text = payloadString(event.payload, "text");
       if (!text) continue;
       const filePath = payloadString(event.payload, "filePath");
@@ -306,7 +459,7 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
     }
   }
 
-  flushTools(items, pendingTools, toolsGroupId || "end");
+  flushActivities(items, pendingActivities, activityGroupId || "end");
 
   // Fallback: completed turns with stored output but no assistant bubble yet.
   for (const turn of session.turns) {

@@ -72,6 +72,46 @@ describe("AgentPanel", () => {
     );
   });
 
+  it("shows an in-progress tool as a readable activity row", () => {
+    const activitySession: AgentSession = {
+      ...session,
+      events: [
+        {
+          id: "activity-1",
+          type: "tool.called",
+          payload: {
+            name: "read_file",
+            arguments: JSON.stringify({ path: "project.json" }),
+          },
+          createdAt: "2026-07-30T12:00:01.000Z",
+        },
+      ],
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          sessions: [activitySession],
+          stateEvents: [],
+        }),
+      }),
+    );
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[activitySession]}
+      />,
+    );
+
+    expect(screen.getByText("Reading")).toBeInTheDocument();
+    expect(screen.getByText("project.json")).toBeInTheDocument();
+    expect(screen.queryByText(/tools?/i)).not.toBeInTheDocument();
+  });
+
   it("shows readable labels for the recent GPT model catalog", async () => {
     vi.stubGlobal(
       "fetch",

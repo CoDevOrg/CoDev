@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  describeAgentActivity,
   mapAgentEventToChatEvent,
   mapSessionToChatItems,
   type AgentChatSession,
@@ -64,7 +65,7 @@ describe("mapSessionToChatItems", () => {
     ]);
   });
 
-  it("collapses consecutive tool events into a single tools trail", () => {
+  it("shows consecutive tool events as readable activity rows", () => {
     const items = mapSessionToChatItems(
       session({
         turns: [
@@ -115,20 +116,24 @@ describe("mapSessionToChatItems", () => {
     expect(items).toEqual([
       { kind: "user", id: "turn:turn-2", text: "Refactor auth" },
       {
-        kind: "tools",
-        id: "tools:t1",
-        tools: [
+        kind: "activities",
+        id: "activities:t1",
+        activities: [
           {
+            category: "file",
+            detail: "file",
             id: "t1",
+            label: "Read",
             name: "read_file",
             status: "completed",
-            detail: "ok",
           },
           {
+            category: "file",
+            detail: "file",
             id: "t3",
+            label: "Could not edit",
             name: "write_file",
             status: "failed",
-            detail: "conflict",
           },
         ],
       },
@@ -258,6 +263,34 @@ describe("mapAgentEventToChatEvent", () => {
         filePath: "src/auth.ts",
         lineNumber: 42,
       },
+    });
+  });
+});
+
+describe("describeAgentActivity", () => {
+  it("turns file and command tools into user-facing progress copy", () => {
+    expect(
+      describeAgentActivity(
+        "read_file",
+        JSON.stringify({ path: "apps/web/package.json" }),
+        "running",
+      ),
+    ).toEqual({
+      category: "file",
+      label: "Reading",
+      detail: "apps/web/package.json",
+    });
+
+    expect(
+      describeAgentActivity(
+        "run_command",
+        JSON.stringify({ command: ["pnpm", "test", "--", "agent-chat"] }),
+        "completed",
+      ),
+    ).toEqual({
+      category: "command",
+      label: "Ran",
+      detail: "$ pnpm test -- agent-chat",
     });
   });
 });
