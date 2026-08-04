@@ -401,6 +401,14 @@ export const agentSessions = pgTable(
   ],
 );
 
+export type AgentTurnAttachment = {
+  name: string;
+  type: string;
+  size: number;
+  text?: string;
+  data?: string;
+};
+
 export const agentTurns = pgTable(
   "agent_turns",
   {
@@ -412,6 +420,10 @@ export const agentTurns = pgTable(
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
     prompt: text("prompt").notNull(),
+    attachments: jsonb("attachments")
+      .$type<AgentTurnAttachment[]>()
+      .default([])
+      .notNull(),
     status: agentTurnStatus("status").default("queued").notNull(),
     workflowRunId: text("workflow_run_id"),
     responseId: text("response_id"),

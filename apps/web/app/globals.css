@@ -9156,6 +9156,41 @@ html .live-ide .agent-chat-bubble.assistant p {
   line-height: 1.68;
 }
 
+html .live-ide .agent-chat-bubble-attachments {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+html .live-ide .agent-chat-bubble-attachments > span {
+  display: inline-flex;
+  max-width: 240px;
+  min-height: 26px;
+  padding: 0 9px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 8px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+
+html .live-ide .agent-chat-bubble-attachments svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  color: var(--workspace-accent);
+}
+
+html .live-ide .agent-chat-bubble-attachments > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @keyframes chat-message-in {
   from {
     opacity: 0;

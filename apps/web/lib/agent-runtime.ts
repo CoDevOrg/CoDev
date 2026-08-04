@@ -4,7 +4,7 @@ import { generateText, jsonSchema, stepCountIs, tool, type ToolSet } from "ai";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import OpenAI from "openai";
 
-import { schema } from "@codev/db";
+import { schema, type AgentTurnAttachment } from "@codev/db";
 import { createAgentEvent } from "@codev/shared-types";
 
 import { createAgentModel, getAgentModel, getAgentProvider } from "./ai-model";
@@ -221,7 +221,84 @@ type AgentContext = {
   authorId: string;
   model: string;
   prompt: string;
+  attachments: AgentTurnAttachment[];
 };
+
+function normalizeAttachments(value: unknown): AgentTurnAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const attachment = item as Record<string, unknown>;
+    if (
+      typeof attachment.name !== "string" ||
+      typeof attachment.type !== "string" ||
+      typeof attachment.size !== "number"
+    ) {
+      return [];
+    }
+    return [
+      {
+        name: attachment.name,
+        type: attachment.type,
+        size: attachment.size,
+        ...(typeof attachment.text === "string"
+          ? { text: attachment.text }
+          : {}),
+        ...(typeof attachment.data === "string"
+          ? { data: attachment.data }
+          : {}),
+      },
+    ];
+  });
+}
+
+function publicAttachmentMetadata(value: unknown) {
+  return normalizeAttachments(value).map(({ name, type, size }) => ({
+    name,
+    type,
+    size,
+  }));
+}
+
+function modelInput(context: AgentContext, transcript: string) {
+  const parts: Array<
+    | { type: "text"; text: string }
+    | {
+        type: "file";
+        mediaType: string;
+        data: { type: "data"; data: string };
+      }
+  > = [
+    {
+      type: "text",
+      text: `Repository session transcript:\n${transcript}\n\nComplete the latest request. Inspect the repository before editing.`,
+    },
+  ];
+
+  for (const attachment of context.attachments) {
+    if (attachment.data && attachment.type.toLowerCase().startsWith("image/")) {
+      parts.push({
+        type: "file",
+        mediaType: attachment.type,
+        data: { type: "data", data: attachment.data },
+      });
+      continue;
+    }
+    if (attachment.text) {
+      parts.push({
+        type: "text",
+        text: `Attached text file: ${attachment.name}\n${attachment.text}`,
+      });
+      continue;
+    }
+    parts.push({
+      type: "text",
+      text: `The user attached ${attachment.name} (${attachment.type || "unknown type"}, ${attachment.size} bytes). Its binary contents are not available to this agent input.`,
+    });
+  }
+
+  return parts;
+}
 
 function eventProvider(provider: ReturnType<typeof getAgentProvider>) {
   return provider === "openai"
@@ -367,6 +444,7 @@ async function loadAgentContext(turnId: string): Promise<AgentContext> {
       authorId: schema.agentTurns.authorId,
       model: schema.agentSessions.model,
       prompt: schema.agentTurns.prompt,
+      attachments: schema.agentTurns.attachments,
     })
     .from(schema.agentTurns)
     .innerJoin(
@@ -376,7 +454,7 @@ async function loadAgentContext(turnId: string): Promise<AgentContext> {
     .where(eq(schema.agentTurns.id, turnId))
     .limit(1);
   if (!row) throw new Error("Agent turn not found.");
-  return row;
+  return { ...row, attachments: normalizeAttachments(row.attachments) };
 }
 
 async function turnWasInterrupted(turnId: string) {
@@ -802,7 +880,7 @@ export async function runAgentTurn(turnId: string) {
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
       "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. Never publish, merge, access credentials, or escape the worktree.",
-    prompt: `Repository session transcript:\n${transcript}\n\nComplete the latest request. Inspect the repository before editing.`,
+    messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse }) => {
       if (text) {
@@ -900,6 +978,7 @@ export async function listAgentSessions(workspaceId: string) {
           .select({
             id: schema.agentTurns.id,
             prompt: schema.agentTurns.prompt,
+            attachments: schema.agentTurns.attachments,
             status: schema.agentTurns.status,
             output: schema.agentTurns.output,
             lastError: schema.agentTurns.lastError,
@@ -924,7 +1003,10 @@ export async function listAgentSessions(workspaceId: string) {
       ]);
       return {
         ...session,
-        turns,
+        turns: turns.map((turn) => ({
+          ...turn,
+          attachments: publicAttachmentMetadata(turn.attachments),
+        })),
         events: events.reverse(),
         claims,
         messages,

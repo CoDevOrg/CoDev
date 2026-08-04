@@ -12,6 +12,10 @@ import { getDatabase } from "@/lib/database";
 import { assertTurnQuota, QuotaError, quotaResponse } from "@/lib/quotas";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import {
+  agentAttachmentsSchema,
+  toStoredAgentAttachments,
+} from "@/lib/agent-attachments";
+import {
   AgentPromptRateLimitError,
   enforceAgentPromptRateLimit,
 } from "@/lib/agent-rate-limit";
@@ -19,6 +23,7 @@ import {
 const inputSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),
   model: z.string().trim().min(1).max(120).optional(),
+  attachments: agentAttachmentsSchema,
 });
 
 export async function POST(
@@ -80,7 +85,12 @@ export async function POST(
 
     const [turn] = await getDatabase()
       .insert(schema.agentTurns)
-      .values({ sessionId, authorId: user.id, prompt: input.prompt })
+      .values({
+        sessionId,
+        authorId: user.id,
+        prompt: input.prompt,
+        attachments: toStoredAgentAttachments(input.attachments),
+      })
       .returning({ id: schema.agentTurns.id });
     await kickAgentSession(sessionId);
     return Response.json({ turnId: turn?.id }, { status: 202 });

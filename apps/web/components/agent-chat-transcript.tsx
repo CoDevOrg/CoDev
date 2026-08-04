@@ -10,6 +10,7 @@ import {
   TerminalSquare,
   Wrench,
   XCircle,
+  Paperclip,
 } from "lucide-react";
 
 import type { ChatActivity, ChatItem } from "@/lib/agent-chat";
@@ -60,6 +61,16 @@ export function AgentChatTranscript({
             <div className="agent-chat-bubble user" key={item.id}>
               <span className="agent-chat-role">You</span>
               <p>{item.text}</p>
+              {item.attachments?.length ? (
+                <div className="agent-chat-bubble-attachments">
+                  {item.attachments.map((attachment) => (
+                    <span key={`${item.id}:${attachment.name}`}>
+                      <Paperclip aria-hidden="true" />
+                      <span>{attachment.name}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           );
         }

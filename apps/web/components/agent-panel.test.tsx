@@ -210,6 +210,64 @@ describe("AgentPanel", () => {
     expect(MAX_PARALLEL_AGENT_SESSIONS).toBe(3);
   });
 
+  it("sends image data separately from the visible prompt", async () => {
+    const fetchMock = vi.fn().mockImplementation((_input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          init?.method === "POST"
+            ? { sessionId: "session-new" }
+            : { sessions: [], stateEvents: [], models: ["gpt-5.6-luna"] },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AgentPanel workspaceId="workspace-1" canMerge />);
+
+    const file = new File(["image bytes"], "Screenshot.png", {
+      type: "image/png",
+    });
+    fireEvent.change(
+      screen.getByLabelText("Attach files", { selector: "input" }),
+      {
+        target: { files: [file] },
+      },
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Screenshot.png")).toBeInTheDocument(),
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Message the agent" }),
+      {
+        target: { value: "What is this image?" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start session" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+      ).toBe(true),
+    );
+    const postCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
+    const body = JSON.parse(postCall?.[1]?.body as string) as {
+      prompt: string;
+      attachments: { name: string; data?: string }[];
+    };
+    expect(body.prompt).toBe("What is this image?");
+    expect(body.prompt).not.toContain("file-content");
+    expect(body.attachments).toEqual([
+      {
+        name: "Screenshot.png",
+        type: "image/png",
+        size: 11,
+        data: "aW1hZ2UgYnl0ZXM=",
+      },
+    ]);
+  });
+
   it("deletes a chat after confirmation", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const fetchMock = vi.fn().mockImplementation((_input, init) =>

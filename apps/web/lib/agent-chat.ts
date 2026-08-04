@@ -1,8 +1,15 @@
 import type { AgentEvent } from "@codev/shared-types";
 
+export type AgentChatAttachment = {
+  name: string;
+  type: string;
+  size: number;
+};
+
 export type AgentChatTurn = {
   id: string;
   prompt: string;
+  attachments?: AgentChatAttachment[];
   status: string;
   output: string | null;
   lastError: string | null;
@@ -33,7 +40,12 @@ export type ChatActivity = {
 };
 
 export type ChatItem =
-  | { kind: "user"; id: string; text: string }
+  | {
+      kind: "user";
+      id: string;
+      text: string;
+      attachments?: AgentChatAttachment[];
+    }
   | { kind: "assistant"; id: string; text: string }
   | { kind: "activities"; id: string; activities: ChatActivity[] }
   | {
@@ -198,6 +210,26 @@ function shorten(value: string, maxLength = 120) {
     : normalized;
 }
 
+const legacyAttachmentPattern =
+  /\n\nAttached file: (.+?) \(([^,]+), (\d+) bytes\)\n<file-content>[\s\S]*?<\/file-content>/g;
+
+function visibleTurnPrompt(turn: AgentChatTurn) {
+  const legacyAttachments: AgentChatAttachment[] = [];
+  const text = turn.prompt
+    .replace(
+      legacyAttachmentPattern,
+      (_match, name: string, type: string, size: string) => {
+        legacyAttachments.push({ name, type, size: Number(size) });
+        return "";
+      },
+    )
+    .trim();
+  return {
+    text: text || "Attached files",
+    attachments: [...legacyAttachments, ...(turn.attachments ?? [])],
+  };
+}
+
 function activityCopy(
   active: string,
   complete: string,
@@ -356,10 +388,14 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
   for (const node of nodes) {
     if (node.kind === "turn") {
       flushActivities(items, pendingActivities, activityGroupId);
+      const visiblePrompt = visibleTurnPrompt(node.turn);
       items.push({
         kind: "user",
         id: `turn:${node.turn.id}`,
-        text: node.turn.prompt,
+        text: visiblePrompt.text,
+        ...(visiblePrompt.attachments.length
+          ? { attachments: visiblePrompt.attachments }
+          : {}),
       });
       if (node.turn.lastError) {
         items.push({

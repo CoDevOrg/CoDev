@@ -28,6 +28,10 @@ import {
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { readWorkspaceStateEvents } from "@/lib/workspace-state";
 import {
+  agentAttachmentsSchema,
+  toStoredAgentAttachments,
+} from "@/lib/agent-attachments";
+import {
   AgentPromptRateLimitError,
   enforceAgentPromptRateLimit,
 } from "@/lib/agent-rate-limit";
@@ -37,6 +41,7 @@ const createSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),
   model: z.string().trim().min(1).max(120).optional(),
   issueNumber: z.number().int().positive().optional(),
+  attachments: agentAttachmentsSchema,
 });
 
 class DuplicateIssueError extends Error {}
@@ -291,6 +296,7 @@ export async function POST(
           sessionId: session.id,
           authorId: user.id,
           prompt: input.prompt,
+          attachments: toStoredAgentAttachments(input.attachments),
         });
         return {
           headSha: integration.headSha,

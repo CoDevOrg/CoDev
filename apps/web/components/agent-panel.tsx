@@ -31,6 +31,7 @@ import { AgentChatTranscript } from "@/components/agent-chat-transcript";
 import {
   mapAgentEventToChatEvent,
   mapSessionToChatItems,
+  type AgentChatAttachment,
 } from "@/lib/agent-chat";
 import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
@@ -92,6 +93,7 @@ export type AgentSession = {
   turns: {
     id: string;
     prompt: string;
+    attachments?: AgentChatAttachment[];
     status: string;
     output: string | null;
     lastError: string | null;
@@ -118,10 +120,12 @@ type AgentAttachment = {
   type: string;
   size: number;
   text?: string;
+  data?: string;
 };
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGE_ATTACHMENT_SIZE = 4 * 1024 * 1024;
 const MAX_ATTACHMENT_TEXT = 120_000;
 
 function isTextAttachment(file: File) {
@@ -133,16 +137,33 @@ function isTextAttachment(file: File) {
   );
 }
 
-function attachmentPrompt(attachments: AgentAttachment[]) {
-  if (!attachments.length) return "";
-  return attachments
-    .map((attachment) => {
-      const header = `Attached file: ${attachment.name} (${attachment.type || "unknown type"}, ${attachment.size} bytes)`;
-      return attachment.text
-        ? `\n\n${header}\n<file-content>\n${attachment.text}\n</file-content>`
-        : `\n\n${header}\n<file-content>Binary content was attached by the user; use the filename and type as context.</file-content>`;
-    })
-    .join("");
+function readImageData(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const separator = result.indexOf(",");
+      if (separator < 0) {
+        reject(new Error(`Could not read ${file.name} as an image.`));
+        return;
+      }
+      resolve(result.slice(separator + 1));
+    });
+    reader.addEventListener("error", () => {
+      reject(new Error(`Could not read ${file.name} as an image.`));
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+function attachmentPayload(attachments: AgentAttachment[]) {
+  return attachments.map((attachment) => ({
+    name: attachment.name,
+    type: attachment.type,
+    size: attachment.size,
+    ...(attachment.text !== undefined ? { text: attachment.text } : {}),
+    ...(attachment.data !== undefined ? { data: attachment.data } : {}),
+  }));
 }
 
 async function json<T>(response: Response) {
@@ -385,16 +406,37 @@ export function AgentPanel({
         setError(`${file.name} is larger than the 10 MB attachment limit.`);
         continue;
       }
-      const text = isTextAttachment(file)
-        ? (await file.text()).slice(0, MAX_ATTACHMENT_TEXT)
-        : undefined;
+      let text: string | undefined;
+      let data: string | undefined;
+      try {
+        text = isTextAttachment(file)
+          ? (await file.text()).slice(0, MAX_ATTACHMENT_TEXT)
+          : undefined;
+        if (file.type.startsWith("image/")) {
+          if (file.size > MAX_IMAGE_ATTACHMENT_SIZE) {
+            setError(
+              `${file.name} is larger than the 4 MB image limit. Please choose a smaller image.`,
+            );
+            continue;
+          }
+          data = await readImageData(file);
+        }
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : `Could not attach ${file.name}.`,
+        );
+        continue;
+      }
       const attachment: AgentAttachment = {
         id: `${file.name}-${file.lastModified}-${file.size}`,
         name: file.name,
-        type: file.type,
+        type: file.type || "application/octet-stream",
         size: file.size,
       };
       if (text !== undefined) attachment.text = text;
+      if (data !== undefined) attachment.data = data;
       next.push(attachment);
     }
     if (next.length) {
@@ -408,7 +450,6 @@ export function AgentPanel({
     const value = prompt.trim();
     if (!value && !attachments.length) return;
     const promptText = value || "Please inspect the attached files.";
-    const promptWithAttachments = `${promptText}${attachmentPrompt(attachments)}`;
     setBusy(true);
     setError("");
     try {
@@ -417,8 +458,9 @@ export function AgentPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: deriveAgentSessionName(promptText),
-          prompt: promptWithAttachments,
+          prompt: promptText,
           model: selectedModel,
+          attachments: attachmentPayload(attachments),
         }),
       }).then((response) => json<{ sessionId?: string }>(response));
       setPrompt("");
@@ -450,7 +492,6 @@ export function AgentPanel({
     const value = followUp.trim();
     if (!value && !attachments.length) return;
     const promptText = value || "Please inspect the attached files.";
-    const promptWithAttachments = `${promptText}${attachmentPrompt(attachments)}`;
     setBusy(true);
     setError("");
     try {
@@ -458,8 +499,9 @@ export function AgentPanel({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          prompt: promptWithAttachments,
+          prompt: promptText,
           model: selectedModel,
+          attachments: attachmentPayload(attachments),
         }),
       }).then((response) => json(response));
       setFollowUp("");

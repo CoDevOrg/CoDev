@@ -1,0 +1,1 @@
+ALTER TABLE "agent_turns" ADD COLUMN "attachments" jsonb DEFAULT '[]'::jsonb NOT NULL;

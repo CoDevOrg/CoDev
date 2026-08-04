@@ -155,6 +155,13 @@
       "when": 1785701391770,
       "tag": "0021_plain_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785816167398,
+      "tag": "0022_icy_clint_barton",
+      "breakpoints": true
     }
   ]
 }

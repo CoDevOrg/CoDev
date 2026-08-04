@@ -172,6 +172,34 @@ describe("mapSessionToChatItems", () => {
     ]);
   });
 
+  it("keeps attachment metadata out of the visible prompt", () => {
+    const items = mapSessionToChatItems(
+      session({
+        turns: [
+          {
+            id: "turn-attachment",
+            prompt:
+              "What is this image?\n\nAttached file: Screenshot.png (image/png, 37488 bytes)\n<file-content>Binary content was attached by the user; use the filename and type as context.</file-content>",
+            attachments: [],
+            status: "completed",
+            output: "It is a screenshot.",
+            lastError: null,
+            createdAt: "2026-07-30T14:30:00.000Z",
+          },
+        ],
+        events: [],
+      }),
+    );
+
+    expect(items[0]).toEqual({
+      kind: "user",
+      id: "turn:turn-attachment",
+      text: "What is this image?",
+      attachments: [{ name: "Screenshot.png", type: "image/png", size: 37488 }],
+    });
+    expect(JSON.stringify(items)).not.toContain("file-content");
+  });
+
   it("includes turn errors as error items", () => {
     const items = mapSessionToChatItems(
       session({
