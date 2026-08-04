@@ -13,6 +13,18 @@ import { saveProviderCredential } from "./credentials";
 
 export type OAuthProvider = "claude" | "codex";
 
+export class OAuthConfigurationError extends Error {
+  readonly provider: OAuthProvider;
+  readonly missing: readonly string[];
+
+  constructor(provider: OAuthProvider, missing: readonly string[]) {
+    super(`OAuth is not configured for ${provider}.`);
+    this.name = "OAuthConfigurationError";
+    this.provider = provider;
+    this.missing = missing;
+  }
+}
+
 export type OAuthState = {
   state: string;
   codeVerifier: string;
@@ -116,13 +128,29 @@ function envUrl(name: string, fallback: string) {
   return value || fallback;
 }
 
+function clientIdEnvName(provider: OAuthProvider) {
+  return provider === "claude"
+    ? "CLAUDE_OAUTH_CLIENT_ID"
+    : "CODEX_OAUTH_CLIENT_ID";
+}
+
+export function getOAuthConfigurationStatus(provider: OAuthProvider) {
+  const clientIdEnv = clientIdEnvName(provider);
+  return {
+    configured: Boolean(process.env[clientIdEnv]?.trim()),
+    missing: process.env[clientIdEnv]?.trim() ? [] : [clientIdEnv],
+  };
+}
+
 export function getOAuthConfiguration(
   provider: OAuthProvider,
   origin: string,
 ): OAuthConfiguration {
   if (provider === "claude") {
     const clientId = process.env.CLAUDE_OAUTH_CLIENT_ID?.trim();
-    if (!clientId) throw new Error("CLAUDE_OAUTH_CLIENT_ID is not configured.");
+    if (!clientId) {
+      throw new OAuthConfigurationError(provider, [clientIdEnvName(provider)]);
+    }
     return {
       provider: "anthropic",
       clientId,
@@ -147,7 +175,9 @@ export function getOAuthConfiguration(
   }
 
   const clientId = process.env.CODEX_OAUTH_CLIENT_ID?.trim();
-  if (!clientId) throw new Error("CODEX_OAUTH_CLIENT_ID is not configured.");
+  if (!clientId) {
+    throw new OAuthConfigurationError(provider, [clientIdEnvName(provider)]);
+  }
   return {
     provider: "openai",
     clientId,

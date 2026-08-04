@@ -3532,7 +3532,7 @@ footer > span {
   display: flex;
   margin-left: auto;
   align-items: center;
-  gap: 13px;
+  gap: 8px;
 }
 
 .connection-state {
@@ -8524,6 +8524,65 @@ html .live-ide .agent-session-list button.active {
   box-shadow: inset 2px 0 0 var(--workspace-accent);
 }
 
+html .live-ide .agent-session-row {
+  position: relative;
+  min-height: 48px;
+}
+
+html .live-ide .agent-session-row > button:first-child {
+  width: 100%;
+  padding-right: 34px;
+}
+
+html .live-ide .agent-session-row:hover > button:first-child,
+html .live-ide .agent-session-row.active > button:first-child {
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-session-row.active > button:first-child {
+  box-shadow: inset 2px 0 0 var(--workspace-accent);
+}
+
+html .live-ide .agent-session-row > .agent-session-delete {
+  display: grid;
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  grid-template-columns: 1fr;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workspace-faint);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    opacity 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+html .live-ide .agent-session-row:hover > .agent-session-delete,
+html .live-ide .agent-session-row.active > .agent-session-delete,
+html .live-ide .agent-session-row > .agent-session-delete:focus-visible {
+  opacity: 1;
+}
+
+html .live-ide .agent-session-row > .agent-session-delete:hover {
+  border-color: rgba(190, 67, 67, 0.25);
+  background: rgba(190, 67, 67, 0.08);
+  color: #b33f3f;
+}
+
+html .live-ide .agent-session-row > .agent-session-delete svg {
+  width: 13px;
+  height: 13px;
+}
+
 html .live-ide .agent-session-list button > span {
   display: grid;
   min-width: 0;
@@ -9206,6 +9265,12 @@ html .live-ide .agent-review-comment > button {
   color: var(--workspace-surface);
 }
 
+html .live-ide .agent-review-actions .agent-review-assistant {
+  border-color: var(--workspace-accent);
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+}
+
 html .live-ide .agent-review-actions .agent-discard {
   margin-left: auto;
   border-color: rgba(190, 67, 67, 0.25);
@@ -9292,9 +9357,21 @@ html .live-ide .agent-review-comment > button {
 
 /* Workspace navigation and review controls. */
 
+html .live-ide-topbar .topbar-center {
+  position: static;
+  flex: 0 0 auto;
+  margin-left: auto;
+  transform: none;
+}
+
+html .live-ide-topbar .topbar-actions {
+  margin-left: 10px;
+}
+
 html .live-ide .topbar-review-actions {
   position: relative;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
 }
 
@@ -9304,7 +9381,7 @@ html .live-ide .topbar-review-actions > .agent-review-disclosure {
   overflow: visible;
   border: 1px solid var(--workspace-line-strong);
   border-radius: 8px;
-  background: var(--workspace-surface-raised);
+  background: var(--workspace-surface-muted);
   box-shadow: none;
 }
 
@@ -9315,6 +9392,7 @@ html .live-ide .topbar-review-actions .agent-review-disclosure > summary {
   gap: 6px;
   color: var(--workspace-ink);
   font-size: 10px;
+  white-space: nowrap;
 }
 
 html .live-ide .topbar-review-actions .agent-review-summary-icon {
@@ -9351,6 +9429,31 @@ html
   border-radius: 14px;
   background: var(--workspace-surface);
   box-shadow: 0 18px 45px rgba(8, 24, 17, 0.18);
+}
+
+@media (min-width: 641px) and (max-width: 1200px) {
+  html .live-ide-topbar .topbar-divider,
+  html .live-ide-topbar .repo-crumbs {
+    display: none;
+  }
+
+  html .live-ide-topbar .topbar-center {
+    position: static;
+    flex: 0 0 auto;
+    margin-left: auto;
+    transform: none;
+  }
+
+  html .live-ide-topbar .topbar-actions {
+    margin-left: 10px;
+  }
+}
+
+@media (max-width: 960px) {
+  html .live-ide-topbar .connection-state,
+  html .live-ide-topbar .presence-group {
+    display: none;
+  }
 }
 
 html
@@ -9585,6 +9688,28 @@ html .live-ide .agent-sidebar-foot {
 }
 
 @media (max-width: 640px) {
+  html .live-ide-topbar .topbar-actions {
+    margin-left: auto;
+  }
+
+  html .live-ide .agent-session-row {
+    width: 42px;
+    margin-inline: auto;
+  }
+
+  html .live-ide .agent-session-row > button:first-child {
+    width: 42px;
+    min-height: 42px;
+    padding: 0;
+  }
+
+  html .live-ide .agent-session-row > .agent-session-delete {
+    right: -4px;
+    width: 18px;
+    min-height: 18px;
+    opacity: 1;
+  }
+
   html .live-ide .agent-review-actions .agent-discard {
     width: 100%;
     margin-left: 0;

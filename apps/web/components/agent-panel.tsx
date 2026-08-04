@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   ChevronDown,
+  Bot,
   FileCode2,
   GitBranch,
   GitPullRequest,
@@ -35,6 +36,7 @@ import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
 
 const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
+export const MAX_PARALLEL_AGENT_SESSIONS = 3;
 const ACTIVE_AGENT_POLL_INTERVAL = 5_000;
 const IDLE_AGENT_POLL_INTERVAL = 30_000;
 const ERROR_AGENT_POLL_INTERVAL = 15_000;
@@ -103,7 +105,7 @@ export type AgentSession = {
   }[];
 };
 
-type WorktreeReview = {
+export type WorktreeReview = {
   baseSha: string;
   headSha: string;
   diff: string;
@@ -500,8 +502,99 @@ export function AgentPanel({
         [sessionId]: result.review,
       }));
       await refresh();
+      return result.review;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Review failed.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startReviewAssistant() {
+    if (!canSteer || !selectedSession) return;
+    if (activeSessionCount >= MAX_PARALLEL_AGENT_SESSIONS) {
+      setError(
+        `Free a chat slot before starting the review assistant. Maximum ${MAX_PARALLEL_AGENT_SESSIONS} parallel chats are supported.`,
+      );
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const cachedReview = reviews[selectedSession.id];
+      const reviewResult: { review: WorktreeReview } = cachedReview
+        ? { review: cachedReview }
+        : await fetch(`${endpoint}/${selectedSession.id}/review`, {
+            method: "POST",
+          }).then((response) => json<{ review: WorktreeReview }>(response));
+      setReviews((current) => ({
+        ...current,
+        [selectedSession.id]: reviewResult.review,
+      }));
+
+      const diff = reviewResult.review.diff.slice(0, 15_000);
+      const prompt = [
+        "Act as a focused code-review assistant.",
+        `Review the proposed changes from the agent session \"${selectedSession.name}\".`,
+        "Explain the intent, call out correctness or security risks, and suggest concrete fixes. Do not edit files unless I explicitly ask.",
+        "Here is the prepared diff:",
+        "<review-diff>",
+        diff || "No file changes were found.",
+        "</review-diff>",
+      ].join("\n\n");
+
+      const result = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Review assistant",
+          prompt,
+          model: selectedModel,
+        }),
+      }).then((response) => json<{ sessionId?: string }>(response));
+
+      setComposingNew(false);
+      if (result.sessionId) setSelectedSessionId(result.sessionId);
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Review assistant could not be started.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSession(session: AgentSession) {
+    if (!canSteer) return;
+    if (
+      !window.confirm(
+        `Delete \"${session.name}\"? This removes its conversation and worktree.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      await fetch(`${endpoint}/${session.id}`, { method: "DELETE" }).then(
+        (response) => json(response),
+      );
+      setReviews((current) => {
+        const next: Record<string, WorktreeReview> = { ...current };
+        delete next[session.id];
+        return next;
+      });
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Chat could not be deleted.",
+      );
     } finally {
       setBusy(false);
     }
@@ -578,7 +671,10 @@ export function AgentPanel({
   }
 
   const showNewComposer =
-    canSteer && (composingNew || !selectedSession || activeSessionCount < 2);
+    canSteer &&
+    (composingNew ||
+      !selectedSession ||
+      activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS);
   const followUpMode = Boolean(selectedSession) && !composingNew;
 
   const reviewPanel =
@@ -602,10 +698,10 @@ export function AgentPanel({
               <div>
                 <FileCode2 aria-hidden="true" />
                 <span>
-                  <strong>Check the proposed changes</strong>
+                  <strong>Review the proposed changes</strong>
                   <small>
-                    Generate a diff, leave notes, then merge when it looks
-                    right.
+                    Prepare a diff, ask for a second opinion, leave notes, then
+                    merge when it looks right.
                   </small>
                 </span>
               </div>
@@ -622,6 +718,17 @@ export function AgentPanel({
                   ? "Refresh review"
                   : "Prepare review"}
               </button>
+              {canSteer ? (
+                <button
+                  type="button"
+                  className="agent-review-assistant"
+                  disabled={busy}
+                  onClick={() => void startReviewAssistant()}
+                >
+                  <Bot aria-hidden="true" />
+                  Ask review assistant
+                </button>
+              ) : null}
               {canMerge && selectedSession.reviewedAt ? (
                 <>
                   <button
@@ -751,7 +858,7 @@ export function AgentPanel({
             </button>
           </div>
 
-          {canSteer && activeSessionCount < 2 ? (
+          {canSteer && activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
             <button
               type="button"
               className={`agent-new-session ${composingNew ? "active" : ""}`}
@@ -798,35 +905,51 @@ export function AgentPanel({
               aria-label="Sessions"
             >
               {filteredSessions.map((session) => (
-                <button
+                <div
                   key={session.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={
-                    session.id === selectedSession?.id && !composingNew
-                  }
-                  className={
+                  className={`agent-session-row ${
                     session.id === selectedSession?.id && !composingNew
                       ? "active"
                       : ""
-                  }
-                  onClick={() => {
-                    setSelectedSessionId(session.id);
-                    setSelectedModel(session.model);
-                    setComposingNew(false);
-                  }}
+                  }`}
                 >
-                  <span className="agent-session-icon" aria-hidden="true">
-                    <MessageSquare />
-                  </span>
-                  <span>
-                    <strong>{session.name}</strong>
-                    <small>
-                      {formatAgentModelLabel(session.model)} / {session.status}
-                    </small>
-                  </span>
-                  <i className={`session-status status-${session.status}`} />
-                </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={
+                      session.id === selectedSession?.id && !composingNew
+                    }
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      setSelectedModel(session.model);
+                      setComposingNew(false);
+                    }}
+                  >
+                    <span className="agent-session-icon" aria-hidden="true">
+                      <MessageSquare />
+                    </span>
+                    <span>
+                      <strong>{session.name}</strong>
+                      <small>
+                        {formatAgentModelLabel(session.model)} /{" "}
+                        {session.status}
+                      </small>
+                    </span>
+                    <i className={`session-status status-${session.status}`} />
+                  </button>
+                  {canSteer ? (
+                    <button
+                      type="button"
+                      className="agent-session-delete"
+                      aria-label={`Delete ${session.name}`}
+                      title={`Delete ${session.name}`}
+                      disabled={busy}
+                      onClick={() => void deleteSession(session)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
               ))}
             </div>
           ) : sessions.length > 0 ? (
@@ -844,7 +967,10 @@ export function AgentPanel({
           <div className="agent-sidebar-foot">
             <GitBranch aria-hidden="true" />
             <span>
-              <strong>{activeSessionCount}/2</strong> parallel slots used
+              <strong>
+                {activeSessionCount}/{MAX_PARALLEL_AGENT_SESSIONS}
+              </strong>{" "}
+              parallel slots used
             </span>
           </div>
         </aside>
@@ -915,162 +1041,7 @@ export function AgentPanel({
             )}
           </div>
 
-          {!reviewPortalTarget &&
-          selectedSession &&
-          !composingNew &&
-          (canReview || canMerge) ? (
-            <details className="agent-review-disclosure">
-              <summary>
-                <span className="agent-review-summary-icon">
-                  <GitPullRequest aria-hidden="true" />
-                </span>
-                <span>
-                  <strong>Review changes</strong>
-                  <small>Inspect the agent&apos;s work before merging</small>
-                </span>
-                <ChevronDown
-                  className="agent-review-chevron"
-                  aria-hidden="true"
-                />
-              </summary>
-              {canReview &&
-              selectedSession.worktreeStatus !== "merged" &&
-              selectedSession.worktreeStatus !== "discarded" ? (
-                <div className="agent-review">
-                  <div className="agent-review-intro">
-                    <div>
-                      <FileCode2 aria-hidden="true" />
-                      <span>
-                        <strong>Check the proposed changes</strong>
-                        <small>
-                          Generate a diff, leave notes, then merge when it looks
-                          right.
-                        </small>
-                      </span>
-                    </div>
-                  </div>
-                  <div className="agent-review-actions">
-                    <button
-                      type="button"
-                      className="agent-review-primary"
-                      disabled={busy}
-                      onClick={() => void review(selectedSession.id)}
-                    >
-                      <GitPullRequest aria-hidden="true" />
-                      {selectedSession.reviewedAt
-                        ? "Refresh review"
-                        : "Prepare review"}
-                    </button>
-                    {canMerge && selectedSession.reviewedAt ? (
-                      <>
-                        <button
-                          type="button"
-                          className="agent-review-secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            void reviewAction(selectedSession.id, "rebase")
-                          }
-                        >
-                          Rebase
-                        </button>
-                        <button
-                          type="button"
-                          className="agent-review-merge"
-                          disabled={busy}
-                          onClick={() =>
-                            void reviewAction(selectedSession.id, "merge")
-                          }
-                        >
-                          Merge
-                        </button>
-                      </>
-                    ) : null}
-                    {canMerge ? (
-                      <button
-                        type="button"
-                        className="agent-discard"
-                        disabled={busy}
-                        onClick={() =>
-                          void reviewAction(selectedSession.id, "discard")
-                        }
-                      >
-                        <Trash2 aria-hidden="true" />
-                        Discard changes
-                      </button>
-                    ) : null}
-                  </div>
-                  {reviews[selectedSession.id] ? (
-                    <details>
-                      <summary>
-                        Reviewed diff ·{" "}
-                        {reviews[selectedSession.id]?.diffDigest.slice(0, 10)}
-                      </summary>
-                      <pre>
-                        {reviews[selectedSession.id]?.diff ||
-                          "No file changes."}
-                      </pre>
-                    </details>
-                  ) : null}
-                  {canReview ? (
-                    <div className="agent-review-comment">
-                      <div className="agent-review-comment-title">
-                        <MessageSquareText aria-hidden="true" />
-                        <span>
-                          <strong>Leave a review note</strong>
-                          <small>
-                            Point to a file or line when the feedback is
-                            specific.
-                          </small>
-                        </span>
-                      </div>
-                      <div className="agent-review-comment-location">
-                        <input
-                          aria-label="Comment file path"
-                          value={commentPath}
-                          onChange={(event) =>
-                            setCommentPath(event.target.value)
-                          }
-                          placeholder="src/file.ts (optional)"
-                        />
-                        <input
-                          aria-label="Comment line number"
-                          inputMode="numeric"
-                          value={commentLine}
-                          onChange={(event) =>
-                            setCommentLine(event.target.value)
-                          }
-                          placeholder="Line"
-                        />
-                      </div>
-                      <textarea
-                        aria-label="Review comment"
-                        value={commentBody}
-                        onChange={(event) => setCommentBody(event.target.value)}
-                        placeholder="Leave an inline review note without running an agent…"
-                        rows={3}
-                      />
-                      <button
-                        type="button"
-                        disabled={busy || !commentBody.trim()}
-                        onClick={() => void addComment()}
-                      >
-                        <MessageSquareText aria-hidden="true" />
-                        {busy ? "Saving note…" : "Add note"}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="agent-review-result">
-                  {selectedSession.worktreeStatus === "merged"
-                    ? "Merged into the integration worktree."
-                    : selectedSession.worktreeStatus === "discarded"
-                      ? "Worktree discarded."
-                      : "Reviewer capability is required to inspect this worktree."}
-                </div>
-              )}
-            </details>
-          ) : null}
+          {!reviewPortalTarget ? reviewPanel : null}
 
           <div
             className={`agent-chat-composer ${draggingFiles ? "is-dragging" : ""}`}
@@ -1196,7 +1167,8 @@ export function AgentPanel({
                   ) : null}
                 </div>
               </>
-            ) : showNewComposer && activeSessionCount < 2 ? (
+            ) : showNewComposer &&
+              activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
               <>
                 <textarea
                   ref={composerTextareaRef}
@@ -1260,8 +1232,8 @@ export function AgentPanel({
               </>
             ) : (
               <p className="agent-chat-composer-full">
-                Two active worktrees are running. Review or discard one to start
-                another session.
+                {MAX_PARALLEL_AGENT_SESSIONS} active worktrees are running.
+                Delete, review, or discard one to start another session.
               </p>
             )}
           </div>

@@ -42,6 +42,8 @@ const createSchema = z.object({
 class DuplicateIssueError extends Error {}
 class AgentCapacityError extends Error {}
 
+const MAX_PARALLEL_AGENT_SESSIONS = 3;
+
 function isUniqueViolation(error: unknown) {
   return (
     typeof error === "object" &&
@@ -208,9 +210,9 @@ export async function POST(
               inArray(schema.worktrees.status, ["active", "frozen"]),
             ),
           );
-        if (Number(sessionCount?.value ?? 0) >= 2) {
+        if (Number(sessionCount?.value ?? 0) >= MAX_PARALLEL_AGENT_SESSIONS) {
           throw new AgentCapacityError(
-            "A workspace supports at most two agent sessions.",
+            `A workspace supports at most ${MAX_PARALLEL_AGENT_SESSIONS} agent sessions.`,
           );
         }
         const [repository] = await transaction

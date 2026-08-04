@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentPanel,
   getAgentPollDelay,
+  MAX_PARALLEL_AGENT_SESSIONS,
+  type WorktreeReview,
   type AgentSession,
 } from "./agent-panel";
 
@@ -202,6 +204,100 @@ describe("AgentPanel", () => {
     expect(getAgentPollDelay([{ status: "waiting" }])).toBe(5_000);
     expect(getAgentPollDelay([{ status: "idle" }])).toBe(30_000);
     expect(getAgentPollDelay([])).toBe(30_000);
+  });
+
+  it("allows three parallel sessions", () => {
+    expect(MAX_PARALLEL_AGENT_SESSIONS).toBe(3);
+  });
+
+  it("deletes a chat after confirmation", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = vi.fn().mockImplementation((_input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          init?.method === "DELETE"
+            ? null
+            : { sessions: [], stateEvents: [], models: [] },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[session]}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Delete Improve workspace navigation",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workspaces/workspace-1/agents/session-1",
+        { method: "DELETE" },
+      );
+      expect(screen.getByText("No conversations yet")).toBeInTheDocument();
+    });
+    expect(confirm).toHaveBeenCalledWith(
+      'Delete "Improve workspace navigation"? This removes its conversation and worktree.',
+    );
+  });
+
+  it("can start a review assistant from the review panel", async () => {
+    const reviewed: WorktreeReview = {
+      baseSha: "base",
+      headSha: "head",
+      diff: "diff --git a/app.ts b/app.ts\n+const answer = 42;",
+      diffDigest: "digest",
+    };
+    const fetchMock = vi.fn().mockImplementation((input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () => {
+          if (init?.method === "POST" && String(input).endsWith("/review")) {
+            return { review: reviewed };
+          }
+          if (init?.method === "POST") return { sessionId: "review-session" };
+          return {
+            sessions: [session, { ...session, id: "review-session" }],
+            stateEvents: [],
+            models: [],
+          };
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[session]}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ask review assistant" }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workspaces/workspace-1/agents",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    const createCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input) === "/api/workspaces/workspace-1/agents" &&
+        init?.method === "POST",
+    );
+    expect(createCall?.[1]?.body).toContain("diff --git a/app.ts b/app.ts");
   });
 
   it("includes dropped or selected text files in a new agent prompt", async () => {

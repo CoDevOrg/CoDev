@@ -490,8 +490,14 @@ export async function getProviderCredentialStatus(
   scopeType: ScopeType,
   scopeId: string,
   provider: AuthProvider,
+  credentialType?: CredentialType,
 ) {
-  const credential = await findCredential(scopeType, scopeId, provider);
+  const credential = await findCredential(
+    scopeType,
+    scopeId,
+    provider,
+    credentialType,
+  );
   return credential
     ? {
         credentialType: credential.credentialType as CredentialType,
@@ -501,6 +507,19 @@ export async function getProviderCredentialStatus(
         updatedAt: credential.updatedAt,
       }
     : null;
+}
+
+export async function getOAuthCredentialStatus(
+  scopeType: ScopeType,
+  scopeId: string,
+  provider: AuthProvider,
+) {
+  return getProviderCredentialStatus(
+    scopeType,
+    scopeId,
+    provider,
+    "OAUTH_TOKEN",
+  );
 }
 
 export async function deleteProviderCredential(

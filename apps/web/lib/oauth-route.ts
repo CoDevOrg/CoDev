@@ -14,6 +14,7 @@ import {
   getOAuthConfiguration,
   oauthCallbackPath,
   oauthCookieName,
+  OAuthConfigurationError,
   openOAuthState,
   persistOAuthTokens,
   sealOAuthState,
@@ -36,7 +37,7 @@ function safeReturnTo(
 function redirectToSettings(
   request: Request,
   provider: OAuthProvider,
-  status: "connected" | "denied" | "error",
+  status: "connected" | "denied" | "error" | "not_configured",
   returnTo = DEFAULT_OAUTH_RETURN_TO,
 ) {
   const url = new URL(safeReturnTo(returnTo), request.url);
@@ -69,6 +70,9 @@ async function authorizeScope(
     }
   }
 
+  const returnTo = safeReturnTo(
+    new URL(request.url).searchParams.get("returnTo"),
+  );
   try {
     const configuration = getOAuthConfiguration(
       provider,
@@ -94,10 +98,10 @@ async function authorizeScope(
     });
     return response;
   } catch {
-    return NextResponse.json(
-      { error: "OAuth is not configured for this provider." },
-      { status: 503 },
-    );
+    // A browser navigation should return to Settings with an actionable
+    // message instead of exposing a raw API error page. Provider credentials
+    // are intentionally never included in the redirect.
+    return redirectToSettings(request, provider, "not_configured", returnTo);
   }
 }
 
@@ -190,11 +194,16 @@ export async function finishOAuth(request: Request, provider: OAuthProvider) {
     return clearCookie(
       redirectToSettings(request, provider, "connected", returnTo),
     );
-  } catch {
+  } catch (error) {
     // Never place provider error bodies, authorization codes, or tokens in the
     // redirect or response body.
     return clearCookie(
-      redirectToSettings(request, provider, "error", returnTo),
+      redirectToSettings(
+        request,
+        provider,
+        error instanceof OAuthConfigurationError ? "not_configured" : "error",
+        returnTo,
+      ),
     );
   }
 }
