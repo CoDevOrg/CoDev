@@ -9,12 +9,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
-  Code2,
   FileCode2,
-  Files,
   GitBranch,
-  MonitorPlay,
-  PanelRightClose,
   RefreshCw,
   Search,
   TerminalSquare,
@@ -42,10 +38,15 @@ import { AgentPanel, type AgentSession } from "@/components/agent-panel";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  WorkspaceViewNav,
+  type WorkspacePrimaryView,
+} from "@/components/workspace-view-nav";
+import { TeamStatsPanel } from "@/components/team-stats-panel";
 import type { WorkspaceShareMember } from "@/components/share-dialog";
 import type { AgentEvent } from "@codev/shared-types";
 
-type IdeView = "chat" | "files" | "code" | "preview" | "terminal";
+type IdeView = "chat" | "files" | "code" | "stats" | "preview" | "terminal";
 type RuntimeStatus =
   | "provisioning"
   | "ready"
@@ -81,6 +82,10 @@ function fileName(path: string) {
 
 function collaboratorLabel(collaborator: CollaborationUser) {
   return collaborator.name ?? collaborator.login;
+}
+
+function isCanvasView(view: IdeView) {
+  return view === "files" || view === "code" || view === "preview";
 }
 
 export interface WorkspaceIdeProps {
@@ -848,6 +853,25 @@ export function WorkspaceIde({
     }
     return paths;
   }, [distinctCollaborators]);
+  const activePrimaryView: WorkspacePrimaryView | null =
+    view === "chat"
+      ? "chat"
+      : view === "files" || view === "code"
+        ? "code"
+        : view === "stats"
+          ? "stats"
+          : view === "preview"
+            ? "preview"
+            : null;
+  const selectPrimaryView = useCallback(
+    (nextView: WorkspacePrimaryView) => {
+      if (nextView === "preview" && !hasPreview) return;
+      setSearchOpen(false);
+      setTerminalCollapsed(true);
+      setView(nextView === "chat" ? "chat" : nextView);
+    },
+    [hasPreview],
+  );
 
   return (
     <main className="live-ide" aria-label="CoDev browser IDE">
@@ -875,71 +899,24 @@ export function WorkspaceIde({
           <span>{branch}</span>
         </div>
         <div className="topbar-actions">
-          <nav className="workspace-canvas-tools" aria-label="Workspace canvas">
-            <button
-              type="button"
-              className={view === "files" ? "active" : ""}
-              aria-label="Open files"
-              aria-pressed={view === "files"}
-              onClick={() => {
-                setView("files");
-                setSearchOpen(false);
-                setTerminalCollapsed(true);
-              }}
-            >
-              <Files aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className={view === "code" ? "active" : ""}
-              aria-label="Open code editor"
-              aria-pressed={view === "code"}
-              onClick={() => {
-                setView("code");
-                setTerminalCollapsed(true);
-              }}
-            >
-              <Code2 aria-hidden="true" />
-            </button>
-            {hasPreview ? (
-              <button
-                type="button"
-                className={view === "preview" ? "active" : ""}
-                aria-label="Open app preview"
-                aria-pressed={view === "preview"}
-                onClick={() => {
-                  setView("preview");
-                  setTerminalCollapsed(true);
-                }}
-              >
-                <MonitorPlay aria-hidden="true" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={view === "terminal" ? "active" : ""}
-              aria-label="Open terminal"
-              aria-pressed={view === "terminal"}
-              onClick={() => {
-                setView("terminal");
-                setTerminalCollapsed(false);
-              }}
-            >
-              <TerminalSquare aria-hidden="true" />
-            </button>
-            {view !== "chat" ? (
-              <button
-                type="button"
-                aria-label="Close canvas"
-                onClick={() => {
-                  setView("chat");
-                  setTerminalCollapsed(true);
-                }}
-              >
-                <PanelRightClose aria-hidden="true" />
-              </button>
-            ) : null}
-          </nav>
+          <WorkspaceViewNav
+            activeView={activePrimaryView}
+            hasPreview={hasPreview}
+            onSelect={selectPrimaryView}
+          />
+          <button
+            className={`terminal-utility${view === "terminal" ? " active" : ""}`}
+            type="button"
+            aria-label="Open terminal"
+            aria-pressed={view === "terminal"}
+            onClick={() => {
+              setView("terminal");
+              setTerminalCollapsed(false);
+            }}
+          >
+            <TerminalSquare aria-hidden="true" />
+            <span>Terminal</span>
+          </button>
           <div id="topbar-review-actions" className="topbar-review-actions" />
           <ThemeToggle />
           <WorkspaceShareButton
@@ -1049,19 +1026,28 @@ export function WorkspaceIde({
           .join(" ")}
       >
         <div
-          className={["ide-main-stage", view !== "chat" ? "canvas-open" : ""]
+          className={["ide-main-stage", isCanvasView(view) ? "canvas-open" : ""]
             .filter(Boolean)
             .join(" ")}
         >
-          <AgentPanel
-            workspaceId={workspaceId}
-            canMerge={canMerge}
-            canReview={canReview}
-            canSteer={canEdit && hasRepository}
-            initialSessions={initialAgentSessions}
-            initialStateEvents={initialStateEvents}
-            onTurnCompleted={handleTurnCompleted}
-          />
+          {view === "stats" ? (
+            <TeamStatsPanel
+              sessions={initialAgentSessions}
+              collaborators={distinctCollaborators}
+              currentUser={user}
+              peopleHere={peopleHere}
+            />
+          ) : (
+            <AgentPanel
+              workspaceId={workspaceId}
+              canMerge={canMerge}
+              canReview={canReview}
+              canSteer={canEdit && hasRepository}
+              initialSessions={initialAgentSessions}
+              initialStateEvents={initialStateEvents}
+              onTurnCompleted={handleTurnCompleted}
+            />
+          )}
           {hasPreview && view === "preview" ? (
             <PreviewPane
               workspaceId={workspaceId}

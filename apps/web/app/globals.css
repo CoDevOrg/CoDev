@@ -9593,6 +9593,86 @@ html .live-ide-topbar .topbar-actions {
   margin-left: 10px;
 }
 
+html .live-ide .workspace-view-nav {
+  display: flex;
+  min-width: 0;
+  height: 34px;
+  padding: 3px;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 10px;
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .workspace-view-nav button {
+  display: inline-flex;
+  min-height: 26px;
+  padding: 0 10px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--workspace-faint);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html .live-ide .workspace-view-nav button svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+html .live-ide .workspace-view-nav button:hover:not(:disabled) {
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-ink);
+}
+
+html .live-ide .workspace-view-nav button.active {
+  background: var(--workspace-accent);
+  color: var(--workspace-surface-raised);
+  box-shadow: 0 2px 5px rgba(8, 24, 17, 0.12);
+}
+
+html .live-ide .workspace-view-nav button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+html .live-ide .terminal-utility {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 0 9px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--workspace-line-strong);
+  border-radius: 8px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html .live-ide .terminal-utility svg {
+  width: 14px;
+  height: 14px;
+}
+
+html .live-ide .terminal-utility:hover,
+html .live-ide .terminal-utility.active {
+  border-color: var(--workspace-accent);
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+}
+
 html .live-ide .topbar-review-actions {
   position: relative;
   display: flex;
@@ -9701,6 +9781,238 @@ html .live-ide-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "stage";
+}
+
+html .live-ide-grid.view-stats > .ide-main-stage {
+  display: block;
+  overflow: auto;
+}
+
+html .live-ide .team-stats-panel {
+  width: min(1040px, calc(100% - 48px));
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 40px 0 56px;
+}
+
+html .live-ide .team-stats-header,
+html .live-ide .team-stats-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+html .live-ide .team-stats-eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--workspace-accent);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html .live-ide .team-stats-header h1,
+html .live-ide .team-stats-section-heading h2 {
+  margin: 0;
+  color: var(--workspace-ink);
+}
+
+html .live-ide .team-stats-header h1 {
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: -0.04em;
+}
+
+html .live-ide .team-stats-header p {
+  max-width: 520px;
+  margin: 10px 0 0;
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+html .live-ide .team-stats-live-status {
+  display: inline-flex;
+  min-height: 28px;
+  padding: 0 10px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 999px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+html .live-ide .team-stats-live-status i,
+html .live-ide .team-person > i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #3b9b6c;
+}
+
+html .live-ide .team-stats-cards {
+  display: grid;
+  margin-top: 28px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+html .live-ide .team-stat-card {
+  display: flex;
+  min-height: 126px;
+  padding: 18px;
+  align-items: flex-start;
+  gap: 13px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 14px;
+  background: var(--workspace-surface-raised);
+  box-shadow: 0 8px 20px rgba(8, 24, 17, 0.04);
+}
+
+html .live-ide .team-stat-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+}
+
+html .live-ide .team-stat-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+html .live-ide .team-stat-card small,
+html .live-ide .team-stat-card span,
+html .live-ide .team-person small,
+html .live-ide .team-worktree small {
+  display: block;
+  color: var(--workspace-muted);
+  font-size: 10px;
+}
+
+html .live-ide .team-stat-card strong {
+  display: block;
+  margin: 3px 0 2px;
+  color: var(--workspace-ink);
+  font-size: 28px;
+  line-height: 1;
+}
+
+html .live-ide .team-stats-lower-grid {
+  display: grid;
+  margin-top: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+html .live-ide .team-stats-section {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 14px;
+  background: var(--workspace-surface-raised);
+}
+
+html .live-ide .team-stats-section-heading {
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+html .live-ide .team-stats-section-heading h2 {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+html .live-ide .team-stats-section-heading > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--workspace-faint);
+}
+
+html .live-ide .team-people-list,
+html .live-ide .team-worktree-list {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+}
+
+html .live-ide .team-person,
+html .live-ide .team-worktree {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  padding: 7px 0;
+  align-items: center;
+  gap: 10px;
+}
+
+html .live-ide .team-person-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+html .live-ide .team-person > span:nth-child(2),
+html .live-ide .team-worktree > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+html .live-ide .team-person strong,
+html .live-ide .team-worktree strong {
+  display: block;
+  overflow: hidden;
+  color: var(--workspace-ink);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html .live-ide .team-person > i {
+  margin-left: auto;
+}
+
+html .live-ide .team-worktree {
+  border-bottom: 1px solid var(--workspace-line);
+}
+
+html .live-ide .team-worktree:last-child {
+  border-bottom: 0;
+}
+
+html .live-ide .team-worktree b {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--workspace-accent-soft);
+  color: var(--workspace-accent);
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+html .live-ide .team-stats-empty {
+  margin: 8px 0;
+  color: var(--workspace-muted);
+  font-size: 11px;
 }
 
 html .live-ide-grid > .ide-main-stage {
@@ -9888,6 +10200,19 @@ html .live-ide .agent-sidebar-foot {
 }
 
 @media (max-width: 860px) {
+  html .live-ide .workspace-view-nav button {
+    padding-inline: 8px;
+  }
+
+  html .live-ide .workspace-view-nav button span,
+  html .live-ide .terminal-utility span {
+    display: none;
+  }
+
+  html .live-ide .workspace-view-nav button {
+    justify-content: center;
+  }
+
   html .live-ide-grid.view-code,
   html .live-ide-grid.view-files,
   html .live-ide-grid.view-preview {
@@ -9913,6 +10238,20 @@ html .live-ide .agent-sidebar-foot {
 }
 
 @media (max-width: 640px) {
+  html .live-ide .workspace-view-nav {
+    flex: 1 1 auto;
+  }
+
+  html .live-ide .workspace-view-nav button {
+    flex: 1 1 0;
+  }
+
+  html .live-ide .terminal-utility {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+
   html .live-ide-topbar .topbar-actions {
     margin-left: auto;
   }
@@ -10230,6 +10569,25 @@ html .live-ide .agent-sidebar-foot strong {
 }
 
 @media (max-width: 640px) {
+  html .live-ide .team-stats-panel {
+    width: calc(100% - 28px);
+    padding-top: 24px;
+  }
+
+  html .live-ide .team-stats-header {
+    display: block;
+  }
+
+  html .live-ide .team-stats-live-status {
+    width: fit-content;
+    margin-top: 16px;
+  }
+
+  html .live-ide .team-stats-cards,
+  html .live-ide .team-stats-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
   html .live-ide .agent-panel-layout {
     grid-template-columns: 66px minmax(0, 1fr);
   }
