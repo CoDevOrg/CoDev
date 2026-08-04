@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: workspace-lifecycle
+  cancel-in-progress: false
+
 jobs:
   reconcile:
     runs-on: ubuntu-latest
