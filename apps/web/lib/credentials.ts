@@ -136,18 +136,27 @@ async function findCredential(
   scopeType: ScopeType,
   scopeId: string,
   provider: AuthProvider,
+  credentialType?: CredentialType,
 ) {
+  const predicates = [
+    eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
+    eq(schema.providerCredentials.scopeId, scopeId),
+    eq(schema.providerCredentials.provider, parseProvider(provider)),
+    eq(schema.providerCredentials.isConnected, true),
+  ];
+  if (credentialType) {
+    predicates.push(
+      eq(
+        schema.providerCredentials.credentialType,
+        parseCredentialType(credentialType),
+      ),
+    );
+  }
+
   const [credential] = await getDatabase()
     .select()
     .from(schema.providerCredentials)
-    .where(
-      and(
-        eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
-        eq(schema.providerCredentials.scopeId, scopeId),
-        eq(schema.providerCredentials.provider, parseProvider(provider)),
-        eq(schema.providerCredentials.isConnected, true),
-      ),
-    )
+    .where(and(...predicates))
     .orderBy(asc(schema.providerCredentials.priorityOrder))
     .limit(1);
   return credential ?? null;

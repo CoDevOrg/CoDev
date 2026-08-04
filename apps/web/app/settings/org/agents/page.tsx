@@ -1,19 +1,30 @@
-import Link from "next/link";
-
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
+import {
+  OAuthConnectionsCard,
+  parseOAuthNotice,
+} from "@/components/oauth-connections-card";
 import {
   OrganizationSettingsCard,
   OrganizationSettingsPage,
   SettingsCard,
 } from "@/components/settings/settings-content";
 import { WorkspaceCredentialForm } from "@/components/workspace-credential-form";
-import { getProviderCredentialStatus } from "@/lib/credentials";
+import {
+  getOAuthCredentialStatus,
+  getProviderCredentialStatus,
+} from "@/lib/credentials";
 import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
+import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
 
-export default async function OrganizationAgentsPage() {
+export default async function OrganizationAgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ oauth?: string; status?: string }>;
+}) {
   const user = await requireUser();
   const context = await getActiveOrganizationSettingsContext(user.id);
+  const params = await searchParams;
   const credentials = context
     ? await Promise.all([
         getProviderCredentialStatus(
@@ -31,8 +42,14 @@ export default async function OrganizationAgentsPage() {
           context.workspace.id,
           "bedrock",
         ),
+        getOAuthCredentialStatus("WORKSPACE", context.workspace.id, "openai"),
+        getOAuthCredentialStatus(
+          "WORKSPACE",
+          context.workspace.id,
+          "anthropic",
+        ),
       ])
-    : [null, null, null];
+    : [null, null, null, null, null];
 
   return (
     <OrganizationSettingsPage
@@ -62,22 +79,20 @@ export default async function OrganizationAgentsPage() {
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
-          <SettingsCard title="OAuth connections">
-            <div className="form-actions">
-              <Link
-                className="primary-button"
-                href={`/api/auth/oauth/claude?scopeType=WORKSPACE&workspaceId=${context.workspace.id}&returnTo=/settings/org/agents`}
-              >
-                Connect Claude Code
-              </Link>
-              <Link
-                className="primary-button"
-                href={`/api/auth/oauth/codex?scopeType=WORKSPACE&workspaceId=${context.workspace.id}&returnTo=/settings/org/agents`}
-              >
-                Connect Codex
-              </Link>
-            </div>
-          </SettingsCard>
+          <OAuthConnectionsCard
+            connected={{
+              claude: credentials[4]?.credentialType === "OAUTH_TOKEN",
+              codex: credentials[3]?.credentialType === "OAUTH_TOKEN",
+            }}
+            configured={{
+              claude: getOAuthConfigurationStatus("claude").configured,
+              codex: getOAuthConfigurationStatus("codex").configured,
+            }}
+            notice={parseOAuthNotice(params)}
+            returnTo="/settings/org/agents"
+            scopeType="WORKSPACE"
+            workspaceId={context.workspace.id}
+          />
           <SettingsCard title="Amazon Bedrock">
             <BedrockRoleForm
               currentRole={credentials[2]?.awsRoleArn}

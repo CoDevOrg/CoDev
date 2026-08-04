@@ -5,7 +5,9 @@ import {
   createOAuthState,
   exchangeOAuthCode,
   getOAuthConfiguration,
+  getOAuthConfigurationStatus,
   openOAuthState,
+  OAuthConfigurationError,
   pkceChallenge,
   sealOAuthState,
 } from "./oauth";
@@ -16,6 +18,18 @@ afterEach(() => {
 });
 
 describe("provider OAuth", () => {
+  it("reports missing provider client configuration without exposing values", () => {
+    vi.stubEnv("CLAUDE_OAUTH_CLIENT_ID", "");
+
+    expect(getOAuthConfigurationStatus("claude")).toEqual({
+      configured: false,
+      missing: ["CLAUDE_OAUTH_CLIENT_ID"],
+    });
+    expect(() =>
+      getOAuthConfiguration("claude", "https://app.example.com"),
+    ).toThrowError(OAuthConfigurationError);
+  });
+
   it("seals and validates the PKCE state payload", () => {
     vi.stubEnv("AUTH_SECRET", "a".repeat(40));
     const state = createOAuthState({

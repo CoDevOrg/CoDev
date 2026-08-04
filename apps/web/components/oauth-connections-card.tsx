@@ -77,7 +77,7 @@ function connectionHref({
 }: {
   provider: OAuthProvider;
   scopeType: "USER" | "WORKSPACE";
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   returnTo: string;
 }) {
   const query = new URLSearchParams({ returnTo });
@@ -90,16 +90,18 @@ function connectionHref({
 
 export function OAuthConnectionsCard({
   connected,
+  configured,
   notice,
   returnTo,
   scopeType = "USER",
   workspaceId,
 }: {
   connected: Record<OAuthProvider, boolean>;
-  notice?: OAuthNotice;
+  configured: Record<OAuthProvider, boolean>;
+  notice?: OAuthNotice | undefined;
   returnTo: string;
   scopeType?: "USER" | "WORKSPACE";
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 }) {
   const noticeDetails = notice ? noticeCopy(notice) : null;
 
@@ -109,10 +111,7 @@ export function OAuthConnectionsCard({
       title="OAuth connections"
     >
       {noticeDetails ? (
-        <div
-          className={noticeDetails.className}
-          role={noticeDetails.role}
-        >
+        <div className={noticeDetails.className} role={noticeDetails.role}>
           {noticeDetails.text}
         </div>
       ) : null}
@@ -120,6 +119,7 @@ export function OAuthConnectionsCard({
         {(["claude", "codex"] as const).map((provider) => {
           const label = providerLabel(provider);
           const isConnected = connected[provider];
+          const isConfigured = configured[provider];
           return (
             <div className="oauth-connection-card" key={provider}>
               <div className="oauth-connection-card-copy">
@@ -127,25 +127,37 @@ export function OAuthConnectionsCard({
                 <small>
                   {isConnected
                     ? "Connected and encrypted"
-                    : "Not connected"}
+                    : isConfigured
+                      ? "Not connected"
+                      : "Provider setup required"}
                 </small>
               </div>
               <span
                 className={`oauth-connection-state ${isConnected ? "is-connected" : ""}`}
               >
-                {isConnected ? "Connected" : "Not connected"}
+                {isConnected
+                  ? "Connected"
+                  : isConfigured
+                    ? "Not connected"
+                    : "Setup required"}
               </span>
-              <Link
-                className="secondary-button"
-                href={connectionHref({
-                  provider,
-                  returnTo,
-                  scopeType,
-                  workspaceId,
-                })}
-              >
-                {isConnected ? "Reconnect" : "Connect"}
-              </Link>
+              {isConfigured ? (
+                <Link
+                  className="secondary-button"
+                  href={connectionHref({
+                    provider,
+                    returnTo,
+                    scopeType,
+                    workspaceId,
+                  })}
+                >
+                  {isConnected ? "Reconnect" : "Connect"}
+                </Link>
+              ) : (
+                <span className="oauth-connection-unavailable">
+                  Waiting for setup
+                </span>
+              )}
             </div>
           );
         })}
