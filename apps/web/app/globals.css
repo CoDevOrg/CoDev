@@ -9156,6 +9156,111 @@ html .live-ide .agent-chat-bubble.assistant p {
   line-height: 1.68;
 }
 
+html .live-ide .agent-markdown {
+  color: var(--workspace-ink);
+  font-size: 14px;
+  line-height: 1.68;
+}
+
+html .live-ide .agent-markdown > :first-child {
+  margin-top: 0;
+}
+
+html .live-ide .agent-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+html .live-ide .agent-markdown p,
+html .live-ide .agent-markdown h1,
+html .live-ide .agent-markdown h2,
+html .live-ide .agent-markdown h3,
+html .live-ide .agent-markdown h4,
+html .live-ide .agent-markdown h5,
+html .live-ide .agent-markdown h6 {
+  margin: 0 0 11px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+html .live-ide .agent-markdown h1,
+html .live-ide .agent-markdown h2,
+html .live-ide .agent-markdown h3 {
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+html .live-ide .agent-markdown h1 {
+  font-size: 20px;
+}
+
+html .live-ide .agent-markdown h2 {
+  font-size: 17px;
+}
+
+html .live-ide .agent-markdown h3 {
+  font-size: 15px;
+}
+
+html .live-ide .agent-markdown ul,
+html .live-ide .agent-markdown ol {
+  margin: 0 0 11px;
+  padding-left: 22px;
+}
+
+html .live-ide .agent-markdown li + li {
+  margin-top: 5px;
+}
+
+html .live-ide .agent-markdown pre {
+  position: relative;
+  margin: 0 0 11px;
+  padding: 28px 12px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--workspace-line);
+  border-radius: 9px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-ink);
+  font:
+    12px/1.55 var(--font-geist-mono),
+    monospace;
+  white-space: pre;
+}
+
+html .live-ide .agent-markdown pre code {
+  color: inherit;
+  font: inherit;
+}
+
+html .live-ide .agent-markdown-language {
+  position: absolute;
+  top: 7px;
+  left: 12px;
+  color: var(--workspace-faint);
+  font:
+    9px/1 var(--font-geist-mono),
+    monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+html .live-ide .agent-markdown :not(pre) > code {
+  padding: 2px 5px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 5px;
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-accent);
+  font:
+    0.9em var(--font-geist-mono),
+    monospace;
+}
+
+html .live-ide .agent-markdown a {
+  color: var(--workspace-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 html .live-ide .agent-chat-bubble-attachments {
   display: flex;
   max-width: 100%;
