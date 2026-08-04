@@ -35,6 +35,11 @@ import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
 
 const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
+const ACTIVE_AGENT_POLL_INTERVAL = 5_000;
+const IDLE_AGENT_POLL_INTERVAL = 30_000;
+const ERROR_AGENT_POLL_INTERVAL = 15_000;
+
+const ACTIVE_AGENT_STATUSES = new Set(["queued", "running", "waiting"]);
 
 function formatAgentModelLabel(model: string) {
   if (!model.startsWith("gpt-")) return model;
@@ -43,6 +48,12 @@ function formatAgentModelLabel(model: string) {
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+export function getAgentPollDelay(sessions: Pick<AgentSession, "status">[]) {
+  return sessions.some((session) => ACTIVE_AGENT_STATUSES.has(session.status))
+    ? ACTIVE_AGENT_POLL_INTERVAL
+    : IDLE_AGENT_POLL_INTERVAL;
 }
 
 export type AgentSession = {
@@ -283,24 +294,59 @@ export function AgentPanel({
       return result.sessions[0]?.id ?? null;
     });
     if (result.sessions.length === 0) setComposingNew(true);
+    return result.sessions;
   }, [endpoint]);
 
   useEffect(() => {
     let stopped = false;
+    let polling = false;
+    let timer: number | null = null;
+
+    const schedule = (delay: number) => {
+      if (stopped) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        void poll();
+      }, delay);
+    };
+
     const poll = async () => {
+      if (stopped || polling) return;
+      if (document.visibilityState === "hidden") {
+        schedule(IDLE_AGENT_POLL_INTERVAL);
+        return;
+      }
+      polling = true;
       try {
-        await refresh();
+        const nextSessions = await refresh();
+        schedule(getAgentPollDelay(nextSessions));
       } catch (caught) {
         if (!stopped)
           setError(
             caught instanceof Error ? caught.message : "Agent refresh failed.",
           );
+        schedule(ERROR_AGENT_POLL_INTERVAL);
+      } finally {
+        polling = false;
       }
-      if (!stopped) window.setTimeout(() => void poll(), 1_500);
     };
+
     void poll();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      void poll();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh]);
 

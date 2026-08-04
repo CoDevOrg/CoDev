@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AgentPanel, type AgentSession } from "./agent-panel";
+import {
+  AgentPanel,
+  getAgentPollDelay,
+  type AgentSession,
+} from "./agent-panel";
 
 const session: AgentSession = {
   id: "session-1",
@@ -151,6 +155,13 @@ describe("AgentPanel", () => {
     expect(
       screen.getByRole("tab", { name: /Run the test suite/i }),
     ).toBeInTheDocument();
+  });
+
+  it("slows agent polling when sessions are idle", () => {
+    expect(getAgentPollDelay([{ status: "running" }])).toBe(5_000);
+    expect(getAgentPollDelay([{ status: "waiting" }])).toBe(5_000);
+    expect(getAgentPollDelay([{ status: "idle" }])).toBe(30_000);
+    expect(getAgentPollDelay([])).toBe(30_000);
   });
 
   it("includes dropped or selected text files in a new agent prompt", async () => {
