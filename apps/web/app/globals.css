@@ -3898,43 +3898,67 @@ footer > span {
 
 .repo-crumbs {
   display: flex;
-  min-width: 210px;
+  min-width: 0;
   align-items: center;
   gap: 5px;
+  overflow: hidden;
   color: #8791a5;
 }
 
 .repo-crumbs strong {
+  min-width: 0;
+  overflow: hidden;
   color: #e0e6f0;
   font-weight: 530;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .repo-crumbs i {
+  flex: 0 0 auto;
   color: #4e5754;
   font-style: normal;
 }
 
+.repo-crumbs > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .github-glyph {
+  flex: 0 0 auto;
   margin-right: 3px;
   color: #cbd2cf;
 }
 
 .topbar-center {
-  position: absolute;
-  left: 50%;
+  position: static;
+  left: auto;
   display: flex;
   height: 30px;
-  min-width: 198px;
+  min-width: 0;
+  max-width: 220px;
   padding: 0 8px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   border: 1px solid #2c3230;
   border-radius: 5px;
   background: #171a19;
-  transform: translateX(-50%);
+  transform: none;
+}
+
+.topbar-center > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .branch-icon {
+  flex: 0 0 auto;
   color: var(--teal);
 }
 
@@ -4902,7 +4926,9 @@ footer > span {
   display: flex;
   height: 48px;
   padding: 0 12px;
+  min-width: 0;
   align-items: center;
+  gap: 8px;
   border-bottom: 1px solid #252a28;
   background:
     radial-gradient(
@@ -4915,14 +4941,32 @@ footer > span {
 }
 
 .live-ide-topbar .workspace-brand {
+  flex: 0 0 auto;
   color: #e6ebe8;
   text-decoration: none;
 }
 
+.live-ide-topbar .topbar-divider {
+  flex: 0 0 auto;
+}
+
+.live-ide-topbar .repo-crumbs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .live-ide-topbar .topbar-center {
+  flex: 0 0 auto;
   justify-content: center;
+  margin-left: 0;
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
+}
+
+.live-ide-topbar .topbar-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
 }
 
 .live-ide-topbar .topbar-actions img {
@@ -8180,6 +8224,7 @@ html .live-ide-topbar {
   height: 56px;
   padding: 0 18px;
   flex: 0 0 56px;
+  gap: 10px;
   border-color: var(--workspace-line);
   background: var(--workspace-surface);
   box-shadow: 0 1px 0 var(--workspace-line);
@@ -8217,8 +8262,13 @@ html .live-ide .repo-crumbs i {
 }
 
 html .live-ide .topbar-center {
-  min-width: 150px;
+  position: static;
+  left: auto;
+  min-width: 0;
+  max-width: min(180px, 28vw);
   min-height: 32px;
+  margin-left: 0;
+  transform: none;
   border-color: var(--workspace-line);
   border-radius: 8px;
   background: var(--workspace-surface-muted);
@@ -9573,7 +9623,6 @@ html .live-ide .terminal-head {
 }
 
 @media (max-width: 1120px) {
-  html .live-ide .topbar-center,
   html .live-ide .connection-state,
   html .live-ide .presence-copy {
     display: none;
@@ -10315,15 +10364,23 @@ html .live-ide .agent-review-comment > button {
 
 /* Workspace navigation and review controls. */
 
+html .live-ide-topbar .repo-crumbs {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(420px, 34vw);
+}
+
 html .live-ide-topbar .topbar-center {
   position: static;
   flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: 0;
   transform: none;
 }
 
 html .live-ide-topbar .topbar-actions {
-  margin-left: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
 }
 
 html .live-ide .workspace-view-nav {
@@ -10542,7 +10599,7 @@ html
   box-shadow: 0 18px 45px rgba(8, 24, 17, 0.18);
 }
 
-@media (min-width: 641px) and (max-width: 1200px) {
+@media (min-width: 641px) and (max-width: 1280px) {
   html .live-ide-topbar .topbar-divider,
   html .live-ide-topbar .repo-crumbs {
     display: none;
@@ -10551,12 +10608,12 @@ html
   html .live-ide-topbar .topbar-center {
     position: static;
     flex: 0 0 auto;
-    margin-left: auto;
+    margin-left: 0;
     transform: none;
   }
 
   html .live-ide-topbar .topbar-actions {
-    margin-left: 10px;
+    margin-left: auto;
   }
 }
 

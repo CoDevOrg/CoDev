@@ -922,13 +922,16 @@ export function WorkspaceIde({
           <strong>CoDev</strong>
         </Link>
         <span className="topbar-divider" />
-        <div className="repo-crumbs">
+        <div
+          className="repo-crumbs"
+          title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}
+        >
           <GitBranch className="github-glyph" aria-hidden="true" />
-          <strong>{repository}</strong>
+          <strong title={repository}>{repository}</strong>
           <i>/</i>
           <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
         </div>
-        <div className="topbar-center">
+        <div className="topbar-center" title={branch}>
           <GitBranch className="branch-icon" aria-hidden="true" />
           <span>{branch}</span>
         </div>
