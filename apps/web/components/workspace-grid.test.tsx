@@ -39,8 +39,8 @@ describe("WorkspaceGrid", () => {
     ).toHaveAttribute("href", "/workspaces/workspace-1/ide");
   });
 
-  it("uses a user-friendly label for a workspace that needs attention", () => {
-    render(
+  it("does not show lifecycle status in the quick resume card", () => {
+    const { container } = render(
       <WorkspaceGrid
         appSlug={undefined}
         workspaces={[
@@ -58,6 +58,8 @@ describe("WorkspaceGrid", () => {
       />,
     );
 
-    expect(screen.getByText("Needs attention")).toHaveClass("status-pill");
+    expect(
+      container.querySelector(".home-quick-resume-card .status-pill"),
+    ).not.toBeInTheDocument();
   });
 });

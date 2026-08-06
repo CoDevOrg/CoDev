@@ -57,11 +57,6 @@ function getGreeting() {
   return "Good evening";
 }
 
-function getWorkspaceStatusLabel(status: string) {
-  if (status === "failed") return "Needs attention";
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 export function WorkspaceGrid({
   appSlug,
   user,
@@ -201,11 +196,6 @@ export function WorkspaceGrid({
                       {latestWorkspace.baseSha.slice(0, 7)}
                     </span>
                   ) : null}
-                  <span
-                    className={`status-pill status-${latestWorkspace.status}`}
-                  >
-                    {getWorkspaceStatusLabel(latestWorkspace.status)}
-                  </span>
                 </div>
               </div>
 
