@@ -1256,7 +1256,37 @@ export function WorkspaceIde({
                   : "Connect a GitHub repository to enable live coding."}
             </span>
             {runtimeMessage || runtimeError ? (
-              <small>{runtimeMessage || runtimeError}</small>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginTop: "6px",
+                }}
+              >
+                <small>{runtimeMessage || runtimeError}</small>
+                {canStartRuntime ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      autoStartAttempted.current = false;
+                      void startWorkspace();
+                    }}
+                    style={{
+                      padding: "3px 10px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      borderRadius: "6px",
+                      border: "1px solid rgba(212, 175, 55, 0.4)",
+                      background: "rgba(212, 175, 55, 0.15)",
+                      color: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Retry starting workspace
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
           <span className="runtime-state">
