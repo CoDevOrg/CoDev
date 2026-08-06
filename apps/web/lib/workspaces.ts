@@ -23,7 +23,7 @@ import {
   workspaceSyncBlockReason,
 } from "./workspace-lifecycle";
 
-export const workspaceRuntimeTtlMs = 4 * 60 * 60 * 1000;
+export const workspaceRuntimeTtlMs = 15 * 60 * 1000;
 
 export function inviteAllowsUser(
   invite: {

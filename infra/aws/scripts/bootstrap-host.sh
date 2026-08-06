@@ -241,7 +241,7 @@ Environment=CODEV_MAX_SANDBOXES=2
 Environment=CODEV_VM_VCPU=2
 Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
-Environment=CODEV_IDLE_TIMEOUT=4h
+Environment=CODEV_IDLE_TIMEOUT=15m
 Environment=CODEV_HOST_IDLE_TIMEOUT=15m
 Restart=always
 RestartSec=2
