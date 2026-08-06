@@ -121,8 +121,7 @@ install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu"
-cp -a /usr/lib/aarch64-linux-gnu/libcurl* "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu/" 2>/dev/null || true
-cp -a /usr/lib/aarch64-linux-gnu/libgnutls* "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu/" 2>/dev/null || true
+cp -a /usr/lib/aarch64-linux-gnu/* "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
