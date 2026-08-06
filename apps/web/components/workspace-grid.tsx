@@ -5,14 +5,11 @@ import { useMemo, useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
-  Clock,
   FolderGit2,
   Grid2X2,
   List,
   Search,
   SlidersHorizontal,
-  Sparkles,
-  Zap,
 } from "lucide-react";
 
 import { RepositoryPicker } from "@/components/repository-picker";
@@ -114,11 +111,9 @@ export function WorkspaceGrid({
       <section className="home-welcome-hero">
         <div className="home-welcome-header">
           <div className="home-welcome-text">
-            <span className="home-badge">
-              <Sparkles className="h-3.5 w-3.5" /> Workspace Home
-            </span>
+            <span className="home-badge">Workspace Home</span>
             <h1>
-              {greeting}, <span className="home-highlight-name">{firstName}</span> 👋
+              {greeting}, <span className="home-highlight-name">{firstName}</span>
             </h1>
             <p>
               Welcome back to CoDev. Pick up right where you left off or start a new
@@ -148,10 +143,8 @@ export function WorkspaceGrid({
         {latestWorkspace ? (
           <div className="home-quick-resume-card">
             <div className="resume-card-badge">
-              <Zap className="h-3.5 w-3.5" />
               <span>Quick Resume</span>
               <span className="resume-card-time">
-                <Clock className="h-3 w-3 inline mr-1" />
                 Active {formatUpdatedAt(latestWorkspace.updatedAt)}
               </span>
             </div>
