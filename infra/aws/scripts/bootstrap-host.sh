@@ -191,6 +191,23 @@ MemoryMax=1024M
 WantedBy=multi-user.target
 UNIT
 
+cat >"${work_dir}/rootfs/usr/local/bin/codev-wait-for-theia" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+for ((attempt = 1; attempt <= 100; attempt += 1)); do
+  if (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null; then
+    exec 3>&-
+    exit 0
+  fi
+  sleep 0.1
+done
+
+echo "Theia did not accept connections within 10 seconds." >&2
+exit 1
+SCRIPT
+chmod 0755 "${work_dir}/rootfs/usr/local/bin/codev-wait-for-theia"
+
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
 Description=CoDev guest daemon
@@ -200,6 +217,7 @@ Wants=codev-theia.service
 
 [Service]
 Type=simple
+ExecStartPre=/usr/local/bin/codev-wait-for-theia
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 Restart=on-failure

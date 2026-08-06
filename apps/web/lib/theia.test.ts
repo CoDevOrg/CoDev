@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -34,6 +37,20 @@ describe("Theia workspace transport", () => {
       ),
     ).toBe(
       "theia-connection-token=token; Path=/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/theia; HttpOnly; SameSite=Strict",
+    );
+  });
+
+  it("does not expose guestd before the Theia backend is ready", () => {
+    const bootstrap = readFileSync(
+      resolve(process.cwd(), "../../infra/aws/scripts/bootstrap-host.sh"),
+      "utf8",
+    );
+
+    expect(bootstrap).toContain(
+      'cat >"${work_dir}/rootfs/usr/local/bin/codev-wait-for-theia"',
+    );
+    expect(bootstrap).toContain(
+      "ExecStartPre=/usr/local/bin/codev-wait-for-theia",
     );
   });
 });
