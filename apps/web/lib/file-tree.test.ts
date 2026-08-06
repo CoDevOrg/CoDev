@@ -4,6 +4,7 @@ import {
   buildFileTree,
   collectDirectoryPaths,
   fileExtension,
+  getFileTreeChildrenAt,
 } from "./file-tree";
 
 describe("buildFileTree", () => {
@@ -72,5 +73,24 @@ describe("buildFileTree", () => {
     expect(collectDirectoryPaths(tree)).toEqual(["src", "src/lib"]);
     expect(fileExtension("apps/web/route.ts")).toBe("ts");
     expect(fileExtension(".gitignore")).toBe(".gitignore");
+  });
+
+  it("returns dig-in children for a cwd", () => {
+    const tree = buildFileTree([
+      { path: "src/lib/util.ts" },
+      { path: "src/index.ts" },
+      { path: "README.md" },
+    ]);
+    expect(getFileTreeChildrenAt(tree, "").map((node) => node.name)).toEqual([
+      "src",
+      "README.md",
+    ]);
+    expect(getFileTreeChildrenAt(tree, "src").map((node) => node.name)).toEqual(
+      ["lib", "index.ts"],
+    );
+    expect(
+      getFileTreeChildrenAt(tree, "src/lib").map((node) => node.name),
+    ).toEqual(["util.ts"]);
+    expect(getFileTreeChildrenAt(tree, "missing")).toEqual([]);
   });
 });

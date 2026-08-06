@@ -40,6 +40,22 @@ function send(socket: WebSocket, message: Record<string, unknown>) {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
 }
 
+async function startTerminalSession(
+  workspaceId: string,
+  dimensions: { rows: number; columns: number },
+) {
+  try {
+    return await startSandboxTerminal(workspaceId, dimensions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/capacity exceeded/i.test(message)) throw error;
+    // Older guests or racing reconnects may still surface capacity once;
+    // retry once after a short pause so the terminal stays available.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return await startSandboxTerminal(workspaceId, dimensions);
+  }
+}
+
 export async function handleSandboxTerminalSocket(
   workspaceId: string,
   socket: WebSocket,
@@ -102,7 +118,7 @@ export async function handleSandboxTerminalSocket(
         const message = parseMessage(data);
         if (message.type === "start") {
           if (sessionId) return;
-          sessionId = await startSandboxTerminal(workspaceId, message);
+          sessionId = await startTerminalSession(workspaceId, message);
           after = 0;
           const event = terminalEvent(
             workspaceId,
@@ -154,6 +170,10 @@ export async function handleSandboxTerminalSocket(
   });
   socket.once("error", () => {
     closed = true;
+    if (sessionId) {
+      void closeSandboxTerminal(workspaceId, sessionId).catch(() => undefined);
+      sessionId = null;
+    }
   });
 }
 

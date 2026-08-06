@@ -4916,7 +4916,7 @@ footer > span {
 
 .live-ide {
   min-height: 100dvh;
-  overflow: hidden;
+  overflow: visible;
   background: #0c0f0e;
   color: #e0e6f0;
 }
@@ -5068,6 +5068,7 @@ footer > span {
   position: relative;
   display: grid;
   height: calc(100dvh - 48px);
+  overflow: hidden;
   grid-template:
     "rail stage" minmax(0, 1fr)
     "rail terminal" 0
@@ -7132,6 +7133,26 @@ html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
   position: relative;
 }
 
+.profile-menu-compact .profile-menu-trigger {
+  min-height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  gap: 0;
+}
+
+.profile-menu-compact .profile-menu-trigger img,
+.profile-menu-compact .profile-menu-trigger .user-fallback {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.profile-menu-compact .profile-menu-popover {
+  right: 0;
+  left: auto;
+  z-index: 120;
+}
+
 .profile-menu-trigger {
   display: inline-flex;
   min-height: 38px;
@@ -8197,7 +8218,7 @@ html .live-ide {
   display: flex;
   min-height: 100dvh;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   background: var(--workspace-bg);
   color: var(--workspace-ink);
   color-scheme: light;
@@ -8225,9 +8246,31 @@ html .live-ide-topbar {
   padding: 0 18px;
   flex: 0 0 56px;
   gap: 10px;
+  overflow: visible;
   border-color: var(--workspace-line);
   background: var(--workspace-surface);
   box-shadow: 0 1px 0 var(--workspace-line);
+}
+
+html .live-ide-topbar .profile-menu-popover {
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface-raised, var(--workspace-surface));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+}
+
+html .live-ide-topbar .profile-menu-heading,
+html .live-ide-topbar .profile-menu-link,
+html .live-ide-topbar .profile-menu-action {
+  color: var(--workspace-ink);
+}
+
+html .live-ide-topbar .profile-menu-heading span {
+  color: var(--workspace-muted, var(--muted));
+}
+
+html .live-ide-topbar .profile-menu-link:hover,
+html .live-ide-topbar .profile-menu-action:hover {
+  background: var(--workspace-surface-muted);
 }
 
 html .live-ide-topbar .workspace-brand {
@@ -8345,6 +8388,7 @@ html .live-ide-grid.terminal-collapsed {
   min-height: 0;
   height: auto;
   flex: 1 1 auto;
+  overflow: hidden;
   background: var(--workspace-bg);
 }
 
@@ -8567,6 +8611,64 @@ html .live-ide .preview-pane {
 
 html .live-ide .file-explorer {
   min-height: 0;
+}
+
+html .live-ide .file-explorer-dig-in .repository-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+html .live-ide .file-explorer-up {
+  display: inline-flex;
+  min-height: 28px;
+  padding: 0 8px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 7px;
+  background: var(--workspace-surface-raised);
+  color: var(--workspace-muted);
+  font:
+    650 10px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+html .live-ide .file-explorer-up svg {
+  width: 14px;
+  height: 14px;
+}
+
+html .live-ide .file-explorer-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 10px 8px;
+}
+
+html .live-ide .file-explorer-breadcrumb button {
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--workspace-muted);
+  font:
+    600 10px/1.3 var(--font-geist-mono),
+    monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html .live-ide .file-explorer-breadcrumb button:hover {
+  background: color-mix(in srgb, var(--workspace-ink) 5%, transparent);
+  color: var(--workspace-ink);
 }
 
 html .live-ide .repository-heading {
@@ -10127,8 +10229,8 @@ html .live-ide .agent-review-disclosure[open] > summary {
 html .live-ide .agent-review-disclosure .agent-review {
   display: grid;
   margin: 0;
-  padding: 16px;
-  gap: 16px;
+  padding: 14px 16px 12px;
+  gap: 0;
   background: var(--workspace-surface);
 }
 
@@ -10136,12 +10238,35 @@ html .live-ide .agent-review-diff,
 html .live-ide .agent-review-decide {
   display: grid;
   gap: 10px;
+  padding: 12px 0;
+}
+
+html .live-ide .agent-review-diff {
+  padding-top: 4px;
+}
+
+html .live-ide .agent-review-decide {
+  border-top: 1px solid var(--workspace-line);
+}
+
+html .live-ide .agent-review-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html .live-ide .agent-review-section-head > span {
+  color: var(--workspace-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 html .live-ide .agent-review-status,
 html .live-ide .agent-review-loading,
 html .live-ide .agent-review-empty,
-html .live-ide .agent-review-assistant-hint,
 html .live-ide .agent-review-publish-hint {
   margin: 0;
   color: var(--workspace-muted);
@@ -10152,6 +10277,7 @@ html .live-ide .agent-review-publish-hint {
 html .live-ide .agent-review-status {
   color: var(--workspace-ink);
   font-weight: 650;
+  text-align: right;
 }
 
 html .live-ide .agent-review-files {
@@ -10238,6 +10364,11 @@ html .live-ide .agent-review-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+
+html .live-ide .agent-review-actions-single {
+  justify-content: flex-start;
 }
 
 html .live-ide .agent-review-actions button,
@@ -10281,10 +10412,14 @@ html .live-ide .agent-review-diff-tools .agent-review-assistant:hover {
 }
 
 html .live-ide .agent-review-actions .agent-discard {
-  margin-left: auto;
   border-color: rgba(190, 67, 67, 0.25);
   background: rgba(190, 67, 67, 0.07);
   color: #b33f3f;
+}
+
+html .live-ide .agent-review-actions:not(.agent-review-actions-single)
+  .agent-discard {
+  margin-left: auto;
 }
 
 html .live-ide .agent-review-actions button:disabled,
@@ -10296,7 +10431,7 @@ html .live-ide .agent-review-comment > button:disabled {
 
 html .live-ide .agent-review-notes {
   border-top: 1px solid var(--workspace-line);
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 html .live-ide .agent-review-notes > summary {
@@ -11138,10 +11273,10 @@ html .live-ide-grid > .ide-main-stage {
 }
 
 html .live-ide-grid.view-files {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 440px) minmax(200px, 260px);
   grid-template-rows: minmax(0, 1fr) 0fr;
   grid-template-areas:
-    "files stage"
+    "stage files"
     "terminal terminal";
 }
 
@@ -11154,13 +11289,13 @@ html .live-ide-grid.view-files.terminal-collapsed {
 }
 
 html .live-ide-grid.view-code {
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(
-      360px,
-      440px
+  grid-template-columns: minmax(360px, 440px) minmax(0, 1fr) minmax(
+      200px,
+      260px
     );
   grid-template-rows: minmax(0, 1fr) 0fr;
   grid-template-areas:
-    "files editor stage"
+    "stage editor files"
     "terminal terminal terminal";
 }
 
@@ -11209,8 +11344,8 @@ html .live-ide-grid.view-code .file-sidebar {
   inset: auto;
   width: auto;
   height: 100%;
-  border-right: 1px solid var(--workspace-line);
-  border-left: 0;
+  border-left: 1px solid var(--workspace-line);
+  border-right: 0;
   border-radius: 0;
   box-shadow: none;
 }
@@ -11339,10 +11474,14 @@ html .live-ide .agent-sidebar-foot {
 
 @media (max-width: 1120px) {
   html .live-ide-grid.view-code {
-    grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(
-        320px,
-        40vw
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(
+        180px,
+        220px
       );
+  }
+
+  html .live-ide-grid.view-files {
+    grid-template-columns: minmax(300px, 360px) minmax(180px, 220px);
   }
 
   html .live-ide-grid.view-preview {
@@ -11453,6 +11592,11 @@ html .live-ide .agent-sidebar-foot {
 /* Conversation navigator refresh */
 html .live-ide .agent-panel-layout {
   grid-template-columns: minmax(240px, 268px) minmax(0, 1fr);
+}
+
+html .live-ide-grid.view-code .agent-panel-layout,
+html .live-ide-grid.view-files .agent-panel-layout {
+  grid-template-columns: minmax(168px, 200px) minmax(0, 1fr);
 }
 
 html .live-ide .agent-session-sidebar {

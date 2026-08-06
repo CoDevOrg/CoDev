@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { WorkspaceIdeLoader } from "@/components/workspace-ide-loader";
 import { requireUser } from "@/lib/session";
+import { clerkAuthConfigured } from "@/lib/identity";
 import {
   getWorkspaceForMember,
   getWorkspaceRuntime,
@@ -58,6 +59,7 @@ export default async function WorkspaceIdePage({
       integrationHeadSha={workspace.integrationHeadSha}
       vmMinutesUsed={vmMinutesUsed}
       vmMinutesQuota={VM_MINUTE_LIFETIME_QUOTA}
+      useClerkAuth={clerkAuthConfigured()}
       user={{
         id: user.id,
         name: user.name ?? null,

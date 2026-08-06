@@ -103,3 +103,21 @@ export function collectDirectoryPaths(nodes: FileTreeNode[]): string[] {
   }
   return paths;
 }
+
+/** Children of a directory path within a built tree (`""` = repository root). */
+export function getFileTreeChildrenAt(
+  nodes: FileTreeNode[],
+  cwd: string,
+): FileTreeNode[] {
+  if (!cwd) return nodes;
+  const segments = cwd.split("/").filter(Boolean);
+  let current = nodes;
+  for (const segment of segments) {
+    const next = current.find(
+      (node) => node.kind === "dir" && node.name === segment,
+    );
+    if (!next || next.kind !== "dir") return [];
+    current = next.children;
+  }
+  return current;
+}

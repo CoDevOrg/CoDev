@@ -158,6 +158,8 @@ pub struct ExecRequest {
 pub struct WorktreeCreateRequest {
     pub worktree_id: String,
     pub head_sha: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -212,6 +214,8 @@ pub struct WorktreeMergeResponse {
 #[serde(rename_all = "camelCase")]
 pub struct PublicationExportRequest {
     pub expected_head_sha: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

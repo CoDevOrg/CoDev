@@ -37,6 +37,7 @@ import { FeedbackWidget } from "@/components/feedback-widget";
 import { FileExplorer } from "@/components/file-explorer";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
+import { ProfileMenu } from "@/components/profile-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   WorkspaceViewNav,
@@ -123,6 +124,7 @@ export interface WorkspaceIdeProps {
     login?: string;
     image?: string | null;
   };
+  useClerkAuth?: boolean;
 }
 
 export function WorkspaceIde({
@@ -146,6 +148,7 @@ export function WorkspaceIde({
   vmMinutesUsed,
   vmMinutesQuota,
   user,
+  useClerkAuth = false,
 }: WorkspaceIdeProps) {
   const isHibernated = runtimeStatus === "hibernated";
   const isRuntimeReady = runtimeStatus === "ready";
@@ -603,10 +606,7 @@ export function WorkspaceIde({
       } else if (event.type === "error") {
         sessionReady = false;
         const detail = event.message ?? "Terminal stream interrupted.";
-        const hint = /capacity exceeded/i.test(detail)
-          ? " Close other terminal tabs for this workspace, then reopen Terminal."
-          : "";
-        void writeTerminal(`\r\n\x1b[31m${detail}${hint}\x1b[0m\r\n`);
+        void writeTerminal(`\r\n\x1b[31m${detail}\x1b[0m\r\n`);
       }
     };
     socket.onerror = () => {
@@ -922,10 +922,7 @@ export function WorkspaceIde({
           <strong>CoDev</strong>
         </Link>
         <span className="topbar-divider" />
-        <div
-          className="repo-crumbs"
-          title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}
-        >
+        <div className="repo-crumbs" title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}>
           <GitBranch className="github-glyph" aria-hidden="true" />
           <strong title={repository}>{repository}</strong>
           <i>/</i>
@@ -1013,13 +1010,16 @@ export function WorkspaceIde({
               )}
             </div>
           </div>
-          {user.image ? (
-            <Image src={user.image} alt="" width={26} height={26} unoptimized />
-          ) : (
-            <span className="user-avatar">
-              {(user.login ?? user.name ?? "U").slice(0, 1).toUpperCase()}
-            </span>
-          )}
+          <ProfileMenu
+            compact
+            returnTo={`/workspaces/${workspaceId}/ide`}
+            useClerkAuth={useClerkAuth}
+            user={{
+              name: user.name,
+              githubLogin: user.login,
+              image: user.image,
+            }}
+          />
         </div>
       </header>
 

@@ -31,6 +31,10 @@ import {
   readSandboxFile,
   writeSandboxFile,
 } from "./orchestrator";
+import {
+  publishAgentWorktreeToGitHub,
+  syncAgentWorktreeWithGitHub,
+} from "./agent-github";
 import { appendWorkspaceStateEvent } from "./workspace-state";
 
 const MAX_TOOL_ROUNDS = 12;
@@ -214,6 +218,29 @@ const tools: OpenAI.Responses.Tool[] = [
     name: "git_status",
     description: "Inspect Git status for this isolated worktree.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "github_sync",
+    description:
+      "Sync this agent worktree with the workspace GitHub default branch tip via the control plane. Prefer this over git pull/fetch.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "github_publish",
+    description:
+      "Publish this agent worktree to an immutable codev/* branch on GitHub via the control plane. Prefer this over git push. Pass a codev/... branch name, or an empty string to use the default.",
+    parameters: {
+      type: "object",
+      properties: {
+        branchName: { type: "string" },
+      },
+      required: ["branchName"],
+      additionalProperties: false,
+    },
     strict: true,
   },
 ];
@@ -523,15 +550,6 @@ export function validateAgentCommand(command: string[]) {
   if (executable === "git") {
     const operation = command[1] ?? "";
     if (
-      !new Set([
-        "status",
-        "diff",
-        "log",
-        "show",
-        "grep",
-        "rev-parse",
-        "ls-files",
-      ]).has(operation) ||
       command.some(
         (part) =>
           part === "-C" ||
@@ -539,7 +557,48 @@ export function validateAgentCommand(command: string[]) {
           part.startsWith("--work-tree"),
       )
     ) {
-      throw new Error("Only read-only Git inspection commands are allowed.");
+      throw new Error("Git commands must stay inside the worktree.");
+    }
+    const remoteOps = new Set([
+      "pull",
+      "fetch",
+      "push",
+      "clone",
+      "remote",
+    ]);
+    if (remoteOps.has(operation)) {
+      throw new Error(
+        "Remote Git commands are not available in the sandbox. Use the github_sync or github_publish tools instead.",
+      );
+    }
+    const localOps = new Set([
+      "status",
+      "diff",
+      "log",
+      "show",
+      "grep",
+      "rev-parse",
+      "ls-files",
+      "add",
+      "rm",
+      "mv",
+      "restore",
+      "commit",
+      "checkout",
+      "switch",
+      "branch",
+      "stash",
+      "merge",
+      "rebase",
+      "cherry-pick",
+      "reset",
+      "revert",
+      "tag",
+      "clean",
+      "init",
+    ]);
+    if (!localOps.has(operation)) {
+      throw new Error(`Git operation "${operation}" is not allowed.`);
     }
     return command;
   }
@@ -744,6 +803,28 @@ async function executeTool(
         "status",
         context.worktreeId,
       );
+    case "github_sync":
+      return JSON.stringify(
+        await syncAgentWorktreeWithGitHub({
+          workspaceId: context.workspaceId,
+          worktreeId: context.worktreeId,
+          userId: context.authorId,
+        }),
+      );
+    case "github_publish": {
+      const branchName =
+        typeof input.branchName === "string" && input.branchName.trim()
+          ? input.branchName.trim()
+          : undefined;
+      return JSON.stringify(
+        await publishAgentWorktreeToGitHub({
+          workspaceId: context.workspaceId,
+          worktreeId: context.worktreeId,
+          userId: context.authorId,
+          ...(branchName ? { branchName } : {}),
+        }),
+      );
+    }
     case "run_command": {
       if (
         !Array.isArray(input.command) ||
@@ -969,7 +1050,7 @@ export async function runAgentTurn(turnId: string) {
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. Never publish, merge, access credentials, or escape the worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run local Git commands (status, diff, add, commit, checkout, branch, rebase, etc.) inside this worktree. For GitHub remote sync or publishing to a codev/* branch, use the github_sync and github_publish tools — never access credentials, and never try git pull/fetch/push/clone. Do not merge into the integration worktree or escape this worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse, usage }) => {

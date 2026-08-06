@@ -259,11 +259,29 @@ export async function createSandboxWorktree(
   workspaceId: string,
   worktreeId: string,
   headSha: string,
+  branchName?: string,
 ) {
   await orchestratorRequest("POST", `/v1/sandboxes/${workspaceId}/worktrees`, {
     worktreeId,
     headSha,
+    ...(branchName ? { branchName } : {}),
   });
+}
+
+export async function exportSandboxPublication(
+  workspaceId: string,
+  expectedHeadSha: string,
+  worktreeId?: string,
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/publication/export`,
+    {
+      expectedHeadSha,
+      ...(worktreeId ? { worktreeId } : {}),
+    },
+  );
+  return publicationExportSchema.parse(await response.json());
 }
 
 export async function deleteSandboxWorktree(
@@ -344,18 +362,6 @@ export async function mergeSandboxWorktree(
   return z
     .object({ headSha: z.string().regex(/^[0-9a-f]{40}$/) })
     .parse(await response.json());
-}
-
-export async function exportSandboxPublication(
-  workspaceId: string,
-  expectedHeadSha: string,
-) {
-  const response = await orchestratorRequest(
-    "POST",
-    `/v1/sandboxes/${workspaceId}/publication/export`,
-    { expectedHeadSha },
-  );
-  return publicationExportSchema.parse(await response.json());
 }
 
 export async function readSandboxFile(

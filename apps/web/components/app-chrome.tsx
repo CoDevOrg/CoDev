@@ -1,14 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
-import { signOut } from "@/auth";
-import { connectGitHubAccount } from "@/app/actions/github";
-import { ClerkSignOut } from "@/components/clerk-sign-out";
 import { FeedbackWidget } from "@/components/feedback-widget";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ProfileMenu } from "@/components/profile-menu";
 import { clerkAuthConfigured } from "@/lib/identity";
 
 export function Brand() {
@@ -41,66 +37,11 @@ export function AppChrome({
           <Link href="/dashboard">Workspaces</Link>
         </nav>
         <div className="user-menu">
-          <details className="profile-menu">
-            <summary className="profile-menu-trigger">
-              {user.image ? (
-                <Image
-                  src={user.image}
-                  alt=""
-                  width={30}
-                  height={30}
-                  unoptimized
-                />
-              ) : (
-                <span className="user-fallback" aria-hidden="true">
-                  {(user.githubLogin ?? user.name ?? "U")
-                    .slice(0, 1)
-                    .toUpperCase()}
-                </span>
-              )}
-              <span className="profile-menu-name">
-                {user.githubLogin ?? user.name ?? "Your account"}
-              </span>
-              <ChevronDown
-                className="profile-menu-chevron"
-                aria-hidden="true"
-              />
-            </summary>
-            <div className="profile-menu-popover">
-              <div className="profile-menu-heading">
-                <span>Account</span>
-                <strong>
-                  {user.name ?? user.githubLogin ?? "Your account"}
-                </strong>
-              </div>
-              <Link className="profile-menu-link" href="/settings">
-                Settings
-              </Link>
-              <div className="profile-menu-divider" />
-              <ThemeToggle />
-              {!user.githubLogin && isGitHubAuthConfigured() ? (
-                <form action={connectGitHubAccount.bind(null, "/dashboard")}>
-                  <button className="profile-menu-action" type="submit">
-                    Connect GitHub
-                  </button>
-                </form>
-              ) : null}
-              {clerkAuthConfigured() ? (
-                <ClerkSignOut />
-              ) : (
-                <form
-                  action={async () => {
-                    "use server";
-                    await signOut({ redirectTo: "/" });
-                  }}
-                >
-                  <button className="profile-menu-action" type="submit">
-                    Sign out
-                  </button>
-                </form>
-              )}
-            </div>
-          </details>
+          <ProfileMenu
+            user={user}
+            showConnectGitHub={!user.githubLogin && isGitHubAuthConfigured()}
+            useClerkAuth={clerkAuthConfigured()}
+          />
         </div>
       </header>
       {children}

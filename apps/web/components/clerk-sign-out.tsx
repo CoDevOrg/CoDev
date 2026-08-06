@@ -6,7 +6,7 @@ export function ClerkSignOut() {
   const { signOut } = useClerk();
   return (
     <button
-      className="quiet-button"
+      className="profile-menu-action"
       type="button"
       onClick={() => void signOut({ redirectUrl: "/" })}
     >

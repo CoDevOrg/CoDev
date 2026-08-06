@@ -873,9 +873,12 @@ export function AgentPanel({
         selectedSession.worktreeStatus !== "discarded" ? (
           <div className="agent-review">
             <section className="agent-review-diff" aria-label="Proposed diff">
-              {reviewStatusLabel ? (
-                <p className="agent-review-status">{reviewStatusLabel}</p>
-              ) : null}
+              <header className="agent-review-section-head">
+                <span>Diff</span>
+                {reviewStatusLabel ? (
+                  <p className="agent-review-status">{reviewStatusLabel}</p>
+                ) : null}
+              </header>
               {busy && !reviewReady ? (
                 <p className="agent-review-loading">Loading diff…</p>
               ) : null}
@@ -909,6 +912,10 @@ export function AgentPanel({
                 ) : (
                   <p className="agent-review-empty">No file changes.</p>
                 )
+              ) : !busy ? (
+                <p className="agent-review-empty">
+                  Prepare a review to inspect the proposed file changes.
+                </p>
               ) : null}
               <div className="agent-review-diff-tools">
                 <button
@@ -936,18 +943,22 @@ export function AgentPanel({
                   </button>
                 ) : null}
               </div>
-              {canSteer ? (
-                <p className="agent-review-assistant-hint">
-                  Opens a new chat with the diff
-                </p>
-              ) : null}
             </section>
 
             <section
               className="agent-review-decide"
               aria-label="Decide on changes"
             >
-              <div className="agent-review-actions">
+              <header className="agent-review-section-head">
+                <span>Decide</span>
+              </header>
+              <div
+                className={
+                  canMerge && reviewReady
+                    ? "agent-review-actions"
+                    : "agent-review-actions agent-review-actions-single"
+                }
+              >
                 {canMerge && reviewReady ? (
                   <>
                     <button

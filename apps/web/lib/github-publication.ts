@@ -470,6 +470,88 @@ export async function publishWorkspaceBranch(input: PublicationTarget) {
   }
 }
 
+export async function publishAgentWorktreeBranch(input: {
+  workspaceId: string;
+  userId: string;
+  worktreeId: string;
+  branchName: string;
+  expectedHeadSha: string;
+  requestId: string;
+  baseSha: string;
+  repository: string;
+  installationId: number;
+  repositoryId: number;
+}) {
+  await requireWorkspacePermission(input.workspaceId, input.userId, "coSteer");
+  if (input.branchName.split("/")[0] !== "codev") {
+    throw new PublicationError("Agent publications must use a codev/* branch.");
+  }
+
+  const { repository } = await getRepository(
+    input.userId,
+    input.installationId,
+    input.repositoryId,
+  );
+  if (
+    repository.id !== input.repositoryId ||
+    repository.full_name !== input.repository
+  ) {
+    throw new PublicationError(
+      "The GitHub installation no longer exposes this repository.",
+      403,
+    );
+  }
+
+  const exported = await exportSandboxPublication(
+    input.workspaceId,
+    input.expectedHeadSha,
+    input.worktreeId,
+  );
+  const decodedBytes = exported.files.reduce(
+    (total, file) =>
+      total + Buffer.from(file.contentBase64, "base64").byteLength,
+    0,
+  );
+  if (decodedBytes !== exported.totalBytes) {
+    throw new PublicationError("The sandbox export failed validation.");
+  }
+
+  const commitSha = await createGitHubCommit(
+    input.userId,
+    input.repository,
+    input.baseSha,
+    input.branchName,
+    exported.files,
+  );
+  await ensureGitHubRef(
+    input.userId,
+    input.repository,
+    input.branchName,
+    commitSha,
+  );
+  const htmlUrl = `https://github.com/${input.repository}/tree/${encodeURIComponent(input.branchName)}`;
+  await appendWorkspaceEvent({
+    workspaceId: input.workspaceId,
+    actorId: input.userId,
+    type: "publication.published",
+    payload: {
+      branchName: input.branchName,
+      sourceHeadSha: input.expectedHeadSha,
+      commitSha,
+      requestId: input.requestId,
+      worktreeId: input.worktreeId,
+      source: "agent",
+    },
+  }).catch(() => undefined);
+
+  return {
+    branchName: input.branchName,
+    commitSha,
+    htmlUrl,
+    sourceHeadSha: input.expectedHeadSha,
+  };
+}
+
 export async function listWorkspacePublications(
   workspaceId: string,
   userId: string,

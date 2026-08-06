@@ -31,6 +31,9 @@ const MAX_BODY_BYTES: usize = 2 << 20;
 const MAX_OUTPUT_BYTES: usize = 2 << 20;
 const MAX_TERMINAL_BUFFER_BYTES: usize = 1 << 20;
 const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
+/// Soft cap on concurrent PTYs per guest. New starts always reclaim older
+/// sessions instead of failing with capacity exceeded.
+const MAX_LIVE_TERMINALS: usize = 4;
 const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -138,9 +141,9 @@ impl GuestService {
             Ok(value) => GuestResponse::json(200, value),
             Err(error) => match error {
                 RuntimeError::BadRequest(_) => GuestResponse::error(400, error),
-                RuntimeError::RevisionMismatch(_) | RuntimeError::Conflict(_) => {
-                    GuestResponse::error(409, error)
-                }
+                RuntimeError::RevisionMismatch(_)
+                | RuntimeError::Conflict(_)
+                | RuntimeError::CapacityExceeded => GuestResponse::error(409, error),
                 RuntimeError::GitConflict {
                     message,
                     conflict_paths,
@@ -322,49 +325,31 @@ impl GuestService {
         let _mutation = self.mutations.lock().expect("mutation lock");
         {
             let mut terminals = self.terminals.lock().expect("terminal map lock");
+            // Drop fully exited sessions first.
             terminals.retain(|_, session| {
                 let output = session.output.lock().expect("terminal output lock");
                 !(output.reader_closed && output.exit_code.is_some())
             });
-            if terminals.len() >= 4 {
-                // Prefer reclaiming finished or reader-closed sessions first.
-                let mut reclaim: Vec<String> = terminals
+            // Always make room for a new PTY — never reject with capacity exceeded.
+            while terminals.len() >= MAX_LIVE_TERMINALS {
+                let reclaim_id = terminals
                     .iter()
-                    .filter(|(_, session)| {
+                    .find(|(_, session)| {
                         let output = session.output.lock().expect("terminal output lock");
                         output.reader_closed || output.exit_code.is_some()
                     })
                     .map(|(session_id, _)| session_id.clone())
-                    .collect();
-                reclaim.sort();
-                for session_id in reclaim {
-                    if let Some(session) = terminals.remove(&session_id) {
-                        let mut writer = session.writer.lock().expect("terminal writer lock");
-                        let _ = writer.write_all(b"\x03exit\n");
-                        let _ = writer.flush();
-                        let mut output = session.output.lock().expect("terminal output lock");
-                        output.reader_closed = true;
-                        session.output_changed.notify_all();
-                    }
+                    .or_else(|| {
+                        let mut ids: Vec<String> = terminals.keys().cloned().collect();
+                        ids.sort();
+                        ids.into_iter().next()
+                    });
+                let Some(session_id) = reclaim_id else {
+                    break;
+                };
+                if let Some(session) = terminals.remove(&session_id) {
+                    Self::force_close_session(session);
                 }
-            }
-            if terminals.len() >= 4 {
-                // Last resort: close the oldest live session so reconnects can succeed.
-                let mut ids: Vec<String> = terminals.keys().cloned().collect();
-                ids.sort();
-                if let Some(oldest) = ids.first()
-                    && let Some(session) = terminals.remove(oldest)
-                {
-                    let mut writer = session.writer.lock().expect("terminal writer lock");
-                    let _ = writer.write_all(b"\x03exit\n");
-                    let _ = writer.flush();
-                    let mut output = session.output.lock().expect("terminal output lock");
-                    output.reader_closed = true;
-                    session.output_changed.notify_all();
-                }
-            }
-            if terminals.len() >= 4 {
-                return Err(RuntimeError::CapacityExceeded);
             }
         }
         let size = validated_terminal_size(request.rows, request.columns)?;
@@ -536,13 +521,19 @@ impl GuestService {
             .expect("terminal map lock")
             .remove(session_id)
             .ok_or_else(|| RuntimeError::BadRequest("terminal session not found".into()))?;
-        let mut writer = session.writer.lock().expect("terminal writer lock");
-        let _ = writer.write_all(b"\x03exit\n");
-        let _ = writer.flush();
+        Self::force_close_session(session);
+        Ok(serde_json::json!({ "closed": true }))
+    }
+
+    fn force_close_session(session: Arc<TerminalSession>) {
+        {
+            let mut writer = session.writer.lock().expect("terminal writer lock");
+            let _ = writer.write_all(b"\x03exit\n");
+            let _ = writer.flush();
+        }
         let mut output = session.output.lock().expect("terminal output lock");
         output.reader_closed = true;
         session.output_changed.notify_all();
-        Ok(serde_json::json!({ "closed": true }))
     }
 
     fn terminal(&self, session_id: &str) -> crate::model::Result<Arc<TerminalSession>> {
@@ -559,27 +550,39 @@ impl GuestService {
         let _mutation = self.mutations.lock().expect("mutation lock");
         validate_worktree_id(&request.worktree_id)?;
         validate_commit_sha(&request.head_sha)?;
+        if let Some(branch_name) = request.branch_name.as_deref() {
+            validate_branch_name(branch_name)?;
+        }
         let worktrees_root = self.worktrees_root()?;
         fs::create_dir_all(&worktrees_root).map_err(RuntimeError::internal)?;
         let target = worktrees_root.join(&request.worktree_id);
         if target.exists() {
             return Err(RuntimeError::Conflict("worktree already exists".into()));
         }
-        self.git(
-            &self.workspace_root,
-            &[
-                "worktree",
-                "add",
-                "--detach",
-                target
-                    .to_str()
-                    .ok_or_else(|| RuntimeError::Internal("invalid worktree path".into()))?,
-                &request.head_sha,
-            ],
-        )?;
+        let target_path = target
+            .to_str()
+            .ok_or_else(|| RuntimeError::Internal("invalid worktree path".into()))?;
+        match request.branch_name.as_deref() {
+            Some(branch_name) => self.git(
+                &self.workspace_root,
+                &[
+                    "worktree",
+                    "add",
+                    "-b",
+                    branch_name,
+                    target_path,
+                    &request.head_sha,
+                ],
+            )?,
+            None => self.git(
+                &self.workspace_root,
+                &["worktree", "add", "--detach", target_path, &request.head_sha],
+            )?,
+        };
         Ok(serde_json::json!({
             "worktreeId": request.worktree_id,
-            "headSha": request.head_sha
+            "headSha": request.head_sha,
+            "branchName": request.branch_name,
         }))
     }
 
@@ -787,19 +790,31 @@ impl GuestService {
 
         let request: PublicationExportRequest = decode(body)?;
         validate_commit_sha(&request.expected_head_sha)?;
+        if let Some(worktree_id) = request.worktree_id.as_deref() {
+            validate_worktree_id(worktree_id)?;
+        }
         let _mutation = self.mutations.lock().expect("mutation lock");
-        self.require_head(
-            &self.workspace_root,
-            &request.expected_head_sha,
-            "integration",
-        )?;
+        let root = self.target_root(request.worktree_id.as_deref())?;
+        let label = if request.worktree_id.is_some() {
+            "worktree"
+        } else {
+            "integration"
+        };
+        self.require_head(&root, &request.expected_head_sha, label)?;
         if require_clean {
-            self.require_clean(&self.workspace_root, "integration worktree is dirty")?;
+            self.require_clean(
+                &root,
+                if request.worktree_id.is_some() {
+                    "worktree is dirty"
+                } else {
+                    "integration worktree is dirty"
+                },
+            )?;
         }
 
         let entries: Vec<(String, String, Vec<u8>)> = if require_clean {
             let tree = self.git_output(
-                &self.workspace_root,
+                &root,
                 &["ls-tree", "-r", "-z", "--full-tree", "HEAD"],
             )?;
             if !tree.status.success() {
@@ -826,7 +841,7 @@ impl GuestService {
                     }
                     validate_publication_path(path)?;
                     validate_commit_sha(sha)?;
-                    let blob = self.git_output(&self.workspace_root, &["cat-file", "blob", sha])?;
+                    let blob = self.git_output(&root, &["cat-file", "blob", sha])?;
                     if !blob.status.success() {
                         return Err(git_failure("read publication blob", &blob));
                     }
@@ -835,7 +850,7 @@ impl GuestService {
                 .collect::<crate::model::Result<Vec<_>>>()?
         } else {
             let listing = self.git_output(
-                &self.workspace_root,
+                &root,
                 &["ls-files", "-co", "--exclude-standard", "-z"],
             )?;
             if !listing.status.success() {
@@ -850,7 +865,7 @@ impl GuestService {
                         RuntimeError::BadRequest("workspace snapshot paths must be UTF-8".into())
                     })?;
                     validate_publication_path(path)?;
-                    let file_path = self.workspace_root.join(path);
+                    let file_path = root.join(path);
                     let metadata = match fs::symlink_metadata(&file_path) {
                         Ok(metadata) => metadata,
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -1156,6 +1171,29 @@ fn validate_worktree_id(worktree_id: &str) -> crate::model::Result<()> {
     }
 }
 
+fn validate_branch_name(branch_name: &str) -> crate::model::Result<()> {
+    let valid = !branch_name.is_empty()
+        && branch_name.len() <= 120
+        && !branch_name.starts_with('/')
+        && !branch_name.ends_with('/')
+        && !branch_name.ends_with(".lock")
+        && !branch_name.contains("..")
+        && !branch_name.contains("@{")
+        && !branch_name.contains("//")
+        && branch_name.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'-' | b'_' | b'.' | b'/')
+        })
+        && branch_name
+            .split('/')
+            .all(|segment| !segment.is_empty() && !segment.starts_with('.'));
+    if valid {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest("invalid branch name".into()))
+    }
+}
+
 fn validate_publication_path(path: &str) -> crate::model::Result<()> {
     if path.is_empty()
         || path.starts_with('/')
@@ -1349,6 +1387,7 @@ mod tests {
             "/v1/worktrees",
             serde_json::to_string(&WorktreeCreateRequest {
                 worktree_id: "agent-one".into(),
+                branch_name: None,
                 head_sha: head_sha.clone(),
             })
             .expect("request")
@@ -1360,6 +1399,34 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&create.body)
         );
+
+        let create_named = service.handle(
+            "POST",
+            "/v1/worktrees",
+            serde_json::to_string(&WorktreeCreateRequest {
+                worktree_id: "agent-named".into(),
+                branch_name: Some("agent/agent-named".into()),
+                head_sha: head_sha.clone(),
+            })
+            .expect("request")
+            .as_bytes(),
+        );
+        assert_eq!(
+            create_named.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&create_named.body)
+        );
+        let named_head = service.handle(
+            "POST",
+            "/v1/pty/exec",
+            br#"{"command":["git","symbolic-ref","--short","HEAD"],"worktreeId":"agent-named"}"#,
+        );
+        assert_eq!(named_head.status, 200);
+        let named_result: ExecResponse =
+            serde_json::from_slice(&named_head.body).expect("exec");
+        assert_eq!(named_result.exit_code, 0);
+        assert_eq!(named_result.output.trim(), "agent/agent-named");
 
         let read = service.handle(
             "POST",
@@ -1576,7 +1643,8 @@ mod tests {
                 "/v1/worktrees",
                 serde_json::to_string(&WorktreeCreateRequest {
                     worktree_id: worktree_id.into(),
-                    head_sha: base_sha.clone(),
+                    branch_name: None,
+                head_sha: base_sha.clone(),
                 })
                 .expect("create request")
                 .as_bytes(),
@@ -1692,6 +1760,49 @@ mod tests {
     }
 
     #[test]
+    fn terminal_start_reclaims_oldest_when_at_capacity() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let mut session_ids = Vec::new();
+        for _ in 0..MAX_LIVE_TERMINALS {
+            let start = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);
+            assert_eq!(start.status, 200, "{}", String::from_utf8_lossy(&start.body));
+            let body: serde_json::Value =
+                serde_json::from_slice(&start.body).expect("terminal start");
+            session_ids.push(
+                body["sessionId"]
+                    .as_str()
+                    .expect("session id")
+                    .to_owned(),
+            );
+        }
+
+        let overflow = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);
+        assert_eq!(
+            overflow.status,
+            200,
+            "new terminal should reclaim a slot instead of failing: {}",
+            String::from_utf8_lossy(&overflow.body)
+        );
+        let overflow_body: serde_json::Value =
+            serde_json::from_slice(&overflow.body).expect("overflow start");
+        let new_id = overflow_body["sessionId"].as_str().expect("new session id");
+        assert!(!session_ids.iter().any(|id| id == new_id));
+
+        // Oldest session should be gone; interacting with it must fail.
+        let oldest = &session_ids[0];
+        let stale = service.handle(
+            "POST",
+            &format!("/v1/terminals/{oldest}/input"),
+            br#"{"data":"echo stale\n"}"#,
+        );
+        assert_eq!(stale.status, 400);
+
+        let close = service.handle("DELETE", &format!("/v1/terminals/{new_id}"), b"");
+        assert_eq!(close.status, 200);
+    }
+
+    #[test]
     fn workspace_snapshot_preserves_dirty_files_and_deletions() {
         let directory = tempdir().expect("tempdir");
         git(directory.path(), &["init", "--quiet"]);
@@ -1716,6 +1827,7 @@ mod tests {
                 endpoint,
                 serde_json::to_string(&PublicationExportRequest {
                     expected_head_sha: head_sha.clone(),
+                    worktree_id: None,
                 })
                 .expect("export request")
                 .as_bytes(),

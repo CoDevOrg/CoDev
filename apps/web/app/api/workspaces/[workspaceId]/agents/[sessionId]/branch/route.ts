@@ -235,6 +235,7 @@ export async function POST(
         headSha,
         sessionId: session.id,
         worktreeId: worktree.id,
+        branchName: `agent/${worktree.id}`,
         kick: Boolean(input.prompt),
       };
     });
@@ -244,6 +245,7 @@ export async function POST(
         workspaceId,
         reservation.worktreeId,
         reservation.headSha,
+        reservation.branchName,
       );
       if (reservation.kick) {
         await kickAgentSession(reservation.sessionId);

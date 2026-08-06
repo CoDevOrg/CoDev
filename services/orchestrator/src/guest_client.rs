@@ -321,6 +321,7 @@ impl GuestClient {
                         }
                     }
                     408 => RuntimeError::Timeout(message),
+                    _ if message.contains("capacity exceeded") => RuntimeError::CapacityExceeded,
                     _ => RuntimeError::GuestUnavailable(message),
                 });
             }

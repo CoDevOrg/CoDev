@@ -196,4 +196,67 @@ describe("sandbox terminal WebSocket bridge", () => {
     expect(orchestrator.sendSandboxTerminalInput).not.toHaveBeenCalled();
     expect(orchestrator.resizeSandboxTerminal).not.toHaveBeenCalled();
   });
+
+  it("retries terminal start once after a capacity exceeded error", async () => {
+    orchestrator.startSandboxTerminal
+      .mockRejectedValueOnce(new Error("sandbox capacity exceeded"))
+      .mockResolvedValueOnce("term-retry");
+    orchestrator.pollSandboxTerminal.mockResolvedValue({
+      chunks: [],
+      nextSequence: 1,
+      exited: true,
+      exitCode: 0,
+    });
+
+    const socket = new FakeSocket();
+    await handleSandboxTerminalSocket(
+      "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+      socket as unknown as WebSocket,
+      actor,
+    );
+    socket.emit(
+      "message",
+      Buffer.from(JSON.stringify({ type: "start", rows: 24, columns: 80 })),
+    );
+
+    await eventually(() =>
+      socket.sent.some((value) => JSON.parse(value).type === "ready"),
+    );
+    expect(orchestrator.startSandboxTerminal).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(socket.sent[0]!)).toMatchObject({
+      type: "ready",
+      sessionId: "term-retry",
+    });
+  });
+
+  it("closes the guest PTY when the socket errors after start", async () => {
+    orchestrator.closeSandboxTerminal.mockResolvedValue(undefined);
+    orchestrator.startSandboxTerminal.mockResolvedValue("term-err");
+    orchestrator.pollSandboxTerminal.mockImplementation(
+      () => new Promise(() => undefined),
+    );
+
+    const socket = new FakeSocket();
+    await handleSandboxTerminalSocket(
+      "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+      socket as unknown as WebSocket,
+      actor,
+    );
+    socket.emit(
+      "message",
+      Buffer.from(JSON.stringify({ type: "start", rows: 24, columns: 80 })),
+    );
+    await eventually(() =>
+      socket.sent.some((value) => JSON.parse(value).type === "ready"),
+    );
+
+    socket.emit("error");
+    await eventually(
+      () => orchestrator.closeSandboxTerminal.mock.calls.length === 1,
+    );
+    expect(orchestrator.closeSandboxTerminal).toHaveBeenCalledWith(
+      "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+      "term-err",
+    );
+  });
 });

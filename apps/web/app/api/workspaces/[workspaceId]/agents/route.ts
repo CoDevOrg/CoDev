@@ -311,6 +311,7 @@ export async function POST(
           headSha: integration.headSha,
           sessionId: session.id,
           worktreeId: worktree.id,
+          branchName: `agent/${worktree.id}`,
         };
       });
     } catch (error) {
@@ -327,6 +328,7 @@ export async function POST(
         workspaceId,
         reservation.worktreeId,
         reservation.headSha,
+        reservation.branchName,
       );
       await kickAgentSession(reservation.sessionId);
       return Response.json(
