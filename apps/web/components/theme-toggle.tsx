@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 const THEME_KEY = "codev-theme";
 
@@ -16,11 +16,19 @@ function subscribe(onChange: () => void) {
 }
 
 export function ThemeToggle() {
-  const theme = useSyncExternalStore(subscribe, getTheme, () => "light");
+  const [mounted, setMounted] = useState(false);
+  const rawTheme = useSyncExternalStore(subscribe, getTheme, () => "light");
+  const theme = mounted ? rawTheme : "light";
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      document.documentElement.dataset.theme = rawTheme;
+    }
+  }, [mounted, rawTheme]);
 
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";

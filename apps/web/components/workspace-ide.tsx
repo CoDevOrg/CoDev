@@ -166,11 +166,16 @@ export function WorkspaceIde({
   const isRuntimeStarting =
     runtimeStatus === "provisioning" || runtimeStatus === "stopping";
   const hasRepository = Boolean(repository);
-  const uiTheme = useSyncExternalStore(
+  const [mounted, setMounted] = useState(false);
+  const rawUiTheme = useSyncExternalStore(
     subscribeDocumentTheme,
     getDocumentTheme,
     () => "light",
   );
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const uiTheme = mounted ? rawUiTheme : "light";
   const editorTheme = uiTheme === "dark" ? "vs-dark" : "vs";
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
