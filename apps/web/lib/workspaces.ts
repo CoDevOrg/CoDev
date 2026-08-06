@@ -736,3 +736,55 @@ export async function updateMemberCapabilities(
     throw new Error("Workspace member was not found.");
   }
 }
+
+export async function deleteWorkspace(workspaceId: string, userId: string) {
+  const access = await getWorkspaceAccess(workspaceId, userId);
+  if (!access) {
+    throw new WorkspaceAccessError(
+      "Workspace not found or access denied.",
+      404,
+    );
+  }
+  if (access.role !== "owner" && !access.permissions.merge) {
+    throw new WorkspaceAccessError(
+      "You do not have permission to delete this workspace.",
+      403,
+    );
+  }
+
+  const db = getDatabase();
+
+  const sessions = await db
+    .select({ id: schema.agentSessions.id })
+    .from(schema.agentSessions)
+    .where(eq(schema.agentSessions.workspaceId, workspaceId));
+
+  for (const session of sessions) {
+    await db
+      .delete(schema.agentTurns)
+      .where(eq(schema.agentTurns.sessionId, session.id));
+  }
+
+  await db
+    .delete(schema.agentEvents)
+    .where(eq(schema.agentEvents.workspaceId, workspaceId));
+  await db
+    .delete(schema.agentSessions)
+    .where(eq(schema.agentSessions.workspaceId, workspaceId));
+  await db
+    .delete(schema.workspaceInvites)
+    .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
+  await db
+    .delete(schema.workspaceMembers)
+    .where(eq(schema.workspaceMembers.workspaceId, workspaceId));
+  await db
+    .delete(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId));
+
+  await appendWorkspaceEvent({
+    workspaceId,
+    actorId: userId,
+    type: "WORKSPACE_DELETED",
+    payload: { deletedAt: new Date().toISOString() },
+  }).catch(() => undefined);
+}

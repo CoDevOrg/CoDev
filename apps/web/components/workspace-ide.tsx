@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import type { editor as MonacoEditor } from "monaco-editor";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -21,6 +22,7 @@ import {
   RefreshCw,
   Search,
   TerminalSquare,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -193,9 +195,36 @@ export function WorkspaceIde({
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [allBranches, setAllBranches] = useState<string[]>([]);
   const [branchPickerLoading, setBranchPickerLoading] = useState(false);
+  const router = useRouter();
   const [checkingOutBranch, setCheckingOutBranch] = useState<string | null>(
     null,
   );
+  const [deleteWorkspaceModalOpen, setDeleteWorkspaceModalOpen] =
+    useState(false);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [deleteWorkspaceError, setDeleteWorkspaceError] = useState("");
+
+  const handleDeleteWorkspace = async () => {
+    setDeletingWorkspace(true);
+    setDeleteWorkspaceError("");
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        router.push("/dashboard");
+      } else {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setDeleteWorkspaceError(data?.error || "Failed to delete workspace.");
+      }
+    } catch {
+      setDeleteWorkspaceError("Failed to delete workspace.");
+    } finally {
+      setDeletingWorkspace(false);
+    }
+  };
   const [branchSearch, setBranchSearch] = useState("");
   const [publicationBranch, setPublicationBranch] = useState("codev/demo");
   const [publishing, setPublishing] = useState(false);
@@ -1114,6 +1143,31 @@ export function WorkspaceIde({
             workspaceName={workspaceName}
             members={members}
           />
+          {isOwner || canMerge ? (
+            <button
+              className="workspace-delete-btn"
+              type="button"
+              aria-label="Delete workspace"
+              title="Delete workspace"
+              onClick={() => setDeleteWorkspaceModalOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "6px 10px",
+                borderRadius: "8px",
+                border: "1px solid rgba(190, 67, 67, 0.3)",
+                background: "rgba(190, 67, 67, 0.08)",
+                color: "#d66161",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <Trash2 style={{ width: "13px", height: "13px" }} />
+              <span>Delete</span>
+            </button>
+          ) : null}
           <span
             className={`connection-state collaboration-${displayedCollaborationStatus}`}
           >
@@ -1597,6 +1651,108 @@ export function WorkspaceIde({
         </section>
       </div>
       <FeedbackWidget workspaceId={workspaceId} />
+      {deleteWorkspaceModalOpen ? (
+        <div
+          className="delete-workspace-backdrop"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => setDeleteWorkspaceModalOpen(false)}
+        >
+          <div
+            className="delete-workspace-modal"
+            style={{
+              background: "var(--workspace-surface, #1e1e1e)",
+              color: "var(--workspace-ink, #fff)",
+              border: "1px solid var(--workspace-line, #333)",
+              borderRadius: "12px",
+              padding: "24px",
+              maxWidth: "420px",
+              width: "90%",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}
+            >
+              Delete Workspace?
+            </h3>
+            <p
+              style={{
+                margin: "0 0 16px",
+                fontSize: "13px",
+                opacity: 0.8,
+                lineHeight: 1.5,
+              }}
+            >
+              Are you sure you want to delete{" "}
+              <strong>{workspaceName || repository || "this workspace"}</strong>
+              ? This action is permanent and will delete all sessions, turns,
+              and settings.
+            </p>
+            {deleteWorkspaceError ? (
+              <div
+                style={{
+                  color: "#d66161",
+                  fontSize: "12px",
+                  marginBottom: "12px",
+                }}
+              >
+                {deleteWorkspaceError}
+              </div>
+            ) : null}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                disabled={deletingWorkspace}
+                onClick={() => setDeleteWorkspaceModalOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--workspace-line, #444)",
+                  color: "inherit",
+                  borderRadius: "6px",
+                  padding: "8px 14px",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingWorkspace}
+                onClick={() => void handleDeleteWorkspace()}
+                style={{
+                  background: "#b33f3f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "8px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  opacity: deletingWorkspace ? 0.6 : 1,
+                }}
+              >
+                {deletingWorkspace ? "Deleting..." : "Delete Workspace"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

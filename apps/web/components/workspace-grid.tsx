@@ -10,6 +10,7 @@ import {
   List,
   Search,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 
 import { RepositoryPicker } from "@/components/repository-picker";
@@ -65,19 +66,24 @@ export function WorkspaceGrid({
   user?: AppUser;
   workspaces: WorkspaceItem[];
 }) {
+  const [workspaceList, setWorkspaceList] = useState(workspaces);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [artifactType, setArtifactType] = useState("");
   const [view, setView] = useState<WorkspaceView>("grid");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmWorkspace, setDeleteConfirmWorkspace] =
+    useState<WorkspaceItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const greeting = useMemo(() => getGreeting(), []);
 
   const sortedWorkspaces = useMemo(() => {
-    return [...workspaces].sort(
+    return [...workspaceList].sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
-  }, [workspaces]);
+  }, [workspaceList]);
 
   const latestWorkspace = sortedWorkspaces[0];
 
@@ -99,10 +105,33 @@ export function WorkspaceGrid({
   }, [artifactType, query, sortedWorkspaces, status]);
 
   const activeCount = useMemo(() => {
-    return workspaces.filter(
+    return workspaceList.filter(
       (w) => w.status === "ready" || w.status === "provisioning",
     ).length;
-  }, [workspaces]);
+  }, [workspaceList]);
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    setDeletingId(workspaceId);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setWorkspaceList((prev) => prev.filter((w) => w.id !== workspaceId));
+        setDeleteConfirmWorkspace(null);
+      } else {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setDeleteError(data?.error || "Failed to delete workspace.");
+      }
+    } catch {
+      setDeleteError("Failed to delete workspace.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const firstName =
     user?.name?.split(" ")[0] || user?.githubLogin || "Developer";
@@ -273,31 +302,66 @@ export function WorkspaceGrid({
         >
           <RepositoryPicker appSlug={appSlug} />
           {filteredWorkspaces.map((workspace) => (
-            <Link
-              className="workspace-card"
-              href={`/workspaces/${workspace.id}/ide`}
+            <div
+              className="workspace-card-wrapper"
               key={workspace.id}
+              style={{ position: "relative" }}
             >
-              <span className="workspace-card-icon" aria-hidden="true" />
-              <div>
-                <strong>{workspace.repository || "Untitled workspace"}</strong>
-                <span>
-                  {workspace.repository
-                    ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
-                    : "No repository connected"}
-                </span>
-              </div>
-              <div className="workspace-card-meta">
-                <span className="workspace-card-access">
-                  {workspace.repositoryVisibility === "private"
-                    ? "Private"
-                    : workspace.repository
-                      ? "Public"
-                      : "Blank"}
-                </span>
-                <small>{formatUpdatedAt(workspace.updatedAt)}</small>
-              </div>
-            </Link>
+              <Link
+                className="workspace-card"
+                href={`/workspaces/${workspace.id}/ide`}
+              >
+                <span className="workspace-card-icon" aria-hidden="true" />
+                <div>
+                  <strong>
+                    {workspace.repository || "Untitled workspace"}
+                  </strong>
+                  <span>
+                    {workspace.repository
+                      ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
+                      : "No repository connected"}
+                  </span>
+                </div>
+                <div className="workspace-card-meta">
+                  <span className="workspace-card-access">
+                    {workspace.repositoryVisibility === "private"
+                      ? "Private"
+                      : workspace.repository
+                        ? "Public"
+                        : "Blank"}
+                  </span>
+                  <small>{formatUpdatedAt(workspace.updatedAt)}</small>
+                </div>
+              </Link>
+              <button
+                type="button"
+                className="workspace-card-delete-button"
+                aria-label={`Delete ${workspace.repository || "workspace"}`}
+                title="Delete workspace"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeleteConfirmWorkspace(workspace);
+                }}
+                style={{
+                  position: "absolute",
+                  top: "12px",
+                  right: "12px",
+                  zIndex: 10,
+                  background: "transparent",
+                  border: "none",
+                  padding: "6px",
+                  borderRadius: "6px",
+                  color: "var(--workspace-faint, #888)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           ))}
         </div>
 
@@ -305,6 +369,114 @@ export function WorkspaceGrid({
           <p className="workspace-empty-state">
             No workspaces match these filters.
           </p>
+        ) : null}
+
+        {deleteConfirmWorkspace ? (
+          <div
+            className="delete-workspace-backdrop"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1000,
+              background: "rgba(0, 0, 0, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={() => setDeleteConfirmWorkspace(null)}
+          >
+            <div
+              className="delete-workspace-modal"
+              style={{
+                background: "var(--workspace-surface, #1e1e1e)",
+                color: "var(--workspace-ink, #fff)",
+                border: "1px solid var(--workspace-line, #333)",
+                borderRadius: "12px",
+                padding: "24px",
+                maxWidth: "420px",
+                width: "90%",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3
+                style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}
+              >
+                Delete Workspace?
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 16px",
+                  fontSize: "13px",
+                  opacity: 0.8,
+                  lineHeight: 1.5,
+                }}
+              >
+                Are you sure you want to delete{" "}
+                <strong>
+                  {deleteConfirmWorkspace.repository || "this workspace"}
+                </strong>
+                ? This action is permanent and cannot be undone.
+              </p>
+              {deleteError ? (
+                <div
+                  style={{
+                    color: "#d66161",
+                    fontSize: "12px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  {deleteError}
+                </div>
+              ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={deletingId === deleteConfirmWorkspace.id}
+                  onClick={() => setDeleteConfirmWorkspace(null)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--workspace-line, #444)",
+                    color: "inherit",
+                    borderRadius: "6px",
+                    padding: "8px 14px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingId === deleteConfirmWorkspace.id}
+                  onClick={() =>
+                    void handleDeleteWorkspace(deleteConfirmWorkspace.id)
+                  }
+                  style={{
+                    background: "#b33f3f",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "8px 14px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    opacity: deletingId === deleteConfirmWorkspace.id ? 0.6 : 1,
+                  }}
+                >
+                  {deletingId === deleteConfirmWorkspace.id
+                    ? "Deleting..."
+                    : "Delete Workspace"}
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
       </section>
     </div>
