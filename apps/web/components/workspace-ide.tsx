@@ -8,6 +8,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
+  Check,
+  ChevronDown,
   GitBranch,
   RefreshCw,
   Search,
@@ -180,6 +182,12 @@ export function WorkspaceIde({
   const [collaborationConflict, setCollaborationConflict] =
     useState<CollaborationConflict | null>(null);
   const [resolvingConflict, setResolvingConflict] = useState(false);
+  const [activeBranch, setActiveBranch] = useState(branch);
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [allBranches, setAllBranches] = useState<string[]>([]);
+  const [branchPickerLoading, setBranchPickerLoading] = useState(false);
+  const [checkingOutBranch, setCheckingOutBranch] = useState<string | null>(null);
+  const [branchSearch, setBranchSearch] = useState("");
   const [publicationBranch, setPublicationBranch] = useState("codev/demo");
   const [publishing, setPublishing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -928,9 +936,115 @@ export function WorkspaceIde({
           <i>/</i>
           <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
         </div>
-        <div className="topbar-center" title={branch}>
-          <GitBranch className="branch-icon" aria-hidden="true" />
-          <span>{branch}</span>
+        <div className="topbar-center">
+          <button
+            className="topbar-branch-btn"
+            title={`Current branch: ${activeBranch}`}
+            aria-label={`Switch branch (current: ${activeBranch})`}
+            aria-expanded={branchPickerOpen}
+            aria-haspopup="listbox"
+            onClick={async () => {
+              if (!branchPickerOpen) {
+                setBranchPickerOpen(true);
+                setBranchPickerLoading(true);
+                setBranchSearch("");
+                try {
+                  const res = await fetch(`/api/workspaces/${workspaceId}/sandbox/branches`);
+                  if (res.ok) {
+                    const data = (await res.json()) as { branches: string[]; currentBranch: string };
+                    setAllBranches(data.branches);
+                    setActiveBranch(data.currentBranch);
+                  }
+                } catch {
+                  // silently ignore
+                } finally {
+                  setBranchPickerLoading(false);
+                }
+              } else {
+                setBranchPickerOpen(false);
+              }
+            }}
+          >
+            <GitBranch aria-hidden="true" />
+            <span>{activeBranch}</span>
+            <ChevronDown aria-hidden="true" className="branch-chevron" />
+          </button>
+          {branchPickerOpen && (
+            <>
+              <div
+                className="branch-picker-backdrop"
+                onClick={() => setBranchPickerOpen(false)}
+                aria-hidden="true"
+              />
+              <div className="branch-picker" role="listbox" aria-label="Select a branch">
+                <div className="branch-picker-header">
+                  <Search aria-hidden="true" />
+                  <input
+                    className="branch-picker-search"
+                    type="text"
+                    placeholder="Find or switch branch…"
+                    value={branchSearch}
+                    onChange={(e) => setBranchSearch(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="branch-picker-list">
+                  {branchPickerLoading ? (
+                    <div className="branch-picker-loading">Loading branches…</div>
+                  ) : (
+                    allBranches
+                      .filter((b) =>
+                        b.toLowerCase().includes(branchSearch.toLowerCase()),
+                      )
+                      .map((b) => (
+                        <button
+                          key={b}
+                          role="option"
+                          aria-selected={b === activeBranch}
+                          className={`branch-picker-item${b === activeBranch ? " active" : ""}${checkingOutBranch === b ? " checking-out" : ""}`}
+                          onClick={async () => {
+                            if (b === activeBranch || checkingOutBranch) return;
+                            setCheckingOutBranch(b);
+                            try {
+                              const res = await fetch(
+                                `/api/workspaces/${workspaceId}/sandbox/checkout`,
+                                {
+                                  method: "POST",
+                                  headers: { "content-type": "application/json" },
+                                  body: JSON.stringify({ branch: b }),
+                                },
+                              );
+                              if (res.ok) {
+                                setActiveBranch(b);
+                                setBranchPickerOpen(false);
+                                // Refresh file list to reflect new branch
+                                void refreshFiles().catch(() => undefined);
+                              } else {
+                                const payload = (await res.json()) as { error?: string };
+                                setError(payload.error ?? "Branch checkout failed.");
+                              }
+                            } catch {
+                              setError("Branch checkout failed.");
+                            } finally {
+                              setCheckingOutBranch(null);
+                            }
+                          }}
+                        >
+                          <GitBranch aria-hidden="true" />
+                          <span>{b}</span>
+                          {b === activeBranch && <Check aria-hidden="true" className="branch-check" />}
+                        </button>
+                      ))
+                  )}
+                  {!branchPickerLoading && allBranches.filter((b) =>
+                    b.toLowerCase().includes(branchSearch.toLowerCase())
+                  ).length === 0 && (
+                    <div className="branch-picker-empty">No branches match.</div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
         <div className="topbar-actions">
           <WorkspaceViewNav
