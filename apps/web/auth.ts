@@ -8,6 +8,7 @@ import Google from "next-auth/providers/google";
 
 import { schema } from "@codev/db";
 
+import { resolveSignInProviderGate } from "@/lib/auth-sign-in-gate";
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
@@ -148,7 +149,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async signIn({ account, profile }) {
-      if (account?.provider === "google") {
+      const providerGate = resolveSignInProviderGate(account?.provider);
+
+      // Credentials are fully validated in authorize(); do not fall through to
+      // the GitHub-only gate (that used to return false → AccessDenied).
+      if (providerGate === "allow-credentials") {
+        return true;
+      }
+
+      if (providerGate === "handle-google") {
         const googleProfile = profile as unknown as GoogleProfile | undefined;
         const googleUserId = googleProfile?.sub ?? googleProfile?.id;
         if (
@@ -193,8 +202,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       if (
-        account?.provider !== "github" ||
-        !account.access_token ||
+        providerGate !== "handle-github" ||
+        !account?.access_token ||
         !profile ||
         !process.env.CREDENTIAL_ENCRYPTION_KEY
       ) {
