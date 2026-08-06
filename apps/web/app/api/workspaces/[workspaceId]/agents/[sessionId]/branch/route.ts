@@ -228,11 +228,19 @@ export async function POST(
         });
       }
 
+      const shortId = worktree.id.slice(0, 8);
+      const slug = sessionName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 20);
+      const branchName = `agent/${slug || "branch"}-${shortId}`;
+
       return {
         headSha,
         sessionId: session.id,
         worktreeId: worktree.id,
-        branchName: `agent/${worktree.id}`,
+        branchName,
         kick: Boolean(input.prompt),
       };
     });

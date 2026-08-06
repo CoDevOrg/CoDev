@@ -45,7 +45,11 @@ export async function GET(
       command: ["git", "symbolic-ref", "--short", "HEAD"],
       timeoutSeconds: 10,
     });
-    const currentBranch = headResult.output.trim();
+    const rawCurrent = headResult.output.trim();
+    const currentBranch =
+      headResult.exitCode === 0 && rawCurrent && !rawCurrent.includes("fatal:") && !rawCurrent.includes("error:")
+        ? rawCurrent
+        : "main";
 
     return Response.json({ branches, currentBranch });
   } catch (error) {

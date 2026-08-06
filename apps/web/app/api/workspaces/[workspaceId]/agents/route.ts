@@ -307,11 +307,18 @@ export async function POST(
           prompt: input.prompt,
           attachments: toStoredAgentAttachments(input.attachments),
         });
+        const shortId = worktree.id.slice(0, 8);
+        const slug = input.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 20);
+        const branchName = `agent/${slug || "session"}-${shortId}`;
         return {
           headSha: integration.headSha,
           sessionId: session.id,
           worktreeId: worktree.id,
-          branchName: `agent/${worktree.id}`,
+          branchName,
         };
       });
     } catch (error) {
