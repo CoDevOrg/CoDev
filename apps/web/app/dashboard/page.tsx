@@ -14,15 +14,6 @@ export default async function DashboardPage() {
   return (
     <AppChrome user={user}>
       <main className="dashboard-shell">
-        <header className="workspace-page-header">
-          <span className="workspace-page-icon" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          <h1>Workspaces</h1>
-        </header>
         <WorkspaceGrid
           appSlug={process.env.GITHUB_APP_SLUG}
           user={user}

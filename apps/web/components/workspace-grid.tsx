@@ -133,12 +133,12 @@ export function WorkspaceGrid({
             </div>
             <div className="stat-card">
               <span className="stat-label">Active / Provisioning</span>
-              <strong className="stat-value text-emerald-400">{activeCount}</strong>
+              <strong className="stat-value stat-value-active">{activeCount}</strong>
             </div>
             {user?.githubLogin ? (
               <div className="stat-card">
                 <span className="stat-label">Connected GitHub</span>
-                <strong className="stat-value text-sky-400">@{user.githubLogin}</strong>
+                <strong className="stat-value">@{user.githubLogin}</strong>
               </div>
             ) : null}
           </div>
