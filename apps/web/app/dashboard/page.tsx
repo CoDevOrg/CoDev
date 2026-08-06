@@ -25,6 +25,7 @@ export default async function DashboardPage() {
         </header>
         <WorkspaceGrid
           appSlug={process.env.GITHUB_APP_SLUG}
+          user={user}
           workspaces={workspaces.map((workspace) => ({
             ...workspace,
             updatedAt: workspace.updatedAt.toISOString(),
