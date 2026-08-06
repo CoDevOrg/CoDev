@@ -213,6 +213,13 @@ export async function prepareAgentReview(
       target.worktreeId,
       target.worktreeHeadSha,
     );
+    if (checkpoint.headSha !== target.worktreeHeadSha) {
+      await getDatabase()
+        .update(schema.worktrees)
+        .set({ headSha: checkpoint.headSha, updatedAt: new Date() })
+        .where(eq(schema.worktrees.id, target.worktreeId));
+      target.worktreeHeadSha = checkpoint.headSha;
+    }
     const review = await reviewSandboxWorktree(
       workspaceId,
       target.worktreeId,

@@ -46,29 +46,36 @@ export async function getHostState(): Promise<InstanceStateName> {
 
 export async function requestHostWake(): Promise<"running" | "starting"> {
   const { client, instanceId } = createClient();
-  const response = await client.send(
-    new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-  );
-  const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
 
-  if (state === "running") {
-    return "running";
-  }
-  if (state === "stopped") {
-    await client.send(new StartInstancesCommand({ InstanceIds: [instanceId] }));
-    return "starting";
-  }
-  if (state === "pending" || state === "stopping") {
-    return "starting";
-  }
-  if (
-    state === "shutting-down" ||
-    state === "terminated" ||
-    state === undefined
-  ) {
-    throw new Error(
-      `The Firecracker host cannot be started from state ${state ?? "unknown"}.`,
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const response = await client.send(
+      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
     );
+    const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+
+    if (state === "running") {
+      return "running";
+    }
+    if (state === "stopped") {
+      await client.send(new StartInstancesCommand({ InstanceIds: [instanceId] }));
+      return "starting";
+    }
+    if (state === "pending") {
+      return "starting";
+    }
+    if (state === "stopping") {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      continue;
+    }
+    if (
+      state === "shutting-down" ||
+      state === "terminated" ||
+      state === undefined
+    ) {
+      throw new Error(
+        `The Firecracker host cannot be started from state ${state ?? "unknown"}.`,
+      );
+    }
   }
-  throw new Error(`Unexpected Firecracker host state: ${state}.`);
+  return "starting";
 }
