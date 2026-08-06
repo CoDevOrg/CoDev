@@ -24,6 +24,8 @@ import {
   WorkspaceLifecycleError,
 } from "@/lib/workspaces";
 
+export const maxDuration = 60;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },

@@ -2,6 +2,8 @@ import { apiError, getApiUser } from "@/lib/api";
 import { requireWorkspacePermission } from "@/lib/access";
 import { executeInSandbox } from "@/lib/orchestrator";
 
+export const maxDuration = 60;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
