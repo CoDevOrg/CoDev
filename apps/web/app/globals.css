@@ -10031,9 +10031,9 @@ html .live-ide .agent-review-summary-icon {
 }
 
 html .live-ide .agent-review-summary-icon svg,
-html .live-ide .agent-review-intro svg,
-html .live-ide .agent-review-comment-title svg,
 html .live-ide .agent-review-actions svg,
+html .live-ide .agent-review-diff-tools svg,
+html .live-ide .agent-review-notes > summary svg,
 html .live-ide .agent-review-comment > button svg {
   width: 16px;
   height: 16px;
@@ -10041,25 +10041,19 @@ html .live-ide .agent-review-comment > button svg {
   stroke-width: 1.8;
 }
 
-html .live-ide .agent-review-disclosure > summary > span:nth-child(2),
-html .live-ide .agent-review-intro span,
-html .live-ide .agent-review-comment-title span {
+html .live-ide .agent-review-disclosure > summary > span:nth-child(2) {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
-html .live-ide .agent-review-disclosure > summary strong,
-html .live-ide .agent-review-intro strong,
-html .live-ide .agent-review-comment-title strong {
+html .live-ide .agent-review-disclosure > summary strong {
   color: var(--workspace-ink);
   font-size: 12px;
   font-weight: 700;
 }
 
-html .live-ide .agent-review-disclosure > summary small,
-html .live-ide .agent-review-intro small,
-html .live-ide .agent-review-comment-title small {
+html .live-ide .agent-review-disclosure > summary small {
   color: var(--workspace-muted);
   font-size: 10px;
   font-weight: 450;
@@ -10085,21 +10079,110 @@ html .live-ide .agent-review-disclosure .agent-review {
   display: grid;
   margin: 0;
   padding: 16px;
-  gap: 14px;
+  gap: 16px;
   background: var(--workspace-surface);
 }
 
-html .live-ide .agent-review-intro > div,
-html .live-ide .agent-review-comment-title {
-  display: flex;
-  align-items: flex-start;
+html .live-ide .agent-review-diff,
+html .live-ide .agent-review-decide {
+  display: grid;
   gap: 10px;
 }
 
-html .live-ide .agent-review-intro svg,
-html .live-ide .agent-review-comment-title svg {
-  margin-top: 1px;
-  color: var(--workspace-accent);
+html .live-ide .agent-review-status,
+html .live-ide .agent-review-loading,
+html .live-ide .agent-review-empty,
+html .live-ide .agent-review-assistant-hint,
+html .live-ide .agent-review-publish-hint {
+  margin: 0;
+  color: var(--workspace-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+html .live-ide .agent-review-status {
+  color: var(--workspace-ink);
+  font-weight: 650;
+}
+
+html .live-ide .agent-review-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+html .live-ide .agent-review-files details {
+  overflow: hidden;
+  border: 1px solid var(--workspace-line);
+  border-radius: 9px;
+  background: var(--workspace-surface-muted);
+}
+
+html .live-ide .agent-review-files summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  color: var(--workspace-ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html .live-ide .agent-review-files summary svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  color: var(--workspace-muted);
+}
+
+html .live-ide .agent-review-file-path {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html .live-ide .agent-review-file-stats {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+  font:
+    650 10px var(--font-geist-mono),
+    monospace;
+}
+
+html .live-ide .agent-review-add {
+  color: #2f8f5b;
+}
+
+html .live-ide .agent-review-del {
+  color: #b33f3f;
+}
+
+html .live-ide .agent-review-files pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--workspace-line);
+  background: #111923;
+  color: #dce6e1;
+  font:
+    10px/1.55 var(--font-geist-mono),
+    monospace;
+}
+
+html .live-ide .agent-review-diff-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 html .live-ide .agent-review-actions {
@@ -10109,6 +10192,7 @@ html .live-ide .agent-review-actions {
 }
 
 html .live-ide .agent-review-actions button,
+html .live-ide .agent-review-diff-tools button,
 html .live-ide .agent-review-comment > button {
   display: inline-flex;
   min-height: 36px;
@@ -10127,7 +10211,6 @@ html .live-ide .agent-review-comment > button {
   cursor: pointer;
 }
 
-html .live-ide .agent-review-actions .agent-review-primary,
 html .live-ide .agent-review-actions .agent-review-merge,
 html .live-ide .agent-review-comment > button {
   border-color: var(--workspace-ink);
@@ -10135,10 +10218,17 @@ html .live-ide .agent-review-comment > button {
   color: var(--workspace-surface);
 }
 
-html .live-ide .agent-review-actions .agent-review-assistant {
-  border-color: var(--workspace-accent);
-  background: var(--workspace-accent-soft);
-  color: var(--workspace-accent);
+html .live-ide .agent-review-diff-tools .agent-review-assistant {
+  border-color: transparent;
+  background: transparent;
+  color: var(--workspace-muted);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html .live-ide .agent-review-diff-tools .agent-review-assistant:hover {
+  color: var(--workspace-ink);
 }
 
 html .live-ide .agent-review-actions .agent-discard {
@@ -10149,44 +10239,42 @@ html .live-ide .agent-review-actions .agent-discard {
 }
 
 html .live-ide .agent-review-actions button:disabled,
+html .live-ide .agent-review-diff-tools button:disabled,
 html .live-ide .agent-review-comment > button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-html .live-ide .agent-review > details {
-  overflow: hidden;
-  border: 1px solid var(--workspace-line);
-  border-radius: 9px;
-  background: var(--workspace-surface-muted);
+html .live-ide .agent-review-notes {
+  border-top: 1px solid var(--workspace-line);
+  padding-top: 4px;
 }
 
-html .live-ide .agent-review > details > summary {
-  padding: 10px 12px;
-  color: var(--workspace-ink);
-  font-size: 10px;
+html .live-ide .agent-review-notes > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 0;
+  color: var(--workspace-muted);
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
+  list-style: none;
 }
 
-html .live-ide .agent-review > details pre {
-  max-height: 280px;
-  margin: 0;
-  padding: 12px;
-  overflow: auto;
-  border-top: 1px solid var(--workspace-line);
-  background: #111923;
-  color: #dce6e1;
-  font:
-    10px/1.55 var(--font-geist-mono),
-    monospace;
+html .live-ide .agent-review-notes > summary::-webkit-details-marker {
+  display: none;
+}
+
+html .live-ide .agent-review-notes > summary svg {
+  width: 13px;
+  height: 13px;
 }
 
 html .live-ide .agent-review-comment {
   display: grid;
-  padding-top: 14px;
   gap: 9px;
-  border-top: 1px solid var(--workspace-line);
+  padding-bottom: 4px;
 }
 
 html .live-ide .agent-review-comment-location {

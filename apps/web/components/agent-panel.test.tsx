@@ -32,8 +32,21 @@ const session: AgentSession = {
   events: [],
 };
 
+async function mountReviewHost() {
+  const existing = document.getElementById("topbar-review-actions");
+  if (existing) existing.remove();
+  const host = document.createElement("div");
+  host.id = "topbar-review-actions";
+  document.body.appendChild(host);
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+  return host;
+}
+
 describe("AgentPanel", () => {
   afterEach(() => {
+    document.getElementById("topbar-review-actions")?.remove();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -333,6 +346,7 @@ describe("AgentPanel", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
+    await mountReviewHost();
 
     render(
       <AgentPanel
@@ -341,6 +355,12 @@ describe("AgentPanel", () => {
         initialSessions={[session]}
       />,
     );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Ask review assistant" }),
+      ).toBeInTheDocument();
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: "Ask review assistant" }),
@@ -358,6 +378,133 @@ describe("AgentPanel", () => {
         init?.method === "POST",
     );
     expect(createCall?.[1]?.body).toContain("diff --git a/app.ts b/app.ts");
+  });
+
+  it("auto-prepares a review and then shows Merge", async () => {
+    const reviewed: WorktreeReview = {
+      baseSha: "base",
+      headSha: "head",
+      diff: [
+        "diff --git a/app.ts b/app.ts",
+        "--- a/app.ts",
+        "+++ b/app.ts",
+        "@@ -1 +1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+      diffDigest: "digest-123",
+    };
+    const fetchMock = vi.fn().mockImplementation((input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () => {
+          if (init?.method === "POST" && String(input).endsWith("/review")) {
+            return { review: reviewed };
+          }
+          return {
+            sessions: [
+              {
+                ...session,
+                reviewedAt: "2026-08-05T00:00:00.000Z",
+                reviewDiffDigest: reviewed.diffDigest,
+              },
+            ],
+            stateEvents: [],
+            models: [],
+          };
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await mountReviewHost();
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[session]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Review changes")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Merge" })).toBeNull();
+
+    fireEvent.click(screen.getByText("Review changes"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workspaces/workspace-1/agents/session-1/review",
+        { method: "POST" },
+      );
+      expect(screen.getByText("app.ts")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Merge" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Rebase" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Merge or discard before Publish"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("requires confirmation before discarding review changes", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchMock = vi.fn().mockImplementation((_input, init) =>
+      Promise.resolve({
+        ok: true,
+        json: async () =>
+          init?.method === "POST"
+            ? {
+                review: {
+                  baseSha: "base",
+                  headSha: "head",
+                  diff: "diff --git a/a.ts b/a.ts\n+ok",
+                  diffDigest: "d",
+                },
+              }
+            : { sessions: [session], stateEvents: [], models: [] },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await mountReviewHost();
+
+    render(
+      <AgentPanel
+        workspaceId="workspace-1"
+        canMerge
+        initialSessions={[session]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Discard changes" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Discard changes from "Improve workspace navigation"? This removes the agent worktree and cannot be undone.',
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).endsWith("/discard"),
+      ),
+    ).toBe(false);
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workspaces/workspace-1/agents/session-1/discard",
+        { method: "POST" },
+      );
+    });
   });
 
   it("includes dropped or selected text files in a new agent prompt", async () => {

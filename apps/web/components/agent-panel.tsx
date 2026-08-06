@@ -13,6 +13,7 @@ import {
   Bot,
   FileCode2,
   GitBranch,
+  GitMerge,
   GitPullRequest,
   MessageSquareText,
   Paperclip,
@@ -33,6 +34,7 @@ import {
   type AgentChatAttachment,
 } from "@/lib/agent-chat";
 import { deriveAgentSessionName } from "@/lib/agent-session-name";
+import { parseReviewDiff } from "@/lib/parse-review-diff";
 import type { AgentEvent } from "@codev/shared-types";
 
 const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
@@ -210,7 +212,9 @@ export function AgentPanel({
   const [prompt, setPrompt] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [reviews, setReviews] = useState<Record<string, WorktreeReview>>({});
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const autoPreparedSessionId = useRef<string | null>(null);
   const [branchingTurnId, setBranchingTurnId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [commentBody, setCommentBody] = useState("");
@@ -754,6 +758,16 @@ export function AgentPanel({
     sessionId: string,
     action: "rebase" | "merge" | "discard",
   ) {
+    if (action === "discard") {
+      const target = sessions.find((session) => session.id === sessionId);
+      if (
+        !window.confirm(
+          `Discard changes from "${target?.name ?? "this chat"}"? This removes the agent worktree and cannot be undone.`,
+        )
+      ) {
+        return;
+      }
+    }
     setBusy(true);
     setError("");
     try {
@@ -767,6 +781,14 @@ export function AgentPanel({
           ...current,
           [sessionId]: result.review!,
         }));
+      }
+      if (action === "discard") {
+        setReviews((current) => {
+          const next = { ...current };
+          delete next[sessionId];
+          return next;
+        });
+        autoPreparedSessionId.current = null;
       }
       await refresh();
     } catch (caught) {
@@ -787,9 +809,55 @@ export function AgentPanel({
       activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS);
   const followUpMode = Boolean(selectedSession) && !composingNew;
 
+  const selectedReview = selectedSession
+    ? reviews[selectedSession.id]
+    : undefined;
+  const reviewFiles = useMemo(
+    () => (selectedReview ? parseReviewDiff(selectedReview.diff) : []),
+    [selectedReview],
+  );
+  const reviewReady = Boolean(selectedReview);
+  const reviewNeedsRebase =
+    Boolean(selectedSession?.lastError?.toLowerCase().includes("rebase")) ||
+    Boolean(error.toLowerCase().includes("rebase"));
+
+  useEffect(() => {
+    if (!reviewOpen || !selectedSession || !canReview || !canSteer) return;
+    if (
+      selectedSession.worktreeStatus === "merged" ||
+      selectedSession.worktreeStatus === "discarded"
+    ) {
+      return;
+    }
+    if (reviews[selectedSession.id]) return;
+    if (autoPreparedSessionId.current === selectedSession.id) return;
+    autoPreparedSessionId.current = selectedSession.id;
+    void review(selectedSession.id);
+  }, [
+    reviewOpen,
+    selectedSession,
+    canReview,
+    canSteer,
+    reviews,
+  ]);
+
+  const reviewStatusLabel = (() => {
+    if (!selectedSession) return null;
+    if (reviewNeedsRebase) return "Needs rebase onto integration";
+    if (selectedSession.worktreeStatus === "frozen") return "Frozen for review";
+    if (reviewReady) return "Diff ready for review";
+    if (busy) return "Loading diff…";
+    return "Preparing review…";
+  })();
+
   const reviewPanel =
     selectedSession && !composingNew && (canReview || canMerge) ? (
-      <details className="agent-review-disclosure">
+      <details
+        className="agent-review-disclosure"
+        onToggle={(event) => {
+          setReviewOpen(event.currentTarget.open);
+        }}
+      >
         <summary>
           <span className="agent-review-summary-icon">
             <GitPullRequest aria-hidden="true" />
@@ -804,132 +872,169 @@ export function AgentPanel({
         selectedSession.worktreeStatus !== "merged" &&
         selectedSession.worktreeStatus !== "discarded" ? (
           <div className="agent-review">
-            <div className="agent-review-intro">
-              <div>
-                <FileCode2 aria-hidden="true" />
-                <span>
-                  <strong>Review the proposed changes</strong>
-                  <small>
-                    Prepare a diff, ask for a second opinion, leave notes, then
-                    merge when it looks right.
-                  </small>
-                </span>
+            <section className="agent-review-diff" aria-label="Proposed diff">
+              {reviewStatusLabel ? (
+                <p className="agent-review-status">{reviewStatusLabel}</p>
+              ) : null}
+              {busy && !reviewReady ? (
+                <p className="agent-review-loading">Loading diff…</p>
+              ) : null}
+              {reviewReady ? (
+                reviewFiles.length > 0 ? (
+                  <ul className="agent-review-files">
+                    {reviewFiles.map((file) => (
+                      <li key={file.path}>
+                        <details>
+                          <summary
+                            onClick={() => setCommentPath(file.path)}
+                          >
+                            <FileCode2 aria-hidden="true" />
+                            <span className="agent-review-file-path">
+                              {file.path}
+                            </span>
+                            <span className="agent-review-file-stats">
+                              <span className="agent-review-add">
+                                +{file.additions}
+                              </span>
+                              <span className="agent-review-del">
+                                −{file.deletions}
+                              </span>
+                            </span>
+                          </summary>
+                          <pre>{file.hunk}</pre>
+                        </details>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="agent-review-empty">No file changes.</p>
+                )
+              ) : null}
+              <div className="agent-review-diff-tools">
+                <button
+                  type="button"
+                  className="agent-review-secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    autoPreparedSessionId.current = selectedSession.id;
+                    void review(selectedSession.id);
+                  }}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  {reviewReady ? "Refresh" : "Prepare review"}
+                </button>
+                {canSteer ? (
+                  <button
+                    type="button"
+                    className="agent-review-assistant"
+                    disabled={busy}
+                    onClick={() => void startReviewAssistant()}
+                    title="Opens a new chat with the diff"
+                  >
+                    <Bot aria-hidden="true" />
+                    Ask review assistant
+                  </button>
+                ) : null}
               </div>
-            </div>
-            <div className="agent-review-actions">
-              <button
-                type="button"
-                className="agent-review-primary"
-                disabled={busy}
-                onClick={() => void review(selectedSession.id)}
-              >
-                <GitPullRequest aria-hidden="true" />
-                {selectedSession.reviewedAt
-                  ? "Refresh review"
-                  : "Prepare review"}
-              </button>
               {canSteer ? (
-                <button
-                  type="button"
-                  className="agent-review-assistant"
-                  disabled={busy}
-                  onClick={() => void startReviewAssistant()}
-                >
-                  <Bot aria-hidden="true" />
-                  Ask review assistant
-                </button>
+                <p className="agent-review-assistant-hint">
+                  Opens a new chat with the diff
+                </p>
               ) : null}
-              {canMerge && selectedSession.reviewedAt ? (
-                <>
+            </section>
+
+            <section
+              className="agent-review-decide"
+              aria-label="Decide on changes"
+            >
+              <div className="agent-review-actions">
+                {canMerge && reviewReady ? (
+                  <>
+                    <button
+                      type="button"
+                      className="agent-review-merge"
+                      disabled={busy}
+                      onClick={() =>
+                        void reviewAction(selectedSession.id, "merge")
+                      }
+                    >
+                      <GitMerge aria-hidden="true" />
+                      Merge
+                    </button>
+                    <button
+                      type="button"
+                      className="agent-review-secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void reviewAction(selectedSession.id, "rebase")
+                      }
+                    >
+                      <GitBranch aria-hidden="true" />
+                      Rebase
+                    </button>
+                  </>
+                ) : null}
+                {canMerge ? (
                   <button
                     type="button"
-                    className="agent-review-secondary"
+                    className="agent-discard"
                     disabled={busy}
                     onClick={() =>
-                      void reviewAction(selectedSession.id, "rebase")
+                      void reviewAction(selectedSession.id, "discard")
                     }
                   >
-                    Rebase
+                    <Trash2 aria-hidden="true" />
+                    Discard changes
                   </button>
-                  <button
-                    type="button"
-                    className="agent-review-merge"
-                    disabled={busy}
-                    onClick={() =>
-                      void reviewAction(selectedSession.id, "merge")
-                    }
-                  >
-                    Merge
-                  </button>
-                </>
-              ) : null}
-              {canMerge ? (
-                <button
-                  type="button"
-                  className="agent-discard"
-                  disabled={busy}
-                  onClick={() =>
-                    void reviewAction(selectedSession.id, "discard")
-                  }
-                >
-                  <Trash2 aria-hidden="true" />
-                  Discard changes
-                </button>
-              ) : null}
-            </div>
-            {reviews[selectedSession.id] ? (
-              <details>
-                <summary>
-                  Reviewed diff ·{" "}
-                  {reviews[selectedSession.id]?.diffDigest.slice(0, 10)}
-                </summary>
-                <pre>
-                  {reviews[selectedSession.id]?.diff || "No file changes."}
-                </pre>
-              </details>
-            ) : null}
-            {canReview ? (
-              <div className="agent-review-comment">
-                <div className="agent-review-comment-title">
-                  <MessageSquareText aria-hidden="true" />
-                  <span>
-                    <strong>Leave a review note</strong>
-                    <small>
-                      Point to a file or line when the feedback is specific.
-                    </small>
-                  </span>
-                </div>
-                <div className="agent-review-comment-location">
-                  <input
-                    aria-label="Comment file path"
-                    value={commentPath}
-                    onChange={(event) => setCommentPath(event.target.value)}
-                    placeholder="src/file.ts (optional)"
-                  />
-                  <input
-                    aria-label="Comment line number"
-                    inputMode="numeric"
-                    value={commentLine}
-                    onChange={(event) => setCommentLine(event.target.value)}
-                    placeholder="Line"
-                  />
-                </div>
-                <textarea
-                  aria-label="Review comment"
-                  value={commentBody}
-                  onChange={(event) => setCommentBody(event.target.value)}
-                  placeholder="Leave an inline review note without running an agent…"
-                  rows={3}
-                />
-                <button
-                  type="button"
-                  disabled={busy || !commentBody.trim()}
-                  onClick={() => void addComment()}
-                >
-                  <MessageSquareText aria-hidden="true" />
-                  {busy ? "Saving note…" : "Add note"}
-                </button>
+                ) : null}
               </div>
+              {selectedSession.worktreeStatus === "active" ||
+              selectedSession.worktreeStatus === "frozen" ? (
+                <p className="agent-review-publish-hint">
+                  Merge or discard before Publish
+                </p>
+              ) : null}
+            </section>
+
+            {canReview ? (
+              <details className="agent-review-notes">
+                <summary>
+                  <MessageSquareText aria-hidden="true" />
+                  Leave a note
+                </summary>
+                <div className="agent-review-comment">
+                  <div className="agent-review-comment-location">
+                    <input
+                      aria-label="Comment file path"
+                      value={commentPath}
+                      onChange={(event) => setCommentPath(event.target.value)}
+                      placeholder="src/file.ts (optional)"
+                    />
+                    <input
+                      aria-label="Comment line number"
+                      inputMode="numeric"
+                      value={commentLine}
+                      onChange={(event) => setCommentLine(event.target.value)}
+                      placeholder="Line"
+                    />
+                  </div>
+                  <textarea
+                    aria-label="Review comment"
+                    value={commentBody}
+                    onChange={(event) => setCommentBody(event.target.value)}
+                    placeholder="Leave an inline review note without running an agent…"
+                    rows={3}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !commentBody.trim()}
+                    onClick={() => void addComment()}
+                  >
+                    <MessageSquareText aria-hidden="true" />
+                    {busy ? "Saving note…" : "Add note"}
+                  </button>
+                </div>
+              </details>
             ) : null}
           </div>
         ) : (
