@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   streamText: vi.fn(),
   tool: vi.fn((definition: unknown) => definition),
   appendWorkspaceStateEvent: vi.fn(),
+  getWorkspaceForMember: vi.fn(),
   resolveAgentCredential: vi.fn(),
   AgentPromptRateLimitError: class AgentPromptRateLimitError extends Error {
     constructor(readonly retryAfterSeconds: number) {
@@ -61,6 +62,9 @@ vi.mock("@/lib/orchestrator", () => ({
 }));
 vi.mock("@/lib/workspace-state", () => ({
   appendWorkspaceStateEvent: mocks.appendWorkspaceStateEvent,
+}));
+vi.mock("@/lib/workspaces", () => ({
+  getWorkspaceForMember: mocks.getWorkspaceForMember,
 }));
 
 import { POST } from "@/app/api/workspaces/[workspaceId]/agents/stream/route";
@@ -109,6 +113,15 @@ describe("agent canvas stream route", () => {
       image: null,
     });
     mocks.requireWorkspacePermission.mockResolvedValue(undefined);
+    mocks.getWorkspaceForMember.mockResolvedValue({
+      id: workspaceId,
+      repository: "acme/repo",
+      repositoryVisibility: "public",
+      defaultBranch: "main",
+      baseSha: "1111111111111111111111111111111111111111",
+      status: "ready",
+      ownerId: "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+    });
     mocks.resolveAgentCredential.mockResolvedValue({
       provider: "openai",
       source: "USER",

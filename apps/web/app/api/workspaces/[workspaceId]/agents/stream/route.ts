@@ -29,8 +29,8 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   prompt: z.string().trim().min(1).max(50_000),
-  sessionId: z.uuid().nullable().optional(),
-  turnId: z.uuid().nullable().optional(),
+  sessionId: z.string().nullable().optional(),
+  turnId: z.string().nullable().optional(),
   provider: z
     .enum(["openai", "anthropic", "cursor", "bedrock", "azure_foundry"])
     .optional(),
@@ -140,7 +140,7 @@ export async function POST(
     const workspace = await getWorkspaceForMember(workspaceId, user.id);
     if (!workspace) return apiError(new Error("Workspace not found."), 404);
     const actor: AgentEvent["actor"] = {
-      userId: z.uuid().parse(user.id),
+      userId: String(user.id),
       userName:
         typeof user.name === "string" && user.name.trim().length > 0
           ? user.name.trim()

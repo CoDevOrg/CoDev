@@ -427,12 +427,12 @@ describe("AgentPanel", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Review changes")).toBeInTheDocument();
+      expect(screen.getByText("Changes")).toBeInTheDocument();
     });
 
     expect(screen.queryByRole("button", { name: "Merge" })).toBeNull();
 
-    fireEvent.click(screen.getByText("Review changes"));
+    fireEvent.click(screen.getByText("Changes"));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

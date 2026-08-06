@@ -61,12 +61,17 @@ export async function ensureWorkspaceRuntimeReady(
       await recordWorkspaceHeartbeat(workspaceId);
       return;
     } catch (error) {
-      if (!(error instanceof OrchestratorError && error.status === 404)) {
+      if (
+        !(
+          error instanceof OrchestratorError &&
+          (error.status === 404 || error.status === 403 || error.status === 503)
+        )
+      ) {
         throw error;
       }
-      // The host may have been replaced while the database still says the
-      // runtime is ready. Treat the missing in-memory sandbox as stopped so
-      // this mutating action can provision it again.
+      // The host may have stopped, restarted, or been replaced while the database
+      // still says the runtime is ready. Wake host if stopped and treat missing runtime as stopped.
+      await Promise.resolve(requestHostWake()).catch(() => undefined);
       await markWorkspaceStopped(workspaceId);
     }
   }

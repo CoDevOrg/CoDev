@@ -22,6 +22,7 @@ vi.mock("./hibernation", () => ({
   getWorkspaceSnapshot: mocks.getWorkspaceSnapshot,
 }));
 vi.mock("./github", () => ({ getRepositorySnapshot: vi.fn() }));
+vi.mock("./quotas", () => ({ assertVmMinuteQuota: vi.fn() }));
 vi.mock("./host", () => ({
   getHostState: mocks.getHostState,
   requestHostWake: vi.fn(),

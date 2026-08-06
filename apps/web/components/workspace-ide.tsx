@@ -998,11 +998,25 @@ export function WorkspaceIde({
                       branches: string[];
                       currentBranch: string;
                     };
-                    setAllBranches(data.branches);
-                    setActiveBranch(data.currentBranch);
+                    setAllBranches(
+                      data.branches.length > 0
+                        ? data.branches
+                        : [data.currentBranch || activeBranch || "main"],
+                    );
+                    if (data.currentBranch) setActiveBranch(data.currentBranch);
+                  } else {
+                    setAllBranches((prev) =>
+                      prev.length
+                        ? prev
+                        : Array.from(new Set([activeBranch, "main"])),
+                    );
                   }
                 } catch {
-                  // silently ignore
+                  setAllBranches((prev) =>
+                    prev.length
+                      ? prev
+                      : Array.from(new Set([activeBranch, "main"])),
+                  );
                 } finally {
                   setBranchPickerLoading(false);
                 }

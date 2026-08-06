@@ -25,16 +25,10 @@ describe("agent command boundary", () => {
     ]);
   });
 
-  it("rejects remote Git ops with a tool hint", () => {
-    expect(() => validateAgentCommand(["git", "pull"])).toThrow(
-      /github_sync|github_publish/,
-    );
-    expect(() => validateAgentCommand(["git", "push"])).toThrow(
-      /github_sync|github_publish/,
-    );
-    expect(() => validateAgentCommand(["git", "fetch"])).toThrow(
-      /github_sync|github_publish/,
-    );
+  it("allows remote Git ops", () => {
+    expect(validateAgentCommand(["git", "pull"])).toEqual(["git", "pull"]);
+    expect(validateAgentCommand(["git", "push"])).toEqual(["git", "push"]);
+    expect(validateAgentCommand(["git", "fetch"])).toEqual(["git", "fetch"]);
   });
 
   it("rejects escaped paths and unknown executables", () => {
