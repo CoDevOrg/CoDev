@@ -1,0 +1,5 @@
+gen-esbuild.*.mjs
+gen-webpack*.js
+lib/
+src-gen/
+webpack.config.js

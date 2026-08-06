@@ -7,28 +7,91 @@
     "target": "browser",
     "frontend": {
       "config": {
-        "applicationName": "CoDev IDE"
+        "applicationName": "CoDev Workspace",
+        "preferences": {
+          "files.enableTrash": false,
+          "security.workspace.trust.enabled": true,
+          "workbench.startupEditor": "none"
+        },
+        "reloadOnReconnect": true
+      }
+    },
+    "backend": {
+      "config": {
+        "frontendConnectionTimeout": 3000,
+        "configureProxyFromPreferences": false
       }
     }
   },
   "scripts": {
-    "build": "theia build",
-    "start": "theia start --hostname=0.0.0.0 --port=3000",
+    "clean": "theia clean",
+    "build": "pnpm run build:development",
+    "build:development": "pnpm run rebuild && theia build --mode development",
+    "build:production": "pnpm run rebuild && theia build --mode production",
+    "rebuild": "theia rebuild:browser --cacheRoot ../..",
+    "start": "theia start /workspace --hostname=127.0.0.1 --port=3000 --plugins=local-dir:/opt/codev/theia/plugins",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@codev/shared-types": "workspace:*",
     "@codev/theia-extension": "workspace:*",
-    "@theia/core": "1.65.0",
-    "@theia/editor": "1.65.0",
-    "@theia/filesystem": "1.65.0",
-    "@theia/monaco": "1.65.0",
-    "@theia/navigator": "1.65.0",
-    "@theia/terminal": "1.65.0",
-    "@theia/workspace": "1.65.0"
+    "@parcel/watcher": "^2.5.6",
+    "@theia/ai-core": "1.74.1",
+    "@theia/ai-mcp": "1.74.1",
+    "@theia/bulk-edit": "1.74.1",
+    "@theia/callhierarchy": "1.74.1",
+    "@theia/collaboration": "1.74.1",
+    "@theia/console": "1.74.1",
+    "@theia/core": "1.74.1",
+    "@theia/debug": "1.74.1",
+    "@theia/editor": "1.74.1",
+    "@theia/editor-preview": "1.74.1",
+    "@theia/file-search": "1.74.1",
+    "@theia/filesystem": "1.74.1",
+    "@theia/keymaps": "1.74.1",
+    "@theia/markers": "1.74.1",
+    "@theia/messages": "1.74.1",
+    "@theia/monaco": "1.74.1",
+    "@theia/monaco-editor-core": "1.108.201",
+    "@theia/navigator": "1.74.1",
+    "@theia/notebook": "1.74.1",
+    "@theia/outline-view": "1.74.1",
+    "@theia/output": "1.74.1",
+    "@theia/plugin-ext": "1.74.1",
+    "@theia/plugin-ext-vscode": "1.74.1",
+    "@theia/preferences": "1.74.1",
+    "@theia/process": "1.74.1",
+    "@theia/scm": "1.74.1",
+    "@theia/scm-extra": "1.74.1",
+    "@theia/search-in-workspace": "1.74.1",
+    "@theia/task": "1.74.1",
+    "@theia/terminal": "1.74.1",
+    "@theia/test": "1.74.1",
+    "@theia/timeline": "1.74.1",
+    "@theia/toolbar": "1.74.1",
+    "@theia/typehierarchy": "1.74.1",
+    "@theia/userstorage": "1.74.1",
+    "@theia/variable-resolver": "1.74.1",
+    "@theia/vsx-registry": "1.74.1",
+    "@theia/workspace": "1.74.1",
+    "@vscode/ripgrep": "^1.18.0",
+    "node-pty": "1.2.0-beta.12",
+    "reflect-metadata": "^0.2.2",
+    "trash": "^7.2.0"
   },
   "devDependencies": {
-    "@theia/cli": "1.65.0",
-    "typescript": "5.9.3"
+    "@theia/bundle-plugin": "1.74.1",
+    "@theia/cli": "1.74.1",
+    "esbuild": "^0.28.0",
+    "esbuild-plugin-copy": "^2.1.1",
+    "esbuild-plugins-node-modules-polyfill": "^1.8.2",
+    "resolve-package-path": "^4.0.3",
+    "typescript": "5.9.3",
+    "yargs": "^17.7.3"
+  },
+  "optionalDependencies": {
+    "@parcel/watcher-darwin-arm64": "2.6.0",
+    "@parcel/watcher-linux-arm64-glibc": "2.6.0",
+    "@vscode/ripgrep-darwin-arm64": "1.18.0",
+    "@vscode/ripgrep-linux-arm64": "1.18.0"
   }
 }
