@@ -12,7 +12,9 @@ export function parseReviewDiff(diff: string): ReviewDiffFile[] {
   const trimmed = diff.trim();
   if (!trimmed) return [];
 
-  const chunks = trimmed.split(/(?=^diff --git )/m).filter((chunk) => chunk.trim());
+  const chunks = trimmed
+    .split(/(?=^diff --git )/m)
+    .filter((chunk) => chunk.trim());
   const files: ReviewDiffFile[] = [];
 
   for (const chunk of chunks) {

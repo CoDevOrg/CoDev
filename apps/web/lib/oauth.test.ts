@@ -35,12 +35,12 @@ describe("provider OAuth", () => {
       configured: true,
       flowMode: "device_code",
     });
-    expect(getOAuthConfiguration("claude", "https://app.example.com").clientId).toBe(
-      DEFAULT_CLAUDE_OAUTH_CLIENT_ID,
-    );
-    expect(getOAuthConfiguration("codex", "https://app.example.com").redirectUri).toBe(
-      CODEX_DEVICE_REDIRECT_URI,
-    );
+    expect(
+      getOAuthConfiguration("claude", "https://app.example.com").clientId,
+    ).toBe(DEFAULT_CLAUDE_OAUTH_CLIENT_ID);
+    expect(
+      getOAuthConfiguration("codex", "https://app.example.com").redirectUri,
+    ).toBe(CODEX_DEVICE_REDIRECT_URI);
   });
 
   it("uses app callback mode when a redirect URI override is set", () => {

@@ -1,14 +1,23 @@
 packages:
   - apps/*
   - packages/*
+blockExoticSubdeps: false
 allowBuilds:
-  "@clerk/shared": set this to true or false
+  "@clerk/shared": true
+  "@parcel/watcher": true
   "@swc/core": true
+  "@theia/ffmpeg": true
   cbor-extract: true
+  drivelist: true
   esbuild: true
+  keytar: true
+  msgpackr-extract: true
+  node-pty: true
+  puppeteer: true
   sharp: true
   unrs-resolver: true
 overrides:
+  "@electron/node-gyp": "npm:node-gyp@^10.0.0"
   postcss: 8.5.25
   sharp: 0.35.3
 minimumReleaseAgeExclude:

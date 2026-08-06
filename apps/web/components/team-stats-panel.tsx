@@ -136,15 +136,14 @@ export function TeamStatsPanel({
         <div className="team-stats-metric" role="listitem">
           <small>Turns</small>
           <strong>{stats.turnCount}</strong>
-          <span>
-            {stats.failedSessions} with errors
-          </span>
+          <span>{stats.failedSessions} with errors</span>
         </div>
         <div className="team-stats-metric" role="listitem">
           <small>Open worktrees</small>
           <strong>{stats.openWorktrees}</strong>
           <span>
-            {stats.mergedWorktrees} merged · {stats.discardedWorktrees} discarded
+            {stats.mergedWorktrees} merged · {stats.discardedWorktrees}{" "}
+            discarded
           </span>
         </div>
         <div className="team-stats-metric" role="listitem">
@@ -216,7 +215,11 @@ export function TeamStatsPanel({
                         </span>
                       </div>
                       <div className="team-stats-meter">
-                        <b style={{ width: `${Math.round(bucket.share * 100)}%` }} />
+                        <b
+                          style={{
+                            width: `${Math.round(bucket.share * 100)}%`,
+                          }}
+                        />
                       </div>
                     </li>
                   ))}
@@ -234,7 +237,11 @@ export function TeamStatsPanel({
                         </span>
                       </div>
                       <div className="team-stats-meter">
-                        <b style={{ width: `${Math.round(bucket.share * 100)}%` }} />
+                        <b
+                          style={{
+                            width: `${Math.round(bucket.share * 100)}%`,
+                          }}
+                        />
                       </div>
                     </li>
                   ))}
@@ -267,7 +274,9 @@ export function TeamStatsPanel({
           </span>
         </div>
         {stats.recentSessions.length === 0 ? (
-          <p className="team-stats-empty">No agent activity in this workspace.</p>
+          <p className="team-stats-empty">
+            No agent activity in this workspace.
+          </p>
         ) : (
           <div className="team-stats-table-wrap">
             <table className="team-stats-table">
@@ -299,7 +308,9 @@ export function TeamStatsPanel({
                       <code>{row.model}</code>
                     </td>
                     <td>
-                      <b className={`team-stats-pill ${statusTone(row.status)}`}>
+                      <b
+                        className={`team-stats-pill ${statusTone(row.status)}`}
+                      >
                         {row.status}
                       </b>
                     </td>

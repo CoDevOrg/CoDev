@@ -40,7 +40,10 @@ export async function getVmMinutesUsed(userId: string) {
 }
 
 export async function getVmMinutesRemaining(userId: string) {
-  return Math.max(0, VM_MINUTE_LIFETIME_QUOTA - (await getVmMinutesUsed(userId)));
+  return Math.max(
+    0,
+    VM_MINUTE_LIFETIME_QUOTA - (await getVmMinutesUsed(userId)),
+  );
 }
 
 export async function openSandboxInterval(

@@ -58,8 +58,7 @@ function issueTitle(input: FeedbackIssueInput) {
 }
 
 function issueBody(input: FeedbackIssueInput) {
-  const rating =
-    input.rating === null ? "Not rated" : `${input.rating} / 5`;
+  const rating = input.rating === null ? "Not rated" : `${input.rating} / 5`;
   const author =
     input.user.githubLogin != null
       ? `@${input.user.githubLogin}`

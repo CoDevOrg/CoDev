@@ -235,10 +235,7 @@ export function getOAuthConfiguration(
       "CODEX_OAUTH_TOKEN_URL",
       "https://auth.openai.com/oauth/token",
     ),
-    scope: envUrl(
-      "CODEX_OAUTH_SCOPE",
-      "openid profile email offline_access",
-    ),
+    scope: envUrl("CODEX_OAUTH_SCOPE", "openid profile email offline_access"),
     redirectUri: envUrl(
       "CODEX_OAUTH_REDIRECT_URI",
       flowMode === "device_code"

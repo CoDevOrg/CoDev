@@ -6,7 +6,14 @@ import { Terminal } from "@xterm/xterm";
 import type { editor as MonacoEditor } from "monaco-editor";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   Check,
   ChevronDown,
@@ -186,7 +193,9 @@ export function WorkspaceIde({
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [allBranches, setAllBranches] = useState<string[]>([]);
   const [branchPickerLoading, setBranchPickerLoading] = useState(false);
-  const [checkingOutBranch, setCheckingOutBranch] = useState<string | null>(null);
+  const [checkingOutBranch, setCheckingOutBranch] = useState<string | null>(
+    null,
+  );
   const [branchSearch, setBranchSearch] = useState("");
   const [publicationBranch, setPublicationBranch] = useState("codev/demo");
   const [publishing, setPublishing] = useState(false);
@@ -930,7 +939,10 @@ export function WorkspaceIde({
           <strong>CoDev</strong>
         </Link>
         <span className="topbar-divider" />
-        <div className="repo-crumbs" title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}>
+        <div
+          className="repo-crumbs"
+          title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}
+        >
           <GitBranch className="github-glyph" aria-hidden="true" />
           <strong title={repository}>{repository}</strong>
           <i>/</i>
@@ -949,9 +961,14 @@ export function WorkspaceIde({
                 setBranchPickerLoading(true);
                 setBranchSearch("");
                 try {
-                  const res = await fetch(`/api/workspaces/${workspaceId}/sandbox/branches`);
+                  const res = await fetch(
+                    `/api/workspaces/${workspaceId}/sandbox/branches`,
+                  );
                   if (res.ok) {
-                    const data = (await res.json()) as { branches: string[]; currentBranch: string };
+                    const data = (await res.json()) as {
+                      branches: string[];
+                      currentBranch: string;
+                    };
                     setAllBranches(data.branches);
                     setActiveBranch(data.currentBranch);
                   }
@@ -976,7 +993,11 @@ export function WorkspaceIde({
                 onClick={() => setBranchPickerOpen(false)}
                 aria-hidden="true"
               />
-              <div className="branch-picker" role="listbox" aria-label="Select a branch">
+              <div
+                className="branch-picker"
+                role="listbox"
+                aria-label="Select a branch"
+              >
                 <div className="branch-picker-header">
                   <Search aria-hidden="true" />
                   <input
@@ -990,7 +1011,9 @@ export function WorkspaceIde({
                 </div>
                 <div className="branch-picker-list">
                   {branchPickerLoading ? (
-                    <div className="branch-picker-loading">Loading branches…</div>
+                    <div className="branch-picker-loading">
+                      Loading branches…
+                    </div>
                   ) : (
                     allBranches
                       .filter((b) =>
@@ -1010,7 +1033,9 @@ export function WorkspaceIde({
                                 `/api/workspaces/${workspaceId}/sandbox/checkout`,
                                 {
                                   method: "POST",
-                                  headers: { "content-type": "application/json" },
+                                  headers: {
+                                    "content-type": "application/json",
+                                  },
                                   body: JSON.stringify({ branch: b }),
                                 },
                               );
@@ -1020,8 +1045,12 @@ export function WorkspaceIde({
                                 // Refresh file list to reflect new branch
                                 void refreshFiles().catch(() => undefined);
                               } else {
-                                const payload = (await res.json()) as { error?: string };
-                                setError(payload.error ?? "Branch checkout failed.");
+                                const payload = (await res.json()) as {
+                                  error?: string;
+                                };
+                                setError(
+                                  payload.error ?? "Branch checkout failed.",
+                                );
                               }
                             } catch {
                               setError("Branch checkout failed.");
@@ -1032,15 +1061,23 @@ export function WorkspaceIde({
                         >
                           <GitBranch aria-hidden="true" />
                           <span>{b}</span>
-                          {b === activeBranch && <Check aria-hidden="true" className="branch-check" />}
+                          {b === activeBranch && (
+                            <Check
+                              aria-hidden="true"
+                              className="branch-check"
+                            />
+                          )}
                         </button>
                       ))
                   )}
-                  {!branchPickerLoading && allBranches.filter((b) =>
-                    b.toLowerCase().includes(branchSearch.toLowerCase())
-                  ).length === 0 && (
-                    <div className="branch-picker-empty">No branches match.</div>
-                  )}
+                  {!branchPickerLoading &&
+                    allBranches.filter((b) =>
+                      b.toLowerCase().includes(branchSearch.toLowerCase()),
+                    ).length === 0 && (
+                      <div className="branch-picker-empty">
+                        No branches match.
+                      </div>
+                    )}
                 </div>
               </div>
             </>
@@ -1350,9 +1387,7 @@ export function WorkspaceIde({
                 <FileExplorer
                   files={files}
                   loading={loading}
-                  repositoryName={
-                    repository.split("/").at(-1) ?? repository
-                  }
+                  repositoryName={repository.split("/").at(-1) ?? repository}
                   openPath={openFile?.path}
                   presenceByPath={presenceByPath}
                   onOpen={(path) => {

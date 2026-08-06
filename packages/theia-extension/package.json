@@ -1,0 +1,28 @@
+{
+  "name": "@codev/theia-extension",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "lib/browser/theia-extension-frontend-module.js",
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/theia-extension-frontend-module"
+    }
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codev/shared-types": "workspace:*",
+    "@theia/core": "1.65.0",
+    "inversify": "6.2.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "typescript": "5.9.3"
+  }
+}

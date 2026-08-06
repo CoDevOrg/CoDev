@@ -9501,15 +9501,75 @@ html .live-ide .conversation-status {
 }
 
 html .live-ide .agent-chat-meta {
-  padding: 8px 24px;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 24px;
   align-items: center;
+  border-bottom: 1px solid var(--workspace-line);
   background: var(--workspace-surface);
 }
 
-html .live-ide .agent-chat-meta > span {
+html .live-ide .agent-chat-meta-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+html .live-ide .agent-chat-meta-info > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+html .live-ide .agent-chat-view-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--workspace-surface-muted);
+  border: 1px solid var(--workspace-line);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+html .live-ide .agent-chat-view-toggle button {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-muted);
+  font:
+    600 11px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+html .live-ide .agent-chat-view-toggle button:hover {
+  color: var(--workspace-ink);
+}
+
+html .live-ide .agent-chat-view-toggle button.active {
+  background: var(--workspace-surface-raised, #ffffff);
+  color: var(--workspace-ink);
+  box-shadow: 0 1px 3px rgba(8, 24, 17, 0.08);
+}
+
+html .live-ide .agent-chat-view-toggle button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+html .live-ide .agent-review-takeover {
+  flex: 1 1 auto;
+  overflow: auto;
+  background: var(--workspace-surface);
+}
+
+html .live-ide .agent-review-takeover .agent-review {
+  padding: 24px 0;
+  width: min(840px, calc(100% - 40px));
+  margin: 0 auto;
 }
 
 html .live-ide .agent-chat-body {
@@ -10289,9 +10349,7 @@ html .live-ide .agent-review-files {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
-  max-height: 320px;
-  overflow: auto;
+  gap: 12px;
 }
 
 html .live-ide .agent-review-files details {
@@ -10345,16 +10403,18 @@ html .live-ide .agent-review-del {
 }
 
 html .live-ide .agent-review-files pre {
-  max-height: 220px;
   margin: 0;
-  padding: 12px;
+  padding: 16px;
   overflow: auto;
   border-top: 1px solid var(--workspace-line);
-  background: #111923;
+  background: #0f1620;
   color: #dce6e1;
   font:
-    10px/1.55 var(--font-geist-mono),
+    11px/1.6 var(--font-geist-mono),
     monospace;
+  /* Add rudimentary diff styling for pre using simple lines */
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 html .live-ide .agent-review-diff-tools {
@@ -10421,7 +10481,9 @@ html .live-ide .agent-review-actions .agent-discard {
   color: #b33f3f;
 }
 
-html .live-ide .agent-review-actions:not(.agent-review-actions-single)
+html
+  .live-ide
+  .agent-review-actions:not(.agent-review-actions-single)
   .agent-discard {
   margin-left: auto;
 }
@@ -10527,10 +10589,16 @@ html .live-ide .topbar-branch-btn {
   border-radius: 8px;
   background: var(--workspace-surface-muted);
   color: var(--workspace-muted);
-  font: 600 11px var(--font-geist-sans), system-ui, sans-serif;
+  font:
+    600 11px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 80ms ease, background 80ms ease, color 80ms ease;
+  transition:
+    border-color 80ms ease,
+    background 80ms ease,
+    color 80ms ease;
   max-width: 180px;
 }
 
@@ -10587,7 +10655,9 @@ html .live-ide .branch-picker {
   border: 1px solid var(--workspace-line-strong);
   border-radius: 12px;
   background: var(--workspace-surface-raised);
-  box-shadow: 0 12px 40px rgba(8, 24, 17, 0.18), 0 2px 8px rgba(8, 24, 17, 0.08);
+  box-shadow:
+    0 12px 40px rgba(8, 24, 17, 0.18),
+    0 2px 8px rgba(8, 24, 17, 0.08);
   animation: branch-picker-appear 120ms ease-out;
   overflow: hidden;
 }
@@ -10625,7 +10695,10 @@ html .live-ide .branch-picker-search {
   outline: none;
   background: transparent;
   color: var(--workspace-ink);
-  font: 12px var(--font-geist-sans), system-ui, sans-serif;
+  font:
+    12px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
 }
 
 html .live-ide .branch-picker-search::placeholder {
@@ -10651,7 +10724,10 @@ html .live-ide .branch-picker-item {
   border-radius: 7px;
   background: transparent;
   color: var(--workspace-ink);
-  font: 12px var(--font-geist-sans), system-ui, sans-serif;
+  font:
+    12px var(--font-geist-sans),
+    system-ui,
+    sans-serif;
   text-align: left;
   cursor: pointer;
   transition: background 60ms ease;
@@ -10856,11 +10932,7 @@ html .live-ide .topbar-review-actions .agent-review-disclosure > summary:hover {
   color: var(--workspace-ink);
 }
 
-html
-  .live-ide
-  .topbar-review-actions
-  .agent-review-disclosure[open]
-  > summary {
+html .live-ide .topbar-review-actions .agent-review-disclosure[open] > summary {
   color: var(--workspace-accent);
 }
 
@@ -10880,14 +10952,24 @@ html .live-ide .topbar-review-actions .agent-review-summary-icon svg {
   stroke-width: 1.85;
 }
 
-html .live-ide .topbar-review-actions .agent-review-disclosure > summary > span:nth-child(2) {
+html
+  .live-ide
+  .topbar-review-actions
+  .agent-review-disclosure
+  > summary
+  > span:nth-child(2) {
   display: inline-flex;
   min-width: 0;
   align-items: center;
   gap: 0;
 }
 
-html .live-ide .topbar-review-actions .agent-review-disclosure > summary strong {
+html
+  .live-ide
+  .topbar-review-actions
+  .agent-review-disclosure
+  > summary
+  strong {
   color: inherit;
   font-size: 10px;
   font-weight: 650;
@@ -11996,11 +12078,7 @@ html .live-ide .agent-session-group-label b {
   padding: 2px 7px;
   border: 0;
   border-radius: 999px;
-  background: color-mix(
-    in srgb,
-    var(--workspace-ink) 8%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--workspace-ink) 8%, transparent);
   color: var(--workspace-ink);
   font-size: 10px;
   font-weight: 650;
@@ -12418,7 +12496,9 @@ html .live-ide .agent-sidebar-capacity-bar > i {
   background: rgba(255, 255, 255, 0.85);
   border: 1.5px solid rgba(21, 128, 61, 0.25);
   box-shadow: 0 4px 16px -4px rgba(21, 128, 61, 0.1);
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .home-quick-resume-card:hover {
@@ -12488,12 +12568,14 @@ html .live-ide .agent-sidebar-capacity-bar > i {
   color: #15803d;
 }
 
-.status-provisioning, .status-pending {
+.status-provisioning,
+.status-pending {
   background: rgba(217, 119, 6, 0.12);
   color: #b45309;
 }
 
-.status-hibernated, .status-stopped {
+.status-hibernated,
+.status-stopped {
   background: rgba(100, 116, 139, 0.12);
   color: #475569;
 }
@@ -12514,7 +12596,9 @@ html .live-ide .agent-sidebar-capacity-bar > i {
   color: #ffffff;
   background: var(--teal, #15803d);
   box-shadow: 0 4px 12px rgba(21, 128, 61, 0.25);
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
   text-decoration: none;
 }
 
@@ -12540,4 +12624,3 @@ html .live-ide .agent-sidebar-capacity-bar > i {
   color: var(--muted, #64748b);
   margin: 0;
 }
-

@@ -430,10 +430,7 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
     }
 
     const { event } = node;
-    if (
-      event.type === "turn.started" ||
-      event.type === "turn.interrupted"
-    ) {
+    if (event.type === "turn.started" || event.type === "turn.interrupted") {
       continue;
     }
 
@@ -529,9 +526,7 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
         id: `assistant:${event.id}`,
         text,
         ...(currentTurnId ? { turnId: currentTurnId } : {}),
-        ...(usage
-          ? { tokens: usage, tokensEstimated: false }
-          : {}),
+        ...(usage ? { tokens: usage, tokensEstimated: false } : {}),
       });
       continue;
     }

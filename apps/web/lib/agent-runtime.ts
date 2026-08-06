@@ -7,7 +7,11 @@ import OpenAI from "openai";
 import { schema, type AgentTurnAttachment } from "@codev/db";
 import { createAgentEvent } from "@codev/shared-types";
 
-import { createAgentModel, getAgentModel, parseAgentProvider } from "./ai-model";
+import {
+  createAgentModel,
+  getAgentModel,
+  parseAgentProvider,
+} from "./ai-model";
 import { resolveAgentCredential } from "./credentials";
 import {
   requireCursorApiKey,

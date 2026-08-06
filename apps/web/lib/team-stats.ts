@@ -109,7 +109,10 @@ function toBuckets(
       count,
       share: total > 0 ? count / total : 0,
     }))
-    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.label.localeCompare(right.label),
+    );
 }
 
 function collaboratorDisplayName(member: CollaborationUser) {
@@ -152,10 +155,16 @@ export function buildTeamStatsSnapshot({
     const provider = session.provider ?? "unknown";
     providerCounts.set(provider, (providerCounts.get(provider) ?? 0) + 1);
     modelCounts.set(session.model, (modelCounts.get(session.model) ?? 0) + 1);
-    statusCounts.set(session.status, (statusCounts.get(session.status) ?? 0) + 1);
+    statusCounts.set(
+      session.status,
+      (statusCounts.get(session.status) ?? 0) + 1,
+    );
     turnCount += session.turns.length;
     if (session.status === "failed" || session.lastError) failedSessions += 1;
-    if (session.worktreeStatus === "active" || session.worktreeStatus === "frozen") {
+    if (
+      session.worktreeStatus === "active" ||
+      session.worktreeStatus === "frozen"
+    ) {
       openWorktrees += 1;
     } else if (session.worktreeStatus === "merged") {
       mergedWorktrees += 1;
@@ -206,7 +215,9 @@ export function buildTeamStatsSnapshot({
 
   const memberIds = new Set(members.map((member) => member.userId));
   const guestPresence = collaborators
-    .filter((member) => !memberIds.has(member.id) && member.id !== currentUser.id)
+    .filter(
+      (member) => !memberIds.has(member.id) && member.id !== currentUser.id,
+    )
     .map((member) => ({
       id: member.id,
       name: collaboratorDisplayName(member),
@@ -218,11 +229,13 @@ export function buildTeamStatsSnapshot({
       isYou: false,
     }));
 
-  const people = [...peopleFromMembers, ...guestPresence].sort((left, right) => {
-    if (left.online !== right.online) return left.online ? -1 : 1;
-    if (left.isYou !== right.isYou) return left.isYou ? -1 : 1;
-    return left.name.localeCompare(right.name);
-  });
+  const people = [...peopleFromMembers, ...guestPresence].sort(
+    (left, right) => {
+      if (left.online !== right.online) return left.online ? -1 : 1;
+      if (left.isYou !== right.isYou) return left.isYou ? -1 : 1;
+      return left.name.localeCompare(right.name);
+    },
+  );
 
   const recentSessions = [...sessions]
     .reverse()

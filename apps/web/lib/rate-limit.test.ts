@@ -11,7 +11,9 @@ describe("consumeRateLimit", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("REDIS_URL", "");
 
-    await expect(consumeRateLimit("user-1", "feedback", 5, 60)).resolves.toEqual({
+    await expect(
+      consumeRateLimit("user-1", "feedback", 5, 60),
+    ).resolves.toEqual({
       allowed: false,
       remaining: 0,
       retryAfterSeconds: 60,
@@ -22,7 +24,9 @@ describe("consumeRateLimit", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("REDIS_URL", "");
 
-    await expect(consumeRateLimit("user-1", "feedback", 5, 60)).resolves.toEqual({
+    await expect(
+      consumeRateLimit("user-1", "feedback", 5, 60),
+    ).resolves.toEqual({
       allowed: true,
       remaining: 5,
       retryAfterSeconds: 0,

@@ -76,7 +76,9 @@ export function CredentialForm({
   async function remove() {
     setSaving(true);
     setMessage("");
-    const response = await fetch(deleteEndpoint(provider), { method: "DELETE" });
+    const response = await fetch(deleteEndpoint(provider), {
+      method: "DELETE",
+    });
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string };
       setMessage(payload.error ?? "The key could not be removed.");

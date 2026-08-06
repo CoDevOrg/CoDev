@@ -134,40 +134,39 @@ export function OAuthConnectionsCard({
   } | null>(null);
   const [busy, setBusy] = useState<OAuthProvider | null>(null);
 
-  const onDevicePending = useEffectEvent(async (session: {
-    deviceAuthId: string;
-    userCode: string;
-  }) => {
-    const response = await fetch("/api/auth/oauth/codex/poll", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        deviceAuthId: session.deviceAuthId,
-        userCode: session.userCode,
-      }),
-    });
-    const payload = (await response.json()) as {
-      status?: string;
-      error?: string;
-    };
-    if (!response.ok) {
-      setMessage({
-        text: payload.error ?? "Codex authorization failed.",
-        tone: "warning",
+  const onDevicePending = useEffectEvent(
+    async (session: { deviceAuthId: string; userCode: string }) => {
+      const response = await fetch("/api/auth/oauth/codex/poll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceAuthId: session.deviceAuthId,
+          userCode: session.userCode,
+        }),
       });
-      setActive(null);
-      setBusy(null);
-      return "stop" as const;
-    }
-    if (payload.status === "connected") {
-      setMessage({ text: "Codex is connected.", tone: "success" });
-      setActive(null);
-      setBusy(null);
-      router.refresh();
-      return "stop" as const;
-    }
-    return "continue" as const;
-  });
+      const payload = (await response.json()) as {
+        status?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setMessage({
+          text: payload.error ?? "Codex authorization failed.",
+          tone: "warning",
+        });
+        setActive(null);
+        setBusy(null);
+        return "stop" as const;
+      }
+      if (payload.status === "connected") {
+        setMessage({ text: "Codex is connected.", tone: "success" });
+        setActive(null);
+        setBusy(null);
+        router.refresh();
+        return "stop" as const;
+      }
+      return "continue" as const;
+    },
+  );
 
   useEffect(() => {
     if (!active || active.mode !== "device_code") return;
@@ -413,11 +412,7 @@ export function OAuthConnectionsCard({
         <div className="oauth-connection-flow">
           <p>
             Open{" "}
-            <a
-              href={active.verificationUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
+            <a href={active.verificationUrl} rel="noreferrer" target="_blank">
               {active.verificationUrl}
             </a>{" "}
             and enter this one-time code. Keep this page open until CoDev

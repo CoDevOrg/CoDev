@@ -1,0 +1,34 @@
+{
+  "name": "@codev/theia-app",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "theia": {
+    "target": "browser",
+    "frontend": {
+      "config": {
+        "applicationName": "CoDev IDE"
+      }
+    }
+  },
+  "scripts": {
+    "build": "theia build",
+    "start": "theia start --hostname=0.0.0.0 --port=3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codev/shared-types": "workspace:*",
+    "@codev/theia-extension": "workspace:*",
+    "@theia/core": "1.65.0",
+    "@theia/editor": "1.65.0",
+    "@theia/filesystem": "1.65.0",
+    "@theia/monaco": "1.65.0",
+    "@theia/navigator": "1.65.0",
+    "@theia/terminal": "1.65.0",
+    "@theia/workspace": "1.65.0"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.65.0",
+    "typescript": "5.9.3"
+  }
+}

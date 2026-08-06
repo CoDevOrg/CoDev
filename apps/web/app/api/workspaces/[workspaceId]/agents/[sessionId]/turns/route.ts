@@ -5,7 +5,10 @@ import { schema } from "@codev/db";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import { apiError, getApiUser } from "@/lib/api";
-import { parseAgentProvider, resolveSelectableAgentModel } from "@/lib/ai-model";
+import {
+  parseAgentProvider,
+  resolveSelectableAgentModel,
+} from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";

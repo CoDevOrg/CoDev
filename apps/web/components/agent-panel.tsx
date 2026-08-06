@@ -248,6 +248,14 @@ export function AgentPanel({
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [sessionView, setSessionView] = useState<"chat" | "diff">("chat");
+
+  // Reset to chat view when creating a new session
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (composingNew) setSessionView("chat");
+  }, [composingNew]);
+
   useEffect(() => {
     onTurnCompletedRef.current = onTurnCompleted;
   }, [onTurnCompleted]);
@@ -563,14 +571,11 @@ export function AgentPanel({
     setBranchingTurnId(turnId);
     setError("");
     try {
-      const result = await fetch(
-        `${endpoint}/${selectedSession.id}/branch`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fromTurnId: turnId }),
-        },
-      ).then((response) => json<{ sessionId?: string }>(response));
+      const result = await fetch(`${endpoint}/${selectedSession.id}/branch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fromTurnId: turnId }),
+      }).then((response) => json<{ sessionId?: string }>(response));
       if (result.sessionId) {
         setSelectedSessionId(result.sessionId);
         setComposingNew(false);
@@ -833,13 +838,7 @@ export function AgentPanel({
     if (autoPreparedSessionId.current === selectedSession.id) return;
     autoPreparedSessionId.current = selectedSession.id;
     void review(selectedSession.id);
-  }, [
-    reviewOpen,
-    selectedSession,
-    canReview,
-    canSteer,
-    reviews,
-  ]);
+  }, [reviewOpen, selectedSession, canReview, canSteer, reviews]);
 
   const reviewStatusLabel = (() => {
     if (!selectedSession) return null;
@@ -852,22 +851,7 @@ export function AgentPanel({
 
   const reviewPanel =
     selectedSession && !composingNew && (canReview || canMerge) ? (
-      <details
-        className="agent-review-disclosure"
-        onToggle={(event) => {
-          setReviewOpen(event.currentTarget.open);
-        }}
-      >
-        <summary>
-          <span className="agent-review-summary-icon">
-            <GitPullRequest aria-hidden="true" />
-          </span>
-          <span>
-            <strong>Review changes</strong>
-            <small>Inspect the agent&apos;s work before merging</small>
-          </span>
-          <ChevronDown className="agent-review-chevron" aria-hidden="true" />
-        </summary>
+      <>
         {canReview &&
         selectedSession.worktreeStatus !== "merged" &&
         selectedSession.worktreeStatus !== "discarded" ? (
@@ -887,10 +871,8 @@ export function AgentPanel({
                   <ul className="agent-review-files">
                     {reviewFiles.map((file) => (
                       <li key={file.path}>
-                        <details>
-                          <summary
-                            onClick={() => setCommentPath(file.path)}
-                          >
+                        <details open>
+                          <summary onClick={() => setCommentPath(file.path)}>
                             <FileCode2 aria-hidden="true" />
                             <span className="agent-review-file-path">
                               {file.path}
@@ -1057,7 +1039,7 @@ export function AgentPanel({
                 : "Reviewer capability is required to inspect this worktree."}
           </div>
         )}
-      </details>
+      </>
     ) : null;
 
   return (
@@ -1083,8 +1065,7 @@ export function AgentPanel({
               >
                 <RefreshCw />
               </button>
-              {canSteer &&
-              activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
+              {canSteer && activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
                 <button
                   type="button"
                   className={`agent-new-session ${composingNew ? "active" : ""}`}
@@ -1205,10 +1186,7 @@ export function AgentPanel({
                 </strong>{" "}
                 parallel
               </span>
-              <div
-                className="agent-sidebar-capacity-bar"
-                aria-hidden="true"
-              >
+              <div className="agent-sidebar-capacity-bar" aria-hidden="true">
                 <i
                   style={{
                     width: `${(activeSessionCount / MAX_PARALLEL_AGENT_SESSIONS) * 100}%`,
@@ -1250,280 +1228,322 @@ export function AgentPanel({
 
           {selectedSession && !composingNew ? (
             <div className="agent-chat-meta">
-              <span>
-                <GitBranch aria-hidden="true" />
-                {selectedSession.worktreeName}
-              </span>
-              {selectedSession.issueNumber ? (
-                <a
-                  href={selectedSession.issueUrl ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  #{selectedSession.issueNumber}
-                </a>
-              ) : null}
-              {selectedSession.lastError ? (
-                <span className="agent-chat-meta-error">
-                  {selectedSession.lastError}
+              <div className="agent-chat-meta-info">
+                <span>
+                  <GitBranch aria-hidden="true" />
+                  {selectedSession.worktreeName}
                 </span>
-              ) : null}
+                {selectedSession.issueNumber ? (
+                  <a
+                    href={selectedSession.issueUrl ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    #{selectedSession.issueNumber}
+                  </a>
+                ) : null}
+                {selectedSession.lastError ? (
+                  <span className="agent-chat-meta-error">
+                    {selectedSession.lastError}
+                  </span>
+                ) : null}
+              </div>
+              <div className="agent-chat-view-toggle">
+                <button
+                  type="button"
+                  className={sessionView === "chat" ? "active" : ""}
+                  onClick={() => setSessionView("chat")}
+                >
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  className={sessionView === "diff" ? "active" : ""}
+                  onClick={() => {
+                    setSessionView("diff");
+                    // Automatically prepare review if not ready
+                    if (!reviewReady && !busy && selectedSession) {
+                      autoPreparedSessionId.current = selectedSession.id;
+                      void review(selectedSession.id);
+                    }
+                  }}
+                  disabled={!canReview && !canMerge}
+                >
+                  Changes
+                </button>
+              </div>
             </div>
           ) : null}
 
-          <div className="agent-chat-body">
-            {composingNew || !selectedSession ? (
-              <div className="agent-chat-welcome">
-                <strong>What should we build?</strong>
-                <p>
-                  Describe a change below. The agent works in an isolated
-                  worktree; everyone in this workspace sees the same chat.
-                </p>
+          {sessionView === "chat" ? (
+            <>
+              <div className="agent-chat-body">
+                {composingNew || !selectedSession ? (
+                  <div className="agent-chat-welcome">
+                    <strong>What should we build?</strong>
+                    <p>
+                      Describe a change below. The agent works in an isolated
+                      worktree; everyone in this workspace sees the same chat.
+                    </p>
+                  </div>
+                ) : (
+                  <AgentChatTranscript
+                    items={chatItems}
+                    canBranch={canSteer}
+                    branchingTurnId={branchingTurnId}
+                    onBranchFromReply={(turnId) => void branchFromReply(turnId)}
+                  />
+                )}
               </div>
-            ) : (
-              <AgentChatTranscript
-                items={chatItems}
-                canBranch={canSteer}
-                branchingTurnId={branchingTurnId}
-                onBranchFromReply={(turnId) => void branchFromReply(turnId)}
-              />
-            )}
-          </div>
 
-          {!reviewPortalTarget ? reviewPanel : null}
-
-          <div
-            className={`agent-chat-composer ${draggingFiles ? "is-dragging" : ""}`}
-            onDragEnter={(event) => {
-              if (!canSteer || !event.dataTransfer.types.includes("Files"))
-                return;
-              event.preventDefault();
-              setDraggingFiles(true);
-            }}
-            onDragOver={(event) => {
-              if (!canSteer || !event.dataTransfer.types.includes("Files"))
-                return;
-              event.preventDefault();
-            }}
-            onDragLeave={(event) => {
-              if (event.currentTarget === event.target) setDraggingFiles(false);
-            }}
-            onDrop={(event) => {
-              if (!canSteer) return;
-              event.preventDefault();
-              setDraggingFiles(false);
-              void addAttachments(event.dataTransfer.files);
-            }}
-          >
-            <input
-              ref={attachmentInputRef}
-              className="agent-attachment-input"
-              type="file"
-              multiple
-              aria-label="Attach files"
-              onChange={(event) => {
-                void addAttachments(event.target.files ?? []);
-                event.target.value = "";
-              }}
-            />
-            {attachments.length ? (
-              <div className="agent-attachments" aria-label="Attached files">
-                {attachments.map((attachment) => (
-                  <span className="agent-attachment" key={attachment.id}>
-                    <Paperclip aria-hidden="true" />
-                    <span>{attachment.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${attachment.name}`}
-                      onClick={() =>
-                        setAttachments((current) =>
-                          current.filter((item) => item.id !== attachment.id),
-                        )
+              <div
+                className={`agent-chat-composer ${draggingFiles ? "is-dragging" : ""}`}
+                onDragEnter={(event) => {
+                  if (!canSteer || !event.dataTransfer.types.includes("Files"))
+                    return;
+                  event.preventDefault();
+                  setDraggingFiles(true);
+                }}
+                onDragOver={(event) => {
+                  if (!canSteer || !event.dataTransfer.types.includes("Files"))
+                    return;
+                  event.preventDefault();
+                }}
+                onDragLeave={(event) => {
+                  if (event.currentTarget === event.target)
+                    setDraggingFiles(false);
+                }}
+                onDrop={(event) => {
+                  if (!canSteer) return;
+                  event.preventDefault();
+                  setDraggingFiles(false);
+                  void addAttachments(event.dataTransfer.files);
+                }}
+              >
+                <input
+                  ref={attachmentInputRef}
+                  className="agent-attachment-input"
+                  type="file"
+                  multiple
+                  aria-label="Attach files"
+                  onChange={(event) => {
+                    void addAttachments(event.target.files ?? []);
+                    event.target.value = "";
+                  }}
+                />
+                {attachments.length ? (
+                  <div
+                    className="agent-attachments"
+                    aria-label="Attached files"
+                  >
+                    {attachments.map((attachment) => (
+                      <span className="agent-attachment" key={attachment.id}>
+                        <Paperclip aria-hidden="true" />
+                        <span>{attachment.name}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${attachment.name}`}
+                          onClick={() =>
+                            setAttachments((current) =>
+                              current.filter(
+                                (item) => item.id !== attachment.id,
+                              ),
+                            )
+                          }
+                        >
+                          <X aria-hidden="true" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {!canSteer ? (
+                  <p className="agent-chat-composer-full">
+                    Read-only workspace access. A Co-Steer member can send
+                    prompts or interrupt an agent.
+                  </p>
+                ) : followUpMode && selectedSession ? (
+                  <>
+                    <textarea
+                      ref={composerTextareaRef}
+                      aria-label={`Message ${selectedSession.name}`}
+                      value={followUp}
+                      onChange={(event) => setFollowUp(event.target.value)}
+                      onKeyDown={(event) =>
+                        onComposerKeyDown(event, () => void sendFollowUp())
                       }
-                    >
-                      <X aria-hidden="true" />
-                    </button>
-                  </span>
-                ))}
+                      placeholder="Message the agent…"
+                      rows={3}
+                    />
+                    <div className="agent-chat-composer-actions">
+                      <div className="agent-composer-tools">
+                        <button
+                          type="button"
+                          onClick={() => attachmentInputRef.current?.click()}
+                          aria-label="Attach files"
+                          title="Attach files"
+                        >
+                          <Paperclip />
+                        </button>
+                        <label className="agent-model-select">
+                          <span className="sr-only">Agent provider</span>
+                          <select
+                            aria-label="Agent provider"
+                            value={selectedProvider}
+                            onChange={(event) => {
+                              const next = event.target
+                                .value as AgentProviderId;
+                              setSelectedProvider(next);
+                              modelOptionsLoadedRef.current = false;
+                            }}
+                          >
+                            {AGENT_PROVIDERS.map((provider) => (
+                              <option key={provider.id} value={provider.id}>
+                                {provider.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown aria-hidden="true" />
+                        </label>
+                        <label className="agent-model-select">
+                          <span className="sr-only">Agent model</span>
+                          <select
+                            aria-label="Agent model"
+                            value={selectedModel}
+                            onChange={(event) =>
+                              setSelectedModel(event.target.value)
+                            }
+                          >
+                            {modelOptions.map((model) => (
+                              <option key={model} value={model}>
+                                {formatAgentModelLabel(model)}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown aria-hidden="true" />
+                        </label>
+                        <kbd>⌘ Enter</kbd>
+                      </div>
+                      <button
+                        type="button"
+                        className="agent-send"
+                        disabled={
+                          busy || (!followUp.trim() && !attachments.length)
+                        }
+                        onClick={() => void sendFollowUp()}
+                        aria-label="Send message"
+                      >
+                        <Send />
+                      </button>
+                      {selectedSession.status === "running" ? (
+                        <button
+                          className="agent-interrupt"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void interrupt(selectedSession.id)}
+                        >
+                          <Square />
+                          Stop
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                ) : showNewComposer &&
+                  activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
+                  <>
+                    <textarea
+                      ref={composerTextareaRef}
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      onKeyDown={(event) =>
+                        onComposerKeyDown(event, () => void createSession())
+                      }
+                      placeholder="Ask the agent to build something…"
+                      rows={3}
+                      aria-label="Message the agent"
+                    />
+                    <div className="agent-chat-composer-actions">
+                      <div className="agent-composer-tools">
+                        <button
+                          type="button"
+                          onClick={() => attachmentInputRef.current?.click()}
+                          aria-label="Attach files"
+                          title="Attach files"
+                        >
+                          <Paperclip />
+                        </button>
+                        <label className="agent-model-select">
+                          <span className="sr-only">Agent provider</span>
+                          <select
+                            aria-label="Agent provider"
+                            value={selectedProvider}
+                            onChange={(event) => {
+                              const next = event.target
+                                .value as AgentProviderId;
+                              setSelectedProvider(next);
+                              modelOptionsLoadedRef.current = false;
+                            }}
+                          >
+                            {AGENT_PROVIDERS.map((provider) => (
+                              <option key={provider.id} value={provider.id}>
+                                {provider.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown aria-hidden="true" />
+                        </label>
+                        <label className="agent-model-select">
+                          <span className="sr-only">Agent model</span>
+                          <select
+                            aria-label="Agent model"
+                            value={selectedModel}
+                            onChange={(event) =>
+                              setSelectedModel(event.target.value)
+                            }
+                          >
+                            {modelOptions.map((model) => (
+                              <option key={model} value={model}>
+                                {formatAgentModelLabel(model)}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown aria-hidden="true" />
+                        </label>
+                        <kbd>⌘ Enter</kbd>
+                      </div>
+                      <button
+                        type="button"
+                        className="agent-send"
+                        disabled={
+                          busy || (!prompt.trim() && !attachments.length)
+                        }
+                        onClick={() => void createSession()}
+                        aria-label="Start session"
+                      >
+                        <Send />
+                      </button>
+                      {selectedSession ? (
+                        <button
+                          type="button"
+                          className="agent-composer-cancel"
+                          onClick={() => setComposingNew(false)}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <p className="agent-chat-composer-full">
+                    {MAX_PARALLEL_AGENT_SESSIONS} active worktrees are running.
+                    Delete, review, or discard one to start another session.
+                  </p>
+                )}
               </div>
-            ) : null}
-            {!canSteer ? (
-              <p className="agent-chat-composer-full">
-                Read-only workspace access. A Co-Steer member can send prompts
-                or interrupt an agent.
-              </p>
-            ) : followUpMode && selectedSession ? (
-              <>
-                <textarea
-                  ref={composerTextareaRef}
-                  aria-label={`Message ${selectedSession.name}`}
-                  value={followUp}
-                  onChange={(event) => setFollowUp(event.target.value)}
-                  onKeyDown={(event) =>
-                    onComposerKeyDown(event, () => void sendFollowUp())
-                  }
-                  placeholder="Message the agent…"
-                  rows={3}
-                />
-                <div className="agent-chat-composer-actions">
-                  <div className="agent-composer-tools">
-                    <button
-                      type="button"
-                      onClick={() => attachmentInputRef.current?.click()}
-                      aria-label="Attach files"
-                      title="Attach files"
-                    >
-                      <Paperclip />
-                    </button>
-                    <label className="agent-model-select">
-                      <span className="sr-only">Agent provider</span>
-                      <select
-                        aria-label="Agent provider"
-                        value={selectedProvider}
-                        onChange={(event) => {
-                          const next = event.target.value as AgentProviderId;
-                          setSelectedProvider(next);
-                          modelOptionsLoadedRef.current = false;
-                        }}
-                      >
-                        {AGENT_PROVIDERS.map((provider) => (
-                          <option key={provider.id} value={provider.id}>
-                            {provider.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown aria-hidden="true" />
-                    </label>
-                    <label className="agent-model-select">
-                      <span className="sr-only">Agent model</span>
-                      <select
-                        aria-label="Agent model"
-                        value={selectedModel}
-                        onChange={(event) =>
-                          setSelectedModel(event.target.value)
-                        }
-                      >
-                        {modelOptions.map((model) => (
-                          <option key={model} value={model}>
-                            {formatAgentModelLabel(model)}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown aria-hidden="true" />
-                    </label>
-                    <kbd>⌘ Enter</kbd>
-                  </div>
-                  <button
-                    type="button"
-                    className="agent-send"
-                    disabled={busy || (!followUp.trim() && !attachments.length)}
-                    onClick={() => void sendFollowUp()}
-                    aria-label="Send message"
-                  >
-                    <Send />
-                  </button>
-                  {selectedSession.status === "running" ? (
-                    <button
-                      className="agent-interrupt"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void interrupt(selectedSession.id)}
-                    >
-                      <Square />
-                      Stop
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            ) : showNewComposer &&
-              activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
-              <>
-                <textarea
-                  ref={composerTextareaRef}
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onKeyDown={(event) =>
-                    onComposerKeyDown(event, () => void createSession())
-                  }
-                  placeholder="Ask the agent to build something…"
-                  rows={3}
-                  aria-label="Message the agent"
-                />
-                <div className="agent-chat-composer-actions">
-                  <div className="agent-composer-tools">
-                    <button
-                      type="button"
-                      onClick={() => attachmentInputRef.current?.click()}
-                      aria-label="Attach files"
-                      title="Attach files"
-                    >
-                      <Paperclip />
-                    </button>
-                    <label className="agent-model-select">
-                      <span className="sr-only">Agent provider</span>
-                      <select
-                        aria-label="Agent provider"
-                        value={selectedProvider}
-                        onChange={(event) => {
-                          const next = event.target.value as AgentProviderId;
-                          setSelectedProvider(next);
-                          modelOptionsLoadedRef.current = false;
-                        }}
-                      >
-                        {AGENT_PROVIDERS.map((provider) => (
-                          <option key={provider.id} value={provider.id}>
-                            {provider.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown aria-hidden="true" />
-                    </label>
-                    <label className="agent-model-select">
-                      <span className="sr-only">Agent model</span>
-                      <select
-                        aria-label="Agent model"
-                        value={selectedModel}
-                        onChange={(event) =>
-                          setSelectedModel(event.target.value)
-                        }
-                      >
-                        {modelOptions.map((model) => (
-                          <option key={model} value={model}>
-                            {formatAgentModelLabel(model)}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown aria-hidden="true" />
-                    </label>
-                    <kbd>⌘ Enter</kbd>
-                  </div>
-                  <button
-                    type="button"
-                    className="agent-send"
-                    disabled={busy || (!prompt.trim() && !attachments.length)}
-                    onClick={() => void createSession()}
-                    aria-label="Start session"
-                  >
-                    <Send />
-                  </button>
-                  {selectedSession ? (
-                    <button
-                      type="button"
-                      className="agent-composer-cancel"
-                      onClick={() => setComposingNew(false)}
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <p className="agent-chat-composer-full">
-                {MAX_PARALLEL_AGENT_SESSIONS} active worktrees are running.
-                Delete, review, or discard one to start another session.
-              </p>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="agent-review-takeover">{reviewPanel}</div>
+          )}
         </section>
       </section>
     </>

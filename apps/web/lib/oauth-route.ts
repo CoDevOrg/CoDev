@@ -146,7 +146,10 @@ async function authorizeScope(input: {
     }
 
     if (configuration.flowMode === "manual_code") {
-      const authorizeUrl = buildAuthorizationUrl(configuration, state).toString();
+      const authorizeUrl = buildAuthorizationUrl(
+        configuration,
+        state,
+      ).toString();
       if (asJson) {
         return setOAuthCookie(
           NextResponse.json({
@@ -158,7 +161,11 @@ async function authorizeScope(input: {
           state,
         );
       }
-      return setOAuthCookie(NextResponse.redirect(authorizeUrl), provider, state);
+      return setOAuthCookie(
+        NextResponse.redirect(authorizeUrl),
+        provider,
+        state,
+      );
     }
 
     const authorizeUrl = buildAuthorizationUrl(configuration, state);
@@ -173,11 +180,7 @@ async function authorizeScope(input: {
         state,
       );
     }
-    return setOAuthCookie(
-      NextResponse.redirect(authorizeUrl),
-      provider,
-      state,
-    );
+    return setOAuthCookie(NextResponse.redirect(authorizeUrl), provider, state);
   } catch (error) {
     if (asJson) {
       return NextResponse.json(
@@ -250,12 +253,7 @@ export async function startOAuth(request: Request, provider: OAuthProvider) {
   const flowMode = getOAuthFlowMode(provider);
   if (request.method === "GET" && flowMode !== "app_callback") {
     // Hosted Claude/Codex flows need the interactive settings UI.
-    return redirectToSettings(
-      request,
-      provider,
-      "error",
-      resolved.returnTo,
-    );
+    return redirectToSettings(request, provider, "error", resolved.returnTo);
   }
 
   return authorizeScope({
@@ -317,7 +315,9 @@ export async function completeManualOAuth(
     );
   }
 
-  const parsed = sessionBodySchema.safeParse(await request.json().catch(() => ({})));
+  const parsed = sessionBodySchema.safeParse(
+    await request.json().catch(() => ({})),
+  );
   const codeRaw = parsed.success ? (parsed.data.code ?? "") : "";
   if (!codeRaw.trim()) {
     return NextResponse.json(
@@ -356,9 +356,7 @@ export async function completeManualOAuth(
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "OAuth completion failed.",
+          error instanceof Error ? error.message : "OAuth completion failed.",
       },
       { status: 400 },
     );
@@ -384,7 +382,9 @@ export async function pollDeviceOAuth(
     );
   }
 
-  const parsed = sessionBodySchema.safeParse(await request.json().catch(() => ({})));
+  const parsed = sessionBodySchema.safeParse(
+    await request.json().catch(() => ({})),
+  );
   const deviceAuthId = parsed.success ? (parsed.data.deviceAuthId ?? "") : "";
   const userCode = parsed.success ? (parsed.data.userCode ?? "") : "";
   if (!deviceAuthId || !userCode) {

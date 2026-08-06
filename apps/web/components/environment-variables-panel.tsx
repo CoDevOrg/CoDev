@@ -124,8 +124,8 @@ export function EnvironmentVariablesPanel({
     <div className="env-vars-panel">
       <div className="env-vars-toolbar">
         <p className="settings-muted-copy">
-          Values are encrypted at rest and never shown again after you save.
-          Use them like a personal <code>.env</code> for CoDev workflows.
+          Values are encrypted at rest and never shown again after you save. Use
+          them like a personal <code>.env</code> for CoDev workflows.
         </p>
         <button
           className="secondary-button"

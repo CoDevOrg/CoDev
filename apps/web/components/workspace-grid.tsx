@@ -74,7 +74,8 @@ export function WorkspaceGrid({
 
   const sortedWorkspaces = useMemo(() => {
     return [...workspaces].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   }, [workspaces]);
 
@@ -103,7 +104,8 @@ export function WorkspaceGrid({
     ).length;
   }, [workspaces]);
 
-  const firstName = user?.name?.split(" ")[0] || user?.githubLogin || "Developer";
+  const firstName =
+    user?.name?.split(" ")[0] || user?.githubLogin || "Developer";
 
   return (
     <div className="home-hub-shell">
@@ -113,11 +115,12 @@ export function WorkspaceGrid({
           <div className="home-welcome-text">
             <span className="home-badge">Workspace Home</span>
             <h1>
-              {greeting}, <span className="home-highlight-name">{firstName}</span>
+              {greeting},{" "}
+              <span className="home-highlight-name">{firstName}</span>
             </h1>
             <p>
-              Welcome back to CoDev. Pick up right where you left off or start a new
-              collaborative workspace with AI agents.
+              Welcome back to CoDev. Pick up right where you left off or start a
+              new collaborative workspace with AI agents.
             </p>
           </div>
 
@@ -128,7 +131,9 @@ export function WorkspaceGrid({
             </div>
             <div className="stat-card">
               <span className="stat-label">Active / Provisioning</span>
-              <strong className="stat-value stat-value-active">{activeCount}</strong>
+              <strong className="stat-value stat-value-active">
+                {activeCount}
+              </strong>
             </div>
             {user?.githubLogin ? (
               <div className="stat-card">
@@ -162,7 +167,9 @@ export function WorkspaceGrid({
                       {latestWorkspace.baseSha.slice(0, 7)}
                     </span>
                   ) : null}
-                  <span className={`status-pill status-${latestWorkspace.status}`}>
+                  <span
+                    className={`status-pill status-${latestWorkspace.status}`}
+                  >
                     {latestWorkspace.status}
                   </span>
                 </div>
@@ -303,4 +310,3 @@ export function WorkspaceGrid({
     </div>
   );
 }
-

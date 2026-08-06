@@ -6,10 +6,7 @@ import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
 import { consumeRateLimit } from "./rate-limit";
-import {
-  getVmMinutesUsed,
-  VM_MINUTE_LIFETIME_QUOTA,
-} from "./vm-usage";
+import { getVmMinutesUsed, VM_MINUTE_LIFETIME_QUOTA } from "./vm-usage";
 
 export class QuotaError extends Error {
   constructor(

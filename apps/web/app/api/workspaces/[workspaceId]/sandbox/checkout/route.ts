@@ -10,10 +10,7 @@ const bodySchema = z.object({
     .min(1)
     .max(256)
     // Only allow safe branch name characters to prevent shell injection
-    .regex(
-      /^[a-zA-Z0-9._\-/]+$/,
-      "Branch name contains invalid characters.",
-    ),
+    .regex(/^[a-zA-Z0-9._\-/]+$/, "Branch name contains invalid characters."),
 });
 
 export async function POST(

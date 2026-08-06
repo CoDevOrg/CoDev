@@ -187,11 +187,7 @@ export function FeedbackWidget({
                 {status.issueUrl ? (
                   <>
                     {" "}
-                    <a
-                      href={status.issueUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
+                    <a href={status.issueUrl} rel="noreferrer" target="_blank">
                       View issue
                     </a>
                   </>

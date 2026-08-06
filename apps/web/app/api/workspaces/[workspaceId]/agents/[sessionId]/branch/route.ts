@@ -115,10 +115,7 @@ export async function POST(
       !branchPoint ||
       (branchPoint.status !== "completed" && !branchPoint.output)
     ) {
-      return apiError(
-        new Error("Branch from a completed agent reply."),
-        409,
-      );
+      return apiError(new Error("Branch from a completed agent reply."), 409);
     }
 
     let headSha = source.headSha;

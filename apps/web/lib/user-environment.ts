@@ -97,10 +97,7 @@ export async function createUserEnvironmentVariable(
     );
   }
 
-  const encryptedValue = await encryptSecret(
-    parsed.value,
-    envContext(userId),
-  );
+  const encryptedValue = await encryptSecret(parsed.value, envContext(userId));
 
   try {
     const [row] = await database
@@ -140,10 +137,7 @@ export async function updateUserEnvironmentVariable(
   input: unknown,
 ) {
   const parsed = updateEnvironmentVariableSchema.parse(input);
-  const encryptedValue = await encryptSecret(
-    parsed.value,
-    envContext(userId),
-  );
+  const encryptedValue = await encryptSecret(parsed.value, envContext(userId));
 
   const [row] = await getDatabase()
     .update(schema.userEnvironmentVariables)
