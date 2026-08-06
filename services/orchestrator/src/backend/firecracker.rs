@@ -29,8 +29,9 @@ use crate::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
         PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
         TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        TheiaProxyRequest, TheiaProxyResponse, WorktreeCheckpointRequest,
+        WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
         WorktreeReviewResponse, WriteFileRequest,
     },
 };
@@ -595,6 +596,17 @@ impl FirecrackerBackend {
     pub async fn git_diff(&self, workspace_id: &str, worktree_id: Option<&str>) -> Result<String> {
         let machine = self.machine(workspace_id).await?;
         let result = machine.guest.git_diff(worktree_id).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn proxy_theia(
+        &self,
+        workspace_id: &str,
+        request: TheiaProxyRequest,
+    ) -> Result<TheiaProxyResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.proxy_theia(&request).await?;
         self.mark_activity(&machine);
         Ok(result)
     }

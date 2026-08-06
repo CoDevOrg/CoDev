@@ -2,15 +2,16 @@
 
 import dynamic from "next/dynamic";
 
-import type { WorkspaceIdeProps } from "./workspace-ide";
+import type { WorkspaceIdeProps } from "./workspace-ide-types";
 
 const BrowserWorkspaceIde = dynamic(
-  () => import("./workspace-ide").then((module) => module.WorkspaceIde),
+  () =>
+    import("./theia-workspace-ide").then((module) => module.TheiaWorkspaceIde),
   {
     ssr: false,
     loading: () => (
       <main aria-label="CoDev browser IDE">
-        <p>Loading browser IDE…</p>
+        <p>Loading collaborative workspace…</p>
       </main>
     ),
   },

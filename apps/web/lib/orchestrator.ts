@@ -78,6 +78,14 @@ const publicationExportSchema = z.object({
     .max(5 * 1_024 * 1_024),
 });
 
+const theiaProxyResponseSchema = z.object({
+  status: z.number().int().min(100).max(599),
+  headers: z.record(z.string(), z.string()),
+  bodyBase64: z.string(),
+});
+
+export type TheiaProxyResponse = z.infer<typeof theiaProxyResponseSchema>;
+
 function getOrchestratorConfiguration() {
   const environment = readServerEnvironment();
   const endpoint =
@@ -147,13 +155,35 @@ async function orchestratorRequest(
 }
 
 export async function checkOrchestratorConnection(timeoutMs = 4_000) {
-  const response = await orchestratorRequest("GET", "/healthz", undefined, timeoutMs);
+  const response = await orchestratorRequest(
+    "GET",
+    "/healthz",
+    undefined,
+    timeoutMs,
+  );
   return z
     .object({
       status: z.literal("ok"),
       service: z.literal("codev-orchestrator"),
     })
     .parse(await response.json());
+}
+
+export async function proxySandboxTheia(
+  workspaceId: string,
+  input: {
+    method: "GET" | "POST";
+    path: string;
+    headers: Record<string, string>;
+    bodyBase64: string;
+  },
+): Promise<TheiaProxyResponse> {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/theia/proxy`,
+    input,
+  );
+  return theiaProxyResponseSchema.parse(await response.json());
 }
 
 export async function waitForOrchestrator() {

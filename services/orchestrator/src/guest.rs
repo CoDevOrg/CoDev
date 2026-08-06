@@ -1,7 +1,8 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
+    net::{TcpStream, ToSocketAddrs},
     os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
@@ -22,9 +23,10 @@ use wait_timeout::ChildExt;
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, TheiaProxyRequest,
+    TheiaProxyResponse, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -102,6 +104,7 @@ impl GuestService {
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
+            ("POST", "/v1/theia/proxy") => self.proxy_theia(body),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -171,6 +174,113 @@ impl GuestService {
             "status": "ok",
             "service": "codev-guest"
         }))
+    }
+
+    fn proxy_theia(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: TheiaProxyRequest = decode(body)?;
+        if !matches!(request.method.as_str(), "GET" | "POST") {
+            return Err(RuntimeError::BadRequest(
+                "Theia proxy method must be GET or POST".into(),
+            ));
+        }
+        let socket_path = request.path == "/socket.io/" || request.path.starts_with("/socket.io/?");
+        let bootstrap_path = request.method == "GET" && request.path == "/";
+        if !socket_path && !bootstrap_path {
+            return Err(RuntimeError::BadRequest(
+                "Theia proxy only accepts the Socket.IO endpoint".into(),
+            ));
+        }
+        if request.path.contains(['\r', '\n']) {
+            return Err(RuntimeError::BadRequest("invalid Theia proxy path".into()));
+        }
+
+        let request_body = BASE64
+            .decode(request.body_base64)
+            .map_err(|_| RuntimeError::BadRequest("invalid Theia body base64".into()))?;
+        if request_body.len() > MAX_BODY_BYTES {
+            return Err(RuntimeError::BadRequest(
+                "Theia request exceeds the two MiB limit".into(),
+            ));
+        }
+
+        let address = "127.0.0.1:3000"
+            .to_socket_addrs()
+            .map_err(RuntimeError::internal)?
+            .next()
+            .ok_or_else(|| RuntimeError::Unavailable("Theia address is unavailable".into()))?;
+        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
+            .map_err(|error| RuntimeError::Unavailable(format!("Theia is unavailable: {error}")))?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(65)))
+            .map_err(RuntimeError::internal)?;
+        stream
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .map_err(RuntimeError::internal)?;
+
+        write!(
+            stream,
+            "{} {} HTTP/1.1\r\nHost: 127.0.0.1:3000\r\nConnection: close\r\nContent-Length: {}\r\n",
+            request.method,
+            request.path,
+            request_body.len()
+        )
+        .map_err(RuntimeError::internal)?;
+        for name in ["accept", "content-type", "cookie", "origin", "user-agent"] {
+            if let Some(value) = request.headers.get(name)
+                && !value.contains(['\r', '\n'])
+                && value.len() <= 4_096
+            {
+                write!(stream, "{name}: {value}\r\n").map_err(RuntimeError::internal)?;
+            }
+        }
+        stream.write_all(b"\r\n").map_err(RuntimeError::internal)?;
+        stream
+            .write_all(&request_body)
+            .map_err(RuntimeError::internal)?;
+        stream.flush().map_err(RuntimeError::internal)?;
+
+        let mut raw = Vec::new();
+        stream
+            .take((MAX_OUTPUT_BYTES + (64 << 10) + 1) as u64)
+            .read_to_end(&mut raw)
+            .map_err(RuntimeError::internal)?;
+        if raw.len() > MAX_OUTPUT_BYTES + (64 << 10) {
+            return Err(RuntimeError::Unavailable(
+                "Theia response exceeds the two MiB limit".into(),
+            ));
+        }
+        let headers_end = raw
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .map(|index| index + 4)
+            .ok_or_else(|| RuntimeError::Unavailable("invalid Theia response".into()))?;
+        let header_text = std::str::from_utf8(&raw[..headers_end])
+            .map_err(|_| RuntimeError::Unavailable("invalid Theia response headers".into()))?;
+        let status = header_text
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|value| value.parse::<u16>().ok())
+            .ok_or_else(|| RuntimeError::Unavailable("invalid Theia response status".into()))?;
+        let mut headers = BTreeMap::new();
+        for line in header_text.lines().skip(1) {
+            let Some((name, value)) = line.split_once(':') else {
+                continue;
+            };
+            if matches!(
+                name.to_ascii_lowercase().as_str(),
+                "cache-control" | "content-type" | "set-cookie"
+            ) {
+                headers.insert(name.to_ascii_lowercase(), value.trim().to_owned());
+            }
+        }
+        let response_body = &raw[headers_end..];
+        serde_json::to_value(TheiaProxyResponse {
+            status,
+            headers,
+            body_base64: BASE64.encode(response_body),
+        })
+        .map_err(RuntimeError::internal)
     }
 
     fn read_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
@@ -576,7 +686,13 @@ impl GuestService {
             )?,
             None => self.git(
                 &self.workspace_root,
-                &["worktree", "add", "--detach", target_path, &request.head_sha],
+                &[
+                    "worktree",
+                    "add",
+                    "--detach",
+                    target_path,
+                    &request.head_sha,
+                ],
             )?,
         };
         Ok(serde_json::json!({
@@ -654,7 +770,6 @@ impl GuestService {
         serde_json::to_value(WorktreeCheckpointResponse { head_sha })
             .map_err(RuntimeError::internal)
     }
-
 
     fn review_worktree(
         &self,
@@ -811,10 +926,7 @@ impl GuestService {
         }
 
         let entries: Vec<(String, String, Vec<u8>)> = if require_clean {
-            let tree = self.git_output(
-                &root,
-                &["ls-tree", "-r", "-z", "--full-tree", "HEAD"],
-            )?;
+            let tree = self.git_output(&root, &["ls-tree", "-r", "-z", "--full-tree", "HEAD"])?;
             if !tree.status.success() {
                 return Err(git_failure("enumerate publication tree", &tree));
             }
@@ -847,10 +959,8 @@ impl GuestService {
                 })
                 .collect::<crate::model::Result<Vec<_>>>()?
         } else {
-            let listing = self.git_output(
-                &root,
-                &["ls-files", "-co", "--exclude-standard", "-z"],
-            )?;
+            let listing =
+                self.git_output(&root, &["ls-files", "-co", "--exclude-standard", "-z"])?;
             if !listing.status.success() {
                 return Err(git_failure("enumerate workspace snapshot", &listing));
             }
@@ -1178,10 +1288,9 @@ fn validate_branch_name(branch_name: &str) -> crate::model::Result<()> {
         && !branch_name.contains("..")
         && !branch_name.contains("@{")
         && !branch_name.contains("//")
-        && branch_name.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric()
-                || matches!(byte, b'-' | b'_' | b'.' | b'/')
-        })
+        && branch_name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/'))
         && branch_name
             .split('/')
             .all(|segment| !segment.is_empty() && !segment.starts_with('.'));
@@ -1303,6 +1412,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn theia_proxy_rejects_non_socket_routes() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle(
+            "POST",
+            "/v1/theia/proxy",
+            br#"{"method":"GET","path":"/admin","headers":{},"bodyBase64":""}"#,
+        );
+        assert_eq!(response.status, 400);
+        assert!(String::from_utf8_lossy(&response.body).contains("Socket.IO"));
+    }
+
+    #[test]
     fn revision_checked_file_lifecycle() {
         let directory = tempdir().expect("tempdir");
         fs::write(directory.path().join("hello.txt"), "hello").expect("seed");
@@ -1421,8 +1543,7 @@ mod tests {
             br#"{"command":["git","symbolic-ref","--short","HEAD"],"worktreeId":"agent-named"}"#,
         );
         assert_eq!(named_head.status, 200);
-        let named_result: ExecResponse =
-            serde_json::from_slice(&named_head.body).expect("exec");
+        let named_result: ExecResponse = serde_json::from_slice(&named_head.body).expect("exec");
         assert_eq!(named_result.exit_code, 0);
         assert_eq!(named_result.output.trim(), "agent/agent-named");
 
@@ -1642,7 +1763,7 @@ mod tests {
                 serde_json::to_string(&WorktreeCreateRequest {
                     worktree_id: worktree_id.into(),
                     branch_name: None,
-                head_sha: base_sha.clone(),
+                    head_sha: base_sha.clone(),
                 })
                 .expect("create request")
                 .as_bytes(),
@@ -1764,15 +1885,15 @@ mod tests {
         let mut session_ids = Vec::new();
         for _ in 0..MAX_LIVE_TERMINALS {
             let start = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);
-            assert_eq!(start.status, 200, "{}", String::from_utf8_lossy(&start.body));
+            assert_eq!(
+                start.status,
+                200,
+                "{}",
+                String::from_utf8_lossy(&start.body)
+            );
             let body: serde_json::Value =
                 serde_json::from_slice(&start.body).expect("terminal start");
-            session_ids.push(
-                body["sessionId"]
-                    .as_str()
-                    .expect("session id")
-                    .to_owned(),
-            );
+            session_ids.push(body["sessionId"].as_str().expect("session id").to_owned());
         }
 
         let overflow = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);

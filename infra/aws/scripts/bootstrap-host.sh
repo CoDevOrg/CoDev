@@ -28,14 +28,22 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
   ca-certificates \
+  build-essential \
   curl \
   e2fsprogs \
   git \
   iptables \
   jq \
+  python3 \
   ripgrep \
   squashfs-tools \
+  xz-utils \
   xfsprogs
+
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+apt-get install -y nodejs
+corepack enable
+corepack prepare pnpm@11.5.0 --activate
 
 curl -fsSL \
   https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb \
@@ -95,6 +103,19 @@ chmod 0755 /opt/codev-verify-lifecycle.sh
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
+install -d -m 0755 "${work_dir}/theia-source" "${work_dir}/theia-runtime"
+aws s3 cp "${release_prefix}/codev-theia-source.tar.gz" "${work_dir}/codev-theia-source.tar.gz"
+tar -xzf "${work_dir}/codev-theia-source.tar.gz" -C "${work_dir}/theia-source"
+(
+  cd "${work_dir}/theia-source"
+  pnpm install --frozen-lockfile
+  pnpm --filter @codev/theia-extension build
+  pnpm --filter @codev/theia-app run clean
+  pnpm --filter @codev/theia-app build:production
+  pnpm --filter @codev/theia-app deploy --prod --legacy "${work_dir}/theia-runtime"
+  cp -a apps/theia-app/lib "${work_dir}/theia-runtime/lib"
+)
+
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-aarch64.tgz" \
   -o "${work_dir}/firecracker.tgz"
@@ -118,6 +139,10 @@ unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
 install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/codev-guestd"
 install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
 install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
+install -m 0755 /usr/bin/node "${work_dir}/rootfs/usr/local/bin/node"
+install -d -m 0755 "${work_dir}/rootfs/opt/codev"
+cp -a "${work_dir}/theia-runtime" "${work_dir}/rootfs/opt/codev/theia"
+install -d -m 0755 "${work_dir}/rootfs/opt/codev/theia/plugins"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu"
@@ -127,7 +152,7 @@ install -d -m 0755 "${work_dir}/rootfs/workspace"
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk
-Before=codev-guestd.service
+Before=codev-theia.service codev-guestd.service
 
 [Mount]
 What=/dev/vdb
@@ -139,11 +164,39 @@ Options=rw,nosuid,nodev
 WantedBy=multi-user.target
 UNIT
 
+cat >"${work_dir}/rootfs/etc/systemd/system/codev-theia.service" <<'UNIT'
+[Unit]
+Description=CoDev Eclipse Theia workspace backend
+After=workspace.mount
+Requires=workspace.mount
+
+[Service]
+Type=simple
+StateDirectory=codev-theia
+Environment=HOME=/var/lib/codev-theia
+ExecStartPre=/usr/bin/mkdir -p /var/lib/codev-theia/plugins
+ExecStart=/usr/local/bin/node /opt/codev/theia/lib/backend/main.js /workspace --hostname=127.0.0.1 --port=3000 --plugins=local-dir:/var/lib/codev-theia/plugins
+Restart=on-failure
+RestartSec=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/workspace /var/lib/codev-theia
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+TasksMax=512
+MemoryMax=1024M
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
 Description=CoDev guest daemon
-After=workspace.mount
+After=workspace.mount codev-theia.service
 Requires=workspace.mount
+Wants=codev-theia.service
 
 [Service]
 Type=simple
@@ -156,7 +209,7 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/workspace
-RestrictAddressFamilies=AF_VSOCK AF_UNIX
+RestrictAddressFamilies=AF_VSOCK AF_UNIX AF_INET
 TasksMax=256
 MemoryMax=512M
 
@@ -166,10 +219,12 @@ UNIT
 
 ln -s ../workspace.mount \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/workspace.mount"
+ln -s ../codev-theia.service \
+  "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-theia.service"
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
 
-truncate -s 2G "${base_dir}/rootfs.ext4"
+truncate -s 3G "${base_dir}/rootfs.ext4"
 mkfs.ext4 -q -F -d "${work_dir}/rootfs" -L CODEV_ROOT "${base_dir}/rootfs.ext4"
 chmod 0600 "${base_dir}/rootfs.ext4"
 chmod 0644 "${base_dir}/vmlinux"
