@@ -8558,6 +8558,8 @@ html .live-ide .agent-chat-activity-copy code {
 }
 
 html .live-ide .agent-chat-composer {
+  display: flex;
+  flex-direction: column;
   padding: 16px 20px 18px;
   border-color: var(--workspace-line);
   background: var(--workspace-surface);
@@ -9546,6 +9548,8 @@ html .live-ide .agent-review-disclosure {
 }
 
 html .live-ide .agent-chat-composer {
+  display: flex;
+  flex-direction: column;
   width: min(840px, calc(100% - 40px));
   margin: 0 auto 20px;
   padding: 10px;
@@ -10581,7 +10585,7 @@ html .live-ide .workspace-view-nav button:disabled {
   cursor: not-allowed;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1440px) {
   html .live-ide .workspace-view-nav button {
     padding-inline: 8px;
     justify-content: center;

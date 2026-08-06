@@ -795,12 +795,7 @@ impl GuestService {
         }
         let _mutation = self.mutations.lock().expect("mutation lock");
         let root = self.target_root(request.worktree_id.as_deref())?;
-        let label = if request.worktree_id.is_some() {
-            "worktree"
-        } else {
-            "integration"
-        };
-        self.require_head(&root, &request.expected_head_sha, label)?;
+        let actual_head_sha = self.head_sha(&root)?;
         if require_clean {
             self.require_clean(
                 &root,
@@ -934,7 +929,7 @@ impl GuestService {
         }
 
         serde_json::to_value(PublicationExportResponse {
-            head_sha: request.expected_head_sha,
+            head_sha: actual_head_sha,
             files,
             total_bytes,
         })

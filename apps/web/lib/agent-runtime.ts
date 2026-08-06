@@ -548,7 +548,6 @@ export function validateAgentCommand(command: string[]) {
     "test",
   ]);
   if (executable === "git") {
-    const operation = command[1] ?? "";
     if (
       command.some(
         (part) =>
@@ -558,47 +557,6 @@ export function validateAgentCommand(command: string[]) {
       )
     ) {
       throw new Error("Git commands must stay inside the worktree.");
-    }
-    const remoteOps = new Set([
-      "pull",
-      "fetch",
-      "push",
-      "clone",
-      "remote",
-    ]);
-    if (remoteOps.has(operation)) {
-      throw new Error(
-        "Remote Git commands are not available in the sandbox. Use the github_sync or github_publish tools instead.",
-      );
-    }
-    const localOps = new Set([
-      "status",
-      "diff",
-      "log",
-      "show",
-      "grep",
-      "rev-parse",
-      "ls-files",
-      "add",
-      "rm",
-      "mv",
-      "restore",
-      "commit",
-      "checkout",
-      "switch",
-      "branch",
-      "stash",
-      "merge",
-      "rebase",
-      "cherry-pick",
-      "reset",
-      "revert",
-      "tag",
-      "clean",
-      "init",
-    ]);
-    if (!localOps.has(operation)) {
-      throw new Error(`Git operation "${operation}" is not allowed.`);
     }
     return command;
   }
@@ -1050,7 +1008,7 @@ export async function runAgentTurn(turnId: string) {
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run local Git commands (status, diff, add, commit, checkout, branch, rebase, etc.) inside this worktree. For GitHub remote sync or publishing to a codev/* branch, use the github_sync and github_publish tools — never access credentials, and never try git pull/fetch/push/clone. Do not merge into the integration worktree or escape this worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. Do not merge into the integration worktree or escape this worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse, usage }) => {
