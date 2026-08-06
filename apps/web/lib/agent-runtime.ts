@@ -1012,7 +1012,7 @@ export async function runAgentTurn(turnId: string) {
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. Do not merge into the integration worktree or escape this worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. Do not merge into the integration worktree or escape this worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse, usage }) => {
@@ -1026,7 +1026,18 @@ export async function runAgentTurn(turnId: string) {
       }
     },
   });
-  finalOutput = response.text || finalOutput;
+  finalOutput = (response.text || finalOutput).trim();
+  if (!finalOutput) {
+    const executedTools = response.steps.flatMap((step) =>
+      step.toolCalls.map((tc) => tc.toolName),
+    );
+    if (executedTools.length > 0) {
+      const uniqueTools = Array.from(new Set(executedTools));
+      finalOutput = `Completed turn: executed ${executedTools.length} operation(s) using ${uniqueTools.join(", ")}.`;
+    } else {
+      finalOutput = "Completed requested task.";
+    }
+  }
   const totalUsage = normalizeTokenUsage(response.totalUsage ?? response.usage);
 
   if (await turnWasInterrupted(turnId)) return;
@@ -1035,7 +1046,7 @@ export async function runAgentTurn(turnId: string) {
     .set({
       status: "completed",
       responseId: response.response.id,
-      output: finalOutput || "Completed without a textual summary.",
+      output: finalOutput,
       finishedAt: new Date(),
       updatedAt: new Date(),
     })
