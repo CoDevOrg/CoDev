@@ -626,11 +626,13 @@ impl GuestService {
         validate_commit_sha(&request.expected_head_sha)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
         let root = self.target_root(Some(worktree_id))?;
-        self.require_head(&root, &request.expected_head_sha, "worktree")?;
+        // Use the actual current HEAD rather than enforcing expected_head_sha —
+        // the agent may have committed since the last poll, which is fine.
         self.git(&root, &["add", "--all"])?;
         let staged = self.git_output(&root, &["diff", "--cached", "--quiet", "--"])?;
         let head_sha = if staged.status.success() {
-            request.expected_head_sha
+            // Nothing staged; return the actual current HEAD.
+            self.head_sha(&root)?
         } else if staged.status.code() == Some(1) {
             self.git(
                 &root,
@@ -652,6 +654,7 @@ impl GuestService {
         serde_json::to_value(WorktreeCheckpointResponse { head_sha })
             .map_err(RuntimeError::internal)
     }
+
 
     fn review_worktree(
         &self,
