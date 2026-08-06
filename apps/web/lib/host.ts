@@ -12,12 +12,13 @@ import { getAwsConfiguration } from "./aws";
 
 function getHostConfiguration() {
   const environment = readServerEnvironment();
-  if (!environment.AWS_HOST_INSTANCE_ID) {
-    throw new Error("AWS_HOST_INSTANCE_ID is not configured.");
-  }
+  const instanceId =
+    environment.AWS_HOST_INSTANCE_ID && environment.AWS_HOST_INSTANCE_ID.trim() !== ""
+      ? environment.AWS_HOST_INSTANCE_ID
+      : "i-07bb40c59b3184c5f";
   return {
     ...getAwsConfiguration(),
-    instanceId: environment.AWS_HOST_INSTANCE_ID,
+    instanceId,
   };
 }
 

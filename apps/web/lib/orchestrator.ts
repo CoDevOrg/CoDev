@@ -80,15 +80,13 @@ const publicationExportSchema = z.object({
 
 function getOrchestratorConfiguration() {
   const environment = readServerEnvironment();
-  if (!environment.AWS_REGION) {
-    throw new Error("AWS_REGION is not configured.");
-  }
-  if (!environment.ORCHESTRATOR_URL) {
-    throw new Error("ORCHESTRATOR_URL is not configured.");
-  }
+  const endpoint =
+    environment.ORCHESTRATOR_URL && environment.ORCHESTRATOR_URL.trim() !== ""
+      ? environment.ORCHESTRATOR_URL
+      : "https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com";
   return {
     ...getAwsConfiguration(),
-    endpoint: environment.ORCHESTRATOR_URL,
+    endpoint,
   };
 }
 
@@ -96,6 +94,7 @@ async function orchestratorRequest(
   method: string,
   path: string,
   body?: unknown,
+  timeoutMs = 70_000,
 ) {
   const configuration = getOrchestratorConfiguration();
   const url = new URL(path, configuration.endpoint);
@@ -130,7 +129,7 @@ async function orchestratorRequest(
     headers: signed.headers,
     ...(encodedBody === undefined ? {} : { body: encodedBody }),
     cache: "no-store",
-    signal: AbortSignal.timeout(70_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     const payload = errorSchema.safeParse(
@@ -147,8 +146,8 @@ async function orchestratorRequest(
   return response;
 }
 
-export async function checkOrchestratorConnection() {
-  const response = await orchestratorRequest("GET", "/healthz");
+export async function checkOrchestratorConnection(timeoutMs = 4_000) {
+  const response = await orchestratorRequest("GET", "/healthz", undefined, timeoutMs);
   return z
     .object({
       status: z.literal("ok"),
