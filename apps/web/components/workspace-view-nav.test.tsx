@@ -7,9 +7,7 @@ describe("WorkspaceViewNav", () => {
   it("renders the primary workspace views and selects a view", () => {
     const onSelect = vi.fn();
 
-    render(
-      <WorkspaceViewNav activeView="chat" hasPreview onSelect={onSelect} />,
-    );
+    render(<WorkspaceViewNav activeView="chat" onSelect={onSelect} />);
 
     expect(
       screen.getByRole("button", { name: "Agent Console" }),
@@ -22,17 +20,14 @@ describe("WorkspaceViewNav", () => {
     expect(onSelect).toHaveBeenCalledWith("stats");
   });
 
-  it("disables Web Workspace until a preview is available", () => {
-    render(
-      <WorkspaceViewNav
-        activeView="chat"
-        hasPreview={false}
-        onSelect={vi.fn()}
-      />,
-    );
+  it("keeps Web Workspace selectable without a preview entry", () => {
+    const onSelect = vi.fn();
 
-    expect(
-      screen.getByRole("button", { name: "Web Workspace" }),
-    ).toBeDisabled();
+    render(<WorkspaceViewNav activeView="chat" onSelect={onSelect} />);
+
+    const preview = screen.getByRole("button", { name: "Web Workspace" });
+    expect(preview).toBeEnabled();
+    fireEvent.click(preview);
+    expect(onSelect).toHaveBeenCalledWith("preview");
   });
 });

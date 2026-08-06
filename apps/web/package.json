@@ -29,6 +29,7 @@
     "@codev/contracts": "workspace:*",
     "@codev/db": "workspace:*",
     "@codev/shared-types": "workspace:*",
+    "@cursor/sdk": "^1.0.26",
     "@hocuspocus/provider": "4.4.0",
     "@monaco-editor/react": "4.7.0",
     "@octokit/rest": "22.0.0",

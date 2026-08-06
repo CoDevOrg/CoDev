@@ -296,23 +296,27 @@ impl GuestClient {
                     .unwrap_or_else(|| format!("guest daemon returned HTTP {status}"));
                 return Err(match status {
                     409 => {
-                        let conflict_paths = payload
-                            .as_ref()
-                            .and_then(|value| value.get("conflictPaths"))
-                            .and_then(|value| value.as_array())
-                            .map(|paths| {
-                                paths
-                                    .iter()
-                                    .filter_map(|path| path.as_str().map(str::to_owned))
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default();
-                        if conflict_paths.is_empty() {
-                            RuntimeError::Conflict(message)
+                        if message.contains("capacity exceeded") {
+                            RuntimeError::CapacityExceeded
                         } else {
-                            RuntimeError::GitConflict {
-                                message,
-                                conflict_paths,
+                            let conflict_paths = payload
+                                .as_ref()
+                                .and_then(|value| value.get("conflictPaths"))
+                                .and_then(|value| value.as_array())
+                                .map(|paths| {
+                                    paths
+                                        .iter()
+                                        .filter_map(|path| path.as_str().map(str::to_owned))
+                                        .collect::<Vec<_>>()
+                                })
+                                .unwrap_or_default();
+                            if conflict_paths.is_empty() {
+                                RuntimeError::Conflict(message)
+                            } else {
+                                RuntimeError::GitConflict {
+                                    message,
+                                    conflict_paths,
+                                }
                             }
                         }
                     }

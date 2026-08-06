@@ -27,12 +27,14 @@ export default async function PersonalAgentsPage({
     openaiCredential,
     anthropicCredential,
     bedrockCredential,
+    cursorCredential,
     codexCredential,
     claudeCredential,
   ] = await Promise.all([
     getOpenAICredentialStatus(user.id),
     getProviderCredentialStatus("USER", user.id, "anthropic"),
     getProviderCredentialStatus("USER", user.id, "bedrock"),
+    getProviderCredentialStatus("USER", user.id, "cursor"),
     getOAuthCredentialStatus("USER", user.id, "openai"),
     getOAuthCredentialStatus("USER", user.id, "anthropic"),
   ]);
@@ -40,7 +42,7 @@ export default async function PersonalAgentsPage({
   return (
     <div className="settings-page">
       <SettingsPageHeader
-        description="Connect private provider keys used for the agent turns you author."
+        description="Connect private provider keys used for the agent turns you author. CoDev does not bill for model tokens — use your own Codex, Claude, or Cursor credentials."
         eyebrow="Personal settings"
         title="Coding agents"
       />
@@ -68,6 +70,15 @@ export default async function PersonalAgentsPage({
           provider="anthropic"
         />
       </SettingsCard>
+      <SettingsCard
+        description="Use your Cursor API key so agent turns bill to your Cursor plan via the Cursor SDK."
+        title="Cursor"
+      >
+        <CredentialForm
+          currentLastFour={cursorCredential?.lastFour}
+          provider="cursor"
+        />
+      </SettingsCard>
       <OAuthConnectionsCard
         connected={{
           claude: claudeCredential?.credentialType === "OAUTH_TOKEN",
@@ -76,6 +87,10 @@ export default async function PersonalAgentsPage({
         configured={{
           claude: getOAuthConfigurationStatus("claude").configured,
           codex: getOAuthConfigurationStatus("codex").configured,
+        }}
+        flowModes={{
+          claude: getOAuthConfigurationStatus("claude").flowMode,
+          codex: getOAuthConfigurationStatus("codex").flowMode,
         }}
         notice={parseOAuthNotice(params)}
         returnTo="/settings/personal/agents"

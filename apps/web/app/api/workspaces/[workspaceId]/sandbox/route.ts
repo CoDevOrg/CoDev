@@ -13,6 +13,7 @@ import {
   provisionSandbox,
   waitForOrchestrator,
 } from "@/lib/orchestrator";
+import { assertVmMinuteQuota, QuotaError, quotaResponse } from "@/lib/quotas";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
@@ -111,6 +112,7 @@ export async function POST(
     if (runtime?.status === "provisioning" || runtime?.status === "stopping") {
       return Response.json({ state: runtime.status }, { status: 202 });
     }
+    await assertVmMinuteQuota(workspace.ownerId);
     const hostState = await requestHostWake();
     if (hostState === "starting") {
       return Response.json({ state: "starting" }, { status: 202 });
@@ -146,6 +148,7 @@ export async function POST(
     if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);
     return Response.json({ sandbox }, { status: 201 });
   } catch (error) {
+    if (error instanceof QuotaError) return quotaResponse(error);
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
     return apiError(
       error,

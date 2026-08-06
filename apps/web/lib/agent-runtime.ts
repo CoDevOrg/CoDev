@@ -7,9 +7,14 @@ import OpenAI from "openai";
 import { schema, type AgentTurnAttachment } from "@codev/db";
 import { createAgentEvent } from "@codev/shared-types";
 
-import { createAgentModel, getAgentModel, getAgentProvider } from "./ai-model";
+import { createAgentModel, getAgentModel, parseAgentProvider } from "./ai-model";
 import { resolveAgentCredential } from "./credentials";
+import {
+  requireCursorApiKey,
+  runCursorCloudAgent,
+} from "./cursor-agent-runtime";
 import { getDatabase } from "./database";
+import { normalizeTokenUsage } from "./token-usage";
 import {
   createCoordinationMessage,
   createPathClaim,
@@ -220,6 +225,9 @@ type AgentContext = {
   worktreeId: string;
   authorId: string;
   model: string;
+  provider: string;
+  repository: string | null;
+  baseSha: string | null;
   prompt: string;
   attachments: AgentTurnAttachment[];
 };
@@ -300,7 +308,7 @@ function modelInput(context: AgentContext, transcript: string) {
   return parts;
 }
 
-function eventProvider(provider: ReturnType<typeof getAgentProvider>) {
+function eventProvider(provider: ReturnType<typeof parseAgentProvider>) {
   return provider === "openai"
     ? ("openai" as const)
     : provider === "anthropic" || provider === "bedrock"
@@ -333,7 +341,7 @@ async function addEvent(
         : type === "tool.called"
           ? "TOOL_CALL_INIT"
           : "TOOL_CALL_RESULT";
-  const provider = getAgentProvider();
+  const provider = parseAgentProvider(context.provider);
   const agentEvent = createAgentEvent({
     workspaceId: context.workspaceId,
     sessionId: context.sessionId,
@@ -443,6 +451,9 @@ async function loadAgentContext(turnId: string): Promise<AgentContext> {
       worktreeId: schema.agentSessions.worktreeId,
       authorId: schema.agentTurns.authorId,
       model: schema.agentSessions.model,
+      provider: schema.agentSessions.provider,
+      repository: schema.workspaces.repository,
+      baseSha: schema.workspaces.baseSha,
       prompt: schema.agentTurns.prompt,
       attachments: schema.agentTurns.attachments,
     })
@@ -450,6 +461,10 @@ async function loadAgentContext(turnId: string): Promise<AgentContext> {
     .innerJoin(
       schema.agentSessions,
       eq(schema.agentTurns.sessionId, schema.agentSessions.id),
+    )
+    .innerJoin(
+      schema.workspaces,
+      eq(schema.agentSessions.workspaceId, schema.workspaces.id),
     )
     .where(eq(schema.agentTurns.id, turnId))
     .limit(1);
@@ -837,16 +852,13 @@ export async function runAgentTurn(turnId: string) {
   "use step";
 
   const context = await loadAgentContext(turnId);
-  const provider = getAgentProvider();
+  const provider = parseAgentProvider(context.provider);
   const credential = await resolveAgentCredential(
     context.authorId,
     context.workspaceId,
     provider,
   );
-  const model = createAgentModel(
-    credential,
-    context.model || getAgentModel(provider),
-  );
+
   const history = await getDatabase()
     .select({
       prompt: schema.agentTurns.prompt,
@@ -870,10 +882,88 @@ export async function runAgentTurn(turnId: string) {
   await addEvent(context, `${turnId}:started`, "turn.started", {
     prompt: context.prompt,
     model: context.model,
+    provider,
   });
 
-  let finalOutput = "";
   if (await turnWasInterrupted(turnId)) return;
+
+  if (provider === "cursor") {
+    if (!context.repository) {
+      throw new Error(
+        "Connect a GitHub repository before starting a Cursor agent.",
+      );
+    }
+    let cursorUsage = undefined as
+      | {
+          inputTokens: number;
+          outputTokens: number;
+          totalTokens: number;
+        }
+      | undefined;
+    const result = await runCursorCloudAgent({
+      apiKey: requireCursorApiKey(credential),
+      model: context.model || getAgentModel("cursor"),
+      repository: context.repository,
+      startingRef: context.baseSha,
+      prompt: `Repository session transcript:\n${transcript}\n\nComplete the latest request.`,
+      onEvent: async (event) => {
+        if (event.kind === "text") {
+          await addEvent(
+            context,
+            `${turnId}:output:${Date.now()}`,
+            "agent.output",
+            {
+              text: event.text,
+            },
+          );
+        } else if (event.kind === "tool") {
+          await addEvent(
+            context,
+            `${turnId}:tool:${event.name}:${Date.now()}`,
+            "tool.completed",
+            { name: event.name },
+          );
+        } else if (event.kind === "usage") {
+          cursorUsage = event.usage;
+        } else {
+          await addEvent(
+            context,
+            `${turnId}:status:${Date.now()}`,
+            "agent.output",
+            { text: event.text },
+          );
+        }
+      },
+    });
+    if (await turnWasInterrupted(turnId)) return;
+    cursorUsage = normalizeTokenUsage(result.usage) ?? cursorUsage;
+    await getDatabase()
+      .update(schema.agentTurns)
+      .set({
+        status: "completed",
+        responseId: result.agentId,
+        output: result.output,
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.agentTurns.id, turnId));
+    await addEvent(context, `${turnId}:output:final`, "agent.output", {
+      text: result.output,
+      ...(cursorUsage ? { usage: cursorUsage } : {}),
+    });
+    await addEvent(context, `${turnId}:completed`, "turn.completed", {
+      output: result.output,
+      ...(cursorUsage ? { usage: cursorUsage } : {}),
+    });
+    return;
+  }
+
+  const model = createAgentModel(
+    credential,
+    context.model || getAgentModel(provider),
+  );
+
+  let finalOutput = "";
   const response = await generateText({
     model,
     maxOutputTokens: 4096,
@@ -882,16 +972,19 @@ export async function runAgentTurn(turnId: string) {
       "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. Never publish, merge, access credentials, or escape the worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
-    onStepEnd: async ({ text, response: stepResponse }) => {
+    onStepEnd: async ({ text, response: stepResponse, usage }) => {
       if (text) {
         finalOutput = text;
+        const stepUsage = normalizeTokenUsage(usage);
         await addEvent(context, `${stepResponse.id}:output`, "agent.output", {
           text,
+          ...(stepUsage ? { usage: stepUsage } : {}),
         });
       }
     },
   });
   finalOutput = response.text || finalOutput;
+  const totalUsage = normalizeTokenUsage(response.totalUsage ?? response.usage);
 
   if (await turnWasInterrupted(turnId)) return;
   await getDatabase()
@@ -906,6 +999,7 @@ export async function runAgentTurn(turnId: string) {
     .where(eq(schema.agentTurns.id, turnId));
   await addEvent(context, `${turnId}:completed`, "turn.completed", {
     output: finalOutput,
+    ...(totalUsage ? { usage: totalUsage } : {}),
   });
 }
 
@@ -943,6 +1037,7 @@ export async function listAgentSessions(workspaceId: string) {
       id: schema.agentSessions.id,
       name: schema.agentSessions.name,
       model: schema.agentSessions.model,
+      provider: schema.agentSessions.provider,
       status: schema.agentSessions.status,
       worktreeId: schema.agentSessions.worktreeId,
       worktreeName: schema.worktrees.name,

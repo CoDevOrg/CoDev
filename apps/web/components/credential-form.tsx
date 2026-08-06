@@ -3,32 +3,64 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type ApiKeyProvider = "openai" | "anthropic" | "cursor";
+
+const PROVIDER_LABELS: Record<ApiKeyProvider, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  cursor: "Cursor",
+};
+
+const PROVIDER_PLACEHOLDERS: Record<ApiKeyProvider, string> = {
+  openai: "sk-…",
+  anthropic: "sk-ant-…",
+  cursor: "key_…",
+};
+
+function saveEndpoint(provider: ApiKeyProvider) {
+  if (provider === "openai") return "/api/settings/openai-key";
+  if (provider === "anthropic") return "/api/settings/anthropic-key";
+  return "/api/settings/provider-credential";
+}
+
+function saveBody(provider: ApiKeyProvider, apiKey: string) {
+  if (provider === "cursor") {
+    return JSON.stringify({
+      provider: "cursor",
+      credentialType: "API_KEY",
+      apiKey,
+    });
+  }
+  return JSON.stringify({ apiKey });
+}
+
+function deleteEndpoint(provider: ApiKeyProvider) {
+  if (provider === "openai") return "/api/settings/openai-key";
+  if (provider === "anthropic") return "/api/settings/anthropic-key";
+  return "/api/settings/provider-credential?provider=cursor";
+}
+
 export function CredentialForm({
   currentLastFour,
   provider = "openai",
 }: {
   currentLastFour: string | undefined;
-  provider?: "openai" | "anthropic";
+  provider?: ApiKeyProvider;
 }) {
   const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const providerName = provider === "openai" ? "OpenAI" : "Anthropic";
+  const providerName = PROVIDER_LABELS[provider];
 
   async function save() {
     setSaving(true);
     setMessage("");
-    const response = await fetch(
-      provider === "openai"
-        ? "/api/settings/openai-key"
-        : "/api/settings/anthropic-key",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey }),
-      },
-    );
+    const response = await fetch(saveEndpoint(provider), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: saveBody(provider, apiKey),
+    });
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) {
       setMessage(payload.error ?? "The key could not be saved.");
@@ -36,9 +68,7 @@ export function CredentialForm({
       return;
     }
     setApiKey("");
-    setMessage(
-      `${provider === "openai" ? "OpenAI" : "Anthropic"} key saved securely.`,
-    );
+    setMessage(`${providerName} key saved securely.`);
     setSaving(false);
     router.refresh();
   }
@@ -46,12 +76,7 @@ export function CredentialForm({
   async function remove() {
     setSaving(true);
     setMessage("");
-    const response = await fetch(
-      provider === "openai"
-        ? "/api/settings/openai-key"
-        : "/api/settings/anthropic-key",
-      { method: "DELETE" },
-    );
+    const response = await fetch(deleteEndpoint(provider), { method: "DELETE" });
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string };
       setMessage(payload.error ?? "The key could not be removed.");
@@ -85,7 +110,7 @@ export function CredentialForm({
           type="password"
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
-          placeholder={provider === "openai" ? "sk-…" : "sk-ant-…"}
+          placeholder={PROVIDER_PLACEHOLDERS[provider]}
           autoComplete="off"
           spellCheck={false}
         />

@@ -6,10 +6,8 @@ import { Terminal } from "@xterm/xterm";
 import type { editor as MonacoEditor } from "monaco-editor";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  ChevronDown,
-  FileCode2,
   GitBranch,
   RefreshCw,
   Search,
@@ -35,6 +33,8 @@ import {
 import { formatPresenceCopy } from "@/lib/presence-copy";
 import { isPreviewExtensionAllowed, resolvePreviewEntry } from "@/lib/preview";
 import { AgentPanel, type AgentSession } from "@/components/agent-panel";
+import { FeedbackWidget } from "@/components/feedback-widget";
+import { FileExplorer } from "@/components/file-explorer";
 import { PreviewPane } from "@/components/preview-pane";
 import { WorkspaceShareButton } from "@/components/workspace-share-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -80,6 +80,15 @@ function fileName(path: string) {
   return path.split("/").at(-1) ?? path;
 }
 
+function getDocumentTheme() {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function subscribeDocumentTheme(onChange: () => void) {
+  window.addEventListener("codev-theme-change", onChange);
+  return () => window.removeEventListener("codev-theme-change", onChange);
+}
+
 function collaboratorLabel(collaborator: CollaborationUser) {
   return collaborator.name ?? collaborator.login;
 }
@@ -106,6 +115,8 @@ export interface WorkspaceIdeProps {
   canShare: boolean;
   isOwner: boolean;
   integrationHeadSha: string;
+  vmMinutesUsed: number;
+  vmMinutesQuota: number;
   user: {
     id: string;
     name?: string | null;
@@ -132,6 +143,8 @@ export function WorkspaceIde({
   canShare,
   isOwner,
   integrationHeadSha,
+  vmMinutesUsed,
+  vmMinutesQuota,
   user,
 }: WorkspaceIdeProps) {
   const isHibernated = runtimeStatus === "hibernated";
@@ -139,6 +152,12 @@ export function WorkspaceIde({
   const isRuntimeStarting =
     runtimeStatus === "provisioning" || runtimeStatus === "stopping";
   const hasRepository = Boolean(repository);
+  const uiTheme = useSyncExternalStore(
+    subscribeDocumentTheme,
+    getDocumentTheme,
+    () => "light",
+  );
+  const editorTheme = uiTheme === "dark" ? "vs-dark" : "vs";
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,7 +166,8 @@ export function WorkspaceIde({
   const [diffOpen, setDiffOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [view, setView] = useState<IdeView>("chat");
-  const [terminalCollapsed, setTerminalCollapsed] = useState(true);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalCollapsed, setTerminalCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [searching, setSearching] = useState(false);
@@ -395,17 +415,12 @@ export function WorkspaceIde({
 
   const handleTurnCompleted = useCallback(() => {
     schedulePreviewRefresh();
-    if (hasPreview) setView("preview");
-  }, [hasPreview, schedulePreviewRefresh]);
+  }, [schedulePreviewRefresh]);
 
   useEffect(() => {
-    if (!hasPreview && view === "preview") {
-      // The preview rail can disappear after a file refresh; keep the active
-      // view valid when that external state changes.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setView("chat");
-    }
-  }, [hasPreview, view]);
+    if (view !== "preview" || !isRuntimeReady) return;
+    void refreshFiles().catch(() => undefined);
+  }, [view, isRuntimeReady, refreshFiles]);
 
   useEffect(() => {
     if (!isRuntimeReady) return;
@@ -521,11 +536,14 @@ export function WorkspaceIde({
     if (
       !canTerminal ||
       !isRuntimeReady ||
+      !terminalOpen ||
+      terminalCollapsed ||
       !terminalElement.current ||
       terminal.current
     )
       return;
     let stopped = false;
+    let sessionReady = false;
     let resizeTimer: number | null = null;
     const instance = new Terminal({
       convertEol: true,
@@ -572,33 +590,45 @@ export function WorkspaceIde({
         message?: string;
       };
       if (event.type === "ready") {
+        sessionReady = true;
         terminalSession.current = event.sessionId ?? null;
         instance.clear();
       } else if (event.type === "data" && event.data) {
         void writeTerminal(event.data);
       } else if (event.type === "exit") {
+        sessionReady = false;
         void writeTerminal(
-          `\r\n\x1b[33mPTY exited (${event.exitCode ?? "unknown"}). Reload to reconnect.\x1b[0m\r\n`,
+          `\r\n\x1b[33mPTY exited (${event.exitCode ?? "unknown"}). Reopen Terminal to reconnect.\x1b[0m\r\n`,
         );
       } else if (event.type === "error") {
-        void writeTerminal(
-          `\r\n\x1b[31m${event.message ?? "Terminal stream interrupted."}\x1b[0m\r\n`,
-        );
+        sessionReady = false;
+        const detail = event.message ?? "Terminal stream interrupted.";
+        const hint = /capacity exceeded/i.test(detail)
+          ? " Close other terminal tabs for this workspace, then reopen Terminal."
+          : "";
+        void writeTerminal(`\r\n\x1b[31m${detail}${hint}\x1b[0m\r\n`);
       }
     };
     socket.onerror = () => {
+      sessionReady = false;
       void writeTerminal("\r\n\x1b[31mTerminal WebSocket failed.\x1b[0m\r\n");
     };
     const dataSubscription = instance.onData((data) => {
-      if (canEdit && !stopped && socket.readyState === WebSocket.OPEN) {
+      if (
+        canEdit &&
+        sessionReady &&
+        !stopped &&
+        socket.readyState === WebSocket.OPEN
+      ) {
         socket.send(JSON.stringify({ type: "input", data }));
       }
     });
     const observer = new ResizeObserver(() => {
       fit.fit();
+      if (!sessionReady) return;
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (sessionReady && socket.readyState === WebSocket.OPEN) {
           socket.send(
             JSON.stringify({
               type: "resize",
@@ -614,6 +644,7 @@ export function WorkspaceIde({
     fitAddon.current = fit;
     return () => {
       stopped = true;
+      sessionReady = false;
       observer.disconnect();
       dataSubscription.dispose();
       if (resizeTimer !== null) window.clearTimeout(resizeTimer);
@@ -624,15 +655,23 @@ export function WorkspaceIde({
       fitAddon.current = null;
       terminalSession.current = null;
     };
-  }, [canEdit, canTerminal, isRuntimeReady, workspaceId, writeTerminal]);
+  }, [
+    canEdit,
+    canTerminal,
+    isRuntimeReady,
+    terminalCollapsed,
+    terminalOpen,
+    workspaceId,
+    writeTerminal,
+  ]);
 
   useEffect(() => {
-    if (view !== "terminal" || terminalCollapsed) return;
+    if (!terminalOpen || terminalCollapsed) return;
     const frame = window.requestAnimationFrame(() => {
       fitAddon.current?.fit();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [terminalCollapsed, view]);
+  }, [terminalCollapsed, terminalOpen]);
 
   async function openPath(path: string, line?: number) {
     if (openFile?.path === path) return;
@@ -863,15 +902,10 @@ export function WorkspaceIde({
           : view === "preview"
             ? "preview"
             : null;
-  const selectPrimaryView = useCallback(
-    (nextView: WorkspacePrimaryView) => {
-      if (nextView === "preview" && !hasPreview) return;
-      setSearchOpen(false);
-      setTerminalCollapsed(true);
-      setView(nextView === "chat" ? "chat" : nextView);
-    },
-    [hasPreview],
-  );
+  const selectPrimaryView = useCallback((nextView: WorkspacePrimaryView) => {
+    setSearchOpen(false);
+    setView(nextView === "chat" ? "chat" : nextView);
+  }, []);
 
   return (
     <main className="live-ide" aria-label="CoDev browser IDE">
@@ -901,16 +935,19 @@ export function WorkspaceIde({
         <div className="topbar-actions">
           <WorkspaceViewNav
             activeView={activePrimaryView}
-            hasPreview={hasPreview}
             onSelect={selectPrimaryView}
           />
           <button
-            className={`terminal-utility${view === "terminal" ? " active" : ""}`}
+            className={`terminal-utility${terminalOpen ? " active" : ""}`}
             type="button"
             aria-label="Open terminal"
-            aria-pressed={view === "terminal"}
+            aria-pressed={terminalOpen}
             onClick={() => {
-              setView("terminal");
+              if (terminalOpen && !terminalCollapsed) {
+                setTerminalOpen(false);
+                return;
+              }
+              setTerminalOpen(true);
               setTerminalCollapsed(false);
             }}
           >
@@ -1018,9 +1055,9 @@ export function WorkspaceIde({
         className={[
           "live-ide-grid",
           `view-${view}`,
-          hasPreview ? "has-preview" : "preview-hidden",
-          view === "terminal" && terminalCollapsed ? "terminal-collapsed" : "",
-          view === "terminal" && !terminalCollapsed ? "terminal-open" : "",
+          hasPreview || view === "preview" ? "has-preview" : "preview-hidden",
+          terminalOpen && terminalCollapsed ? "terminal-collapsed" : "",
+          terminalOpen && !terminalCollapsed ? "terminal-open" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -1034,8 +1071,14 @@ export function WorkspaceIde({
             <TeamStatsPanel
               sessions={initialAgentSessions}
               collaborators={distinctCollaborators}
+              members={members}
               currentUser={user}
               peopleHere={peopleHere}
+              runtimeStatus={runtimeStatus}
+              repository={repository}
+              branch={branch}
+              vmMinutesUsed={vmMinutesUsed}
+              vmMinutesQuota={vmMinutesQuota}
             />
           ) : (
             <AgentPanel
@@ -1048,18 +1091,14 @@ export function WorkspaceIde({
               onTurnCompleted={handleTurnCompleted}
             />
           )}
-          {hasPreview && view === "preview" ? (
+          {view === "preview" ? (
             <PreviewPane
               workspaceId={workspaceId}
               files={files}
               revisionToken={String(previewRevision)}
               onRefresh={refreshPreviewNow}
-              className={[
-                "preview-pane-enter",
-                view === "preview" ? "preview-focus" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              runtimeReady={isRuntimeReady}
+              className={["preview-pane-enter", "preview-focus"].join(" ")}
               exportActions={
                 canMerge ? (
                   <div
@@ -1191,60 +1230,20 @@ export function WorkspaceIde({
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="repository-heading">
-                    <ChevronDown aria-hidden="true" />
-                    <strong>
-                      {repository.split("/").at(-1)?.toUpperCase()}
-                    </strong>
-                  </div>
-                  <div className="file-tree">
-                    {loading ? (
-                      <p className="ide-empty">Loading files…</p>
-                    ) : null}
-                    {files.map((file) => (
-                      <button
-                        className={`file-row ${openFile?.path === file.path ? "active" : ""}`}
-                        key={file.path}
-                        type="button"
-                        style={
-                          {
-                            "--file-depth": file.path.split("/").length - 1,
-                          } as React.CSSProperties
-                        }
-                        onClick={() => {
-                          void openPath(file.path);
-                          setView("code");
-                        }}
-                        title={file.path}
-                      >
-                        <FileCode2 className="file-kind" aria-hidden="true" />
-                        <span>{fileName(file.path)}</span>
-                        {file.status ? <i>{file.status}</i> : null}
-                        {(presenceByPath.get(file.path) ?? []).length > 0 ? (
-                          <span
-                            className="file-presence"
-                            aria-label="Active editors"
-                          >
-                            {(presenceByPath.get(file.path) ?? [])
-                              .slice(0, 3)
-                              .map((collaborator) => (
-                                <b
-                                  key={collaborator.id}
-                                  title={`${collaboratorLabel(collaborator)} is editing`}
-                                  style={
-                                    {
-                                      "--presence-color": collaborator.color,
-                                    } as React.CSSProperties
-                                  }
-                                />
-                              ))}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
-                </>
+                <FileExplorer
+                  files={files}
+                  loading={loading}
+                  repositoryName={
+                    repository.split("/").at(-1) ?? repository
+                  }
+                  openPath={openFile?.path}
+                  presenceByPath={presenceByPath}
+                  onOpen={(path) => {
+                    void openPath(path);
+                    setView("code");
+                  }}
+                  collaboratorLabel={collaboratorLabel}
+                />
               )}
             </aside>
           ) : null}
@@ -1336,7 +1335,7 @@ export function WorkspaceIde({
                     original={openFile.original}
                     modified={openFile.contents}
                     language={languageForPath(openFile.path)}
-                    theme="vs-dark"
+                    theme={editorTheme}
                     options={{
                       automaticLayout: true,
                       fontFamily: "var(--font-geist-mono)",
@@ -1351,7 +1350,7 @@ export function WorkspaceIde({
                     path={openFile.path}
                     value={openFile.contents}
                     language={languageForPath(openFile.path)}
-                    theme="vs-dark"
+                    theme={editorTheme}
                     onMount={editorMount}
                     onChange={(contents) =>
                       setOpenFile((current) =>
@@ -1378,14 +1377,8 @@ export function WorkspaceIde({
                 )
               ) : (
                 <div className="ide-welcome">
-                  <span className="wordmark-mark" aria-hidden="true">
-                    <span />
-                    <span />
-                  </span>
-                  <h1>Open a file to start building.</h1>
-                  <p>
-                    Use the Files rail to browse the Firecracker workspace, then
-                    edit here.
+                  <p className="ide-welcome-hint">
+                    Select a file in the explorer to open it.
                   </p>
                 </div>
               )}
@@ -1397,13 +1390,13 @@ export function WorkspaceIde({
           className={[
             "terminal-panel",
             "live-terminal",
-            view === "terminal" ? "terminal-drawer" : "terminal-hidden",
+            terminalOpen ? "terminal-drawer" : "terminal-hidden",
             terminalCollapsed ? "is-collapsed" : "",
           ]
             .filter(Boolean)
             .join(" ")}
           aria-label="Sandbox terminal"
-          aria-hidden={view !== "terminal"}
+          aria-hidden={!terminalOpen}
         >
           <div className="terminal-head">
             <div>
@@ -1428,8 +1421,8 @@ export function WorkspaceIde({
                 type="button"
                 aria-label="Close terminal"
                 onClick={() => {
-                  setView("chat");
-                  setTerminalCollapsed(true);
+                  setTerminalOpen(false);
+                  setTerminalCollapsed(false);
                 }}
               >
                 <X aria-hidden="true" />
@@ -1437,7 +1430,13 @@ export function WorkspaceIde({
             </div>
           </div>
           {canTerminal ? (
-            <div className="xterm-host" ref={terminalElement} />
+            isRuntimeReady ? (
+              <div className="xterm-host" ref={terminalElement} />
+            ) : (
+              <div className="terminal-denied">
+                Start the sandbox runtime to open a Firecracker terminal.
+              </div>
+            )
           ) : (
             <div className="terminal-denied">
               Ask the workspace owner for terminal capability.
@@ -1445,6 +1444,7 @@ export function WorkspaceIde({
           )}
         </section>
       </div>
+      <FeedbackWidget workspaceId={workspaceId} />
     </main>
   );
 }

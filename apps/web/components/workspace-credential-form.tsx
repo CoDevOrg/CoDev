@@ -9,14 +9,19 @@ export function WorkspaceCredentialForm({
   currentLastFour,
 }: {
   workspaceId: string;
-  provider: "openai" | "anthropic";
+  provider: "openai" | "anthropic" | "cursor";
   currentLastFour?: string | undefined;
 }) {
   const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
-  const providerName = provider === "openai" ? "OpenAI" : "Anthropic";
+  const providerName =
+    provider === "openai"
+      ? "OpenAI"
+      : provider === "anthropic"
+        ? "Anthropic"
+        : "Cursor";
   const endpoint = `/api/workspaces/${workspaceId}/credentials`;
 
   async function save() {
@@ -81,7 +86,13 @@ export function WorkspaceCredentialForm({
           type="password"
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
-          placeholder={provider === "openai" ? "sk-…" : "sk-ant-…"}
+          placeholder={
+            provider === "openai"
+              ? "sk-…"
+              : provider === "anthropic"
+                ? "sk-ant-…"
+                : "key_…"
+          }
           autoComplete="off"
           spellCheck={false}
         />

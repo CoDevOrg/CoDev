@@ -61,6 +61,67 @@ describe("mapSessionToChatItems", () => {
         kind: "assistant",
         id: "assistant:ev-out",
         text: "I added a README with setup steps.",
+        turnId: "turn-1",
+        tokens: {
+          inputTokens: 0,
+          outputTokens: 9,
+          totalTokens: 9,
+        },
+        tokensEstimated: true,
+      },
+    ]);
+  });
+
+  it("attaches reported token usage from turn.completed", () => {
+    const items = mapSessionToChatItems(
+      session({
+        turns: [
+          {
+            id: "turn-usage",
+            prompt: "Ship it",
+            status: "completed",
+            output: "Shipped",
+            lastError: null,
+            createdAt: "2026-07-30T12:00:00.000Z",
+          },
+        ],
+        events: [
+          {
+            id: "ev-out-usage",
+            type: "agent.output",
+            payload: { text: "Shipped cleanly." },
+            createdAt: "2026-07-30T12:00:05.000Z",
+          },
+          {
+            id: "ev-done-usage",
+            type: "turn.completed",
+            payload: {
+              output: "Shipped cleanly.",
+              usage: {
+                inputTokens: 120,
+                outputTokens: 40,
+                totalTokens: 160,
+              },
+            },
+            createdAt: "2026-07-30T12:00:06.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(items).toEqual([
+      { kind: "user", id: "turn:turn-usage", text: "Ship it" },
+      {
+        kind: "assistant",
+        id: "assistant:ev-out-usage",
+        text: "Shipped cleanly.",
+        turnId: "turn-usage",
+        tokens: {
+          inputTokens: 120,
+          outputTokens: 40,
+          totalTokens: 160,
+        },
+        tokensEstimated: false,
       },
     ]);
   });
@@ -116,31 +177,96 @@ describe("mapSessionToChatItems", () => {
     expect(items).toEqual([
       { kind: "user", id: "turn:turn-2", text: "Refactor auth" },
       {
-        kind: "activities",
-        id: "activities:t1",
-        activities: [
-          {
-            category: "file",
-            detail: "file",
-            id: "t1",
-            label: "Read",
-            name: "read_file",
-            status: "completed",
-          },
-          {
-            category: "file",
-            detail: "file",
-            id: "t3",
-            label: "Could not edit",
-            name: "write_file",
-            status: "failed",
-          },
-        ],
-      },
-      {
         kind: "assistant",
         id: "assistant:a1",
         text: "Auth refactor stalled on a write conflict.",
+        turnId: "turn-2",
+        tokens: {
+          inputTokens: 0,
+          outputTokens: 11,
+          totalTokens: 11,
+        },
+        tokensEstimated: true,
+      },
+    ]);
+  });
+
+  it("shows only terminal command activities in the chat feed", () => {
+    const items = mapSessionToChatItems(
+      session({
+        turns: [
+          {
+            id: "turn-cmd",
+            prompt: "Check git",
+            status: "completed",
+            output: null,
+            lastError: null,
+            createdAt: "2026-07-30T13:00:00.000Z",
+          },
+        ],
+        events: [
+          {
+            id: "c1",
+            type: "tool.called",
+            payload: {
+              name: "claim_path",
+              arguments: JSON.stringify({ path: "README.md" }),
+            },
+            createdAt: "2026-07-30T13:00:01.000Z",
+          },
+          {
+            id: "c2",
+            type: "tool.called",
+            payload: {
+              name: "run_command",
+              arguments: JSON.stringify({
+                command: ["git", "status", "--short"],
+              }),
+            },
+            createdAt: "2026-07-30T13:00:02.000Z",
+          },
+          {
+            id: "c3",
+            type: "tool.completed",
+            payload: { name: "run_command", output: "ok" },
+            createdAt: "2026-07-30T13:00:03.000Z",
+          },
+          {
+            id: "c4",
+            type: "tool.failed",
+            payload: {
+              name: "run_command",
+              error: "exit 1",
+            },
+            createdAt: "2026-07-30T13:00:04.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(items).toEqual([
+      { kind: "user", id: "turn:turn-cmd", text: "Check git" },
+      {
+        kind: "activities",
+        id: "activities:c2",
+        activities: [
+          {
+            category: "command",
+            detail: "$ git status --short",
+            id: "c2",
+            label: "Ran",
+            name: "run_command",
+            status: "completed",
+          },
+          {
+            category: "command",
+            detail: "command",
+            id: "c4",
+            label: "Command failed",
+            name: "run_command",
+            status: "failed",
+          },
+        ],
       },
     ]);
   });
@@ -168,6 +294,13 @@ describe("mapSessionToChatItems", () => {
         kind: "assistant",
         id: "turn-output:turn-3",
         text: "Hello from the worktree.",
+        turnId: "turn-3",
+        tokens: {
+          inputTokens: 0,
+          outputTokens: 6,
+          totalTokens: 6,
+        },
+        tokensEstimated: true,
       },
     ]);
   });

@@ -1,7 +1,5 @@
-import { FeedbackForm } from "@/components/feedback-form";
 import {
   ProfileSettings,
-  SettingsCard,
   SettingsPageHeader,
 } from "@/components/settings/settings-content";
 import { getConnectedAccounts } from "@/lib/identity";
@@ -32,12 +30,6 @@ export default async function PersonalProfilePage({
         connectedAccounts={connectedAccounts}
         user={user}
       />
-      <SettingsCard
-        description="Help prioritize the design-partner experience."
-        title="Design-partner feedback"
-      >
-        <FeedbackForm />
-      </SettingsCard>
     </div>
   );
 }

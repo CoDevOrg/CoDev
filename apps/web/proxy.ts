@@ -24,8 +24,22 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     request.nextUrl.pathname === "/api/workspace/create" ||
     request.nextUrl.pathname === "/api/workspaces" ||
     request.nextUrl.pathname.startsWith("/api/auth/");
+  if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Rate limiting is temporarily unavailable." },
+      { status: 503 },
+    );
+  }
   if (edgeLimited && apiEdgeLimiter) {
-    const result = await apiEdgeLimiter.limit(clientIdentifier(request));
+    let result;
+    try {
+      result = await apiEdgeLimiter.limit(clientIdentifier(request));
+    } catch {
+      return NextResponse.json(
+        { error: "Rate limiting is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
     if (!result.success) {
       return NextResponse.json(
         { error: "Too many requests. Please try again shortly." },

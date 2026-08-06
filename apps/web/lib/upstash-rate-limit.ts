@@ -1,16 +1,20 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-const hasUpstashConfiguration = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
-);
+const redisUrl =
+  process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+const redisToken =
+  process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+const hasUpstashConfiguration = Boolean(redisUrl && redisToken);
 
-const redis = hasUpstashConfiguration ? Redis.fromEnv() : null;
+const redis = hasUpstashConfiguration
+  ? new Redis({ url: redisUrl!, token: redisToken! })
+  : null;
 
 /**
  * Limits that must work across Vercel edge regions. The nullable export keeps
- * local development usable without an Upstash deployment; production validates
- * these environment variables during deployment.
+ * local development usable without an Upstash deployment; production callers
+ * must reject requests when it is null.
  */
 export const apiEdgeLimiter = redis
   ? new Ratelimit({

@@ -6,24 +6,20 @@ import {
   getOpenAICredentialStatus,
 } from "./credentials";
 import type { AuthProvider } from "@codev/shared-types";
-import {
-  aiAgentLimiter,
-  byokSpamLimiter,
-  retryAfterSeconds,
-} from "./upstash-rate-limit";
+import { byokSpamLimiter, retryAfterSeconds } from "./upstash-rate-limit";
 
 export class AgentPromptRateLimitError extends Error {
   constructor(readonly retryAfterSeconds: number) {
-    super("Agent prompt limit reached. Upgrade or add your own API key.");
+    super("Agent prompt limit reached. Wait briefly and try again.");
     this.name = "AgentPromptRateLimitError";
   }
 }
 
-export type AgentKeySource = "byok" | "platform";
+export type AgentKeySource = "byok";
 
 /**
- * User and workspace-scoped (organization) credentials are BYOK. Either must
- * bypass the platform allowance while retaining the separate anti-spam limit.
+ * All agent prompts require USER or WORKSPACE credentials (BYOK). Anti-spam
+ * limits still apply so a single key cannot flood the control plane.
  */
 export async function getAgentKeySource(
   userId: string,
@@ -33,7 +29,10 @@ export async function getAgentKeySource(
   if (workspaceId) {
     return getCredentialAgentKeySource(userId, workspaceId, provider);
   }
-  return (await getOpenAICredentialStatus(userId)) ? "byok" : "platform";
+  if (await getOpenAICredentialStatus(userId)) return "byok";
+  throw new Error(
+    "Connect a Codex, Claude, or Cursor credential in Settings before starting an agent.",
+  );
 }
 
 export async function enforceAgentPromptRateLimit(
@@ -42,17 +41,18 @@ export async function enforceAgentPromptRateLimit(
   provider: AuthProvider = "openai",
 ) {
   const source = await getAgentKeySource(userId, workspaceId, provider);
-  const limiter = source === "byok" ? byokSpamLimiter : aiAgentLimiter;
-  if (limiter) {
-    const result = await limiter.limit(`${source}:${userId}`);
+  if (byokSpamLimiter) {
+    const result = await byokSpamLimiter.limit(`${source}:${userId}`);
     if (!result.success) {
       throw new AgentPromptRateLimitError(retryAfterSeconds(result.reset));
     }
   } else {
-    const fallback =
-      source === "byok"
-        ? await consumeRateLimit(userId, "byok-agent-prompt", 100, 60)
-        : await consumeRateLimit(userId, "platform-agent-prompt", 30, 60 * 60);
+    const fallback = await consumeRateLimit(
+      userId,
+      "byok-agent-prompt",
+      100,
+      60,
+    );
     if (!fallback.allowed) {
       throw new AgentPromptRateLimitError(fallback.retryAfterSeconds);
     }

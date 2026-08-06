@@ -78,6 +78,18 @@ export async function mergeUserIntoCanonical(
       WHERE user_id = ${targetUserId}
     `);
     await transaction.execute(sql`
+      DELETE FROM user_environment_variables AS duplicate
+      USING user_environment_variables AS canonical
+      WHERE duplicate.user_id = ${targetUserId}
+        AND canonical.user_id = ${canonicalUserId}
+        AND duplicate.name = canonical.name
+    `);
+    await transaction.execute(sql`
+      UPDATE user_environment_variables
+      SET user_id = ${canonicalUserId}
+      WHERE user_id = ${targetUserId}
+    `);
+    await transaction.execute(sql`
       UPDATE workspace_invites
       SET created_by = ${canonicalUserId}
       WHERE created_by = ${targetUserId}

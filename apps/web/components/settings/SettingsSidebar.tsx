@@ -3,18 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import {
-  ArrowLeft,
-  Bot,
-  CreditCard,
-  Key,
-  Plug,
-  Settings,
-  ShieldAlert,
-  Sliders,
-  User,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, Bot, KeyRound, User } from "lucide-react";
 
 type SettingsNavItem = {
   name: string;
@@ -30,28 +19,9 @@ const personalNav: SettingsNavItem[] = [
     icon: Bot,
   },
   {
-    name: "Integrations",
-    href: "/settings/personal/integrations",
-    icon: Plug,
-  },
-  { name: "API Keys", href: "/settings/personal/api-keys", icon: Key },
-  {
-    name: "Preferences",
-    href: "/settings/personal/preferences",
-    icon: Sliders,
-  },
-];
-
-const organizationNav: SettingsNavItem[] = [
-  { name: "Coding Agents", href: "/settings/org/agents", icon: Bot },
-  { name: "Integrations", href: "/settings/org/integrations", icon: Plug },
-  { name: "Settings", href: "/settings/org/general", icon: Settings },
-  { name: "Billing", href: "/settings/org/billing", icon: CreditCard },
-  { name: "Members", href: "/settings/org/members", icon: Users },
-  {
-    name: "Audit Log",
-    href: "/settings/org/audit-log",
-    icon: ShieldAlert,
+    name: "Environment Variables",
+    href: "/settings/personal/environment",
+    icon: KeyRound,
   },
 ];
 
@@ -104,11 +74,6 @@ export function SettingsSidebar() {
       <SettingsNavGroup
         items={personalNav}
         label="Personal"
-        pathname={pathname}
-      />
-      <SettingsNavGroup
-        items={organizationNav}
-        label="Organization"
         pathname={pathname}
       />
     </aside>

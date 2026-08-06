@@ -31,6 +31,11 @@ export const serverEnvironmentSchema = z.object({
   AUTH_GOOGLE_ID: z.string().min(1).optional(),
   AUTH_GOOGLE_SECRET: z.string().min(1).optional(),
   GITHUB_APP_SLUG: z.string().min(1).optional(),
+  FEEDBACK_GITHUB_TOKEN: z.string().min(1).optional(),
+  FEEDBACK_GITHUB_REPO: z
+    .string()
+    .regex(/^[^/\s]+\/[^/\s]+$/)
+    .optional(),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   CREDENTIAL_KMS_KEY_ID: z.string().min(1).optional(),
   PLATFORM_FALLBACK_API_KEY: z.string().min(1).optional(),

@@ -38,33 +38,27 @@ const viewItems: Array<{
 
 export function WorkspaceViewNav({
   activeView,
-  hasPreview,
   onSelect,
 }: {
   activeView: WorkspacePrimaryView | null;
-  hasPreview: boolean;
   onSelect: (view: WorkspacePrimaryView) => void;
 }) {
   return (
     <nav className="workspace-view-nav" aria-label="Workspace views">
-      {viewItems.map(({ id, label, description, Icon }) => {
-        const disabled = id === "preview" && !hasPreview;
-        return (
-          <button
-            key={id}
-            type="button"
-            className={activeView === id ? "active" : ""}
-            aria-label={label}
-            title={description}
-            aria-pressed={activeView === id}
-            disabled={disabled}
-            onClick={() => onSelect(id)}
-          >
-            <Icon aria-hidden="true" />
-            <span>{label}</span>
-          </button>
-        );
-      })}
+      {viewItems.map(({ id, label, description, Icon }) => (
+        <button
+          key={id}
+          type="button"
+          className={activeView === id ? "active" : ""}
+          aria-label={label}
+          title={description}
+          aria-pressed={activeView === id}
+          onClick={() => onSelect(id)}
+        >
+          <Icon aria-hidden="true" />
+          <span>{label}</span>
+        </button>
+      ))}
     </nav>
   );
 }

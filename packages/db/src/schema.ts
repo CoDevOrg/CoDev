@@ -192,6 +192,31 @@ export const providerCredentials = pgTable(
   ],
 );
 
+export const userEnvironmentVariables = pgTable(
+  "user_environment_variables",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    keyVersion: integer("key_version").default(1).notNull(),
+    lastFour: text("last_four"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("user_environment_variables_user_name_idx").on(
+      table.userId,
+      table.name,
+    ),
+    index("user_environment_variables_user_updated_idx").on(
+      table.userId,
+      table.updatedAt,
+    ),
+  ],
+);
+
 export const designPartnerFeedback = pgTable(
   "design_partner_feedback",
   {
@@ -383,6 +408,7 @@ export const agentSessions = pgTable(
     issueNumber: integer("issue_number"),
     name: text("name").notNull().default("Agent"),
     model: text("model").notNull().default("gpt-5"),
+    provider: text("provider").notNull().default("openai"),
     status: agentSessionStatus("status").default("idle").notNull(),
     workflowRunId: text("workflow_run_id"),
     lastError: text("last_error"),
@@ -719,6 +745,43 @@ export const publishedBranches = pgTable(
       table.workspaceId,
       table.status,
       table.updatedAt,
+    ),
+  ],
+);
+
+export const userComputeUsage = pgTable("user_compute_usage", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  minutesUsed: integer("minutes_used").default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const sandboxRuntimeIntervals = pgTable(
+  "sandbox_runtime_intervals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    source: text("source").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("sandbox_runtime_intervals_user_open_idx").on(
+      table.userId,
+      table.endedAt,
+    ),
+    index("sandbox_runtime_intervals_workspace_open_idx").on(
+      table.workspaceId,
+      table.endedAt,
     ),
   ],
 );

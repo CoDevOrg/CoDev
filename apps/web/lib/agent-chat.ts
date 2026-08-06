@@ -1,5 +1,11 @@
 import type { AgentEvent } from "@codev/shared-types";
 
+import {
+  estimateTokenUsage,
+  normalizeTokenUsage,
+  type TokenUsageSummary,
+} from "./token-usage";
+
 export type AgentChatAttachment = {
   name: string;
   type: string;
@@ -46,7 +52,14 @@ export type ChatItem =
       text: string;
       attachments?: AgentChatAttachment[];
     }
-  | { kind: "assistant"; id: string; text: string }
+  | {
+      kind: "assistant";
+      id: string;
+      text: string;
+      turnId?: string;
+      tokens?: TokenUsageSummary;
+      tokensEstimated?: boolean;
+    }
   | { kind: "activities"; id: string; activities: ChatActivity[] }
   | {
       kind: "comment";
@@ -340,18 +353,25 @@ export function describeAgentActivity(
   }
 }
 
+function isTerminalCommandTool(name: string) {
+  return name === "run_command" || name === "terminal";
+}
+
 function flushActivities(
   items: ChatItem[],
   pending: ChatActivity[],
   groupId: string,
 ) {
-  if (pending.length === 0) return;
+  const activities = pending.filter(
+    (activity) => activity.category === "command",
+  );
+  pending.length = 0;
+  if (activities.length === 0) return;
   items.push({
     kind: "activities",
     id: `activities:${groupId}`,
-    activities: pending.map((activity) => ({ ...activity })),
+    activities,
   });
-  pending.length = 0;
 }
 
 /**
@@ -384,9 +404,11 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
   const pendingActivities: ChatActivity[] = [];
   let activityGroupId = "";
   const assistantTexts = new Set<string>();
+  let currentTurnId: string | undefined;
 
   for (const node of nodes) {
     if (node.kind === "turn") {
+      currentTurnId = node.turn.id;
       flushActivities(items, pendingActivities, activityGroupId);
       const visiblePrompt = visibleTurnPrompt(node.turn);
       items.push({
@@ -410,9 +432,25 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
     const { event } = node;
     if (
       event.type === "turn.started" ||
-      event.type === "turn.completed" ||
       event.type === "turn.interrupted"
     ) {
+      continue;
+    }
+
+    if (event.type === "turn.completed") {
+      const usage = normalizeTokenUsage(event.payload.usage);
+      if (usage) {
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          const item = items[index];
+          if (!item) continue;
+          if (item.kind === "user") break;
+          if (item.kind === "assistant") {
+            item.tokens = usage;
+            item.tokensEstimated = false;
+            break;
+          }
+        }
+      }
       continue;
     }
 
@@ -422,6 +460,9 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
       event.type === "tool.failed"
     ) {
       const name = payloadString(event.payload, "name") ?? "tool";
+      // Surface only terminal commands in the chat timeline; other tool noise
+      // (claims, file reads, coordination) stays out of the user-facing feed.
+      if (!isTerminalCommandTool(name)) continue;
       if (pendingActivities.length === 0) activityGroupId = event.id;
 
       if (event.type === "tool.called") {
@@ -467,12 +508,30 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
     if (event.type === "agent.output") {
       flushActivities(items, pendingActivities, activityGroupId);
       const text = payloadString(event.payload, "text");
-      if (!text || assistantTexts.has(text)) continue;
+      if (!text) continue;
+      const usage = normalizeTokenUsage(event.payload.usage);
+      if (assistantTexts.has(text)) {
+        if (usage) {
+          for (let index = items.length - 1; index >= 0; index -= 1) {
+            const item = items[index];
+            if (item?.kind === "assistant" && item.text === text) {
+              item.tokens = usage;
+              item.tokensEstimated = false;
+              break;
+            }
+          }
+        }
+        continue;
+      }
       assistantTexts.add(text);
       items.push({
         kind: "assistant",
         id: `assistant:${event.id}`,
         text,
+        ...(currentTurnId ? { turnId: currentTurnId } : {}),
+        ...(usage
+          ? { tokens: usage, tokensEstimated: false }
+          : {}),
       });
       continue;
     }
@@ -522,8 +581,15 @@ export function mapSessionToChatItems(session: AgentChatSession): ChatItem[] {
       kind: "assistant",
       id: `turn-output:${turn.id}`,
       text: turn.output,
+      turnId: turn.id,
     });
     assistantTexts.add(turn.output);
+  }
+
+  for (const item of items) {
+    if (item.kind !== "assistant" || item.tokens) continue;
+    item.tokens = estimateTokenUsage(item.text);
+    item.tokensEstimated = true;
   }
 
   return items;

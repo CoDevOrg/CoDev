@@ -10,6 +10,7 @@ import type { AuthProvider } from "@codev/shared-types";
 import type { ResolvedCredential } from "./credentials";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.6-luna";
+export const DEFAULT_CURSOR_MODEL = "composer-2.5";
 const RECENT_OPENAI_FALLBACK_MODELS = [
   "gpt-5.6-sol",
   "gpt-5.6-terra",
@@ -18,6 +19,7 @@ const RECENT_OPENAI_FALLBACK_MODELS = [
   "gpt-5.4",
   "gpt-5.4-mini",
 ];
+const CURSOR_FALLBACK_MODELS = ["composer-2.5", "auto-smart"];
 const OPENAI_MODEL_CACHE_TTL_MS = 5 * 60 * 1_000;
 const openAIModelCache = new Map<
   string,
@@ -35,7 +37,25 @@ export function getAgentProvider(): AuthProvider {
     configured !== "openai" &&
     configured !== "anthropic" &&
     configured !== "bedrock" &&
-    configured !== "azure_foundry"
+    configured !== "azure_foundry" &&
+    configured !== "cursor"
+  ) {
+    throw new Error(`Unsupported agent provider: ${configured}.`);
+  }
+  return configured;
+}
+
+export function parseAgentProvider(
+  value: string | undefined,
+  fallback: AuthProvider = getAgentProvider(),
+): AuthProvider {
+  const configured = value?.trim() || fallback;
+  if (
+    configured !== "openai" &&
+    configured !== "anthropic" &&
+    configured !== "bedrock" &&
+    configured !== "azure_foundry" &&
+    configured !== "cursor"
   ) {
     throw new Error(`Unsupported agent provider: ${configured}.`);
   }
@@ -48,6 +68,8 @@ export function getAgentModel(provider: AuthProvider = getAgentProvider()) {
       return getOpenAIModel();
     case "anthropic":
       return process.env.CODEV_ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
+    case "cursor":
+      return process.env.CODEV_CURSOR_MODEL?.trim() || DEFAULT_CURSOR_MODEL;
     case "bedrock": {
       const model = process.env.CODEV_BEDROCK_MODEL?.trim();
       if (!model) {
@@ -139,6 +161,9 @@ export async function getSelectableAgentModels(
   if (configured?.length) return [...new Set(configured)];
 
   const current = getAgentModel(provider);
+  if (provider === "cursor") {
+    return [...new Set([current, ...CURSOR_FALLBACK_MODELS])];
+  }
   if (provider !== "openai") return [current];
   const models = await fetchRecentOpenAIModels(credential);
   return [...new Set(models)];
@@ -211,6 +236,10 @@ export function createAgentModel(
         baseURL: credential.endpointUrl,
       })(model);
     }
+    case "cursor":
+      throw new Error(
+        "Cursor agents use the Cursor SDK runtime, not the AI SDK model factory.",
+      );
     default:
       throw new Error(
         `Provider ${credential.provider} is not configured for agents.`,

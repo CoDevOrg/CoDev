@@ -173,15 +173,6 @@ export function ProfileSettings({
           </p>
         ) : null}
       </SettingsCard>
-      <SettingsCard
-        description="Authentication and SSO controls are kept with your configured identity provider."
-        title="Security & SSO"
-      >
-        <p className="settings-muted-copy">
-          Sign-in, session security, and single sign-on policies will appear
-          here as your organization connects an identity provider.
-        </p>
-      </SettingsCard>
     </>
   );
 }

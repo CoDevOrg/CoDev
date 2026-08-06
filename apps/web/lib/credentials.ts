@@ -21,7 +21,7 @@ const CREDENTIAL_CONTEXT = {
   purpose: "provider-credential",
 };
 
-export type CredentialSource = "USER" | "WORKSPACE" | "PLATFORM";
+export type CredentialSource = "USER" | "WORKSPACE";
 
 export interface ResolvedCredential {
   provider: AuthProvider;
@@ -70,66 +70,10 @@ async function decryptCredentialSecret(encrypted: string) {
   }
 }
 
-function platformCredential(provider: AuthProvider): ResolvedCredential | null {
-  switch (provider) {
-    case "openai": {
-      const apiKey =
-        process.env.CODEV_PLATFORM_OPENAI_API_KEY ??
-        process.env.PLATFORM_FALLBACK_API_KEY ??
-        process.env.OPENAI_API_KEY;
-      return apiKey
-        ? {
-            provider,
-            source: "PLATFORM",
-            authType: "API_KEY",
-            apiKeyOrToken: apiKey,
-          }
-        : null;
-    }
-    case "anthropic": {
-      const apiKey =
-        process.env.CODEV_PLATFORM_ANTHROPIC_API_KEY ??
-        process.env.PLATFORM_FALLBACK_API_KEY ??
-        process.env.ANTHROPIC_API_KEY;
-      return apiKey
-        ? {
-            provider,
-            source: "PLATFORM",
-            authType: "API_KEY",
-            apiKeyOrToken: apiKey,
-          }
-        : null;
-    }
-    case "bedrock": {
-      const awsRoleArn =
-        process.env.PLATFORM_FALLBACK_BEDROCK_ROLE_ARN ??
-        process.env.AWS_ROLE_ARN;
-      return awsRoleArn
-        ? {
-            provider,
-            source: "PLATFORM",
-            authType: "AWS_BEDROCK_ROLE",
-            awsRoleArn,
-          }
-        : null;
-    }
-    case "azure_foundry": {
-      const apiKey = process.env.CODEV_PLATFORM_AZURE_FOUNDRY_API_KEY;
-      const endpointUrl = process.env.CODEV_PLATFORM_AZURE_FOUNDRY_ENDPOINT;
-      return apiKey && endpointUrl
-        ? {
-            provider,
-            source: "PLATFORM",
-            authType: "AZURE_ENDPOINT",
-            apiKeyOrToken: apiKey,
-            endpointUrl,
-          }
-        : null;
-    }
-    case "cursor":
-    case "custom":
-      return null;
-  }
+function byokRequiredError(provider: AuthProvider) {
+  return new Error(
+    `Connect a Codex, Claude, or Cursor credential in Settings before using ${provider} agents. CoDev does not provide platform AI keys.`,
+  );
 }
 
 async function findCredential(
@@ -171,10 +115,7 @@ async function findCredentialSource(
   if (user) return "USER";
   const workspace = await findCredential("WORKSPACE", workspaceId, provider);
   if (workspace) return "WORKSPACE";
-  if (platformCredential(provider)) return "PLATFORM";
-  throw new Error(
-    `No valid ${provider} credential is configured. Connect a provider credential or contact your workspace administrator.`,
-  );
+  throw byokRequiredError(provider);
 }
 
 export async function getAgentKeySource(
@@ -182,8 +123,8 @@ export async function getAgentKeySource(
   workspaceId: string,
   provider: AuthProvider = "openai",
 ) {
-  const source = await findCredentialSource(userId, workspaceId, provider);
-  return source === "PLATFORM" ? ("platform" as const) : ("byok" as const);
+  await findCredentialSource(userId, workspaceId, provider);
+  return "byok" as const;
 }
 
 async function refreshOAuthToken(
@@ -196,14 +137,18 @@ async function refreshOAuthToken(
           tokenUrl:
             process.env.CLAUDE_OAUTH_TOKEN_URL ??
             "https://console.anthropic.com/v1/oauth/token",
-          clientId: process.env.CLAUDE_OAUTH_CLIENT_ID,
+          clientId:
+            process.env.CLAUDE_OAUTH_CLIENT_ID?.trim() ||
+            "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
           clientSecret: process.env.CLAUDE_OAUTH_CLIENT_SECRET,
         }
       : {
           tokenUrl:
             process.env.CODEX_OAUTH_TOKEN_URL ??
             "https://auth.openai.com/oauth/token",
-          clientId: process.env.CODEX_OAUTH_CLIENT_ID,
+          clientId:
+            process.env.CODEX_OAUTH_CLIENT_ID?.trim() ||
+            "app_EMoamEEZ73f0CkXaXp7hrann",
           clientSecret: process.env.CODEX_OAUTH_CLIENT_SECRET,
         };
 
@@ -367,11 +312,7 @@ export async function resolveAgentCredential(
   );
   if (workspaceCredential) return getCredentialValue(workspaceCredential);
 
-  const fallback = platformCredential(normalizedProvider);
-  if (fallback) return fallback;
-  throw new Error(
-    `No valid ${normalizedProvider} credential is configured. Connect a provider credential or contact your workspace administrator.`,
-  );
+  throw byokRequiredError(normalizedProvider);
 }
 
 export async function saveProviderCredential(input: {
@@ -582,24 +523,15 @@ export async function getOpenAIApiKeyForAgent(
     }
     return {
       apiKey: resolved.apiKeyOrToken,
-      source:
-        resolved.source === "PLATFORM"
-          ? ("platform" as const)
-          : ("byok" as const),
+      source: "byok" as const,
     };
   }
 
   const credential = await getOpenAICredentialStatus(userId);
-  if (credential) {
-    return { apiKey: await getOpenAIApiKey(userId), source: "byok" as const };
+  if (!credential) {
+    throw byokRequiredError("openai");
   }
-  const fallback = platformCredential("openai");
-  if (!fallback?.apiKeyOrToken) {
-    throw new Error(
-      "Add an OpenAI API key in Settings or contact your workspace administrator.",
-    );
-  }
-  return { apiKey: fallback.apiKeyOrToken, source: "platform" as const };
+  return { apiKey: await getOpenAIApiKey(userId), source: "byok" as const };
 }
 
 export async function deleteOpenAICredential(userId: string) {

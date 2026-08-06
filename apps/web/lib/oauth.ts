@@ -12,6 +12,24 @@ import type { AuthProvider, ScopeType } from "@codev/shared-types";
 import { saveProviderCredential } from "./credentials";
 
 export type OAuthProvider = "claude" | "codex";
+export type OAuthFlowMode = "app_callback" | "manual_code" | "device_code";
+
+/** Public Claude Code PKCE client used by the official CLI. */
+export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
+  "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+/** Public Codex CLI PKCE client used by the official CLI. */
+export const DEFAULT_CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+
+export const CLAUDE_MANUAL_REDIRECT_URI =
+  "https://console.anthropic.com/oauth/code/callback";
+export const CODEX_DEVICE_REDIRECT_URI =
+  "https://auth.openai.com/deviceauth/callback";
+export const CODEX_DEVICE_VERIFICATION_URL =
+  "https://auth.openai.com/codex/device";
+const CODEX_DEVICE_USERCODE_URL =
+  "https://auth.openai.com/api/accounts/deviceauth/usercode";
+const CODEX_DEVICE_TOKEN_URL =
+  "https://auth.openai.com/api/accounts/deviceauth/token";
 
 export class OAuthConfigurationError extends Error {
   readonly provider: OAuthProvider;
@@ -42,6 +60,7 @@ type OAuthConfiguration = {
   tokenUrl: string;
   scope: string;
   redirectUri: string;
+  flowMode: OAuthFlowMode;
 };
 
 const COOKIE_MAX_AGE_SECONDS = 10 * 60;
@@ -128,17 +147,45 @@ function envUrl(name: string, fallback: string) {
   return value || fallback;
 }
 
+function envOptional(name: string) {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
 function clientIdEnvName(provider: OAuthProvider) {
   return provider === "claude"
     ? "CLAUDE_OAUTH_CLIENT_ID"
     : "CODEX_OAUTH_CLIENT_ID";
 }
 
+export function resolveOAuthClientId(provider: OAuthProvider) {
+  if (provider === "claude") {
+    return (
+      envOptional("CLAUDE_OAUTH_CLIENT_ID") ?? DEFAULT_CLAUDE_OAUTH_CLIENT_ID
+    );
+  }
+  return envOptional("CODEX_OAUTH_CLIENT_ID") ?? DEFAULT_CODEX_OAUTH_CLIENT_ID;
+}
+
+export function getOAuthFlowMode(provider: OAuthProvider): OAuthFlowMode {
+  if (provider === "claude") {
+    return envOptional("CLAUDE_OAUTH_REDIRECT_URI")
+      ? "app_callback"
+      : "manual_code";
+  }
+  return envOptional("CODEX_OAUTH_REDIRECT_URI")
+    ? "app_callback"
+    : "device_code";
+}
+
 export function getOAuthConfigurationStatus(provider: OAuthProvider) {
-  const clientIdEnv = clientIdEnvName(provider);
+  // Public CLI client IDs are used when env vars are unset, so subscription
+  // OAuth is available without a separately registered provider app.
   return {
-    configured: Boolean(process.env[clientIdEnv]?.trim()),
-    missing: process.env[clientIdEnv]?.trim() ? [] : [clientIdEnv],
+    configured: Boolean(resolveOAuthClientId(provider)),
+    missing: [] as string[],
+    flowMode: getOAuthFlowMode(provider),
+    clientIdEnv: clientIdEnvName(provider),
   };
 }
 
@@ -146,15 +193,13 @@ export function getOAuthConfiguration(
   provider: OAuthProvider,
   origin: string,
 ): OAuthConfiguration {
+  const flowMode = getOAuthFlowMode(provider);
   if (provider === "claude") {
-    const clientId = process.env.CLAUDE_OAUTH_CLIENT_ID?.trim();
-    if (!clientId) {
-      throw new OAuthConfigurationError(provider, [clientIdEnvName(provider)]);
-    }
+    const clientId = resolveOAuthClientId(provider);
     return {
       provider: "anthropic",
       clientId,
-      clientSecret: process.env.CLAUDE_OAUTH_CLIENT_SECRET,
+      clientSecret: envOptional("CLAUDE_OAUTH_CLIENT_SECRET"),
       authorizeUrl: envUrl(
         "CLAUDE_OAUTH_AUTHORIZE_URL",
         "https://claude.ai/oauth/authorize",
@@ -165,23 +210,23 @@ export function getOAuthConfiguration(
       ),
       scope: envUrl(
         "CLAUDE_OAUTH_SCOPE",
-        "claude_code:write user:profile offline_access",
+        "org:create_api_key user:profile user:inference",
       ),
       redirectUri: envUrl(
         "CLAUDE_OAUTH_REDIRECT_URI",
-        `${origin}${oauthCallbackPath(provider)}`,
+        flowMode === "manual_code"
+          ? CLAUDE_MANUAL_REDIRECT_URI
+          : `${origin}${oauthCallbackPath(provider)}`,
       ),
+      flowMode,
     };
   }
 
-  const clientId = process.env.CODEX_OAUTH_CLIENT_ID?.trim();
-  if (!clientId) {
-    throw new OAuthConfigurationError(provider, [clientIdEnvName(provider)]);
-  }
+  const clientId = resolveOAuthClientId(provider);
   return {
     provider: "openai",
     clientId,
-    clientSecret: process.env.CODEX_OAUTH_CLIENT_SECRET,
+    clientSecret: envOptional("CODEX_OAUTH_CLIENT_SECRET"),
     authorizeUrl: envUrl(
       "CODEX_OAUTH_AUTHORIZE_URL",
       "https://auth.openai.com/oauth/authorize",
@@ -192,12 +237,15 @@ export function getOAuthConfiguration(
     ),
     scope: envUrl(
       "CODEX_OAUTH_SCOPE",
-      "openid profile email offline_access api.connectors.read api.connectors.invoke",
+      "openid profile email offline_access",
     ),
     redirectUri: envUrl(
       "CODEX_OAUTH_REDIRECT_URI",
-      `${origin}${oauthCallbackPath(provider)}`,
+      flowMode === "device_code"
+        ? CODEX_DEVICE_REDIRECT_URI
+        : `${origin}${oauthCallbackPath(provider)}`,
     ),
+    flowMode,
   };
 }
 
@@ -213,11 +261,29 @@ export function buildAuthorizationUrl(
   url.searchParams.set("state", state.state);
   url.searchParams.set("code_challenge", pkceChallenge(state.codeVerifier));
   url.searchParams.set("code_challenge_method", "S256");
+  if (configuration.provider === "anthropic") {
+    url.searchParams.set("code", "true");
+  }
   if (configuration.provider === "openai") {
     url.searchParams.set("codex_cli_simplified_flow", "true");
     url.searchParams.set("id_token_add_organizations", "true");
   }
   return url;
+}
+
+export function parseManualAuthorizationCode(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("Authorization code is required.");
+  }
+  const hashIndex = trimmed.indexOf("#");
+  if (hashIndex >= 0) {
+    return {
+      code: trimmed.slice(0, hashIndex),
+      returnedState: trimmed.slice(hashIndex + 1) || undefined,
+    };
+  }
+  return { code: trimmed, returnedState: undefined };
 }
 
 function expiresAtFrom(value: unknown) {
@@ -263,6 +329,107 @@ export async function exchangeOAuthCode(
         ? payload.refresh_token
         : undefined,
     expiresAt: expiresAtFrom(payload.expires_in),
+  };
+}
+
+export type CodexDeviceCode = {
+  verificationUrl: string;
+  userCode: string;
+  deviceAuthId: string;
+  intervalSeconds: number;
+};
+
+export async function requestCodexDeviceCode(
+  clientId: string,
+): Promise<CodexDeviceCode> {
+  const response = await fetch(CODEX_DEVICE_USERCODE_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_id: clientId }),
+    cache: "no-store",
+  });
+  if (response.status === 404) {
+    throw new Error(
+      "Codex device code login is not enabled for this account. Enable it in ChatGPT security settings, or set CODEX_OAUTH_REDIRECT_URI for an app-callback client.",
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Codex device code request failed with status ${response.status}.`,
+    );
+  }
+  const payload = (await response.json()) as Record<string, unknown>;
+  const userCode =
+    typeof payload.user_code === "string"
+      ? payload.user_code
+      : typeof payload.usercode === "string"
+        ? payload.usercode
+        : undefined;
+  const deviceAuthId =
+    typeof payload.device_auth_id === "string"
+      ? payload.device_auth_id
+      : undefined;
+  if (!userCode || !deviceAuthId) {
+    throw new Error("Codex device code response was incomplete.");
+  }
+  const intervalRaw = payload.interval;
+  const intervalSeconds =
+    typeof intervalRaw === "number"
+      ? intervalRaw
+      : typeof intervalRaw === "string"
+        ? Number.parseInt(intervalRaw, 10)
+        : 5;
+  return {
+    verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
+    userCode,
+    deviceAuthId,
+    intervalSeconds:
+      Number.isFinite(intervalSeconds) && intervalSeconds > 0
+        ? intervalSeconds
+        : 5,
+  };
+}
+
+export type CodexDevicePollResult =
+  | { status: "pending" }
+  | {
+      status: "ready";
+      authorizationCode: string;
+      codeVerifier: string;
+    };
+
+export async function pollCodexDeviceCode(input: {
+  deviceAuthId: string;
+  userCode: string;
+}): Promise<CodexDevicePollResult> {
+  const response = await fetch(CODEX_DEVICE_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      device_auth_id: input.deviceAuthId,
+      user_code: input.userCode,
+    }),
+    cache: "no-store",
+  });
+  if (response.status === 403 || response.status === 404) {
+    return { status: "pending" };
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Codex device authorization failed with status ${response.status}.`,
+    );
+  }
+  const payload = (await response.json()) as Record<string, unknown>;
+  if (
+    typeof payload.authorization_code !== "string" ||
+    typeof payload.code_verifier !== "string"
+  ) {
+    throw new Error("Codex device authorization response was incomplete.");
+  }
+  return {
+    status: "ready",
+    authorizationCode: payload.authorization_code,
+    codeVerifier: payload.code_verifier,
   };
 }
 

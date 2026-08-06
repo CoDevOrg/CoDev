@@ -14,7 +14,6 @@ import {
   FileCode2,
   GitBranch,
   GitPullRequest,
-  MessageSquare,
   MessageSquareText,
   Paperclip,
   Plus,
@@ -37,6 +36,12 @@ import { deriveAgentSessionName } from "@/lib/agent-session-name";
 import type { AgentEvent } from "@codev/shared-types";
 
 const DEFAULT_AGENT_MODEL = "gpt-5.6-luna";
+const AGENT_PROVIDERS = [
+  { id: "openai", label: "Codex / OpenAI" },
+  { id: "anthropic", label: "Claude / Anthropic" },
+  { id: "cursor", label: "Cursor" },
+] as const;
+type AgentProviderId = (typeof AGENT_PROVIDERS)[number]["id"];
 export const MAX_PARALLEL_AGENT_SESSIONS = 3;
 const ACTIVE_AGENT_POLL_INTERVAL = 5_000;
 const IDLE_AGENT_POLL_INTERVAL = 30_000;
@@ -63,6 +68,7 @@ export type AgentSession = {
   id: string;
   name: string;
   model: string;
+  provider?: string;
   status: string;
   worktreeName: string;
   worktreeStatus: "active" | "frozen" | "merged" | "discarded";
@@ -205,6 +211,7 @@ export function AgentPanel({
   const [followUp, setFollowUp] = useState("");
   const [reviews, setReviews] = useState<Record<string, WorktreeReview>>({});
   const [busy, setBusy] = useState(false);
+  const [branchingTurnId, setBranchingTurnId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [commentPath, setCommentPath] = useState("");
@@ -219,10 +226,19 @@ export function AgentPanel({
   const [selectedModel, setSelectedModel] = useState(
     initialSessions[0]?.model ?? DEFAULT_AGENT_MODEL,
   );
+  const [selectedProvider, setSelectedProvider] = useState<AgentProviderId>(
+    () => {
+      const initial = initialSessions[0]?.provider;
+      return initial === "anthropic" || initial === "cursor"
+        ? initial
+        : "openai";
+    },
+  );
   const [reviewPortalTarget, setReviewPortalTarget] =
     useState<HTMLElement | null>(null);
   const turnStatusRef = useRef(new Map<string, string>());
   const modelOptionsLoadedRef = useRef(false);
+  const loadedProviderRef = useRef<string | null>(null);
   const onTurnCompletedRef = useRef(onTurnCompleted);
   const composerFocusedRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -283,9 +299,16 @@ export function AgentPanel({
   }, [selectedSession, stateEvents]);
 
   const refresh = useCallback(async () => {
-    const includeModels = !modelOptionsLoadedRef.current;
+    const includeModels =
+      !modelOptionsLoadedRef.current ||
+      loadedProviderRef.current !== selectedProvider;
+    const query = new URLSearchParams();
+    if (includeModels) {
+      query.set("includeModels", "true");
+      query.set("provider", selectedProvider);
+    }
     const result = await fetch(
-      `${endpoint}${includeModels ? "?includeModels=true" : ""}`,
+      `${endpoint}${query.size ? `?${query.toString()}` : ""}`,
       { cache: "no-store" },
     ).then((response) =>
       json<{
@@ -296,7 +319,10 @@ export function AgentPanel({
     );
     setSessions(result.sessions);
     setStateEvents(result.stateEvents ?? []);
-    if (includeModels) modelOptionsLoadedRef.current = true;
+    if (includeModels) {
+      modelOptionsLoadedRef.current = true;
+      loadedProviderRef.current = selectedProvider;
+    }
     if (result.models?.length) {
       setModelOptions(result.models);
       setSelectedModel((current) =>
@@ -318,7 +344,7 @@ export function AgentPanel({
     });
     if (result.sessions.length === 0) setComposingNew(true);
     return result.sessions;
-  }, [endpoint]);
+  }, [endpoint, selectedProvider]);
 
   useEffect(() => {
     let stopped = false;
@@ -372,6 +398,10 @@ export function AgentPanel({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    void refresh().catch(() => undefined);
+  }, [selectedProvider, refresh]);
 
   useEffect(() => {
     let sawCompletion = false;
@@ -460,6 +490,7 @@ export function AgentPanel({
           name: deriveAgentSessionName(promptText),
           prompt: promptText,
           model: selectedModel,
+          provider: selectedProvider,
           attachments: attachmentPayload(attachments),
         }),
       }).then((response) => json<{ sessionId?: string }>(response));
@@ -512,6 +543,43 @@ export function AgentPanel({
         caught instanceof Error ? caught.message : "Follow-up could not queue.",
       );
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function branchFromReply(turnId: string) {
+    if (!canSteer || !selectedSession) return;
+    if (activeSessionCount >= MAX_PARALLEL_AGENT_SESSIONS) {
+      setError(
+        `Free a chat slot before branching. Maximum ${MAX_PARALLEL_AGENT_SESSIONS} parallel chats are supported.`,
+      );
+      return;
+    }
+    setBusy(true);
+    setBranchingTurnId(turnId);
+    setError("");
+    try {
+      const result = await fetch(
+        `${endpoint}/${selectedSession.id}/branch`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fromTurnId: turnId }),
+        },
+      ).then((response) => json<{ sessionId?: string }>(response));
+      if (result.sessionId) {
+        setSelectedSessionId(result.sessionId);
+        setComposingNew(false);
+      }
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not branch from that reply.",
+      );
+    } finally {
+      setBranchingTurnId(null);
       setBusy(false);
     }
   }
@@ -883,61 +951,67 @@ export function AgentPanel({
         : null}
       <section className="agent-panel-layout" aria-label="Workspace chat">
         <aside className="agent-session-sidebar" aria-label="Chat sessions">
-          <div className="agent-sidebar-title">
-            <span className="agent-sidebar-mark" aria-hidden="true">
-              <MessageSquare />
-            </span>
-            <div>
+          <header className="agent-sidebar-head">
+            <div className="agent-sidebar-title">
               <strong>Chats</strong>
-              <span>{activeSessionCount} active</span>
+              <span className="agent-sidebar-count">
+                {activeSessionCount} active
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              aria-label="Refresh chats"
-            >
-              <RefreshCw />
-            </button>
-          </div>
-
-          {canSteer && activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
-            <button
-              type="button"
-              className={`agent-new-session ${composingNew ? "active" : ""}`}
-              onClick={() => setComposingNew(true)}
-            >
-              <Plus aria-hidden="true" />
-              <span>New session</span>
-            </button>
-          ) : null}
-
-          <div className="agent-session-toolbar">
-            <div className="agent-session-group-label">
-              <span>Recent sessions</span>
-              <b>
-                {filteredSessions.length}/{sessions.length}
-              </b>
-            </div>
-            <label className="agent-session-search">
-              <Search aria-hidden="true" />
-              <span className="sr-only">Search chats</span>
-              <input
-                type="search"
-                aria-label="Search chats"
-                value={sessionQuery}
-                onChange={(event) => setSessionQuery(event.target.value)}
-                placeholder="Search chats"
-              />
-              {sessionQuery ? (
+            <div className="agent-sidebar-actions">
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                aria-label="Refresh chats"
+                title="Refresh"
+              >
+                <RefreshCw />
+              </button>
+              {canSteer &&
+              activeSessionCount < MAX_PARALLEL_AGENT_SESSIONS ? (
                 <button
                   type="button"
-                  aria-label="Clear chat search"
-                  onClick={() => setSessionQuery("")}
+                  className={`agent-new-session ${composingNew ? "active" : ""}`}
+                  onClick={() => setComposingNew(true)}
+                  aria-label="New session"
+                  title="New session"
                 >
-                  <X aria-hidden="true" />
+                  <Plus aria-hidden="true" />
+                  <span>New</span>
                 </button>
               ) : null}
-            </label>
+            </div>
+          </header>
+
+          <label className="agent-session-search">
+            <Search aria-hidden="true" />
+            <span className="sr-only">Search chats</span>
+            <input
+              type="search"
+              aria-label="Search chats"
+              value={sessionQuery}
+              onChange={(event) => setSessionQuery(event.target.value)}
+              placeholder="Search"
+            />
+            {sessionQuery ? (
+              <button
+                type="button"
+                aria-label="Clear chat search"
+                onClick={() => setSessionQuery("")}
+              >
+                <X aria-hidden="true" />
+              </button>
+            ) : null}
+          </label>
+
+          <div className="agent-session-group-label">
+            <span>Sessions</span>
+            <b>
+              {filteredSessions.length}
+              {sessions.length !== filteredSessions.length
+                ? `/${sessions.length}`
+                : ""}
+            </b>
           </div>
 
           {filteredSessions.length > 0 ? (
@@ -967,17 +1041,18 @@ export function AgentPanel({
                       setComposingNew(false);
                     }}
                   >
-                    <span className="agent-session-icon" aria-hidden="true">
-                      <MessageSquare />
-                    </span>
                     <span>
                       <strong>{session.name}</strong>
                       <small>
-                        {formatAgentModelLabel(session.model)} /{" "}
+                        <i
+                          className={`session-status status-${session.status}`}
+                          aria-hidden="true"
+                        />
+                        {formatAgentModelLabel(session.model)}
+                        <em>·</em>
                         {session.status}
                       </small>
                     </span>
-                    <i className={`session-status status-${session.status}`} />
                   </button>
                   {canSteer ? (
                     <button
@@ -1007,13 +1082,24 @@ export function AgentPanel({
           )}
 
           <div className="agent-sidebar-foot">
-            <GitBranch aria-hidden="true" />
-            <span>
-              <strong>
-                {activeSessionCount}/{MAX_PARALLEL_AGENT_SESSIONS}
-              </strong>{" "}
-              parallel slots used
-            </span>
+            <div className="agent-sidebar-capacity">
+              <span>
+                <strong>
+                  {activeSessionCount}/{MAX_PARALLEL_AGENT_SESSIONS}
+                </strong>{" "}
+                parallel
+              </span>
+              <div
+                className="agent-sidebar-capacity-bar"
+                aria-hidden="true"
+              >
+                <i
+                  style={{
+                    width: `${(activeSessionCount / MAX_PARALLEL_AGENT_SESSIONS) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </aside>
 
@@ -1079,7 +1165,12 @@ export function AgentPanel({
                 </p>
               </div>
             ) : (
-              <AgentChatTranscript items={chatItems} />
+              <AgentChatTranscript
+                items={chatItems}
+                canBranch={canSteer}
+                branchingTurnId={branchingTurnId}
+                onBranchFromReply={(turnId) => void branchFromReply(turnId)}
+              />
             )}
           </div>
 
@@ -1169,6 +1260,25 @@ export function AgentPanel({
                       <Paperclip />
                     </button>
                     <label className="agent-model-select">
+                      <span className="sr-only">Agent provider</span>
+                      <select
+                        aria-label="Agent provider"
+                        value={selectedProvider}
+                        onChange={(event) => {
+                          const next = event.target.value as AgentProviderId;
+                          setSelectedProvider(next);
+                          modelOptionsLoadedRef.current = false;
+                        }}
+                      >
+                        {AGENT_PROVIDERS.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown aria-hidden="true" />
+                    </label>
+                    <label className="agent-model-select">
                       <span className="sr-only">Agent model</span>
                       <select
                         aria-label="Agent model"
@@ -1233,6 +1343,25 @@ export function AgentPanel({
                     >
                       <Paperclip />
                     </button>
+                    <label className="agent-model-select">
+                      <span className="sr-only">Agent provider</span>
+                      <select
+                        aria-label="Agent provider"
+                        value={selectedProvider}
+                        onChange={(event) => {
+                          const next = event.target.value as AgentProviderId;
+                          setSelectedProvider(next);
+                          modelOptionsLoadedRef.current = false;
+                        }}
+                      >
+                        {AGENT_PROVIDERS.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown aria-hidden="true" />
+                    </label>
                     <label className="agent-model-select">
                       <span className="sr-only">Agent model</span>
                       <select

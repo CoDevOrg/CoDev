@@ -11,6 +11,9 @@ import {
   pathClaims,
   publishedBranches,
   providerCredentials,
+  sandboxRuntimeIntervals,
+  userComputeUsage,
+  userEnvironmentVariables,
   users,
   workspaceMembers,
   workspaceRuntimes,
@@ -31,6 +34,7 @@ describe("database schema", () => {
     expect(getTableName(agentSessions)).toBe("agent_sessions");
     expect(getTableName(agentEvents)).toBe("agent_events");
     expect(agentSessions.workflowRunId.name).toBe("workflow_run_id");
+    expect(agentSessions.provider.name).toBe("provider");
     expect(agentEvents.idempotencyKey.name).toBe("idempotency_key");
     expect(getTableName(githubIssueAssignments)).toBe(
       "github_issue_assignments",
@@ -49,6 +53,18 @@ describe("database schema", () => {
     expect(worktrees.mergedAt.name).toBe("merged_at");
     expect(getTableName(publishedBranches)).toBe("published_branches");
     expect(getTableName(providerCredentials)).toBe("provider_credentials");
+    expect(getTableName(userEnvironmentVariables)).toBe(
+      "user_environment_variables",
+    );
+    expect(userEnvironmentVariables.encryptedValue.name).toBe(
+      "encrypted_value",
+    );
+    expect(getTableName(userComputeUsage)).toBe("user_compute_usage");
+    expect(userComputeUsage.minutesUsed.name).toBe("minutes_used");
+    expect(getTableName(sandboxRuntimeIntervals)).toBe(
+      "sandbox_runtime_intervals",
+    );
+    expect(sandboxRuntimeIntervals.endedAt.name).toBe("ended_at");
     expect(users.passwordHash.name).toBe("password_hash");
     expect(users.googleUserId.name).toBe("google_user_id");
     expect(providerCredentials.scopeType.name).toBe("scope_type");

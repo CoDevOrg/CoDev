@@ -11,6 +11,7 @@ import { apiError, getApiUser } from "@/lib/api";
 import {
   getAgentProvider,
   getSelectableAgentModels,
+  parseAgentProvider,
   resolveSelectableAgentModel,
 } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
@@ -40,6 +41,9 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(32),
   prompt: z.string().trim().min(1).max(20_000),
   model: z.string().trim().min(1).max(120).optional(),
+  provider: z
+    .enum(["openai", "anthropic", "cursor", "bedrock", "azure_foundry"])
+    .optional(),
   issueNumber: z.number().int().positive().optional(),
   attachments: agentAttachmentsSchema,
 });
@@ -120,9 +124,13 @@ export async function GET(
   ]);
   const includeModels =
     new URL(request.url).searchParams.get("includeModels") === "true";
+  const requestedProvider = new URL(request.url).searchParams.get("provider");
   const models = includeModels
     ? await (async () => {
-        const provider = getAgentProvider();
+        const provider = parseAgentProvider(
+          requestedProvider ?? undefined,
+          getAgentProvider(),
+        );
         const credential = await resolveAgentCredential(
           user.id,
           workspaceId,
@@ -165,7 +173,7 @@ export async function POST(
 
   try {
     const input = createSchema.parse(await request.json());
-    const provider = getAgentProvider();
+    const provider = parseAgentProvider(input.provider, getAgentProvider());
     const credential = await resolveAgentCredential(
       user.id,
       workspaceId,
@@ -278,6 +286,7 @@ export async function POST(
             issueNumber: issue?.number,
             name: input.name,
             model,
+            provider,
           })
           .returning({ id: schema.agentSessions.id });
         if (!session) throw new Error("Could not create the agent session.");

@@ -10,12 +10,26 @@ import {
 } from "@/lib/credentials";
 
 const requestSchema = z.object({
-  provider: z.enum(["anthropic", "openai", "bedrock", "azure_foundry"]),
+  provider: z.enum([
+    "anthropic",
+    "openai",
+    "bedrock",
+    "azure_foundry",
+    "cursor",
+  ]),
   credentialType: z.enum(["API_KEY", "AWS_BEDROCK_ROLE", "AZURE_ENDPOINT"]),
   apiKey: z.string().trim().min(20).max(512).optional(),
   awsRoleArn: z.string().trim().startsWith("arn:aws:iam::").max(512).optional(),
   endpointUrl: z.url().optional(),
 });
+
+const providerParam = z.enum([
+  "anthropic",
+  "openai",
+  "bedrock",
+  "azure_foundry",
+  "cursor",
+]);
 
 export async function GET(
   request: Request,
@@ -26,9 +40,9 @@ export async function GET(
   const { workspaceId } = await params;
   try {
     await requireWorkspacePermission(workspaceId, user.id, "view");
-    const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
-      .parse(new URL(request.url).searchParams.get("provider"));
+    const provider = providerParam.parse(
+      new URL(request.url).searchParams.get("provider"),
+    );
     return Response.json(
       await getProviderCredentialStatus("WORKSPACE", workspaceId, provider),
     );
@@ -80,9 +94,9 @@ export async function DELETE(
   const { workspaceId } = await params;
   try {
     await requireOrganizationSettingsWrite(user.id, workspaceId);
-    const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
-      .parse(new URL(request.url).searchParams.get("provider"));
+    const provider = providerParam.parse(
+      new URL(request.url).searchParams.get("provider"),
+    );
     await deleteProviderCredential("WORKSPACE", workspaceId, provider);
     return new Response(null, { status: 204 });
   } catch (error) {

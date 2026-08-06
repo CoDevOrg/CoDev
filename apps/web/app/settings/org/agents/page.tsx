@@ -42,6 +42,11 @@ export default async function OrganizationAgentsPage({
           context.workspace.id,
           "bedrock",
         ),
+        getProviderCredentialStatus(
+          "WORKSPACE",
+          context.workspace.id,
+          "cursor",
+        ),
         getOAuthCredentialStatus("WORKSPACE", context.workspace.id, "openai"),
         getOAuthCredentialStatus(
           "WORKSPACE",
@@ -49,7 +54,7 @@ export default async function OrganizationAgentsPage({
           "anthropic",
         ),
       ])
-    : [null, null, null, null, null];
+    : [null, null, null, null, null, null];
 
   return (
     <OrganizationSettingsPage
@@ -79,14 +84,25 @@ export default async function OrganizationAgentsPage({
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
+          <SettingsCard title="Cursor">
+            <WorkspaceCredentialForm
+              currentLastFour={credentials[3]?.lastFour}
+              provider="cursor"
+              workspaceId={context.workspace.id}
+            />
+          </SettingsCard>
           <OAuthConnectionsCard
             connected={{
-              claude: credentials[4]?.credentialType === "OAUTH_TOKEN",
-              codex: credentials[3]?.credentialType === "OAUTH_TOKEN",
+              claude: credentials[5]?.credentialType === "OAUTH_TOKEN",
+              codex: credentials[4]?.credentialType === "OAUTH_TOKEN",
             }}
             configured={{
               claude: getOAuthConfigurationStatus("claude").configured,
               codex: getOAuthConfigurationStatus("codex").configured,
+            }}
+            flowModes={{
+              claude: getOAuthConfigurationStatus("claude").flowMode,
+              codex: getOAuthConfigurationStatus("codex").flowMode,
             }}
             notice={parseOAuthNotice(params)}
             returnTo="/settings/org/agents"

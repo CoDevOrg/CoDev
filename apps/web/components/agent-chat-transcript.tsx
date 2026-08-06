@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   MessageSquare,
   PencilLine,
+  Split,
   TerminalSquare,
   Wrench,
   XCircle,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import type { ChatActivity, ChatItem } from "@/lib/agent-chat";
+import { formatTokenCount } from "@/lib/token-usage";
 
 type MarkdownBlock =
   | { kind: "paragraph"; lines: string[] }
@@ -236,11 +238,17 @@ export function AgentChatTranscript({
   items,
   streamingText,
   emptyLabel = "Start a session to collaborate in the shared chat.",
+  canBranch = false,
+  branchingTurnId = null,
+  onBranchFromReply,
 }: {
   items: ChatItem[];
   /** Reserved for live token streaming; unused in M1. */
   streamingText?: string;
   emptyLabel?: string;
+  canBranch?: boolean;
+  branchingTurnId?: string | null;
+  onBranchFromReply?: (turnId: string) => void;
 }) {
   const showEmpty = items.length === 0 && !streamingText;
 
@@ -271,10 +279,51 @@ export function AgentChatTranscript({
           );
         }
         if (item.kind === "assistant") {
+          const branchBusy = Boolean(
+            item.turnId && branchingTurnId === item.turnId,
+          );
           return (
             <div className="agent-chat-bubble assistant" key={item.id}>
-              <span className="agent-chat-role">Agent</span>
+              <div className="agent-chat-role-row">
+                <span className="agent-chat-role">Agent Reply</span>
+                {item.tokens ? (
+                  <span
+                    className="agent-chat-tokens"
+                    title={
+                      item.tokensEstimated
+                        ? "Estimated from reply length"
+                        : [
+                            item.tokens.inputTokens
+                              ? `${formatTokenCount(item.tokens.inputTokens)} input`
+                              : null,
+                            item.tokens.outputTokens
+                              ? `${formatTokenCount(item.tokens.outputTokens)} output`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Model token usage"
+                    }
+                  >
+                    {item.tokensEstimated ? "~" : ""}
+                    {formatTokenCount(item.tokens.totalTokens)} tokens
+                  </span>
+                ) : null}
+              </div>
               <AgentMarkdown text={item.text} />
+              {canBranch && item.turnId && onBranchFromReply ? (
+                <div className="agent-chat-reply-actions">
+                  <button
+                    type="button"
+                    className="agent-chat-branch"
+                    disabled={branchBusy || Boolean(branchingTurnId)}
+                    onClick={() => onBranchFromReply(item.turnId!)}
+                    title="Start a new session from this reply"
+                  >
+                    <Split aria-hidden="true" />
+                    <span>{branchBusy ? "Branching…" : "Branch here"}</span>
+                  </button>
+                </div>
+              ) : null}
             </div>
           );
         }
@@ -332,7 +381,9 @@ export function AgentChatTranscript({
       })}
       {streamingText ? (
         <div className="agent-chat-bubble assistant streaming">
-          <span className="agent-chat-role">Agent</span>
+          <div className="agent-chat-role-row">
+            <span className="agent-chat-role">Agent Reply</span>
+          </div>
           <AgentMarkdown text={streamingText} />
         </div>
       ) : null}

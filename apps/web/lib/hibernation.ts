@@ -14,6 +14,7 @@ import {
 } from "./orchestrator";
 import { getDatabase } from "./database";
 import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
+import { closeSandboxInterval } from "./vm-usage";
 import { workspaceRuntimeTtlMs } from "./workspaces";
 
 export const E2B_LIFECYCLE_OPTIONS = {
@@ -281,6 +282,7 @@ export async function hibernateWorkspace(workspaceId: string) {
     throw error;
   }
 
+  await closeSandboxInterval(workspaceId, "hibernate");
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaceRuntimes)

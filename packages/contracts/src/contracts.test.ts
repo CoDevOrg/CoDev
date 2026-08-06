@@ -56,6 +56,22 @@ describe("workspace contracts", () => {
     ).toThrow();
   });
 
+  it("validates personal environment variable names", async () => {
+    const { createEnvironmentVariableSchema } = await import("./domain");
+    expect(
+      createEnvironmentVariableSchema.parse({
+        name: "DATABASE_URL",
+        value: "postgres://example",
+      }).name,
+    ).toBe("DATABASE_URL");
+    expect(() =>
+      createEnvironmentVariableSchema.parse({
+        name: "not valid",
+        value: "x",
+      }),
+    ).toThrow();
+  });
+
   it("requires strictly sequenced terminal chunks", () => {
     expect(
       terminalPollSchema.parse({

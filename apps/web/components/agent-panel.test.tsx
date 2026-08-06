@@ -82,8 +82,10 @@ describe("AgentPanel", () => {
           id: "activity-1",
           type: "tool.called",
           payload: {
-            name: "read_file",
-            arguments: JSON.stringify({ path: "project.json" }),
+            name: "run_command",
+            arguments: JSON.stringify({
+              command: ["git", "status", "--short"],
+            }),
           },
           createdAt: "2026-07-30T12:00:01.000Z",
         },
@@ -109,8 +111,8 @@ describe("AgentPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Reading")).toBeInTheDocument();
-    expect(screen.getByText("project.json")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("$ git status --short")).toBeInTheDocument();
     expect(screen.queryByText(/tools?/i)).not.toBeInTheDocument();
   });
 

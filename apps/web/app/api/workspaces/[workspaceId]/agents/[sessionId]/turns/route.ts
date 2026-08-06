@@ -5,7 +5,7 @@ import { schema } from "@codev/db";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import { apiError, getApiUser } from "@/lib/api";
-import { getAgentProvider, resolveSelectableAgentModel } from "@/lib/ai-model";
+import { parseAgentProvider, resolveSelectableAgentModel } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
@@ -48,18 +48,12 @@ export async function POST(
 
   try {
     const input = inputSchema.parse(await request.json());
-    const provider = getAgentProvider();
-    const credential = await resolveAgentCredential(
-      user.id,
-      workspaceId,
-      provider,
-    );
-    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const [session] = await getDatabase()
       .select({
         id: schema.agentSessions.id,
         model: schema.agentSessions.model,
+        provider: schema.agentSessions.provider,
       })
       .from(schema.agentSessions)
       .where(
@@ -70,6 +64,13 @@ export async function POST(
       )
       .limit(1);
     if (!session) return apiError(new Error("Agent session not found."), 404);
+    const provider = parseAgentProvider(session.provider);
+    const credential = await resolveAgentCredential(
+      user.id,
+      workspaceId,
+      provider,
+    );
+    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     await assertTurnQuota(user.id, sessionId);
     const model =
       !input.model || input.model === session.model

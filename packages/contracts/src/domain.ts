@@ -297,6 +297,34 @@ export const designPartnerFeedbackInputSchema = z.object({
   workspaceId: identifierSchema.nullable(),
 });
 
+export const environmentVariableNameSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, {
+    message: "Use letters, numbers, and underscores.",
+  })
+  .min(1)
+  .max(128);
+
+export const environmentVariableValueSchema = z.string().min(1).max(8_192);
+
+export const createEnvironmentVariableSchema = z.object({
+  name: environmentVariableNameSchema,
+  value: environmentVariableValueSchema,
+});
+
+export const updateEnvironmentVariableSchema = z.object({
+  value: environmentVariableValueSchema,
+});
+
+export const environmentVariableSchema = z.object({
+  id: identifierSchema,
+  name: environmentVariableNameSchema,
+  lastFour: z.string().min(1).max(4).nullable(),
+  updatedAt: timestampSchema,
+  createdAt: timestampSchema,
+});
+
 export const publicationSchema = z.object({
   id: identifierSchema,
   workspaceId: identifierSchema,
@@ -322,6 +350,16 @@ export type Worktree = z.infer<typeof worktreeSchema>;
 export type AgentSession = z.infer<typeof agentSessionSchema>;
 export type AgentTurn = z.infer<typeof agentTurnSchema>;
 export type AgentActivityEvent = z.infer<typeof agentActivityEventSchema>;
+export type DesignPartnerFeedbackInput = z.infer<
+  typeof designPartnerFeedbackInputSchema
+>;
+export type EnvironmentVariable = z.infer<typeof environmentVariableSchema>;
+export type CreateEnvironmentVariable = z.infer<
+  typeof createEnvironmentVariableSchema
+>;
+export type UpdateEnvironmentVariable = z.infer<
+  typeof updateEnvironmentVariableSchema
+>;
 export type PathClaim = z.infer<typeof pathClaimSchema>;
 export type CoordinationMessage = z.infer<typeof coordinationMessageSchema>;
 export type CoordinationMessageInput = z.infer<

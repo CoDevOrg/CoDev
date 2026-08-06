@@ -2,12 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildAuthorizationUrl,
+  CLAUDE_MANUAL_REDIRECT_URI,
+  CODEX_DEVICE_REDIRECT_URI,
   createOAuthState,
+  DEFAULT_CLAUDE_OAUTH_CLIENT_ID,
+  DEFAULT_CODEX_OAUTH_CLIENT_ID,
   exchangeOAuthCode,
   getOAuthConfiguration,
   getOAuthConfigurationStatus,
+  getOAuthFlowMode,
   openOAuthState,
-  OAuthConfigurationError,
+  parseManualAuthorizationCode,
   pkceChallenge,
   sealOAuthState,
 } from "./oauth";
@@ -18,16 +23,41 @@ afterEach(() => {
 });
 
 describe("provider OAuth", () => {
-  it("reports missing provider client configuration without exposing values", () => {
+  it("defaults to public CLI clients when env vars are unset", () => {
     vi.stubEnv("CLAUDE_OAUTH_CLIENT_ID", "");
+    vi.stubEnv("CODEX_OAUTH_CLIENT_ID", "");
 
-    expect(getOAuthConfigurationStatus("claude")).toEqual({
-      configured: false,
-      missing: ["CLAUDE_OAUTH_CLIENT_ID"],
+    expect(getOAuthConfigurationStatus("claude")).toMatchObject({
+      configured: true,
+      flowMode: "manual_code",
     });
-    expect(() =>
-      getOAuthConfiguration("claude", "https://app.example.com"),
-    ).toThrowError(OAuthConfigurationError);
+    expect(getOAuthConfigurationStatus("codex")).toMatchObject({
+      configured: true,
+      flowMode: "device_code",
+    });
+    expect(getOAuthConfiguration("claude", "https://app.example.com").clientId).toBe(
+      DEFAULT_CLAUDE_OAUTH_CLIENT_ID,
+    );
+    expect(getOAuthConfiguration("codex", "https://app.example.com").redirectUri).toBe(
+      CODEX_DEVICE_REDIRECT_URI,
+    );
+  });
+
+  it("uses app callback mode when a redirect URI override is set", () => {
+    vi.stubEnv(
+      "CLAUDE_OAUTH_REDIRECT_URI",
+      "https://app.example.com/api/auth/oauth/claude/callback",
+    );
+    vi.stubEnv(
+      "CODEX_OAUTH_REDIRECT_URI",
+      "https://app.example.com/api/auth/oauth/codex/callback",
+    );
+
+    expect(getOAuthFlowMode("claude")).toBe("app_callback");
+    expect(getOAuthFlowMode("codex")).toBe("app_callback");
+    expect(
+      getOAuthConfiguration("claude", "https://app.example.com").redirectUri,
+    ).toBe("https://app.example.com/api/auth/oauth/claude/callback");
   });
 
   it("seals and validates the PKCE state payload", () => {
@@ -48,6 +78,14 @@ describe("provider OAuth", () => {
   it("builds Claude Code and Codex authorization requests with S256 PKCE", () => {
     vi.stubEnv("CLAUDE_OAUTH_CLIENT_ID", "claude-client");
     vi.stubEnv("CODEX_OAUTH_CLIENT_ID", "codex-client");
+    vi.stubEnv(
+      "CLAUDE_OAUTH_REDIRECT_URI",
+      "https://app.example.com/api/auth/oauth/claude/callback",
+    );
+    vi.stubEnv(
+      "CODEX_OAUTH_REDIRECT_URI",
+      "https://app.example.com/api/auth/oauth/codex/callback",
+    );
     const state = createOAuthState({
       userId: "user-1",
       scopeType: "USER",
@@ -68,6 +106,7 @@ describe("provider OAuth", () => {
       pkceChallenge(state.codeVerifier),
     );
     expect(claude.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(claude.searchParams.get("code")).toBe("true");
     expect(claude.searchParams.get("redirect_uri")).toBe(
       "https://app.example.com/api/auth/oauth/claude/callback",
     );
@@ -75,8 +114,42 @@ describe("provider OAuth", () => {
     expect(codex.searchParams.get("client_id")).toBe("codex-client");
   });
 
+  it("defaults Claude authorize requests to the manual Anthropic callback", () => {
+    const state = createOAuthState({
+      userId: "user-1",
+      scopeType: "USER",
+      scopeId: "user-1",
+      returnTo: "/settings",
+    });
+    const claude = buildAuthorizationUrl(
+      getOAuthConfiguration("claude", "https://app.example.com"),
+      state,
+    );
+    expect(claude.searchParams.get("redirect_uri")).toBe(
+      CLAUDE_MANUAL_REDIRECT_URI,
+    );
+    expect(claude.searchParams.get("client_id")).toBe(
+      DEFAULT_CLAUDE_OAUTH_CLIENT_ID,
+    );
+  });
+
+  it("parses pasted Claude authorization codes with optional state", () => {
+    expect(parseManualAuthorizationCode("abc123")).toEqual({
+      code: "abc123",
+      returnedState: undefined,
+    });
+    expect(parseManualAuthorizationCode("abc123#state-value")).toEqual({
+      code: "abc123",
+      returnedState: "state-value",
+    });
+  });
+
   it("exchanges a code without returning provider secrets to callers", async () => {
     vi.stubEnv("CODEX_OAUTH_CLIENT_ID", "codex-client");
+    vi.stubEnv(
+      "CODEX_OAUTH_REDIRECT_URI",
+      "https://app.example.com/api/auth/oauth/codex/callback",
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({

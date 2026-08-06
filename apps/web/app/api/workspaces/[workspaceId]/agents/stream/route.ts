@@ -8,15 +8,21 @@ import {
   createAgentModel,
   getAgentModel,
   getAgentProvider,
+  parseAgentProvider,
 } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
+import {
+  requireCursorApiKey,
+  runCursorCloudAgent,
+} from "@/lib/cursor-agent-runtime";
 import {
   AgentPromptRateLimitError,
   enforceAgentPromptRateLimit,
 } from "@/lib/agent-rate-limit";
 import { readSandboxFile, searchSandboxFiles } from "@/lib/orchestrator";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { getWorkspaceForMember } from "@/lib/workspaces";
 import { appendWorkspaceStateEvent } from "@/lib/workspace-state";
 
 export const runtime = "nodejs";
@@ -25,6 +31,10 @@ const requestSchema = z.object({
   prompt: z.string().trim().min(1).max(50_000),
   sessionId: z.uuid().nullable().optional(),
   turnId: z.uuid().nullable().optional(),
+  provider: z
+    .enum(["openai", "anthropic", "cursor", "bedrock", "azure_foundry"])
+    .optional(),
+  model: z.string().trim().min(1).max(120).optional(),
 });
 
 type WireEvent =
@@ -82,8 +92,9 @@ function eventFor(
   actor: AgentEvent["actor"],
   type: AgentEvent["type"],
   payload: AgentEvent["payload"],
+  options?: { provider?: string; modelName?: string },
 ) {
-  const provider = getAgentProvider();
+  const provider = parseAgentProvider(options?.provider, getAgentProvider());
   const modelProvider: AgentEvent["modelProvider"] =
     provider === "openai"
       ? "openai"
@@ -96,7 +107,7 @@ function eventFor(
     turnId,
     actor,
     modelProvider,
-    modelName: getAgentModel(provider),
+    modelName: options?.modelName ?? getAgentModel(provider),
     type,
     payload,
   });
@@ -126,6 +137,8 @@ export async function POST(
   try {
     const input = requestSchema.parse(await request.json());
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) return apiError(new Error("Workspace not found."), 404);
     const actor: AgentEvent["actor"] = {
       userId: z.uuid().parse(user.id),
       userName:
@@ -136,14 +149,142 @@ export async function POST(
             : "CoDev user",
       avatarUrl: safeAvatar(user.image),
     };
-    const provider = getAgentProvider();
+    const provider = parseAgentProvider(input.provider, getAgentProvider());
     await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     const credential = await resolveAgentCredential(
       user.id,
       workspaceId,
       provider,
     );
-    const model = createAgentModel(credential, getAgentModel(provider));
+    const selectedModel = input.model?.trim() || getAgentModel(provider);
+
+    if (provider === "cursor") {
+      if (!workspace.repository) {
+        return apiError(
+          new Error(
+            "Connect a GitHub repository before starting a Cursor agent.",
+          ),
+          409,
+        );
+      }
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          const send = (event: WireEvent) => {
+            controller.enqueue(encoder.encode(toWireLine(event)));
+          };
+          const persistAndSend = async (event: WireEvent) => {
+            await appendWorkspaceStateEvent(event.event);
+            send(event);
+          };
+          const sessionId = input.sessionId ?? null;
+          const turnId = input.turnId ?? null;
+          await persistAndSend({
+            kind: "text",
+            delta: "",
+            event: eventFor(
+              workspaceId,
+              sessionId,
+              turnId,
+              actor,
+              "USER_PROMPT",
+              { promptText: input.prompt },
+              { provider, modelName: selectedModel },
+            ),
+          });
+          try {
+            await runCursorCloudAgent({
+              apiKey: requireCursorApiKey(credential),
+              model: selectedModel,
+              repository: workspace.repository!,
+              startingRef: workspace.baseSha,
+              prompt: input.prompt,
+              signal: request.signal,
+              onEvent: async (progress) => {
+                if (progress.kind === "text") {
+                  await persistAndSend({
+                    kind: "text",
+                    delta: progress.text,
+                    event: eventFor(
+                      workspaceId,
+                      sessionId,
+                      turnId,
+                      actor,
+                      "AGENT_THOUGHT",
+                      { outputStream: progress.text },
+                      { provider, modelName: selectedModel },
+                    ),
+                  });
+                } else if (progress.kind === "tool") {
+                  const toolCallId = crypto.randomUUID();
+                  await persistAndSend({
+                    kind: "tool-call",
+                    toolCallId,
+                    toolName: progress.name,
+                    args: {},
+                    event: eventFor(
+                      workspaceId,
+                      sessionId,
+                      turnId,
+                      actor,
+                      "TOOL_CALL_INIT",
+                      {
+                        toolName: progress.name,
+                        toolCallId,
+                        metadata: {},
+                      },
+                      { provider, modelName: selectedModel },
+                    ),
+                  });
+                } else if (progress.kind === "status") {
+                  await persistAndSend({
+                    kind: "text",
+                    delta: progress.text,
+                    event: eventFor(
+                      workspaceId,
+                      sessionId,
+                      turnId,
+                      actor,
+                      "AGENT_THOUGHT",
+                      { outputStream: progress.text },
+                      { provider, modelName: selectedModel },
+                    ),
+                  });
+                }
+              },
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Cursor agent stream failed.";
+            await persistAndSend({
+              kind: "error",
+              message,
+              event: eventFor(
+                workspaceId,
+                sessionId,
+                turnId,
+                actor,
+                "TOOL_CALL_RESULT",
+                { error: message, status: "error" },
+                { provider, modelName: selectedModel },
+              ),
+            });
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
+    const model = createAgentModel(credential, selectedModel);
     const result = streamText({
       model,
       maxOutputTokens: 4096,

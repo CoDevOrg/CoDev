@@ -57,9 +57,8 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
-  it("prefers a personal credential over workspace and platform credentials", async () => {
+  it("prefers a personal credential over workspace credentials", async () => {
     mockRows.push([baseCredential()]);
-    vi.stubEnv("CODEV_PLATFORM_OPENAI_API_KEY", "platform-key");
 
     const resolved = await resolveAgentCredential(
       "user-1",
@@ -71,7 +70,7 @@ describe("resolveAgentCredential", () => {
     expect(resolved.apiKeyOrToken).toBe("decrypted-secret");
   });
 
-  it("falls back to the workspace credential before the platform key", async () => {
+  it("falls back to the workspace credential before failing", async () => {
     mockRows.push(
       [],
       [
@@ -82,7 +81,6 @@ describe("resolveAgentCredential", () => {
         }),
       ],
     );
-    vi.stubEnv("CODEV_PLATFORM_OPENAI_API_KEY", "platform-key");
 
     const resolved = await resolveAgentCredential(
       "user-1",
@@ -92,6 +90,16 @@ describe("resolveAgentCredential", () => {
 
     expect(resolved.source).toBe("WORKSPACE");
     expect(resolved.apiKeyOrToken).toBe("decrypted-secret");
+  });
+
+  it("rejects platform keys and requires BYOK", async () => {
+    mockRows.push([], []);
+    vi.stubEnv("CODEV_PLATFORM_OPENAI_API_KEY", "platform-key");
+    vi.stubEnv("OPENAI_API_KEY", "platform-key");
+
+    await expect(
+      resolveAgentCredential("user-1", "workspace-1", "openai"),
+    ).rejects.toThrow(/Connect a Codex, Claude, or Cursor credential/);
   });
 
   it("refreshes an OAuth token inside the five-minute window", async () => {

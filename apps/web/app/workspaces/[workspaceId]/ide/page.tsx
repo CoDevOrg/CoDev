@@ -11,6 +11,7 @@ import {
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { requireWorkspacePermission } from "@/lib/access";
 import { readWorkspaceStateEvents } from "@/lib/workspace-state";
+import { getVmMinutesUsed, VM_MINUTE_LIFETIME_QUOTA } from "@/lib/vm-usage";
 
 export const metadata: Metadata = { title: "IDE" };
 
@@ -31,6 +32,7 @@ export default async function WorkspaceIdePage({
       readWorkspaceStateEvents(workspaceId),
     ]);
   if (!workspace) notFound();
+  const vmMinutesUsed = await getVmMinutesUsed(workspace.ownerId);
   return (
     <WorkspaceIdeLoader
       workspaceId={workspaceId}
@@ -54,6 +56,8 @@ export default async function WorkspaceIdePage({
       }
       isOwner={workspace.role === "owner"}
       integrationHeadSha={workspace.integrationHeadSha}
+      vmMinutesUsed={vmMinutesUsed}
+      vmMinutesQuota={VM_MINUTE_LIFETIME_QUOTA}
       user={{
         id: user.id,
         name: user.name ?? null,

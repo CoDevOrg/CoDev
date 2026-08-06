@@ -15,6 +15,7 @@ import {
   provisionSandbox,
   waitForOrchestrator,
 } from "./orchestrator";
+import { assertVmMinuteQuota } from "./quotas";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
@@ -24,6 +25,7 @@ import {
   markWorkspaceStopped,
   WorkspaceLifecycleError,
 } from "./workspaces";
+
 const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
 async function waitForHostAndOrchestrator() {
@@ -78,6 +80,7 @@ export async function ensureWorkspaceRuntimeReady(
       "Connect a GitHub repository before using the sandbox.",
     );
   }
+  await assertVmMinuteQuota(workspace.ownerId);
   const expiresAt = await beginWorkspaceProvisioning(
     workspaceId,
     userId,

@@ -17,6 +17,7 @@ import { getDatabase } from "./database";
 import { getRepository } from "./github";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 import { assertWorkspaceQuota } from "./quotas";
+import { closeSandboxInterval, openSandboxInterval } from "./vm-usage";
 import {
   hasUnpublishedRuntimeChanges,
   workspaceSyncBlockReason,
@@ -362,6 +363,11 @@ export async function markWorkspaceReady(
 ) {
   const now = new Date();
   const hibernateAt = new Date(now.getTime() + workspaceRuntimeTtlMs);
+  const [workspace] = await getDatabase()
+    .select({ ownerId: schema.workspaces.ownerId })
+    .from(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId))
+    .limit(1);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaceRuntimes)
@@ -396,6 +402,9 @@ export async function markWorkspaceReady(
         ),
       );
   });
+  if (workspace?.ownerId) {
+    await openSandboxInterval(workspace.ownerId, workspaceId, "provision");
+  }
 }
 
 export async function markWorkspaceFailed(workspaceId: string, error: unknown) {
@@ -417,6 +426,7 @@ export async function markWorkspaceFailed(workspaceId: string, error: unknown) {
 }
 
 export async function markWorkspaceStopped(workspaceId: string) {
+  await closeSandboxInterval(workspaceId, "stop");
   const now = new Date();
   await getDatabase().transaction(async (transaction) => {
     const [state] = await transaction

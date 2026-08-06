@@ -327,6 +327,43 @@ impl GuestService {
                 !(output.reader_closed && output.exit_code.is_some())
             });
             if terminals.len() >= 4 {
+                // Prefer reclaiming finished or reader-closed sessions first.
+                let mut reclaim: Vec<String> = terminals
+                    .iter()
+                    .filter(|(_, session)| {
+                        let output = session.output.lock().expect("terminal output lock");
+                        output.reader_closed || output.exit_code.is_some()
+                    })
+                    .map(|(session_id, _)| session_id.clone())
+                    .collect();
+                reclaim.sort();
+                for session_id in reclaim {
+                    if let Some(session) = terminals.remove(&session_id) {
+                        let mut writer = session.writer.lock().expect("terminal writer lock");
+                        let _ = writer.write_all(b"\x03exit\n");
+                        let _ = writer.flush();
+                        let mut output = session.output.lock().expect("terminal output lock");
+                        output.reader_closed = true;
+                        session.output_changed.notify_all();
+                    }
+                }
+            }
+            if terminals.len() >= 4 {
+                // Last resort: close the oldest live session so reconnects can succeed.
+                let mut ids: Vec<String> = terminals.keys().cloned().collect();
+                ids.sort();
+                if let Some(oldest) = ids.first()
+                    && let Some(session) = terminals.remove(oldest)
+                {
+                    let mut writer = session.writer.lock().expect("terminal writer lock");
+                    let _ = writer.write_all(b"\x03exit\n");
+                    let _ = writer.flush();
+                    let mut output = session.output.lock().expect("terminal output lock");
+                    output.reader_closed = true;
+                    session.output_changed.notify_all();
+                }
+            }
+            if terminals.len() >= 4 {
                 return Err(RuntimeError::CapacityExceeded);
             }
         }

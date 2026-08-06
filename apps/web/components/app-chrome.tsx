@@ -7,6 +7,7 @@ import { isGitHubAuthConfigured } from "@codev/config";
 import { signOut } from "@/auth";
 import { connectGitHubAccount } from "@/app/actions/github";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
+import { FeedbackWidget } from "@/components/feedback-widget";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { clerkAuthConfigured } from "@/lib/identity";
 
@@ -72,12 +73,6 @@ export function AppChrome({
                   {user.name ?? user.githubLogin ?? "Your account"}
                 </strong>
               </div>
-              <Link
-                className="profile-menu-link"
-                href="/settings/personal/profile"
-              >
-                Profile
-              </Link>
               <Link className="profile-menu-link" href="/settings">
                 Settings
               </Link>
@@ -109,6 +104,7 @@ export function AppChrome({
         </div>
       </header>
       {children}
+      <FeedbackWidget />
     </div>
   );
 }

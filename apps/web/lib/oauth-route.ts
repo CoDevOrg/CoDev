@@ -12,11 +12,15 @@ import {
   createOAuthState,
   exchangeOAuthCode,
   getOAuthConfiguration,
+  getOAuthFlowMode,
   oauthCallbackPath,
   oauthCookieName,
   OAuthConfigurationError,
   openOAuthState,
+  parseManualAuthorizationCode,
   persistOAuthTokens,
+  pollCodexDeviceCode,
+  requestCodexDeviceCode,
   sealOAuthState,
   type OAuthProvider,
   type OAuthState,
@@ -25,8 +29,17 @@ import {
 const scopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
 const DEFAULT_OAUTH_RETURN_TO = "/settings/personal/agents";
 
+const sessionBodySchema = z.object({
+  scopeType: z.enum(["USER", "WORKSPACE"]).optional(),
+  workspaceId: z.string().uuid().optional(),
+  returnTo: z.string().optional(),
+  code: z.string().optional(),
+  deviceAuthId: z.string().optional(),
+  userCode: z.string().optional(),
+});
+
 function safeReturnTo(
-  value: string | null,
+  value: string | null | undefined,
   fallback = DEFAULT_OAUTH_RETURN_TO,
 ) {
   return value && value.startsWith("/") && !value.startsWith("//")
@@ -46,18 +59,52 @@ function redirectToSettings(
   return NextResponse.redirect(url);
 }
 
-async function authorizeScope(
-  request: Request,
+function setOAuthCookie(
+  response: NextResponse,
   provider: OAuthProvider,
-  scopeType: "USER" | "WORKSPACE",
-  scopeId: string,
+  state: OAuthState,
 ) {
+  response.cookies.set({
+    name: oauthCookieName(provider),
+    value: sealOAuthState(state),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: COOKIE_MAX_AGE_SECONDS,
+    path: `/api/auth/oauth/${provider}`,
+  });
+  return response;
+}
+
+function clearOAuthCookie(response: NextResponse, provider: OAuthProvider) {
+  response.cookies.set({
+    name: oauthCookieName(provider),
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: `/api/auth/oauth/${provider}`,
+  });
+  return response;
+}
+
+async function authorizeScope(input: {
+  request: Request;
+  provider: OAuthProvider;
+  scopeType: "USER" | "WORKSPACE";
+  scopeId: string;
+  returnTo: string;
+  asJson: boolean;
+}) {
+  const { request, provider, scopeType, scopeId, returnTo, asJson } = input;
   const user = await getApiUser();
-  if (!user)
+  if (!user) {
     return NextResponse.json(
       { error: "Authentication required." },
       { status: 401 },
     );
+  }
 
   if (scopeType === "WORKSPACE") {
     try {
@@ -70,9 +117,6 @@ async function authorizeScope(
     }
   }
 
-  const returnTo = safeReturnTo(
-    new URL(request.url).searchParams.get("returnTo"),
-  );
   try {
     const configuration = getOAuthConfiguration(
       provider,
@@ -82,73 +126,319 @@ async function authorizeScope(
       userId: user.id,
       scopeType,
       scopeId,
-      returnTo: safeReturnTo(new URL(request.url).searchParams.get("returnTo")),
+      returnTo,
     });
-    const response = NextResponse.redirect(
-      buildAuthorizationUrl(configuration, state),
+
+    if (configuration.flowMode === "device_code") {
+      const device = await requestCodexDeviceCode(configuration.clientId);
+      return setOAuthCookie(
+        NextResponse.json({
+          mode: configuration.flowMode,
+          provider,
+          verificationUrl: device.verificationUrl,
+          userCode: device.userCode,
+          deviceAuthId: device.deviceAuthId,
+          intervalSeconds: device.intervalSeconds,
+        }),
+        provider,
+        state,
+      );
+    }
+
+    if (configuration.flowMode === "manual_code") {
+      const authorizeUrl = buildAuthorizationUrl(configuration, state).toString();
+      if (asJson) {
+        return setOAuthCookie(
+          NextResponse.json({
+            mode: configuration.flowMode,
+            provider,
+            authorizeUrl,
+          }),
+          provider,
+          state,
+        );
+      }
+      return setOAuthCookie(NextResponse.redirect(authorizeUrl), provider, state);
+    }
+
+    const authorizeUrl = buildAuthorizationUrl(configuration, state);
+    if (asJson) {
+      return setOAuthCookie(
+        NextResponse.json({
+          mode: configuration.flowMode,
+          provider,
+          authorizeUrl: authorizeUrl.toString(),
+        }),
+        provider,
+        state,
+      );
+    }
+    return setOAuthCookie(
+      NextResponse.redirect(authorizeUrl),
+      provider,
+      state,
     );
-    response.cookies.set({
-      name: oauthCookieName(provider),
-      value: sealOAuthState(state),
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: COOKIE_MAX_AGE_SECONDS,
-      path: `/api/auth/oauth/${provider}`,
-    });
-    return response;
-  } catch {
-    // A browser navigation should return to Settings with an actionable
-    // message instead of exposing a raw API error page. Provider credentials
-    // are intentionally never included in the redirect.
+  } catch (error) {
+    if (asJson) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "OAuth could not be started.",
+        },
+        { status: error instanceof OAuthConfigurationError ? 503 : 502 },
+      );
+    }
     return redirectToSettings(request, provider, "not_configured", returnTo);
   }
 }
 
-export async function startOAuth(request: Request, provider: OAuthProvider) {
+async function parseSessionInput(request: Request) {
   const url = new URL(request.url);
+  let scopeTypeRaw = url.searchParams.get("scopeType");
+  let workspaceId = url.searchParams.get("workspaceId");
+  let returnTo = url.searchParams.get("returnTo");
+
+  if (request.method !== "GET") {
+    try {
+      const parsed = sessionBodySchema.safeParse(await request.json());
+      if (parsed.success) {
+        if (parsed.data.scopeType) scopeTypeRaw = parsed.data.scopeType;
+        if (parsed.data.workspaceId) workspaceId = parsed.data.workspaceId;
+        if (parsed.data.returnTo) returnTo = parsed.data.returnTo;
+      }
+    } catch {
+      // Query-string session starts remain valid.
+    }
+  }
+
   const scopeTypeResult = scopeTypeSchema.safeParse(
-    (url.searchParams.get("scopeType") ?? "USER").toUpperCase(),
+    (scopeTypeRaw ?? "USER").toUpperCase(),
   );
   if (!scopeTypeResult.success) {
-    return NextResponse.json(
-      { error: "scopeType must be USER or WORKSPACE." },
-      { status: 400 },
-    );
+    return {
+      error: NextResponse.json(
+        { error: "scopeType must be USER or WORKSPACE." },
+        { status: 400 },
+      ),
+    } as const;
   }
+
   const scopeType = scopeTypeResult.data;
-  const workspaceId = url.searchParams.get("workspaceId");
   if (scopeType === "WORKSPACE" && !z.uuid().safeParse(workspaceId).success) {
-    return NextResponse.json(
-      { error: "workspaceId is required for workspace OAuth." },
-      { status: 400 },
+    return {
+      error: NextResponse.json(
+        { error: "workspaceId is required for workspace OAuth." },
+        { status: 400 },
+      ),
+    } as const;
+  }
+
+  const user = await getApiUser();
+  return {
+    scopeType,
+    scopeId: scopeType === "WORKSPACE" ? workspaceId! : (user?.id ?? ""),
+    returnTo: safeReturnTo(returnTo),
+  } as const;
+}
+
+export async function startOAuth(request: Request, provider: OAuthProvider) {
+  const resolved = await parseSessionInput(request);
+  if ("error" in resolved) return resolved.error;
+
+  const flowMode = getOAuthFlowMode(provider);
+  if (request.method === "GET" && flowMode !== "app_callback") {
+    // Hosted Claude/Codex flows need the interactive settings UI.
+    return redirectToSettings(
+      request,
+      provider,
+      "error",
+      resolved.returnTo,
     );
   }
-  return authorizeScope(
+
+  return authorizeScope({
     request,
     provider,
-    scopeType,
-    scopeType === "WORKSPACE" ? workspaceId! : ((await getApiUser())?.id ?? ""),
-  );
+    scopeType: resolved.scopeType,
+    scopeId: resolved.scopeId,
+    returnTo: resolved.returnTo,
+    asJson: false,
+  });
+}
+
+export async function startOAuthSession(
+  request: Request,
+  provider: OAuthProvider,
+) {
+  const resolved = await parseSessionInput(request);
+  if ("error" in resolved) return resolved.error;
+
+  return authorizeScope({
+    request,
+    provider,
+    scopeType: resolved.scopeType,
+    scopeId: resolved.scopeId,
+    returnTo: resolved.returnTo,
+    asJson: true,
+  });
+}
+
+async function readOAuthState(
+  provider: OAuthProvider,
+): Promise<OAuthState | null> {
+  const cookieStore = await cookies();
+  const stateCookie = cookieStore.get(oauthCookieName(provider))?.value;
+  if (!stateCookie) return null;
+  try {
+    return openOAuthState(stateCookie);
+  } catch {
+    return null;
+  }
+}
+
+export async function completeManualOAuth(
+  request: Request,
+  provider: OAuthProvider,
+) {
+  if (provider !== "claude") {
+    return NextResponse.json(
+      { error: "Manual code completion is only supported for Claude Code." },
+      { status: 400 },
+    );
+  }
+
+  const state = await readOAuthState(provider);
+  if (!state) {
+    return NextResponse.json(
+      { error: "OAuth session expired. Start the connection again." },
+      { status: 400 },
+    );
+  }
+
+  const parsed = sessionBodySchema.safeParse(await request.json().catch(() => ({})));
+  const codeRaw = parsed.success ? (parsed.data.code ?? "") : "";
+  if (!codeRaw.trim()) {
+    return NextResponse.json(
+      { error: "Authorization code is required." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const { code, returnedState } = parseManualAuthorizationCode(codeRaw);
+    if (returnedState && returnedState !== state.state) {
+      throw new Error("OAuth state mismatch.");
+    }
+    const user = await getApiUser();
+    if (!user || user.id !== state.userId) {
+      throw new Error("OAuth user mismatch.");
+    }
+    if (state.scopeType === "WORKSPACE") {
+      await requireOrganizationSettingsWrite(user.id, state.scopeId);
+    }
+    const configuration = getOAuthConfiguration(
+      provider,
+      new URL(request.url).origin,
+    );
+    const tokens = await exchangeOAuthCode(
+      configuration,
+      code,
+      state.codeVerifier,
+    );
+    await persistOAuthTokens(state, configuration, tokens);
+    return clearOAuthCookie(
+      NextResponse.json({ status: "connected", provider }),
+      provider,
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "OAuth completion failed.",
+      },
+      { status: 400 },
+    );
+  }
+}
+
+export async function pollDeviceOAuth(
+  request: Request,
+  provider: OAuthProvider,
+) {
+  if (provider !== "codex") {
+    return NextResponse.json(
+      { error: "Device code completion is only supported for Codex." },
+      { status: 400 },
+    );
+  }
+
+  const state = await readOAuthState(provider);
+  if (!state) {
+    return NextResponse.json(
+      { error: "OAuth session expired. Start the connection again." },
+      { status: 400 },
+    );
+  }
+
+  const parsed = sessionBodySchema.safeParse(await request.json().catch(() => ({})));
+  const deviceAuthId = parsed.success ? (parsed.data.deviceAuthId ?? "") : "";
+  const userCode = parsed.success ? (parsed.data.userCode ?? "") : "";
+  if (!deviceAuthId || !userCode) {
+    return NextResponse.json(
+      { error: "Device authorization details are required." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const user = await getApiUser();
+    if (!user || user.id !== state.userId) {
+      throw new Error("OAuth user mismatch.");
+    }
+    if (state.scopeType === "WORKSPACE") {
+      await requireOrganizationSettingsWrite(user.id, state.scopeId);
+    }
+
+    const poll = await pollCodexDeviceCode({ deviceAuthId, userCode });
+    if (poll.status === "pending") {
+      return NextResponse.json({ status: "pending" });
+    }
+
+    const configuration = getOAuthConfiguration(
+      provider,
+      new URL(request.url).origin,
+    );
+    const tokens = await exchangeOAuthCode(
+      configuration,
+      poll.authorizationCode,
+      poll.codeVerifier,
+    );
+    await persistOAuthTokens(state, configuration, tokens);
+    return clearOAuthCookie(
+      NextResponse.json({ status: "connected", provider }),
+      provider,
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Device authorization failed.",
+      },
+      { status: 400 },
+    );
+  }
 }
 
 export async function finishOAuth(request: Request, provider: OAuthProvider) {
   const cookieStore = await cookies();
   const cookieName = oauthCookieName(provider);
   const stateCookie = cookieStore.get(cookieName)?.value;
-  const clearCookie = (response: NextResponse) => {
-    response.cookies.set({
-      name: cookieName,
-      value: "",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-      path: `/api/auth/oauth/${provider}`,
-    });
-    return response;
-  };
-
   if (!stateCookie) return redirectToSettings(request, provider, "error");
   let state: OAuthState | null = null;
   try {
@@ -159,21 +449,22 @@ export async function finishOAuth(request: Request, provider: OAuthProvider) {
   const returnTo = state.returnTo;
   const query = new URL(request.url).searchParams;
   if (query.get("error")) {
-    return clearCookie(
+    return clearOAuthCookie(
       redirectToSettings(request, provider, "denied", returnTo),
+      provider,
     );
   }
 
   const code = query.get("code");
   const returnedState = query.get("state");
   if (!code || !returnedState) {
-    return clearCookie(
+    return clearOAuthCookie(
       redirectToSettings(request, provider, "error", returnTo),
+      provider,
     );
   }
 
   try {
-    if (!state) throw new Error("OAuth state is missing.");
     if (state.state !== returnedState) throw new Error("OAuth state mismatch.");
     const user = await getApiUser();
     if (!user || user.id !== state.userId)
@@ -191,19 +482,19 @@ export async function finishOAuth(request: Request, provider: OAuthProvider) {
       state.codeVerifier,
     );
     await persistOAuthTokens(state, configuration, tokens);
-    return clearCookie(
+    return clearOAuthCookie(
       redirectToSettings(request, provider, "connected", returnTo),
+      provider,
     );
   } catch (error) {
-    // Never place provider error bodies, authorization codes, or tokens in the
-    // redirect or response body.
-    return clearCookie(
+    return clearOAuthCookie(
       redirectToSettings(
         request,
         provider,
         error instanceof OAuthConfigurationError ? "not_configured" : "error",
         returnTo,
       ),
+      provider,
     );
   }
 }

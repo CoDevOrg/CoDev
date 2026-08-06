@@ -9,7 +9,13 @@ import {
 
 const requestSchema = z
   .object({
-    provider: z.enum(["anthropic", "openai", "bedrock", "azure_foundry"]),
+    provider: z.enum([
+      "anthropic",
+      "openai",
+      "bedrock",
+      "azure_foundry",
+      "cursor",
+    ]),
     credentialType: z.enum(["API_KEY", "AWS_BEDROCK_ROLE", "AZURE_ENDPOINT"]),
     apiKey: z.string().trim().min(20).max(512).optional(),
     awsRoleArn: z
@@ -73,7 +79,7 @@ export async function DELETE(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
+      .enum(["anthropic", "openai", "bedrock", "azure_foundry", "cursor"])
       .parse(new URL(request.url).searchParams.get("provider"));
     await deleteProviderCredential("USER", user.id, provider);
     return new Response(null, { status: 204 });
@@ -87,7 +93,7 @@ export async function GET(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
+      .enum(["anthropic", "openai", "bedrock", "azure_foundry", "cursor"])
       .parse(new URL(request.url).searchParams.get("provider"));
     return Response.json(
       await getProviderCredentialStatus("USER", user.id, provider),

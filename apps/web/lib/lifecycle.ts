@@ -12,6 +12,7 @@ import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
 import { logEvent } from "./observability";
 import { destroySandbox } from "./orchestrator";
 import { hibernateWorkspace } from "./hibernation";
+import { closeOrphanSandboxIntervals } from "./vm-usage";
 import { markWorkspaceStopped } from "./workspaces";
 
 async function cancelWorkspaceAgents(workspaceId: string) {
@@ -181,12 +182,15 @@ export async function reconcileLifecycle() {
       ),
     );
 
+  const orphanIntervalsClosed = await closeOrphanSandboxIntervals();
+
   const result = {
     hostState,
     cleaned: targets.size,
     hibernated,
     hibernationFailures,
     cancellationFailures,
+    orphanIntervalsClosed,
     durationMs: Date.now() - startedAt,
   };
   logEvent("info", "lifecycle.reconciled", result);

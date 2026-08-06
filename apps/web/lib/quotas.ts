@@ -6,6 +6,10 @@ import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
 import { consumeRateLimit } from "./rate-limit";
+import {
+  getVmMinutesUsed,
+  VM_MINUTE_LIFETIME_QUOTA,
+} from "./vm-usage";
 
 export class QuotaError extends Error {
   constructor(
@@ -65,6 +69,17 @@ export async function assertTurnQuota(userId: string, sessionId: string) {
       "This agent already has two queued or running turns.",
       "queued_turn_limit",
       30,
+    );
+  }
+}
+
+export async function assertVmMinuteQuota(ownerId: string) {
+  const used = await getVmMinutesUsed(ownerId);
+  if (used >= VM_MINUTE_LIFETIME_QUOTA) {
+    throw new QuotaError(
+      `Lifetime VM minute allotment exhausted (${VM_MINUTE_LIFETIME_QUOTA} minutes).`,
+      "vm_minute_quota",
+      86_400,
     );
   }
 }
