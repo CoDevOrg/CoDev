@@ -58,9 +58,9 @@ install -d -m 0755 "${base_dir}" "${jailer_dir}"
 # support reflinks, so the launch template attaches a dedicated data volume.
 # Discover the non-root EBS disk instead of relying on Nitro's device name.
 root_source="$(findmnt -no SOURCE /)"
-root_disk="$(lsblk -sno NAME "${root_source}" | tail -n 1)"
+root_disk="$(lsblk -no PKNAME "${root_source}" | head -n 1)"
 if [[ -z "${root_disk}" ]]; then
-  root_disk="$(lsblk -ndo NAME "${root_source}" | head -n 1)"
+  root_disk="$(basename "${root_source}")"
 fi
 jailer_device=""
 for _ in {1..60}; do

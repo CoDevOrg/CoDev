@@ -104,6 +104,16 @@ describe("Theia workspace transport", () => {
     expect(runtimeTemplate).toContain("DPkg::Lock::Timeout=300");
   });
 
+  it("identifies the root disk without lsblk tree prefixes", () => {
+    const bootstrap = readFileSync(
+      resolve(process.cwd(), "../../infra/aws/scripts/bootstrap-host.sh"),
+      "utf8",
+    );
+
+    expect(bootstrap).toContain('lsblk -no PKNAME "${root_source}"');
+    expect(bootstrap).not.toContain("lsblk -sno NAME");
+  });
+
   it("registers the workspace transport before Theia's backend preloader", () => {
     const extensionPackage = JSON.parse(
       readFileSync(
