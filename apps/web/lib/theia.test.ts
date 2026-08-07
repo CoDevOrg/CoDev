@@ -130,10 +130,16 @@ describe("Theia workspace transport", () => {
         "utf8",
       ),
     ) as {
-      theia?: { frontend?: { config?: { reloadOnReconnect?: boolean } } };
+      theia?: {
+        frontend?: { config?: { reloadOnReconnect?: boolean } };
+        backend?: { config?: { frontendConnectionTimeout?: number } };
+      };
     };
     expect(applicationPackage.theia?.frontend?.config?.reloadOnReconnect).toBe(
       false,
     );
+    expect(
+      applicationPackage.theia?.backend?.config?.frontendConnectionTimeout,
+    ).toBe(30_000);
   });
 });
