@@ -6,7 +6,8 @@
   "main": "lib/browser/theia-extension-frontend-module.js",
   "theiaExtensions": [
     {
-      "frontend": "lib/browser/theia-extension-frontend-module"
+      "frontend": "lib/browser/theia-extension-frontend-module",
+      "frontendPreload": "lib/browser/theia-extension-preload-module"
     }
   ],
   "scripts": {

@@ -87,4 +87,17 @@ describe("Theia workspace transport", () => {
       "ExecStartPre=/usr/local/bin/codev-wait-for-theia",
     );
   });
+
+  it("registers the workspace transport before Theia's backend preloader", () => {
+    const extensionPackage = JSON.parse(
+      readFileSync(
+        resolve(process.cwd(), "../../packages/theia-extension/package.json"),
+        "utf8",
+      ),
+    ) as { theiaExtensions?: { frontendPreload?: string }[] };
+
+    expect(extensionPackage.theiaExtensions?.[0]?.frontendPreload).toBe(
+      "lib/browser/theia-extension-preload-module",
+    );
+  });
 });

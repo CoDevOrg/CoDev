@@ -1,5 +1,5 @@
 import { WebSocketConnectionSource } from "@theia/core/lib/browser/messaging/ws-connection-source";
-import { injectable } from "@theia/core/shared/inversify";
+import { injectable, postConstruct } from "@theia/core/shared/inversify";
 
 import {
   workspaceIdFromSearch,
@@ -11,6 +11,7 @@ export class CoDevConnectionSource extends WebSocketConnectionSource {
   private bootstrapComplete = false;
   private bootstrapPending = false;
 
+  @postConstruct()
   override openSocket(): void {
     const workspaceId = workspaceIdFromSearch(window.location.search);
     if (!workspaceId || this.bootstrapComplete) {
