@@ -59,10 +59,30 @@ async function proxy(request: Request, context: RouteContext) {
         scopeTheiaConnectionCookie(response.headers["set-cookie"], workspaceId),
       );
     }
-    return new Response(
-      new Uint8Array(Buffer.from(response.bodyBase64, "base64")),
-      { status: response.status, headers },
-    );
+    const responseBody = Buffer.from(response.bodyBase64, "base64");
+    const requestPacket = body ? enginePacketType(Buffer.from(body)) : null;
+    const responsePacket = enginePacketType(responseBody);
+    if (
+      requestPacket === "pong" ||
+      responsePacket === "ping" ||
+      response.status >= 400
+    ) {
+      console.info(
+        JSON.stringify({
+          event: "theia.transport",
+          workspaceId,
+          requestPacket,
+          requestBytes: body?.byteLength ?? 0,
+          responsePacket,
+          responseBytes: responseBody.byteLength,
+          status: response.status,
+        }),
+      );
+    }
+    return new Response(new Uint8Array(responseBody), {
+      status: response.status,
+      headers,
+    });
   } catch (error) {
     return apiError(
       error,
@@ -77,4 +97,11 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   return proxy(request, context);
+}
+
+function enginePacketType(body: Uint8Array) {
+  if (body.byteLength !== 1) return null;
+  if (body[0] === "2".charCodeAt(0)) return "ping";
+  if (body[0] === "3".charCodeAt(0)) return "pong";
+  return null;
 }
