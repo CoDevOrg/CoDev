@@ -13,7 +13,7 @@
           "security.workspace.trust.enabled": true,
           "workbench.startupEditor": "none"
         },
-        "reloadOnReconnect": true
+        "reloadOnReconnect": false
       }
     },
     "backend": {

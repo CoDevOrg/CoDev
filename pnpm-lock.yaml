@@ -507,6 +507,9 @@ importers:
       '@theia/core':
         specifier: 1.74.1
         version: 1.74.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      socket.io-client:
+        specifier: 4.8.3
+        version: 4.8.3
     devDependencies:
       typescript:
         specifier: 5.9.3

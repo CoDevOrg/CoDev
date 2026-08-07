@@ -1,7 +1,9 @@
 import { WebSocketConnectionSource } from "@theia/core/lib/browser/messaging/ws-connection-source";
 import { injectable, postConstruct } from "@theia/core/shared/inversify";
+import { io, type Socket } from "socket.io-client";
 
 import {
+  WORKSPACE_SOCKET_TRANSPORTS,
   workspaceIdFromSearch,
   workspaceStartupError,
 } from "./codev-workspace-context";
@@ -36,6 +38,19 @@ export class CoDevConnectionSource extends WebSocketConnectionSource {
       return super.createSocketIoPath(url);
     }
     return `/api/workspaces/${workspaceId}/theia/socket.io`;
+  }
+
+  protected override createWebSocket(url: string): Socket {
+    const path = this.createSocketIoPath(url);
+    return io(url, {
+      ...(path ? { path } : {}),
+      transports: [...WORKSPACE_SOCKET_TRANSPORTS],
+      upgrade: false,
+      reconnection: true,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 10_000,
+      reconnectionAttempts: Infinity,
+    });
   }
 
   private async bootstrap(workspaceId: string): Promise<void> {

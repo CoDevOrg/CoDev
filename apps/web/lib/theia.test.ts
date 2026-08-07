@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  WORKSPACE_SOCKET_TRANSPORTS,
   workspaceAgentsPath,
   workspaceIdFromSearch,
   workspaceStartupError,
@@ -33,6 +34,7 @@ describe("Theia workspace transport", () => {
       "/socket.io/?EIO=4&transport=polling",
     );
     expect(theiaSocketProxyPath("/unexpected")).toBe("/socket.io/");
+    expect(WORKSPACE_SOCKET_TRANSPORTS).toEqual(["polling"]);
   });
 
   it("scopes Theia's token cookie to one workspace", () => {
@@ -98,6 +100,18 @@ describe("Theia workspace transport", () => {
 
     expect(extensionPackage.theiaExtensions?.[0]?.frontendPreload).toBe(
       "lib/browser/theia-extension-preload-module",
+    );
+
+    const applicationPackage = JSON.parse(
+      readFileSync(
+        resolve(process.cwd(), "../../apps/theia-app/package.json"),
+        "utf8",
+      ),
+    ) as {
+      theia?: { frontend?: { config?: { reloadOnReconnect?: boolean } } };
+    };
+    expect(applicationPackage.theia?.frontend?.config?.reloadOnReconnect).toBe(
+      false,
     );
   });
 });

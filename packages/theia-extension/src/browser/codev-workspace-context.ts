@@ -1,6 +1,8 @@
 const WORKSPACE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+export const WORKSPACE_SOCKET_TRANSPORTS = ["polling"] as const;
+
 export function workspaceIdFromSearch(search: string): string | undefined {
   const value = new URLSearchParams(search).get("workspaceId");
   return value && WORKSPACE_ID.test(value) ? value : undefined;
