@@ -63,7 +63,7 @@ async function proxy(request: Request, context: RouteContext) {
     const requestPacket = body ? enginePacketType(Buffer.from(body)) : null;
     const responsePacket = enginePacketType(responseBody);
     if (
-      requestPacket === "pong" ||
+      requestPacket !== null ||
       responsePacket === "ping" ||
       response.status >= 400
     ) {
@@ -100,8 +100,10 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 function enginePacketType(body: Uint8Array) {
-  if (body.byteLength !== 1) return null;
-  if (body[0] === "2".charCodeAt(0)) return "ping";
-  if (body[0] === "3".charCodeAt(0)) return "pong";
+  if (body.byteLength === 0 || body.byteLength > 8) return null;
+  const firstByte = body[0];
+  if (firstByte === "2".charCodeAt(0)) return "ping";
+  if (firstByte === "3".charCodeAt(0)) return "pong";
+  if (firstByte !== undefined) return `control:${firstByte}`;
   return null;
 }
