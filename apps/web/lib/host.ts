@@ -13,7 +13,8 @@ import { getAwsConfiguration } from "./aws";
 function getHostConfiguration() {
   const environment = readServerEnvironment();
   const instanceId =
-    environment.AWS_HOST_INSTANCE_ID && environment.AWS_HOST_INSTANCE_ID.trim() !== ""
+    environment.AWS_HOST_INSTANCE_ID &&
+    environment.AWS_HOST_INSTANCE_ID.trim() !== ""
       ? environment.AWS_HOST_INSTANCE_ID
       : "i-0ea41735a804f2526";
   return {
@@ -58,7 +59,9 @@ export async function requestHostWake(): Promise<"running" | "starting"> {
       return "running";
     }
     if (state === "stopped") {
-      await client.send(new StartInstancesCommand({ InstanceIds: [instanceId] }));
+      await client.send(
+        new StartInstancesCommand({ InstanceIds: [instanceId] }),
+      );
       return "starting";
     }
     if (state === "pending") {
