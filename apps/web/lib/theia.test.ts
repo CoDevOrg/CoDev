@@ -96,8 +96,16 @@ describe("Theia workspace transport", () => {
         resolve(process.cwd(), "../../packages/theia-extension/package.json"),
         "utf8",
       ),
-    ) as { theiaExtensions?: { frontendPreload?: string }[] };
+    ) as {
+      theiaExtensions?: {
+        backend?: string;
+        frontendPreload?: string;
+      }[];
+    };
 
+    expect(extensionPackage.theiaExtensions?.[0]?.backend).toBe(
+      "lib/node/theia-extension-backend-module",
+    );
     expect(extensionPackage.theiaExtensions?.[0]?.frontendPreload).toBe(
       "lib/browser/theia-extension-preload-module",
     );
