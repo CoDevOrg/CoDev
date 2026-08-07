@@ -15,7 +15,7 @@ function getHostConfiguration() {
   const instanceId =
     environment.AWS_HOST_INSTANCE_ID && environment.AWS_HOST_INSTANCE_ID.trim() !== ""
       ? environment.AWS_HOST_INSTANCE_ID
-      : "i-07bb40c59b3184c5f";
+      : "i-0ea41735a804f2526";
   return {
     ...getAwsConfiguration(),
     instanceId,
