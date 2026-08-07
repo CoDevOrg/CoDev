@@ -30,30 +30,76 @@ function createClient() {
       region: configuration.region,
       credentials: configuration.credentials,
     }),
-    instanceId: configuration.instanceId,
+    configuredInstanceId: configuration.instanceId,
   };
 }
 
-export async function getHostState(): Promise<InstanceStateName> {
-  const { client, instanceId } = createClient();
+async function describeInstance(
+  client: EC2Client,
+  instanceId: string,
+): Promise<InstanceStateName | undefined> {
   const response = await client.send(
     new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
   );
-  const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-  if (!state) {
+  return response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+}
+
+async function resolveHost(client: EC2Client, configuredInstanceId: string) {
+  try {
+    const state = await describeInstance(client, configuredInstanceId);
+    if (state && state !== "terminated" && state !== "shutting-down") {
+      return { instanceId: configuredInstanceId, state };
+    }
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.name !== "InvalidInstanceID.NotFound"
+    ) {
+      throw error;
+    }
+  }
+
+  const response = await client.send(
+    new DescribeInstancesCommand({
+      Filters: [
+        { Name: "tag:Name", Values: ["codev-firecracker-host"] },
+        { Name: "tag:Project", Values: ["CoDev"] },
+        {
+          Name: "instance-state-name",
+          Values: ["pending", "running", "stopping", "stopped"],
+        },
+      ],
+    }),
+  );
+  const instance = response.Reservations?.flatMap(
+    (reservation) => reservation.Instances ?? [],
+  )
+    .filter((candidate) => candidate.InstanceId && candidate.State?.Name)
+    .sort(
+      (left, right) =>
+        (right.LaunchTime?.getTime() ?? 0) - (left.LaunchTime?.getTime() ?? 0),
+    )[0];
+  if (!instance?.InstanceId || !instance.State?.Name) {
     throw new Error("The configured Firecracker host was not found.");
   }
-  return state;
+  return { instanceId: instance.InstanceId, state: instance.State.Name };
+}
+
+export async function getHostState(): Promise<InstanceStateName> {
+  const { client, configuredInstanceId } = createClient();
+  return (await resolveHost(client, configuredInstanceId)).state;
 }
 
 export async function requestHostWake(): Promise<"running" | "starting"> {
-  const { client, instanceId } = createClient();
+  const { client, configuredInstanceId } = createClient();
+  const resolved = await resolveHost(client, configuredInstanceId);
+  const { instanceId } = resolved;
 
   for (let attempt = 0; attempt < 30; attempt++) {
-    const response = await client.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-    );
-    const state = response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+    const state =
+      attempt === 0
+        ? resolved.state
+        : await describeInstance(client, instanceId);
 
     if (state === "running") {
       return "running";

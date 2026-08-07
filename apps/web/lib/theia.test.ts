@@ -4,6 +4,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  workspaceAgentsPath,
+  workspaceIdFromSearch,
+  workspaceStartupError,
+} from "../../../packages/theia-extension/src/browser/codev-workspace-context";
+
+import {
   scopeTheiaConnectionCookie,
   theiaSocketProxyPath,
   theiaWorkspaceUrl,
@@ -37,6 +43,34 @@ describe("Theia workspace transport", () => {
       ),
     ).toBe(
       "theia-connection-token=token; Path=/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/theia; HttpOnly; SameSite=Strict",
+    );
+  });
+
+  it("opens the authenticated agent surface inside the workbench", () => {
+    const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
+    expect(workspaceIdFromSearch(`?workspaceId=${workspaceId}`)).toBe(
+      workspaceId,
+    );
+    expect(workspaceAgentsPath(workspaceId)).toBe(
+      `/workspaces/${workspaceId}/agents`,
+    );
+    expect(workspaceIdFromSearch("?workspaceId=../../admin")).toBeUndefined();
+  });
+
+  it("surfaces the bootstrap error instead of connecting a dead socket", async () => {
+    await expect(
+      workspaceStartupError(
+        new Response(
+          JSON.stringify({ error: "The workspace host is asleep." }),
+          {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    ).resolves.toBe("The workspace host is asleep.");
+    await expect(workspaceStartupError(new Response(null))).resolves.toBe(
+      undefined,
     );
   });
 
