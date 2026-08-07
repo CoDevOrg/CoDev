@@ -274,11 +274,23 @@ impl GuestService {
                 headers.insert(name.to_ascii_lowercase(), value.trim().to_owned());
             }
         }
-        let response_body = &raw[headers_end..];
+        let encoded_body = &raw[headers_end..];
+        let response_body = if header_text.lines().skip(1).any(|line| {
+            line.split_once(':').is_some_and(|(name, value)| {
+                name.eq_ignore_ascii_case("transfer-encoding")
+                    && value
+                        .split(',')
+                        .any(|encoding| encoding.trim().eq_ignore_ascii_case("chunked"))
+            })
+        }) {
+            decode_chunked_response_body(encoded_body)?
+        } else {
+            encoded_body.to_vec()
+        };
         serde_json::to_value(TheiaProxyResponse {
             status,
             headers,
-            body_base64: BASE64.encode(response_body),
+            body_base64: BASE64.encode(&response_body),
         })
         .map_err(RuntimeError::internal)
     }
@@ -1383,6 +1395,41 @@ fn decode<T: serde::de::DeserializeOwned>(body: &[u8]) -> crate::model::Result<T
     serde_json::from_slice(body).map_err(|error| RuntimeError::BadRequest(error.to_string()))
 }
 
+fn decode_chunked_response_body(mut input: &[u8]) -> crate::model::Result<Vec<u8>> {
+    let mut output = Vec::new();
+    loop {
+        let line_end = input
+            .windows(2)
+            .position(|window| window == b"\r\n")
+            .ok_or_else(|| RuntimeError::Unavailable("invalid chunked Theia response".into()))?;
+        let size_text = std::str::from_utf8(&input[..line_end])
+            .map_err(|_| RuntimeError::Unavailable("invalid Theia chunk size".into()))?
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim();
+        let size = usize::from_str_radix(size_text, 16)
+            .map_err(|_| RuntimeError::Unavailable("invalid Theia chunk size".into()))?;
+        input = &input[line_end + 2..];
+
+        if size == 0 {
+            return Ok(output);
+        }
+        if size > MAX_OUTPUT_BYTES.saturating_sub(output.len()) {
+            return Err(RuntimeError::Unavailable(
+                "Theia response exceeds the two MiB limit".into(),
+            ));
+        }
+        if input.len() < size + 2 || &input[size..size + 2] != b"\r\n" {
+            return Err(RuntimeError::Unavailable(
+                "truncated chunked Theia response".into(),
+            ));
+        }
+        output.extend_from_slice(&input[..size]);
+        input = &input[size + 2..];
+    }
+}
+
 fn revision(contents: &[u8]) -> String {
     hex::encode(Sha256::digest(contents))
 }
@@ -1422,6 +1469,14 @@ mod tests {
         );
         assert_eq!(response.status, 400);
         assert!(String::from_utf8_lossy(&response.body).contains("Socket.IO"));
+    }
+
+    #[test]
+    fn theia_proxy_decodes_chunked_engine_io_payloads() {
+        let body =
+            decode_chunked_response_body(b"4\r\nopen\r\n7;extension=value\r\n socket\r\n0\r\n\r\n")
+                .expect("decode");
+        assert_eq!(body, b"open socket");
     }
 
     #[test]
