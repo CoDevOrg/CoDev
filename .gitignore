@@ -5,6 +5,7 @@ coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+.testsprite/
 .env.local
 .env.*.local
 .vercel/

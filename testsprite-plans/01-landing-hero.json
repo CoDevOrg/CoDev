@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/TestSprite/testsprite-cli/v0.5.0/schemas/plan.schema.json",
+  "projectId": "728c7e85-4f91-4fc7-969b-0c962adb7c2e",
+  "type": "frontend",
+  "name": "Landing — hero explains CoDev and Start building goes to sign-in",
+  "planSteps": [
+    {
+      "type": "action",
+      "description": "Navigate to https://codev-xi.vercel.app/"
+    },
+    {
+      "type": "assertion",
+      "description": "The page heading contains the text 'Build software' and the word 'together'"
+    },
+    {
+      "type": "assertion",
+      "description": "Visible body text includes 'CoDev brings your team and AI agents'"
+    },
+    {
+      "type": "assertion",
+      "description": "A primary link or button labeled 'Start building' is visible"
+    },
+    {
+      "type": "assertion",
+      "description": "No visible text says 'Open demo'"
+    },
+    {
+      "type": "action",
+      "description": "Click the 'Start building' link"
+    },
+    {
+      "type": "assertion",
+      "description": "The browser URL path is /sign-in"
+    },
+    {
+      "type": "assertion",
+      "description": "A heading with the exact text 'Welcome to CoDev.' is visible"
+    }
+  ]
+}
