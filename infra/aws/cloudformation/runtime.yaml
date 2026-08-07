@@ -237,8 +237,8 @@ Resources:
             chronyc waitsync 60 1.0 0.0 2
             systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update
-            apt-get install -y ca-certificates curl unzip
+            apt-get -o DPkg::Lock::Timeout=300 update
+            apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl unzip
             curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
             unzip -q /tmp/awscliv2.zip -d /tmp
             /tmp/aws/install --update

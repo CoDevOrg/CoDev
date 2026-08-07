@@ -90,6 +90,20 @@ describe("Theia workspace transport", () => {
     );
   });
 
+  it("waits for Ubuntu package-manager locks during host bootstrap", () => {
+    const bootstrap = readFileSync(
+      resolve(process.cwd(), "../../infra/aws/scripts/bootstrap-host.sh"),
+      "utf8",
+    );
+    const runtimeTemplate = readFileSync(
+      resolve(process.cwd(), "../../infra/aws/cloudformation/runtime.yaml"),
+      "utf8",
+    );
+
+    expect(bootstrap).toContain("DPkg::Lock::Timeout=300");
+    expect(runtimeTemplate).toContain("DPkg::Lock::Timeout=300");
+  });
+
   it("registers the workspace transport before Theia's backend preloader", () => {
     const extensionPackage = JSON.parse(
       readFileSync(

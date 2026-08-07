@@ -25,8 +25,8 @@ fi
 systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y \
+apt-get -o DPkg::Lock::Timeout=300 update
+apt-get -o DPkg::Lock::Timeout=300 install -y \
   ca-certificates \
   build-essential \
   curl \
