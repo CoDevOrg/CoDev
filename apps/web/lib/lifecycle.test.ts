@@ -43,7 +43,7 @@ vi.mock("./vm-usage", () => ({
 }));
 vi.mock("./workspaces", () => ({ markWorkspaceStopped: vi.fn() }));
 
-import { reconcileLifecycle } from "./lifecycle";
+import { destroySandboxForCleanup, reconcileLifecycle } from "./lifecycle";
 
 describe("reconcileLifecycle", () => {
   beforeEach(() => {
@@ -69,5 +69,14 @@ describe("reconcileLifecycle", () => {
       hostState: "unavailable",
       hibernated: 0,
     });
+  });
+
+  it("does not fail lifecycle cleanup when the orchestrator is unavailable", async () => {
+    const { destroySandbox } = await import("./orchestrator");
+    vi.mocked(destroySandbox).mockRejectedValueOnce(
+      new Error("Firecracker host unavailable"),
+    );
+
+    await expect(destroySandboxForCleanup("workspace-1")).resolves.toBe(false);
   });
 });

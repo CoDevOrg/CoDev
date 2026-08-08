@@ -90,7 +90,9 @@ async function cleanupWorkspace(
   reason: "expired" | "runtime_missing",
 ) {
   const cancellationErrors = await cancelWorkspaceAgents(workspaceId);
-  if (hostRunning) await destroySandbox(workspaceId);
+  if (hostRunning && !(await destroySandboxForCleanup(workspaceId))) {
+    return cancellationErrors.length;
+  }
   await markWorkspaceStopped(workspaceId);
   await appendWorkspaceEvent({
     workspaceId,
@@ -102,6 +104,19 @@ async function cleanupWorkspace(
     },
   });
   return cancellationErrors.length;
+}
+
+export async function destroySandboxForCleanup(workspaceId: string) {
+  try {
+    await destroySandbox(workspaceId);
+    return true;
+  } catch (error) {
+    logEvent("warn", "lifecycle.destroy_failed", {
+      workspaceId,
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+    return false;
+  }
 }
 
 export async function reconcileLifecycle() {
