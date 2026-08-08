@@ -43,6 +43,7 @@ import {
 } from "@/lib/ide";
 import { formatPresenceCopy } from "@/lib/presence-copy";
 import { isPreviewExtensionAllowed, resolvePreviewEntry } from "@/lib/preview";
+import { createOrcaRuntimeAdapter } from "@/lib/orca-runtime-adapter";
 import { AgentPanel, type AgentSession } from "@/components/agent-panel";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { FileExplorer } from "@/components/file-explorer";
@@ -56,6 +57,13 @@ import {
 } from "@/components/workspace-view-nav";
 import { TeamStatsPanel } from "@/components/team-stats-panel";
 import type { WorkspaceShareMember } from "@/components/share-dialog";
+import {
+  OrcaHostedInspector,
+  OrcaHostedSidebar,
+  OrcaHostedStatusbar,
+  OrcaHostedTitlebar,
+  type OrcaSurface,
+} from "@/components/orca/orca-hosted-shell";
 import type { AgentEvent } from "@codev/shared-types";
 
 type IdeView = "chat" | "files" | "code" | "stats" | "preview" | "terminal";
@@ -173,6 +181,8 @@ export function OrcaWorkspaceIde({
   );
   const editorTheme = uiTheme === "dark" ? "vs-dark" : "vs";
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [orcaSessions, setOrcaSessions] =
+    useState<AgentSession[]>(initialAgentSessions);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -252,6 +262,10 @@ export function OrcaWorkspaceIde({
     : collaborationStatus;
 
   const apiBase = `/api/workspaces/${workspaceId}/sandbox`;
+  const orcaRuntime = useMemo(
+    () => createOrcaRuntimeAdapter(workspaceId),
+    [workspaceId],
+  );
 
   async function publishBranch() {
     setPublishing(true);
@@ -423,11 +437,8 @@ export function OrcaWorkspaceIde({
   }, [apiBase, isRuntimeStarting]);
 
   const refreshFiles = useCallback(async () => {
-    const filePayload = await fetch(`${apiBase}/files`, {
-      cache: "no-store",
-    }).then((response) => payload<{ files: WorkspaceFile[] }>(response));
-    setFiles(filePayload.files);
-  }, [apiBase]);
+    setFiles(await orcaRuntime.files.list());
+  }, [orcaRuntime]);
 
   const refreshPreviewNow = useCallback(() => {
     if (previewRefreshTimer.current !== null) {
@@ -604,13 +615,13 @@ export function OrcaWorkspaceIde({
       fontFamily: "var(--font-geist-mono), monospace",
       fontSize: 12,
       theme: {
-        background: "#081221",
-        foreground: "#b9c1be",
-        cursor: "#d4af37",
-        cyan: "#d4af37",
-        blue: "#64b7d0",
-        red: "#ef8e8e",
-        green: "#79cea9",
+        background: "#0a0a0a",
+        foreground: "#d4d4d4",
+        cursor: "#fafafa",
+        cyan: "#22d3ee",
+        blue: "#60a5fa",
+        red: "#f87171",
+        green: "#34d399",
       },
     });
     const fit = new FitAddon();
@@ -621,7 +632,7 @@ export function OrcaWorkspaceIde({
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(
-      `${protocol}//${window.location.host}/api/workspaces/${encodeURIComponent(workspaceId)}/sandbox/terminal/stream`,
+      `${protocol}//${window.location.host}${orcaRuntime.terminal.streamUrl}`,
     );
     terminalSocket.current = socket;
     socket.onopen = () => {
@@ -708,9 +719,9 @@ export function OrcaWorkspaceIde({
     canEdit,
     canTerminal,
     isRuntimeReady,
+    orcaRuntime,
     terminalCollapsed,
     terminalOpen,
-    workspaceId,
     writeTerminal,
   ]);
 
@@ -727,24 +738,13 @@ export function OrcaWorkspaceIde({
     setError("");
     try {
       const [fileResult, headResult] = await Promise.all([
-        fetch(`${apiBase}/files`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path }),
-        }).then((response) =>
-          payload<{
-            file: { path: string; contents: string; revision: string };
-          }>(response),
-        ),
-        fetch(
-          `${apiBase}/git?operation=show&path=${encodeURIComponent(path)}`,
-          { cache: "no-store" },
-        ).then((response) => payload<{ contents: string }>(response)),
+        orcaRuntime.files.read(path),
+        orcaRuntime.git.show(path),
       ]);
       setOpenFile({
-        ...fileResult.file,
-        savedContents: fileResult.file.contents,
-        original: headResult.contents,
+        ...fileResult,
+        savedContents: fileResult.contents,
+        original: headResult,
         dirty: false,
       });
       setDiffOpen(false);
@@ -789,21 +789,13 @@ export function OrcaWorkspaceIde({
         strategy === "filesystem" &&
         openFile?.path === collaborationConflict.path
       ) {
-        const latest = await fetch(`${apiBase}/files`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path: collaborationConflict.path }),
-        }).then((response) =>
-          payload<{
-            file: { path: string; contents: string; revision: string };
-          }>(response),
-        );
+        const latest = await orcaRuntime.files.read(collaborationConflict.path);
         setOpenFile({
-          path: latest.file.path,
-          contents: latest.file.contents,
-          savedContents: latest.file.contents,
-          original: latest.file.contents,
-          revision: latest.file.revision,
+          path: latest.path,
+          contents: latest.contents,
+          savedContents: latest.contents,
+          original: latest.contents,
+          revision: latest.revision,
           dirty: false,
         });
       } else if (openFile?.path === collaborationConflict.path) {
@@ -836,20 +828,16 @@ export function OrcaWorkspaceIde({
     setSaving(true);
     setError("");
     try {
-      const result = await fetch(`${apiBase}/files`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          path: openFile.path,
-          contents: openFile.contents,
-          expectedRevision: openFile.revision,
-        }),
-      }).then((response) => payload<{ revision: string }>(response));
+      const revision = await orcaRuntime.files.write({
+        path: openFile.path,
+        contents: openFile.contents,
+        expectedRevision: openFile.revision,
+      });
       setOpenFile((current) =>
         current
           ? {
               ...current,
-              revision: result.revision,
+              revision,
               savedContents: current.contents,
               dirty: false,
             }
@@ -867,9 +855,9 @@ export function OrcaWorkspaceIde({
       setSaving(false);
     }
   }, [
-    apiBase,
     canEdit,
     openFile,
+    orcaRuntime,
     refreshFiles,
     saving,
     schedulePreviewRefresh,
@@ -906,18 +894,16 @@ export function OrcaWorkspaceIde({
     if (!query.trim()) return;
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void fetch(`${apiBase}/files?query=${encodeURIComponent(query.trim())}`, {
-        cache: "no-store",
-      })
-        .then((response) => payload<{ matches: SearchMatch[] }>(response))
-        .then((result) => setMatches(result.matches))
+      void orcaRuntime.files
+        .search(query.trim())
+        .then(setMatches)
         .catch((caught) =>
           setError(caught instanceof Error ? caught.message : "Search failed."),
         )
         .finally(() => setSearching(false));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [apiBase, query]);
+  }, [orcaRuntime, query]);
 
   const distinctCollaborators = useMemo(
     () => [
@@ -955,6 +941,26 @@ export function OrcaWorkspaceIde({
     setSearchOpen(false);
     setView(nextView === "chat" ? "chat" : nextView);
   }, []);
+  const orcaSurface: OrcaSurface =
+    view === "chat"
+      ? "agent"
+      : view === "preview"
+        ? "preview"
+        : view === "stats"
+          ? "stats"
+          : "code";
+  const selectOrcaSurface = useCallback((surface: OrcaSurface) => {
+    setSearchOpen(false);
+    setView(
+      surface === "agent"
+        ? "chat"
+        : surface === "preview"
+          ? "preview"
+          : surface === "stats"
+            ? "stats"
+            : "code",
+    );
+  }, []);
 
   return (
     <main
@@ -962,745 +968,860 @@ export function OrcaWorkspaceIde({
       aria-label="CoDev Orca agent workspace"
       data-ide="orca"
     >
-      <header className="live-ide-topbar">
-        <Link className="workspace-brand" href="/dashboard">
-          <Image
-            className="workspace-brand-logo"
-            src="/brand/codev-mark-v3.png"
-            alt=""
-            width={28}
-            height={28}
-            priority
-          />
-          <strong>CoDev</strong>
-        </Link>
-        <span className="topbar-divider" />
-        <div
-          className="repo-crumbs"
-          title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}
+      <OrcaHostedTitlebar
+        repository={repository}
+        branch={activeBranch}
+        surface={orcaSurface}
+        onSurfaceChange={selectOrcaSurface}
+        terminalOpen={terminalOpen}
+        onTerminalToggle={() => {
+          setTerminalOpen((open) => !open);
+          setTerminalCollapsed(false);
+        }}
+      />
+      <div className="orca-hosted-body">
+        <OrcaHostedSidebar
+          sessions={orcaSessions}
+          repository={repository}
+          branch={activeBranch}
+          canCreate={canEdit && hasRepository}
+        />
+        <section
+          className="orca-hosted-stage"
+          aria-label="Active workspace pane"
         >
-          <GitBranch className="github-glyph" aria-hidden="true" />
-          <strong title={repository}>{repository}</strong>
-          <i>/</i>
-          <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
-        </div>
-        <div className="topbar-center">
-          <button
-            className="topbar-branch-btn"
-            title={`Current branch: ${activeBranch}`}
-            aria-label={`Switch branch (current: ${activeBranch})`}
-            aria-expanded={branchPickerOpen}
-            aria-haspopup="listbox"
-            onClick={async () => {
-              if (!branchPickerOpen) {
-                setBranchPickerOpen(true);
-                setBranchPickerLoading(true);
-                setBranchSearch("");
-                try {
-                  const res = await fetch(
-                    `/api/workspaces/${workspaceId}/sandbox/branches`,
-                  );
-                  if (res.ok) {
-                    const data = (await res.json()) as {
-                      branches: string[];
-                      currentBranch: string;
-                    };
-                    setAllBranches(
-                      data.branches.length > 0
-                        ? data.branches
-                        : [data.currentBranch || activeBranch || "main"],
-                    );
-                    if (data.currentBranch) setActiveBranch(data.currentBranch);
-                  } else {
-                    setAllBranches((prev) =>
-                      prev.length
-                        ? prev
-                        : Array.from(new Set([activeBranch, "main"])),
-                    );
-                  }
-                } catch {
-                  setAllBranches((prev) =>
-                    prev.length
-                      ? prev
-                      : Array.from(new Set([activeBranch, "main"])),
-                  );
-                } finally {
-                  setBranchPickerLoading(false);
-                }
-              } else {
-                setBranchPickerOpen(false);
-              }
-            }}
-          >
-            <GitBranch aria-hidden="true" />
-            <span>{activeBranch}</span>
-            <ChevronDown aria-hidden="true" className="branch-chevron" />
-          </button>
-          {branchPickerOpen && (
-            <>
-              <div
-                className="branch-picker-backdrop"
-                onClick={() => setBranchPickerOpen(false)}
-                aria-hidden="true"
+          <header className="live-ide-topbar">
+            <Link className="workspace-brand" href="/dashboard">
+              <Image
+                className="workspace-brand-logo"
+                src="/brand/codev-mark-v3.png"
+                alt=""
+                width={28}
+                height={28}
+                priority
               />
-              <div
-                className="branch-picker"
-                role="listbox"
-                aria-label="Select a branch"
-              >
-                <div className="branch-picker-header">
-                  <Search aria-hidden="true" />
-                  <input
-                    className="branch-picker-search"
-                    type="text"
-                    placeholder="Find or switch branch…"
-                    value={branchSearch}
-                    onChange={(e) => setBranchSearch(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="branch-picker-list">
-                  {branchPickerLoading ? (
-                    <div className="branch-picker-loading">
-                      Loading branches…
-                    </div>
-                  ) : (
-                    allBranches
-                      .filter((b) =>
-                        b.toLowerCase().includes(branchSearch.toLowerCase()),
-                      )
-                      .map((b) => (
-                        <button
-                          key={b}
-                          role="option"
-                          aria-selected={b === activeBranch}
-                          className={`branch-picker-item${b === activeBranch ? " active" : ""}${checkingOutBranch === b ? " checking-out" : ""}`}
-                          onClick={async () => {
-                            if (b === activeBranch || checkingOutBranch) return;
-                            setCheckingOutBranch(b);
-                            try {
-                              const res = await fetch(
-                                `/api/workspaces/${workspaceId}/sandbox/checkout`,
-                                {
-                                  method: "POST",
-                                  headers: {
-                                    "content-type": "application/json",
-                                  },
-                                  body: JSON.stringify({ branch: b }),
-                                },
-                              );
-                              if (res.ok) {
-                                setActiveBranch(b);
-                                setBranchPickerOpen(false);
-                                // Refresh file list to reflect new branch
-                                void refreshFiles().catch(() => undefined);
-                              } else {
-                                const payload = (await res.json()) as {
-                                  error?: string;
-                                };
-                                setError(
-                                  payload.error ?? "Branch checkout failed.",
-                                );
-                              }
-                            } catch {
-                              setError("Branch checkout failed.");
-                            } finally {
-                              setCheckingOutBranch(null);
-                            }
-                          }}
-                        >
-                          <GitBranch aria-hidden="true" />
-                          <span>{b}</span>
-                          {b === activeBranch && (
-                            <Check
-                              aria-hidden="true"
-                              className="branch-check"
-                            />
-                          )}
-                        </button>
-                      ))
-                  )}
-                  {!branchPickerLoading &&
-                    allBranches.filter((b) =>
-                      b.toLowerCase().includes(branchSearch.toLowerCase()),
-                    ).length === 0 && (
-                      <div className="branch-picker-empty">
-                        No branches match.
-                      </div>
-                    )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        <div className="topbar-actions">
-          <WorkspaceViewNav
-            activeView={activePrimaryView}
-            onSelect={selectPrimaryView}
-          />
-          <button
-            className={`terminal-utility${terminalOpen ? " active" : ""}`}
-            type="button"
-            aria-label="Open terminal"
-            aria-pressed={terminalOpen}
-            onClick={() => {
-              if (terminalOpen && !terminalCollapsed) {
-                setTerminalOpen(false);
-                return;
-              }
-              setTerminalOpen(true);
-              setTerminalCollapsed(false);
-            }}
-          >
-            <TerminalSquare aria-hidden="true" />
-            <span>Terminal</span>
-          </button>
-          <div id="topbar-review-actions" className="topbar-review-actions" />
-          <ThemeToggle />
-          <WorkspaceShareButton
-            workspaceId={workspaceId}
-            canShare={canShare}
-            isOwner={isOwner}
-            workspaceName={workspaceName}
-            members={members}
-          />
-          {isOwner || canMerge ? (
-            <button
-              className="workspace-delete-btn"
-              type="button"
-              aria-label="Delete workspace"
-              title="Delete workspace"
-              onClick={() => setDeleteWorkspaceModalOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "6px 10px",
-                borderRadius: "8px",
-                border: "1px solid rgba(190, 67, 67, 0.3)",
-                background: "rgba(190, 67, 67, 0.08)",
-                color: "#d66161",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              <strong>CoDev</strong>
+            </Link>
+            <span className="topbar-divider" />
+            <div
+              className="repo-crumbs"
+              title={`${repository} / ${openFile ? fileName(openFile.path) : "workspace"}`}
             >
-              <Trash2 style={{ width: "13px", height: "13px" }} />
-              <span>Delete</span>
-            </button>
-          ) : null}
-          <span
-            className={`connection-state collaboration-${displayedCollaborationStatus}`}
-          >
-            <i />{" "}
-            {displayedCollaborationStatus === "online"
-              ? "Realtime online"
-              : displayedCollaborationStatus === "reconnecting"
-                ? "Reconnecting…"
-                : displayedCollaborationStatus === "connecting"
-                  ? "Connecting…"
-                  : "Realtime offline"}
-          </span>
-          <div
-            className="presence-group"
-            aria-label={formatPresenceCopy(peopleHere)}
-          >
-            <span className="presence-copy">
-              {formatPresenceCopy(peopleHere)}
-            </span>
-            <div className="presence-stack">
-              {remoteCollaborators.slice(0, 4).map((collaborator) =>
-                collaborator.image ? (
-                  <Image
-                    key={collaborator.id}
-                    src={collaborator.image}
-                    alt={collaboratorLabel(collaborator)}
-                    title={collaboratorLabel(collaborator)}
-                    width={26}
-                    height={26}
-                    unoptimized
-                  />
-                ) : (
-                  <span
-                    key={collaborator.id}
-                    title={collaboratorLabel(collaborator)}
-                    style={
-                      {
-                        "--presence-color": collaborator.color,
-                      } as React.CSSProperties
-                    }
-                  >
-                    {collaborator.login.slice(0, 1).toUpperCase()}
-                  </span>
-                ),
-              )}
+              <GitBranch className="github-glyph" aria-hidden="true" />
+              <strong title={repository}>{repository}</strong>
+              <i>/</i>
+              <span>{openFile ? fileName(openFile.path) : "workspace"}</span>
             </div>
-          </div>
-          <ProfileMenu
-            compact
-            returnTo={`/workspaces/${workspaceId}/ide`}
-            useClerkAuth={useClerkAuth}
-            user={{
-              name: user.name,
-              githubLogin: user.login,
-              image: user.image,
-            }}
-          />
-        </div>
-      </header>
-
-      {!isRuntimeReady ? (
-        <section className="runtime-banner" role="status">
-          <div>
-            <strong>
-              {isHibernated ? "Restoring workspace" : "Starting workspace"}
-            </strong>
-            <span>
-              {isHibernated
-                ? "Your files, conversations, and agent history are safe while the workspace restores in the background."
-                : hasRepository
-                  ? "Your conversations are ready while the workspace starts in the background."
-                  : "Connect a GitHub repository to enable live coding."}
-            </span>
-            {runtimeMessage || runtimeError ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  marginTop: "6px",
+            <div className="topbar-center">
+              <button
+                className="topbar-branch-btn"
+                title={`Current branch: ${activeBranch}`}
+                aria-label={`Switch branch (current: ${activeBranch})`}
+                aria-expanded={branchPickerOpen}
+                aria-haspopup="listbox"
+                onClick={async () => {
+                  if (!branchPickerOpen) {
+                    setBranchPickerOpen(true);
+                    setBranchPickerLoading(true);
+                    setBranchSearch("");
+                    try {
+                      const data = await orcaRuntime.git.branches();
+                      setAllBranches(
+                        data.branches.length > 0
+                          ? data.branches
+                          : [data.currentBranch || activeBranch || "main"],
+                      );
+                      if (data.currentBranch)
+                        setActiveBranch(data.currentBranch);
+                    } catch {
+                      setAllBranches((prev) =>
+                        prev.length
+                          ? prev
+                          : Array.from(new Set([activeBranch, "main"])),
+                      );
+                    } finally {
+                      setBranchPickerLoading(false);
+                    }
+                  } else {
+                    setBranchPickerOpen(false);
+                  }
                 }}
               >
-                <small>{runtimeMessage || runtimeError}</small>
-                {canStartRuntime ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      autoStartAttempted.current = false;
-                      void startWorkspace();
-                    }}
-                    style={{
-                      padding: "3px 10px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      borderRadius: "6px",
-                      border: "1px solid rgba(212, 175, 55, 0.4)",
-                      background: "rgba(212, 175, 55, 0.15)",
-                      color: "inherit",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Retry starting workspace
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <span className="runtime-state">
-            {isRuntimeStarting
-              ? "Starting…"
-              : isHibernated
-                ? "Restoring…"
-                : hasRepository
-                  ? startingRuntime
-                    ? "Preparing…"
-                    : "Queued"
-                  : "Repository needed"}
-          </span>
-        </section>
-      ) : null}
-
-      <div
-        className={[
-          "live-ide-grid",
-          `view-${view}`,
-          hasPreview || view === "preview" ? "has-preview" : "preview-hidden",
-          terminalOpen && terminalCollapsed ? "terminal-collapsed" : "",
-          terminalOpen && !terminalCollapsed ? "terminal-open" : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <div
-          className={["ide-main-stage", isCanvasView(view) ? "canvas-open" : ""]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          {view === "stats" ? (
-            <TeamStatsPanel
-              sessions={initialAgentSessions}
-              collaborators={distinctCollaborators}
-              members={members}
-              currentUser={user}
-              peopleHere={peopleHere}
-              runtimeStatus={runtimeStatus}
-              repository={repository}
-              branch={branch}
-              vmMinutesUsed={vmMinutesUsed}
-              vmMinutesQuota={vmMinutesQuota}
-            />
-          ) : (
-            <AgentPanel
-              workspaceId={workspaceId}
-              canMerge={canMerge}
-              canReview={canReview}
-              canSteer={canEdit && hasRepository}
-              initialSessions={initialAgentSessions}
-              initialStateEvents={initialStateEvents}
-              onTurnCompleted={handleTurnCompleted}
-            />
-          )}
-          {view === "preview" ? (
-            <PreviewPane
-              workspaceId={workspaceId}
-              files={files}
-              revisionToken={String(previewRevision)}
-              onRefresh={refreshPreviewNow}
-              runtimeReady={isRuntimeReady}
-              className={["preview-pane-enter", "preview-focus"].join(" ")}
-              exportActions={
-                canMerge ? (
-                  <div
-                    className="publication-control preview-export-control"
-                    aria-label="Share what you built"
-                  >
-                    {publishedUrl ? (
-                      <>
-                        <a href={publishedUrl} target="_blank" rel="noreferrer">
-                          Published ↗
-                        </a>
-                        {pullRequestUrl ? (
-                          <a
-                            href={pullRequestUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Pull request ↗
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={openingPullRequest}
-                            onClick={() => void openPullRequest()}
-                          >
-                            {openingPullRequest
-                              ? "Opening PR…"
-                              : "Open pull request"}
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <input
-                          aria-label="GitHub publication branch"
-                          value={publicationBranch}
-                          onChange={(event) =>
-                            setPublicationBranch(
-                              event.target.value.toLowerCase(),
-                            )
-                          }
-                          spellCheck={false}
-                        />
-                        <button
-                          type="button"
-                          disabled={
-                            exporting || publishing || Boolean(openFile?.dirty)
-                          }
-                          onClick={() => void exportPullRequest()}
-                        >
-                          {exporting ? "Creating PR…" : "Create pull request"}
-                        </button>
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          disabled={publishing || Boolean(openFile?.dirty)}
-                          onClick={() => void publishBranch()}
-                        >
-                          {publishing ? "Publishing…" : "Publish branch"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : undefined
-              }
-            />
-          ) : null}
-
-          {view === "files" || view === "code" ? (
-            <aside
-              className="file-sidebar ide-drawer ide-drawer-files"
-              aria-label="Files"
-            >
-              <div className="panel-title">
-                <span>{searchOpen ? "Search" : "Explorer"}</span>
-                <div className="ide-drawer-actions">
-                  <button
-                    type="button"
-                    className={searchOpen ? "active" : ""}
-                    aria-label="Search"
-                    onClick={() => setSearchOpen((open) => !open)}
-                  >
-                    <Search aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => void refreshFiles()}>
-                    <RefreshCw aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Close files"
-                    onClick={() => setView("chat")}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-              {searchOpen ? (
+                <GitBranch aria-hidden="true" />
+                <span>{activeBranch}</span>
+                <ChevronDown aria-hidden="true" className="branch-chevron" />
+              </button>
+              {branchPickerOpen && (
                 <>
-                  <div className="ide-search">
-                    <input
-                      aria-label="Search workspace"
-                      value={query}
-                      onChange={(event) => {
-                        setQuery(event.target.value);
-                        if (!event.target.value.trim()) setMatches([]);
-                      }}
-                      placeholder="Search files"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="search-results">
-                    {searching ? <p>Searching…</p> : null}
-                    {matches.map((match) => (
-                      <button
-                        key={`${match.path}:${match.line}`}
-                        type="button"
-                        onClick={() => {
-                          void openPath(match.path, match.line);
-                          setView("code");
-                        }}
-                      >
-                        <strong>{fileName(match.path)}</strong>
-                        <span>
-                          {match.path}:{match.line}
-                        </span>
-                        <small>{match.preview}</small>
-                      </button>
-                    ))}
+                  <div
+                    className="branch-picker-backdrop"
+                    onClick={() => setBranchPickerOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="branch-picker"
+                    role="listbox"
+                    aria-label="Select a branch"
+                  >
+                    <div className="branch-picker-header">
+                      <Search aria-hidden="true" />
+                      <input
+                        className="branch-picker-search"
+                        type="text"
+                        placeholder="Find or switch branch…"
+                        value={branchSearch}
+                        onChange={(e) => setBranchSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="branch-picker-list">
+                      {branchPickerLoading ? (
+                        <div className="branch-picker-loading">
+                          Loading branches…
+                        </div>
+                      ) : (
+                        allBranches
+                          .filter((b) =>
+                            b
+                              .toLowerCase()
+                              .includes(branchSearch.toLowerCase()),
+                          )
+                          .map((b) => (
+                            <button
+                              key={b}
+                              role="option"
+                              aria-selected={b === activeBranch}
+                              className={`branch-picker-item${b === activeBranch ? " active" : ""}${checkingOutBranch === b ? " checking-out" : ""}`}
+                              onClick={async () => {
+                                if (b === activeBranch || checkingOutBranch)
+                                  return;
+                                setCheckingOutBranch(b);
+                                try {
+                                  await orcaRuntime.git.checkout(b);
+                                  setActiveBranch(b);
+                                  setBranchPickerOpen(false);
+                                  void refreshFiles().catch(() => undefined);
+                                } catch {
+                                  setError("Branch checkout failed.");
+                                } finally {
+                                  setCheckingOutBranch(null);
+                                }
+                              }}
+                            >
+                              <GitBranch aria-hidden="true" />
+                              <span>{b}</span>
+                              {b === activeBranch && (
+                                <Check
+                                  aria-hidden="true"
+                                  className="branch-check"
+                                />
+                              )}
+                            </button>
+                          ))
+                      )}
+                      {!branchPickerLoading &&
+                        allBranches.filter((b) =>
+                          b.toLowerCase().includes(branchSearch.toLowerCase()),
+                        ).length === 0 && (
+                          <div className="branch-picker-empty">
+                            No branches match.
+                          </div>
+                        )}
+                    </div>
                   </div>
                 </>
-              ) : (
-                <FileExplorer
-                  files={files}
-                  loading={loading}
-                  repositoryName={repository.split("/").at(-1) ?? repository}
-                  openPath={openFile?.path}
-                  presenceByPath={presenceByPath}
-                  onOpen={(path) => {
-                    void openPath(path);
-                    setView("code");
-                  }}
-                  collaboratorLabel={collaboratorLabel}
-                />
               )}
-            </aside>
-          ) : null}
-
-          {view === "code" ? (
-            <section
-              className="ide-editor ide-drawer ide-drawer-code"
-              aria-label="Code editor"
-            >
-              <div className="editor-tabbar">
-                {openFile ? (
-                  <div className="editor-tab active">
-                    <span>
-                      {openFile.dirty ? "● " : ""}
-                      {fileName(openFile.path)}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="editor-tab-actions">
-                  <button
-                    type="button"
-                    disabled={!openFile}
-                    className={diffOpen ? "active" : ""}
-                    onClick={() => setDiffOpen((value) => !value)}
-                  >
-                    Diff
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      !canEdit ||
-                      displayedCollaborationStatus === "online" ||
-                      !openFile?.dirty ||
-                      saving
-                    }
-                    onClick={() => void save()}
-                  >
-                    {displayedCollaborationStatus === "online"
-                      ? openFile?.dirty
-                        ? "Syncing…"
-                        : "Synced"
-                      : saving
-                        ? "Saving…"
-                        : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Close code"
-                    onClick={() => setView("chat")}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-              {error ? <div className="ide-error">{error}</div> : null}
-              {collaborationConflict ? (
-                <div className="collaboration-conflict" role="alert">
-                  <div>
-                    <strong>
-                      Filesystem conflict in {collaborationConflict.path}
-                    </strong>
-                    <span>{collaborationConflict.message}</span>
-                  </div>
-                  <div className="collaboration-conflict-actions">
-                    <button
-                      type="button"
-                      disabled={resolvingConflict}
-                      onClick={() =>
-                        void resolveCollaborationConflict("collaboration")
-                      }
-                    >
-                      Keep editor version
-                    </button>
-                    <button
-                      type="button"
-                      disabled={resolvingConflict}
-                      onClick={() =>
-                        void resolveCollaborationConflict("filesystem")
-                      }
-                    >
-                      Use sandbox version
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              {openFile ? (
-                diffOpen ? (
-                  <DiffEditor
-                    original={openFile.original}
-                    modified={openFile.contents}
-                    language={languageForPath(openFile.path)}
-                    theme={editorTheme}
-                    options={{
-                      automaticLayout: true,
-                      fontFamily: "var(--font-geist-mono)",
-                      fontSize: 13,
-                      minimap: { enabled: false },
-                      renderSideBySide: true,
-                      readOnly: true,
-                    }}
-                  />
-                ) : (
-                  <Editor
-                    path={openFile.path}
-                    value={openFile.contents}
-                    language={languageForPath(openFile.path)}
-                    theme={editorTheme}
-                    onMount={editorMount}
-                    onChange={(contents) =>
-                      setOpenFile((current) =>
-                        current
-                          ? {
-                              ...current,
-                              contents: contents ?? "",
-                              dirty: (contents ?? "") !== current.savedContents,
-                            }
-                          : null,
-                      )
-                    }
-                    options={{
-                      automaticLayout: true,
-                      fontFamily: "var(--font-geist-mono)",
-                      fontSize: 13,
-                      minimap: { enabled: false },
-                      padding: { top: 14 },
-                      smoothScrolling: true,
-                      tabSize: 2,
-                      readOnly: !canEdit,
-                    }}
-                  />
-                )
-              ) : (
-                <div className="ide-welcome">
-                  <p className="ide-welcome-hint">
-                    Select a file in the explorer to open it.
-                  </p>
-                </div>
-              )}
-            </section>
-          ) : null}
-        </div>
-
-        <section
-          className={[
-            "terminal-panel",
-            "live-terminal",
-            terminalOpen ? "terminal-drawer" : "terminal-hidden",
-            terminalCollapsed ? "is-collapsed" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-label="Sandbox terminal"
-          aria-hidden={!terminalOpen}
-        >
-          <div className="terminal-head">
-            <div>
-              <button className="active" type="button">
-                Terminal <span>1</span>
-              </button>
             </div>
-            <div className="terminal-head-actions">
-              <span>
-                {canTerminal ? "authenticated" : "capability required"}
-              </span>
+            <div className="topbar-actions">
+              <WorkspaceViewNav
+                activeView={activePrimaryView}
+                onSelect={selectPrimaryView}
+              />
               <button
+                className={`terminal-utility${terminalOpen ? " active" : ""}`}
                 type="button"
-                aria-label={
-                  terminalCollapsed ? "Expand terminal" : "Collapse terminal"
-                }
-                onClick={() => setTerminalCollapsed((value) => !value)}
-              >
-                {terminalCollapsed ? "▴" : "▾"}
-              </button>
-              <button
-                type="button"
-                aria-label="Close terminal"
+                aria-label="Open terminal"
+                aria-pressed={terminalOpen}
                 onClick={() => {
-                  setTerminalOpen(false);
+                  if (terminalOpen && !terminalCollapsed) {
+                    setTerminalOpen(false);
+                    return;
+                  }
+                  setTerminalOpen(true);
                   setTerminalCollapsed(false);
                 }}
               >
-                <X aria-hidden="true" />
+                <TerminalSquare aria-hidden="true" />
+                <span>Terminal</span>
+              </button>
+              <div
+                id="topbar-review-actions"
+                className="topbar-review-actions"
+              />
+              <ThemeToggle />
+              <WorkspaceShareButton
+                workspaceId={workspaceId}
+                canShare={canShare}
+                isOwner={isOwner}
+                workspaceName={workspaceName}
+                members={members}
+              />
+              {isOwner || canMerge ? (
+                <button
+                  className="workspace-delete-btn"
+                  type="button"
+                  aria-label="Delete workspace"
+                  title="Delete workspace"
+                  onClick={() => setDeleteWorkspaceModalOpen(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(190, 67, 67, 0.3)",
+                    background: "rgba(190, 67, 67, 0.08)",
+                    color: "#d66161",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 style={{ width: "13px", height: "13px" }} />
+                  <span>Delete</span>
+                </button>
+              ) : null}
+              <span
+                className={`connection-state collaboration-${displayedCollaborationStatus}`}
+              >
+                <i />{" "}
+                {displayedCollaborationStatus === "online"
+                  ? "Realtime online"
+                  : displayedCollaborationStatus === "reconnecting"
+                    ? "Reconnecting…"
+                    : displayedCollaborationStatus === "connecting"
+                      ? "Connecting…"
+                      : "Realtime offline"}
+              </span>
+              <div
+                className="presence-group"
+                aria-label={formatPresenceCopy(peopleHere)}
+              >
+                <span className="presence-copy">
+                  {formatPresenceCopy(peopleHere)}
+                </span>
+                <div className="presence-stack">
+                  {remoteCollaborators.slice(0, 4).map((collaborator) =>
+                    collaborator.image ? (
+                      <Image
+                        key={collaborator.id}
+                        src={collaborator.image}
+                        alt={collaboratorLabel(collaborator)}
+                        title={collaboratorLabel(collaborator)}
+                        width={26}
+                        height={26}
+                        unoptimized
+                      />
+                    ) : (
+                      <span
+                        key={collaborator.id}
+                        title={collaboratorLabel(collaborator)}
+                        style={
+                          {
+                            "--presence-color": collaborator.color,
+                          } as React.CSSProperties
+                        }
+                      >
+                        {collaborator.login.slice(0, 1).toUpperCase()}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+              <ProfileMenu
+                compact
+                returnTo={`/workspaces/${workspaceId}/ide`}
+                useClerkAuth={useClerkAuth}
+                user={{
+                  name: user.name,
+                  githubLogin: user.login,
+                  image: user.image,
+                }}
+              />
+            </div>
+          </header>
+
+          {!isRuntimeReady ? (
+            <section className="runtime-banner" role="status">
+              <div>
+                <strong>
+                  {isHibernated ? "Restoring workspace" : "Starting workspace"}
+                </strong>
+                <span>
+                  {isHibernated
+                    ? "Your files, conversations, and agent history are safe while the workspace restores in the background."
+                    : hasRepository
+                      ? "Your conversations are ready while the workspace starts in the background."
+                      : "Connect a GitHub repository to enable live coding."}
+                </span>
+                {runtimeMessage || runtimeError ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      marginTop: "6px",
+                    }}
+                  >
+                    <small>{runtimeMessage || runtimeError}</small>
+                    {canStartRuntime ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          autoStartAttempted.current = false;
+                          void startWorkspace();
+                        }}
+                        style={{
+                          padding: "3px 10px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderRadius: "6px",
+                          border: "1px solid rgba(212, 175, 55, 0.4)",
+                          background: "rgba(212, 175, 55, 0.15)",
+                          color: "inherit",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Retry starting workspace
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <span className="runtime-state">
+                {isRuntimeStarting
+                  ? "Starting…"
+                  : isHibernated
+                    ? "Restoring…"
+                    : hasRepository
+                      ? startingRuntime
+                        ? "Preparing…"
+                        : "Queued"
+                      : "Repository needed"}
+              </span>
+            </section>
+          ) : null}
+
+          <div
+            className={[
+              "live-ide-grid",
+              `view-${view}`,
+              hasPreview || view === "preview"
+                ? "has-preview"
+                : "preview-hidden",
+              terminalOpen && terminalCollapsed ? "terminal-collapsed" : "",
+              terminalOpen && !terminalCollapsed ? "terminal-open" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <div
+              className={[
+                "ide-main-stage",
+                isCanvasView(view) ? "canvas-open" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {view === "stats" ? (
+                <TeamStatsPanel
+                  sessions={orcaSessions}
+                  collaborators={distinctCollaborators}
+                  members={members}
+                  currentUser={user}
+                  peopleHere={peopleHere}
+                  runtimeStatus={runtimeStatus}
+                  repository={repository}
+                  branch={branch}
+                  vmMinutesUsed={vmMinutesUsed}
+                  vmMinutesQuota={vmMinutesQuota}
+                />
+              ) : (
+                <AgentPanel
+                  workspaceId={workspaceId}
+                  canMerge={canMerge}
+                  canReview={canReview}
+                  canSteer={canEdit && hasRepository}
+                  initialSessions={initialAgentSessions}
+                  initialStateEvents={initialStateEvents}
+                  onTurnCompleted={handleTurnCompleted}
+                  onSessionsChange={setOrcaSessions}
+                />
+              )}
+              {view === "preview" ? (
+                <PreviewPane
+                  workspaceId={workspaceId}
+                  files={files}
+                  revisionToken={String(previewRevision)}
+                  onRefresh={refreshPreviewNow}
+                  runtimeReady={isRuntimeReady}
+                  className={["preview-pane-enter", "preview-focus"].join(" ")}
+                  exportActions={
+                    canMerge ? (
+                      <div
+                        className="publication-control preview-export-control"
+                        aria-label="Share what you built"
+                      >
+                        {publishedUrl ? (
+                          <>
+                            <a
+                              href={publishedUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Published ↗
+                            </a>
+                            {pullRequestUrl ? (
+                              <a
+                                href={pullRequestUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Pull request ↗
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={openingPullRequest}
+                                onClick={() => void openPullRequest()}
+                              >
+                                {openingPullRequest
+                                  ? "Opening PR…"
+                                  : "Open pull request"}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              aria-label="GitHub publication branch"
+                              value={publicationBranch}
+                              onChange={(event) =>
+                                setPublicationBranch(
+                                  event.target.value.toLowerCase(),
+                                )
+                              }
+                              spellCheck={false}
+                            />
+                            <button
+                              type="button"
+                              disabled={
+                                exporting ||
+                                publishing ||
+                                Boolean(openFile?.dirty)
+                              }
+                              onClick={() => void exportPullRequest()}
+                            >
+                              {exporting
+                                ? "Creating PR…"
+                                : "Create pull request"}
+                            </button>
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              disabled={publishing || Boolean(openFile?.dirty)}
+                              onClick={() => void publishBranch()}
+                            >
+                              {publishing ? "Publishing…" : "Publish branch"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ) : undefined
+                  }
+                />
+              ) : null}
+
+              {view === "files" || view === "code" ? (
+                <aside
+                  className="file-sidebar ide-drawer ide-drawer-files"
+                  aria-label="Files"
+                >
+                  <div className="panel-title">
+                    <span>{searchOpen ? "Search" : "Explorer"}</span>
+                    <div className="ide-drawer-actions">
+                      <button
+                        type="button"
+                        className={searchOpen ? "active" : ""}
+                        aria-label="Search"
+                        onClick={() => setSearchOpen((open) => !open)}
+                      >
+                        <Search aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => void refreshFiles()}>
+                        <RefreshCw aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Close files"
+                        onClick={() => setView("chat")}
+                      >
+                        <X aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  {searchOpen ? (
+                    <>
+                      <div className="ide-search">
+                        <input
+                          aria-label="Search workspace"
+                          value={query}
+                          onChange={(event) => {
+                            setQuery(event.target.value);
+                            if (!event.target.value.trim()) setMatches([]);
+                          }}
+                          placeholder="Search files"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="search-results">
+                        {searching ? <p>Searching…</p> : null}
+                        {matches.map((match) => (
+                          <button
+                            key={`${match.path}:${match.line}`}
+                            type="button"
+                            onClick={() => {
+                              void openPath(match.path, match.line);
+                              setView("code");
+                            }}
+                          >
+                            <strong>{fileName(match.path)}</strong>
+                            <span>
+                              {match.path}:{match.line}
+                            </span>
+                            <small>{match.preview}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <FileExplorer
+                      files={files}
+                      loading={loading}
+                      repositoryName={
+                        repository.split("/").at(-1) ?? repository
+                      }
+                      openPath={openFile?.path}
+                      presenceByPath={presenceByPath}
+                      onOpen={(path) => {
+                        void openPath(path);
+                        setView("code");
+                      }}
+                      collaboratorLabel={collaboratorLabel}
+                    />
+                  )}
+                </aside>
+              ) : null}
+
+              {view === "code" ? (
+                <section
+                  className="ide-editor ide-drawer ide-drawer-code"
+                  aria-label="Code editor"
+                >
+                  <div className="editor-tabbar">
+                    {openFile ? (
+                      <div className="editor-tab active">
+                        <span>
+                          {openFile.dirty ? "● " : ""}
+                          {fileName(openFile.path)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="editor-tab-actions">
+                      <button
+                        type="button"
+                        disabled={!openFile}
+                        className={diffOpen ? "active" : ""}
+                        onClick={() => setDiffOpen((value) => !value)}
+                      >
+                        Diff
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          !canEdit ||
+                          displayedCollaborationStatus === "online" ||
+                          !openFile?.dirty ||
+                          saving
+                        }
+                        onClick={() => void save()}
+                      >
+                        {displayedCollaborationStatus === "online"
+                          ? openFile?.dirty
+                            ? "Syncing…"
+                            : "Synced"
+                          : saving
+                            ? "Saving…"
+                            : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Close code"
+                        onClick={() => setView("chat")}
+                      >
+                        <X aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  {error ? <div className="ide-error">{error}</div> : null}
+                  {collaborationConflict ? (
+                    <div className="collaboration-conflict" role="alert">
+                      <div>
+                        <strong>
+                          Filesystem conflict in {collaborationConflict.path}
+                        </strong>
+                        <span>{collaborationConflict.message}</span>
+                      </div>
+                      <div className="collaboration-conflict-actions">
+                        <button
+                          type="button"
+                          disabled={resolvingConflict}
+                          onClick={() =>
+                            void resolveCollaborationConflict("collaboration")
+                          }
+                        >
+                          Keep editor version
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resolvingConflict}
+                          onClick={() =>
+                            void resolveCollaborationConflict("filesystem")
+                          }
+                        >
+                          Use sandbox version
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {openFile ? (
+                    diffOpen ? (
+                      <DiffEditor
+                        original={openFile.original}
+                        modified={openFile.contents}
+                        language={languageForPath(openFile.path)}
+                        theme={editorTheme}
+                        options={{
+                          automaticLayout: true,
+                          fontFamily: "var(--font-geist-mono)",
+                          fontSize: 13,
+                          minimap: { enabled: false },
+                          renderSideBySide: true,
+                          readOnly: true,
+                        }}
+                      />
+                    ) : (
+                      <Editor
+                        path={openFile.path}
+                        value={openFile.contents}
+                        language={languageForPath(openFile.path)}
+                        theme={editorTheme}
+                        onMount={editorMount}
+                        onChange={(contents) =>
+                          setOpenFile((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  contents: contents ?? "",
+                                  dirty:
+                                    (contents ?? "") !== current.savedContents,
+                                }
+                              : null,
+                          )
+                        }
+                        options={{
+                          automaticLayout: true,
+                          fontFamily: "var(--font-geist-mono)",
+                          fontSize: 13,
+                          minimap: { enabled: false },
+                          padding: { top: 14 },
+                          smoothScrolling: true,
+                          tabSize: 2,
+                          readOnly: !canEdit,
+                        }}
+                      />
+                    )
+                  ) : (
+                    <div className="ide-welcome">
+                      <p className="ide-welcome-hint">
+                        Select a file in the explorer to open it.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              ) : null}
+            </div>
+
+            <section
+              className={[
+                "terminal-panel",
+                "live-terminal",
+                terminalOpen ? "terminal-drawer" : "terminal-hidden",
+                terminalCollapsed ? "is-collapsed" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-label="Sandbox terminal"
+              aria-hidden={!terminalOpen}
+            >
+              <div className="terminal-head">
+                <div>
+                  <button className="active" type="button">
+                    Terminal <span>1</span>
+                  </button>
+                </div>
+                <div className="terminal-head-actions">
+                  <span>
+                    {canTerminal ? "authenticated" : "capability required"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={
+                      terminalCollapsed
+                        ? "Expand terminal"
+                        : "Collapse terminal"
+                    }
+                    onClick={() => setTerminalCollapsed((value) => !value)}
+                  >
+                    {terminalCollapsed ? "▴" : "▾"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Close terminal"
+                    onClick={() => {
+                      setTerminalOpen(false);
+                      setTerminalCollapsed(false);
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              {canTerminal ? (
+                isRuntimeReady ? (
+                  <div className="xterm-host" ref={terminalElement} />
+                ) : (
+                  <div className="terminal-denied">
+                    Start the sandbox runtime to open a Firecracker terminal.
+                  </div>
+                )
+              ) : (
+                <div className="terminal-denied">
+                  Ask the workspace owner for terminal capability.
+                </div>
+              )}
+            </section>
+          </div>
+        </section>
+        <OrcaHostedInspector
+          sourceControl={
+            <div className="orca-inspector-list">
+              <div className="orca-inspector-summary">
+                <strong>Changes</strong>
+                <span>{files.filter((file) => file.status).length}</span>
+              </div>
+              {files.filter((file) => file.status).length ? (
+                files
+                  .filter((file) => file.status)
+                  .map((file) => (
+                    <button
+                      type="button"
+                      key={file.path}
+                      onClick={() => {
+                        void openPath(file.path);
+                        setView("code");
+                        setDiffOpen(true);
+                      }}
+                    >
+                      <span>{fileName(file.path)}</span>
+                      <small>{file.path}</small>
+                      <b>{file.status}</b>
+                    </button>
+                  ))
+              ) : (
+                <p>No uncommitted changes.</p>
+              )}
+            </div>
+          }
+          agents={
+            <div className="orca-inspector-list">
+              <div className="orca-inspector-summary">
+                <strong>Agents</strong>
+                <span>{orcaSessions.length}</span>
+              </div>
+              {orcaSessions.map((session) => (
+                <button
+                  type="button"
+                  key={session.id}
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent("codev:orca-select-session", {
+                        detail: { sessionId: session.id },
+                      }),
+                    );
+                    setView("chat");
+                  }}
+                >
+                  <span>{session.name}</span>
+                  <small>{session.worktreeName}</small>
+                  <b>{session.status}</b>
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <div className="orca-inspector-actions">
+            <strong>{repository.split("/").at(-1) || "workspace"}</strong>
+            <div>
+              <button
+                type="button"
+                aria-label="Search files"
+                onClick={() => {
+                  setView("code");
+                  setSearchOpen(true);
+                }}
+              >
+                <Search aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label="Refresh files"
+                onClick={() => void refreshFiles()}
+              >
+                <RefreshCw aria-hidden="true" />
               </button>
             </div>
           </div>
-          {canTerminal ? (
-            isRuntimeReady ? (
-              <div className="xterm-host" ref={terminalElement} />
-            ) : (
-              <div className="terminal-denied">
-                Start the sandbox runtime to open a Firecracker terminal.
-              </div>
-            )
-          ) : (
-            <div className="terminal-denied">
-              Ask the workspace owner for terminal capability.
-            </div>
-          )}
-        </section>
+          <FileExplorer
+            files={files}
+            loading={loading}
+            repositoryName={repository.split("/").at(-1) ?? repository}
+            openPath={openFile?.path}
+            presenceByPath={presenceByPath}
+            onOpen={(path) => {
+              void openPath(path);
+              setView("code");
+            }}
+            collaboratorLabel={collaboratorLabel}
+          />
+        </OrcaHostedInspector>
       </div>
+      <OrcaHostedStatusbar
+        branch={activeBranch}
+        runtimeReady={isRuntimeReady}
+        peopleHere={peopleHere}
+        sessions={orcaSessions}
+      />
       <FeedbackWidget workspaceId={workspaceId} />
       {deleteWorkspaceModalOpen ? (
         <div

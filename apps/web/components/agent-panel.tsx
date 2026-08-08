@@ -192,6 +192,7 @@ export function AgentPanel({
   initialSessions = [],
   initialStateEvents = [],
   onTurnCompleted,
+  onSessionsChange,
 }: {
   workspaceId: string;
   canMerge: boolean;
@@ -200,6 +201,7 @@ export function AgentPanel({
   initialSessions?: AgentSession[];
   initialStateEvents?: AgentEvent[];
   onTurnCompleted?: () => void;
+  onSessionsChange?: (sessions: AgentSession[]) => void;
 }) {
   const endpoint = `/api/workspaces/${workspaceId}/agents`;
   const [sessions, setSessions] = useState<AgentSession[]>(initialSessions);
@@ -244,21 +246,51 @@ export function AgentPanel({
   const modelOptionsLoadedRef = useRef(false);
   const loadedProviderRef = useRef<string | null>(null);
   const onTurnCompletedRef = useRef(onTurnCompleted);
+  const onSessionsChangeRef = useRef(onSessionsChange);
   const composerFocusedRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   const [sessionView, setSessionView] = useState<"chat" | "diff">("chat");
 
-  // Reset to chat view when creating a new session
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Reset to chat view when creating a new session.
   useEffect(() => {
-    if (composingNew) setSessionView("chat");
+    if (!composingNew) return;
+    const frame = window.requestAnimationFrame(() => setSessionView("chat"));
+    return () => window.cancelAnimationFrame(frame);
   }, [composingNew]);
 
   useEffect(() => {
     onTurnCompletedRef.current = onTurnCompleted;
   }, [onTurnCompleted]);
+
+  useEffect(() => {
+    onSessionsChangeRef.current = onSessionsChange;
+  }, [onSessionsChange]);
+
+  useEffect(() => {
+    onSessionsChangeRef.current?.(sessions);
+  }, [sessions]);
+
+  useEffect(() => {
+    const selectSession = (event: Event) => {
+      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail
+        ?.sessionId;
+      if (!sessionId) return;
+      const session = sessions.find((candidate) => candidate.id === sessionId);
+      if (!session) return;
+      setSelectedSessionId(session.id);
+      setSelectedModel(session.model);
+      setComposingNew(false);
+    };
+    const newSession = () => setComposingNew(true);
+    window.addEventListener("codev:orca-select-session", selectSession);
+    window.addEventListener("codev:orca-new-session", newSession);
+    return () => {
+      window.removeEventListener("codev:orca-select-session", selectSession);
+      window.removeEventListener("codev:orca-new-session", newSession);
+    };
+  }, [sessions]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -412,7 +444,10 @@ export function AgentPanel({
   }, [refresh]);
 
   useEffect(() => {
-    void refresh().catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      void refresh().catch(() => undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [selectedProvider, refresh]);
 
   useEffect(() => {

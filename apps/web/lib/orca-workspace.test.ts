@@ -33,7 +33,17 @@ describe("Orca workspace architecture", () => {
       existsSync(resolve(repositoryRoot, "third_party/orca/LICENSE")),
     ).toBe(true);
     expect(source("third_party/orca/UPSTREAM.md")).toContain(
-      "fc8441194ce400ad3a6dfdc053d163a9f9688a33",
+      "6da7b8e9cfe62e5b4d34bb52e8c570036c1935fc",
     );
+  });
+
+  it("adapts Orca's preload vocabulary to authenticated workspace APIs", () => {
+    const adapter = source("apps/web/lib/orca-runtime-adapter.ts");
+    const shell = source("apps/web/components/orca/orca-hosted-shell.tsx");
+
+    expect(adapter).toContain("createOrcaRuntimeAdapter");
+    expect(adapter).toContain("/sandbox");
+    expect(shell).toContain("OrcaHostedSidebar");
+    expect(shell).toContain("OrcaHostedInspector");
   });
 });

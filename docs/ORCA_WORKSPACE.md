@@ -1,13 +1,14 @@
 # Orca workspace architecture
 
-CoDev uses an Orca-based, agent-first browser IDE instead of Eclipse Theia.
-The implementation follows Orca's open-source web workspace model while
-preserving CoDev's hosted control plane and Firecracker isolation boundary.
+CoDev forks Orca's open-source renderer into an agent-first browser IDE. The
+hosted fork preserves Orca's worktree fleet, titlebar tabs, multi-pane workbench,
+file inspector, agent status vocabulary, and theme while preserving CoDev's
+control plane and Firecracker isolation boundary.
 
 ## Runtime split
 
-- The workspace shell, Monaco editor, xterm terminal, worktree reviews, and
-  agent surfaces run in the browser.
+- Orca's adapted renderer shell, Monaco editor, xterm terminal, worktree
+  reviews, and agent surfaces run in the browser.
 - Files, Git operations, terminals, previews, and agent worktrees are served
   through authenticated CoDev workspace APIs.
 - The Firecracker guest runs only `codev-guestd` beside `/workspace`; it does
@@ -15,16 +16,17 @@ preserving CoDev's hosted control plane and Firecracker isolation boundary.
 - Yjs collaboration remains on CoDev's WebSocket service and Postgres-backed
   document store.
 
-## Why CoDev does not run `orca serve` directly
+## Runtime adapter
 
-Upstream Orca's web client pairs with a long-running Electron-based runtime
-over its own encrypted WebSocket protocol. CoDev already has permission-aware
-workspace APIs, durable agent state, collaboration rooms, and an isolated
-guest protocol. Reusing those boundaries avoids a second identity system and
-keeps Vercel, AWS, and guest credentials separated.
+Upstream Orca's web client normally installs a browser implementation of its
+Electron preload API and pairs with a long-running Orca runtime. CoDev provides
+the same renderer boundary through `createOrcaRuntimeAdapter`: file listing,
+search, reads, writes, Git operations, branch checkout, and PTY streaming map
+to authenticated CoDev APIs and then to `codev-guestd` over vsock. Agent and
+worktree operations continue through CoDev's durable agent APIs.
 
 ## Upstream tracking
 
-The initial adaptation is based on Orca commit
-`fc8441194ce400ad3a6dfdc053d163a9f9688a33` (`v1.4.176`). The upstream MIT
-license and reference metadata are retained under `third_party/orca/`.
+The renderer fork is based on Orca commit
+`6da7b8e9cfe62e5b4d34bb52e8c570036c1935fc` (`v1.4.177-rc.0`). The upstream
+MIT license and reference metadata are retained under `third_party/orca/`.
