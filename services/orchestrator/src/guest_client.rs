@@ -10,10 +10,9 @@ use tokio::{
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-    TerminalResizeRequest, TerminalStartRequest, TheiaProxyRequest, TheiaProxyResponse,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;
@@ -204,10 +203,6 @@ impl GuestClient {
     ) -> Result<PublicationExportResponse> {
         self.request("POST", "/v1/workspace/snapshot", Some(request))
             .await
-    }
-
-    pub async fn proxy_theia(&self, request: &TheiaProxyRequest) -> Result<TheiaProxyResponse> {
-        self.request("POST", "/v1/theia/proxy", Some(request)).await
     }
 
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {

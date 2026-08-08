@@ -33,13 +33,13 @@ export default async function WorkspaceAgentsPage({
     workspace.accessRole === "owner" || workspace.accessRole === "co_steer";
 
   return (
-    <main className="live-ide theia-agent-embed" aria-label="CoDev agents">
+    <main className="live-ide orca-agent-embed" aria-label="CoDev agents">
       <div
         id="topbar-review-actions"
         className="topbar-review-actions"
         aria-label="Agent review actions"
       />
-      <div className="theia-agent-embed-body">
+      <div className="orca-agent-embed-body">
         <AgentPanel
           workspaceId={workspaceId}
           canMerge={workspace.canMerge}

@@ -1,8 +1,7 @@
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{HashMap, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
-    net::{TcpStream, ToSocketAddrs},
     os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
@@ -23,10 +22,9 @@ use wait_timeout::ChildExt;
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, TheiaProxyRequest,
-    TheiaProxyResponse, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -104,7 +102,6 @@ impl GuestService {
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
-            ("POST", "/v1/theia/proxy") => self.proxy_theia(body),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -174,125 +171,6 @@ impl GuestService {
             "status": "ok",
             "service": "codev-guest"
         }))
-    }
-
-    fn proxy_theia(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
-        let request: TheiaProxyRequest = decode(body)?;
-        if !matches!(request.method.as_str(), "GET" | "POST") {
-            return Err(RuntimeError::BadRequest(
-                "Theia proxy method must be GET or POST".into(),
-            ));
-        }
-        let socket_path = request.path == "/socket.io/" || request.path.starts_with("/socket.io/?");
-        let bootstrap_path = request.method == "GET" && request.path == "/";
-        if !socket_path && !bootstrap_path {
-            return Err(RuntimeError::BadRequest(
-                "Theia proxy only accepts the Socket.IO endpoint".into(),
-            ));
-        }
-        if request.path.contains(['\r', '\n']) {
-            return Err(RuntimeError::BadRequest("invalid Theia proxy path".into()));
-        }
-
-        let request_body = BASE64
-            .decode(request.body_base64)
-            .map_err(|_| RuntimeError::BadRequest("invalid Theia body base64".into()))?;
-        if request_body.len() > MAX_BODY_BYTES {
-            return Err(RuntimeError::BadRequest(
-                "Theia request exceeds the two MiB limit".into(),
-            ));
-        }
-
-        let address = "127.0.0.1:3000"
-            .to_socket_addrs()
-            .map_err(RuntimeError::internal)?
-            .next()
-            .ok_or_else(|| RuntimeError::Unavailable("Theia address is unavailable".into()))?;
-        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
-            .map_err(|error| RuntimeError::Unavailable(format!("Theia is unavailable: {error}")))?;
-        stream
-            .set_read_timeout(Some(Duration::from_secs(65)))
-            .map_err(RuntimeError::internal)?;
-        stream
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .map_err(RuntimeError::internal)?;
-
-        write!(
-            stream,
-            "{} {} HTTP/1.1\r\nHost: 127.0.0.1:3000\r\nConnection: close\r\nContent-Length: {}\r\n",
-            request.method,
-            request.path,
-            request_body.len()
-        )
-        .map_err(RuntimeError::internal)?;
-        for name in ["accept", "content-type", "cookie", "origin", "user-agent"] {
-            if let Some(value) = request.headers.get(name)
-                && !value.contains(['\r', '\n'])
-                && value.len() <= 4_096
-            {
-                write!(stream, "{name}: {value}\r\n").map_err(RuntimeError::internal)?;
-            }
-        }
-        stream.write_all(b"\r\n").map_err(RuntimeError::internal)?;
-        stream
-            .write_all(&request_body)
-            .map_err(RuntimeError::internal)?;
-        stream.flush().map_err(RuntimeError::internal)?;
-
-        let mut raw = Vec::new();
-        stream
-            .take((MAX_OUTPUT_BYTES + (64 << 10) + 1) as u64)
-            .read_to_end(&mut raw)
-            .map_err(RuntimeError::internal)?;
-        if raw.len() > MAX_OUTPUT_BYTES + (64 << 10) {
-            return Err(RuntimeError::Unavailable(
-                "Theia response exceeds the two MiB limit".into(),
-            ));
-        }
-        let headers_end = raw
-            .windows(4)
-            .position(|window| window == b"\r\n\r\n")
-            .map(|index| index + 4)
-            .ok_or_else(|| RuntimeError::Unavailable("invalid Theia response".into()))?;
-        let header_text = std::str::from_utf8(&raw[..headers_end])
-            .map_err(|_| RuntimeError::Unavailable("invalid Theia response headers".into()))?;
-        let status = header_text
-            .lines()
-            .next()
-            .and_then(|line| line.split_whitespace().nth(1))
-            .and_then(|value| value.parse::<u16>().ok())
-            .ok_or_else(|| RuntimeError::Unavailable("invalid Theia response status".into()))?;
-        let mut headers = BTreeMap::new();
-        for line in header_text.lines().skip(1) {
-            let Some((name, value)) = line.split_once(':') else {
-                continue;
-            };
-            if matches!(
-                name.to_ascii_lowercase().as_str(),
-                "cache-control" | "content-type" | "set-cookie"
-            ) {
-                headers.insert(name.to_ascii_lowercase(), value.trim().to_owned());
-            }
-        }
-        let encoded_body = &raw[headers_end..];
-        let response_body = if header_text.lines().skip(1).any(|line| {
-            line.split_once(':').is_some_and(|(name, value)| {
-                name.eq_ignore_ascii_case("transfer-encoding")
-                    && value
-                        .split(',')
-                        .any(|encoding| encoding.trim().eq_ignore_ascii_case("chunked"))
-            })
-        }) {
-            decode_chunked_response_body(encoded_body)?
-        } else {
-            encoded_body.to_vec()
-        };
-        serde_json::to_value(TheiaProxyResponse {
-            status,
-            headers,
-            body_base64: BASE64.encode(&response_body),
-        })
-        .map_err(RuntimeError::internal)
     }
 
     fn read_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
@@ -1395,41 +1273,6 @@ fn decode<T: serde::de::DeserializeOwned>(body: &[u8]) -> crate::model::Result<T
     serde_json::from_slice(body).map_err(|error| RuntimeError::BadRequest(error.to_string()))
 }
 
-fn decode_chunked_response_body(mut input: &[u8]) -> crate::model::Result<Vec<u8>> {
-    let mut output = Vec::new();
-    loop {
-        let line_end = input
-            .windows(2)
-            .position(|window| window == b"\r\n")
-            .ok_or_else(|| RuntimeError::Unavailable("invalid chunked Theia response".into()))?;
-        let size_text = std::str::from_utf8(&input[..line_end])
-            .map_err(|_| RuntimeError::Unavailable("invalid Theia chunk size".into()))?
-            .split(';')
-            .next()
-            .unwrap_or_default()
-            .trim();
-        let size = usize::from_str_radix(size_text, 16)
-            .map_err(|_| RuntimeError::Unavailable("invalid Theia chunk size".into()))?;
-        input = &input[line_end + 2..];
-
-        if size == 0 {
-            return Ok(output);
-        }
-        if size > MAX_OUTPUT_BYTES.saturating_sub(output.len()) {
-            return Err(RuntimeError::Unavailable(
-                "Theia response exceeds the two MiB limit".into(),
-            ));
-        }
-        if input.len() < size + 2 || &input[size..size + 2] != b"\r\n" {
-            return Err(RuntimeError::Unavailable(
-                "truncated chunked Theia response".into(),
-            ));
-        }
-        output.extend_from_slice(&input[..size]);
-        input = &input[size + 2..];
-    }
-}
-
 fn revision(contents: &[u8]) -> String {
     hex::encode(Sha256::digest(contents))
 }
@@ -1457,27 +1300,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-
-    #[test]
-    fn theia_proxy_rejects_non_socket_routes() {
-        let directory = tempdir().expect("tempdir");
-        let service = GuestService::new(directory.path()).expect("service");
-        let response = service.handle(
-            "POST",
-            "/v1/theia/proxy",
-            br#"{"method":"GET","path":"/admin","headers":{},"bodyBase64":""}"#,
-        );
-        assert_eq!(response.status, 400);
-        assert!(String::from_utf8_lossy(&response.body).contains("Socket.IO"));
-    }
-
-    #[test]
-    fn theia_proxy_decodes_chunked_engine_io_payloads() {
-        let body =
-            decode_chunked_response_body(b"4\r\nopen\r\n7;extension=value\r\n socket\r\n0\r\n\r\n")
-                .expect("decode");
-        assert_eq!(body, b"open socket");
-    }
 
     #[test]
     fn revision_checked_file_lifecycle() {
@@ -1655,7 +1477,7 @@ mod tests {
             b"",
         );
         assert_eq!(premature_review.status, 409);
-        let stale_checkpoint = service.handle(
+        let agent_advanced_checkpoint = service.handle(
             "POST",
             "/v1/worktrees/agent-one/checkpoint",
             serde_json::to_string(&WorktreeCheckpointRequest {
@@ -1664,7 +1486,9 @@ mod tests {
             .expect("checkpoint request")
             .as_bytes(),
         );
-        assert_eq!(stale_checkpoint.status, 409);
+        // Checkpointing deliberately tolerates an agent advancing HEAD between
+        // polls and returns the actual resulting commit.
+        assert_eq!(agent_advanced_checkpoint.status, 200);
         let checkpoint = service.handle(
             "POST",
             "/v1/worktrees/agent-one/checkpoint",

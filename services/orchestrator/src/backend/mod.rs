@@ -8,10 +8,9 @@ use chrono::{Duration, Utc};
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, TheiaProxyRequest,
-    TheiaProxyResponse, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
@@ -336,20 +335,6 @@ impl Backend {
             Self::Firecracker(backend) => backend.git_diff(workspace_id, worktree_id).await,
         }
     }
-
-    pub async fn proxy_theia(
-        &self,
-        workspace_id: &str,
-        request: TheiaProxyRequest,
-    ) -> Result<TheiaProxyResponse> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = &request;
-        match self {
-            Self::Fake(backend) => backend.proxy_theia(workspace_id),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.proxy_theia(workspace_id, request).await,
-        }
-    }
 }
 
 pub type SharedBackend = Arc<Backend>;
@@ -587,13 +572,6 @@ impl FakeBackend {
     fn git_diff(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {
         self.get(workspace_id)?;
         Ok(String::new())
-    }
-
-    fn proxy_theia(&self, workspace_id: &str) -> Result<TheiaProxyResponse> {
-        self.get(workspace_id)?;
-        Err(RuntimeError::Unavailable(
-            "Theia is unavailable in the fake backend".into(),
-        ))
     }
 }
 

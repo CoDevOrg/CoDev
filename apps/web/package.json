@@ -7,7 +7,6 @@
   },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "pnpm --filter @codev/theia-extension build && pnpm --filter @codev/theia-app run clean && pnpm --filter @codev/theia-app build:production && node scripts/sync-theia-frontend.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",

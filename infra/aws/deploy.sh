@@ -36,21 +36,6 @@ echo "Building CoDev runtime ${release_version} for linux/arm64"
     "${build_dir}/codev-guestd-linux-arm64"
 )
 
-tar \
-  --exclude='apps/theia-app/lib' \
-  --exclude='apps/theia-app/src-gen' \
-  --exclude='apps/theia-app/gen-*' \
-  --exclude='packages/theia-extension/lib' \
-  --exclude='**/node_modules' \
-  -C "${repo_root}" \
-  -czf "${build_dir}/codev-theia-source.tar.gz" \
-  package.json \
-  pnpm-lock.yaml \
-  pnpm-workspace.yaml \
-  tsconfig.base.json \
-  apps/theia-app \
-  packages/theia-extension
-
 aws cloudformation deploy \
   --region "${region}" \
   --stack-name "${artifacts_stack}" \
@@ -58,7 +43,7 @@ aws cloudformation deploy \
   --parameter-overrides "BucketName=${artifact_bucket}" \
   --no-fail-on-empty-changeset
 
-for artifact in codev-orchestrator-linux-arm64 codev-guestd-linux-arm64 codev-theia-source.tar.gz; do
+for artifact in codev-orchestrator-linux-arm64 codev-guestd-linux-arm64; do
   aws s3 cp \
     "${build_dir}/${artifact}" \
     "s3://${artifact_bucket}/releases/${release_version}/${artifact}" \

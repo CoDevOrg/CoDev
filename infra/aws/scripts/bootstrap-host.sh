@@ -103,19 +103,6 @@ chmod 0755 /opt/codev-verify-lifecycle.sh
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
-install -d -m 0755 "${work_dir}/theia-source" "${work_dir}/theia-runtime"
-aws s3 cp "${release_prefix}/codev-theia-source.tar.gz" "${work_dir}/codev-theia-source.tar.gz"
-tar -xzf "${work_dir}/codev-theia-source.tar.gz" -C "${work_dir}/theia-source"
-(
-  cd "${work_dir}/theia-source"
-  pnpm install --frozen-lockfile
-  pnpm --filter @codev/theia-extension build
-  pnpm --filter @codev/theia-app run clean
-  pnpm --filter @codev/theia-app build:production
-  pnpm --filter @codev/theia-app deploy --prod --legacy "${work_dir}/theia-runtime"
-  cp -a apps/theia-app/lib "${work_dir}/theia-runtime/lib"
-)
-
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-aarch64.tgz" \
   -o "${work_dir}/firecracker.tgz"
@@ -140,9 +127,6 @@ install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/co
 install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
 install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
 install -m 0755 /usr/bin/node "${work_dir}/rootfs/usr/local/bin/node"
-install -d -m 0755 "${work_dir}/rootfs/opt/codev"
-cp -a "${work_dir}/theia-runtime" "${work_dir}/rootfs/opt/codev/theia"
-install -d -m 0755 "${work_dir}/rootfs/opt/codev/theia/plugins"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu"
@@ -152,7 +136,7 @@ install -d -m 0755 "${work_dir}/rootfs/workspace"
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk
-Before=codev-theia.service codev-guestd.service
+Before=codev-guestd.service
 
 [Mount]
 What=/dev/vdb
@@ -164,60 +148,14 @@ Options=rw,nosuid,nodev
 WantedBy=multi-user.target
 UNIT
 
-cat >"${work_dir}/rootfs/etc/systemd/system/codev-theia.service" <<'UNIT'
+cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
-Description=CoDev Eclipse Theia workspace backend
+Description=CoDev guest daemon
 After=workspace.mount
 Requires=workspace.mount
 
 [Service]
 Type=simple
-StateDirectory=codev-theia
-Environment=HOME=/var/lib/codev-theia
-ExecStartPre=/usr/bin/mkdir -p /var/lib/codev-theia/plugins
-ExecStart=/usr/local/bin/node /opt/codev/theia/lib/backend/main.js /workspace --hostname=127.0.0.1 --port=3000 --plugins=local-dir:/var/lib/codev-theia/plugins
-Restart=on-failure
-RestartSec=1
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=true
-ProtectSystem=strict
-ReadWritePaths=/workspace /var/lib/codev-theia
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-TasksMax=512
-MemoryMax=1024M
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-cat >"${work_dir}/rootfs/usr/local/bin/codev-wait-for-theia" <<'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
-
-for ((attempt = 1; attempt <= 100; attempt += 1)); do
-  if (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null; then
-    exec 3>&-
-    exit 0
-  fi
-  sleep 0.1
-done
-
-echo "Theia did not accept connections within 10 seconds." >&2
-exit 1
-SCRIPT
-chmod 0755 "${work_dir}/rootfs/usr/local/bin/codev-wait-for-theia"
-
-cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
-[Unit]
-Description=CoDev guest daemon
-After=workspace.mount codev-theia.service
-Requires=workspace.mount
-Wants=codev-theia.service
-
-[Service]
-Type=simple
-ExecStartPre=/usr/local/bin/codev-wait-for-theia
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 Restart=on-failure
@@ -237,8 +175,6 @@ UNIT
 
 ln -s ../workspace.mount \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/workspace.mount"
-ln -s ../codev-theia.service \
-  "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-theia.service"
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
 

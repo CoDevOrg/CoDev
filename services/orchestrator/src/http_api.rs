@@ -22,7 +22,7 @@ use crate::{
     model::{
         CreateRequest, ExecRequest, PublicationExportRequest, Result, RuntimeError,
         TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
-        TheiaProxyRequest, WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
         WorktreeRebaseRequest, WriteFileRequest,
     },
 };
@@ -107,10 +107,6 @@ pub fn router(backend: SharedBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
-        .route(
-            "/v1/sandboxes/{workspace_id}/theia/proxy",
-            post(proxy_theia),
-        )
         .route(
             "/v1/sandboxes/{workspace_id}/publication/export",
             post(export_publication),
@@ -486,25 +482,6 @@ async fn git_diff(
         .git_diff(&workspace_id, query.worktree_id.as_deref())
         .await?;
     Ok(Json(serde_json::json!({ "output": output })))
-}
-
-async fn proxy_theia(
-    State(backend): State<SharedBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<TheiaProxyRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    let valid_socket = request.path == "/socket.io/" || request.path.starts_with("/socket.io/?");
-    let valid_bootstrap = request.method == "GET" && request.path == "/";
-    if !matches!(request.method.as_str(), "GET" | "POST") || (!valid_socket && !valid_bootstrap) {
-        return Err(RuntimeError::BadRequest(
-            "invalid Theia proxy request".into(),
-        ));
-    }
-    let response = backend.proxy_theia(&workspace_id, request).await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
 }
 
 fn validate_create(request: &CreateRequest) -> Result<()> {

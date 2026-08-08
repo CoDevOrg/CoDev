@@ -12625,48 +12625,7 @@ html .live-ide .agent-sidebar-capacity-bar > i {
   margin: 0;
 }
 
-.theia-workspace {
-  display: block;
-  width: 100vw;
-  height: 100dvh;
-  overflow: hidden;
-  background: #1e1e1e;
-}
-
-.theia-workspace > iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #1e1e1e;
-}
-
-.theia-readonly-state {
-  display: grid;
-  height: 100%;
-  place-content: center;
-  justify-items: center;
-  padding: 32px;
-  background: #151a18;
-  color: #eef2f8;
-  text-align: center;
-}
-.theia-readonly-state svg {
-  width: 28px;
-  height: 28px;
-  margin-bottom: 14px;
-  color: var(--orange);
-}
-.theia-readonly-state strong {
-  font-size: 18px;
-}
-.theia-readonly-state p {
-  max-width: 460px;
-  color: #9aa7b6;
-  line-height: 1.6;
-}
-
-html .theia-agent-embed {
+html .orca-agent-embed {
   display: flex;
   width: 100vw;
   height: 100dvh;
@@ -12675,17 +12634,17 @@ html .theia-agent-embed {
   background: var(--workspace-surface);
 }
 
-html .theia-agent-embed > .topbar-review-actions:empty {
+html .orca-agent-embed > .topbar-review-actions:empty {
   display: none;
 }
 
-html .theia-agent-embed-body {
+html .orca-agent-embed-body {
   min-width: 0;
   min-height: 0;
   flex: 1 1 0%;
   overflow: hidden;
 }
 
-html .theia-agent-embed-body > .agent-panel-layout {
+html .orca-agent-embed-body > .agent-panel-layout {
   height: 100%;
 }
