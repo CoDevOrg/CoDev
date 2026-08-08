@@ -129,7 +129,7 @@ export async function createWorkspace(
           : "none",
         defaultBranch: repository?.default_branch ?? "",
         baseSha,
-        hibernateAt: expiresAt,
+        hibernateAt: null,
         expiresAt,
       })
       .returning();
@@ -362,7 +362,6 @@ export async function markWorkspaceReady(
   headSha: string,
 ) {
   const now = new Date();
-  const hibernateAt = new Date(now.getTime() + workspaceRuntimeTtlMs);
   const [workspace] = await getDatabase()
     .select({ ownerId: schema.workspaces.ownerId })
     .from(schema.workspaces)
@@ -388,7 +387,9 @@ export async function markWorkspaceReady(
       .set({
         status: "ready",
         lastActivityAt: now,
-        hibernateAt,
+        // Automatic hibernation is disabled. Keep this nullable so a stale
+        // deadline cannot be mistaken for an active lifecycle policy.
+        hibernateAt: null,
         updatedAt: now,
       })
       .where(eq(schema.workspaces.id, workspaceId));

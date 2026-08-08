@@ -64,11 +64,10 @@ async function hasRecentPostgresActivity(workspaceId: string) {
 
 export async function recordWorkspaceHeartbeat(workspaceId: string) {
   const now = new Date();
-  const hibernateAt = new Date(now.getTime() + workspaceRuntimeTtlMs);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaces)
-      .set({ lastActivityAt: now, hibernateAt, updatedAt: now })
+      .set({ lastActivityAt: now, hibernateAt: null, updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
     await transaction
       .update(schema.workspaceRuntimes)
@@ -97,7 +96,7 @@ export async function recordWorkspaceHeartbeat(workspaceId: string) {
   }
 
   await touchSandbox(workspaceId).catch(() => undefined);
-  return { lastActivityAt: now, hibernateAt };
+  return { lastActivityAt: now, hibernateAt: null };
 }
 
 export function workspaceHeartbeatKey(workspaceId: string) {

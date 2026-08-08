@@ -8,10 +8,8 @@ import { schema } from "@codev/db";
 import { appendWorkspaceEvent } from "./audit";
 import { getDatabase } from "./database";
 import { getHostState } from "./host";
-import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
 import { logEvent } from "./observability";
 import { destroySandbox } from "./orchestrator";
-import { hibernateWorkspace } from "./hibernation";
 import { closeOrphanSandboxIntervals } from "./vm-usage";
 import { markWorkspaceStopped } from "./workspaces";
 
@@ -108,7 +106,12 @@ async function cleanupWorkspace(
 
 export async function reconcileLifecycle() {
   const startedAt = Date.now();
-  const hostState = await getHostState();
+  const hostState = await getHostState().catch((error) => {
+    logEvent("warn", "lifecycle.host_unavailable", {
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+    return "unavailable" as const;
+  });
   const hostRunning = hostState === "running";
   const now = new Date();
   const expired = await getDatabase()
@@ -125,37 +128,12 @@ export async function reconcileLifecycle() {
       ),
     )
     .limit(100);
-  const hibernationCandidates = hostRunning
-    ? await getDatabase()
-        .select({ id: schema.workspaces.id })
-        .from(schema.workspaces)
-        .where(
-          and(
-            eq(schema.workspaces.status, "ready"),
-            lt(schema.workspaces.hibernateAt, now),
-          ),
-        )
-        .limit(100)
-    : [];
-
   const targets = new Map<string, "expired" | "runtime_missing">();
   for (const workspace of expired) targets.set(workspace.id, "expired");
 
+  // Automatic workspace hibernation is intentionally disabled. Workspaces
+  // stay live until an explicit stop or cleanup operation is requested.
   let cancellationFailures = 0;
-  let hibernated = 0;
-  let hibernationFailures = 0;
-  for (const workspace of hibernationCandidates) {
-    try {
-      if (await hasLiveWorkspaceHeartbeat(workspace.id)) continue;
-      if (await hibernateWorkspace(workspace.id)) hibernated += 1;
-    } catch (error) {
-      hibernationFailures += 1;
-      logEvent("warn", "lifecycle.hibernate_failed", {
-        workspaceId: workspace.id,
-        error: error instanceof Error ? error.message : "unknown error",
-      });
-    }
-  }
   for (const [workspaceId, reason] of targets) {
     cancellationFailures += await cleanupWorkspace(
       workspaceId,
@@ -187,8 +165,8 @@ export async function reconcileLifecycle() {
   const result = {
     hostState,
     cleaned: targets.size,
-    hibernated,
-    hibernationFailures,
+    hibernated: 0,
+    hibernationFailures: 0,
     cancellationFailures,
     orphanIntervalsClosed,
     durationMs: Date.now() - startedAt,
