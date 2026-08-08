@@ -119,7 +119,7 @@ To prevent runaway AI loops or abusive users from inflating cloud bills:
 
 2. **1-Click "Report Agent Bug" Button:**
 
-- Embedded inside the Assistant-UI Agent Canvas toolbar.
+- Exposed through the authenticated agent diagnostics endpoint for a frontend to present.
 - **Payload Package:** Captures the last 5 agent prompt-response cycles, active terminal error logs, browser user agent, and workspace ID, filing an internal ticket automatically.
 
 3. **Graceful Connection Recovery:**

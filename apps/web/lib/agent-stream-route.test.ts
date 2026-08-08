@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   createAgentModel: vi.fn(),
   getAgentModel: vi.fn(() => "gpt-5"),
   getAgentProvider: vi.fn(() => "openai"),
+  parseAgentProvider: vi.fn(
+    (value: string | undefined, fallback: string) => value ?? fallback,
+  ),
   getApiUser: vi.fn(),
   enforceAgentPromptRateLimit: vi.fn(),
   readSandboxFile: vi.fn(),
@@ -42,6 +45,7 @@ vi.mock("@/lib/ai-model", () => ({
   createAgentModel: mocks.createAgentModel,
   getAgentModel: mocks.getAgentModel,
   getAgentProvider: mocks.getAgentProvider,
+  parseAgentProvider: mocks.parseAgentProvider,
 }));
 vi.mock("@/lib/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
@@ -104,8 +108,13 @@ function request(body: Record<string, unknown>, signal?: AbortSignal) {
   return new Request("https://codev.test", init);
 }
 
-describe("agent canvas stream route", () => {
+describe("agent stream route", () => {
   beforeEach(() => {
+    mocks.getAgentModel.mockReturnValue("gpt-5");
+    mocks.getAgentProvider.mockReturnValue("openai");
+    mocks.parseAgentProvider.mockImplementation(
+      (value: string | undefined, fallback: string) => value ?? fallback,
+    );
     mocks.getApiUser.mockResolvedValue({
       id: "e010bd2c-a3c1-438f-acef-166287a3b1cb",
       name: "Ada",

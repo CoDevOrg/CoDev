@@ -10,7 +10,7 @@
     },
     {
       "type": "assertion",
-      "description": "The page does not show an IDE Agent Console or workspace editor chrome"
+      "description": "The page does not expose protected workspace data or actions"
     },
     {
       "type": "assertion",

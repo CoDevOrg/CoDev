@@ -47,9 +47,9 @@ Instead of developers working in isolation on local setups (Cursor, Claude, Code
 
 | Layer                    | Technology                        | Usage / Purpose                                                                             |
 | ------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Frontend UI**          | **Next.js (React) & TypeScript**  | Fast, responsive web client rendering and dashboard interface.                              |
-| **Code Editor**          | **Monaco Editor**                 | Powers VS Code-like browser editing experience with full syntax highlighting.               |
-| **Terminal Emulator**    | **xterm.js**                      | Streams raw PTY terminal output to the browser in real time.                                |
+| **Frontend UI**          | **To be selected**                | A new workspace client built against the authenticated backend contracts.                   |
+| **Code Editor**          | **To be selected**                | Consumes file, revision, Git, and realtime collaboration APIs.                              |
+| **Terminal Emulator**    | **To be selected**                | Consumes the authenticated PTY WebSocket or polling protocol.                               |
 | **Multiplayer Sync**     | **Yjs (CRDTs) + WebSockets**      | Real-time document conflict resolution, multiplayer cursors, and presence.                  |
 | **MicroVM Engine**       | **Firecracker / Apple Container** | Ephemeral, isolated, sub-second runtime sandboxes hosted in the cloud.                      |
 | **Orchestration**        | **Rust**                          | Memory-safe daemon managing VM pooling, state sync, and sandbox lifecycles.                 |

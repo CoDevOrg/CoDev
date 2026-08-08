@@ -1,9 +1,9 @@
 # CoDev Hocuspocus service
 
-This service hosts the Yjs WebSocket rooms used by the browser workspace. It
+This service hosts the Yjs WebSocket rooms available to a workspace frontend. It
 persists document state in Postgres and uses signed workspace tokens issued by
 the Next.js application. Hocuspocus awareness carries collaborator presence
-and Monaco cursor state.
+and any cursor or selection state supplied by the replacement frontend.
 
 Required environment:
 

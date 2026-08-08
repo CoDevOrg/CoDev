@@ -1,11 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  ArrowRight,
   ChevronDown,
-  FolderGit2,
   Grid2X2,
   List,
   Search,
@@ -84,8 +81,6 @@ export function WorkspaceGrid({
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   }, [workspaceList]);
-
-  const latestWorkspace = sortedWorkspaces[0];
 
   const filteredWorkspaces = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -172,43 +167,6 @@ export function WorkspaceGrid({
             ) : null}
           </div>
         </div>
-
-        {/* Quick Resume Hero Card */}
-        {latestWorkspace ? (
-          <div className="home-quick-resume-card">
-            <div className="resume-card-badge">
-              <span>Quick Resume</span>
-              <span className="resume-card-time">
-                Active {formatUpdatedAt(latestWorkspace.updatedAt)}
-              </span>
-            </div>
-
-            <div className="resume-card-content">
-              <div className="resume-card-info">
-                <h2>{latestWorkspace.repository || "Untitled workspace"}</h2>
-                <div className="resume-card-meta">
-                  <span className="meta-pill">
-                    <FolderGit2 className="h-3.5 w-3.5" />
-                    {latestWorkspace.defaultBranch || "main"}
-                  </span>
-                  {latestWorkspace.baseSha ? (
-                    <span className="meta-pill font-mono">
-                      {latestWorkspace.baseSha.slice(0, 7)}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <Link
-                className="resume-primary-button"
-                href={`/workspaces/${latestWorkspace.id}/ide`}
-              >
-                <span>Resume Session</span>
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       {/* Main Workspace Browser Section */}
@@ -302,10 +260,7 @@ export function WorkspaceGrid({
               key={workspace.id}
               style={{ position: "relative" }}
             >
-              <Link
-                className="workspace-card"
-                href={`/workspaces/${workspace.id}/ide`}
-              >
+              <article className="workspace-card">
                 <span className="workspace-card-icon" aria-hidden="true" />
                 <div>
                   <strong>
@@ -327,7 +282,7 @@ export function WorkspaceGrid({
                   </span>
                   <small>{formatUpdatedAt(workspace.updatedAt)}</small>
                 </div>
-              </Link>
+              </article>
               <button
                 type="button"
                 className="workspace-card-delete-button"

@@ -3,19 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceGrid } from "./workspace-grid";
 
-vi.mock("next/link", () => ({
-  default: ({
-    children,
-    ...props
-  }: React.PropsWithChildren<{ href: string }>) => <a {...props}>{children}</a>,
-}));
-
 vi.mock("./repository-picker", () => ({
   RepositoryPicker: () => null,
 }));
 
 describe("WorkspaceGrid", () => {
-  it("opens a workspace directly in the IDE", () => {
+  it("lists persisted workspaces without coupling them to a frontend route", () => {
     render(
       <WorkspaceGrid
         appSlug={undefined}
@@ -34,12 +27,11 @@ describe("WorkspaceGrid", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("link", { name: /yousef20920\/CoDev/ }),
-    ).toHaveAttribute("href", "/workspaces/workspace-1/ide");
+    expect(screen.getByText("yousef20920/CoDev")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("does not show lifecycle status in the quick resume card", () => {
+  it("does not render a removed workspace frontend resume action", () => {
     const { container } = render(
       <WorkspaceGrid
         appSlug={undefined}
@@ -58,8 +50,6 @@ describe("WorkspaceGrid", () => {
       />,
     );
 
-    expect(
-      container.querySelector(".home-quick-resume-card .status-pill"),
-    ).not.toBeInTheDocument();
+    expect(container.querySelector(".resume-primary-button")).toBeNull();
   });
 });

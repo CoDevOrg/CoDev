@@ -141,9 +141,9 @@ Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$
                                         ▼
                ┌──────────────────────────────────────────────────┐
                │              SUB-SECOND REHYDRATION              │
-               │  1. DB renders full UI & Agent Timeline in <100ms │
+               │  1. DB restores durable workspace and agent state │
                │  2. Firecracker resumes RAM & processes in <500ms │
-               │  3. xterm.js & Yjs WebSockets reconnect seamlessly│
+               │  3. PTY and Yjs clients reconnect through APIs     │
                └──────────────────────────────────────────────────┘
 
 ```

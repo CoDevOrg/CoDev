@@ -15,15 +15,15 @@ AWS host is returning to `stopped`.
 6. Use a disposable `codev/` publication branch and record the default-branch
    SHA before the session.
 
-## Product journey
+## Backend journey
 
 1. Create either a public workspace or a private workspace no larger than 500
    files and 3 MiB decoded.
-2. Start the Firecracker sandbox and open the browser IDE.
-3. Edit and save a file, run a harmless terminal command, and exercise Git
-   status.
-4. Join from a second GitHub identity and verify presence, reconnect recovery,
-   and revision-safe collaborative editing.
+2. Start the Firecracker sandbox through the authenticated sandbox API.
+3. Read and revision-safely write a file, run a harmless PTY command, and query
+   Git status through the workspace APIs.
+4. Connect from a second GitHub identity and verify Yjs presence, reconnect
+   recovery, and revision-safe collaboration at the protocol layer.
 5. Start two agents attached to distinct exact GitHub issues.
 6. Exercise an overlapping claim, coordination response, checkpoint review,
    rebase when needed, and merge into integration.

@@ -24,7 +24,7 @@ The Next.js website, control APIs, realtime gateway, and durable agent workflows
 | 1     | Foundation and Live Website           | Complete    |
 | 2     | GitHub Identity and Workspaces        | Complete    |
 | 3     | Firecracker Runtime                   | Complete    |
-| 4     | Browser IDE and Terminal              | Complete    |
+| 4     | Workspace APIs and Terminal           | Complete    |
 | 5     | Realtime Collaboration                | Complete    |
 | 6     | Parallel Agent Runtime                | Complete    |
 | 7     | Collision Coordination and Review     | Complete    |
@@ -107,22 +107,22 @@ Provision jailed Firecracker microVMs on one AWS bare-metal host, clone reposito
 - Cost optimization: wake on demand, 15-minute idle shutdown, and a 40 GiB gp3 root volume
 - Completed: July 29, 2026
 
-## Phase 4: Browser IDE and Terminal
+## Phase 4: Workspace Frontend Contracts and Terminal
 
-Connect Monaco and xterm.js to the sandbox, provide file navigation and search, stream authenticated terminals with backpressure, and show Git status and side-by-side diffs.
+Expose file navigation, search, revision-checked writes, Git operations, and authenticated PTY streaming through frontend-agnostic workspace APIs.
 
 ### Acceptance Criteria
 
-- Authenticated workspace members can open a desktop-first Monaco IDE backed by their running Firecracker workspace.
+- Authenticated workspace members can access frontend-ready APIs backed by their running Firecracker workspace.
 - File navigation, repository search, revision-checked saves, Git status, and side-by-side diffs use authenticated workspace APIs.
-- xterm.js connects to a persistent Rust-managed PTY with resize, reconnect-safe sequencing, acknowledgement, bounded buffering, and backpressure.
+- A frontend can connect to a persistent Rust-managed PTY with resize, reconnect-safe sequencing, acknowledgement, bounded buffering, and backpressure.
 - Terminal access remains capability-gated and every sandbox operation is scoped to a workspace membership.
 - Browser smoke tests, production health checks, TypeScript checks, and Rust formatting, linting, and tests pass.
 
 ### Phase 4 Delivery
 
-- IDE: Monaco editor and diff editor with file explorer, repository search, save conflict protection, and Git status
-- Terminal: xterm.js connected to a persistent Rust PTY through authenticated, sequenced long polling
+- Workspace APIs: file listing, repository search, save conflict protection, and Git status/diff/show
+- Terminal: persistent Rust PTY exposed through authenticated WebSocket and sequenced polling transports
 - Runtime: bounded unacknowledged output pauses the guest reader to provide backpressure
 - Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
 - Completed: July 29, 2026
@@ -133,7 +133,7 @@ Add Yjs editing, cursors, active-file presence, Redis room coordination, durable
 
 ### Acceptance Criteria
 
-- Authenticated workspace members share Yjs-backed Monaco documents, cursors, and active-file presence without trusting client-supplied identity.
+- Authenticated workspace members share Yjs-backed documents and awareness without trusting client-supplied identity.
 - Vercel WebSocket instances coordinate document events and expiring presence through Redis streams.
 - Reconnects resubscribe with Yjs state vectors and recover edits made while the connection was unavailable.
 - PostgreSQL stores durable Yjs updates, state vectors, filesystem revisions, and explicit conflict metadata.
@@ -142,7 +142,7 @@ Add Yjs editing, cursors, active-file presence, Redis room coordination, durable
 
 ### Phase 5 Delivery
 
-- Collaboration: Yjs and y-monaco with authenticated WebSocket upgrades, reconnect/resubscribe, and multiplayer awareness
+- Collaboration: Yjs with authenticated WebSocket upgrades, reconnect/resubscribe, and multiplayer awareness
 - Coordination: `codev-realtime` Upstash Redis resource connected through the Vercel Marketplace
 - Persistence: Supabase-backed durable snapshots with migration `0004_dear_daimon_hellstrom.sql`
 - Reconciliation: revision-checked sandbox writes, external-change ingestion, and explicit concurrent-change conflicts
@@ -159,7 +159,7 @@ Run up to two durable agent sessions in separate Git worktrees. Stream tool call
 - Authenticated workspace members can run at most two agent sessions, each in a detached Git worktree isolated from the integration checkout and the other agent.
 - Vercel Workflow DevKit durably drains queued turns and can resume after function restarts or step retries.
 - OpenAI Responses API calls use the configured `CODEV_OPENAI_MODEL` (default `gpt-5`), bounded repository tools, and the prompt author's encrypted key without persisting plaintext credentials in workflow state or exposing them to the browser or sandbox.
-- The IDE displays agent status, tool activity, results, queued follow-ups, failures, and interruption controls.
+- The API exposes agent status, tool activity, results, queued follow-ups, failures, and interruption controls.
 - Agent file and command tools are path-confined, timeout-bounded, and cannot publish, merge, or access host credentials.
 - Schema, web, workflow, browser, and Rust checks pass against the deployed database and runtime.
 
@@ -169,7 +169,7 @@ Run up to two durable agent sessions in separate Git worktrees. Stream tool call
 - Model: OpenAI Responses API using the configured `CODEV_OPENAI_MODEL` (default `gpt-5`)
 - Isolation: detached Git worktrees inside each Firecracker workspace
 - Persistence: Supabase-backed turns, workflow run IDs, results, and idempotent activity events
-- Controls: queue follow-up and interrupt from the browser IDE
+- Controls: authenticated APIs for queued follow-ups and interruption
 - Security: per-author encrypted BYO key remains server-side; sandboxes receive no provider or GitHub credentials
 - Production: [https://codev-xi.vercel.app](https://codev-xi.vercel.app)
 - Completed: July 29, 2026
