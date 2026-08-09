@@ -103,6 +103,13 @@ const OPTION_SELECTOR = '[role="option"]';
 const DIALOG_SELECTOR = '[role="dialog"]';
 const PATH_INPUT_SELECTOR = 'input[placeholder*="enter a path" i]';
 const AUTO_ADD_PROJECT_TIMEOUT_MS = 25_000;
+const EMPTY_STATE_TIMEOUT_MS = 20_000;
+
+function isOrcaShowingEmptyProjectState(doc: Document): boolean {
+  return Array.from(doc.querySelectorAll("h1, h2, p, span")).some((node) =>
+    /add a project to get started/i.test(node.textContent ?? ""),
+  );
+}
 
 function findButtonByText(
   root: ParentNode,
@@ -149,26 +156,31 @@ async function waitFor<T>(
 export async function autoAddOrcaProject(
   doc: Document,
   workspacePath: string,
-  { timeoutMs = AUTO_ADD_PROJECT_TIMEOUT_MS }: { timeoutMs?: number } = {},
+  {
+    timeoutMs = AUTO_ADD_PROJECT_TIMEOUT_MS,
+    emptyStateTimeoutMs = EMPTY_STATE_TIMEOUT_MS,
+  }: { timeoutMs?: number; emptyStateTimeoutMs?: number } = {},
 ): Promise<boolean> {
   const win = doc.defaultView;
   if (!win) {
     return false;
   }
 
-  const isEmptyState = Array.from(doc.querySelectorAll("h1, h2, p, span")).some(
-    (node) => /add a project to get started/i.test(node.textContent ?? ""),
-  );
-  if (!isEmptyState) {
-    return false;
-  }
-
   try {
+    // The iframe's `load` event fires as soon as its scripts finish
+    // executing, well before Orca's React app has rendered anything (it
+    // still has to boot and negotiate the pairing connection). Poll for the
+    // toolbar's "Add Project" button as a boot signal instead of checking
+    // once for the empty state, which would otherwise race an empty DOM.
     const addProjectButton = await waitFor(
       win,
       () => doc.querySelector<HTMLButtonElement>(ADD_PROJECT_BUTTON_SELECTOR),
-      { timeoutMs },
+      { timeoutMs: emptyStateTimeoutMs },
     );
+    if (!isOrcaShowingEmptyProjectState(doc)) {
+      // A project is already open; nothing to do.
+      return false;
+    }
     addProjectButton.click();
 
     const dialog = await waitFor(

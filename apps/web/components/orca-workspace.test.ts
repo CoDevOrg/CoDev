@@ -133,13 +133,13 @@ describe("autoAddOrcaProject", () => {
                 <h2>Add Git Project?</h2>
                 <button>Add Git Project</button>
               `;
-              findButtonByText(
-                dialog!,
-                /add git project/i,
-              )?.addEventListener("click", () => {
-                steps.push("add-git-project");
-                doc.body.innerHTML = "<span>Project added.</span>";
-              });
+              findButtonByText(dialog!, /add git project/i)?.addEventListener(
+                "click",
+                () => {
+                  steps.push("add-git-project");
+                  doc.body.innerHTML = "<span>Project added.</span>";
+                },
+              );
             });
           },
         );
@@ -172,23 +172,50 @@ describe("autoAddOrcaProject", () => {
   });
 
   it("does nothing when Orca already has a project open", async () => {
-    document.body.innerHTML = `<span class="titlebar-app-name-main">CoDev</span>`;
+    document.body.innerHTML = `
+      <button aria-label="Add Project">+</button>
+      <span class="titlebar-app-name-main">CoDev</span>
+    `;
 
     const result = await autoAddOrcaProject(document, WORKSPACE_PATH, {
       timeoutMs: 200,
+      emptyStateTimeoutMs: 200,
     });
 
     expect(result).toBe(false);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("aborts gracefully if the Add Project control can't be found", async () => {
-    document.body.innerHTML = `<h1>Add a project to get started.</h1>`;
+  it("aborts gracefully if the Add Project control never renders", async () => {
+    document.body.innerHTML = "";
 
     const result = await autoAddOrcaProject(document, WORKSPACE_PATH, {
       timeoutMs: 200,
+      emptyStateTimeoutMs: 200,
     });
 
     expect(result).toBe(false);
+  });
+
+  it("keeps polling past an iframe load event that fires before Orca has rendered anything", async () => {
+    // Regression test: the iframe's `load` event fires as soon as its
+    // scripts finish executing, before Orca's React app renders anything
+    // (it still has to boot and negotiate the pairing connection). A naive
+    // one-shot DOM check at that point would see an empty document and bail
+    // out immediately instead of waiting for Orca to actually boot.
+    document.body.innerHTML = "";
+    const steps: string[] = [];
+
+    const resultPromise = autoAddOrcaProject(document, WORKSPACE_PATH, {
+      timeoutMs: 2_000,
+      emptyStateTimeoutMs: 2_000,
+    });
+
+    // Simulate Orca's app finishing its boot/pairing sequence shortly after
+    // the iframe's load event already fired with an empty document.
+    setTimeout(() => createOrcaDocument(steps), 100);
+
+    expect(await resultPromise).toBe(true);
+    expect(document.body.textContent).toContain("Project added.");
   });
 });
