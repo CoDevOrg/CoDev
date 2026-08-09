@@ -22,6 +22,66 @@
   --codev-secondary: #527e68;
 }
 
+/*
+ * Orca's current UI is driven by these shadcn design tokens, rather than the
+ * utility-class names below. `html.dark` deliberately has higher specificity
+ * than Orca's `.dark` selector, so this bridge remains effective if its link
+ * is inserted before a future Orca stylesheet.
+ */
+:root,
+html.dark {
+  --orca-security-background: var(--codev-workspace-surface);
+  --orca-security-foreground: var(--codev-workspace-ink);
+  --orca-security-card: var(--codev-workspace-surface-2);
+  --orca-security-card-foreground: var(--codev-workspace-ink);
+  --orca-security-popover: var(--codev-workspace-surface-2);
+  --orca-security-popover-foreground: var(--codev-workspace-ink);
+  --orca-security-primary: var(--codev-accent);
+  --orca-security-primary-foreground: var(--codev-workspace-ink);
+  --orca-security-secondary: var(--codev-workspace-surface-3);
+  --orca-security-secondary-foreground: var(--codev-workspace-ink);
+  --orca-security-muted: var(--codev-workspace-surface-3);
+  --orca-security-muted-foreground: var(--codev-workspace-muted);
+  --orca-security-accent: #244633;
+  --orca-security-accent-foreground: var(--codev-workspace-ink);
+  --orca-security-border: rgba(242, 237, 224, 0.1);
+  --orca-security-input: rgba(242, 237, 224, 0.2);
+  --orca-security-ring: var(--codev-accent);
+
+  --background: var(--codev-workspace-surface);
+  --foreground: var(--codev-workspace-ink);
+  --card: var(--codev-workspace-surface-2);
+  --card-foreground: var(--codev-workspace-ink);
+  --popover: var(--codev-workspace-surface-2);
+  --popover-foreground: var(--codev-workspace-ink);
+  --primary: var(--codev-accent);
+  --primary-foreground: var(--codev-workspace-ink);
+  --secondary: var(--codev-workspace-surface-3);
+  --secondary-foreground: var(--codev-workspace-ink);
+  --muted: var(--codev-workspace-surface-3);
+  --muted-foreground: var(--codev-workspace-muted);
+  --accent: #244633;
+  --accent-foreground: var(--codev-workspace-ink);
+  --border: rgba(242, 237, 224, 0.1);
+  --input: rgba(242, 237, 224, 0.2);
+  --ring: var(--codev-accent);
+
+  --worktree-sidebar: var(--codev-workspace-surface-2);
+  --worktree-sidebar-foreground: var(--codev-workspace-ink);
+  --worktree-sidebar-accent: #244633;
+  --worktree-sidebar-accent-foreground: var(--codev-workspace-ink);
+  --worktree-sidebar-border: rgba(242, 237, 224, 0.1);
+  --worktree-sidebar-ring: var(--codev-accent);
+  --sidebar: var(--codev-workspace-surface-2);
+  --sidebar-foreground: var(--codev-workspace-ink);
+  --sidebar-primary: var(--codev-accent);
+  --sidebar-primary-foreground: var(--codev-workspace-ink);
+  --sidebar-accent: #244633;
+  --sidebar-accent-foreground: var(--codev-workspace-ink);
+  --sidebar-border: rgba(242, 237, 224, 0.1);
+  --sidebar-ring: var(--codev-accent);
+}
+
 html,
 body,
 #root {
