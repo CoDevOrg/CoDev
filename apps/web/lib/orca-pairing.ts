@@ -138,6 +138,7 @@ export function buildCloneScript(args: {
       ? plainUrl
       : `https://x-access-token:${args.token}@github.com/${args.repository}.git`;
   return [
+    `#!/bin/bash`,
     `set -euo pipefail`,
     `mkdir -p ${ORCA_WORKSPACES_ROOT}`,
     `chown orca:orca ${ORCA_WORKSPACES_ROOT}`,
