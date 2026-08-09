@@ -7,7 +7,6 @@ import { ChevronDown } from "lucide-react";
 import { connectGitHubAccount } from "@/app/actions/github";
 import { signOutToHome } from "@/app/actions/auth";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export type ProfileMenuUser = {
   name?: string | null | undefined;
@@ -19,14 +18,12 @@ export function ProfileMenu({
   user,
   compact = false,
   returnTo = "/dashboard",
-  showThemeToggle = !compact,
   showConnectGitHub = false,
   useClerkAuth = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY),
 }: {
   user: ProfileMenuUser;
   compact?: boolean;
   returnTo?: string;
-  showThemeToggle?: boolean;
   showConnectGitHub?: boolean;
   useClerkAuth?: boolean;
 }) {
@@ -72,12 +69,6 @@ export function ProfileMenu({
         <Link className="profile-menu-link" href="/settings/personal/profile">
           Profile
         </Link>
-        {showThemeToggle ? (
-          <>
-            <div className="profile-menu-divider" />
-            <ThemeToggle />
-          </>
-        ) : null}
         {showConnectGitHub ? (
           <form action={connectGitHubAccount.bind(null, returnTo)}>
             <button className="profile-menu-action" type="submit">

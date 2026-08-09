@@ -9,6 +9,7 @@ type ConnectionPhase =
   | { phase: "error"; message: string };
 
 const HOST_STARTING_RETRY_MS = 8_000;
+const ORCA_THEME_OVERRIDE_HREF = "/orca-theme-overrides.css";
 
 type OrcaConnectResponse = {
   state?: string;
@@ -17,6 +18,25 @@ type OrcaConnectResponse = {
   workspacePath?: string | null;
   error?: string;
 };
+
+function injectOrcaThemeOverrides(iframe: HTMLIFrameElement) {
+  try {
+    const doc = iframe.contentDocument;
+    if (!doc?.head) {
+      return;
+    }
+    if (doc.getElementById("codev-orca-theme")) {
+      return;
+    }
+    const link = doc.createElement("link");
+    link.id = "codev-orca-theme";
+    link.rel = "stylesheet";
+    link.href = ORCA_THEME_OVERRIDE_HREF;
+    doc.head.appendChild(link);
+  } catch {
+    // Same-origin injection is best-effort; stock Orca colors are fine as fallback.
+  }
+}
 
 /**
  * Full-viewport host for the vendored Orca web client. Fetches the runtime
@@ -96,72 +116,52 @@ export function OrcaWorkspace({
 
   if (connection.phase === "ready") {
     return (
-      <iframe
-        src={connection.iframeSrc}
-        title={repository ? `Orca — ${repository}` : "Orca workspace"}
-        style={{
-          display: "block",
-          width: "100vw",
-          height: "100dvh",
-          border: "none",
-        }}
-        allow="clipboard-read; clipboard-write"
-      />
+      <div className="workspace-page">
+        <iframe
+          className="workspace-iframe"
+          src={connection.iframeSrc}
+          title={repository ? `Orca — ${repository}` : "Orca workspace"}
+          allow="clipboard-read; clipboard-write"
+          onLoad={(event) => {
+            injectOrcaThemeOverrides(event.currentTarget);
+          }}
+        />
+      </div>
     );
   }
 
   return (
-    <main
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "12px",
-        height: "100dvh",
-        textAlign: "center",
-        padding: "24px",
-      }}
-    >
-      {connection.phase === "error" ? (
-        <>
-          <h1 style={{ fontSize: "18px", margin: 0 }}>
-            Could not open the workspace
-          </h1>
-          <p style={{ opacity: 0.75, maxWidth: "480px", margin: 0 }}>
-            {connection.message}
-          </p>
-          <button
-            type="button"
-            onClick={retry}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "8px",
-              border: "1px solid currentColor",
-              background: "transparent",
-              color: "inherit",
-              cursor: "pointer",
-            }}
-          >
-            Retry
-          </button>
-        </>
-      ) : (
-        <>
-          <h1 style={{ fontSize: "18px", margin: 0 }}>
-            {connection.phase === "host-starting"
-              ? "Starting the cloud host…"
-              : "Connecting to your workspace…"}
-          </h1>
-          <p style={{ opacity: 0.75, margin: 0 }}>
-            {connection.phase === "host-starting"
-              ? "The AWS instance is booting. This can take a minute."
-              : repository
-                ? `Preparing ${repository} in the Orca IDE.`
-                : "Preparing the Orca IDE."}
-          </p>
-        </>
-      )}
-    </main>
+    <div className="workspace-page">
+      <main className="workspace-status">
+        {connection.phase === "error" ? (
+          <>
+            <h1>Could not open the workspace</h1>
+            <p>{connection.message}</p>
+            <button
+              type="button"
+              className="workspace-status-retry"
+              onClick={retry}
+            >
+              Retry
+            </button>
+          </>
+        ) : (
+          <>
+            <h1>
+              {connection.phase === "host-starting"
+                ? "Starting the cloud host…"
+                : "Connecting to your workspace…"}
+            </h1>
+            <p>
+              {connection.phase === "host-starting"
+                ? "The AWS instance is booting. This can take a minute."
+                : repository
+                  ? `Preparing ${repository} in the Orca IDE.`
+                  : "Preparing the Orca IDE."}
+            </p>
+          </>
+        )}
+      </main>
+    </div>
   );
 }

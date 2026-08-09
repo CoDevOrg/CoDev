@@ -1,0 +1,134 @@
+/*
+ * CoDev theme bridge for the vendored Orca web client.
+ *
+ * This file is first-party CoDev CSS (not part of the upstream Orca build).
+ * It is injected at runtime into the Orca iframe by orca-workspace.tsx so the
+ * IDE chrome picks up CoDev's unified paper / deep-green / burnt-orange palette
+ * without modifying apps/web/public/orca/.
+ *
+ * Scope intentionally excludes Monaco/editor, terminal, and diff viewers so
+ * code readability and semantic git status colors stay intact. Re-check this
+ * file after upgrading the vendored Orca bundle — selectors may drift.
+ */
+
+:root {
+  --codev-workspace-surface: #0d1f17;
+  --codev-workspace-surface-2: #142c22;
+  --codev-workspace-surface-3: #1b3a2c;
+  --codev-workspace-ink: #f2ede0;
+  --codev-workspace-muted: #9db3a5;
+  --codev-accent: #d9652d;
+  --codev-accent-soft: rgba(217, 101, 45, 0.16);
+  --codev-secondary: #527e68;
+}
+
+html,
+body,
+#root {
+  background-color: var(--codev-workspace-surface) !important;
+  color: var(--codev-workspace-ink) !important;
+}
+
+/* Background retints for common Orca zinc / near-black surfaces. */
+[class*="bg-zinc-950"],
+[class*="bg-neutral-950"],
+[class*="bg-black"],
+[class*="bg-[#0a0a0a]"],
+[class*="bg-[#171717]"],
+[class*="bg-[#18181b]"] {
+  background-color: var(--codev-workspace-surface) !important;
+}
+
+[class*="bg-zinc-900"],
+[class*="bg-neutral-900"],
+[class*="bg-[#262626]"] {
+  background-color: var(--codev-workspace-surface-2) !important;
+}
+
+[class*="bg-zinc-800"],
+[class*="bg-neutral-800"] {
+  background-color: var(--codev-workspace-surface-3) !important;
+}
+
+/* Border retints. */
+[class*="border-zinc-"],
+[class*="border-neutral-"],
+[class*="border-white/"] {
+  border-color: rgba(242, 237, 224, 0.1) !important;
+}
+
+/* Text retints for muted chrome copy. */
+[class*="text-zinc-400"],
+[class*="text-zinc-500"],
+[class*="text-neutral-400"],
+[class*="text-neutral-500"],
+[class*="text-muted"] {
+  color: var(--codev-workspace-muted) !important;
+}
+
+[class*="text-zinc-50"],
+[class*="text-zinc-100"],
+[class*="text-neutral-50"],
+[class*="text-neutral-100"] {
+  color: var(--codev-workspace-ink) !important;
+}
+
+/* Accent badges / primary actions: amber → burnt orange. */
+[class*="bg-amber-"],
+[class*="bg-yellow-"],
+[class*="bg-orange-"],
+[class*="bg-[#f59e0b]"],
+[class*="bg-[#fcbb00]"],
+[class*="bg-[#f99c00]"],
+[class*="bg-[#ffa657]"] {
+  background-color: var(--codev-accent) !important;
+  color: var(--codev-workspace-ink) !important;
+}
+
+[class*="text-amber-"],
+[class*="text-yellow-"],
+[class*="text-orange-"],
+[class*="text-[#f59e0b]"],
+[class*="text-[#fcbb00]"],
+[class*="text-[#f99c00]"],
+[class*="text-[#ffa657]"] {
+  color: var(--codev-accent) !important;
+}
+
+[class*="border-amber-"],
+[class*="border-yellow-"],
+[class*="border-orange-"] {
+  border-color: var(--codev-accent) !important;
+}
+
+/* Soft accent fills for hover / selected chrome. */
+[class*="hover:bg-zinc-800"]:hover,
+[class*="hover:bg-neutral-800"]:hover {
+  background-color: var(--codev-accent-soft) !important;
+}
+
+/* Secondary / muted-green accents for status-adjacent chrome. */
+[class*="text-emerald-"],
+[class*="text-green-400"],
+[class*="text-green-500"] {
+  color: var(--codev-secondary) !important;
+}
+
+/*
+ * Protect editor, terminal, and diff surfaces from background overrides so
+ * syntax highlighting and terminal ANSI colors remain readable.
+ */
+.monaco-editor,
+.monaco-editor *,
+.xterm,
+.xterm *,
+[class*="DiffViewer"],
+[class*="DiffViewer"] *,
+[class*="CombinedDiff"],
+[class*="CombinedDiff"] *,
+[class*="FloatingTerminal"],
+[class*="FloatingTerminal"] *,
+[class*="AgentTerminal"],
+[class*="AgentTerminal"] * {
+  /* Intentionally left alone — do not force CoDev surfaces here. */
+}

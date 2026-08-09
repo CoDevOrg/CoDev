@@ -35,10 +35,6 @@ vi.mock("@/components/clerk-sign-out", () => ({
   ClerkSignOut: () => <button type="button">Sign out</button>,
 }));
 
-vi.mock("@/components/theme-toggle", () => ({
-  ThemeToggle: () => <button type="button">Theme</button>,
-}));
-
 import { ProfileMenu } from "./profile-menu";
 
 describe("ProfileMenu", () => {

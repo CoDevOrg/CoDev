@@ -1,24 +1,30 @@
 :root {
-  --ink: #eef2f8;
-  --muted: #8b95ab;
-  --muted-2: #6b7488;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(212, 175, 55, 0.22);
-  --surface: #081221;
-  --surface-2: #0c1a30;
-  --surface-3: #142848;
-  --navy: #0b1d3a;
-  --gold: #d4af37;
-  --gold-bright: #e8c547;
-  --gold-soft: rgba(212, 175, 55, 0.14);
-  --teal: var(--gold);
-  --teal-soft: var(--gold-soft);
-  --orange: #e0b84a;
-  --violet: #7d93c4;
-  color-scheme: dark;
+  /* Unified CoDev palette — paper, deep green, burnt orange, muted green. */
+  --ink: #173b2d;
+  --muted: #557060;
+  --muted-2: #6b776f;
+  --line: rgba(23, 59, 45, 0.16);
+  --line-strong: rgba(23, 59, 45, 0.24);
+  --surface: #f2e8d8;
+  --surface-2: #f8f1e5;
+  --surface-3: #e7dbc9;
+  --navy: #0e3025;
+  --gold: #d9652d;
+  --gold-bright: #ef8a4e;
+  --gold-soft: rgba(217, 101, 45, 0.12);
+  --teal: #d9652d;
+  --teal-soft: rgba(217, 101, 45, 0.12);
+  --orange: #d9652d;
+  --violet: #527e68;
+  --workspace-surface: #0d1f17;
+  --workspace-surface-2: #142c22;
+  --workspace-surface-3: #1b3a2c;
+  --workspace-ink: #f2ede0;
+  --workspace-muted: #9db3a5;
+  color-scheme: light;
 }
 
-/* Shared warm product theme. Dark mode is opt-in from inside the workspace. */
+/* Shared warm product theme. One palette, two tonal tiers (app shell / workspace). */
 
 .app-page,
 .auth-page {
@@ -52,6 +58,81 @@
     ),
     var(--surface);
   color: var(--ink);
+}
+
+.workspace-page {
+  --ink: var(--workspace-ink);
+  --muted: var(--workspace-muted);
+  --muted-2: #7a9184;
+  --line: rgba(242, 237, 224, 0.1);
+  --line-strong: rgba(217, 101, 45, 0.28);
+  --surface: var(--workspace-surface);
+  --surface-2: var(--workspace-surface-2);
+  --surface-3: var(--workspace-surface-3);
+  --navy: #0e3025;
+  --gold: #d9652d;
+  --gold-bright: #ef8a4e;
+  --gold-soft: rgba(217, 101, 45, 0.16);
+  --teal: #d9652d;
+  --teal-soft: rgba(217, 101, 45, 0.16);
+  --orange: #d9652d;
+  --violet: #527e68;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--workspace-surface);
+  color: var(--workspace-ink);
+  color-scheme: dark;
+}
+
+.workspace-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100dvh;
+  padding: 24px;
+  text-align: center;
+  background: var(--workspace-surface);
+  color: var(--workspace-ink);
+}
+
+.workspace-status h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.workspace-status p {
+  max-width: 480px;
+  margin: 0;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.workspace-status-retry {
+  padding: 8px 16px;
+  border: 1px solid rgba(242, 237, 224, 0.28);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--workspace-ink);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.workspace-status-retry:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.workspace-iframe {
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  border: none;
+  background: var(--workspace-surface);
 }
 
 .auth-page {
@@ -1383,25 +1464,6 @@ button {
   font-size: 11px;
 }
 
-.theme-toggle {
-  display: inline-flex;
-  min-height: 28px;
-  padding: 0 8px;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted-2);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.theme-toggle:hover {
-  border-color: var(--landing-orange, var(--teal));
-  color: var(--ink);
-}
-
 .auth-nav {
   justify-content: space-between;
 }
@@ -2390,161 +2452,6 @@ footer > span {
   text-transform: uppercase;
 }
 
-/* Final theme tokens and surface overrides */
-
-html .app-page,
-html .auth-page {
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --teal: #d9652d;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  --violet: #527e68;
-  background:
-    radial-gradient(
-      circle at 82% 0,
-      rgba(217, 101, 45, 0.13),
-      transparent 28rem
-    ),
-    radial-gradient(
-      circle at 12% 35%,
-      rgba(91, 137, 94, 0.12),
-      transparent 30rem
-    ),
-    var(--surface);
-  color: var(--ink);
-}
-
-html .auth-page {
-  background:
-    radial-gradient(
-      circle at 82% 0,
-      rgba(217, 101, 45, 0.15),
-      transparent 25rem
-    ),
-    var(--surface);
-}
-
-html .app-nav,
-html .auth-nav {
-  border-color: rgba(23, 59, 45, 0.18);
-}
-
-html .app-nav nav,
-html .auth-nav > a,
-html .user-menu {
-  color: rgba(23, 59, 45, 0.68);
-}
-
-html .auth-card {
-  border-color: rgba(23, 59, 45, 0.18);
-  background: rgba(248, 241, 229, 0.92);
-  box-shadow: 0 28px 90px rgba(23, 59, 45, 0.14);
-}
-
-html .auth-card > p:not(.eyebrow) {
-  color: rgba(23, 59, 45, 0.7);
-}
-
-html .setup-panel p,
-html .auth-card > small,
-html .panel-status,
-html .security-note,
-html .form-message,
-html .workspace-card-meta small,
-html .role-label {
-  color: rgba(23, 59, 45, 0.62);
-}
-
-html .panel,
-html .workspace-card,
-html .settings-panel {
-  border-color: rgba(23, 59, 45, 0.22);
-  background: rgba(248, 241, 229, 0.78);
-}
-
-html .secondary-button,
-html .danger-button {
-  border-color: rgba(23, 59, 45, 0.22);
-  background: rgba(255, 255, 255, 0.32);
-  color: rgba(23, 59, 45, 0.78);
-}
-
-html select,
-html .credential-form input,
-html .feedback-form textarea {
-  border-color: rgba(23, 59, 45, 0.24);
-  background: #f8f1e5;
-  color: #173b2d;
-}
-
-html .workspace-card:hover {
-  border-color: rgba(217, 101, 45, 0.42);
-  background: #f8f1e5;
-}
-
-html[data-theme="dark"] .app-page,
-html[data-theme="dark"] .auth-page {
-  --ink: #eef2f8;
-  --muted: #8b95ab;
-  --muted-2: #6b7488;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(212, 175, 55, 0.22);
-  --surface: #081221;
-  --surface-2: #0c1a30;
-  --surface-3: #142848;
-  --teal: #d4af37;
-  --teal-soft: rgba(212, 175, 55, 0.14);
-  background: #081221;
-  color: #eef2f8;
-}
-
-html[data-theme="dark"] .auth-page {
-  background: #081221;
-}
-
-html[data-theme="dark"] .auth-card {
-  border-color: rgba(212, 175, 55, 0.22);
-  background: rgba(14, 28, 52, 0.9);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
-}
-
-html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
-  color: #98a2b8;
-}
-
-/* Theme choice belongs to the workspace; public/auth pages stay on-brand. */
-
-html[data-theme="dark"] .auth-page {
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --teal: #d9652d;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  background: #f2e8d8;
-  color: #173b2d;
-}
-
-html[data-theme="dark"] .auth-card {
-  border-color: rgba(23, 59, 45, 0.18);
-  background: rgba(248, 241, 229, 0.92);
-  box-shadow: 0 28px 90px rgba(23, 59, 45, 0.14);
-}
-
-html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
-  color: rgba(23, 59, 45, 0.7);
-}
-
 /* Workspace home and account menu refinements */
 
 .app-page {
@@ -2682,51 +2589,6 @@ html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
   height: 1px;
   margin: 4px 2px;
   background: var(--line);
-}
-
-.profile-menu .theme-toggle {
-  width: 100%;
-  min-height: 38px;
-  padding: 0 10px;
-  justify-content: flex-start;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.profile-menu .theme-toggle:hover {
-  border-color: transparent;
-  background: var(--teal-soft);
-  color: var(--ink);
-}
-
-.theme-toggle-track {
-  display: inline-flex;
-  width: 28px;
-  height: 17px;
-  padding: 2px;
-  align-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--surface-3);
-}
-
-.theme-toggle-thumb {
-  display: block;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition:
-    transform 160ms ease,
-    background 160ms ease;
-}
-
-.theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
-  background: var(--teal);
-  transform: translateX(11px);
 }
 
 .workspace-cards {
@@ -3121,60 +2983,6 @@ html[data-theme="dark"] .auth-card > p:not(.eyebrow) {
   border-color: var(--line-strong);
   background: var(--teal-soft);
   color: var(--teal);
-}
-
-html[data-theme="dark"] .app-page {
-  --ink: #f1f6f1;
-  --muted: #a8b8ae;
-  --muted-2: #7e9085;
-  --line: rgba(213, 234, 220, 0.13);
-  --line-strong: rgba(143, 224, 181, 0.28);
-  --surface: #0e1511;
-  --surface-2: #17211b;
-  --surface-3: #202c25;
-  --teal: #8fe0b5;
-  --teal-soft: rgba(143, 224, 181, 0.12);
-  --orange: #f3a375;
-  color-scheme: dark;
-  background:
-    radial-gradient(
-      circle at 82% 0,
-      rgba(143, 224, 181, 0.1),
-      transparent 28rem
-    ),
-    var(--surface);
-}
-
-html[data-theme="dark"] .app-page .panel,
-html[data-theme="dark"] .app-page .workspace-card,
-html[data-theme="dark"] .app-page .settings-card {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-}
-
-html[data-theme="dark"] .app-page .settings-sidebar {
-  background: #0a100d;
-  border-color: var(--line);
-}
-
-html[data-theme="dark"] .app-page .settings-profile-grid > div,
-html[data-theme="dark"] .app-page .settings-org-resource {
-  background: var(--surface);
-}
-
-html[data-theme="dark"] .app-page .secondary-button,
-html[data-theme="dark"] .app-page .danger-button,
-html[data-theme="dark"] .app-page select,
-html[data-theme="dark"] .app-page .credential-form input,
-html[data-theme="dark"] .app-page .feedback-form textarea {
-  border-color: var(--line-strong);
-  background: var(--surface);
-  color: var(--ink);
-}
-
-html[data-theme="dark"] .app-page .workspace-card:hover {
-  background: var(--surface-3);
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
 }
 
 /* Simple workspace browser */

@@ -18,6 +18,24 @@ The bundle is served statically by the CoDev web app at `/orca/web-index.html`
 and boots from a `#pairing=<base64url offer>` URL fragment. No Orca source was
 modified.
 
+## Theme bridge (first-party)
+
+CoDev applies its unified workspace palette to Orca's chrome via a separate,
+first-party stylesheet:
+
+- File: `apps/web/public/orca-theme-overrides.css`
+- Injected at runtime into the Orca iframe by `apps/web/components/orca-workspace.tsx`
+  (same-origin `<link>` append on iframe load)
+
+This bridge is **not** part of the vendored Orca build and lives outside
+`third_party/orca/` / `apps/web/public/orca/`. It retints shell surfaces and
+amber accents toward CoDev's deep-green / burnt-orange palette while leaving
+Monaco editor, terminal, and diff-viewer regions alone.
+
+Re-check the override selectors after any Orca version bump — they target the
+compiled Tailwind class names from the current bundle and are not guaranteed
+stable across upstream rebuilds.
+
 ## Matching server runtime
 
 The Orca runtime server (`orca serve`, same v1.4.176 AppImage,
