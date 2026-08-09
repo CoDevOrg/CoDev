@@ -89,6 +89,24 @@ body,
   color: var(--codev-workspace-ink) !important;
 }
 
+/* CoDev owns the host-level labels around the vendored IDE. */
+.titlebar-app-name-main[data-codev-workspace-name] {
+  font-size: 0 !important;
+}
+
+.titlebar-app-name-main[data-codev-workspace-name]::after {
+  content: attr(data-codev-workspace-name);
+  color: inherit;
+  font-size: 12px;
+  line-height: inherit;
+}
+
+.codev-orca-empty-logo {
+  width: 64px !important;
+  height: 64px !important;
+  object-fit: contain;
+}
+
 /* Background retints for common Orca zinc / near-black surfaces. */
 [class*="bg-zinc-950"],
 [class*="bg-neutral-950"],

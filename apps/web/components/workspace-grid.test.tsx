@@ -55,8 +55,8 @@ describe("WorkspaceGrid", () => {
     expect(container.querySelector(".resume-primary-button")).toBeNull();
   });
 
-  it("shows active collaborators in a workspace card preview", () => {
-    render(
+  it("shows active collaborators instead of a synthetic workspace preview", () => {
+    const { container } = render(
       <WorkspaceGrid
         appSlug={undefined}
         workspaces={[
@@ -86,5 +86,28 @@ describe("WorkspaceGrid", () => {
     expect(
       screen.getByRole("img", { name: "Yousef Abdelhadi" }),
     ).toHaveAttribute("src", "https://example.com/yousef.png");
+    expect(container.querySelector(".workspace-card-icon")).toBeNull();
+  });
+
+  it("states when a workspace has no one active instead of showing a preview", () => {
+    render(
+      <WorkspaceGrid
+        appSlug={undefined}
+        workspaces={[
+          {
+            id: "workspace-1",
+            repository: "yousef20920/CoDev",
+            repositoryVisibility: "private",
+            defaultBranch: "main",
+            baseSha: "1234567890abcdef",
+            status: "ready",
+            role: "owner",
+            updatedAt: new Date().toISOString(),
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("No one is active right now")).toBeVisible();
   });
 });

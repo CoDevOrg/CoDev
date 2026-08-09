@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ConnectionPhase =
   | { phase: "connecting" }
@@ -11,6 +11,7 @@ type ConnectionPhase =
 
 const HOST_STARTING_RETRY_MS = 8_000;
 const ORCA_THEME_OVERRIDE_HREF = "/orca-theme-overrides.css";
+const CODEV_EMPTY_STATE_LOGO_SRC = "/brand/codev-mark-v3.png";
 
 type OrcaConnectResponse = {
   state?: string;
@@ -20,22 +21,79 @@ type OrcaConnectResponse = {
   error?: string;
 };
 
-function injectOrcaThemeOverrides(iframe: HTMLIFrameElement) {
+/**
+ * Adds CoDev-owned branding to the small number of visible Orca surfaces that
+ * identify the host product. The iframe remains an unmodified upstream bundle;
+ * this is applied after it has loaded from the same CoDev origin.
+ */
+export function applyOrcaWorkspaceBranding(
+  doc: Document,
+  workspaceName: string,
+) {
+  const emptyStateLogo = doc.querySelector<HTMLImageElement>(
+    'img[alt="CoDev logo"]',
+  );
+  if (emptyStateLogo) {
+    if (emptyStateLogo.getAttribute("src") !== CODEV_EMPTY_STATE_LOGO_SRC) {
+      emptyStateLogo.src = CODEV_EMPTY_STATE_LOGO_SRC;
+    }
+    emptyStateLogo.classList.add("codev-orca-empty-logo");
+  }
+
+  const titlebars = doc.querySelectorAll<HTMLElement>(
+    ".titlebar-app-name-main",
+  );
+  titlebars.forEach((title) => {
+    if (title.dataset.codevWorkspaceName !== workspaceName) {
+      title.dataset.codevWorkspaceName = workspaceName;
+    }
+  });
+
+  return Boolean(emptyStateLogo) && titlebars.length > 0;
+}
+
+function injectOrcaThemeAndBranding(
+  iframe: HTMLIFrameElement,
+  workspaceName: string,
+) {
   try {
     const doc = iframe.contentDocument;
     if (!doc?.head) {
-      return;
+      return () => undefined;
     }
-    if (doc.getElementById("codev-orca-theme")) {
-      return;
+
+    if (!doc.getElementById("codev-orca-theme")) {
+      const link = doc.createElement("link");
+      link.id = "codev-orca-theme";
+      link.rel = "stylesheet";
+      link.href = ORCA_THEME_OVERRIDE_HREF;
+      doc.head.appendChild(link);
     }
-    const link = doc.createElement("link");
-    link.id = "codev-orca-theme";
-    link.rel = "stylesheet";
-    link.href = ORCA_THEME_OVERRIDE_HREF;
-    doc.head.appendChild(link);
+
+    if (applyOrcaWorkspaceBranding(doc, workspaceName)) {
+      return () => undefined;
+    }
+    if (!doc.body) {
+      return () => undefined;
+    }
+
+    const observer = new MutationObserver(() => {
+      if (applyOrcaWorkspaceBranding(doc, workspaceName)) {
+        stopWatching();
+      }
+    });
+    observer.observe(doc.body, { childList: true, subtree: true });
+    const timeout = setTimeout(stopWatching, 10_000);
+
+    function stopWatching() {
+      observer.disconnect();
+      clearTimeout(timeout);
+    }
+
+    return stopWatching;
   } catch {
     // Same-origin injection is best-effort; stock Orca colors are fine as fallback.
+    return () => undefined;
   }
 }
 
@@ -83,6 +141,13 @@ export function OrcaWorkspace({
     phase: "connecting",
   });
   const [attempt, setAttempt] = useState(0);
+  const disposeIframeBranding = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      disposeIframeBranding.current?.();
+    };
+  }, []);
 
   const retry = useCallback(() => {
     setConnection({ phase: "connecting" });
@@ -153,7 +218,11 @@ export function OrcaWorkspace({
           title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
           allow="clipboard-read; clipboard-write"
           onLoad={(event) => {
-            injectOrcaThemeOverrides(event.currentTarget);
+            disposeIframeBranding.current?.();
+            disposeIframeBranding.current = injectOrcaThemeAndBranding(
+              event.currentTarget,
+              repository || "Workspace",
+            );
           }}
         />
       </div>

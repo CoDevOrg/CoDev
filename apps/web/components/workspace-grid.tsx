@@ -278,13 +278,16 @@ export function WorkspaceGrid({
               >
                 <article className="workspace-card">
                   <div
-                    className={`workspace-card-icon${workspace.liveCollaborators?.length ? " workspace-card-icon-live" : ""}`}
+                    className="workspace-card-presence"
                     aria-label={
                       workspace.liveCollaborators?.length
                         ? `${workspace.liveCollaborators.length} collaborator${workspace.liveCollaborators.length === 1 ? "" : "s"} live now`
-                        : undefined
+                        : "No collaborators live now"
                     }
                   >
+                    <span className="workspace-card-presence-label">
+                      In this workspace
+                    </span>
                     {workspace.liveCollaborators?.length ? (
                       <div className="workspace-live-collaborators">
                         {workspace.liveCollaborators.map((collaborator) =>
@@ -308,7 +311,11 @@ export function WorkspaceGrid({
                         )}
                         <small>Live now</small>
                       </div>
-                    ) : null}
+                    ) : (
+                      <p className="workspace-card-presence-empty">
+                        No one is active right now
+                      </p>
+                    )}
                   </div>
                   <div>
                     <strong>

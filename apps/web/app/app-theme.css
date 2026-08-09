@@ -43,6 +43,8 @@
     var(--landing-paper);
   color: var(--landing-ink);
   color-scheme: dark;
+  background-size: 135% 135%;
+  animation: codev-page-ambient 26s ease-in-out infinite alternate;
 }
 
 .landing-page::before {
@@ -163,6 +165,8 @@
     var(--surface);
   color: var(--ink);
   color-scheme: dark;
+  background-size: 135% 135%;
+  animation: codev-page-ambient 26s ease-in-out infinite alternate;
 }
 
 .app-page .app-nav {
@@ -519,8 +523,7 @@
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
 }
 
-.new-workspace-plus,
-.workspace-card-icon {
+.new-workspace-plus {
   border-color: rgba(217, 101, 45, 0.48);
   background:
     linear-gradient(135deg, rgba(217, 101, 45, 0.16), transparent 60%),
@@ -528,32 +531,26 @@
   color: var(--codev-orange-400);
 }
 
-.workspace-card-icon::before {
-  background: rgba(242, 237, 224, 0.2);
-  box-shadow:
-    0 10px 0 rgba(242, 237, 224, 0.1),
-    0 20px 0 rgba(242, 237, 224, 0.1);
+.workspace-card-presence {
+  min-height: 108px;
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(217, 101, 45, 0.1), transparent 66%);
 }
 
-.workspace-card-icon::after {
-  border-color: rgba(217, 101, 45, 0.42);
-  background: var(--surface-2);
-}
-
-.workspace-card-icon-live {
-  display: grid;
-  place-items: center;
-}
-
-.workspace-card-icon-live::before,
-.workspace-card-icon-live::after {
-  display: none;
+.workspace-card-presence-label {
+  display: block;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .workspace-live-collaborators {
   display: flex;
   align-items: center;
-  padding: 10px 14px;
+  padding-top: 12px;
 }
 
 .workspace-live-collaborators img,
@@ -585,6 +582,31 @@
   font-weight: 650;
 }
 
+.workspace-card-presence-empty {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-cards-list .workspace-card {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1fr) auto;
+}
+
+.workspace-cards-list .workspace-card-presence {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.workspace-cards-list .workspace-live-collaborators {
+  padding-top: 8px;
+}
+
+.workspace-cards-list .workspace-card-presence-empty {
+  margin-top: 8px;
+}
+
 @keyframes codev-hero-glow {
   from {
     transform: translate3d(-20px, 10px, 0) scale(0.82);
@@ -604,7 +626,22 @@
   }
 }
 
+@keyframes codev-page-ambient {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 48% 22%;
+  }
+  100% {
+    background-position: 100% 70%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .landing-page,
+  .app-page,
+  .auth-page,
   .home-welcome-hero::after,
   .home-hub-shell::before,
   .home-hub-shell::after {

@@ -34,4 +34,10 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".landing-nav,\n.landing-hero,");
     expect(appTheme).toContain("width: 100%;");
   });
+
+  it("carries ambient motion through each CoDev page shell", () => {
+    expect(appTheme).toContain("@keyframes codev-page-ambient {");
+    expect(appTheme).toContain("animation: codev-page-ambient 26s");
+    expect(appTheme).toContain("@media (prefers-reduced-motion: reduce) {");
+  });
 });
