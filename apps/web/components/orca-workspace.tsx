@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type ConnectionPhase =
@@ -36,6 +37,34 @@ function injectOrcaThemeOverrides(iframe: HTMLIFrameElement) {
   } catch {
     // Same-origin injection is best-effort; stock Orca colors are fine as fallback.
   }
+}
+
+function WorkspaceTopBar({ repository }: { repository: string | null }) {
+  return (
+    <header className="workspace-topbar">
+      <Link href="/dashboard" className="workspace-topbar-home">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M9.5 3 5 8l4.5 5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        CoDev
+      </Link>
+      {repository ? (
+        <span className="workspace-topbar-repo">{repository}</span>
+      ) : null}
+    </header>
+  );
 }
 
 /**
@@ -117,6 +146,7 @@ export function OrcaWorkspace({
   if (connection.phase === "ready") {
     return (
       <div className="workspace-page">
+        <WorkspaceTopBar repository={repository} />
         <iframe
           className="workspace-iframe"
           src={connection.iframeSrc}
@@ -132,6 +162,7 @@ export function OrcaWorkspace({
 
   return (
     <div className="workspace-page">
+      <WorkspaceTopBar repository={repository} />
       <main className="workspace-status">
         {connection.phase === "error" ? (
           <>

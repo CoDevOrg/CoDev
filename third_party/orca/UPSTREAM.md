@@ -37,6 +37,12 @@ Re-check the override selectors after any Orca version bump — they target the
 compiled Tailwind class names from the current bundle and are not guaranteed
 stable across upstream rebuilds.
 
+`apps/web/components/orca-workspace.tsx` also renders a first-party
+`workspace-topbar` strip above the iframe (not inside it) with a persistent
+"← CoDev" link back to `/dashboard`. It's parent-page chrome, not a patch to
+the vendored bundle, so it survives re-vendoring untouched and needs no
+reapplication.
+
 ## Branding patches (modify the vendored bundle directly)
 
 Unlike the theme bridge above, these edits touch files inside
@@ -49,9 +55,36 @@ rebuild.**
   Settings header). Its export shape (`var e=\`data:...\`;export{e as t};`) is
   preserved; only the data URI content was swapped for a small CoDev mark, so
   every consumer picks up the new logo without touching each call site.
-- `assets/web-index-Cyb9jzml.js` — the bundled English i18n resource string
-  for key `520304a067` ("Orca logo" alt text) was changed to "CoDev logo".
-  Non-English locale bundles were left untouched.
+- `assets/*.js` (every non-locale chunk, ~70 files including the main
+  `web-index-Cyb9jzml.js` entry bundle) — every English-language, capitalized
+  whole-word occurrence of `Orca`/`ORCA` in the bundled i18n strings was
+  replaced with `CoDev`/`CODEV` via a scripted pass (word-boundary substring
+  replace, restricted to files outside the `es-*`/`ja-*`/`zh-*`/`ko-*` locale
+  bundles, which were intentionally left in their original language). This
+  covers both the central resource dictionary in the main bundle and the
+  per-component fallback default strings baked into each lazy-loaded route
+  chunk (Orca's `translate(key, fallbackText)` call sites carry their own
+  literal fallback at every usage site, not just in the dictionary). A
+  follow-up pass fixed the resulting "an CoDev" → "a CoDev" article mismatch
+  (Orca starts with a vowel sound, CoDev doesn't) everywhere it appeared. All
+  727 asset files were `node --check`-verified afterward to confirm no syntax
+  was broken.
+
+  Deliberately **not** touched — genuine technical identifiers that name
+  real, still-functioning artifacts rather than pure brand mentions, all of
+  which happen to be written lowercase in the source (so the case-sensitive
+  `Orca`/`ORCA` replace never matched them): the `orca.yaml` project-config
+  filename, the `~/.orca` config directory, the `orca://pair?code=` URL
+  scheme, the literal `orca`/`orca-cli` CLI binary name and its PATH
+  registration strings, terminal-tab-title examples like `orca · zsh`, the
+  `github.com/stablyai/orca` upstream repo URL, and the `Orca Nerd Font
+Symbols` `@font-face` family name in the CSS bundle (renaming that alone
+  would silently break Nerd Font glyph rendering in the terminal, since
+  nothing else in the bundle references it by a new name). Renaming the
+  _display text_ for these would mislead users into looking for a `codev`
+  command or a `codev.yaml` file that doesn't exist — the underlying Orca CLI
+  binary and config-file conventions are unchanged.
+
 - `web-index.html` — `<title>` changed from "Orca Web" to "CoDev Workspace",
   plus two plain (non-module) inline `<script>` tags added before the app's
   module script (classic scripts run synchronously during HTML parsing,
@@ -68,20 +101,28 @@ rebuild.**
      (`button[class*="border-amber-500/6*"]`, scoped to that button's exact
      Tailwind classes).
   2. Seeds `showMobileButton: false` into the `orca.web.settings.v1`
-     localStorage key the app reads on boot, but only when the key is
-     entirely absent. `showMobileButton` is browser-local-only (never synced
-     with a paired remote host — see `getRuntimeBackedStoredSettings`'s
-     field allowlist in `web-preload-api.ts`), so this is both correct and
-     sufficient to default the "Orca Mobile" sidebar shortcut off on first
-     run. Calling `window.api.settings.set()` after the iframe's `load`
-     event fires (i.e. from `orca-workspace.tsx`) is too late to affect
-     first paint — confirmed by manual testing, the already-rendered
-     sidebar does not react to a settings change made outside its own
-     Zustand store — which is why this lives here instead. Only filling in
-     an absent key, rather than force-setting it every load, means a user
-     who re-enables it from Settings keeps that choice on their next visit;
-     this is a default, not a hard block, since CoDev's own mobile pairing
-     UX is deferred to a later milestone.
+     localStorage key the app reads on boot, gated on a first-party
+     `codevMobileDefaultApplied` marker stored in that same object rather
+     than on `showMobileButton`'s mere presence. `showMobileButton` is
+     browser-local-only (never synced with a paired remote host — see
+     `getRuntimeBackedStoredSettings`'s field allowlist in
+     `web-preload-api.ts`), so seeding it client-side is correct, but
+     `window.api.settings.set()` (in `web-preload-api.ts`) always persists
+     the _entire_ merged settings object — `getStoredSettings()` defaults
+     included — on every call, not just the field being changed. That means
+     any unrelated settings write (dismissing the onboarding checklist,
+     opening Automations, etc.) silently bakes the upstream default of
+     `showMobileButton: true` into storage, which would permanently defeat
+     a plain "set only if the key is absent" check. The marker makes the
+     CoDev default-off apply exactly once per browser regardless of what
+     else has already been written, then leaves any later state (default or
+     an explicit Settings toggle) alone for good. Calling
+     `window.api.settings.set()` after the iframe's `load` event fires (i.e.
+     from `orca-workspace.tsx`) is too late to affect first paint —
+     confirmed by manual testing, the already-rendered sidebar does not
+     react to a settings change made outside its own Zustand store — which
+     is why this lives here instead. This is a default, not a hard block,
+     since CoDev's own mobile pairing UX is deferred to a later milestone.
 
 ## Matching server runtime
 

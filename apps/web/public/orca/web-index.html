@@ -47,16 +47,27 @@
       // sufficient. This must run before the module script: the settings
       // store hydrates synchronously during initial render, so toggling the
       // setting via window.api.settings.set() after the iframe's `load`
-      // event fires is too late to affect the first paint. Only fills in
-      // the key when absent, so a user's own Settings toggle is never
-      // overwritten on later visits.
+      // event fires is too late to affect the first paint.
+      //
+      // We can't gate this on "is showMobileButton absent": web-preload-api's
+      // `settings.set()` always writes back the *entire* merged settings
+      // object (getStoredSettings() defaults + updates), so any unrelated
+      // settings.set() call (dismissing the onboarding checklist, opening
+      // Automations, etc.) bakes the upstream default of `showMobileButton:
+      // true` into storage even though the user never touched that field —
+      // which then permanently defeats an absence check. Instead we track
+      // our own one-time marker key so the CoDev default applies exactly
+      // once per browser, then leaves any later choice (default or explicit
+      // Settings toggle) alone for good.
       (function () {
         try {
           var KEY = "orca.web.settings.v1";
+          var MARKER = "codevMobileDefaultApplied";
           var raw = window.localStorage.getItem(KEY);
           var settings = raw ? JSON.parse(raw) : {};
-          if (settings && typeof settings === "object" && !("showMobileButton" in settings)) {
+          if (settings && typeof settings === "object" && !settings[MARKER]) {
             settings.showMobileButton = false;
+            settings[MARKER] = true;
             window.localStorage.setItem(KEY, JSON.stringify(settings));
           }
         } catch (_err) {
