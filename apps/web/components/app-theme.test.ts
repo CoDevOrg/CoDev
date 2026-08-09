@@ -13,6 +13,7 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
     expect(appTheme).toContain("--surface: var(--codev-forest-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
+    expect(appTheme).toContain("--codev-orange-500: #d9642c;");
     expect(appTheme).toContain("--orange: var(--codev-orange-500);");
   });
 
@@ -20,6 +21,13 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".workspace-browser {");
     expect(appTheme).toContain("background: rgba(20, 44, 34, 0.7);");
     expect(appTheme).toContain(".workspace-card:hover {");
+  });
+
+  it("keeps every profile menu action legible on the dark product surface", () => {
+    expect(appTheme).toContain(
+      ".app-page .profile-menu-link,\n.app-page .profile-menu-action {",
+    );
+    expect(appTheme).toContain("color: var(--muted);");
   });
 
   it("extends the product theme to unauthenticated pages", () => {

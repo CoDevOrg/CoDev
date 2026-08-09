@@ -9,12 +9,12 @@
   --surface-2: #f8f1e5;
   --surface-3: #e7dbc9;
   --navy: #0e3025;
-  --gold: #d9652d;
-  --gold-bright: #ef8a4e;
+  --gold: #d9642c;
+  --gold-bright: #e1732d;
   --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9652d;
+  --teal: #d9642c;
   --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9652d;
+  --orange: #d9642c;
   --violet: #527e68;
   --workspace-surface: #0d1f17;
   --workspace-surface-2: #142c22;
@@ -37,12 +37,12 @@
   --surface-2: #f8f1e5;
   --surface-3: #e7dbc9;
   --navy: #0e3025;
-  --gold: #d9652d;
-  --gold-bright: #ef8a4e;
+  --gold: #d9642c;
+  --gold-bright: #e1732d;
   --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9652d;
+  --teal: #d9642c;
   --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9652d;
+  --orange: #d9642c;
   --violet: #527e68;
   min-height: 100vh;
   background:
@@ -70,12 +70,12 @@
   --surface-2: var(--workspace-surface-2);
   --surface-3: var(--workspace-surface-3);
   --navy: #0e3025;
-  --gold: #d9652d;
-  --gold-bright: #ef8a4e;
+  --gold: #d9642c;
+  --gold-bright: #e1732d;
   --gold-soft: rgba(217, 101, 45, 0.16);
-  --teal: #d9652d;
+  --teal: #d9642c;
   --teal-soft: rgba(217, 101, 45, 0.16);
-  --orange: #d9652d;
+  --orange: #d9642c;
   --violet: #527e68;
   display: flex;
   flex-direction: column;
@@ -310,7 +310,7 @@ select,
   --landing-deep: #0e3025;
   --landing-paper: #f2e8d8;
   --landing-paper-light: #f8f1e5;
-  --landing-orange: #d9652d;
+  --landing-orange: #d9642c;
   --landing-green-line: rgba(23, 59, 45, 0.2);
   position: relative;
   min-height: 100vh;
@@ -1874,7 +1874,7 @@ select,
 
 .feedback-dialog-heading .eyebrow {
   margin: 0 0 4px;
-  color: var(--accent, #d9652d);
+  color: var(--accent, #d9642c);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

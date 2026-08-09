@@ -16,8 +16,8 @@
   --codev-beige-200: #ddd5c5;
   --codev-sage-300: #9db3a5;
   --codev-sage-500: #527e68;
-  --codev-orange-500: #d9652d;
-  --codev-orange-400: #ef8a4e;
+  --codev-orange-500: #d9642c;
+  --codev-orange-400: #e1732d;
 }
 
 /* Public pages use the same palette and responsive gutters as the product. */
@@ -362,9 +362,19 @@
   color: var(--ink);
 }
 
+.app-page .profile-menu-heading span,
+.app-page .profile-menu-link,
+.app-page .profile-menu-action {
+  color: var(--muted);
+}
+
 .app-page .profile-menu-link:hover,
 .app-page .profile-menu-action:hover {
   background: var(--teal-soft);
+}
+
+.app-page .profile-menu-divider {
+  background: var(--line);
 }
 
 .dashboard-shell {
