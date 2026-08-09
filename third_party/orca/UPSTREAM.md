@@ -43,6 +43,34 @@ stable across upstream rebuilds.
 the vendored bundle, so it survives re-vendoring untouched and needs no
 reapplication.
 
+### Auto-opening the cloned workspace repository
+
+`ensureOrcaWorkspaceClone` (`apps/web/lib/orca-host.ts`) clones the workspace
+repository onto the runtime host at a fixed, predictable path
+(`orcaWorkspacePath()` in `apps/web/lib/orca-pairing.ts`,
+`/srv/codev/workspaces/<workspaceId>`), but Orca has no URL parameter or
+`postMessage` API for opening a project on boot — the pairing fragment only
+carries the connection offer. `autoAddOrcaProject` in
+`apps/web/components/orca-workspace.tsx` closes that gap by driving Orca's
+own "Add a project" dialog exactly as a person would (confirmed by
+inspecting the live client's DOM): open the icon "Add Project" button,
+switch the host picker off "Local Mac" onto whichever host is `Connected`,
+"Browse folder", type the cloned path, "Select folder", then confirm "Add
+Git Project" on the follow-up dialog Orca shows for a path that resolves to
+a real git repository. It only runs when Orca is showing its empty "Add a
+project to get started" state, so it's a no-op once a project is already
+open.
+
+This reaches through the DOM rather than Orca's internal Zustand
+store/RPC layer (`addRepoPath`, the `$()` dispatcher) because those aren't
+reachable from a script injected into the iframe from the outside — nothing
+in the bundle exposes the store on `window`. It's therefore best-effort like
+the theme bridge above: any renamed button label, changed dialog structure,
+or added confirmation step just times out and aborts silently, leaving
+Orca's own "Add Project" button as the manual fallback. Re-check the
+selectors and step sequence in `autoAddOrcaProject` after any Orca version
+bump.
+
 ## Branding patches (modify the vendored bundle directly)
 
 Unlike the theme bridge above, these edits touch files inside

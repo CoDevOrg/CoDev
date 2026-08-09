@@ -97,6 +97,146 @@ function injectOrcaThemeAndBranding(
   }
 }
 
+const ADD_PROJECT_BUTTON_SELECTOR = 'button[aria-label="Add Project"]';
+const HOST_SELECTOR = '[role="combobox"]';
+const OPTION_SELECTOR = '[role="option"]';
+const DIALOG_SELECTOR = '[role="dialog"]';
+const PATH_INPUT_SELECTOR = 'input[placeholder*="enter a path" i]';
+const AUTO_ADD_PROJECT_TIMEOUT_MS = 25_000;
+
+function findButtonByText(
+  root: ParentNode,
+  pattern: RegExp,
+): HTMLButtonElement | null {
+  return (
+    Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => pattern.test(button.textContent ?? ""),
+    ) ?? null
+  );
+}
+
+async function waitFor<T>(
+  win: Window,
+  find: () => T | null | undefined,
+  { timeoutMs, intervalMs = 150 }: { timeoutMs: number; intervalMs?: number },
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const found = find();
+    if (found) {
+      return found;
+    }
+    if (Date.now() > deadline) {
+      throw new Error("Timed out waiting for the Orca project dialog.");
+    }
+    await new Promise((resolve) => win.setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * Best-effort automation of Orca's own "Add a project" dialog so the
+ * workspace repository CoDev already cloned onto the runtime host (see
+ * `ensureOrcaWorkspaceClone`) opens automatically instead of leaving the
+ * user stuck at Orca's empty "Add a project to get started" state.
+ *
+ * This drives the real, unmodified UI a person would click through (host
+ * picker -> Browse folder -> path -> Select folder) rather than reaching for
+ * Orca's internal store/RPC calls, which aren't reachable from outside the
+ * vendored bundle. Any missing/renamed selector just aborts silently and
+ * leaves the manual "Add Project" flow as the fallback. Re-check selectors
+ * after any Orca version bump (see third_party/orca/UPSTREAM.md).
+ */
+export async function autoAddOrcaProject(
+  doc: Document,
+  workspacePath: string,
+  { timeoutMs = AUTO_ADD_PROJECT_TIMEOUT_MS }: { timeoutMs?: number } = {},
+): Promise<boolean> {
+  const win = doc.defaultView;
+  if (!win) {
+    return false;
+  }
+
+  const isEmptyState = Array.from(doc.querySelectorAll("h1, h2, p, span")).some(
+    (node) => /add a project to get started/i.test(node.textContent ?? ""),
+  );
+  if (!isEmptyState) {
+    return false;
+  }
+
+  try {
+    const addProjectButton = await waitFor(
+      win,
+      () => doc.querySelector<HTMLButtonElement>(ADD_PROJECT_BUTTON_SELECTOR),
+      { timeoutMs },
+    );
+    addProjectButton.click();
+
+    const dialog = await waitFor(
+      win,
+      () => doc.querySelector<HTMLElement>(DIALOG_SELECTOR),
+      { timeoutMs },
+    );
+
+    const hostTrigger = dialog.querySelector<HTMLElement>(HOST_SELECTOR);
+    if (hostTrigger && !/connected/i.test(hostTrigger.textContent ?? "")) {
+      hostTrigger.click();
+      const connectedOption = await waitFor(
+        win,
+        () =>
+          Array.from(doc.querySelectorAll<HTMLElement>(OPTION_SELECTOR)).find(
+            (option) => /connected/i.test(option.textContent ?? ""),
+          ) ?? null,
+        { timeoutMs },
+      );
+      connectedOption.click();
+    }
+
+    const browseFolderButton = await waitFor(
+      win,
+      () => findButtonByText(dialog, /browse folder/i),
+      { timeoutMs },
+    );
+    browseFolderButton.click();
+
+    const pathInput = await waitFor(
+      win,
+      () => doc.querySelector<HTMLInputElement>(PATH_INPUT_SELECTOR),
+      { timeoutMs },
+    );
+    const setNativeValue = Object.getOwnPropertyDescriptor(
+      win.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setNativeValue?.call(pathInput, workspacePath);
+    pathInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+
+    const selectFolderButton = await waitFor(
+      win,
+      () => {
+        const button = findButtonByText(doc.body, /select folder/i);
+        return button && !button.disabled ? button : null;
+      },
+      { timeoutMs },
+    );
+    selectFolderButton.click();
+
+    // For a path that resolves to an existing git repository, Orca shows a
+    // second confirmation step ("Add Git Project" / "Open as Folder") before
+    // it actually registers the project.
+    const confirmButton = await waitFor(
+      win,
+      () =>
+        findButtonByText(doc.body, /add git project/i) ??
+        findButtonByText(doc.body, /open as folder/i),
+      { timeoutMs },
+    );
+    confirmButton.click();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function WorkspaceTopBar({ repository }: { repository: string | null }) {
   return (
     <header className="workspace-topbar">
@@ -223,6 +363,11 @@ export function OrcaWorkspace({
               event.currentTarget,
               repository || "Workspace",
             );
+            const { workspacePath } = connection;
+            const doc = event.currentTarget.contentDocument;
+            if (workspacePath && doc) {
+              void autoAddOrcaProject(doc, workspacePath);
+            }
           }}
         />
       </div>
