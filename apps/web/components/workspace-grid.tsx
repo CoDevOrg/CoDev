@@ -23,6 +23,12 @@ type WorkspaceItem = {
   status: string;
   role: string;
   updatedAt: string;
+  liveCollaborators?: Array<{
+    id: string;
+    login: string;
+    name: string | null;
+    avatarUrl: string | null;
+  }>;
 };
 
 type WorkspaceView = "grid" | "list";
@@ -53,6 +59,12 @@ function getGreeting() {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
+}
+
+function collaboratorName(
+  collaborator: NonNullable<WorkspaceItem["liveCollaborators"]>[number],
+) {
+  return collaborator.name || collaborator.login;
 }
 
 export function WorkspaceGrid({
@@ -143,10 +155,7 @@ export function WorkspaceGrid({
               {greeting},{" "}
               <span className="home-highlight-name">{firstName}</span>
             </h1>
-            <p>
-              Welcome back to CoDev. Pick up right where you left off or start a
-              new collaborative workspace with AI agents.
-            </p>
+            <p>Build together with people and AI agents.</p>
           </div>
 
           <div className="home-quick-stats">
@@ -268,7 +277,39 @@ export function WorkspaceGrid({
                 style={{ textDecoration: "none", color: "inherit" }}
               >
                 <article className="workspace-card">
-                  <span className="workspace-card-icon" aria-hidden="true" />
+                  <div
+                    className={`workspace-card-icon${workspace.liveCollaborators?.length ? " workspace-card-icon-live" : ""}`}
+                    aria-label={
+                      workspace.liveCollaborators?.length
+                        ? `${workspace.liveCollaborators.length} collaborator${workspace.liveCollaborators.length === 1 ? "" : "s"} live now`
+                        : undefined
+                    }
+                  >
+                    {workspace.liveCollaborators?.length ? (
+                      <div className="workspace-live-collaborators">
+                        {workspace.liveCollaborators.map((collaborator) =>
+                          collaborator.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- Presence avatars can originate from a member's identity provider, so they cannot use a fixed Next image allowlist.
+                            <img
+                              key={collaborator.id}
+                              src={collaborator.avatarUrl}
+                              alt={collaboratorName(collaborator)}
+                              title={`${collaboratorName(collaborator)} is active now`}
+                            />
+                          ) : (
+                            <span
+                              key={collaborator.id}
+                              aria-label={`${collaboratorName(collaborator)} is active now`}
+                              title={`${collaboratorName(collaborator)} is active now`}
+                            >
+                              {collaboratorName(collaborator).slice(0, 1)}
+                            </span>
+                          ),
+                        )}
+                        <small>Live now</small>
+                      </div>
+                    ) : null}
+                  </div>
                   <div>
                     <strong>
                       {workspace.repository || "Untitled workspace"}

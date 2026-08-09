@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   collaborationClientMessageSchema,
+  collaborationPresenceEntrySchema,
   collaborationServerMessageSchema,
   conflictResolutionInputSchema,
   type ConflictResolutionInput,
@@ -114,6 +115,47 @@ function presenceHashKey(workspaceId: string) {
 
 function presenceExpiryKey(workspaceId: string) {
   return `codev:collaboration:${workspaceId}:presence-expiry`;
+}
+
+/**
+ * Returns the distinct people with an active collaboration connection. This
+ * is intentionally separate from workspace membership: a member appears in
+ * this list only while their realtime presence heartbeat is current.
+ */
+export async function listWorkspacePresence(workspaceId: string) {
+  try {
+    const client = redisClient();
+    if (client.status === "wait") await client.connect();
+    const values = await client.hvals(presenceHashKey(workspaceId));
+    const people = new Map<string, CollaborationPresenceEntry>();
+
+    for (const value of values) {
+      try {
+        const parsed = collaborationPresenceEntrySchema.safeParse(
+          JSON.parse(value),
+        );
+        if (!parsed.success) continue;
+        const current = people.get(parsed.data.user.id);
+        if (
+          !current ||
+          parsed.data.lastSeenAt.localeCompare(current.lastSeenAt) > 0
+        ) {
+          people.set(parsed.data.user.id, parsed.data);
+        }
+      } catch {
+        // A stale or malformed presence record must not block the dashboard.
+      }
+    }
+
+    return [...people.values()]
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
+      .slice(0, 5)
+      .map((entry) => entry.user);
+  } catch {
+    // Presence is an enhancement. An unavailable realtime service simply
+    // leaves the preview in its neutral state.
+    return [];
+  }
 }
 
 function documentLockKey(

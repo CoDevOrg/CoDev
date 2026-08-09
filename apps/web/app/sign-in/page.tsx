@@ -13,6 +13,40 @@ export const metadata: Metadata = {
   title: "Sign in",
 };
 
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" className="oauth-provider-mark" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.23c0-.71-.06-1.19-.2-1.69H12v3.55h5.52c-.11.88-.71 2.21-2.04 3.1l-.02.12 2.97 2.3.21.02c1.92-1.77 2.96-4.38 2.96-7.4Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.97-.89 6.63-2.41l-3.16-2.44c-.84.59-1.97 1-3.47 1a6 6 0 0 1-5.68-4.14l-.11.01-3.08 2.39-.04.11A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.32 14.03A6.2 6.2 0 0 1 6 12c0-.71.12-1.4.31-2.03v-.14L3.19 7.4l-.1.05A10 10 0 0 0 2 12c0 1.64.39 3.2 1.08 4.55l3.24-2.52Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.87c1.89 0 3.17.82 3.9 1.5l2.85-2.78C16.96 2.95 14.7 2 12 2a10 10 0 0 0-8.91 5.45l3.22 2.52A6 6 0 0 1 12 5.87Z"
+      />
+    </svg>
+  );
+}
+
+function GitHubMark() {
+  return (
+    <svg aria-hidden="true" className="oauth-provider-mark" viewBox="0 0 24 24">
+      <path
+        fill="currentColor"
+        d="M12 2a10 10 0 0 0-3.16 19.49c.5.1.68-.22.68-.48v-1.7c-2.77.6-3.35-1.18-3.35-1.18-.45-1.15-1.11-1.46-1.11-1.46-.9-.62.07-.61.07-.61 1 .07 1.52 1.03 1.52 1.03.89 1.52 2.33 1.08 2.9.83.09-.64.35-1.08.63-1.33-2.21-.25-4.54-1.1-4.54-4.92 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.8c.85 0 1.7.11 2.5.34 1.91-1.3 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.83-2.33 4.67-4.55 4.92.36.31.67.9.67 1.82v2.7c0 .26.18.58.69.48A10 10 0 0 0 12 2Z"
+      />
+    </svg>
+  );
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
@@ -54,6 +88,44 @@ export default async function SignInPage({
           <ClerkSignIn redirectUrl={safeCallback} />
         ) : (
           <div className="auth-provider-stack">
+            <div className="auth-oauth-buttons">
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("google", { redirectTo: safeCallback });
+                }}
+              >
+                <button
+                  className="google-button"
+                  type="submit"
+                  disabled={!googleConfigured}
+                >
+                  <GoogleMark />
+                  Continue with Google
+                </button>
+              </form>
+
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("github", { redirectTo: safeCallback });
+                }}
+              >
+                <button
+                  className="github-button"
+                  type="submit"
+                  disabled={!githubConfigured}
+                >
+                  <GitHubMark />
+                  Continue with GitHub
+                </button>
+              </form>
+            </div>
+
+            <div className="auth-divider" aria-hidden="true">
+              <span>or use email</span>
+            </div>
+
             <form
               className="auth-credentials-form"
               action={async (formData) => {
@@ -101,51 +173,6 @@ export default async function SignInPage({
                 Continue with email
               </button>
             </form>
-
-            <div className="auth-divider" aria-hidden="true">
-              <span>or</span>
-            </div>
-
-            <form
-              action={async () => {
-                "use server";
-                await signIn("google", { redirectTo: safeCallback });
-              }}
-            >
-              <button
-                className="google-button"
-                type="submit"
-                disabled={!googleConfigured}
-              >
-                Continue with Google
-              </button>
-            </form>
-
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github", { redirectTo: safeCallback });
-              }}
-            >
-              <button
-                className="github-button"
-                type="submit"
-                disabled={!githubConfigured}
-              >
-                Continue with GitHub
-              </button>
-            </form>
-
-            {!googleConfigured || !githubConfigured ? (
-              <div className="setup-panel">
-                <strong>OAuth setup pending</strong>
-                <p>
-                  Add the provider credentials and secure token-storage key to
-                  enable the corresponding sign-in option. Repository access can
-                  be connected afterward.
-                </p>
-              </div>
-            ) : null}
           </div>
         )}
 

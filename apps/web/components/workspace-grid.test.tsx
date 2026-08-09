@@ -54,4 +54,37 @@ describe("WorkspaceGrid", () => {
 
     expect(container.querySelector(".resume-primary-button")).toBeNull();
   });
+
+  it("shows active collaborators in a workspace card preview", () => {
+    render(
+      <WorkspaceGrid
+        appSlug={undefined}
+        workspaces={[
+          {
+            id: "workspace-1",
+            repository: "yousef20920/CoDev",
+            repositoryVisibility: "private",
+            defaultBranch: "main",
+            baseSha: "1234567890abcdef",
+            status: "ready",
+            role: "owner",
+            updatedAt: new Date().toISOString(),
+            liveCollaborators: [
+              {
+                id: "user-1",
+                login: "yousef",
+                name: "Yousef Abdelhadi",
+                avatarUrl: "https://example.com/yousef.png",
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText("1 collaborator live now")).toBeVisible();
+    expect(
+      screen.getByRole("img", { name: "Yousef Abdelhadi" }),
+    ).toHaveAttribute("src", "https://example.com/yousef.png");
+  });
 });
