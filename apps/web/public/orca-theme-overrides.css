@@ -105,6 +105,8 @@ body,
   width: 64px !important;
   height: 64px !important;
   object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(49%) sepia(72%) saturate(1035%)
+    hue-rotate(340deg) brightness(90%) contrast(88%);
 }
 
 /* Background retints for common Orca zinc / near-black surfaces. */

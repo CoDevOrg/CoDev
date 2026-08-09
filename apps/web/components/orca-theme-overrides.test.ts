@@ -28,4 +28,9 @@ describe("Orca theme overrides", () => {
     expect(themeOverrides).toContain('[class*="border-amber-500/60"]');
     expect(themeOverrides).toContain('[class*="border-amber-500/50"]');
   });
+
+  it("uses the CoDev orange mark in Orca's empty workspace state", () => {
+    expect(themeOverrides).toContain(".codev-orca-empty-logo {");
+    expect(themeOverrides).toContain("hue-rotate(340deg)");
+  });
 });
