@@ -47,15 +47,93 @@ describe("autoAddOrcaProject", () => {
    * Builds a jsdom document that mimics Orca's real "Add a project" flow
    * (discovered by driving the live vendored client): an empty-state
    * heading, an icon "Add Project" button that opens a dialog with a host
-   * picker, a "Browse folder" step with a path input, and a "Select folder"
-   * button that only enables after the (simulated) async path validation
-   * that the real host performs.
+   * picker, a "Browse folder" step that lands on a breadcrumb + filterable
+   * directory-listing file browser, and a "Select folder" button whose
+   * `title` always reflects the directory currently being browsed — the
+   * path field itself only *filters* that listing, it doesn't jump to an
+   * arbitrary absolute path.
    */
   function findButtonByText(root: ParentNode, pattern: RegExp) {
     return (
       Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
         (button) => pattern.test(button.textContent ?? ""),
       ) ?? null
+    );
+  }
+
+  const WORKSPACE_PATH_SEGMENTS: string[] =
+    WORKSPACE_PATH.split("/").filter(Boolean);
+
+  // A fake filesystem just deep enough to contain WORKSPACE_PATH, keyed by
+  // the joined segments navigated so far ("" is the root).
+  const FAKE_DIRECTORY_TREE: Record<string, string[]> = {};
+  FAKE_DIRECTORY_TREE[""] = [WORKSPACE_PATH_SEGMENTS[0]!, "home"];
+  for (let depth = 0; depth < WORKSPACE_PATH_SEGMENTS.length - 1; depth++) {
+    FAKE_DIRECTORY_TREE[WORKSPACE_PATH_SEGMENTS.slice(0, depth + 1).join("/")] =
+      [WORKSPACE_PATH_SEGMENTS[depth + 1]!];
+  }
+
+  function renderFileBrowser(
+    doc: Document,
+    dialog: HTMLElement,
+    currentSegments: string[],
+    steps: string[],
+  ) {
+    const resolvedPath = `/${currentSegments.join("/")}`;
+    const entries = FAKE_DIRECTORY_TREE[currentSegments.join("/")] ?? [];
+    dialog.innerHTML = `
+      <h2>Browse host filesystem</h2>
+      <button>/</button>
+      <input placeholder="Type to filter or enter a path…" />
+      <div>
+        ${entries
+          .map(
+            (name) =>
+              `<button><span class="truncate flex-1 min-w-0">${name}</span></button>`,
+          )
+          .join("")}
+      </div>
+      <button title="${resolvedPath}">Select folder</button>
+    `;
+
+    findButtonByText(dialog, /^\/$/)?.addEventListener("click", () => {
+      steps.push("go-to-root");
+      renderFileBrowser(doc, dialog, [], steps);
+    });
+
+    const filterInput = dialog.querySelector<HTMLInputElement>("input");
+    filterInput?.addEventListener("input", () => {
+      steps.push(`filter:${filterInput.value}`);
+    });
+
+    dialog
+      .querySelectorAll<HTMLSpanElement>("span.truncate.flex-1.min-w-0")
+      .forEach((span) => {
+        span.closest("button")?.addEventListener("click", () => {
+          const name = span.textContent ?? "";
+          steps.push(`navigate:${name}`);
+          renderFileBrowser(doc, dialog, [...currentSegments, name], steps);
+        });
+      });
+
+    findButtonByText(dialog, /select folder/i)?.addEventListener(
+      "click",
+      () => {
+        steps.push(`select-folder:${resolvedPath}`);
+        // Orca shows a confirmation step for a path that resolves to an
+        // existing git repository before actually registering it.
+        dialog.innerHTML = `
+          <h2>Add Git Project?</h2>
+          <button>Add Git Project</button>
+        `;
+        findButtonByText(dialog, /add git project/i)?.addEventListener(
+          "click",
+          () => {
+            steps.push("add-git-project");
+            doc.body.innerHTML = "<span>Project added.</span>";
+          },
+        );
+      },
     );
   }
 
@@ -112,35 +190,7 @@ describe("autoAddOrcaProject", () => {
           "click",
           () => {
             steps.push(`browse-folder:${hostTrigger?.textContent}`);
-            dialog!.innerHTML = `
-              <h2>Browse host filesystem</h2>
-              <input placeholder="Type to filter or enter a path…" />
-              <button disabled>Select folder</button>
-            `;
-            const input = dialog!.querySelector<HTMLInputElement>("input");
-            const selectButton = findButtonByText(dialog!, /select folder/i);
-            input?.addEventListener("input", () => {
-              steps.push(`enter-path:${input.value}`);
-              // Real Orca debounces a host filesystem lookup before
-              // enabling the button; simulate that with a short async delay.
-              setTimeout(() => selectButton?.removeAttribute("disabled"), 50);
-            });
-            selectButton?.addEventListener("click", () => {
-              steps.push("select-folder");
-              // Orca shows a confirmation step for a path that resolves to
-              // an existing git repository before actually registering it.
-              dialog!.innerHTML = `
-                <h2>Add Git Project?</h2>
-                <button>Add Git Project</button>
-              `;
-              findButtonByText(dialog!, /add git project/i)?.addEventListener(
-                "click",
-                () => {
-                  steps.push("add-git-project");
-                  doc.body.innerHTML = "<span>Project added.</span>";
-                },
-              );
-            });
+            renderFileBrowser(doc, dialog!, ["home", "orca"], steps);
           },
         );
       });
@@ -151,24 +201,86 @@ describe("autoAddOrcaProject", () => {
   it("drives Orca's own Add Project dialog to open the cloned workspace path", async () => {
     const steps: string[] = [];
     const doc = createOrcaDocument(steps);
+    const automateCalls: number[] = [];
 
     const result = await autoAddOrcaProject(doc, WORKSPACE_PATH, {
       timeoutMs: 2_000,
+      onWillAutomate: () => automateCalls.push(Date.now()),
     });
 
     expect(result).toBe(true);
     expect(doc.body.textContent).toContain("Project added.");
+    expect(automateCalls).toHaveLength(1);
     // Selects the connected runtime host (not the "Local Mac" default)
-    // before browsing, and types the exact cloned path.
+    // before browsing, clicks back to the filesystem root, then clicks
+    // into each path segment in turn (filtering the listing by name first)
+    // rather than typing the absolute path into the filter field directly.
     expect(steps).toEqual([
       "open-add-project-dialog",
       "open-host-picker",
       "select-host:CoDev Server Connected - CoDev server",
       `browse-folder:CoDev Server Connected - CoDev server`,
-      `enter-path:${WORKSPACE_PATH}`,
-      "select-folder",
+      "go-to-root",
+      `filter:${WORKSPACE_PATH_SEGMENTS[0]}`,
+      `navigate:${WORKSPACE_PATH_SEGMENTS[0]}`,
+      `filter:${WORKSPACE_PATH_SEGMENTS[1]}`,
+      `navigate:${WORKSPACE_PATH_SEGMENTS[1]}`,
+      `filter:${WORKSPACE_PATH_SEGMENTS[2]}`,
+      `navigate:${WORKSPACE_PATH_SEGMENTS[2]}`,
+      `filter:${WORKSPACE_PATH_SEGMENTS[3]}`,
+      `navigate:${WORKSPACE_PATH_SEGMENTS[3]}`,
+      `select-folder:${WORKSPACE_PATH}`,
       "add-git-project",
     ]);
+  });
+
+  it("aborts without confirming if the browser lands on the wrong directory", async () => {
+    // Regression test for the bug where the dialog silently fell through to
+    // a default directory (e.g. /home/orca) instead of the cloned repo:
+    // even if every segment click appears to succeed, this must never
+    // click "Select folder" through unless the resolved directory the
+    // dialog reports matches the workspace path exactly.
+    const doc = document;
+    doc.body.innerHTML = `
+      <h1>Add a project to get started.</h1>
+      <button aria-label="Add Project">+</button>
+    `;
+    doc
+      .querySelector<HTMLButtonElement>('button[aria-label="Add Project"]')
+      ?.addEventListener("click", () => {
+        doc.body.insertAdjacentHTML(
+          "beforeend",
+          `<div role="dialog"><button role="combobox">CoDev Server Connected</button><button>Browse folder</button></div>`,
+        );
+        const dialog = doc.querySelector<HTMLElement>('[role="dialog"]');
+        findButtonByText(dialog!, /browse folder/i)?.addEventListener(
+          "click",
+          () => {
+            // Every segment appears clickable, but the dialog's resolved
+            // path never actually changes — simulating a picker bug that
+            // leaves it parked on an unrelated default directory.
+            dialog!.innerHTML = `
+              <button>/</button>
+              <input placeholder="Type to filter or enter a path…" />
+              <div>
+                ${WORKSPACE_PATH_SEGMENTS.map(
+                  (name) =>
+                    `<button><span class="truncate flex-1 min-w-0">${name}</span></button>`,
+                ).join("")}
+              </div>
+              <button title="/home/orca">Select folder</button>
+            `;
+          },
+        );
+      });
+
+    const result = await autoAddOrcaProject(doc, WORKSPACE_PATH, {
+      timeoutMs: 500,
+      navigationStepTimeoutMs: 500,
+    });
+
+    expect(result).toBe(false);
+    expect(doc.body.textContent).not.toContain("Project added.");
   });
 
   it("does nothing when Orca already has a project open", async () => {

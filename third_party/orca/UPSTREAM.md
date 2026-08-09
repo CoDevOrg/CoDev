@@ -55,11 +55,24 @@ carries the connection offer. `autoAddOrcaProject` in
 own "Add a project" dialog exactly as a person would (confirmed by
 inspecting the live client's DOM): open the icon "Add Project" button,
 switch the host picker off "Local Mac" onto whichever host is `Connected`,
-"Browse folder", type the cloned path, "Select folder", then confirm "Add
-Git Project" on the follow-up dialog Orca shows for a path that resolves to
-a real git repository. It only runs when Orca is showing its empty "Add a
-project to get started" state, so it's a no-op once a project is already
-open.
+then "Browse folder" into its filesystem picker. It only runs when Orca is
+showing its empty "Add a project to get started" state, so it's a no-op
+once a project is already open, and the iframe is hidden behind a small
+"Opening your project…" overlay for the (sub-second) duration of the
+automation so it isn't visibly driving Orca's UI in front of the user.
+
+The picker's path field is a _filter_ over the current directory's listing,
+not an absolute-path navigator — typing the full cloned path into it
+directly resolves nothing and silently leaves the browser parked on
+whatever directory it happened to start in (this shipped once and produced
+"This folder isn't a git repository" for a real git repo). So instead
+`autoAddOrcaProject` clicks the breadcrumb back to the filesystem root, then
+clicks into each path segment's listing row in turn — filtering the listing
+by name first to find it — exactly as a person clicking through folders
+would. Before the final "Select folder" click it re-reads the button's
+`title` (the resolved directory Orca is about to open) and aborts rather
+than confirming if it doesn't match the cloned path exactly, so a picker
+quirk can never again silently register the wrong folder.
 
 This reaches through the DOM rather than Orca's internal Zustand
 store/RPC layer (`addRepoPath`, the `$()` dispatcher) because those aren't

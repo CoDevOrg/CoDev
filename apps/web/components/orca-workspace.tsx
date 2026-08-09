@@ -102,8 +102,10 @@ const HOST_SELECTOR = '[role="combobox"]';
 const OPTION_SELECTOR = '[role="option"]';
 const DIALOG_SELECTOR = '[role="dialog"]';
 const PATH_INPUT_SELECTOR = 'input[placeholder*="enter a path" i]';
+const LISTING_ENTRY_NAME_SELECTOR = "button span.truncate.flex-1.min-w-0";
 const AUTO_ADD_PROJECT_TIMEOUT_MS = 25_000;
 const EMPTY_STATE_TIMEOUT_MS = 20_000;
+const NAVIGATION_STEP_TIMEOUT_MS = 6_000;
 
 function isOrcaShowingEmptyProjectState(doc: Document): boolean {
   return Array.from(doc.querySelectorAll("h1, h2, p, span")).some((node) =>
@@ -120,6 +122,38 @@ function findButtonByText(
       (button) => pattern.test(button.textContent ?? ""),
     ) ?? null
   );
+}
+
+/**
+ * The lone breadcrumb segment button rendered with the literal text "/" for
+ * the filesystem root. Unlike every other breadcrumb segment and listing
+ * row (which wrap an icon or a name `<span>`), it has no child elements, so
+ * an exact-text-with-no-children check disambiguates it from unrelated
+ * buttons that might also read "/".
+ */
+function findRootBreadcrumbButton(root: ParentNode): HTMLButtonElement | null {
+  return (
+    Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) =>
+        button.children.length === 0 && button.textContent?.trim() === "/",
+    ) ?? null
+  );
+}
+
+/**
+ * A directory/file row in Orca's filesystem browser listing, matched by its
+ * exact visible name. Listing rows render the name inside a dedicated
+ * `<span>` (as opposed to breadcrumb segments, which are plain-text
+ * buttons), so this can't accidentally match a breadcrumb.
+ */
+function findListingEntryButton(
+  doc: Document,
+  name: string,
+): HTMLButtonElement | null {
+  const nameSpan = Array.from(
+    doc.querySelectorAll<HTMLSpanElement>(LISTING_ENTRY_NAME_SELECTOR),
+  ).find((span) => span.textContent?.trim() === name);
+  return nameSpan?.closest("button") ?? null;
 }
 
 async function waitFor<T>(
@@ -147,11 +181,24 @@ async function waitFor<T>(
  * user stuck at Orca's empty "Add a project to get started" state.
  *
  * This drives the real, unmodified UI a person would click through (host
- * picker -> Browse folder -> path -> Select folder) rather than reaching for
- * Orca's internal store/RPC calls, which aren't reachable from outside the
- * vendored bundle. Any missing/renamed selector just aborts silently and
- * leaves the manual "Add Project" flow as the fallback. Re-check selectors
- * after any Orca version bump (see third_party/orca/UPSTREAM.md).
+ * picker -> Browse folder -> navigate to the directory -> Select folder)
+ * rather than reaching for Orca's internal store/RPC calls, which aren't
+ * reachable from outside the vendored bundle. Any missing/renamed selector
+ * just aborts silently and leaves the manual "Add Project" flow as the
+ * fallback. Re-check selectors after any Orca version bump (see
+ * third_party/orca/UPSTREAM.md).
+ *
+ * The dialog's path field is a *filter* over the current directory's
+ * listing, not an absolute-path navigator — typing the full cloned path
+ * into it directly resolves nothing and silently leaves the browser on
+ * whatever directory it started in. So instead this clicks through the
+ * breadcrumb to the filesystem root, then clicks into each path segment's
+ * listing row in turn (filtering the listing by name first to find it),
+ * mirroring how a person would navigate the picker by hand.
+ *
+ * `onWillAutomate` fires once, right before the dialog is opened, so a
+ * caller can hide the iframe for the (sub-second) duration of the
+ * automation instead of visibly flashing through Orca's own dialog.
  */
 export async function autoAddOrcaProject(
   doc: Document,
@@ -159,7 +206,14 @@ export async function autoAddOrcaProject(
   {
     timeoutMs = AUTO_ADD_PROJECT_TIMEOUT_MS,
     emptyStateTimeoutMs = EMPTY_STATE_TIMEOUT_MS,
-  }: { timeoutMs?: number; emptyStateTimeoutMs?: number } = {},
+    navigationStepTimeoutMs = NAVIGATION_STEP_TIMEOUT_MS,
+    onWillAutomate,
+  }: {
+    timeoutMs?: number;
+    emptyStateTimeoutMs?: number;
+    navigationStepTimeoutMs?: number;
+    onWillAutomate?: () => void;
+  } = {},
 ): Promise<boolean> {
   const win = doc.defaultView;
   if (!win) {
@@ -181,6 +235,7 @@ export async function autoAddOrcaProject(
       // A project is already open; nothing to do.
       return false;
     }
+    onWillAutomate?.();
     addProjectButton.click();
 
     const dialog = await waitFor(
@@ -210,17 +265,34 @@ export async function autoAddOrcaProject(
     );
     browseFolderButton.click();
 
-    const pathInput = await waitFor(
+    const rootBreadcrumbButton = await waitFor(
       win,
-      () => doc.querySelector<HTMLInputElement>(PATH_INPUT_SELECTOR),
-      { timeoutMs },
+      () => findRootBreadcrumbButton(dialog),
+      { timeoutMs: navigationStepTimeoutMs },
     );
+    rootBreadcrumbButton.click();
+
     const setNativeValue = Object.getOwnPropertyDescriptor(
       win.HTMLInputElement.prototype,
       "value",
     )?.set;
-    setNativeValue?.call(pathInput, workspacePath);
-    pathInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+    const segments = workspacePath.split("/").filter(Boolean);
+    for (const segment of segments) {
+      const filterInput = await waitFor(
+        win,
+        () => doc.querySelector<HTMLInputElement>(PATH_INPUT_SELECTOR),
+        { timeoutMs: navigationStepTimeoutMs },
+      );
+      setNativeValue?.call(filterInput, segment);
+      filterInput.dispatchEvent(new win.Event("input", { bubbles: true }));
+
+      const entryButton = await waitFor(
+        win,
+        () => findListingEntryButton(doc, segment),
+        { timeoutMs: navigationStepTimeoutMs },
+      );
+      entryButton.click();
+    }
 
     const selectFolderButton = await waitFor(
       win,
@@ -228,8 +300,17 @@ export async function autoAddOrcaProject(
         const button = findButtonByText(doc.body, /select folder/i);
         return button && !button.disabled ? button : null;
       },
-      { timeoutMs },
+      { timeoutMs: navigationStepTimeoutMs },
     );
+
+    // Confirm the browser actually landed on the exact directory we
+    // navigated to before handing off — Orca surfaces the resolved path as
+    // this button's `title`. Never click through on a mismatch: that's
+    // exactly how an earlier version of this function ended up silently
+    // confirming a fallback directory instead of the cloned repo.
+    if (selectFolderButton.getAttribute("title") !== workspacePath) {
+      return false;
+    }
     selectFolderButton.click();
 
     // For a path that resolves to an existing git repository, Orca shows a
@@ -293,6 +374,7 @@ export function OrcaWorkspace({
     phase: "connecting",
   });
   const [attempt, setAttempt] = useState(0);
+  const [isAddingProject, setIsAddingProject] = useState(false);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -364,24 +446,37 @@ export function OrcaWorkspace({
     return (
       <div className="workspace-page">
         <WorkspaceTopBar repository={repository} />
-        <iframe
-          className="workspace-iframe"
-          src={connection.iframeSrc}
-          title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
-          allow="clipboard-read; clipboard-write"
-          onLoad={(event) => {
-            disposeIframeBranding.current?.();
-            disposeIframeBranding.current = injectOrcaThemeAndBranding(
-              event.currentTarget,
-              repository || "Workspace",
-            );
-            const { workspacePath } = connection;
-            const doc = event.currentTarget.contentDocument;
-            if (workspacePath && doc) {
-              void autoAddOrcaProject(doc, workspacePath);
-            }
-          }}
-        />
+        <div className="workspace-iframe-wrap">
+          <iframe
+            className="workspace-iframe"
+            src={connection.iframeSrc}
+            title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
+            allow="clipboard-read; clipboard-write"
+            onLoad={(event) => {
+              disposeIframeBranding.current?.();
+              disposeIframeBranding.current = injectOrcaThemeAndBranding(
+                event.currentTarget,
+                repository || "Workspace",
+              );
+              const { workspacePath } = connection;
+              const doc = event.currentTarget.contentDocument;
+              if (workspacePath && doc) {
+                void autoAddOrcaProject(doc, workspacePath, {
+                  // Only cover the IDE for the automation itself — Orca's
+                  // own (usually sub-second) boot/pairing sequence stays
+                  // visible as normal.
+                  onWillAutomate: () => setIsAddingProject(true),
+                }).finally(() => setIsAddingProject(false));
+              }
+            }}
+          />
+          {isAddingProject ? (
+            <div className="workspace-iframe-loading" role="status">
+              <span className="workspace-iframe-loading-spinner" />
+              <p>Opening your project…</p>
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }
