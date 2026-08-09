@@ -20,4 +20,12 @@ describe("Orca theme overrides", () => {
     );
     expect(themeOverrides).toContain("--sidebar-primary: var(--codev-accent);");
   });
+
+  it("hides Orca's self-promotional GitHub star-nag surfaces", () => {
+    expect(themeOverrides).toContain(
+      '[role="complementary"][aria-labelledby="star-nag-heading"] {',
+    );
+    expect(themeOverrides).toContain('[class*="border-amber-500/60"]');
+    expect(themeOverrides).toContain('[class*="border-amber-500/50"]');
+  });
 });

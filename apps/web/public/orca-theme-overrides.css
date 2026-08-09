@@ -175,6 +175,24 @@ body,
 }
 
 /*
+ * Branding: hide Orca's self-promotional "Star on GitHub" / "Open GitHub"
+ * surfaces. The persistent bottom-right nag (StarNagCard) is also neutered
+ * at the source via a pre-init script in web-index.html (its GitHub star
+ * button on the empty-repo Landing screen isn't event-driven, so it can
+ * only be hidden here). Selectors key off Tailwind utility classes that
+ * survive minification verbatim, scoped tightly enough to avoid matching
+ * unrelated amber/rounded chrome elsewhere in the app.
+ */
+[role="complementary"][aria-labelledby="star-nag-heading"] {
+  display: none !important;
+}
+
+button[class*="rounded-full"][class*="border-amber-500/60"],
+button[class*="rounded-full"][class*="border-amber-500/50"] {
+  display: none !important;
+}
+
+/*
  * Protect editor, terminal, and diff surfaces from background overrides so
  * syntax highlighting and terminal ANSI colors remain readable.
  */

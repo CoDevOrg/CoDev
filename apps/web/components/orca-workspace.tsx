@@ -120,7 +120,7 @@ export function OrcaWorkspace({
         <iframe
           className="workspace-iframe"
           src={connection.iframeSrc}
-          title={repository ? `Orca — ${repository}` : "Orca workspace"}
+          title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
           allow="clipboard-read; clipboard-write"
           onLoad={(event) => {
             injectOrcaThemeOverrides(event.currentTarget);
@@ -156,8 +156,8 @@ export function OrcaWorkspace({
               {connection.phase === "host-starting"
                 ? "The AWS instance is booting. This can take a minute."
                 : repository
-                  ? `Preparing ${repository} in the Orca IDE.`
-                  : "Preparing the Orca IDE."}
+                  ? `Preparing ${repository} in your CoDev workspace.`
+                  : "Preparing your CoDev workspace."}
             </p>
           </>
         )}

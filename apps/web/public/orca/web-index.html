@@ -3,7 +3,67 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Orca Web</title>
+    <title>CoDev Workspace</title>
+    <script>
+      // CoDev brand bridge (first-party, not part of upstream Orca): the
+      // vendored client's "star Orca on GitHub" nag surfaces (StarNagCard,
+      // StarNagToastHost) subscribe to `window.api.starNag.onShow` during
+      // their first render effect, so patching the callback after the app
+      // boots is too late. Trapping the `window.api` assignment lets us
+      // neuter those two methods the instant the preload API is installed,
+      // before React mounts anything. Re-check after upgrading the vendored
+      // Orca bundle in case the starNag API shape changes.
+      (function () {
+        var current;
+        Object.defineProperty(window, "api", {
+          configurable: true,
+          get: function () {
+            return current;
+          },
+          set: function (value) {
+            current = value;
+            try {
+              if (value && value.starNag) {
+                value.starNag.onShow = function () {
+                  return function () {};
+                };
+                value.starNag.onHide = function () {
+                  return function () {};
+                };
+              }
+            } catch (_err) {
+              // Best-effort; stock star-nag behavior is fine as a fallback.
+            }
+          },
+        });
+      })();
+    </script>
+    <script>
+      // CoDev brand bridge (first-party): default the "Orca Mobile" sidebar
+      // shortcut off. `showMobileButton` is a browser-local-only setting
+      // (never synced with a paired remote host — see web-preload-api.ts's
+      // getRuntimeBackedStoredSettings allowlist), so seeding it into the
+      // same localStorage key the app reads on boot is both correct and
+      // sufficient. This must run before the module script: the settings
+      // store hydrates synchronously during initial render, so toggling the
+      // setting via window.api.settings.set() after the iframe's `load`
+      // event fires is too late to affect the first paint. Only fills in
+      // the key when absent, so a user's own Settings toggle is never
+      // overwritten on later visits.
+      (function () {
+        try {
+          var KEY = "orca.web.settings.v1";
+          var raw = window.localStorage.getItem(KEY);
+          var settings = raw ? JSON.parse(raw) : {};
+          if (settings && typeof settings === "object" && !("showMobileButton" in settings)) {
+            settings.showMobileButton = false;
+            window.localStorage.setItem(KEY, JSON.stringify(settings));
+          }
+        } catch (_err) {
+          // Best-effort; worst case the sidebar shortcut stays visible until toggled in Settings.
+        }
+      })();
+    </script>
     <script type="module" crossorigin src="./assets/web-index-Cyb9jzml.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/web-index-e_TuTuq4.css">
   </head>
