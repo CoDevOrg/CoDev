@@ -1,0 +1,299 @@
+/*
+ * CoDev product theme
+ *
+ * Every authenticated product page lives inside `.app-page` (AppChrome), so
+ * these semantic tokens are the single visual contract for dashboards,
+ * settings, and future product surfaces. The embedded Orca IDE has an
+ * isolated document and receives the same palette through
+ * `/orca-theme-overrides.css`.
+ */
+:root {
+  --codev-forest-950: #0d1f17;
+  --codev-forest-900: #142c22;
+  --codev-forest-800: #1b3a2c;
+  --codev-forest-700: #244633;
+  --codev-beige-100: #f2ede0;
+  --codev-beige-200: #ddd5c5;
+  --codev-sage-300: #9db3a5;
+  --codev-sage-500: #527e68;
+  --codev-orange-500: #d9652d;
+  --codev-orange-400: #ef8a4e;
+}
+
+.app-page {
+  --ink: var(--codev-beige-100);
+  --muted: var(--codev-sage-300);
+  --muted-2: #7a9184;
+  --line: rgba(242, 237, 224, 0.1);
+  --line-strong: rgba(217, 101, 45, 0.32);
+  --surface: var(--codev-forest-950);
+  --surface-2: var(--codev-forest-900);
+  --surface-3: var(--codev-forest-800);
+  --navy: var(--codev-forest-950);
+  --gold: var(--codev-orange-500);
+  --gold-bright: var(--codev-orange-400);
+  --gold-soft: rgba(217, 101, 45, 0.16);
+  --teal: var(--codev-orange-500);
+  --teal-soft: rgba(217, 101, 45, 0.16);
+  --orange: var(--codev-orange-500);
+  --violet: var(--codev-sage-500);
+  min-height: 100dvh;
+  background:
+    radial-gradient(
+      circle at 82% 0,
+      rgba(217, 101, 45, 0.16),
+      transparent 28rem
+    ),
+    radial-gradient(
+      circle at 8% 15%,
+      rgba(82, 126, 104, 0.2),
+      transparent 32rem
+    ),
+    var(--surface);
+  color: var(--ink);
+  color-scheme: dark;
+}
+
+.app-page .app-nav {
+  border-color: var(--line);
+  background: rgba(13, 31, 23, 0.78);
+  color: var(--ink);
+  backdrop-filter: blur(14px);
+}
+
+.app-page .wordmark {
+  color: var(--codev-beige-100);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-weight: 700;
+}
+
+.app-page .app-nav nav,
+.app-page .user-menu {
+  color: var(--muted);
+}
+
+.app-page .app-nav nav a {
+  position: relative;
+  padding-block: 24px;
+}
+
+.app-page .app-nav nav a::after {
+  position: absolute;
+  right: 0;
+  bottom: 15px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--orange);
+  content: "";
+}
+
+.app-page .app-nav nav a:hover,
+.app-page .user-menu:hover {
+  color: var(--ink);
+}
+
+.app-page .profile-menu-trigger:hover,
+.app-page .profile-menu[open] .profile-menu-trigger {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+
+.app-page .profile-menu-popover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.app-page .profile-menu-heading strong,
+.app-page .profile-menu-link:hover,
+.app-page .profile-menu-action:hover {
+  color: var(--ink);
+}
+
+.app-page .profile-menu-link:hover,
+.app-page .profile-menu-action:hover {
+  background: var(--teal-soft);
+}
+
+.dashboard-shell {
+  min-height: calc(100dvh - 68px);
+  padding: clamp(32px, 5vw, 72px) clamp(20px, 5vw, 72px) 96px;
+}
+
+.home-hub-shell {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+  gap: 24px;
+}
+
+.home-welcome-hero {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--line);
+  background:
+    linear-gradient(118deg, rgba(217, 101, 45, 0.12), transparent 38%),
+    linear-gradient(145deg, rgba(27, 58, 44, 0.96), rgba(20, 44, 34, 0.96));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+}
+
+.home-welcome-hero::after {
+  position: absolute;
+  top: -84px;
+  right: 8%;
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(217, 101, 45, 0.26);
+  border-radius: 50%;
+  box-shadow: 0 0 0 34px rgba(217, 101, 45, 0.05);
+  content: "";
+  pointer-events: none;
+}
+
+.home-welcome-header,
+.home-welcome-text {
+  position: relative;
+  z-index: 1;
+}
+
+.home-badge {
+  border-color: rgba(217, 101, 45, 0.38);
+  background: rgba(217, 101, 45, 0.15);
+  color: var(--codev-orange-400);
+}
+
+.home-welcome-text h1,
+.home-section-header h2,
+.stat-value {
+  color: var(--ink);
+}
+
+.home-highlight-name {
+  color: var(--codev-orange-400);
+}
+
+.home-welcome-text p,
+.home-section-header p,
+.stat-label {
+  color: var(--muted);
+}
+
+.stat-card {
+  min-width: 145px;
+  border-color: rgba(242, 237, 224, 0.12);
+  background: rgba(13, 31, 23, 0.52);
+}
+
+.stat-value-active {
+  color: var(--codev-orange-400);
+}
+
+.workspace-browser {
+  padding: clamp(20px, 3vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(20, 44, 34, 0.7);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
+}
+
+.workspace-search,
+.workspace-filter,
+.workspace-scope,
+.workspace-view-toggle {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.workspace-search input,
+.workspace-filter select,
+.workspace-scope {
+  color: var(--ink);
+}
+
+.workspace-search input::placeholder {
+  color: var(--muted-2);
+}
+
+.workspace-view-toggle button.is-active {
+  background: var(--teal-soft);
+  color: var(--codev-orange-400);
+}
+
+.new-workspace-tile,
+.workspace-card {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+.new-workspace-tile:hover,
+.workspace-card:hover {
+  border-color: var(--orange);
+  background: var(--surface-3);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+}
+
+.new-workspace-plus,
+.workspace-card-icon {
+  border-color: rgba(217, 101, 45, 0.48);
+  background:
+    linear-gradient(135deg, rgba(217, 101, 45, 0.16), transparent 60%),
+    var(--surface-3);
+  color: var(--codev-orange-400);
+}
+
+.workspace-card-icon::before {
+  background: rgba(242, 237, 224, 0.2);
+  box-shadow:
+    0 10px 0 rgba(242, 237, 224, 0.1),
+    0 20px 0 rgba(242, 237, 224, 0.1);
+}
+
+.workspace-card-icon::after {
+  border-color: rgba(217, 101, 45, 0.42);
+  background: var(--surface-2);
+}
+
+.workspace-card > div:nth-child(2) strong,
+.new-workspace-tile strong {
+  color: var(--ink);
+}
+
+.workspace-card > div:nth-child(2) span,
+.new-workspace-tile > span:last-child,
+.workspace-card-meta small,
+.workspace-card-access,
+.workspace-empty-state {
+  color: var(--muted);
+}
+
+.workspace-card-access {
+  border-color: var(--line);
+  background: rgba(82, 126, 104, 0.12);
+}
+
+.workspace-create-overlay,
+.delete-workspace-backdrop {
+  background: rgba(5, 15, 10, 0.72) !important;
+}
+
+.workspace-create-modal,
+.delete-workspace-modal {
+  border-color: var(--line-strong) !important;
+  background: var(--surface-2) !important;
+  color: var(--ink) !important;
+}
+
+@media (max-width: 640px) {
+  .dashboard-shell {
+    padding: 28px 16px 72px;
+  }
+
+  .workspace-browser {
+    padding: 18px;
+  }
+
+  .home-welcome-hero {
+    padding: 24px;
+  }
+}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
+import "./app-theme.css";
 
 import { clerkAuthConfigured } from "@/lib/identity";
 import { AppClerkProvider } from "@/components/clerk-provider";
