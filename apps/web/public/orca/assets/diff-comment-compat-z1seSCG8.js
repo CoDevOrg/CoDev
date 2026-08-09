@@ -1,0 +1,1 @@
+function e(e){return e.source===`markdown`?`markdown`:`diff`}function t(t){return e(t)===`diff`}function n(t){return e(t)===`markdown`}function r(e,t=!1){return e.startLine!==void 0&&e.startLine!==e.lineNumber?t?`L${e.startLine}-L${e.lineNumber}`:`Lines ${e.startLine}-${e.lineNumber}`:t?`L${e.lineNumber}`:`Line ${e.lineNumber}`}export{n as i,e as n,t as r,r as t};

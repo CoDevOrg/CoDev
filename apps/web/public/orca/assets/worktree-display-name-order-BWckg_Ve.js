@@ -1,0 +1,1 @@
+function e(e,t){return(e.displayName??``).localeCompare(t.displayName??``)}export{e as t};

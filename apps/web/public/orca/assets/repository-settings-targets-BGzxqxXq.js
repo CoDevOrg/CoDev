@@ -1,0 +1,1 @@
+function e(e){return`repo-${e}-local-commands`}function t(e){return`repo-${e}-icon`}function n(e){return`repo-${e}-source-control-ai`}function r(e,t){return`repo-${e}-source-control-ai-${t}`}export{n as i,e as n,r,t};

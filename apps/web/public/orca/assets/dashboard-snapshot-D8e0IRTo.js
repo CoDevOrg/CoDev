@@ -1,0 +1,1 @@
+const e=[`attention`,`working`,`done`,`idle`],t=1024,n=500,r=2e3;function i(e){return e.dotState===`done`&&!e.unseen?`idle`:e.dotState}export{i as a,r as i,t as n,n as r,e as t};

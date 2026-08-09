@@ -11,6 +11,7 @@ export default defineConfig([
     "app/.well-known/workflow/**",
     "next-env.d.ts",
     "playwright-report/**",
+    "public/orca/**",
     "test-results/**",
   ]),
 ]);

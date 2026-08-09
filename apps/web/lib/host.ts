@@ -16,7 +16,7 @@ function getHostConfiguration() {
     environment.AWS_HOST_INSTANCE_ID &&
     environment.AWS_HOST_INSTANCE_ID.trim() !== ""
       ? environment.AWS_HOST_INSTANCE_ID
-      : "i-0ea41735a804f2526";
+      : "i-03013fac5bc0e7bd0";
   return {
     ...getAwsConfiguration(),
     instanceId,
@@ -83,6 +83,11 @@ async function resolveHost(client: EC2Client, configuredInstanceId: string) {
     throw new Error("The configured Firecracker host was not found.");
   }
   return { instanceId: instance.InstanceId, state: instance.State.Name };
+}
+
+export async function getHostInstanceId(): Promise<string> {
+  const { client, configuredInstanceId } = createClient();
+  return (await resolveHost(client, configuredInstanceId)).instanceId;
 }
 
 export async function getHostState(): Promise<InstanceStateName> {

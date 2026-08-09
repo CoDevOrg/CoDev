@@ -1,0 +1,1 @@
+var e=20;function t(t,n,r,i=e){if(t.delete(n),t.set(n,r),t.size>i){let e=t.keys().next();e.done||t.delete(e.value)}}const n=new Map,r=new Map,i=new Map,a=new Map;export{t as a,n as i,a as n,i as r,r as t};

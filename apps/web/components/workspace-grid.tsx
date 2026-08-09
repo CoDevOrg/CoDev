@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ChevronDown,
   Grid2X2,
@@ -260,29 +261,36 @@ export function WorkspaceGrid({
               key={workspace.id}
               style={{ position: "relative" }}
             >
-              <article className="workspace-card">
-                <span className="workspace-card-icon" aria-hidden="true" />
-                <div>
-                  <strong>
-                    {workspace.repository || "Untitled workspace"}
-                  </strong>
-                  <span>
-                    {workspace.repository
-                      ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
-                      : "No repository connected"}
-                  </span>
-                </div>
-                <div className="workspace-card-meta">
-                  <span className="workspace-card-access">
-                    {workspace.repositoryVisibility === "private"
-                      ? "Private"
-                      : workspace.repository
-                        ? "Public"
-                        : "Blank"}
-                  </span>
-                  <small>{formatUpdatedAt(workspace.updatedAt)}</small>
-                </div>
-              </article>
+              <Link
+                href={`/workspaces/${workspace.id}`}
+                className="workspace-card-link"
+                aria-label={`Open ${workspace.repository || "workspace"}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <article className="workspace-card">
+                  <span className="workspace-card-icon" aria-hidden="true" />
+                  <div>
+                    <strong>
+                      {workspace.repository || "Untitled workspace"}
+                    </strong>
+                    <span>
+                      {workspace.repository
+                        ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
+                        : "No repository connected"}
+                    </span>
+                  </div>
+                  <div className="workspace-card-meta">
+                    <span className="workspace-card-access">
+                      {workspace.repositoryVisibility === "private"
+                        ? "Private"
+                        : workspace.repository
+                          ? "Public"
+                          : "Blank"}
+                    </span>
+                    <small>{formatUpdatedAt(workspace.updatedAt)}</small>
+                  </div>
+                </article>
+              </Link>
               <button
                 type="button"
                 className="workspace-card-delete-button"

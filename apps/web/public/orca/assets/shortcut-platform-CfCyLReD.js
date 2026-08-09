@@ -1,0 +1,1 @@
+function e(){return navigator.userAgent.includes(`Mac`)?`darwin`:navigator.userAgent.includes(`Windows`)?`win32`:`linux`}export{e as t};

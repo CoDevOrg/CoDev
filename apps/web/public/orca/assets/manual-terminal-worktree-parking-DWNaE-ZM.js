@@ -1,0 +1,1 @@
+const e=`orca-manual-terminal-worktree-park`;var t=new Set;function n(n){n&&(t.add(n),window.dispatchEvent(new CustomEvent(e,{detail:{worktreeId:n}})))}function r(e){return t.delete(e)}function i(){let e=[...t];return t.clear(),e}export{r as i,n,i as r,e as t};

@@ -1,0 +1,1 @@
+function e(e,t=window){let n=t.innerWidth,r=t.innerHeight,i=()=>{let{innerWidth:i,innerHeight:a}=t;i===n&&a===r||(n=i,r=a,e())};return t.addEventListener(`resize`,i),()=>t.removeEventListener(`resize`,i)}export{e as t};

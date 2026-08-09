@@ -1,0 +1,2 @@
+var e=/^(---|\+\+\+)\r?\n(?:[\s\S]*?\r?\n)?\1(?:\r?\n|$)/;function t(t){let n=t.match(e);if(!n)return null;let r=n[0];return{raw:r,body:t.slice(r.length)}}function n(e,t){return`${e.endsWith(`
+`)?e:`${e}\n`}${t}`}export{n,t};

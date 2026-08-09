@@ -1,0 +1,1 @@
+var e={disconnected:!1,connecting:!0,"auth-failed":!1,"deploying-relay":!0,connected:!1,reconnecting:!0,"reconnection-failed":!1,error:!1},t={disconnected:!0,connecting:!1,"auth-failed":!0,"deploying-relay":!1,connected:!1,reconnecting:!1,"reconnection-failed":!0,error:!0};function n(t){return t?e[t]:!1}function r(e){return e?t[e]:!1}export{n,r as t};

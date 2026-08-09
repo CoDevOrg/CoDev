@@ -1,0 +1,1 @@
+import{a as e}from"./terminal-D_re8_Ue.js";function t(t){window.dispatchEvent(new CustomEvent(e,{detail:t}))}export{t};

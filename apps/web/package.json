@@ -21,6 +21,7 @@
     "@aws-crypto/sha256-js": "5.2.0",
     "@aws-sdk/client-ec2": "3.1098.0",
     "@aws-sdk/client-kms": "^3.1098.0",
+    "@aws-sdk/client-ssm": "^3.1105.0",
     "@aws-sdk/credential-provider-node": "3.972.75",
     "@aws-sdk/credential-providers": "3.1098.0",
     "@clerk/nextjs": "7.6.3",

@@ -1,0 +1,1 @@
+const e=new Intl.Collator(`en`,{numeric:!0});function t(t,n){let r=e.compare(t,n);return r===0?t<n?-1:t>n?1:0:r}function n(e){return e.sort((e,n)=>e.isDirectory===n.isDirectory?t(e.name,n.name):e.isDirectory?-1:1)}export{n,t};

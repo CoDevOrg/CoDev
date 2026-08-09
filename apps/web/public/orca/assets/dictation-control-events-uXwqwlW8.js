@@ -1,0 +1,1 @@
+const e=`dictation:control`;function t(t){document.dispatchEvent(new CustomEvent(e,{detail:t}))}export{t as n,e as t};

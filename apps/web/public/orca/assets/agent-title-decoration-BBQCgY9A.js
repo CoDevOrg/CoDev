@@ -1,0 +1,1 @@
+var e=/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/;function t(t){return t.replace(e,``).trimStart()}function n(e){let n=t(e);return n.length>0?n:e}export{t as n,n as t};

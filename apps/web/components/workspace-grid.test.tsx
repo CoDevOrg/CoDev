@@ -8,7 +8,7 @@ vi.mock("./repository-picker", () => ({
 }));
 
 describe("WorkspaceGrid", () => {
-  it("lists persisted workspaces without coupling them to a frontend route", () => {
+  it("links each workspace card to its Orca workspace route", () => {
     render(
       <WorkspaceGrid
         appSlug={undefined}
@@ -28,7 +28,9 @@ describe("WorkspaceGrid", () => {
     );
 
     expect(screen.getByText("yousef20920/CoDev")).toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open yousef20920/CoDev" }),
+    ).toHaveAttribute("href", "/workspaces/workspace-1");
   });
 
   it("does not render a removed workspace frontend resume action", () => {

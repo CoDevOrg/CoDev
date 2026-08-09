@@ -1,0 +1,1 @@
+const e=60,t=10080*60,n=1440*60,r=0,i=100;export{i as a,e as i,r as n,t as r,n as t};

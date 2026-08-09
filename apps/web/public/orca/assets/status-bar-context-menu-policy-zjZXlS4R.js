@@ -1,0 +1,1 @@
+const e=`data-status-bar-context-menu-exempt`,t=`[${e}]`,n={[e]:``};var r=`[data-floating-terminal-toggle]`;function i(e){return typeof e?.closest==`function`}function a(e){if(i(e))return e;let t=e?.parentElement;if(i(t))return t;let n=e?.parentNode;return i(n)?n:null}function o(e){let n=a(e);return n?n.closest(r)===null&&n.closest(t)===null:!0}export{o as n,n as t};
