@@ -32,7 +32,12 @@ user or access key:
 - `codev-vercel-production` trusts only the CoDev production OIDC subject.
 - `codev-vercel-preview` trusts only the CoDev preview OIDC subject.
 - Both Vercel roles can invoke only the CoDev API Gateway API, describe EC2
-  state, and start the exact Firecracker host.
+  state, and start the Firecracker host — scoped by that instance's stable
+  `Name=codev-firecracker-host`/`Project=CoDev` tags (set directly in
+  `runtime.yaml`), not its literal instance ID. A host replacement (new
+  instance ID) is covered automatically; a literal-ARN policy would
+  otherwise go stale until the next full `deploy.sh` run re-derived it,
+  breaking Vercel's ability to wake the host in the meantime.
 
 ## Deploy
 

@@ -34,12 +34,41 @@ function createClient() {
   };
 }
 
+/** AWS error names worth a couple of quick retries: transient throttling and
+ * connection issues, not permission or not-found problems that retrying
+ * can't fix. */
+const RETRYABLE_AWS_ERROR_NAMES = new Set([
+  "RequestLimitExceeded",
+  "Throttling",
+  "ThrottlingException",
+  "InternalError",
+  "InternalFailure",
+  "ServiceUnavailable",
+]);
+
+async function withAwsRetry<T>(operation: () => Promise<T>): Promise<T> {
+  const attempts = 3;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      const retryable =
+        error instanceof Error && RETRYABLE_AWS_ERROR_NAMES.has(error.name);
+      if (!retryable || attempt === attempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+  }
+  throw new Error("unreachable");
+}
+
 async function describeInstance(
   client: EC2Client,
   instanceId: string,
 ): Promise<InstanceStateName | undefined> {
-  const response = await client.send(
-    new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
+  const response = await withAwsRetry(() =>
+    client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] })),
   );
   return response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
 }
@@ -110,9 +139,16 @@ export async function requestHostWake(): Promise<"running" | "starting"> {
       return "running";
     }
     if (state === "stopped") {
-      await client.send(
-        new StartInstancesCommand({ InstanceIds: [instanceId] }),
-      );
+      try {
+        await withAwsRetry(() =>
+          client.send(new StartInstancesCommand({ InstanceIds: [instanceId] })),
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `The Firecracker host could not be started (${instanceId}): ${reason}`,
+        );
+      }
       return "starting";
     }
     if (state === "pending") {

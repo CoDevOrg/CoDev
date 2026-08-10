@@ -62,4 +62,34 @@ describe("Firecracker host resolution", () => {
       InstanceIds: ["i-current"],
     });
   });
+
+  it("surfaces a clear, instance-identifying error when StartInstances is denied", async () => {
+    const denied = new Error(
+      "User ... is not authorized to perform: ec2:StartInstances",
+    );
+    denied.name = "AccessDeniedException";
+    aws.send
+      .mockResolvedValueOnce({
+        Reservations: [{ Instances: [{ State: { Name: "stopped" } }] }],
+      })
+      .mockRejectedValueOnce(denied);
+
+    await expect(requestHostWake()).rejects.toThrow(
+      /could not be started \(i-retired\).*ec2:StartInstances/s,
+    );
+  });
+
+  it("retries StartInstances once on transient throttling before succeeding", async () => {
+    const throttled = new Error("Rate exceeded");
+    throttled.name = "RequestLimitExceeded";
+    aws.send
+      .mockResolvedValueOnce({
+        Reservations: [{ Instances: [{ State: { Name: "stopped" } }] }],
+      })
+      .mockRejectedValueOnce(throttled)
+      .mockResolvedValueOnce({});
+
+    await expect(requestHostWake()).resolves.toBe("starting");
+    expect(aws.send).toHaveBeenCalledTimes(3);
+  });
 });

@@ -160,9 +160,17 @@ ensure_vercel_role() {
         }
       }]
     }')"
+  # ec2:StartInstances is scoped by the host's own stable Name/Project tags
+  # (set directly on the FirecrackerHost resource in runtime.yaml), not a
+  # literal instance ARN: CloudFormation replaces that instance (new
+  # instance ID) on host-affecting changes, and a literal-ARN policy would
+  # silently go stale until the next full deploy.sh run re-derived it --
+  # exactly what broke Vercel's ability to wake a replaced host once
+  # already. Tag-scoping means any current or future host is always
+  # covered with no follow-up IAM sync step required.
   invoke_policy="$(jq -cn \
     --arg resource "arn:aws:execute-api:${region}:${account_id}:${api_id}/*/*/*" \
-    --arg instance "arn:aws:ec2:${region}:${account_id}:instance/${instance_id}" \
+    --arg instance_wildcard "arn:aws:ec2:${region}:${account_id}:instance/*" \
     --arg credential_key_arn "${credential_key_arn}" \
     '{
       Version: "2012-10-17",
@@ -175,7 +183,13 @@ ensure_vercel_role() {
         {
           Effect: "Allow",
           Action: "ec2:StartInstances",
-          Resource: $instance
+          Resource: $instance_wildcard,
+          Condition: {
+            StringEquals: {
+              "ec2:ResourceTag/Name": "codev-firecracker-host",
+              "ec2:ResourceTag/Project": "CoDev"
+            }
+          }
         },
         {
           Effect: "Allow",
