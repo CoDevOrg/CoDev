@@ -89,6 +89,12 @@ release asset. `deploy.sh` uploads the resulting
 `bootstrap-host.sh` fetches, checksum-verifies, and extracts it to
 `/opt/orca/squashfs-root`.
 
+Each session is still a full Electron process under the hood, so it needs a
+real X display even though it's driven headlessly: `codev-orca-xvfb.service`
+runs a virtual display on `:99` (`codev-orchestrator.service` requires and
+starts after it), and every `orca serve` process is spawned with
+`DISPLAY=:99` and `LIBGL_ALWAYS_SOFTWARE=1`.
+
 `codev-orchestrator` spawns, tracks, and reaps one `orca serve` process per
 _workspace_ (not one shared instance) via
 `POST/GET/DELETE /v1/sandboxes/{workspaceId}/ide`

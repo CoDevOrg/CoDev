@@ -131,6 +131,30 @@ install -d -m 0755 "${orca_dir}"
 tar -xzf "${work_dir}/orca-serve-linux-arm64.tar.gz" -C "${orca_dir}"
 chmod 0755 "${orca_dir}/squashfs-root/AppRun"
 
+# orca serve is a full Electron app: even run headless via `--serve`, it
+# still needs a real X display to attach to, or it exits immediately before
+# ever printing its `orca_server_ready` line. `xvfb` (installed above) only
+# provides the binary; this unit is what actually runs a virtual display at
+# :99, which services/orchestrator/src/backend/orca.rs assumes is already up
+# (CODEV_ORCA_DISPLAY, default ":99") before spawning any session.
+cat >/etc/systemd/system/codev-orca-xvfb.service <<'UNIT'
+[Unit]
+Description=CoDev virtual display for Orca IDE sessions
+Before=codev-orchestrator.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable codev-orca-xvfb.service
+systemctl restart codev-orca-xvfb.service
+
 # Caddy fronts the public 443 endpoint that browsers connect to directly for
 # Orca's WebSocket protocol; the orchestrator manages its routing table at
 # runtime over the local admin API (127.0.0.1:2019), one `handle_path
@@ -305,6 +329,8 @@ After=network-online.target
 Wants=network-online.target
 Requires=codev-firecracker-network-isolation.service
 After=codev-firecracker-network-isolation.service
+Requires=codev-orca-xvfb.service
+After=codev-orca-xvfb.service
 
 [Service]
 Type=simple
