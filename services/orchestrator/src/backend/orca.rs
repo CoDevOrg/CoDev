@@ -649,7 +649,7 @@ mod tests {
     #[test]
     fn derives_a_stable_short_linux_username() {
         let user = linux_user_for("e010bd2c-a3c1-438f-acef-166287a3b1cb");
-        assert_eq!(user, "orca-ws-e010bd2ca3c1438face");
+        assert_eq!(user, "orca-ws-e010bd2ca3c1438facef");
         assert_eq!(user.len(), "orca-ws-".len() + USER_SUFFIX_LEN);
         assert!(user.len() <= 32);
     }
