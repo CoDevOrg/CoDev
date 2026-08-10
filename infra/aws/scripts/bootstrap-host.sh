@@ -51,7 +51,31 @@ apt-get -o DPkg::Lock::Timeout=300 install -y \
   squashfs-tools \
   sudo \
   xz-utils \
-  xfsprogs
+  xfsprogs \
+  libgtk-3-0t64 \
+  libnss3 \
+  libnspr4 \
+  libasound2t64 \
+  libatk1.0-0t64 \
+  libatk-bridge2.0-0t64 \
+  libcups2t64 \
+  libdrm2 \
+  libgbm1 \
+  libxkbcommon0 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxfixes3 \
+  libxrandr2 \
+  libxshmfence1 \
+  libxss1 \
+  libxtst6 \
+  libpango-1.0-0 \
+  libpangocairo-1.0-0 \
+  libcairo2 \
+  libglib2.0-0t64 \
+  libdbus-1-3 \
+  fonts-liberation \
+  xdg-utils
 
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
@@ -129,7 +153,12 @@ aws s3 cp "${release_prefix}/orca-serve-linux-arm64.tar.gz.sha256" "${work_dir}/
 rm -rf "${orca_dir}"
 install -d -m 0755 "${orca_dir}"
 tar -xzf "${work_dir}/orca-serve-linux-arm64.tar.gz" -C "${orca_dir}"
-chmod 0755 "${orca_dir}/squashfs-root/AppRun"
+# `--appimage-extract` (in the build container) creates squashfs-root as
+# 0700, since it's normally only ever run by the user who extracted it. Here
+# it's `AppRun`-ed by each workspace's own dedicated, unprivileged Linux user
+# (see services/orchestrator/src/backend/orca.rs), so every file and
+# directory underneath needs to be at least world-readable/traversable.
+chmod -R go+rX "${orca_dir}"
 
 # orca serve is a full Electron app: even run headless via `--serve`, it
 # still needs a real X display to attach to, or it exits immediately before

@@ -575,8 +575,11 @@ async fn caddy_load(admin_addr: &str, caddyfile: &str) -> Result<()> {
         RuntimeError::Unavailable(format!("Caddy admin API unreachable: {error}"))
     })?;
     let body = caddyfile.as_bytes();
+    // Caddy's admin API rejects requests whose Host header isn't in its
+    // (CSRF-style) allowed-origins list, which defaults to the admin
+    // listener's own address/port — not a bare "localhost" without a port.
     let request = format!(
-        "POST /load?config_adapter=caddyfile HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/caddyfile\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST /load?config_adapter=caddyfile HTTP/1.1\r\nHost: {admin_addr}\r\nContent-Type: text/caddyfile\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream
