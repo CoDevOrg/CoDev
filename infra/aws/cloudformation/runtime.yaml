@@ -130,7 +130,7 @@ Resources:
   HostSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: CoDev Firecracker host; public ingress limited to Caddy's HTTP/HTTPS (Orca IDE) below
+      GroupDescription: CoDev Firecracker host; public ingress limited to Caddy HTTP/HTTPS (Orca IDE) below
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
