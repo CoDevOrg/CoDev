@@ -21,6 +21,8 @@ readonly oidc_url="https://oidc.vercel.com/${team_slug}"
 readonly oidc_host="oidc.vercel.com/${team_slug}"
 readonly oidc_audience="https://vercel.com/${team_slug}"
 
+readonly skip_orca_build="${CODEV_SKIP_ORCA_BUILD:-}"
+
 build_dir="$(mktemp -d)"
 trap 'rm -rf "${build_dir}"' EXIT
 
@@ -35,6 +37,15 @@ echo "Building CoDev runtime ${release_version} for linux/arm64"
     target/aarch64-unknown-linux-musl/release/guestd \
     "${build_dir}/codev-guestd-linux-arm64"
 )
+
+# Building orca serve from source takes ~15-30 minutes; skip it for
+# orchestrator-only iteration with CODEV_SKIP_ORCA_BUILD=1 once an
+# orca-serve-linux-arm64.tar.gz already exists at the target release version.
+if [[ -n "${skip_orca_build}" ]]; then
+  echo "CODEV_SKIP_ORCA_BUILD set; not rebuilding orca serve from source"
+else
+  "${repo_root}/infra/aws/scripts/build-orca-serve.sh" "${build_dir}"
+fi
 
 aws cloudformation deploy \
   --region "${region}" \
@@ -51,6 +62,16 @@ for artifact in codev-orchestrator-linux-arm64 codev-guestd-linux-arm64; do
     --sse AES256 \
     --only-show-errors
 done
+if [[ -f "${build_dir}/orca-serve-linux-arm64.tar.gz" ]]; then
+  for artifact in orca-serve-linux-arm64.tar.gz orca-serve-linux-arm64.tar.gz.sha256; do
+    aws s3 cp \
+      "${build_dir}/${artifact}" \
+      "s3://${artifact_bucket}/releases/${release_version}/${artifact}" \
+      --region "${region}" \
+      --sse AES256 \
+      --only-show-errors
+  done
+fi
 aws s3 cp \
   "${repo_root}/infra/aws/scripts/bootstrap-host.sh" \
   "s3://${artifact_bucket}/releases/${release_version}/bootstrap-host.sh" \

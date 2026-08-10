@@ -237,6 +237,62 @@ export async function discardSandboxSnapshot(workspaceId: string) {
   }
 }
 
+const ideSessionSchema = z.object({
+  workspaceId: z.string().min(1),
+  port: z.number().int(),
+  createdAt: z.string(),
+  lastActivityAt: z.string(),
+  /** The verbatim `orca_server_ready` JSON; parsed by apps/web/lib/orca-pairing.ts. */
+  ready: z.unknown(),
+});
+
+export type IdeSession = z.infer<typeof ideSessionSchema>;
+
+export interface StartIdeInput {
+  projectRoot: string;
+  clone?: {
+    repository: string;
+    defaultBranch: string;
+    token?: string;
+  };
+}
+
+/**
+ * Start (or idempotently return) this workspace's dedicated per-workspace
+ * Orca IDE process. Replaces the previous SSM RunCommand flow entirely: the
+ * orchestrator both clones the repository (if `clone` is given and the
+ * directory isn't already a git repo) and spawns/tracks `orca serve` itself.
+ */
+export async function startIde(
+  workspaceId: string,
+  input: StartIdeInput,
+): Promise<IdeSession> {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide`,
+    input,
+    110_000,
+  );
+  return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
+}
+
+export async function getIde(workspaceId: string): Promise<IdeSession> {
+  const response = await orchestratorRequest(
+    "GET",
+    `/v1/sandboxes/${workspaceId}/ide`,
+  );
+  return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
+}
+
+export async function stopIde(workspaceId: string) {
+  try {
+    await orchestratorRequest("DELETE", `/v1/sandboxes/${workspaceId}/ide`);
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 404) return;
+    throw error;
+  }
+}
+
 export async function touchSandbox(workspaceId: string) {
   const response = await orchestratorRequest(
     "POST",

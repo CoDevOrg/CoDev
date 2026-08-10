@@ -45,10 +45,12 @@ reapplication.
 
 ### Auto-opening the cloned workspace repository
 
-`ensureOrcaWorkspaceClone` (`apps/web/lib/orca-host.ts`) clones the workspace
-repository onto the runtime host at a fixed, predictable path
-(`orcaWorkspacePath()` in `apps/web/lib/orca-pairing.ts`,
-`/srv/codev/workspaces/<workspaceId>`), but Orca has no URL parameter or
+`ensureOrcaSession` (`apps/web/lib/orca-host.ts`) has `codev-orchestrator`
+clone the workspace repository directly (see
+[`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs))
+onto the runtime host at a fixed, predictable path (`orcaWorkspacePath()` in
+`apps/web/lib/orca-pairing.ts`, `/srv/codev/workspaces/<workspaceId>`), but
+Orca has no URL parameter or
 `postMessage` API for opening a project on boot — the pairing fragment only
 carries the connection offer. `autoAddOrcaProject` in
 `apps/web/components/orca-workspace.tsx` closes that gap by driving Orca's
@@ -167,8 +169,32 @@ Symbols` `@font-face` family name in the CSS bundle (renaming that alone
 
 ## Matching server runtime
 
-The Orca runtime server (`orca serve`, same v1.4.176 AppImage,
-`orca-linux-arm64.AppImage`) runs on the CoDev Firecracker EC2 host as the
-`orca-serve.service` systemd unit, fronted by Caddy TLS at
-`https://3-21-99-52.nip.io`. Keep the vendored web client and the host AppImage
-on the same upstream version when upgrading either.
+`orca serve` (Orca's Electron main process / IDE backend) is a full
+MIT-licensed part of the same `stablyai/orca` monorepo as the vendored web
+client above — it is not a closed-source binary. CoDev builds it from that
+real source at the same pinned tag/commit as the vendored web client,
+instead of downloading upstream's prebuilt `orca-linux-arm64.AppImage`
+release asset:
+
+- [`infra/aws/orca-build/Containerfile`](../../infra/aws/orca-build/Containerfile)
+  clones `stablyai/orca` at the pinned tag, verifies the resolved commit,
+  and runs its own `pnpm run build:linux -- --arm64` (electron-builder),
+  then self-extracts the packaged AppImage into a plain `squashfs-root/`
+  directory.
+- [`infra/aws/scripts/build-orca-serve.sh`](../../infra/aws/scripts/build-orca-serve.sh)
+  runs that build in an arm64-native Linux container via Apple's `container`
+  tool and produces a checksum-pinned `orca-serve-linux-arm64.tar.gz`
+  artifact, uploaded to S3 by `infra/aws/deploy.sh` alongside the
+  orchestrator/guestd binaries.
+
+On the CoDev Firecracker EC2 host, `codev-orchestrator` spawns, tracks, and
+reaps **one dedicated `orca serve` process per workspace** — not a single
+shared systemd unit — each with its own Linux user, loopback port, and
+`/srv/codev/workspaces/<workspaceId>` clone directory (see
+[`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs)).
+Caddy fronts all sessions on one public TLS endpoint (a `nip.io` hostname
+derived from the host's own current public IP) and path-routes
+`/w/<workspaceId>/*` to the matching session's port; the orchestrator updates
+that routing over Caddy's local admin API on every session start/stop. Keep
+the vendored web client and this build's `ORCA_REF`/`ORCA_COMMIT_PREFIX` on
+the same upstream version when upgrading either.

@@ -1,24 +1,16 @@
 import { apiError, getApiUser } from "@/lib/api";
 import { WorkspaceAccessError, requireWorkspacePermission } from "@/lib/access";
-import {
-  OrcaHostError,
-  ensureOrcaRuntime,
-  ensureOrcaWorkspaceClone,
-} from "@/lib/orca-host";
+import { OrcaHostError, ensureOrcaSession } from "@/lib/orca-host";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
 export const maxDuration = 300;
 
 /**
- * Connect a workspace to the shared Orca runtime on the CoDev EC2 host.
- * Wakes the host if needed, waits for the runtime pairing offer, and makes
- * sure the workspace repository is cloned on the host. Responds with the
- * pairing code the vendored Orca web client boots from.
- *
- * Foundation-stage limitation: the pairing offer is runtime-scoped, so any
- * member who can open a workspace gets access to the whole Orca runtime
- * (all workspaces cloned on the host). Per-workspace isolation lands with
- * the collaborative feature work.
+ * Open this workspace's own dedicated Orca IDE process on the CoDev EC2
+ * host, spawned and tracked by `codev-orchestrator`. Wakes the host if
+ * needed, waits for the pairing offer, and makes sure the workspace
+ * repository is cloned. Responds with the pairing code the vendored Orca
+ * web client boots from.
  */
 export async function POST(
   _request: Request,
@@ -37,22 +29,17 @@ export async function POST(
       return apiError(new Error("Workspace not found."), 404);
     }
 
-    const runtime = await ensureOrcaRuntime();
+    const runtime = await ensureOrcaSession(workspace, user.id);
     if (runtime.state === "host-starting") {
       return Response.json({ state: "host-starting" }, { status: 202 });
     }
-
-    const { workspacePath } = await ensureOrcaWorkspaceClone(
-      workspace,
-      user.id,
-    );
 
     return Response.json({
       state: "ready",
       pairingCode: runtime.pairing.pairingCode,
       endpoint: runtime.pairing.endpoint,
       runtimeId: runtime.pairing.runtimeId,
-      workspacePath,
+      workspacePath: runtime.workspacePath,
       webClientPath: "/orca/web-index.html",
     });
   } catch (error) {

@@ -1,10 +1,12 @@
 import { z } from "zod";
 
 /**
- * Pure helpers for the Orca runtime readiness contract. The Orca server
- * (`orca serve --serve-json`) prints one `orca_server_ready` JSON line at
- * startup; the host captures it to `/home/orca/orca-ready.json`, and the
- * control plane reads it over SSM. See third_party/orca/UPSTREAM.md.
+ * Pure helpers for the Orca runtime readiness contract. Each workspace's
+ * dedicated `orca serve --serve-json` process prints one
+ * `orca_server_ready` JSON line at startup; `codev-orchestrator` captures it
+ * and returns it verbatim as `IdeSession.ready` from
+ * `POST/GET /v1/sandboxes/{workspaceId}/ide` (see
+ * `services/orchestrator/src/backend/orca.rs`). See third_party/orca/UPSTREAM.md.
  */
 
 export const orcaReadySchema = z.object({
@@ -60,44 +62,54 @@ export function extractPairingCode(pairingUrl: string): string | null {
 }
 
 /**
- * Parse the captured ready line into the connection info the browser needs.
- * Throws with an operator-actionable message when the runtime cannot pair.
+ * Parse the orchestrator's captured `orca_server_ready` JSON (the `ready`
+ * field of `IdeSession` in services/orchestrator/src/model.rs) into the
+ * connection info the browser needs. Throws with an operator-actionable
+ * message when the runtime cannot pair.
+ *
+ * `expectedWorkspaceId` re-validates that the endpoint this workspace's
+ * dedicated `orca serve` process advertised is actually scoped to its own
+ * `/w/<workspaceId>/` Caddy route (the address the orchestrator told it to
+ * advertise via `--serve-pairing-address`, see `services/orchestrator/src/backend/orca.rs`),
+ * rather than trusting an unexpected self-reported endpoint verbatim — the
+ * same "never confirm on a mismatch" defense already used for the DOM
+ * automation path in `apps/web/components/orca-workspace.tsx`.
  */
-export function parseOrcaReady(readyLine: string): OrcaPairing {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readyLine);
-  } catch {
-    throw new Error("The Orca runtime readiness file is not valid JSON.");
-  }
-  const ready = orcaReadySchema.parse(raw);
-  if (!ready.pairing.available) {
+export function parseOrcaReady(
+  ready: unknown,
+  expectedWorkspaceId: string,
+): OrcaPairing {
+  const parsed = orcaReadySchema.parse(ready);
+  if (!parsed.pairing.available) {
     throw new Error(
-      `Orca runtime pairing is unavailable (${ready.pairing.reason}). ${ready.pairing.guidance}`,
+      `Orca runtime pairing is unavailable (${parsed.pairing.reason}). ${parsed.pairing.guidance}`,
     );
   }
-  if (ready.pairing.scope !== "runtime") {
+  if (parsed.pairing.scope !== "runtime") {
     throw new Error(
-      "The Orca runtime minted a non-runtime pairing offer; restart orca-serve without --mobile-pairing.",
+      "The Orca runtime minted a non-runtime pairing offer; restart orca serve without --mobile-pairing.",
     );
   }
-  const pairingCode = extractPairingCode(ready.pairing.url);
+  if (!parsed.pairing.endpoint.includes(`/w/${expectedWorkspaceId}`)) {
+    throw new Error(
+      "The Orca runtime advertised an endpoint outside this workspace's own path-scoped route.",
+    );
+  }
+  const pairingCode = extractPairingCode(parsed.pairing.url);
   if (!pairingCode) {
     throw new Error("The Orca pairing URL could not be parsed.");
   }
   return {
-    runtimeId: ready.runtimeId,
-    endpoint: ready.pairing.endpoint,
+    runtimeId: parsed.runtimeId,
+    endpoint: parsed.pairing.endpoint,
     pairingCode,
   };
 }
 
 const WORKSPACE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const BRANCH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
-/** Root for per-workspace clones on the Orca host, owned by the orca user. */
+/** Root for per-workspace clones on the Orca host. */
 export const ORCA_WORKSPACES_ROOT = "/srv/codev/workspaces";
 
 export function orcaWorkspacePath(workspaceId: string): string {
@@ -105,48 +117,4 @@ export function orcaWorkspacePath(workspaceId: string): string {
     throw new Error("Invalid workspace id.");
   }
   return `${ORCA_WORKSPACES_ROOT}/${workspaceId}`;
-}
-
-/**
- * Build the shell script that idempotently clones a workspace repository on
- * the Orca host. All interpolated values are validated against strict
- * patterns above; the optional token is used once for the clone and removed
- * from the persisted remote so it never lands on disk.
- */
-export function buildCloneScript(args: {
-  workspaceId: string;
-  repository: string;
-  defaultBranch: string;
-  token?: string | undefined;
-}): string {
-  const path = orcaWorkspacePath(args.workspaceId);
-  if (!REPOSITORY_PATTERN.test(args.repository)) {
-    throw new Error("Invalid repository name.");
-  }
-  if (
-    !BRANCH_PATTERN.test(args.defaultBranch) ||
-    args.defaultBranch.includes("..")
-  ) {
-    throw new Error("Invalid branch name.");
-  }
-  if (args.token !== undefined && !/^[A-Za-z0-9_.-]+$/.test(args.token)) {
-    throw new Error("Invalid repository token.");
-  }
-  const plainUrl = `https://github.com/${args.repository}.git`;
-  const cloneUrl =
-    args.token === undefined
-      ? plainUrl
-      : `https://x-access-token:${args.token}@github.com/${args.repository}.git`;
-  return [
-    `#!/bin/bash`,
-    `set -euo pipefail`,
-    `mkdir -p ${ORCA_WORKSPACES_ROOT}`,
-    `chown orca:orca ${ORCA_WORKSPACES_ROOT}`,
-    `if [ ! -d ${path}/.git ]; then`,
-    `  rm -rf ${path}`,
-    `  sudo -u orca git clone --branch '${args.defaultBranch}' '${cloneUrl}' ${path}`,
-    `  sudo -u orca git -C ${path} remote set-url origin '${plainUrl}'`,
-    `fi`,
-    `echo CLONE_OK`,
-  ].join("\n");
 }

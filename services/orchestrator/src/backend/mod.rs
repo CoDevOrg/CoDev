@@ -6,17 +6,67 @@ use std::{
 use chrono::{Duration, Utc};
 
 use crate::model::{
-    CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
-    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance,
+    PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
+    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 #[cfg(target_os = "linux")]
 mod firecracker;
 #[cfg(target_os = "linux")]
 pub use firecracker::{FirecrackerBackend, FirecrackerConfig};
+
+#[cfg(target_os = "linux")]
+mod orca;
+#[cfg(target_os = "linux")]
+pub use orca::{OrcaBackend, OrcaConfig};
+
+/// Separate from `Backend`: an IDE session is not a sandbox lifecycle
+/// concern, and this stays constructible (as `Disabled`) on every platform
+/// and in configurations where the Orca IDE backend has not been set up yet.
+#[derive(Clone)]
+pub enum IdeBackend {
+    #[cfg(target_os = "linux")]
+    Orca(Arc<OrcaBackend>),
+    Disabled,
+}
+
+impl IdeBackend {
+    pub async fn start(&self, workspace_id: &str, request: IdeStartRequest) -> Result<IdeSession> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = (&workspace_id, &request);
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.start(workspace_id, request).await,
+            Self::Disabled => Err(RuntimeError::Unavailable(
+                "the Orca IDE backend is not configured on this host".into(),
+            )),
+        }
+    }
+
+    pub async fn status(&self, workspace_id: &str) -> Result<IdeSession> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &workspace_id;
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.status(workspace_id).await,
+            Self::Disabled => Err(RuntimeError::SandboxNotFound),
+        }
+    }
+
+    pub async fn stop(&self, workspace_id: &str) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &workspace_id;
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.stop(workspace_id).await,
+            Self::Disabled => Err(RuntimeError::SandboxNotFound),
+        }
+    }
+}
 
 #[allow(clippy::large_enum_variant)]
 pub enum Backend {

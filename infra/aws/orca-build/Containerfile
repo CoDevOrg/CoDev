@@ -1,0 +1,54 @@
+# Builds `orca serve` (Orca's Electron main process / IDE backend) from its
+# real MIT source at a pinned tag, instead of trusting a prebuilt
+# `orca-linux-arm64.AppImage` release asset. See
+# infra/aws/scripts/build-orca-serve.sh, which builds this image with Apple's
+# `container` tool (arm64-native on Apple Silicon hosts) and copies the
+# resulting artifact out. Keep ORCA_REF/ORCA_COMMIT_PREFIX in sync with
+# third_party/orca/UPSTREAM.md when bumping the vendored web client.
+FROM ubuntu:24.04
+
+ARG ORCA_REF=v1.4.176
+ARG ORCA_COMMIT_PREFIX=02cea8a
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git python3 build-essential fakeroot rpm xz-utils \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && corepack enable \
+    && corepack prepare pnpm@10.24.0 --activate \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Pin to a specific commit, not just the mutable tag, so a compromised or
+# force-moved upstream tag can't silently swap in different source.
+RUN git clone --branch "${ORCA_REF}" --depth 1 https://github.com/stablyai/orca.git . \
+    && actual_commit="$(git rev-parse --short=12 HEAD)" \
+    && case "${actual_commit}" in \
+         ${ORCA_COMMIT_PREFIX}*) ;; \
+         *) echo "orca commit mismatch at tag ${ORCA_REF}: expected ${ORCA_COMMIT_PREFIX}*, got ${actual_commit}" >&2; exit 1 ;; \
+       esac
+
+RUN pnpm install --frozen-lockfile
+
+# ORCA_LINUX_ARM64_RELEASE controls electron-builder's artifact naming
+# (config/electron-builder.config.cjs); --arm64 targets the CoDev host's
+# Graviton architecture regardless of this container's own build host.
+ENV ORCA_LINUX_ARM64_RELEASE=1
+RUN pnpm run build:linux -- --arm64
+
+# `orca serve` is what CoDev's orchestrator (services/orchestrator/src/backend/orca.rs)
+# spawns per workspace. `--appimage-extract` unpacks the AppImage into a plain
+# squashfs-root/ directory with no FUSE mount required, which is exactly the
+# layout production already runs `AppRun` out of, so the orchestrator needs no
+# AppImage-specific runtime handling on the host. This must execute on an
+# arm64 host (or an arm64-native container, as here) because the AppImage's
+# ELF stub is arm64 and cannot self-extract under emulation.
+RUN set -eu; \
+    appimage="$(find dist -maxdepth 1 -name '*.AppImage' -print -quit)"; \
+    test -n "${appimage}"; \
+    chmod +x "${appimage}"; \
+    (cd dist && "./$(basename "${appimage}")" --appimage-extract >/dev/null); \
+    tar -C dist -czf dist/orca-serve-linux-arm64.tar.gz squashfs-root; \
+    sha256sum dist/orca-serve-linux-arm64.tar.gz | awk '{print $1}' > dist/orca-serve-linux-arm64.tar.gz.sha256

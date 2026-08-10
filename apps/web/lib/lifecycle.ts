@@ -9,7 +9,7 @@ import { appendWorkspaceEvent } from "./audit";
 import { getDatabase } from "./database";
 import { getHostState } from "./host";
 import { logEvent } from "./observability";
-import { destroySandbox } from "./orchestrator";
+import { destroySandbox, stopIde } from "./orchestrator";
 import { closeOrphanSandboxIntervals } from "./vm-usage";
 import { markWorkspaceStopped } from "./workspaces";
 
@@ -109,7 +109,6 @@ async function cleanupWorkspace(
 export async function destroySandboxForCleanup(workspaceId: string) {
   try {
     await destroySandbox(workspaceId);
-    return true;
   } catch (error) {
     logEvent("warn", "lifecycle.destroy_failed", {
       workspaceId,
@@ -117,6 +116,15 @@ export async function destroySandboxForCleanup(workspaceId: string) {
     });
     return false;
   }
+  // Best-effort: an orphaned Orca IDE process is reclaimed by the
+  // orchestrator's own idle-timeout reaper regardless of this call's result.
+  await stopIde(workspaceId).catch((error: unknown) => {
+    logEvent("warn", "lifecycle.stop_ide_failed", {
+      workspaceId,
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+  });
+  return true;
 }
 
 export async function reconcileLifecycle() {

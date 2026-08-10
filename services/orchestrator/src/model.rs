@@ -287,3 +287,41 @@ pub struct TerminalPollResponse {
     pub exited: bool,
     pub exit_code: Option<i32>,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeStartRequest {
+    pub project_root: String,
+    /// Present only when the workspace's clone directory may not exist yet
+    /// on the host. Moving the clone here (instead of the control plane
+    /// running it over SSM) means Vercel never needs host shell access for
+    /// Orca at all; the orchestrator idempotently no-ops if the directory is
+    /// already a git repository.
+    pub clone: Option<IdeCloneRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeCloneRequest {
+    pub repository: String,
+    pub default_branch: String,
+    /// A short-lived GitHub token for the initial clone of a private repo
+    /// only; the orchestrator drops it from the persisted `origin` remote
+    /// immediately after cloning, mirroring the SSM script it replaces.
+    pub token: Option<String>,
+}
+
+/// A running per-workspace Orca IDE process. `ready` is the verbatim
+/// `orca_server_ready` JSON object the process printed on startup; the
+/// control plane already knows how to validate and parse that shape
+/// (`orcaReadySchema` in `apps/web/lib/orca-pairing.ts`), so the orchestrator
+/// passes it through rather than re-implementing that parsing in Rust.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeSession {
+    pub workspace_id: String,
+    pub port: u16,
+    pub created_at: DateTime<Utc>,
+    pub last_activity_at: DateTime<Utc>,
+    pub ready: serde_json::Value,
+}

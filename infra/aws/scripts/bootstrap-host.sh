@@ -12,6 +12,8 @@ readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
 readonly jailer_dir="/srv/jailer"
 readonly host_log_group="${CODEV_HOST_LOG_GROUP:-/codev/orchestrator/codev-runtime}"
+readonly orca_dir="/opt/orca"
+readonly orca_workspaces_root="/srv/codev/workspaces"
 
 # Bare-metal instances can initially inherit the AMI build clock. Wait for the
 # EC2 time source before making signed AWS requests or validating apt metadata.
@@ -30,13 +32,24 @@ apt-get -o DPkg::Lock::Timeout=300 install -y \
   ca-certificates \
   build-essential \
   curl \
+  debian-keyring \
+  debian-archive-keyring \
+  apt-transport-https \
+  gnupg \
   e2fsprogs \
   git \
   iptables \
   jq \
   python3 \
+  python3-gi \
+  gir1.2-atspi-2.0 \
+  at-spi2-core \
+  xdotool \
+  xclip \
+  xvfb \
   ripgrep \
   squashfs-tools \
+  sudo \
   xz-utils \
   xfsprogs
 
@@ -102,6 +115,56 @@ chmod 0755 /opt/codev-verify-lifecycle.sh
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
+
+# orca serve: the per-workspace Orca IDE backend, built by CoDev from source
+# (infra/aws/scripts/build-orca-serve.sh) rather than downloaded as a
+# prebuilt third-party AppImage release asset. codev-orchestrator spawns one
+# instance of this per workspace (services/orchestrator/src/backend/orca.rs).
+aws s3 cp "${release_prefix}/orca-serve-linux-arm64.tar.gz" "${work_dir}/orca-serve-linux-arm64.tar.gz"
+aws s3 cp "${release_prefix}/orca-serve-linux-arm64.tar.gz.sha256" "${work_dir}/orca-serve-linux-arm64.tar.gz.sha256"
+(
+  cd "${work_dir}"
+  echo "$(cat orca-serve-linux-arm64.tar.gz.sha256)  orca-serve-linux-arm64.tar.gz" | sha256sum --check
+)
+rm -rf "${orca_dir}"
+install -d -m 0755 "${orca_dir}"
+tar -xzf "${work_dir}/orca-serve-linux-arm64.tar.gz" -C "${orca_dir}"
+chmod 0755 "${orca_dir}/squashfs-root/AppRun"
+
+# Caddy fronts the public 443 endpoint that browsers connect to directly for
+# Orca's WebSocket protocol; the orchestrator manages its routing table at
+# runtime over the local admin API (127.0.0.1:2019), one `handle_path
+# /w/<workspaceId>/*` route per active IDE session.
+install -d -m 0755 /usr/share/keyrings
+curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" \
+  -o /etc/apt/sources.list.d/caddy-stable.list
+chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+apt-get -o DPkg::Lock::Timeout=300 update
+apt-get -o DPkg::Lock::Timeout=300 install -y caddy
+
+# Orca's browser client connects to a `nip.io` hostname that resolves to
+# this instance's own current public IP, so a real domain/DNS record is not
+# required. Caddy obtains its own TLS certificate for that hostname.
+public_ipv4_token="$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 60")"
+public_ipv4="$(curl -fsS -H "X-aws-ec2-metadata-token: ${public_ipv4_token}" \
+  "http://169.254.169.254/latest/meta-data/public-ipv4")"
+orca_public_host="${public_ipv4//./-}.nip.io"
+
+cat >/etc/caddy/Caddyfile <<CADDYFILE
+{
+  admin 127.0.0.1:2019
+}
+
+${orca_public_host} {
+  respond 404
+}
+CADDYFILE
+systemctl enable caddy.service
+systemctl restart caddy.service
 
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-aarch64.tgz" \
@@ -235,7 +298,7 @@ modprobe kvm
 test -r /dev/kvm
 test -w /dev/kvm
 
-cat >/etc/systemd/system/codev-orchestrator.service <<'UNIT'
+cat >/etc/systemd/system/codev-orchestrator.service <<UNIT
 [Unit]
 Description=CoDev Firecracker orchestrator
 After=network-online.target
@@ -254,6 +317,12 @@ Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
 Environment=CODEV_IDLE_TIMEOUT=15m
 Environment=CODEV_HOST_IDLE_TIMEOUT=15m
+Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
+Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
+Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
+Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
+Environment=CODEV_MAX_IDE_SESSIONS=4
+Environment=CODEV_IDE_IDLE_TIMEOUT=30m
 Restart=always
 RestartSec=2
 KillMode=control-group

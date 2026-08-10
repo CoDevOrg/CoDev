@@ -11,6 +11,7 @@ import {
   destroySandbox,
   resumeSandbox,
   snapshotWorkspace,
+  stopIde,
 } from "./orchestrator";
 import { getDatabase } from "./database";
 import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
@@ -281,6 +282,10 @@ export async function hibernateWorkspace(workspaceId: string) {
     await releaseClaim().catch(() => undefined);
     throw error;
   }
+  // Best-effort: an orphaned Orca IDE process is reclaimed by the
+  // orchestrator's own idle-timeout reaper (services/orchestrator/src/backend/orca.rs)
+  // even if this call fails, so it must not block hibernation on its result.
+  await stopIde(workspaceId).catch(() => undefined);
 
   await closeSandboxInterval(workspaceId, "hibernate");
   await getDatabase().transaction(async (transaction) => {

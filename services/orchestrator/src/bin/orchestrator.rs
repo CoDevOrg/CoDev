@@ -5,7 +5,7 @@ use std::{
 };
 
 use codev_runtime::{
-    backend::{Backend, SharedBackend},
+    backend::{Backend, IdeBackend, SharedBackend},
     http_api,
     model::{Result, RuntimeError},
 };
@@ -32,15 +32,42 @@ async fn main() -> Result<()> {
         tokio::spawn(stop_idle_host(backend.clone(), host_idle_timeout));
     }
 
+    let ide = configure_ide_backend();
+
     let port = env::var("PORT").unwrap_or_else(|_| "8080".into());
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
         .map_err(RuntimeError::internal)?;
     info!(port, "orchestrator listening");
-    axum::serve(listener, http_api::router(backend))
+    axum::serve(listener, http_api::router(backend, ide))
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(RuntimeError::internal)
+}
+
+/// The Orca IDE backend is optional: a host that has not been provisioned
+/// with `CODEV_ORCA_PUBLIC_HOST` yet (or a non-Linux dev build) simply serves
+/// every other route and reports the IDE routes as unavailable, rather than
+/// failing to start.
+fn configure_ide_backend() -> IdeBackend {
+    #[cfg(target_os = "linux")]
+    {
+        use codev_runtime::backend::{OrcaBackend, OrcaConfig};
+        match OrcaConfig::from_environment() {
+            Ok(config) => IdeBackend::Orca(OrcaBackend::new(config)),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "Orca IDE backend not configured; /ide routes will be unavailable"
+                );
+                IdeBackend::Disabled
+            }
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        IdeBackend::Disabled
+    }
 }
 
 async fn configure_backend() -> Result<Backend> {

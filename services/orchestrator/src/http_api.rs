@@ -3,7 +3,7 @@ use std::{
 };
 
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     body::Body,
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderValue, Request, StatusCode, header},
@@ -18,12 +18,12 @@ use serde::Deserialize;
 use tracing::info;
 
 use crate::{
-    backend::SharedBackend,
+    backend::{IdeBackend, SharedBackend},
     model::{
-        CreateRequest, ExecRequest, PublicationExportRequest, Result, RuntimeError,
-        TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
-        WorktreeRebaseRequest, WriteFileRequest,
+        CreateRequest, ExecRequest, IdeStartRequest, PublicationExportRequest, Result,
+        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
+        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
+        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -48,7 +48,7 @@ struct WorktreeReviewQuery {
     base_sha: String,
 }
 
-pub fn router(backend: SharedBackend) -> Router {
+pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/v1/sandboxes", post(create_sandbox))
@@ -58,6 +58,10 @@ pub fn router(backend: SharedBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/resume", post(resume_sandbox))
         .route("/v1/sandboxes/{workspace_id}/activity", post(touch_sandbox))
+        .route(
+            "/v1/sandboxes/{workspace_id}/ide",
+            post(start_ide).get(get_ide).delete(stop_ide),
+        )
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
@@ -116,6 +120,7 @@ pub fn router(backend: SharedBackend) -> Router {
             post(snapshot_workspace).delete(discard_snapshot),
         )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
+        .layer(Extension(ide))
         .layer(middleware::from_fn(no_store))
         .layer(middleware::from_fn(observe_request))
         .with_state(backend)
@@ -484,6 +489,51 @@ async fn git_diff(
     Ok(Json(serde_json::json!({ "output": output })))
 }
 
+async fn start_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<IdeStartRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
+        return Err(RuntimeError::BadRequest("invalid project root".into()));
+    }
+    if let Some(clone) = &request.clone {
+        if clone.repository.is_empty() || clone.repository.len() > 256 {
+            return Err(RuntimeError::BadRequest("invalid repository".into()));
+        }
+        if clone.default_branch.is_empty() || clone.default_branch.len() > 256 {
+            return Err(RuntimeError::BadRequest("invalid default branch".into()));
+        }
+        if clone.token.as_ref().is_some_and(|token| token.len() > 512) {
+            return Err(RuntimeError::BadRequest("invalid token".into()));
+        }
+    }
+    let session = ide.start(&workspace_id, request).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "ide": session })),
+    ))
+}
+
+async fn get_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    let session = ide.status(&workspace_id).await?;
+    Ok(Json(serde_json::json!({ "ide": session })))
+}
+
+async fn stop_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    ide.stop(&workspace_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 fn validate_create(request: &CreateRequest) -> Result<()> {
     validate_workspace_id(&request.workspace_id)?;
     if !commit_sha_pattern().is_match(&request.base_sha) {
@@ -649,7 +699,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::backend::Backend;
+    use crate::backend::{Backend, IdeBackend};
     use crate::model::{
         CreateRequest, RepositorySnapshot, RepositorySnapshotFile, SandboxLifecycleHooks,
         SandboxLifecycleOptions,
@@ -710,7 +760,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_and_lifecycle() {
-        let app = router(Arc::new(Backend::fake()));
+        let app = router(Arc::new(Backend::fake()), IdeBackend::Disabled);
         let health = app
             .clone()
             .oneshot(

@@ -176,8 +176,9 @@ async function waitFor<T>(
 
 /**
  * Best-effort automation of Orca's own "Add a project" dialog so the
- * workspace repository CoDev already cloned onto the runtime host (see
- * `ensureOrcaWorkspaceClone`) opens automatically instead of leaving the
+ * workspace repository CoDev already cloned onto this workspace's own
+ * dedicated Orca IDE process (see `ensureOrcaSession` in
+ * `apps/web/lib/orca-host.ts`) opens automatically instead of leaving the
  * user stuck at Orca's empty "Add a project to get started" state.
  *
  * This drives the real, unmodified UI a person would click through (host

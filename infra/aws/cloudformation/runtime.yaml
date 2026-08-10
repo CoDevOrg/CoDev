@@ -130,7 +130,7 @@ Resources:
   HostSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: CoDev Firecracker host; no public ingress
+      GroupDescription: CoDev Firecracker host; public ingress limited to Caddy's HTTP/HTTPS (Orca IDE) below
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
@@ -174,6 +174,29 @@ Resources:
       FromPort: 8080
       ToPort: 8080
       SourceSecurityGroupId: !GetAtt ProxyLambdaSecurityGroup.GroupId
+
+  # Browsers connect directly to Caddy on the host for Orca IDE's WebSocket
+  # protocol (see infra/aws/scripts/bootstrap-host.sh); this does not go
+  # through RuntimeApi/RuntimeProxyFunction like the sandbox control API
+  # does. 80 is required for Caddy's automatic Let's Encrypt HTTP-01
+  # challenge; 443 is the actual TLS endpoint the web client connects to.
+  HostPublicHttpIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HostSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  HostPublicHttpsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HostSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
 
   HostRole:
     Type: AWS::IAM::Role

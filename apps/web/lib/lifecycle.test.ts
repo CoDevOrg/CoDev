@@ -37,7 +37,10 @@ vi.mock("./host", () => ({
 }));
 vi.mock("./audit", () => ({ appendWorkspaceEvent: vi.fn() }));
 vi.mock("./observability", () => ({ logEvent: vi.fn() }));
-vi.mock("./orchestrator", () => ({ destroySandbox: vi.fn() }));
+vi.mock("./orchestrator", () => ({
+  destroySandbox: vi.fn().mockResolvedValue(undefined),
+  stopIde: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("./vm-usage", () => ({
   closeOrphanSandboxIntervals: vi.fn().mockResolvedValue(0),
 }));
@@ -78,5 +81,23 @@ describe("reconcileLifecycle", () => {
     );
 
     await expect(destroySandboxForCleanup("workspace-1")).resolves.toBe(false);
+  });
+
+  it("also stops this workspace's Orca IDE session on cleanup", async () => {
+    const { destroySandbox, stopIde } = await import("./orchestrator");
+    vi.mocked(destroySandbox).mockResolvedValueOnce(undefined);
+
+    await expect(destroySandboxForCleanup("workspace-1")).resolves.toBe(true);
+    expect(stopIde).toHaveBeenCalledWith("workspace-1");
+  });
+
+  it("does not fail lifecycle cleanup when stopping the Orca IDE session fails", async () => {
+    const { destroySandbox, stopIde } = await import("./orchestrator");
+    vi.mocked(destroySandbox).mockResolvedValueOnce(undefined);
+    vi.mocked(stopIde).mockRejectedValueOnce(
+      new Error("orchestrator unavailable"),
+    );
+
+    await expect(destroySandboxForCleanup("workspace-1")).resolves.toBe(true);
   });
 });
