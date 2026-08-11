@@ -24,12 +24,41 @@ export function SharedIdePresenceFixture() {
   const [selection, setSelection] = useState<
     typeof helloFunctionSelection | null
   >(null);
+  const [jordanActiveFile, setJordanActiveFile] = useState("src/hello.ts");
+  const [jordanSelection, setJordanSelection] = useState<
+    typeof helloFunctionSelection | null
+  >(null);
+  const [jordanConnected, setJordanConnected] = useState(true);
+  const [replayStatus, setReplayStatus] = useState<string | null>(null);
 
   const selectFile = (file: string) => {
     setActiveFile(file);
     setSelection(null);
+    setReplayStatus(null);
+    if (jordanConnected) {
+      setJordanActiveFile(file);
+      setJordanSelection(null);
+    }
   };
-  const previewLines = (filePreviews[activeFile] ?? "").split("\n");
+  const selectHelloFunction = () => {
+    setSelection(helloFunctionSelection);
+    if (jordanConnected) setJordanSelection(helloFunctionSelection);
+  };
+  const disconnectJordan = () => {
+    setJordanConnected(false);
+    setReplayStatus(
+      "Jordan disconnected. Presence and document replay are waiting for reconnect.",
+    );
+  };
+  const reconnectJordan = () => {
+    setJordanConnected(true);
+    setJordanActiveFile(activeFile);
+    setJordanSelection(selection);
+    setReplayStatus(
+      `Jordan reconnected. Presence and document state replayed for ${activeFile}.`,
+    );
+  };
+  const previewLines = (filePreviews[jordanActiveFile] ?? "").split("\n");
 
   return (
     <section
@@ -38,15 +67,17 @@ export function SharedIdePresenceFixture() {
     >
       <div className={styles.cardHeading}>
         <div>
-          <span className={styles.kicker}>F2.2 · IDE presence</span>
+          <span className={styles.kicker}>F2.4 · IDE reconnect</span>
           <h2 id="shared-ide-heading">Live shared IDE views</h2>
         </div>
-        <span className={styles.count}>Live</span>
+        <span className={styles.count}>
+          {jordanConnected ? "Live" : "Offline"}
+        </span>
       </div>
 
       <p className={styles.presenceIntro}>
-        Alex changes files and selects text in the editor while Jordan sees the
-        named active-file and selection state update in the shared IDE.
+        Alex changes files and selects text while Jordan reconnects and
+        resubscribes to the latest presence and document state.
       </p>
 
       <div className={styles.idePresence} aria-label="IDE presence">
@@ -55,10 +86,15 @@ export function SharedIdePresenceFixture() {
           <strong>Alex Morgan</strong>
           <span>present · editing</span>
         </div>
-        <div aria-label="Jordan Lee IDE presence">
+        <div
+          aria-label="Jordan Lee IDE presence"
+          className={!jordanConnected ? styles.presencePending : undefined}
+        >
           <span className={styles.presenceDot} aria-hidden="true" />
           <strong>Jordan Lee</strong>
-          <span>present · observing</span>
+          <span>
+            {jordanConnected ? "present · observing" : "offline · reconnecting"}
+          </span>
         </div>
       </div>
 
@@ -88,10 +124,17 @@ export function SharedIdePresenceFixture() {
             <button
               className={styles.ideSelectionButton}
               disabled={activeFile !== "src/hello.ts"}
-              onClick={() => setSelection(helloFunctionSelection)}
+              onClick={selectHelloFunction}
               type="button"
             >
               Select hello function as Alex
+            </button>
+            <button
+              className={styles.ideReconnectButton}
+              onClick={jordanConnected ? disconnectJordan : reconnectJordan}
+              type="button"
+            >
+              {jordanConnected ? "Disconnect Jordan" : "Reconnect Jordan"}
             </button>
           </div>
         </aside>
@@ -109,12 +152,28 @@ export function SharedIdePresenceFixture() {
             aria-label="Jordan Lee active-file observation"
             role="status"
           >
-            <span className={styles.presenceDot} aria-hidden="true" />
+            <span
+              className={
+                jordanConnected
+                  ? styles.presenceDot
+                  : `${styles.presenceDot} ${styles.presencePending}`
+              }
+              aria-hidden="true"
+            />
             <span>
-              <strong>Alex Morgan</strong> is viewing <code>{activeFile}</code>
+              {jordanConnected ? (
+                <>
+                  <strong>Alex Morgan</strong> is viewing{" "}
+                  <code>{jordanActiveFile}</code>
+                </>
+              ) : (
+                <>
+                  Jordan is reconnecting from <code>{jordanActiveFile}</code>
+                </>
+              )}
             </span>
           </div>
-          {selection ? (
+          {jordanSelection ? (
             <div
               className={styles.ideSelectionMarker}
               aria-label="Jordan Lee remote selection"
@@ -122,8 +181,9 @@ export function SharedIdePresenceFixture() {
             >
               <span className={styles.selectionSwatch} aria-hidden="true" />
               <span>
-                <strong>Alex Morgan</strong> selected {selection.label} · lines{" "}
-                {selection.startLine + 1}–{selection.endLine + 1}
+                <strong>Alex Morgan</strong> selected {jordanSelection.label} ·
+                lines {jordanSelection.startLine + 1}–
+                {jordanSelection.endLine + 1}
               </span>
             </div>
           ) : (
@@ -161,9 +221,29 @@ export function SharedIdePresenceFixture() {
         </div>
       </div>
 
+      {replayStatus ? (
+        <p
+          className={styles.ideReplayStatus}
+          aria-label="Jordan reconnect state"
+          role="status"
+        >
+          {replayStatus}
+        </p>
+      ) : null}
       <p className={styles.viewerStatus} role="status">
-        Jordan sees Alex Morgan viewing <code>{activeFile}</code>
-        {selection ? ` with the ${selection.label} selected.` : "."}
+        {jordanConnected ? (
+          <>
+            Jordan sees Alex Morgan viewing <code>{jordanActiveFile}</code>
+            {jordanSelection
+              ? ` with the ${jordanSelection.label} selected.`
+              : "."}
+          </>
+        ) : (
+          <>
+            Jordan is reconnecting; the last synced document is{" "}
+            <code>{jordanActiveFile}</code>.
+          </>
+        )}
       </p>
     </section>
   );

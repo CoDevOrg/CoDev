@@ -415,3 +415,60 @@ test("F2.3 renders Alex's selection in Jordan's shared IDE view", async ({
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F2.4 replays presence and document state after Jordan reconnects", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const ideCard = page
+    .getByRole("heading", { name: "Live shared IDE views" })
+    .locator("xpath=ancestor::section");
+  await ideCard.getByRole("button", { name: "tests/hello.test.ts" }).click();
+  await ideCard.getByRole("button", { name: "Disconnect Jordan" }).click();
+
+  await expect(ideCard.getByLabel("Jordan Lee IDE presence")).toContainText(
+    "offline · reconnecting",
+  );
+  await expect(
+    ideCard.getByLabel("Jordan Lee active-file observation"),
+  ).toContainText("tests/hello.test.ts");
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    { taskId: "F2.4", state: "jordan-disconnected" },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f2-4\/jordan-disconnected\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+
+  await ideCard.getByRole("button", { name: "README.md" }).click();
+  await expect(
+    ideCard.getByLabel("Jordan Lee active-file observation"),
+  ).toContainText("tests/hello.test.ts");
+
+  await ideCard.getByRole("button", { name: "Reconnect Jordan" }).click();
+  await expect(ideCard.getByLabel("Jordan Lee IDE presence")).toContainText(
+    "present · observing",
+  );
+  await expect(
+    ideCard.getByLabel("Jordan Lee active-file observation"),
+  ).toContainText("Alex Morgan is viewing README.md");
+  await expect(ideCard.getByLabel("Shared editor content")).toContainText(
+    "# CoDev fixture",
+  );
+  await expect(ideCard.getByLabel("Jordan reconnect state")).toContainText(
+    "Presence and document state replayed for README.md",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F2.4",
+    state: "jordan-reconnected-document-replayed",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f2-4\/jordan-reconnected-document-replayed\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});

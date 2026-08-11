@@ -57,4 +57,40 @@ describe("SharedIdePresenceFixture", () => {
       screen.getByLabelText("Jordan Lee remote selection"),
     ).toHaveTextContent("No remote text selected");
   });
+
+  it("replays presence and the current document after Jordan reconnects", () => {
+    render(<SharedIdePresenceFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "tests/hello.test.ts" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Jordan" }));
+
+    expect(screen.getByLabelText("Jordan Lee IDE presence")).toHaveTextContent(
+      "offline · reconnecting",
+    );
+    expect(
+      screen.getByLabelText("Jordan Lee active-file observation"),
+    ).toHaveTextContent("tests/hello.test.ts");
+
+    fireEvent.click(screen.getByRole("button", { name: "README.md" }));
+    expect(
+      screen.getByLabelText("Jordan Lee active-file observation"),
+    ).toHaveTextContent("tests/hello.test.ts");
+
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect Jordan" }));
+
+    expect(screen.getByLabelText("Jordan Lee IDE presence")).toHaveTextContent(
+      "present · observing",
+    );
+    expect(
+      screen.getByLabelText("Jordan Lee active-file observation"),
+    ).toHaveTextContent("Alex Morgan is viewing README.md");
+    expect(screen.getByLabelText("Shared editor content")).toHaveTextContent(
+      "# CoDev fixture",
+    );
+    expect(screen.getByLabelText("Jordan reconnect state")).toHaveTextContent(
+      "Presence and document state replayed",
+    );
+  });
 });

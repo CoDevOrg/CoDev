@@ -529,6 +529,23 @@
   cursor: not-allowed;
 }
 
+.ideReconnectButton {
+  margin-top: 4px;
+  border: 1px solid rgba(217, 173, 89, 0.35);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(217, 173, 89, 0.08);
+  color: #f2cf8b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.ideReconnectButton:hover {
+  background: rgba(217, 173, 89, 0.16);
+}
+
 .ideEditor {
   display: grid;
   align-content: start;
@@ -622,6 +639,14 @@
   margin: 0;
   color: #899585;
   font-size: 11px;
+  line-height: 1.5;
+}
+
+.ideReplayStatus {
+  margin: 16px 0 0;
+  color: #c8eea6;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.5;
 }
 
