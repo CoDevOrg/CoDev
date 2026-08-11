@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F2.4 — Add reconnect/resubscribe replay for presence and document state**
+**F2.5 — Surface one external-file-change conflict without overwriting either version**
 
 ## Completed tasks
 
@@ -20,6 +20,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
 | F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                            |
 | F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.             |
+| F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.  |
 
 ### B0.2 completion evidence
 
@@ -365,6 +366,52 @@ used`. No credentials or secrets were entered.
   continue to use the existing F2.1 server contract and awareness path.
 - Next task: F2.4 — add reconnect/resubscribe replay for presence and document
   state.
+
+### F2.4 completion evidence
+
+- Completed: 2026-08-11T21:12:10Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused component test — 3 passed; focused F2.1–F2.4 Playwright
+  verification on the built app — 4 passed; targeted Prettier check — passed;
+  web lint — 0 errors with the same 2 pre-existing warnings; web typecheck —
+  passed; web production build — passed; `git diff --check` — passed. The
+  repository-wide `pnpm format:check` remains blocked by the three pre-existing
+  scheduler Markdown files (`COLLABORATIVE_IDE_BASELINE_AUDIT.md`,
+  `COLLABORATIVE_IDE_EXECUTION.md`, and `COLLABORATIVE_IDE_FEATURES.md`);
+  none were changed.
+- Validated source commit:
+  `422a0a390bd07f527ee98d89bf5ec8735ea2d14a`.
+- Vercel preview:
+  <https://codev-nybuq8f0d-yousef20920s-projects.vercel.app> — Ready
+  deployment for the validated source commit; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview at `/verification/b0-2` in a
+  fresh Chrome tab, switched Alex to `tests/hello.test.ts`, clicked `Disconnect
+Jordan`, and confirmed Jordan showed `offline · reconnecting` while the
+  remote view retained the last subscribed document. Switched Alex to
+  `README.md` while Jordan was offline, clicked `Reconnect Jordan`, and
+  confirmed Jordan showed `present · observing`, the remote view showed Alex
+  viewing `README.md`, the `README.md` contents were restored, and the visible
+  status read `Presence and document state replayed for README.md`. No
+  credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f2-4/jordan-disconnected.png`
+  (Playwright reconnecting edge),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f2-4/jordan-reconnected-document-replayed.png`
+  (Playwright replay success),
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%205.12.01%20PM.jpeg`
+  (Computer Use disconnected edge), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%205.12.10%20PM.jpeg`
+  (Computer Use replay success).
+- Known limitations: the credential-free preview fixture models Jordan’s
+  reconnect and resubscribe state in browser state; authenticated realtime
+  clients continue to use the existing resume cursor, Redis stream replay,
+  presence snapshot, and Yjs document sync paths.
+- Next task: F2.5 — surface one external-file-change conflict without
+  overwriting either version.
 
 ## Blocked tasks
 
