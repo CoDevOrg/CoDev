@@ -208,3 +208,61 @@ test("F1.3 blocks an expired invite from being accepted", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("F1.4 refreshes Jordan's Viewer controls after a live role change", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const roleCard = page
+    .getByRole("heading", {
+      name: "Manage member role",
+    })
+    .locator("xpath=ancestor::section");
+  await expect(
+    roleCard.getByText(
+      "Jordan is connected as a Collaborator. Change the role to see the live refresh.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    roleCard.getByRole("button", { name: "Edit shared files · allowed" }),
+  ).toBeEnabled();
+
+  await roleCard
+    .getByRole("combobox", { name: "Role for Jordan Lee" })
+    .selectOption("viewer");
+
+  await expect(roleCard.getByText("Membership refreshed live")).toBeVisible();
+  await expect(
+    roleCard.getByText(
+      "Jordan’s Viewer controls updated immediately from the live membership change.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    roleCard.getByRole("button", { name: "Edit shared files · unavailable" }),
+  ).toBeDisabled();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F1.4",
+    state: "member-role-viewer-live",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f1-4\/member-role-viewer-live\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F1.4",
+      state: "member-role-viewer-restricted",
+    },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f1-4\/member-role-viewer-restricted\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});
