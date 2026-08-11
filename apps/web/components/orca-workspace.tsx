@@ -33,11 +33,13 @@ export function buildOrcaIframeSource({
   pairingCode,
   workspacePath,
   projectKind,
+  projectName,
 }: {
   webClientPath: string;
   pairingCode: string;
   workspacePath: string;
   projectKind: "git" | "folder";
+  projectName?: string;
 }) {
   const fragment = new URLSearchParams({
     pairing: pairingCode,
@@ -45,6 +47,9 @@ export function buildOrcaIframeSource({
     codevProject: workspacePath,
     codevProjectKind: projectKind,
   });
+  if (projectName) {
+    fragment.set("codevProjectName", projectName);
+  }
   return `${webClientPath}#${fragment.toString()}`;
 }
 
@@ -501,6 +506,7 @@ export function OrcaWorkspace({
             pairingCode: payload.pairingCode,
             workspacePath,
             projectKind: repository ? "git" : "folder",
+            ...(repository ? { projectName: repository } : {}),
           }),
           workspacePath,
         });

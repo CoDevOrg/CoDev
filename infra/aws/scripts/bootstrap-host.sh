@@ -68,6 +68,7 @@ apt-get -o DPkg::Lock::Timeout=300 install -y \
   gnupg \
   e2fsprogs \
   git \
+  gh \
   iptables \
   jq \
   python3 \

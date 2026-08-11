@@ -1,8 +1,17 @@
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
-index 294fc4a..a3f0470 100644
+index 294fc4a..acc563a 100644
 --- a/src/renderer/src/App.tsx
 +++ b/src/renderer/src/App.tsx
-@@ -521,6 +521,41 @@ function App(): React.JSX.Element {
+@@ -42,6 +42,8 @@ import {
+   ContextMenuTrigger
+ } from '@/components/ui/context-menu'
+ import { useAppStore } from './store'
++import { openProjectDefaultCheckout } from './components/sidebar/project-added-default-checkout'
++import { openCodevProject } from './web/codev-project-bootstrap'
+ import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
+ import { useShallow } from 'zustand/react/shallow'
+ import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
+@@ -521,6 +523,48 @@ function App(): React.JSX.Element {
    const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
    const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
    const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -10,6 +19,7 @@ index 294fc4a..a3f0470 100644
 +  useEffect(() => {
 +    const projectPath = window.__CODEV_PROJECT_PATH__
 +    const projectKind = window.__CODEV_PROJECT_KIND__
++    const projectName = window.__CODEV_PROJECT_NAME__
 +    if (
 +      !workspaceSessionReady ||
 +      !projectPath ||
@@ -20,41 +30,48 @@ index 294fc4a..a3f0470 100644
 +    }
 +    codevBootstrapStartedRef.current = true
 +
-+    const existing = useAppStore.getState().repos.find((repo) => repo.path === projectPath)
-+    if (existing) {
-+      window.parent.postMessage({ type: 'codev:project-ready' }, window.location.origin)
-+      return
-+    }
-+
-+    void useAppStore
-+      .getState()
-+      .addRepoPath(projectPath, projectKind)
-+      .then((repo) => {
++    void openCodevProject({
++      projectPath,
++      projectKind,
++      projectName,
++      store: useAppStore.getState(),
++      openDefaultCheckout: openProjectDefaultCheckout
++    })
++      .then((opened) => {
 +        window.parent.postMessage(
-+          repo
++          opened
 +            ? { type: 'codev:project-ready' }
 +            : { type: 'codev:project-error', message: 'The workspace project could not be opened.' },
 +          window.location.origin
 +        )
-+        if (!repo) {
++        if (!opened) {
 +          codevBootstrapStartedRef.current = false
 +        }
++      })
++      .catch((error: unknown) => {
++        console.error('Failed to open CoDev workspace project:', error)
++        window.parent.postMessage(
++          { type: 'codev:project-error', message: 'The workspace project could not be opened.' },
++          window.location.origin
++        )
++        codevBootstrapStartedRef.current = false
 +      })
 +  }, [workspaceSessionReady])
    const backgroundTerminalMountRequested = useSyncExternalStore(
      subscribeBackgroundTerminalWorktreeMountRequests,
      hasRequestedBackgroundTerminalWorktreeMount,
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
-index 5ecc70a..d3afe9b 100644
+index 5ecc70a..31b7c0e 100644
 --- a/src/renderer/src/env.d.ts
 +++ b/src/renderer/src/env.d.ts
-@@ -67,6 +67,9 @@ declare global {
+@@ -67,6 +67,10 @@ declare global {
      | undefined
    // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
    interface Window {
 +    __CODEV_EMBEDDED__?: boolean
 +    __CODEV_PROJECT_PATH__?: string
 +    __CODEV_PROJECT_KIND__?: 'git' | 'folder'
++    __CODEV_PROJECT_NAME__?: string
      __paneManagers?: Map<string, PaneManager>
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
      __terminalParkingDebug?: {
@@ -75,10 +92,10 @@ index b738f18..af3054d 100644
      }
 diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
 new file mode 100644
-index 0000000..9785d76
+index 0000000..d27fbca
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.test.ts
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,26 @@
 +import { describe, expect, it } from 'vitest'
 +import { readCodevBootstrap } from './codev-bootstrap'
 +
@@ -86,11 +103,12 @@ index 0000000..9785d76
 +  it('accepts a CoDev-owned workspace path', () => {
 +    expect(
 +      readCodevBootstrap({
-+        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git'
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevProjectName=yousef20920%2FCoDev'
 +      } as Location)
 +    ).toEqual({
 +      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
-+      projectKind: 'git'
++      projectKind: 'git',
++      projectName: 'yousef20920/CoDev'
 +    })
 +  })
 +
@@ -98,6 +116,7 @@ index 0000000..9785d76
 +    '#codev=1&codevProject=%2Fetc&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2F..%2Fsecret&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=other',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevProjectName=..%2F..%2Fsecret',
 +    '#codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git'
 +  ])('rejects an untrusted bootstrap fragment: %s', (hash) => {
 +    expect(readCodevBootstrap({ hash } as Location)).toBeNull()
@@ -105,17 +124,19 @@ index 0000000..9785d76
 +})
 diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
 new file mode 100644
-index 0000000..a2db62e
+index 0000000..d3cbea7
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,32 @@
 +export type CodevBootstrap = {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
++  projectName?: string
 +}
 +
 +const CODEV_WORKSPACE_PATH =
 +  /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
++const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
 +
 +export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
 +  const params = new URLSearchParams(location.hash.replace(/^#/, ''))
@@ -125,6 +146,7 @@ index 0000000..a2db62e
 +
 +  const projectPath = params.get('codevProject')
 +  const projectKind = params.get('codevProjectKind')
++  const projectName = params.get('codevProjectName')
 +  if (
 +    !projectPath ||
 +    !CODEV_WORKSPACE_PATH.test(projectPath) ||
@@ -132,14 +154,151 @@ index 0000000..a2db62e
 +  ) {
 +    return null
 +  }
++  if (projectName && !CODEV_GITHUB_REPOSITORY.test(projectName)) {
++    return null
++  }
 +
-+  return { projectPath, projectKind }
++  return { projectPath, projectKind, ...(projectName ? { projectName } : {}) }
++}
+diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
+new file mode 100644
+index 0000000..885eac7
+--- /dev/null
++++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
+@@ -0,0 +1,70 @@
++import { describe, expect, it, vi } from 'vitest'
++import { openCodevProject } from './codev-project-bootstrap'
++
++const projectPath = '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++
++function createStore(repos: Array<{ id: string; path: string; displayName: string }> = []) {
++  return {
++    repos,
++    addRepoPath: vi.fn(),
++    updateRepo: vi.fn().mockResolvedValue(true),
++    setHideDefaultBranchWorkspace: vi.fn()
++  }
++}
++
++describe('openCodevProject', () => {
++  it('activates an existing project instead of leaving it unselected', async () => {
++    const store = createStore([{ id: 'repo-1', path: projectPath, displayName: 'workspace-id' }])
++    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++
++    await expect(
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        projectName: 'yousef20920/CoDev',
++        store,
++        openDefaultCheckout
++      })
++    ).resolves.toBe(true)
++
++    expect(store.addRepoPath).not.toHaveBeenCalled()
++    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', {
++      displayName: 'yousef20920/CoDev'
++    })
++    expect(openDefaultCheckout).toHaveBeenCalledWith({
++      repoId: 'repo-1',
++      source: 'runtime_server_path',
++      setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace
++    })
++  })
++
++  it('adds and activates a new project as one startup operation', async () => {
++    const store = createStore()
++    store.addRepoPath.mockResolvedValue({
++      id: 'repo-2',
++      path: projectPath,
++      displayName: 'workspace-id'
++    })
++    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++
++    await expect(
++      openCodevProject({ projectPath, projectKind: 'git', store, openDefaultCheckout })
++    ).resolves.toBe(true)
++
++    expect(store.addRepoPath).toHaveBeenCalledWith(projectPath, 'git')
++    expect(openDefaultCheckout).toHaveBeenCalledWith(
++      expect.objectContaining({ repoId: 'repo-2' })
++    )
++  })
++
++  it('reports failure when Orca cannot add the project', async () => {
++    const store = createStore()
++    store.addRepoPath.mockResolvedValue(null)
++    const openDefaultCheckout = vi.fn()
++
++    await expect(
++      openCodevProject({ projectPath, projectKind: 'git', store, openDefaultCheckout })
++    ).resolves.toBe(false)
++    expect(openDefaultCheckout).not.toHaveBeenCalled()
++  })
++})
+diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
+new file mode 100644
+index 0000000..8048f9a
+--- /dev/null
++++ b/src/renderer/src/web/codev-project-bootstrap.ts
+@@ -0,0 +1,52 @@
++type CodevProjectRepo = {
++  id: string
++  path: string
++  displayName: string
++}
++
++type CodevProjectStore = {
++  repos: CodevProjectRepo[]
++  addRepoPath: (
++    path: string,
++    kind: 'git' | 'folder'
++  ) => Promise<CodevProjectRepo | null>
++  updateRepo: (repoId: string, update: { displayName: string }) => Promise<boolean>
++  setHideDefaultBranchWorkspace: (value: boolean) => void
++}
++
++type OpenDefaultCheckout = (args: {
++  repoId: string
++  source: 'runtime_server_path'
++  setHideDefaultBranchWorkspace: (value: boolean) => void
++}) => Promise<void>
++
++export async function openCodevProject({
++  projectPath,
++  projectKind,
++  projectName,
++  store,
++  openDefaultCheckout
++}: {
++  projectPath: string
++  projectKind: 'git' | 'folder'
++  projectName?: string
++  store: CodevProjectStore
++  openDefaultCheckout: OpenDefaultCheckout
++}): Promise<boolean> {
++  const repo =
++    store.repos.find((candidate) => candidate.path === projectPath) ??
++    (await store.addRepoPath(projectPath, projectKind))
++  if (!repo) {
++    return false
++  }
++  if (projectName && repo.displayName !== projectName) {
++    await store.updateRepo(repo.id, { displayName: projectName })
++  }
++
++  await openDefaultCheckout({
++    repoId: repo.id,
++    source: 'runtime_server_path',
++    setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace
++  })
++  return true
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..f4d5e5c 100644
+index eae3a54..6ebcb27 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,15 @@ import {
+@@ -19,10 +19,16 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
@@ -152,6 +311,7 @@ index eae3a54..f4d5e5c 100644
 +  window.__CODEV_EMBEDDED__ = codevBootstrap !== null
 +  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
++  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.

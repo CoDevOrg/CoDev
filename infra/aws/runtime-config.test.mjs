@@ -25,12 +25,14 @@ test("builds and bootstraps architecture-specific runtime artifacts", () => {
   assert.match(deploy, /aarch64-unknown-linux-musl/);
   assert.match(deploy, /CODEV_PURCHASE_OPTION:-spot/);
   assert.match(bootstrap, /codev-orchestrator-linux-\$\{artifact_arch\}/);
+  assert.match(bootstrap, /\n  gh \\\n/);
   assert.match(
     bootstrap,
     /firecracker-\$\{firecracker_version\}-\$\{firecracker_arch\}/,
   );
   assert.match(buildOrca, /TARGET_ARCH=\$\{electron_arch\}/);
   assert.match(buildOrcaWeb, /apply --check/);
+  assert.match(buildOrcaWeb, /corepack pnpm@10\.24\.0/);
   assert.match(buildOrcaWeb, /rsync -a --delete/);
 });
 

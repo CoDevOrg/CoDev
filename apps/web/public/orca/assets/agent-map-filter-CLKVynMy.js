@@ -1,0 +1,1 @@
+import{a as e}from"./dashboard-snapshot-Del1cxGG.js";function t(t){let n=e(t);return n===`blocked`||n===`waiting`?`attention`:n}function n({cards:e,enabledStates:n,hostFilter:r}){return e.filter(e=>(r===`all`||(e.hostKind??`local`)===r)&&n.has(t(e)))}function r(e){let n={attention:0,working:0,done:0,idle:0};for(let r of e)n[t(r)]+=1;return n}export{n,r as t};

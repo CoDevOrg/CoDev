@@ -14,6 +14,7 @@ describe("buildOrcaIframeSource", () => {
       workspacePath:
         "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
       projectKind: "git",
+      projectName: "yousef20920/CoDev",
     });
     const url = new URL(source, "https://codev.example");
 
@@ -26,6 +27,7 @@ describe("buildOrcaIframeSource", () => {
       "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
     );
     expect(fragment.get("codevProjectKind")).toBe("git");
+    expect(fragment.get("codevProjectName")).toBe("yousef20920/CoDev");
   });
 });
 

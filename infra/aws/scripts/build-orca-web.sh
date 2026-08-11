@@ -7,6 +7,7 @@ readonly preload_file="${repo_root}/infra/aws/orca-build/codev-preload.js"
 readonly brand_script="${repo_root}/infra/aws/orca-build/brand-web.mjs"
 readonly target_dir="${repo_root}/apps/web/public/orca"
 readonly source_dir="$(mktemp -d /tmp/codev-orca-web.XXXXXX)"
+readonly -a pnpm_cmd=(corepack pnpm@10.24.0)
 
 cleanup() {
   rm -rf -- "${source_dir}"
@@ -25,9 +26,9 @@ esac
 
 git -C "${source_dir}" apply --check "${patch_file}"
 git -C "${source_dir}" apply "${patch_file}"
-pnpm --dir "${source_dir}" install --frozen-lockfile
-pnpm --dir "${source_dir}" typecheck:web
-pnpm --dir "${source_dir}" build:web
+"${pnpm_cmd[@]}" --dir "${source_dir}" install --frozen-lockfile
+"${pnpm_cmd[@]}" --dir "${source_dir}" typecheck:web
+"${pnpm_cmd[@]}" --dir "${source_dir}" build:web
 cp "${preload_file}" "${source_dir}/out/web/codev-preload.js"
 node "${brand_script}" "${source_dir}/out/web"
 rsync -a --delete "${source_dir}/out/web/" "${target_dir}/"
