@@ -529,6 +529,33 @@
   cursor: not-allowed;
 }
 
+.ideEditButton,
+.ideExternalChangeButton {
+  margin-top: 4px;
+  border: 1px solid rgba(161, 220, 105, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(161, 220, 105, 0.08);
+  color: #c8eea6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.ideEditButton:hover,
+.ideExternalChangeButton:hover {
+  background: rgba(161, 220, 105, 0.16);
+}
+
+.ideEditButton:disabled,
+.ideExternalChangeButton:disabled {
+  border-color: rgba(220, 230, 203, 0.1);
+  background: transparent;
+  color: #687263;
+  cursor: not-allowed;
+}
+
 .ideReconnectButton {
   margin-top: 4px;
   border: 1px solid rgba(217, 173, 89, 0.35);
@@ -633,6 +660,98 @@
   border-left-color: #e4bd61;
   background: rgba(228, 189, 97, 0.12);
   color: #fff0c1;
+}
+
+.ideConflict {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(217, 173, 89, 0.45);
+  border-radius: 8px;
+  background: rgba(74, 57, 25, 0.35);
+}
+
+.ideConflictHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ideConflictHeader > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ideConflictHeader strong {
+  color: #f7dc9d;
+  font-size: 12px;
+}
+
+.ideConflictBadge {
+  border: 1px solid rgba(217, 173, 89, 0.5);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: #f2cf8b;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ideConflict > p {
+  margin: 0;
+  color: #e2c98d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ideConflictVersions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ideConflictVersions > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ideConflictVersions pre {
+  min-height: 64px;
+  margin: 0;
+  overflow: auto;
+  border-radius: 6px;
+  padding: 9px;
+  background: #171b15;
+  color: #e7eddf;
+  font:
+    11px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+}
+
+.ideConflictChoices {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(217, 173, 89, 0.2);
+}
+
+.ideConflictChoices > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ideConflictChoices > div span {
+  border: 1px solid rgba(220, 230, 203, 0.16);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #d8e4d0;
+  font-size: 10px;
 }
 
 .ideSyncNote {

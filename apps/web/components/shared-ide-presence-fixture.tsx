@@ -13,6 +13,11 @@ const filePreviews: Record<string, string> = {
   "tests/hello.test.ts": 'expect(hello()).toBe("hello");',
 };
 
+const localHelloContents =
+  'export function hello() {\n  return "hello from Alex";\n}';
+const terminalHelloContents =
+  'export function hello() {\n  return "hello from terminal";\n}';
+
 const helloFunctionSelection = {
   endLine: 2,
   label: "hello function",
@@ -30,6 +35,12 @@ export function SharedIdePresenceFixture() {
   >(null);
   const [jordanConnected, setJordanConnected] = useState(true);
   const [replayStatus, setReplayStatus] = useState<string | null>(null);
+  const [collaborativeHelloContents, setCollaborativeHelloContents] = useState(
+    filePreviews["src/hello.ts"] ?? "",
+  );
+  const [externalHelloContents, setExternalHelloContents] = useState<
+    string | null
+  >(null);
 
   const selectFile = (file: string) => {
     setActiveFile(file);
@@ -43,6 +54,18 @@ export function SharedIdePresenceFixture() {
   const selectHelloFunction = () => {
     setSelection(helloFunctionSelection);
     if (jordanConnected) setJordanSelection(helloFunctionSelection);
+  };
+  const editHelloFunction = () => {
+    setCollaborativeHelloContents(localHelloContents);
+    setSelection(helloFunctionSelection);
+    if (jordanConnected) setJordanSelection(helloFunctionSelection);
+    setReplayStatus(null);
+  };
+  const simulateExternalChange = () => {
+    setExternalHelloContents(terminalHelloContents);
+    setReplayStatus(
+      "Conflict detected. The shared editor and terminal versions are both preserved.",
+    );
   };
   const disconnectJordan = () => {
     setJordanConnected(false);
@@ -58,7 +81,13 @@ export function SharedIdePresenceFixture() {
       `Jordan reconnected. Presence and document state replayed for ${activeFile}.`,
     );
   };
-  const previewLines = (filePreviews[jordanActiveFile] ?? "").split("\n");
+  const previewContents =
+    jordanActiveFile === "src/hello.ts"
+      ? collaborativeHelloContents
+      : (filePreviews[jordanActiveFile] ?? "");
+  const previewLines = previewContents.split("\n");
+  const conflictActive =
+    activeFile === "src/hello.ts" && externalHelloContents !== null;
 
   return (
     <section
@@ -67,7 +96,7 @@ export function SharedIdePresenceFixture() {
     >
       <div className={styles.cardHeading}>
         <div>
-          <span className={styles.kicker}>F2.4 · IDE reconnect</span>
+          <span className={styles.kicker}>F2.5 · IDE conflict</span>
           <h2 id="shared-ide-heading">Live shared IDE views</h2>
         </div>
         <span className={styles.count}>
@@ -128,6 +157,25 @@ export function SharedIdePresenceFixture() {
               type="button"
             >
               Select hello function as Alex
+            </button>
+            <button
+              className={styles.ideEditButton}
+              disabled={activeFile !== "src/hello.ts"}
+              onClick={editHelloFunction}
+              type="button"
+            >
+              Edit hello function as Alex
+            </button>
+            <button
+              className={styles.ideExternalChangeButton}
+              disabled={
+                activeFile !== "src/hello.ts" ||
+                collaborativeHelloContents === filePreviews["src/hello.ts"]
+              }
+              onClick={simulateExternalChange}
+              type="button"
+            >
+              Simulate terminal change
             </button>
             <button
               className={styles.ideReconnectButton}
@@ -214,9 +262,52 @@ export function SharedIdePresenceFixture() {
               ))}
             </code>
           </pre>
+          {conflictActive ? (
+            <section
+              className={styles.ideConflict}
+              aria-label="External file change conflict"
+            >
+              <div className={styles.ideConflictHeader}>
+                <div>
+                  <span className={styles.label}>External file change</span>
+                  <strong>Resolve before syncing either version</strong>
+                </div>
+                <span className={styles.ideConflictBadge}>Conflict</span>
+              </div>
+              <p>
+                Alex&apos;s shared editor and the terminal changed this file
+                independently. No version was overwritten.
+              </p>
+              <div className={styles.ideConflictVersions}>
+                <div>
+                  <span className={styles.label}>Collaborative editor</span>
+                  <pre aria-label="Collaborative editor version">
+                    {collaborativeHelloContents}
+                  </pre>
+                </div>
+                <div>
+                  <span className={styles.label}>External filesystem</span>
+                  <pre aria-label="External filesystem version">
+                    {externalHelloContents}
+                  </pre>
+                </div>
+              </div>
+              <div
+                className={styles.ideConflictChoices}
+                aria-label="Conflict resolution choices"
+              >
+                <span className={styles.label}>Resolution choices</span>
+                <div>
+                  <span>Keep collaborative editor</span>
+                  <span>Use external filesystem</span>
+                  <span>Merge manually</span>
+                </div>
+              </div>
+            </section>
+          ) : null}
           <p className={styles.ideSyncNote}>
-            Jordan’s editor content stays synchronized separately from presence
-            updates.
+            Jordan&apos;s editor content stays synchronized separately from
+            presence updates.
           </p>
         </div>
       </div>
@@ -231,7 +322,12 @@ export function SharedIdePresenceFixture() {
         </p>
       ) : null}
       <p className={styles.viewerStatus} role="status">
-        {jordanConnected ? (
+        {conflictActive ? (
+          <>
+            Conflict waiting for a resolution; both versions remain available
+            for review.
+          </>
+        ) : jordanConnected ? (
           <>
             Jordan sees Alex Morgan viewing <code>{jordanActiveFile}</code>
             {jordanSelection

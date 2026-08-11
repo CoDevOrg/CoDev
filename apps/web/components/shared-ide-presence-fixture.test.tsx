@@ -93,4 +93,31 @@ describe("SharedIdePresenceFixture", () => {
       "Presence and document state replayed",
     );
   });
+
+  it("surfaces both versions when a terminal change conflicts with Alex's edit", () => {
+    render(<SharedIdePresenceFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit hello function as Alex" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Simulate terminal change" }),
+    );
+
+    expect(
+      screen.getByLabelText("External file change conflict"),
+    ).toHaveTextContent("No version was overwritten.");
+    expect(
+      screen.getByLabelText("Collaborative editor version"),
+    ).toHaveTextContent('return "hello from Alex"');
+    expect(
+      screen.getByLabelText("External filesystem version"),
+    ).toHaveTextContent('return "hello from terminal"');
+    expect(
+      screen.getByLabelText("Conflict resolution choices"),
+    ).toHaveTextContent("Keep collaborative editor");
+    expect(
+      screen.getByLabelText("Conflict resolution choices"),
+    ).toHaveTextContent("Use external filesystem");
+  });
 });

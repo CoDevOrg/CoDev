@@ -25,7 +25,12 @@ test("B0.3 captures the fixture ready state as reusable evidence", async ({
     memberCard.getByText("Jordan Lee", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Casey Rivera", { exact: true })).toBeVisible();
-  await expect(page.getByText("src/hello.ts", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("heading", { name: "Seeded files" })
+      .locator("xpath=ancestor::section")
+      .getByText("src/hello.ts", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("No passwords, tokens, or provider credentials", {
       exact: false,
@@ -35,7 +40,10 @@ test("B0.3 captures the fixture ready state as reusable evidence", async ({
     page.getByText("Viewer mutation controls are disabled.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Edit shared files/ }),
+    page
+      .getByRole("heading", { name: "Viewer access check" })
+      .locator("xpath=ancestor::section")
+      .getByRole("button", { name: /Edit shared files/ }),
   ).toBeDisabled();
 
   const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
@@ -79,13 +87,22 @@ test("F1.1 captures the Viewer restriction state", async ({
     page.getByText("Viewer mutation controls are disabled.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Edit shared files/ }),
+    page
+      .getByRole("heading", { name: "Viewer access check" })
+      .locator("xpath=ancestor::section")
+      .getByRole("button", { name: /Edit shared files/ }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: /Run terminal command/ }),
+    page
+      .getByRole("heading", { name: "Viewer access check" })
+      .locator("xpath=ancestor::section")
+      .getByRole("button", { name: /Run terminal command/ }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: /Manage members/ }),
+    page
+      .getByRole("heading", { name: "Viewer access check" })
+      .locator("xpath=ancestor::section")
+      .getByRole("button", { name: /Manage members/ }),
   ).toBeDisabled();
 
   const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
@@ -469,6 +486,46 @@ test("F2.4 replays presence and document state after Jordan reconnects", async (
   });
   expect(screenshotPath).toMatch(
     /artifacts\/verification\/f2-4\/jordan-reconnected-document-replayed\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
+test("F2.5 preserves both versions for an external file conflict", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const ideCard = page
+    .getByRole("heading", { name: "Live shared IDE views" })
+    .locator("xpath=ancestor::section");
+  await ideCard
+    .getByRole("button", { name: "Edit hello function as Alex" })
+    .click();
+  await ideCard
+    .getByRole("button", { name: "Simulate terminal change" })
+    .click();
+
+  const conflict = ideCard.getByLabel("External file change conflict");
+  await expect(conflict).toContainText("No version was overwritten.");
+  await expect(
+    conflict.getByLabel("Collaborative editor version"),
+  ).toContainText('return "hello from Alex"');
+  await expect(
+    conflict.getByLabel("External filesystem version"),
+  ).toContainText('return "hello from terminal"');
+  await expect(
+    conflict.getByLabel("Conflict resolution choices"),
+  ).toContainText("Merge manually");
+  await expect(ideCard.getByRole("status").last()).toContainText(
+    "both versions remain available for review",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F2.5",
+    state: "external-file-conflict-preserved",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f2-5\/external-file-conflict-preserved\.png$/,
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
