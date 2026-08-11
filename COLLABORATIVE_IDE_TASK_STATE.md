@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F2.5 — Surface one external-file-change conflict without overwriting either version**
+**F3.1 — Define a durable shared-session event schema and ordered turn queue**
 
 ## Completed tasks
 
@@ -21,6 +21,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                            |
 | F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.             |
 | F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.  |
+| F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                        |
 
 ### B0.2 completion evidence
 
@@ -410,8 +411,47 @@ Jordan`, and confirmed Jordan showed `offline · reconnecting` while the
   reconnect and resubscribe state in browser state; authenticated realtime
   clients continue to use the existing resume cursor, Redis stream replay,
   presence snapshot, and Yjs document sync paths.
-- Next task: F2.5 — surface one external-file-change conflict without
-  overwriting either version.
+
+### F2.5 completion evidence
+
+- Completed: 2026-08-11T22:08:46Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused component and reconciliation tests — 7 passed; complete
+  verification-fixture Playwright suite — 12 passed; targeted Prettier check —
+  passed; web lint — 0 errors with the same 2 pre-existing warnings; web
+  typecheck — passed; web production build — passed; `git diff --check` —
+  passed. The repository-wide `pnpm format:check` remains blocked by the three
+  pre-existing scheduler Markdown files (`COLLABORATIVE_IDE_BASELINE_AUDIT.md`,
+  `COLLABORATIVE_IDE_EXECUTION.md`, and `COLLABORATIVE_IDE_FEATURES.md`); none
+  were changed.
+- Validated source commit:
+  `080dd137cb26242c57b3ad581e0aaef47ed7ab9e`.
+- Vercel preview:
+  <https://codev-ffikgwyjo-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, clicked `Edit hello function as Alex`, then clicked
+  `Simulate terminal change`. Confirmed the visible `Conflict` state preserved
+  `return "hello from Alex"` under `Collaborative editor` and
+  `return "hello from terminal"` under `External filesystem`, stated that no
+  version was overwritten, and showed `Keep collaborative editor`, `Use
+external filesystem`, and `Merge manually` as resolution choices. No
+  credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f2-5/external-file-conflict-preserved.png`
+  (Playwright conflict success state), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%206.08.46%20PM.jpeg`
+  (Computer Use preview conflict state with both versions and choices).
+- Known limitations: the credential-free preview fixture models the terminal
+  change and unresolved conflict in browser state; the authenticated path
+  already persists conflict snapshots and exposes the server-backed resolution
+  endpoint.
+- Next task: F3.1 — define a durable shared-session event schema and ordered
+  turn queue.
 
 ## Blocked tasks
 
