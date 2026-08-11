@@ -6,19 +6,19 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F1.4 — Add member-role management and immediate realtime membership refresh**
+**F2.1 — Define durable presence events for joined/left, active file, and cursor state**
 
-Read the F1.4 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.5 or
-any later task during the same scheduler run.
+Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
 
 ## Completed tasks
 
-| Task                                                            | Completed  | Evidence                                                                                                                                                                          |
-| --------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0.1 — Baseline audit                                           | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                             |
-| B0.2 — Stable local verification fixture and fixture identities | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                |
-| B0.3 — Reusable screenshot/evidence convention                  | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
-| F1.2 — Implement one invite lifecycle slice                     | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                         |
+| Task                                                                        | Completed  | Evidence                                                                                                                                                                          |
+| --------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0.1 — Baseline audit                                                       | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                             |
+| B0.2 — Stable local verification fixture and fixture identities             | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                |
+| B0.3 — Reusable screenshot/evidence convention                              | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
+| F1.2 — Implement one invite lifecycle slice                                 | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                         |
+| F1.4 — Add member-role management and immediate realtime membership refresh | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                        |
 
 ### B0.2 completion evidence
 
@@ -211,6 +211,39 @@ used`. No credentials or secrets were entered.
   records.
 - Next task: F1.4 — add member-role management and immediate realtime
   membership refresh.
+
+### F1.4 completion evidence
+
+- Completed: 2026-08-11T17:09:17Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/member-role-management-fixture.tsx`,
+  `apps/web/components/member-role-management-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused fixture/component tests — 7 passed; targeted Prettier check
+  — passed; web lint — 0 errors with the same 2 pre-existing warnings; web
+  typecheck — passed; web production build — passed; focused Playwright
+  verification on the built app — 1 passed; `git diff --check` — passed.
+- Validated source commit: `0d2d5daec1ba147cce8d7bac14f146f5d12bc497`.
+- Vercel preview: <https://codev-abj1nblyc-yousef20920s-projects.vercel.app>
+  — Ready deployment for the validated source commit. Computer Use used its
+  Ready branch alias:
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview fixture in a fresh Chrome tab,
+  confirmed Jordan was initially a connected Collaborator with edit, terminal,
+  and prompt controls allowed, opened the Maintainer role control, selected
+  Viewer, and confirmed the visible `Membership refreshed live` state with
+  Jordan's edit, terminal, prompt, and member-management controls disabled.
+- Screenshots:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%201.09.07%20PM.jpeg`
+  (Computer Use pre-change Collaborator success state) and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%201.09.17%20PM.jpeg`
+  (Computer Use post-change live Viewer state with restricted controls).
+- Known limitations: the credential-free preview fixture keeps the role change
+  in browser state; the existing authenticated member PATCH route remains the
+  server-backed production mutation boundary.
+- Next task: F2.1 — define durable presence events for joined/left, active file,
+  and cursor state.
 
 ## Blocked tasks
 
