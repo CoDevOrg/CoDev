@@ -6,20 +6,21 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization**
+**F2.3 — Add cursor/selection rendering for one collaborator**
 
 Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
 
 ## Completed tasks
 
-| Task                                                                        | Completed  | Evidence                                                                                                                                                                          |
-| --------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0.1 — Baseline audit                                                       | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                             |
-| B0.2 — Stable local verification fixture and fixture identities             | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                |
-| B0.3 — Reusable screenshot/evidence convention                              | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
-| F1.2 — Implement one invite lifecycle slice                                 | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                         |
-| F1.4 — Add member-role management and immediate realtime membership refresh | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                        |
-| F2.1 — Define durable presence events for joined/left, active file, and cursor state | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
+| Task                                                                                                  | Completed  | Evidence                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0.1 — Baseline audit                                                                                 | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                                                       |
+| B0.2 — Stable local verification fixture and fixture identities                                       | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                                          |
+| B0.3 — Reusable screenshot/evidence convention                                                        | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below.                           |
+| F1.2 — Implement one invite lifecycle slice                                                           | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                                                   |
+| F1.4 — Add member-role management and immediate realtime membership refresh                           | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                  |
+| F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
+| F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                            |
 
 ### B0.2 completion evidence
 
@@ -290,6 +291,39 @@ used`. No credentials or secrets were entered.
   event stream, while editor synchronization remains unchanged.
 - Next task: F2.2 — render named presence and active-file state in the IDE
   without changing editor synchronization.
+
+### F2.2 completion evidence
+
+- Completed: 2026-08-11T19:09:52Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused component test — 1 passed; focused F2.1/F2.2 Playwright
+  verification on the built app — 2 passed; targeted Prettier check — passed;
+  web lint — 0 errors with the same 2 pre-existing warnings; web typecheck —
+  passed; web production build — passed; `git diff --check` — passed.
+- Validated source commit: `f766aa95736def828849a57cf994ed2e33102eed`.
+- Vercel preview: <https://codev-kipc2fesm-yousef20920s-projects.vercel.app> —
+  Ready deployment for the validated source commit; branch alias also resolved
+  to <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, confirmed Alex Morgan is present/editing and Jordan
+  Lee is present/observing in the shared IDE, clicked Alex’s `README.md`, and
+  confirmed Jordan’s remote active-file state changed to `README.md`. Then
+  clicked `tests/hello.test.ts` and confirmed Jordan’s visible state changed
+  again to that file. No credentials or secrets were entered.
+- Screenshots:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%203.09.36%20PM.jpeg`
+  (Computer Use success state with Jordan observing Alex on `README.md`), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%203.09.44%20PM.jpeg`
+  (second active-file update showing `tests/hello.test.ts`).
+- Known limitations: the credential-free preview fixture models the two named
+  IDE views in browser state; the editor content and synchronization path are
+  unchanged, while active-file presence is rendered as a focused fixture
+  surface for browser verification.
+- Next task: F2.3 — add cursor/selection rendering for one collaborator.
 
 ## Blocked tasks
 
