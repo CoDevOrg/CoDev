@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentActivityEventSchema,
+  agentCapacitySchema,
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
   conflictResolutionInputSchema,
@@ -14,11 +15,30 @@ import {
   terminalPollSchema,
   workspaceEventSchema,
   workspaceSchema,
+  MAX_PARALLEL_AGENT_SESSIONS,
 } from "./index";
 
 const id = "019c8c2e-c801-7a53-b556-62475c4a60e7";
 
 describe("workspace contracts", () => {
+  it("defines a three-agent workspace capacity", () => {
+    expect(MAX_PARALLEL_AGENT_SESSIONS).toBe(3);
+    expect(
+      agentCapacitySchema.parse({
+        maxActiveSessions: 3,
+        activeSessions: 2,
+        availableSlots: 1,
+      }).availableSlots,
+    ).toBe(1);
+    expect(() =>
+      agentCapacitySchema.parse({
+        maxActiveSessions: 2,
+        activeSessions: 0,
+        availableSlots: 2,
+      }),
+    ).toThrow();
+  });
+
   it("accepts a valid workspace", () => {
     const workspace = workspaceSchema.parse({
       id,

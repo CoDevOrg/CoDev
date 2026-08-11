@@ -24,7 +24,7 @@ AWS host is returning to `stopped`.
    Git status through the workspace APIs.
 4. Connect from a second GitHub identity and verify Yjs presence, reconnect
    recovery, and revision-safe collaboration at the protocol layer.
-5. Start two agents attached to distinct exact GitHub issues.
+5. Start up to three agents attached to distinct exact GitHub issues.
 6. Exercise an overlapping claim, coordination response, checkpoint review,
    rebase when needed, and merge into integration.
 7. Publish an immutable `codev/` branch. Confirm its files and ensure the

@@ -127,6 +127,16 @@
   text-overflow: ellipsis;
 }
 
+.workspace-topbar-capacity {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(242, 237, 224, 0.14);
+  border-radius: 999px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .workspace-status {
   display: flex;
   flex: 1;

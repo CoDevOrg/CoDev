@@ -1,10 +1,23 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { createElement } from "react";
 
 import {
   applyOrcaWorkspaceBranding,
   autoAddOrcaProject,
   buildOrcaIframeSource,
+  WorkspaceTopBar,
 } from "./orca-workspace";
+
+describe("WorkspaceTopBar", () => {
+  it("shows the reconciled three-agent worktree capacity", () => {
+    render(createElement(WorkspaceTopBar, { repository: "yousef20920/CoDev" }));
+
+    expect(
+      screen.getByLabelText("Agent worktree capacity: 3 slots"),
+    ).toHaveTextContent("3 agent worktree slots");
+  });
+});
 
 describe("buildOrcaIframeSource", () => {
   it("keeps the pairing credential and validated project bootstrap in the URL fragment", () => {

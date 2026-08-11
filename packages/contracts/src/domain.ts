@@ -3,6 +3,15 @@ import { z } from "zod";
 export const identifierSchema = z.uuid();
 export const timestampSchema = z.iso.datetime();
 
+/** The maximum number of active agent worktrees a workspace may reserve. */
+export const MAX_PARALLEL_AGENT_SESSIONS = 3;
+
+export const agentCapacitySchema = z.object({
+  maxActiveSessions: z.literal(MAX_PARALLEL_AGENT_SESSIONS),
+  activeSessions: z.number().int().nonnegative(),
+  availableSlots: z.number().int().min(0).max(MAX_PARALLEL_AGENT_SESSIONS),
+});
+
 export const workspaceStatusSchema = z.enum([
   "pending",
   "provisioning",
@@ -343,6 +352,7 @@ export const publicationSchema = z.object({
 });
 
 export type User = z.infer<typeof userSchema>;
+export type AgentCapacity = z.infer<typeof agentCapacitySchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
 export type SandboxInstance = z.infer<typeof sandboxInstanceSchema>;
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;

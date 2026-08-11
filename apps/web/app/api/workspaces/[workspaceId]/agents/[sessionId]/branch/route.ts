@@ -4,6 +4,7 @@ import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
+import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import {
@@ -24,8 +25,6 @@ import {
   WorkspaceLifecycleError,
 } from "@/lib/workspaces";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
-
-const MAX_PARALLEL_AGENT_SESSIONS = 3;
 
 const branchSchema = z.object({
   name: z.string().trim().min(1).max(32).optional(),

@@ -5,6 +5,7 @@ import {
   claimPatternsOverlap,
   claimSerializationScope,
 } from "./agent-coordination";
+import { summarizeAgentCapacity } from "./agent-capacity";
 
 describe("path claim matching", () => {
   it("detects exact and directory overlaps", () => {
@@ -24,5 +25,32 @@ describe("path claim matching", () => {
     expect(claimSerializationScope("workspace-id")).toBe(
       "workspace:workspace-id",
     );
+  });
+});
+
+describe("agent worktree capacity", () => {
+  it("reserves exactly three slots and counts active or frozen worktrees", () => {
+    expect(
+      summarizeAgentCapacity([
+        { worktreeStatus: "active" },
+        { worktreeStatus: "frozen" },
+        { worktreeStatus: "discarded" },
+      ]),
+    ).toEqual({
+      maxActiveSessions: 3,
+      activeSessions: 2,
+      availableSlots: 1,
+    });
+  });
+
+  it("does not expose a negative number of available slots", () => {
+    expect(
+      summarizeAgentCapacity([
+        { worktreeStatus: "active" },
+        { worktreeStatus: "active" },
+        { worktreeStatus: "active" },
+        { worktreeStatus: "active" },
+      ]).availableSlots,
+    ).toBe(0);
   });
 });

@@ -77,7 +77,7 @@ const tools: OpenAI.Responses.Tool[] = [
     type: "function",
     name: "list_claims",
     description:
-      "List active and contested path claims across both workspace agents.",
+      "List active and contested path claims across all workspace agents.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
+import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
   | { phase: "connecting" }
@@ -372,7 +373,7 @@ export async function autoAddOrcaProject(
   }
 }
 
-function WorkspaceTopBar({ repository }: { repository: string | null }) {
+export function WorkspaceTopBar({ repository }: { repository: string | null }) {
   return (
     <header className="workspace-topbar">
       <Link href="/dashboard" className="workspace-topbar-home">
@@ -396,6 +397,12 @@ function WorkspaceTopBar({ repository }: { repository: string | null }) {
       {repository ? (
         <span className="workspace-topbar-repo">{repository}</span>
       ) : null}
+      <span
+        className="workspace-topbar-capacity"
+        aria-label={`Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`}
+      >
+        {MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots
+      </span>
     </header>
   );
 }

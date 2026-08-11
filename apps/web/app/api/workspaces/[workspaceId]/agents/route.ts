@@ -4,6 +4,7 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
+import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/workspaces";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { readWorkspaceStateEvents } from "@/lib/workspace-state";
+import { summarizeAgentCapacity } from "@/lib/agent-capacity";
 import {
   agentAttachmentsSchema,
   toStoredAgentAttachments,
@@ -50,8 +52,6 @@ const createSchema = z.object({
 
 class DuplicateIssueError extends Error {}
 class AgentCapacityError extends Error {}
-
-const MAX_PARALLEL_AGENT_SESSIONS = 3;
 
 function isUniqueViolation(error: unknown) {
   return (
@@ -122,6 +122,7 @@ export async function GET(
     listAgentSessions(workspaceId),
     readWorkspaceStateEvents(workspaceId),
   ]);
+  const capacity = summarizeAgentCapacity(sessions);
   const includeModels =
     new URL(request.url).searchParams.get("includeModels") === "true";
   const requestedProvider = new URL(request.url).searchParams.get("provider");
@@ -142,6 +143,7 @@ export async function GET(
   return Response.json({
     sessions,
     stateEvents,
+    capacity,
     ...(models ? { models } : {}),
   });
 }
