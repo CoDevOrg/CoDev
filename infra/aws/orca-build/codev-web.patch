@@ -171,10 +171,10 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..87350f2
+index 0000000..2a91f43
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,112 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
@@ -203,7 +203,14 @@ index 0000000..87350f2
 +  })
 +})
 +
-+function createStore(repos: Array<{ id: string; path: string; displayName: string }> = []) {
++function createStore(
++  repos: Array<{
++    id: string
++    path: string
++    displayName: string
++    executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
++  }> = []
++) {
 +  return {
 +    repos,
 +    addRepoPath: vi.fn(),
@@ -214,7 +221,14 @@ index 0000000..87350f2
 +
 +describe('openCodevProject', () => {
 +  it('activates an existing project instead of leaving it unselected', async () => {
-+    const store = createStore([{ id: 'repo-1', path: projectPath, displayName: 'workspace-id' }])
++    const store = createStore([
++      {
++        id: 'repo-1',
++        path: projectPath,
++        displayName: 'workspace-id',
++        executionHostId: 'runtime:environment-1'
++      }
++    ])
 +    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
 +
 +    await expect(
@@ -234,7 +248,8 @@ index 0000000..87350f2
 +    expect(openDefaultCheckout).toHaveBeenCalledWith({
 +      repoId: 'repo-1',
 +      source: 'runtime_server_path',
-+      setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace
++      setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
++      executionHostId: 'runtime:environment-1'
 +    })
 +  })
 +
@@ -243,7 +258,8 @@ index 0000000..87350f2
 +    store.addRepoPath.mockResolvedValue({
 +      id: 'repo-2',
 +      path: projectPath,
-+      displayName: 'workspace-id'
++      displayName: 'workspace-id',
++      executionHostId: 'runtime:environment-2'
 +    })
 +    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
 +
@@ -253,7 +269,10 @@ index 0000000..87350f2
 +
 +    expect(store.addRepoPath).toHaveBeenCalledWith(projectPath, 'git')
 +    expect(openDefaultCheckout).toHaveBeenCalledWith(
-+      expect.objectContaining({ repoId: 'repo-2' })
++      expect.objectContaining({
++        repoId: 'repo-2',
++        executionHostId: 'runtime:environment-2'
++      })
 +    )
 +  })
 +
@@ -270,14 +289,15 @@ index 0000000..87350f2
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..9e54fe8
+index 0000000..5cb6618
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,65 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
 +  displayName: string
++  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
 +}
 +
 +type CodevProjectStore = {
@@ -294,6 +314,7 @@ index 0000000..9e54fe8
 +  repoId: string
 +  source: 'runtime_server_path'
 +  setHideDefaultBranchWorkspace: (value: boolean) => void
++  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
 +}) => Promise<void>
 +
 +export function isCodevProjectBootstrapReady({
@@ -332,7 +353,8 @@ index 0000000..9e54fe8
 +  await openDefaultCheckout({
 +    repoId: repo.id,
 +    source: 'runtime_server_path',
-+    setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace
++    setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
++    ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {})
 +  })
 +  return true
 +}

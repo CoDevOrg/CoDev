@@ -1,0 +1,1 @@
+import{r as e}from"./web-index-BezgYuUB.js";export{e as useAppStore};
