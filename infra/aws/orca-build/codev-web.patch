@@ -1,12 +1,13 @@
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
-index 294fc4a..65ae3f5 100644
+index 294fc4a..16cde63 100644
 --- a/src/renderer/src/App.tsx
 +++ b/src/renderer/src/App.tsx
-@@ -42,6 +42,11 @@ import {
+@@ -42,6 +42,12 @@ import {
    ContextMenuTrigger
  } from '@/components/ui/context-menu'
  import { useAppStore } from './store'
 +import { openProjectDefaultCheckout } from './components/sidebar/project-added-default-checkout'
++import { activateWorktreeFromSidebar } from './lib/sidebar-worktree-activation'
 +import {
 +  isCodevProjectBootstrapReady,
 +  openCodevProject
@@ -14,7 +15,7 @@ index 294fc4a..65ae3f5 100644
  import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
  import { useShallow } from 'zustand/react/shallow'
  import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
-@@ -521,6 +526,54 @@ function App(): React.JSX.Element {
+@@ -521,6 +527,56 @@ function App(): React.JSX.Element {
    const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
    const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
    const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -44,7 +45,9 @@ index 294fc4a..65ae3f5 100644
 +      projectKind,
 +      projectName,
 +      store: useAppStore.getState(),
-+      openDefaultCheckout: openProjectDefaultCheckout
++      getStore: useAppStore.getState,
++      openDefaultCheckout: openProjectDefaultCheckout,
++      activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar
 +    })
 +      .then((opened) => {
 +        window.parent.postMessage(
@@ -171,10 +174,10 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..2a91f43
+index 0000000..cf8cb02
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,166 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
@@ -213,6 +216,16 @@ index 0000000..2a91f43
 +) {
 +  return {
 +    repos,
++    worktreesByRepo: {} as Record<
++      string,
++      Array<{
++        id: string
++        repoId: string
++        isMainWorktree: boolean
++        hostId?: 'local' | `ssh:${string}` | `runtime:${string}`
++      }>
++    >,
++    activeWorktreeId: null as string | null,
 +    addRepoPath: vi.fn(),
 +    updateRepo: vi.fn().mockResolvedValue(true),
 +    setHideDefaultBranchWorkspace: vi.fn()
@@ -229,7 +242,18 @@ index 0000000..2a91f43
 +        executionHostId: 'runtime:environment-1'
 +      }
 +    ])
++    store.worktreesByRepo['repo-1'] = [
++      {
++        id: 'worktree-1',
++        repoId: 'repo-1',
++        isMainWorktree: true,
++        hostId: 'ssh:private-host'
++      }
++    ]
 +    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      store.activeWorktreeId = worktreeId
++    })
 +
 +    await expect(
 +      openCodevProject({
@@ -237,7 +261,9 @@ index 0000000..2a91f43
 +        projectKind: 'git',
 +        projectName: 'yousef20920/CoDev',
 +        store,
-+        openDefaultCheckout
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar
 +      })
 +    ).resolves.toBe(true)
 +
@@ -251,6 +277,10 @@ index 0000000..2a91f43
 +      setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
 +      executionHostId: 'runtime:environment-1'
 +    })
++    expect(activateDefaultCheckoutFromSidebar).toHaveBeenCalledWith(
++      'worktree-1',
++      'ssh:private-host'
++    )
 +  })
 +
 +  it('adds and activates a new project as one startup operation', async () => {
@@ -261,10 +291,24 @@ index 0000000..2a91f43
 +      displayName: 'workspace-id',
 +      executionHostId: 'runtime:environment-2'
 +    })
-+    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++    const openDefaultCheckout = vi.fn(async () => {
++      store.worktreesByRepo['repo-2'] = [
++        { id: 'worktree-2', repoId: 'repo-2', isMainWorktree: true }
++      ]
++    })
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      store.activeWorktreeId = worktreeId
++    })
 +
 +    await expect(
-+      openCodevProject({ projectPath, projectKind: 'git', store, openDefaultCheckout })
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar
++      })
 +    ).resolves.toBe(true)
 +
 +    expect(store.addRepoPath).toHaveBeenCalledWith(projectPath, 'git')
@@ -274,25 +318,38 @@ index 0000000..2a91f43
 +        executionHostId: 'runtime:environment-2'
 +      })
 +    )
++    expect(activateDefaultCheckoutFromSidebar).toHaveBeenCalledWith(
++      'worktree-2',
++      'runtime:environment-2'
++    )
 +  })
 +
 +  it('reports failure when Orca cannot add the project', async () => {
 +    const store = createStore()
 +    store.addRepoPath.mockResolvedValue(null)
 +    const openDefaultCheckout = vi.fn()
++    const activateDefaultCheckoutFromSidebar = vi.fn()
 +
 +    await expect(
-+      openCodevProject({ projectPath, projectKind: 'git', store, openDefaultCheckout })
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar
++      })
 +    ).resolves.toBe(false)
 +    expect(openDefaultCheckout).not.toHaveBeenCalled()
++    expect(activateDefaultCheckoutFromSidebar).not.toHaveBeenCalled()
 +  })
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..5cb6618
+index 0000000..90ced1e
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,97 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
@@ -300,8 +357,17 @@ index 0000000..5cb6618
 +  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
 +}
 +
++type CodevProjectWorktree = {
++  id: string
++  repoId: string
++  isMainWorktree: boolean
++  hostId?: 'local' | `ssh:${string}` | `runtime:${string}`
++}
++
 +type CodevProjectStore = {
 +  repos: CodevProjectRepo[]
++  worktreesByRepo: Record<string, CodevProjectWorktree[]>
++  activeWorktreeId: string | null
 +  addRepoPath: (
 +    path: string,
 +    kind: 'git' | 'folder'
@@ -309,6 +375,11 @@ index 0000000..5cb6618
 +  updateRepo: (repoId: string, update: { displayName: string }) => Promise<boolean>
 +  setHideDefaultBranchWorkspace: (value: boolean) => void
 +}
++
++type ActivateDefaultCheckoutFromSidebar = (
++  worktreeId: string,
++  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
++) => Promise<void>
 +
 +type OpenDefaultCheckout = (args: {
 +  repoId: string
@@ -332,13 +403,17 @@ index 0000000..5cb6618
 +  projectKind,
 +  projectName,
 +  store,
-+  openDefaultCheckout
++  getStore,
++  openDefaultCheckout,
++  activateDefaultCheckoutFromSidebar
 +}: {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
 +  projectName?: string
 +  store: CodevProjectStore
++  getStore: () => CodevProjectStore
 +  openDefaultCheckout: OpenDefaultCheckout
++  activateDefaultCheckoutFromSidebar: ActivateDefaultCheckoutFromSidebar
 +}): Promise<boolean> {
 +  const repo =
 +    store.repos.find((candidate) => candidate.path === projectPath) ??
@@ -356,7 +431,21 @@ index 0000000..5cb6618
 +    setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
 +    ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {})
 +  })
-+  return true
++
++  const stateAfterHandoff = getStore()
++  const defaultCheckout = stateAfterHandoff.worktreesByRepo[repo.id]?.find(
++    (worktree) => worktree.isMainWorktree
++  )
++  if (!defaultCheckout) {
++    return false
++  }
++  if (stateAfterHandoff.activeWorktreeId !== defaultCheckout.id) {
++    await activateDefaultCheckoutFromSidebar(
++      defaultCheckout.id,
++      defaultCheckout.hostId ?? repo.executionHostId ?? undefined
++    )
++  }
++  return getStore().activeWorktreeId === defaultCheckout.id
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
 index eae3a54..6ebcb27 100644
