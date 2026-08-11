@@ -6,9 +6,9 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F1.3 — Add invite revocation and expiry enforcement**
+**F1.4 — Add member-role management and immediate realtime membership refresh**
 
-Read the F1.3 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.4 or
+Read the F1.4 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.5 or
 any later task during the same scheduler run.
 
 ## Completed tasks
@@ -170,6 +170,47 @@ used`. No credentials or secrets were entered.
   or request authentication credentials.
 - Next task: F1.3 — add invite revocation and expiry enforcement, including
   server-side tests.
+
+### F1.3 completion evidence
+
+- Completed: 2026-08-11T16:11:13Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/invite-lifecycle-fixture.tsx`,
+  `apps/web/components/invite-lifecycle-fixture.test.tsx`,
+  `apps/web/lib/workspaces.ts`, `apps/web/lib/workspaces.test.ts`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused server and fixture tests — 11 passed; targeted Prettier
+  check — passed; web typecheck — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web production build — passed; focused Playwright
+  verification — 6 passed; `git diff --check` — passed. The repository-wide
+  `pnpm format:check` remains blocked by the three pre-existing scheduler
+  Markdown files named in the run commentary; no task files were changed to
+  mask that failure.
+- Validated source commit: `21397062a0612d973ac63bd108d4a2f8fb78bf8b`.
+- Vercel preview: <https://codev-ec69tfqtp-yousef20920s-projects.vercel.app> —
+  Ready deployment for the validated source commit.
+- Computer Use flow: opened the Ready preview in a new Chrome tab at
+  `/verification/b0-2`, clicked `Create invite` as Alex Morgan, clicked
+  `Revoke invite`, attempted `Accept as Jordan`, and confirmed the visible
+  `Jordan cannot join: Alex revoked this invite before acceptance.` state with
+  the `Join rejected` control disabled. Refreshed the preview, created a new
+  invite, clicked `Simulate expiry`, attempted `Accept as Jordan`, and
+  confirmed the visible expiry rejection and disabled `Join rejected` control.
+  No credentials or secrets were entered.
+- Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/f1-3/invite-revoked-edge.png`
+  (Playwright revoked-invite edge),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f1-3/invite-expired-edge.png`
+  (Playwright expired-invite edge),
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2012.10.30%20PM.jpeg`
+  (Computer Use revoked-invite rejection), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2012.10.56%20PM.jpeg`
+  (Computer Use expired-invite rejection).
+- Known limitations: the credential-free preview fixture models invitation
+  state in browser state; the server acceptance predicate is covered by unit
+  tests, while the preview flow does not use real authenticated membership
+  records.
+- Next task: F1.4 — add member-role management and immediate realtime
+  membership refresh.
 
 ## Blocked tasks
 
