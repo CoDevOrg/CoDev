@@ -1,27 +1,36 @@
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
-index 294fc4a..acc563a 100644
+index 294fc4a..65ae3f5 100644
 --- a/src/renderer/src/App.tsx
 +++ b/src/renderer/src/App.tsx
-@@ -42,6 +42,8 @@ import {
+@@ -42,6 +42,11 @@ import {
    ContextMenuTrigger
  } from '@/components/ui/context-menu'
  import { useAppStore } from './store'
 +import { openProjectDefaultCheckout } from './components/sidebar/project-added-default-checkout'
-+import { openCodevProject } from './web/codev-project-bootstrap'
++import {
++  isCodevProjectBootstrapReady,
++  openCodevProject
++} from './web/codev-project-bootstrap'
  import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
  import { useShallow } from 'zustand/react/shallow'
  import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
-@@ -521,6 +523,48 @@ function App(): React.JSX.Element {
+@@ -521,6 +526,54 @@ function App(): React.JSX.Element {
    const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
    const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
    const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
++  const startupWorktreeRefreshCompleted = useAppStore(
++    (s) => s.startupWorktreeRefreshCompleted
++  )
 +  const codevBootstrapStartedRef = useRef(false)
 +  useEffect(() => {
 +    const projectPath = window.__CODEV_PROJECT_PATH__
 +    const projectKind = window.__CODEV_PROJECT_KIND__
 +    const projectName = window.__CODEV_PROJECT_NAME__
 +    if (
-+      !workspaceSessionReady ||
++      !isCodevProjectBootstrapReady({
++        workspaceSessionReady,
++        startupWorktreeRefreshCompleted
++      }) ||
 +      !projectPath ||
 +      !projectKind ||
 +      codevBootstrapStartedRef.current
@@ -56,7 +65,7 @@ index 294fc4a..acc563a 100644
 +        )
 +        codevBootstrapStartedRef.current = false
 +      })
-+  }, [workspaceSessionReady])
++  }, [startupWorktreeRefreshCompleted, workspaceSessionReady])
    const backgroundTerminalMountRequested = useSyncExternalStore(
      subscribeBackgroundTerminalWorktreeMountRequests,
      hasRequestedBackgroundTerminalWorktreeMount,
@@ -162,14 +171,37 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..885eac7
+index 0000000..87350f2
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,93 @@
 +import { describe, expect, it, vi } from 'vitest'
-+import { openCodevProject } from './codev-project-bootstrap'
++import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
 +const projectPath = '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++
++describe('isCodevProjectBootstrapReady', () => {
++  it('waits for both session hydration and the deferred worktree refresh', () => {
++    expect(
++      isCodevProjectBootstrapReady({
++        workspaceSessionReady: true,
++        startupWorktreeRefreshCompleted: false
++      })
++    ).toBe(false)
++    expect(
++      isCodevProjectBootstrapReady({
++        workspaceSessionReady: false,
++        startupWorktreeRefreshCompleted: true
++      })
++    ).toBe(false)
++    expect(
++      isCodevProjectBootstrapReady({
++        workspaceSessionReady: true,
++        startupWorktreeRefreshCompleted: true
++      })
++    ).toBe(true)
++  })
++})
 +
 +function createStore(repos: Array<{ id: string; path: string; displayName: string }> = []) {
 +  return {
@@ -238,10 +270,10 @@ index 0000000..885eac7
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..8048f9a
+index 0000000..9e54fe8
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,62 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
@@ -263,6 +295,16 @@ index 0000000..8048f9a
 +  source: 'runtime_server_path'
 +  setHideDefaultBranchWorkspace: (value: boolean) => void
 +}) => Promise<void>
++
++export function isCodevProjectBootstrapReady({
++  workspaceSessionReady,
++  startupWorktreeRefreshCompleted
++}: {
++  workspaceSessionReady: boolean
++  startupWorktreeRefreshCompleted: boolean
++}): boolean {
++  return workspaceSessionReady && startupWorktreeRefreshCompleted
++}
 +
 +export async function openCodevProject({
 +  projectPath,
