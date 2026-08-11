@@ -16,6 +16,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+function roleLabel(role: (typeof verificationFixture.members)[number]["role"]) {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export default function VerificationFixturePage() {
   if (!isVerificationFixtureEnabled()) {
     notFound();
@@ -84,13 +88,71 @@ export default function VerificationFixturePage() {
                     <strong>{member.name}</strong>
                     <span>{member.email}</span>
                   </div>
-                  <span className={styles.role}>{member.role}</span>
+                  <span className={styles.role}>{roleLabel(member.role)}</span>
                 </article>
               ))}
             </div>
             <p className={styles.note}>
               These are display-only fixtures. No passwords, tokens, or provider
               credentials are stored or requested.
+            </p>
+          </section>
+
+          <section className={styles.card} aria-labelledby="viewer-heading">
+            <div className={styles.cardHeading}>
+              <div>
+                <span className={styles.kicker}>
+                  Viewer fixture · Casey Rivera
+                </span>
+                <h2 id="viewer-heading">Viewer access check</h2>
+              </div>
+              <span className={styles.count}>Read</span>
+            </div>
+            <p className={styles.note}>
+              Viewers can inspect files, agent activity, and diffs. Mutation
+              controls stay unavailable at the authorization boundary.
+            </p>
+            <div
+              className={styles.permissionList}
+              aria-label="Viewer permissions"
+            >
+              <span className={styles.permissionAllowed}>
+                Inspect workspace · allowed
+              </span>
+              {[
+                [
+                  "Edit shared files",
+                  verificationFixture.viewerCapabilities.canEdit,
+                ],
+                [
+                  "Run terminal command",
+                  verificationFixture.viewerCapabilities.canWriteTerminal,
+                ],
+                [
+                  "Add agent prompt",
+                  verificationFixture.viewerCapabilities.canCoSteer,
+                ],
+                [
+                  "Manage members",
+                  verificationFixture.viewerCapabilities.canManageMembers,
+                ],
+                [
+                  "Approve integration",
+                  verificationFixture.viewerCapabilities.canApproveIntegration,
+                ],
+              ].map(([label, allowed]) => (
+                <button
+                  type="button"
+                  disabled={!allowed}
+                  className={styles.permissionButton}
+                  key={label as string}
+                >
+                  {label as string} · {allowed ? "allowed" : "unavailable"}
+                </button>
+              ))}
+            </div>
+            <p className={styles.viewerStatus} role="status">
+              Viewer mutation controls are disabled.
             </p>
           </section>
 

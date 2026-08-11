@@ -24,15 +24,29 @@ describe("verification fixture", () => {
         id: "b0200000-0000-4000-8000-000000000011",
         name: "Alex Morgan",
         email: "alex.owner@example.test",
-        role: "Owner",
+        role: "maintainer",
       },
       {
         id: "b0200000-0000-4000-8000-000000000012",
         name: "Jordan Lee",
         email: "jordan.collaborator@example.test",
-        role: "Collaborator",
+        role: "collaborator",
+      },
+      {
+        id: "b0200000-0000-4000-8000-000000000013",
+        name: "Casey Rivera",
+        email: "casey.viewer@example.test",
+        role: "viewer",
       },
     ]);
+    expect(verificationFixture.viewerCapabilities).toMatchObject({
+      role: "viewer",
+      canView: true,
+      canEdit: false,
+      canUseTerminal: false,
+      canManageMembers: false,
+      canApproveIntegration: false,
+    });
     expect(verificationFixture.files).toEqual([
       "README.md",
       "src/hello.ts",

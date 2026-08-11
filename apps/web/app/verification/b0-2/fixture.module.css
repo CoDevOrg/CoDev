@@ -220,6 +220,41 @@
   font-size: 13px;
 }
 
+.permissionList {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.permissionAllowed,
+.permissionButton {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(161, 220, 105, 0.24);
+  border-radius: 7px;
+  background: #20251d;
+  color: #c8eea6;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.permissionButton:disabled {
+  border-color: rgba(220, 230, 203, 0.1);
+  background: #191c18;
+  color: #7f8a7a;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.viewerStatus {
+  margin: 18px 0 0;
+  color: #f2cf8b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .note {
   margin: 24px 0 0;
   color: #8f9989;

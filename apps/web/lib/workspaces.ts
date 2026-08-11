@@ -557,12 +557,11 @@ export async function createWorkspaceInvite(
     allowLink?: boolean;
   } = {},
 ) {
-  const access = await requireWorkspacePermission(workspaceId, userId, "view");
-  if (access.role !== "owner" && access.role !== "co_steer") {
-    throw new WorkspaceAccessError(
-      "Only workspace owners and Co-Steer members can share this workspace.",
-    );
-  }
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "invite",
+  );
   await requireOrganizationSettingsWrite(userId, workspaceId);
   const token = createInviteToken();
   const accessRole =

@@ -3,6 +3,10 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
+import {
+  workspaceRoleCapabilities,
+  type WorkspaceRole,
+} from "@codev/contracts";
 
 import { getDatabase } from "./database";
 
@@ -89,18 +93,6 @@ let openFgaTokenCache: OpenFgaTokenCache | null = null;
 
 export function permissionsForRole(role: WorkspaceAccessRole) {
   switch (role) {
-    case "owner":
-    case "co_steer":
-      return {
-        view: true,
-        edit: true,
-        coSteer: true,
-        review: true,
-        terminal: true,
-        terminalWrite: true,
-        merge: true,
-        invite: role === "owner",
-      } as const;
     case "reviewer":
       return {
         view: true,
@@ -112,17 +104,33 @@ export function permissionsForRole(role: WorkspaceAccessRole) {
         merge: false,
         invite: false,
       } as const;
-    case "viewer":
+    default: {
+      const roleCapabilities =
+        workspaceRoleCapabilities[workspaceRoleForAccessRole(role)];
       return {
-        view: true,
-        edit: false,
-        coSteer: false,
-        review: false,
-        terminal: false,
-        terminalWrite: false,
-        merge: false,
-        invite: false,
+        view: roleCapabilities.canView,
+        edit: roleCapabilities.canEdit,
+        coSteer: roleCapabilities.canCoSteer,
+        review: roleCapabilities.canEdit,
+        terminal: roleCapabilities.canUseTerminal,
+        terminalWrite: roleCapabilities.canWriteTerminal,
+        merge: roleCapabilities.canApproveIntegration,
+        invite: roleCapabilities.canManageMembers,
       } as const;
+    }
+  }
+}
+
+function workspaceRoleForAccessRole(role: WorkspaceAccessRole): WorkspaceRole {
+  switch (role) {
+    case "owner":
+      return "maintainer";
+    case "co_steer":
+      return "collaborator";
+    case "viewer":
+      return "viewer";
+    case "reviewer":
+      return "viewer";
   }
 }
 

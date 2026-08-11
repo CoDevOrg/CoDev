@@ -14,6 +14,8 @@ import {
   createPullRequestSchema,
   terminalPollSchema,
   workspaceEventSchema,
+  workspaceRoleCapabilities,
+  workspaceRoleCapabilitiesSchema,
   workspaceSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
 } from "./index";
@@ -21,6 +23,26 @@ import {
 const id = "019c8c2e-c801-7a53-b556-62475c4a60e7";
 
 describe("workspace contracts", () => {
+  it("defines the Viewer, Collaborator, and Maintainer capability sets", () => {
+    expect(
+      workspaceRoleCapabilitiesSchema.parse(workspaceRoleCapabilities.viewer),
+    ).toMatchObject({
+      role: "viewer",
+      canView: true,
+      canEdit: false,
+      canCoSteer: false,
+      canUseTerminal: false,
+      canManageMembers: false,
+      canApproveIntegration: false,
+    });
+    expect(workspaceRoleCapabilities.collaborator.canEdit).toBe(true);
+    expect(workspaceRoleCapabilities.collaborator.canManageMembers).toBe(false);
+    expect(workspaceRoleCapabilities.maintainer.canManageMembers).toBe(true);
+    expect(workspaceRoleCapabilities.maintainer.canApproveIntegration).toBe(
+      true,
+    );
+  });
+
   it("defines a three-agent workspace capacity", () => {
     expect(MAX_PARALLEL_AGENT_SESSIONS).toBe(3);
     expect(

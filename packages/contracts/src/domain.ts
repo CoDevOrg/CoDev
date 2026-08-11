@@ -34,6 +34,70 @@ export const memberCapabilitiesSchema = z.object({
   canMerge: z.boolean(),
 });
 
+/**
+ * The product-facing workspace roles. Database/OpenFGA access-role names may
+ * remain more specific for compatibility, but every member is presented with
+ * one of these three capability sets.
+ */
+export const workspaceRoleSchema = z.enum([
+  "viewer",
+  "collaborator",
+  "maintainer",
+]);
+
+export const workspaceRoleCapabilitiesSchema = z.object({
+  role: workspaceRoleSchema,
+  canView: z.literal(true),
+  canEdit: z.boolean(),
+  canCoSteer: z.boolean(),
+  canInspectDiffs: z.literal(true),
+  canUseTerminal: z.boolean(),
+  canWriteTerminal: z.boolean(),
+  canManageMembers: z.boolean(),
+  canApproveIntegration: z.boolean(),
+});
+
+export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;
+export type WorkspaceRoleCapabilities = z.infer<
+  typeof workspaceRoleCapabilitiesSchema
+>;
+
+export const workspaceRoleCapabilities = {
+  viewer: {
+    role: "viewer",
+    canView: true,
+    canEdit: false,
+    canCoSteer: false,
+    canInspectDiffs: true,
+    canUseTerminal: false,
+    canWriteTerminal: false,
+    canManageMembers: false,
+    canApproveIntegration: false,
+  },
+  collaborator: {
+    role: "collaborator",
+    canView: true,
+    canEdit: true,
+    canCoSteer: true,
+    canInspectDiffs: true,
+    canUseTerminal: true,
+    canWriteTerminal: true,
+    canManageMembers: false,
+    canApproveIntegration: false,
+  },
+  maintainer: {
+    role: "maintainer",
+    canView: true,
+    canEdit: true,
+    canCoSteer: true,
+    canInspectDiffs: true,
+    canUseTerminal: true,
+    canWriteTerminal: true,
+    canManageMembers: true,
+    canApproveIntegration: true,
+  },
+} as const satisfies Record<WorkspaceRole, WorkspaceRoleCapabilities>;
+
 export const workspaceMemberSchema = z.object({
   workspaceId: identifierSchema,
   userId: identifierSchema,

@@ -3,14 +3,24 @@ import { describe, expect, it } from "vitest";
 import { openFgaRelationForPermission, permissionsForRole } from "./access";
 
 describe("workspace access roles", () => {
-  it("gives co-steerers editing, terminal, and merge capability", () => {
+  it("gives collaborators editing and co-steering without maintainer actions", () => {
     expect(permissionsForRole("co_steer")).toMatchObject({
       edit: true,
       coSteer: true,
       review: true,
       terminal: true,
       terminalWrite: true,
+      merge: false,
+      invite: false,
+    });
+  });
+
+  it("gives maintainers member-management and integration capabilities", () => {
+    expect(permissionsForRole("owner")).toMatchObject({
+      edit: true,
+      coSteer: true,
       merge: true,
+      invite: true,
     });
   });
 

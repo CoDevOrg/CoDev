@@ -26,15 +26,14 @@ export type OrganizationSettingsContext = OrganizationSettingsAccess & {
 };
 
 export function isOrganizationSettingsAdmin(role: WorkspaceAccessRole) {
-  return role === "owner" || role === "co_steer";
+  return role === "owner";
 }
 
 /**
  * Authorizes reads and writes for shared settings.
  *
- * The current workspace access model calls the Organization Admin role
- * `co_steer` and stores it in OpenFGA as `editor`. Owners and editors are the
- * only roles allowed to write; reviewers and viewers can still read.
+ * Maintainers are the only role allowed to change shared organization
+ * settings; collaborators and viewers can still read them.
  */
 export async function checkOrgSettingsAccess(
   userId: string,
@@ -51,7 +50,7 @@ export async function checkOrgSettingsAccess(
   if (action === "write") {
     if (!canWrite) {
       throw new WorkspaceAccessError(
-        "Only workspace Owners and Admins can modify organization settings.",
+        "Only workspace Maintainers can modify organization settings.",
       );
     }
 

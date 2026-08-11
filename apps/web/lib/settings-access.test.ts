@@ -24,23 +24,24 @@ afterEach(() => {
 });
 
 describe("organization settings access", () => {
-  it("maps co-steer workspace members to organization Admins", () => {
-    expect(isOrganizationSettingsAdmin("co_steer")).toBe(true);
+  it("maps only maintainers to organization Admins", () => {
+    expect(isOrganizationSettingsAdmin("owner")).toBe(true);
+    expect(isOrganizationSettingsAdmin("co_steer")).toBe(false);
     expect(isOrganizationSettingsAdmin("reviewer")).toBe(false);
     expect(isOrganizationSettingsAdmin("viewer")).toBe(false);
   });
 
-  it("allows an Admin write only when OpenFGA confirms editor access", async () => {
-    mocks.requireWorkspacePermission.mockResolvedValue({ role: "co_steer" });
+  it("allows a Maintainer write only when OpenFGA confirms owner access", async () => {
+    mocks.requireWorkspacePermission.mockResolvedValue({ role: "owner" });
     mocks.checkWorkspaceRelation.mockResolvedValue(true);
 
     await expect(
       checkOrgSettingsAccess("user-1", "workspace-1", "write"),
-    ).resolves.toMatchObject({ role: "co_steer", canWrite: true });
+    ).resolves.toMatchObject({ role: "owner", canWrite: true });
     expect(mocks.checkWorkspaceRelation).toHaveBeenCalledWith(
       "workspace-1",
       "user-1",
-      "editor",
+      "owner",
     );
   });
 
