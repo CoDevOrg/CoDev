@@ -174,10 +174,10 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..2e9fa7b
+index 0000000..0d1ff9b
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,229 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
@@ -353,6 +353,40 @@ index 0000000..2e9fa7b
 +    expect(waitForActivationRetry).toHaveBeenCalledTimes(2)
 +  })
 +
++  it('retries the complete handoff while the execution host is still booting', async () => {
++    const store = createStore([
++      { id: 'repo-4', path: projectPath, displayName: 'yousef20920/CoDev' }
++    ])
++    const openDefaultCheckout = vi.fn(async () => {
++      if (openDefaultCheckout.mock.calls.length < 3) {
++        throw new Error('execution host is not ready')
++      }
++      store.worktreesByRepo['repo-4'] = [
++        { id: 'worktree-4', repoId: 'repo-4', isMainWorktree: true }
++      ]
++    })
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      store.activeWorktreeId = worktreeId
++    })
++    const waitForActivationRetry = vi.fn().mockResolvedValue(undefined)
++
++    await expect(
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar,
++        waitForActivationRetry
++      })
++    ).resolves.toBe(true)
++
++    expect(openDefaultCheckout).toHaveBeenCalledTimes(3)
++    expect(activateDefaultCheckoutFromSidebar).toHaveBeenCalledTimes(1)
++    expect(waitForActivationRetry).toHaveBeenCalledTimes(2)
++  })
++
 +  it('reports failure when Orca cannot add the project', async () => {
 +    const store = createStore()
 +    store.addRepoPath.mockResolvedValue(null)
@@ -375,10 +409,10 @@ index 0000000..2e9fa7b
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..5609396
+index 0000000..0aa361a
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,114 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
@@ -460,30 +494,32 @@ index 0000000..5609396
 +    await store.updateRepo(repo.id, { displayName: projectName })
 +  }
 +
-+  await openDefaultCheckout({
-+    repoId: repo.id,
-+    source: 'runtime_server_path',
-+    setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
-+    ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {})
-+  })
-+
-+  const stateAfterHandoff = getStore()
-+  const defaultCheckout = stateAfterHandoff.worktreesByRepo[repo.id]?.find(
-+    (worktree) => worktree.isMainWorktree
-+  )
-+  if (!defaultCheckout) {
-+    return false
-+  }
 +  for (let attempt = 0; attempt < CODEV_ACTIVATION_ATTEMPTS; attempt += 1) {
-+    if (getStore().activeWorktreeId === defaultCheckout.id) {
-+      return true
-+    }
-+    await activateDefaultCheckoutFromSidebar(
-+      defaultCheckout.id,
-+      defaultCheckout.hostId ?? repo.executionHostId ?? undefined
-+    )
-+    if (getStore().activeWorktreeId === defaultCheckout.id) {
-+      return true
++    try {
++      await openDefaultCheckout({
++        repoId: repo.id,
++        source: 'runtime_server_path',
++        setHideDefaultBranchWorkspace: store.setHideDefaultBranchWorkspace,
++        ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {})
++      })
++
++      const defaultCheckout = getStore().worktreesByRepo[repo.id]?.find(
++        (worktree) => worktree.isMainWorktree
++      )
++      if (defaultCheckout) {
++        if (getStore().activeWorktreeId === defaultCheckout.id) {
++          return true
++        }
++        await activateDefaultCheckoutFromSidebar(
++          defaultCheckout.id,
++          defaultCheckout.hostId ?? repo.executionHostId ?? undefined
++        )
++        if (getStore().activeWorktreeId === defaultCheckout.id) {
++          return true
++        }
++      }
++    } catch (error) {
++      console.warn('CoDev project handoff is waiting for its execution host:', error)
 +    }
 +    if (attempt < CODEV_ACTIVATION_ATTEMPTS - 1) {
 +      await waitForActivationRetry()
