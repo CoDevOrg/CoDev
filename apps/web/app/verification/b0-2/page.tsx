@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
+import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
 import {
   isVerificationFixtureEnabled,
   verificationFixture,
@@ -65,6 +66,8 @@ export default function VerificationFixturePage() {
         </section>
 
         <div className={styles.columns}>
+          <InviteLifecycleFixture />
+
           <section className={styles.card} aria-labelledby="members-heading">
             <div className={styles.cardHeading}>
               <div>

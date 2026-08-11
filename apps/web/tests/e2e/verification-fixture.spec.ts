@@ -15,8 +15,15 @@ test("B0.3 captures the fixture ready state as reusable evidence", async ({
   await expect(
     page.getByText("Ready for browser verification", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Alex Morgan", { exact: true })).toBeVisible();
-  await expect(page.getByText("Jordan Lee", { exact: true })).toBeVisible();
+  const memberCard = page
+    .getByRole("heading", { name: "Ready-to-use members" })
+    .locator("xpath=ancestor::section");
+  await expect(
+    memberCard.getByText("Alex Morgan", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    memberCard.getByText("Jordan Lee", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Casey Rivera", { exact: true })).toBeVisible();
   await expect(page.getByText("src/hello.ts", { exact: true })).toBeVisible();
   await expect(
@@ -89,4 +96,59 @@ test("F1.1 captures the Viewer restriction state", async ({
     /artifacts\/verification\/f1-1\/viewer-restrictions\.png$/,
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
+test("F1.2 creates and accepts a single-use invite", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  await expect(
+    page.getByRole("heading", { name: "Invite and accept once" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create invite" }),
+  ).toBeEnabled();
+  await expect(page.getByText(/waiting for invite/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Create invite" }).click();
+  await expect(
+    page.getByText("Expires in 24 hours · single use"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Accept as Jordan" }),
+  ).toBeEnabled();
+
+  await page.getByRole("button", { name: "Accept as Jordan" }).click();
+  await expect(page.getByText(/joined via invite/)).toBeVisible();
+  await expect(
+    page
+      .locator("section[aria-labelledby='invite-heading']")
+      .getByRole("status"),
+  ).toContainText("accepted once and cannot be reused");
+  await expect(
+    page.getByRole("button", { name: "Invite already used" }),
+  ).toBeDisabled();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F1.2",
+    state: "invite-accepted",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f1-2\/invite-accepted\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F1.2",
+      state: "invite-used-edge",
+    },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f1-2\/invite-used-edge\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
