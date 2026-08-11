@@ -423,6 +423,145 @@
   font-size: 11px;
 }
 
+.sharedIde {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.idePresence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.idePresence > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 11px;
+  border-radius: 8px;
+  background: #20251d;
+  color: #e0e7d8;
+  font-size: 12px;
+}
+
+.idePresence > div span:last-child {
+  margin-left: auto;
+  color: #9fa997;
+  font-size: 11px;
+}
+
+.ideSurface {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(0, 1.3fr);
+  min-height: 245px;
+  overflow: hidden;
+  border: 1px solid rgba(220, 230, 203, 0.12);
+  border-radius: 9px;
+  background: #11140f;
+}
+
+.ideFileNav {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  border-right: 1px solid rgba(220, 230, 203, 0.12);
+  background: #191d17;
+}
+
+.ideFileNav > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.ideFileButton,
+.ideFileActive {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+  background: transparent;
+  color: #aab5a2;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.ideFileButton:hover,
+.ideFileActive {
+  background: #293523;
+  color: #d8f2bc;
+}
+
+.ideFileButton span,
+.ideFileActive span {
+  color: #a1dc69;
+}
+
+.ideEditor {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.ideEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ideEditorHeader code {
+  color: #e0e7d8;
+  font-size: 12px;
+}
+
+.ideRemotePresence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(161, 220, 105, 0.24);
+  border-radius: 7px;
+  background: #1d281a;
+  color: #c8eea6;
+  font-size: 12px;
+}
+
+.ideRemotePresence code {
+  color: #eef2e7;
+}
+
+.ideCode {
+  min-height: 76px;
+  margin: 0;
+  overflow: auto;
+  border-radius: 7px;
+  padding: 12px;
+  background: #171b15;
+  color: #dbe8cf;
+  font:
+    12px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.ideSyncNote {
+  margin: 0;
+  color: #899585;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .inviteStatus {
   margin: 16px 0 0;
   color: #f2cf8b;

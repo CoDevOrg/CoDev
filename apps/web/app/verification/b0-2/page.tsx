@@ -6,6 +6,7 @@ import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
 import { MemberRoleManagementFixture } from "@/components/member-role-management-fixture";
 import { PresenceEventsFixture } from "@/components/presence-events-fixture";
+import { SharedIdePresenceFixture } from "@/components/shared-ide-presence-fixture";
 import {
   isVerificationFixtureEnabled,
   verificationFixture,
@@ -71,6 +72,7 @@ export default function VerificationFixturePage() {
           <InviteLifecycleFixture />
           <MemberRoleManagementFixture />
           <PresenceEventsFixture />
+          <SharedIdePresenceFixture />
 
           <section className={styles.card} aria-labelledby="members-heading">
             <div className={styles.cardHeading}>

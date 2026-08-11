@@ -324,3 +324,43 @@ test("F2.1 shows two fixtures joined to one file with durable presence", async (
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F2.2 updates the other IDE view when Alex switches files", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const ideCard = page
+    .getByRole("heading", { name: "Live shared IDE views" })
+    .locator("xpath=ancestor::section");
+  await expect(ideCard.getByLabel("Alex Morgan IDE presence")).toContainText(
+    "present · editing",
+  );
+  await expect(ideCard.getByLabel("Jordan Lee IDE presence")).toContainText(
+    "present · observing",
+  );
+  await expect(
+    ideCard.getByLabel("Jordan Lee active-file observation"),
+  ).toContainText("src/hello.ts");
+
+  await ideCard
+    .getByLabel("Alex Morgan file navigator")
+    .getByRole("button", { name: "README.md" })
+    .click();
+
+  await expect(
+    ideCard.getByLabel("Jordan Lee active-file observation"),
+  ).toContainText("Alex Morgan is viewing README.md");
+  await expect(ideCard.getByRole("status").last()).toContainText(
+    "Jordan sees Alex Morgan viewing README.md.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F2.2",
+    state: "alex-switches-to-readme",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f2-2\/alex-switches-to-readme\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
