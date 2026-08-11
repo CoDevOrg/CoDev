@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F2.1 — Define durable presence events for joined/left, active file, and cursor state**
+**F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization**
 
 Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
 
@@ -19,6 +19,7 @@ Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
 | B0.3 — Reusable screenshot/evidence convention                              | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
 | F1.2 — Implement one invite lifecycle slice                                 | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                         |
 | F1.4 — Add member-role management and immediate realtime membership refresh | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                        |
+| F2.1 — Define durable presence events for joined/left, active file, and cursor state | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
 
 ### B0.2 completion evidence
 
@@ -244,6 +245,51 @@ used`. No credentials or secrets were entered.
   server-backed production mutation boundary.
 - Next task: F2.1 — define durable presence events for joined/left, active file,
   and cursor state.
+
+### F2.1 completion evidence
+
+- Completed: 2026-08-11T18:13:14Z.
+- Changed files: `packages/contracts/src/events.ts`,
+  `packages/contracts/src/contracts.test.ts`,
+  `apps/web/lib/presence-events.ts`,
+  `apps/web/lib/presence-events.test.ts`,
+  `apps/web/lib/collaboration-server.ts`,
+  `apps/web/components/presence-events-fixture.tsx`,
+  `apps/web/components/presence-events-fixture.test.tsx`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: 17 focused contract tests passed; 6 focused web tests passed;
+  contracts lint and typecheck passed; web lint passed with 0 errors and the
+  same 2 pre-existing warnings; web typecheck passed; web production build
+  passed; targeted Prettier check passed; focused Playwright F2.1 test passed
+  on the built app; `git diff --check` passed. The repository-wide format
+  check remains blocked by the pre-existing scheduler Markdown files recorded
+  in earlier ledger evidence.
+- Validated source commit: `ee6fbb59d59386f8cc6ad510152c5fae3f3c5322`.
+- Vercel preview: <https://codev-fa8p8i3iw-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit; branch alias also resolved
+  to `https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app`.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, clicked `Join file` for Alex Morgan, clicked
+  `Join file` for Jordan Lee, and confirmed both named presence indicators,
+  the shared `src/hello.ts` active-file state, Alex and Jordan cursor labels,
+  and six durable events (`presence.joined`,
+  `presence.active_file.changed`, and `presence.cursor.changed` for each
+  fixture). Then clicked Jordan’s `Leave file` control and confirmed the
+  visible `not joined` state plus the seventh `presence.left` event. No
+  credentials or secrets were entered.
+- Screenshots:
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-11 at 2.13.04 PM.jpeg`
+  (Computer Use success state with both fixtures present), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-11 at 2.13.14 PM.jpeg`
+  (Computer Use leave edge with Jordan offline and `presence.left`).
+- Known limitations: the credential-free preview fixture models the two
+  identities and cursor positions in browser state; authenticated realtime
+  clients now persist typed presence transitions through the workspace audit
+  event stream, while editor synchronization remains unchanged.
+- Next task: F2.2 — render named presence and active-file state in the IDE
+  without changing editor synchronization.
 
 ## Blocked tasks
 
