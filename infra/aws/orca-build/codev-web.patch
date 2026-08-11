@@ -375,7 +375,7 @@ index 0000000..2e9fa7b
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..01b2f16
+index 0000000..5609396
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
 @@ -0,0 +1,112 @@
@@ -414,7 +414,7 @@ index 0000000..01b2f16
 +  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
 +}) => Promise<void>
 +
-+const CODEV_ACTIVATION_ATTEMPTS = 16
++const CODEV_ACTIVATION_ATTEMPTS = 46
 +const CODEV_ACTIVATION_RETRY_DELAY_MS = 2_000
 +
 +function waitForCodevActivationRetry(): Promise<void> {
