@@ -6,9 +6,9 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F1.1 — Define/validate Viewer, Collaborator, and Maintainer capabilities**
+**F1.2 — Implement one invite lifecycle slice**
 
-Read the F1.1 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.2 or
+Read the F1.2 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.3 or
 any later task during the same scheduler run.
 
 ## Completed tasks
@@ -105,6 +105,40 @@ available` capacity state. Then opened `/workspaces/b0-4` and confirmed the
   flow, and the protected-route redirect was captured as its edge state.
 - Next task: F1.1 — define/validate Viewer, Collaborator, and Maintainer
   capabilities in the shared contract and server authorization boundary.
+
+### F1.1 completion evidence
+
+- Completed: 2026-08-11T14:12:34Z.
+- Changed files: `packages/contracts/src/domain.ts`,
+  `packages/contracts/src/contracts.test.ts`, `apps/web/lib/access.ts`,
+  `apps/web/lib/access.test.ts`, `apps/web/lib/settings-access.ts`,
+  `apps/web/lib/settings-access.test.ts`, `apps/web/lib/workspaces.ts`,
+  `apps/web/lib/verification-fixture.ts`,
+  `apps/web/lib/verification-fixture.test.ts`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: 16 shared contract tests passed; 19 focused web authorization and
+  fixture tests passed; targeted Prettier check passed; contracts lint and
+  typecheck passed; web lint passed with 0 errors and the same 2 pre-existing
+  warnings; web typecheck passed; web production build passed; focused
+  Playwright verification passed with 3 tests; `git diff --check` passed.
+- Validated source commit: `c76b2eab03dedbbdf8007bd117a9b66338cd2f74`.
+- Vercel preview: <https://codev-l1pk65br0-yousef20920s-projects.vercel.app> —
+  Ready deployment for the validated source commit.
+- Computer Use flow: opened the Ready preview in a new Chrome tab, navigated
+  to `/verification/b0-2`, and confirmed the fixture identities for Alex
+  Morgan (Maintainer), Jordan Lee (Collaborator), and Casey Rivera (Viewer).
+  Confirmed the Viewer access panel allows workspace inspection while the
+  Edit shared files, Run terminal command, Add agent prompt, Manage members,
+  and Approve integration controls are visibly disabled. No credentials were
+  entered.
+- Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/f1-1/viewer-restrictions.png`
+  (focused browser-test success/edge artifact); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2010.12.22%20AM.jpeg`
+  (Computer Use preview Viewer restriction state).
+- Known limitations: the preview uses the existing credential-free display
+  fixture; authenticated membership lifecycle coverage remains in F1.2.
+- Next task: F1.2 — implement one invite lifecycle slice.
 
 ## Blocked tasks
 
