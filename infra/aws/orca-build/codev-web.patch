@@ -174,10 +174,10 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..cf8cb02
+index 0000000..2e9fa7b
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,195 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
@@ -324,6 +324,35 @@ index 0000000..cf8cb02
 +    )
 +  })
 +
++  it('retries activation while the hosted workspace is still waking', async () => {
++    const store = createStore([
++      { id: 'repo-3', path: projectPath, displayName: 'yousef20920/CoDev' }
++    ])
++    store.worktreesByRepo['repo-3'] = [{ id: 'worktree-3', repoId: 'repo-3', isMainWorktree: true }]
++    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      if (activateDefaultCheckoutFromSidebar.mock.calls.length === 3) {
++        store.activeWorktreeId = worktreeId
++      }
++    })
++    const waitForActivationRetry = vi.fn().mockResolvedValue(undefined)
++
++    await expect(
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar,
++        waitForActivationRetry
++      })
++    ).resolves.toBe(true)
++
++    expect(activateDefaultCheckoutFromSidebar).toHaveBeenCalledTimes(3)
++    expect(waitForActivationRetry).toHaveBeenCalledTimes(2)
++  })
++
 +  it('reports failure when Orca cannot add the project', async () => {
 +    const store = createStore()
 +    store.addRepoPath.mockResolvedValue(null)
@@ -346,10 +375,10 @@ index 0000000..cf8cb02
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..90ced1e
+index 0000000..01b2f16
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,112 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
@@ -368,10 +397,7 @@ index 0000000..90ced1e
 +  repos: CodevProjectRepo[]
 +  worktreesByRepo: Record<string, CodevProjectWorktree[]>
 +  activeWorktreeId: string | null
-+  addRepoPath: (
-+    path: string,
-+    kind: 'git' | 'folder'
-+  ) => Promise<CodevProjectRepo | null>
++  addRepoPath: (path: string, kind: 'git' | 'folder') => Promise<CodevProjectRepo | null>
 +  updateRepo: (repoId: string, update: { displayName: string }) => Promise<boolean>
 +  setHideDefaultBranchWorkspace: (value: boolean) => void
 +}
@@ -387,6 +413,13 @@ index 0000000..90ced1e
 +  setHideDefaultBranchWorkspace: (value: boolean) => void
 +  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
 +}) => Promise<void>
++
++const CODEV_ACTIVATION_ATTEMPTS = 16
++const CODEV_ACTIVATION_RETRY_DELAY_MS = 2_000
++
++function waitForCodevActivationRetry(): Promise<void> {
++  return new Promise((resolve) => window.setTimeout(resolve, CODEV_ACTIVATION_RETRY_DELAY_MS))
++}
 +
 +export function isCodevProjectBootstrapReady({
 +  workspaceSessionReady,
@@ -405,7 +438,8 @@ index 0000000..90ced1e
 +  store,
 +  getStore,
 +  openDefaultCheckout,
-+  activateDefaultCheckoutFromSidebar
++  activateDefaultCheckoutFromSidebar,
++  waitForActivationRetry = waitForCodevActivationRetry
 +}: {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
@@ -414,6 +448,7 @@ index 0000000..90ced1e
 +  getStore: () => CodevProjectStore
 +  openDefaultCheckout: OpenDefaultCheckout
 +  activateDefaultCheckoutFromSidebar: ActivateDefaultCheckoutFromSidebar
++  waitForActivationRetry?: () => Promise<void>
 +}): Promise<boolean> {
 +  const repo =
 +    store.repos.find((candidate) => candidate.path === projectPath) ??
@@ -439,13 +474,22 @@ index 0000000..90ced1e
 +  if (!defaultCheckout) {
 +    return false
 +  }
-+  if (stateAfterHandoff.activeWorktreeId !== defaultCheckout.id) {
++  for (let attempt = 0; attempt < CODEV_ACTIVATION_ATTEMPTS; attempt += 1) {
++    if (getStore().activeWorktreeId === defaultCheckout.id) {
++      return true
++    }
 +    await activateDefaultCheckoutFromSidebar(
 +      defaultCheckout.id,
 +      defaultCheckout.hostId ?? repo.executionHostId ?? undefined
 +    )
++    if (getStore().activeWorktreeId === defaultCheckout.id) {
++      return true
++    }
++    if (attempt < CODEV_ACTIVATION_ATTEMPTS - 1) {
++      await waitForActivationRetry()
++    }
 +  }
-+  return getStore().activeWorktreeId === defaultCheckout.id
++  return false
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
 index eae3a54..6ebcb27 100644
