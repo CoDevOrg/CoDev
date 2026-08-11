@@ -6,18 +6,19 @@
 
 ## What is vendored
 
-`apps/web/public/orca/` contains the **unmodified** production build of Orca's
-official browser web client, built from the upstream tag with:
+`apps/web/public/orca/` contains CoDev's production build of Orca's official
+browser web client. The upstream source is pinned, verified, and patched with
+[`infra/aws/orca-build/codev-web.patch`](../../infra/aws/orca-build/codev-web.patch)
+before it is built. Rebuild it reproducibly with:
 
 ```bash
-pnpm install --ignore-scripts
-npx vite build --config vite.web.config.ts   # outputs out/web/
+pnpm orca:web
 ```
 
-The bundle is served statically by the CoDev web app at `/orca/web-index.html`
-and boots from a `#pairing=<base64url offer>` URL fragment. Aside from the
-minimal, explicitly documented branding patches below, no Orca source was
-modified.
+The bundle is served statically by the CoDev web app at `/orca/web-index.html`.
+The build script checks the exact upstream commit, applies the patch with
+`git apply --check`, runs Orca's web typecheck/build, applies deterministic
+CoDev branding, and replaces the vendored output.
 
 ## Theme bridge (first-party)
 
@@ -43,55 +44,32 @@ stable across upstream rebuilds.
 the vendored bundle, so it survives re-vendoring untouched and needs no
 reapplication.
 
-### Auto-opening the cloned workspace repository
+### Native project bootstrap and GitHub repository picker
 
 `ensureOrcaSession` (`apps/web/lib/orca-host.ts`) has `codev-orchestrator`
 clone the workspace repository directly (see
 [`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs))
 onto the runtime host at a fixed, predictable path (`orcaWorkspacePath()` in
-`apps/web/lib/orca-pairing.ts`, `/srv/codev/workspaces/<workspaceId>`), but
-Orca has no URL parameter or
-`postMessage` API for opening a project on boot — the pairing fragment only
-carries the connection offer. `autoAddOrcaProject` in
-`apps/web/components/orca-workspace.tsx` closes that gap by driving Orca's
-own "Add a project" dialog exactly as a person would (confirmed by
-inspecting the live client's DOM): open the icon "Add Project" button,
-switch the host picker off "Local Mac" onto whichever host is `Connected`,
-then "Browse folder" into its filesystem picker. It only runs when Orca is
-showing its empty "Add a project to get started" state, so it's a no-op
-once a project is already open, and the iframe is hidden behind a small
-"Opening your project…" overlay for the (sub-second) duration of the
-automation so it isn't visibly driving Orca's UI in front of the user.
+`apps/web/lib/orca-pairing.ts`, `/srv/codev/workspaces/<workspaceId>`).
+The CoDev patch adds an explicit bootstrap contract to the pairing fragment:
+`codev=1`, `codevProject`, and `codevProjectKind`. Orca accepts only the exact
+`/srv/codev/workspaces/<UUID>` path shape, waits for its normal session
+hydration, then invokes its typed `addRepoPath` runtime action directly. The
+pairing credential and bootstrap data remain in the URL fragment, so neither
+is sent in HTTP requests, proxy logs, or referrers.
 
-The picker's path field is a _filter_ over the current directory's listing,
-not an absolute-path navigator — typing the full cloned path into it
-directly resolves nothing and silently leaves the browser parked on
-whatever directory it happened to start in (this shipped once and produced
-"This folder isn't a git repository" for a real git repo). So instead
-`autoAddOrcaProject` clicks the breadcrumb back to the filesystem root, then
-clicks into each path segment's listing row in turn — filtering the listing
-by name first to find it — exactly as a person clicking through folders
-would. Before the final "Select folder" click it re-reads the button's
-`title` (the resolved directory Orca is about to open) and aborts rather
-than confirming if it doesn't match the cloned path exactly, so a picker
-quirk can never again silently register the wrong folder.
-
-This reaches through the DOM rather than Orca's internal Zustand
-store/RPC layer (`addRepoPath`, the `$()` dispatcher) because those aren't
-reachable from a script injected into the iframe from the outside — nothing
-in the bundle exposes the store on `window`. It's therefore best-effort like
-the theme bridge above: any renamed button label, changed dialog structure,
-or added confirmation step just times out and aborts silently, leaving
-Orca's own "Add Project" button as the manual fallback. Re-check the
-selectors and step sequence in `autoAddOrcaProject` after any Orca version
-bump.
+In CoDev-embedded mode, Orca's own Add Project action sends the parent a
+same-origin `codev:choose-repository` message. The parent verifies both the
+message origin and the exact iframe window before showing all repositories
+from the user's existing authenticated GitHub installations. Choosing one
+creates and opens its dedicated CoDev workspace. GitHub credentials remain
+server-only and never cross the iframe bridge.
 
 ## Branding patches (modify the vendored bundle directly)
 
 Unlike the theme bridge above, these edits touch files inside
-`apps/web/public/orca/` directly. **Re-vendoring from upstream (re-running the
-`vite build` above) will silently drop them — reapply this section after any
-rebuild.**
+`apps/web/public/orca/` directly. They are reapplied automatically by
+`infra/aws/orca-build/brand-web.mjs` during `pnpm orca:web`.
 
 - `assets/logo-BVyJvfne.js` — the single module that exports Orca's orca-mark
   SVG data URI (consumed by the sidebar, Landing screen, onboarding, and
@@ -129,8 +107,8 @@ Symbols` `@font-face` family name in the CSS bundle (renaming that alone
   binary and config-file conventions are unchanged.
 
 - `web-index.html` — `<title>` changed from "Orca Web" to "CoDev Workspace",
-  plus two plain (non-module) inline `<script>` tags added before the app's
-  module script (classic scripts run synchronously during HTML parsing,
+  plus `codev-preload.js` loaded before the app's module script (classic
+  scripts run synchronously during HTML parsing,
   before deferred `type="module"` scripts — this ordering is what makes both
   patches below effective):
   1. A property trap on `window.api` so that the instant the preload API is

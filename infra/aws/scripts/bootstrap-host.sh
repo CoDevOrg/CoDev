@@ -6,7 +6,26 @@ set -euo pipefail
 
 readonly release_prefix="s3://${CODEV_ARTIFACT_BUCKET}/releases/${CODEV_RELEASE_VERSION}"
 readonly firecracker_version="v1.13.2"
-readonly firecracker_ci_prefix="firecracker-ci/20260723-ae5bf5b68fc4-0/aarch64"
+readonly host_arch="${CODEV_HOST_ARCH:-$(uname -m)}"
+case "${host_arch}" in
+  x86_64)
+    readonly artifact_arch="x86_64"
+    readonly firecracker_arch="x86_64"
+    readonly cloudwatch_arch="amd64"
+    readonly guest_lib_dir="x86_64-linux-gnu"
+    ;;
+  aarch64 | arm64)
+    readonly artifact_arch="arm64"
+    readonly firecracker_arch="aarch64"
+    readonly cloudwatch_arch="arm64"
+    readonly guest_lib_dir="aarch64-linux-gnu"
+    ;;
+  *)
+    echo "Unsupported CoDev host architecture: ${host_arch}" >&2
+    exit 1
+    ;;
+esac
+readonly firecracker_ci_prefix="firecracker-ci/20260723-ae5bf5b68fc4-0/${firecracker_arch}"
 readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecracker_ci_prefix}"
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
@@ -25,6 +44,17 @@ if ! chronyc waitsync 60 1.0 0.0 2; then
   exit 1
 fi
 systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+install -d -m 0755 /usr/local/libexec
+cat >/usr/local/libexec/codev-git-askpass <<'ASKPASS'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' 'x-access-token' ;;
+  *Password*) printf '%s\n' "${CODEV_GITHUB_TOKEN:?missing GitHub credential}" ;;
+  *) exit 1 ;;
+esac
+ASKPASS
+chmod 0755 /usr/local/libexec/codev-git-askpass
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get -o DPkg::Lock::Timeout=300 update
@@ -83,7 +113,7 @@ corepack enable
 corepack prepare pnpm@11.5.0 --activate
 
 curl -fsSL \
-  https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb \
+  "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
   -o /tmp/amazon-cloudwatch-agent.deb
 dpkg -i /tmp/amazon-cloudwatch-agent.deb
 
@@ -131,8 +161,8 @@ if ! xfs_info "${jailer_dir}" 2>/dev/null | grep -q 'reflink=1'; then
   exit 1
 fi
 
-aws s3 cp "${release_prefix}/codev-orchestrator-linux-arm64" /usr/local/bin/codev-orchestrator
-aws s3 cp "${release_prefix}/codev-guestd-linux-arm64" /usr/local/bin/codev-guestd
+aws s3 cp "${release_prefix}/codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/codev-orchestrator
+aws s3 cp "${release_prefix}/codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
 aws s3 cp "${release_prefix}/verify-lifecycle.sh" /opt/codev-verify-lifecycle.sh
 chmod 0755 /opt/codev-verify-lifecycle.sh
@@ -144,15 +174,16 @@ trap 'rm -rf "${work_dir}"' EXIT
 # (infra/aws/scripts/build-orca-serve.sh) rather than downloaded as a
 # prebuilt third-party AppImage release asset. codev-orchestrator spawns one
 # instance of this per workspace (services/orchestrator/src/backend/orca.rs).
-aws s3 cp "${release_prefix}/orca-serve-linux-arm64.tar.gz" "${work_dir}/orca-serve-linux-arm64.tar.gz"
-aws s3 cp "${release_prefix}/orca-serve-linux-arm64.tar.gz.sha256" "${work_dir}/orca-serve-linux-arm64.tar.gz.sha256"
+readonly orca_archive="orca-serve-linux-${artifact_arch}.tar.gz"
+aws s3 cp "${release_prefix}/${orca_archive}" "${work_dir}/${orca_archive}"
+aws s3 cp "${release_prefix}/${orca_archive}.sha256" "${work_dir}/${orca_archive}.sha256"
 (
   cd "${work_dir}"
-  echo "$(cat orca-serve-linux-arm64.tar.gz.sha256)  orca-serve-linux-arm64.tar.gz" | sha256sum --check
+  echo "$(cat "${orca_archive}.sha256")  ${orca_archive}" | sha256sum --check
 )
 rm -rf "${orca_dir}"
 install -d -m 0755 "${orca_dir}"
-tar -xzf "${work_dir}/orca-serve-linux-arm64.tar.gz" -C "${orca_dir}"
+tar -xzf "${work_dir}/${orca_archive}" -C "${orca_dir}"
 # `--appimage-extract` (in the build container) creates squashfs-root as
 # 0700, since it's normally only ever run by the user who extracted it. Here
 # it's `AppRun`-ed by each workspace's own dedicated, unprivileged Linux user
@@ -220,19 +251,19 @@ systemctl enable caddy.service
 systemctl restart caddy.service
 
 curl -fsSL \
-  "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-aarch64.tgz" \
+  "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \
   -o "${work_dir}/firecracker.tgz"
 tar -xzf "${work_dir}/firecracker.tgz" -C "${work_dir}"
-release_dir="${work_dir}/release-${firecracker_version}-aarch64"
+release_dir="${work_dir}/release-${firecracker_version}-${firecracker_arch}"
 (
   cd "${release_dir}"
   sha256sum --check --ignore-missing SHA256SUMS
 )
 install -m 0755 \
-  "${release_dir}/firecracker-${firecracker_version}-aarch64" \
+  "${release_dir}/firecracker-${firecracker_version}-${firecracker_arch}" \
   /usr/local/bin/firecracker
 install -m 0755 \
-  "${release_dir}/jailer-${firecracker_version}-aarch64" \
+  "${release_dir}/jailer-${firecracker_version}-${firecracker_arch}" \
   /usr/local/bin/jailer
 
 curl -fsSL "${firecracker_ci_base}/vmlinux-6.1.176" -o "${base_dir}/vmlinux"
@@ -245,8 +276,8 @@ install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
 install -m 0755 /usr/bin/node "${work_dir}/rootfs/usr/local/bin/node"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
-mkdir -p "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu"
-cp -a /usr/lib/aarch64-linux-gnu/* "${work_dir}/rootfs/usr/lib/aarch64-linux-gnu/" 2>/dev/null || true
+mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
+cp -a "/usr/lib/${guest_lib_dir}/." "${work_dir}/rootfs/usr/lib/${guest_lib_dir}/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'

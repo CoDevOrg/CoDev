@@ -1,0 +1,157 @@
+diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
+index 294fc4a..a3f0470 100644
+--- a/src/renderer/src/App.tsx
++++ b/src/renderer/src/App.tsx
+@@ -521,6 +521,41 @@ function App(): React.JSX.Element {
+   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
+   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
+   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
++  const codevBootstrapStartedRef = useRef(false)
++  useEffect(() => {
++    const projectPath = window.__CODEV_PROJECT_PATH__
++    const projectKind = window.__CODEV_PROJECT_KIND__
++    if (
++      !workspaceSessionReady ||
++      !projectPath ||
++      !projectKind ||
++      codevBootstrapStartedRef.current
++    ) {
++      return
++    }
++    codevBootstrapStartedRef.current = true
++
++    const existing = useAppStore.getState().repos.find((repo) => repo.path === projectPath)
++    if (existing) {
++      window.parent.postMessage({ type: 'codev:project-ready' }, window.location.origin)
++      return
++    }
++
++    void useAppStore
++      .getState()
++      .addRepoPath(projectPath, projectKind)
++      .then((repo) => {
++        window.parent.postMessage(
++          repo
++            ? { type: 'codev:project-ready' }
++            : { type: 'codev:project-error', message: 'The workspace project could not be opened.' },
++          window.location.origin
++        )
++        if (!repo) {
++          codevBootstrapStartedRef.current = false
++        }
++      })
++  }, [workspaceSessionReady])
+   const backgroundTerminalMountRequested = useSyncExternalStore(
+     subscribeBackgroundTerminalWorktreeMountRequests,
+     hasRequestedBackgroundTerminalWorktreeMount,
+diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
+index 5ecc70a..d3afe9b 100644
+--- a/src/renderer/src/env.d.ts
++++ b/src/renderer/src/env.d.ts
+@@ -67,6 +67,9 @@ declare global {
+     | undefined
+   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+   interface Window {
++    __CODEV_EMBEDDED__?: boolean
++    __CODEV_PROJECT_PATH__?: string
++    __CODEV_PROJECT_KIND__?: 'git' | 'folder'
+     __paneManagers?: Map<string, PaneManager>
+     __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
+     __terminalParkingDebug?: {
+diff --git a/src/renderer/src/store/slices/ui.ts b/src/renderer/src/store/slices/ui.ts
+index b738f18..af3054d 100644
+--- a/src/renderer/src/store/slices/ui.ts
++++ b/src/renderer/src/store/slices/ui.ts
+@@ -1555,6 +1555,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
+   activeModal: 'none',
+   modalData: {},
+   openModal: (modal, data = {}) => {
++    if (modal === 'add-repo' && window.__CODEV_EMBEDDED__ && window.parent !== window) {
++      window.parent.postMessage({ type: 'codev:choose-repository' }, window.location.origin)
++      return
++    }
+     if (modal === 'add-repo' || modal === 'create-worktree') {
+       get().recordFeatureInteraction?.('workspace-creation')
+     }
+diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
+new file mode 100644
+index 0000000..9785d76
+--- /dev/null
++++ b/src/renderer/src/web/codev-bootstrap.test.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from 'vitest'
++import { readCodevBootstrap } from './codev-bootstrap'
++
++describe('readCodevBootstrap', () => {
++  it('accepts a CoDev-owned workspace path', () => {
++    expect(
++      readCodevBootstrap({
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git'
++      } as Location)
++    ).toEqual({
++      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++      projectKind: 'git'
++    })
++  })
++
++  it.each([
++    '#codev=1&codevProject=%2Fetc&codevProjectKind=git',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2F..%2Fsecret&codevProjectKind=git',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=other',
++    '#codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git'
++  ])('rejects an untrusted bootstrap fragment: %s', (hash) => {
++    expect(readCodevBootstrap({ hash } as Location)).toBeNull()
++  })
++})
+diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
+new file mode 100644
+index 0000000..a2db62e
+--- /dev/null
++++ b/src/renderer/src/web/codev-bootstrap.ts
+@@ -0,0 +1,26 @@
++export type CodevBootstrap = {
++  projectPath: string
++  projectKind: 'git' | 'folder'
++}
++
++const CODEV_WORKSPACE_PATH =
++  /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
++
++export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
++  const params = new URLSearchParams(location.hash.replace(/^#/, ''))
++  if (params.get('codev') !== '1') {
++    return null
++  }
++
++  const projectPath = params.get('codevProject')
++  const projectKind = params.get('codevProjectKind')
++  if (
++    !projectPath ||
++    !CODEV_WORKSPACE_PATH.test(projectPath) ||
++    (projectKind !== 'git' && projectKind !== 'folder')
++  ) {
++    return null
++  }
++
++  return { projectPath, projectKind }
++}
+diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
+index eae3a54..f4d5e5c 100644
+--- a/src/renderer/src/web/main.tsx
++++ b/src/renderer/src/web/main.tsx
+@@ -19,10 +19,15 @@ import {
+ import { installWebPreloadApi } from './web-preload-api'
+ import { I18nProvider } from '../i18n/I18nProvider'
+ import { translate } from '../i18n/i18n'
++import { readCodevBootstrap } from './codev-bootstrap'
+ 
+ const App = lazy(() => import('../App'))
+ 
+ function WebRoot(): React.JSX.Element {
++  const codevBootstrap = useMemo(() => readCodevBootstrap(window.location), [])
++  window.__CODEV_EMBEDDED__ = codevBootstrap !== null
++  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
++  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
+   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
+   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
+   // the instant save path; mobile/legacy-unknown offers must be shown/probed.

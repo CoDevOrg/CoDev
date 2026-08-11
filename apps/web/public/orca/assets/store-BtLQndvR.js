@@ -1,0 +1,1 @@
+import{r as e}from"./web-index-CfVVK-gn.js";export{e as useAppStore};

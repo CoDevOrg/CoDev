@@ -8,14 +8,26 @@ Parameters:
     Type: String
   InstanceType:
     Type: String
-    Default: a1.metal
-    AllowedPattern: ^[a-z0-9]+[a-z0-9.-]*\.metal$
+    Default: m7i-flex.large
+    AllowedPattern: ^[a-z0-9][a-z0-9.-]*$
+  HostArchitecture:
+    Type: String
+    Default: x86_64
+    AllowedValues:
+      - x86_64
+      - aarch64
+  PurchaseOption:
+    Type: String
+    Default: spot
+    AllowedValues:
+      - on-demand
+      - spot
   AvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
     Default: us-east-2a
   UbuntuAmi:
     Type: AWS::EC2::Image::Id
-    Default: ami-0713df58d0d8b3c1c
+    Default: ami-0dc6aa44dbcdd872e
   HostVolumeSizeGiB:
     Type: Number
     Default: 40
@@ -36,6 +48,8 @@ Parameters:
 
 Conditions:
   HasBudgetAlertEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
+  UseNestedVirtualization: !Equals [!Ref HostArchitecture, x86_64]
+  UseSpot: !Equals [!Ref PurchaseOption, spot]
 
 Resources:
   MonthlyCostBudget:
@@ -250,6 +264,17 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
+        CpuOptions: !If
+          - UseNestedVirtualization
+          - NestedVirtualization: enabled
+          - !Ref AWS::NoValue
+        InstanceMarketOptions: !If
+          - UseSpot
+          - MarketType: spot
+            SpotOptions:
+              InstanceInterruptionBehavior: stop
+              SpotInstanceType: persistent
+          - !Ref AWS::NoValue
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -262,14 +287,14 @@ Resources:
             export DEBIAN_FRONTEND=noninteractive
             apt-get -o DPkg::Lock::Timeout=300 update
             apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl unzip
-            curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o /tmp/awscliv2.zip
+            curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-${HostArchitecture}.zip -o /tmp/awscliv2.zip
             unzip -q /tmp/awscliv2.zip -d /tmp
             /tmp/aws/install --update
             until aws s3 cp s3://${ArtifactBucket}/releases/${ReleaseVersion}/bootstrap-host.sh /tmp/codev-bootstrap-host.sh; do
               sleep 10
             done
             chmod 0700 /tmp/codev-bootstrap-host.sh
-            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_LOG_GROUP=${HostLogGroup} /tmp/codev-bootstrap-host.sh
+            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_ARCH=${HostArchitecture} CODEV_HOST_LOG_GROUP=${HostLogGroup} /tmp/codev-bootstrap-host.sh
       TagSpecifications:
         - ResourceType: launch-template
           Tags:
@@ -325,6 +350,32 @@ Resources:
           Value: CoDev
         - Key: ManagedBy
           Value: CloudFormation
+
+  # Without this, AWS assigns a *new* public IPv4 every time the host is
+  # stopped and restarted (e.g. by the idle-hibernation flow in
+  # apps/web/lib/lifecycle.ts) — but the nip.io hostname Orca's backend
+  # advertises to browsers (CODEV_ORCA_PUBLIC_HOST, computed once from IMDS
+  # in bootstrap-host.sh's one-time first-boot run) and Caddy's TLS
+  # hostname are both static after that first boot. A changed public IP
+  # otherwise silently strands every IDE session behind a now-wrong
+  # hostname ("Disconnected" in the Orca UI) until someone notices and
+  # manually re-derives it. A stable IP makes that whole class of failure
+  # impossible instead of relying on it never happening.
+  HostElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: codev-firecracker-host
+        - Key: Project
+          Value: CoDev
+
+  HostElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref FirecrackerHost
+      AllocationId: !GetAtt HostElasticIp.AllocationId
 
   RuntimeProxyRole:
     Type: AWS::IAM::Role
@@ -588,6 +639,11 @@ Outputs:
     Value: !GetAtt RuntimeApi.ApiEndpoint
   HostInstanceId:
     Value: !Ref FirecrackerHost
+  HostPurchaseOption:
+    Value: !Ref PurchaseOption
+  HostPublicIp:
+    Description: Stable Elastic IP for the Firecracker/Orca host; survives stop/start cycles.
+    Value: !Ref HostElasticIp
   RuntimeVpcId:
     Value: !Ref RuntimeVpc
   RuntimeDashboardName:

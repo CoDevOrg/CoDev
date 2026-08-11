@@ -4,14 +4,14 @@
 
 CoDev is a hosted, browser-based development workspace. The GitHub repository contains the source code; users access the product through its Vercel-hosted website.
 
-The Next.js website, control APIs, realtime gateway, and durable agent workflows run on Vercel. Firecracker requires KVM, so the sandbox orchestrator and guest daemon run on AWS bare-metal infrastructure and are reached from Vercel using short-lived OIDC credentials.
+The Next.js website, control APIs, realtime gateway, and durable agent workflows run on Vercel. Firecracker requires KVM, so the sandbox orchestrator and guest daemon run on an AWS instance with nested virtualization and are reached from Vercel using short-lived OIDC credentials.
 
 ## Architecture Decisions
 
 - **Website:** Next.js App Router, React, and TypeScript on Vercel.
 - **Realtime:** Vercel Fluid Compute WebSockets with reconnect/resubscribe behavior and external durable state.
 - **Persistence:** Managed PostgreSQL for product data and Redis for realtime coordination.
-- **Sandboxes:** Apple Container for local development; Firecracker microVMs on AWS bare metal for hosted workspaces.
+- **Sandboxes:** Apple Container for local development; Firecracker microVMs on an AWS nested-KVM host for hosted workspaces.
 - **Orchestration:** Rust host orchestrator and guest daemon.
 - **Agents:** OpenAI Responses API behind an `AgentProvider` contract, later executed as durable Vercel workflows.
 - **Source control:** GitHub authorization integration for identity, repository access, and branch publication.
@@ -80,12 +80,12 @@ Implement GitHub sign-in and installation discovery, public-repository selection
 
 ## Phase 3: Firecracker Runtime
 
-Provision jailed Firecracker microVMs on one AWS bare-metal host, clone repositories, expose authenticated file/PTY/Git operations through the Rust guest daemon, enforce quotas, and destroy idle workspace disks.
+Provision jailed Firecracker microVMs on one AWS KVM-capable host, clone repositories, expose authenticated file/PTY/Git operations through the Rust guest daemon, enforce quotas, and destroy idle workspace disks.
 
 ### Acceptance Criteria
 
-- An SSM-managed AWS bare-metal host boots with KVM and runs the pinned Firecracker release.
-- Workspace creation boots a jailed ARM64 microVM, clones the selected repository, and reports its exact Git revision.
+- An SSM-managed AWS nested-virtualization host boots with KVM and runs the pinned Firecracker release.
+- Workspace creation boots a jailed x86_64 microVM, clones the selected repository, and reports its exact Git revision.
 - Authenticated file reads and writes, Git status, and PTY execution cross the host-to-guest boundary.
 - The host enforces a maximum of two concurrent microVMs, per-workspace CPU, memory, and disk limits, a 30-minute idle timeout, and a four-hour hard expiry.
 - Vercel exchanges its workload identity for short-lived AWS credentials scoped to the runtime API and permission to wake the exact Firecracker host; no AWS access keys are stored in Vercel.
@@ -97,7 +97,7 @@ Provision jailed Firecracker microVMs on one AWS bare-metal host, clone reposito
 
 - AWS account and region: `014576992564`, `us-east-2`
 - Runtime endpoint: [https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com](https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com)
-- Compute: one scale-to-zero `a1.metal` host using a 40 GiB CoDev ARM64 generic-kernel image
+- Compute: one scale-to-zero `m7i-flex.large` Spot host using nested KVM and a 40 GiB Ubuntu x86_64 image
 - Runtime: Firecracker `v1.13.2`, jailed per workspace
 - Vercel authentication: environment-scoped production and preview OIDC roles
 - Private routing: API Gateway invokes a usage-based VPC Lambda proxy; no always-on load balancer

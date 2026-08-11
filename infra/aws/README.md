@@ -1,6 +1,7 @@
 # CoDev AWS Firecracker Runtime
 
-Phase 3 deploys one ARM bare-metal Firecracker host in `us-east-2`. Vercel
+Phase 3 deploys one x86_64 `m7i-flex.large` Spot host with nested KVM in
+`us-east-2`. Vercel
 reaches it through an IAM-authorized API Gateway HTTP API and a usage-based
 Lambda proxy attached to the runtime VPC. The sandbox control API has no
 public inbound rules and is administered through AWS Systems Manager.
@@ -52,8 +53,10 @@ Defaults:
 - AWS account: current CLI identity
 - Region: `us-east-2`
 - Availability Zone: `us-east-2a`
-- Host: `a1.metal`
-- Host image: `ami-0713df58d0d8b3c1c` (Ubuntu 24.04 ARM64 with a generic kernel)
+- Host: `m7i-flex.large` Spot (persistent request, stop on interruption)
+- Host architecture: x86_64 with EC2 nested virtualization enabled
+- Host image: the current Canonical Ubuntu 24.04 amd64 gp3 AMI resolved from
+  its public SSM parameter during deployment
 - Host root volume: 40 GiB encrypted gp3
 - Snapshot jailer volume: 40 GiB encrypted gp3 by default
 - Firecracker: `v1.13.2`
@@ -66,19 +69,21 @@ Defaults:
 - Host shutdown: 15 minutes after the final microVM stops
 - Monthly cost budget: $75 by default (`CODEV_MONTHLY_BUDGET_USD`)
 
-The script cross-compiles both statically linked Rust binaries for Linux ARM64, uploads an immutable release
+The script cross-compiles both statically linked Rust binaries for the selected host architecture, uploads an immutable release
 plus the lifecycle smoke-test script to private S3, deploys the CloudFormation stacks, and creates or updates the
 Vercel OIDC roles. It prints the API URL and role ARNs needed by Vercel.
 Each release creates a new launch-template version, which makes CloudFormation
 replace the host instead of merely updating EC2 user data that would not rerun.
 
-Set `CODEV_HOST_AMI_ID` when deploying into another account or region because
-the default AMI is account- and region-specific.
+Set `CODEV_HOST_AMI_ID` to override the current Canonical Ubuntu AMI resolved
+from SSM. Set `CODEV_PURCHASE_OPTION=on-demand` to disable Spot, or set
+`CODEV_INSTANCE_TYPE`, `CODEV_HOST_ARCH`, and the AMI override together to use
+a different compatible KVM host.
 Set `CODEV_JAILER_VOLUME_SIZE_GIB` to change the dedicated reflink-enabled
 snapshot volume size.
 Set `CODEV_SKIP_ORCA_BUILD=1` to skip the ~15-30 minute from-source Orca
 build for an orchestrator-only redeploy, reusing whatever
-`orca-serve-linux-arm64.tar.gz` already exists at the target release
+the matching architecture-specific `orca-serve` archive already exists at the target release
 version in S3.
 
 ## Orca IDE runtime
@@ -88,9 +93,9 @@ from `stablyai/orca`'s real MIT source at a pinned tag —
 [`infra/aws/orca-build/Containerfile`](orca-build/Containerfile), run via
 Apple's `container` tool by
 [`infra/aws/scripts/build-orca-serve.sh`](scripts/build-orca-serve.sh) —
-instead of downloading upstream's prebuilt `orca-linux-arm64.AppImage`
-release asset. `deploy.sh` uploads the resulting
-`orca-serve-linux-arm64.tar.gz` alongside the orchestrator/guestd binaries;
+instead of downloading an upstream prebuilt AppImage release asset.
+`deploy.sh` uploads the resulting architecture-specific archive alongside the
+orchestrator/guestd binaries;
 `bootstrap-host.sh` fetches, checksum-verifies, and extracts it to
 `/opt/orca/squashfs-root`.
 
@@ -104,6 +109,10 @@ starts after it), and every `orca serve` process is spawned with
 _workspace_ (not one shared instance) via
 `POST/GET/DELETE /v1/sandboxes/{workspaceId}/ide`
 ([`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs)).
+
+Private GitHub credentials are used only by the orchestrator's clone child
+through `GIT_ASKPASS`. They are never placed in git argv, clone URLs, persisted
+remotes, the browser pairing fragment, or the embedded Orca message bridge.
 Each session gets its own dedicated Linux user (Orca's packaged build
 resolves `userData`/its Electron single-instance lock to one fixed path per
 OS user, so this is the only way to run more than one session on the host at
@@ -161,8 +170,12 @@ The encrypted 40 GiB host volume and all workspace disks are deleted with the
 instance when the runtime stack is deleted. The artifact bucket is retained so
 that stack deletion cannot silently remove release evidence.
 
-The `a1.metal` host costs approximately `$0.408/hour` only while running. CoDev
-wakes it before provisioning a sandbox, and the orchestrator initiates an EC2
-stop after 15 idle minutes. The retained 40 GiB gp3 volume costs approximately
-`$3.20/month`; snapshot, Lambda, API Gateway, public IPv4 while running, and
-artifact storage are additional usage-based charges.
+The default `m7i-flex.large` Spot price varies by Availability Zone and was
+approximately `$0.040/hour` in `us-east-2` when this configuration was added.
+CoDev wakes it before provisioning a sandbox, and the orchestrator initiates
+an EC2 stop after 15 idle minutes. AWS can interrupt an active Spot session;
+the persistent request is configured to stop rather than terminate the host,
+preserving its encrypted EBS volumes, but callers must still retry after
+capacity returns. The retained 40 GiB gp3 volume costs approximately
+`$3.20/month`; snapshot, Lambda, API Gateway, Elastic IPv4, and artifact
+storage are additional charges.

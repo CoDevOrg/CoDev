@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
+
 type ConnectionPhase =
   | { phase: "connecting" }
   | { phase: "host-starting" }
@@ -20,6 +22,31 @@ type OrcaConnectResponse = {
   workspacePath?: string | null;
   error?: string;
 };
+
+type CodevOrcaMessage =
+  | { type: "codev:choose-repository" }
+  | { type: "codev:project-ready" }
+  | { type: "codev:project-error"; message?: string };
+
+export function buildOrcaIframeSource({
+  webClientPath,
+  pairingCode,
+  workspacePath,
+  projectKind,
+}: {
+  webClientPath: string;
+  pairingCode: string;
+  workspacePath: string;
+  projectKind: "git" | "folder";
+}) {
+  const fragment = new URLSearchParams({
+    pairing: pairingCode,
+    codev: "1",
+    codevProject: workspacePath,
+    codevProjectKind: projectKind,
+  });
+  return `${webClientPath}#${fragment.toString()}`;
+}
 
 /**
  * Adds CoDev-owned branding to the small number of visible Orca surfaces that
@@ -106,6 +133,13 @@ const LISTING_ENTRY_NAME_SELECTOR = "button span.truncate.flex-1.min-w-0";
 const AUTO_ADD_PROJECT_TIMEOUT_MS = 25_000;
 const EMPTY_STATE_TIMEOUT_MS = 20_000;
 const NAVIGATION_STEP_TIMEOUT_MS = 6_000;
+
+function findAddProjectButton(doc: Document): HTMLButtonElement | null {
+  return (
+    doc.querySelector<HTMLButtonElement>(ADD_PROJECT_BUTTON_SELECTOR) ??
+    findButtonByText(doc.body, /^\s*add project\s*$/i)
+  );
+}
 
 function isOrcaShowingEmptyProjectState(doc: Document): boolean {
   return Array.from(doc.querySelectorAll("h1, h2, p, span")).some((node) =>
@@ -229,8 +263,10 @@ export async function autoAddOrcaProject(
     // once for the empty state, which would otherwise race an empty DOM.
     const addProjectButton = await waitFor(
       win,
-      () => doc.querySelector<HTMLButtonElement>(ADD_PROJECT_BUTTON_SELECTOR),
-      { timeoutMs: emptyStateTimeoutMs },
+      () => findAddProjectButton(doc),
+      {
+        timeoutMs: emptyStateTimeoutMs,
+      },
     );
     if (!isOrcaShowingEmptyProjectState(doc)) {
       // A project is already open; nothing to do.
@@ -375,13 +411,43 @@ export function OrcaWorkspace({
     phase: "connecting",
   });
   const [attempt, setAttempt] = useState(0);
-  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return () => {
       disposeIframeBranding.current?.();
     };
+  }, []);
+
+  useEffect(() => {
+    function receiveOrcaMessage(event: MessageEvent<CodevOrcaMessage>) {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== iframeRef.current?.contentWindow ||
+        !event.data ||
+        typeof event.data !== "object"
+      ) {
+        return;
+      }
+      if (event.data.type === "codev:choose-repository") {
+        setRepositoryDialogOpen(true);
+      } else if (event.data.type === "codev:project-ready") {
+        setIsOpeningProject(false);
+      } else if (event.data.type === "codev:project-error") {
+        setIsOpeningProject(false);
+        setConnection({
+          phase: "error",
+          message:
+            event.data.message || "The workspace project could not be opened.",
+        });
+      }
+    }
+
+    window.addEventListener("message", receiveOrcaMessage);
+    return () => window.removeEventListener("message", receiveOrcaMessage);
   }, []);
 
   const retry = useCallback(() => {
@@ -419,10 +485,24 @@ export function OrcaWorkspace({
           });
           return;
         }
+        const workspacePath = payload.workspacePath;
+        if (!workspacePath) {
+          setConnection({
+            phase: "error",
+            message: "The workspace runtime did not return a project path.",
+          });
+          return;
+        }
+        setIsOpeningProject(true);
         setConnection({
           phase: "ready",
-          iframeSrc: `${payload.webClientPath}#pairing=${encodeURIComponent(payload.pairingCode)}`,
-          workspacePath: payload.workspacePath ?? null,
+          iframeSrc: buildOrcaIframeSource({
+            webClientPath: payload.webClientPath,
+            pairingCode: payload.pairingCode,
+            workspacePath,
+            projectKind: repository ? "git" : "folder",
+          }),
+          workspacePath,
         });
       } catch {
         if (!cancelled) {
@@ -441,7 +521,7 @@ export function OrcaWorkspace({
         clearTimeout(retryTimer);
       }
     };
-  }, [workspaceId, attempt]);
+  }, [workspaceId, repository, attempt]);
 
   if (connection.phase === "ready") {
     return (
@@ -449,6 +529,7 @@ export function OrcaWorkspace({
         <WorkspaceTopBar repository={repository} />
         <div className="workspace-iframe-wrap">
           <iframe
+            ref={iframeRef}
             className="workspace-iframe"
             src={connection.iframeSrc}
             title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
@@ -459,25 +540,19 @@ export function OrcaWorkspace({
                 event.currentTarget,
                 repository || "Workspace",
               );
-              const { workspacePath } = connection;
-              const doc = event.currentTarget.contentDocument;
-              if (workspacePath && doc) {
-                void autoAddOrcaProject(doc, workspacePath, {
-                  // Only cover the IDE for the automation itself — Orca's
-                  // own (usually sub-second) boot/pairing sequence stays
-                  // visible as normal.
-                  onWillAutomate: () => setIsAddingProject(true),
-                }).finally(() => setIsAddingProject(false));
-              }
             }}
           />
-          {isAddingProject ? (
+          {isOpeningProject ? (
             <div className="workspace-iframe-loading" role="status">
               <span className="workspace-iframe-loading-spinner" />
               <p>Opening your project…</p>
             </div>
           ) : null}
         </div>
+        <WorkspaceRepositoryDialog
+          open={repositoryDialogOpen}
+          onClose={() => setRepositoryDialogOpen(false)}
+        />
       </div>
     );
   }

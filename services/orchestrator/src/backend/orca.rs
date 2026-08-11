@@ -41,6 +41,7 @@ use crate::model::{IdeCloneRequest, IdeSession, IdeStartRequest, Result, Runtime
 
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
 const USER_PREFIX: &str = "orca-ws-";
+const GIT_ASKPASS_BIN: &str = "/usr/local/libexec/codev-git-askpass";
 /// Half of a 32-hex-char (UUID-without-dashes) workspace id. 84 bits of
 /// entropy from a UUIDv4's random bits is far beyond any realistic collision
 /// risk for this host's session count, and keeps the derived name under the
@@ -380,14 +381,6 @@ async fn ensure_workspace_clone(expected_root: &Path, clone: &IdeCloneRequest) -
     }
 
     let plain_url = format!("https://github.com/{}.git", clone.repository);
-    let clone_url = match &clone.token {
-        Some(token) => format!(
-            "https://x-access-token:{token}@github.com/{}.git",
-            clone.repository
-        ),
-        None => plain_url.clone(),
-    };
-
     if let Some(parent) = expected_root.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -395,12 +388,17 @@ async fn ensure_workspace_clone(expected_root: &Path, clone: &IdeCloneRequest) -
     }
     let _ = tokio::fs::remove_dir_all(expected_root).await;
 
-    let output = Command::new("git")
-        .args(["clone", "--branch", &clone.default_branch, &clone_url])
+    let mut command = Command::new("git");
+    command
+        .args(["clone", "--branch", &clone.default_branch, &plain_url])
         .arg(expected_root)
-        .output()
-        .await
-        .map_err(RuntimeError::internal)?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    if let Some(token) = &clone.token {
+        command
+            .env("GIT_ASKPASS", GIT_ASKPASS_BIN)
+            .env("CODEV_GITHUB_TOKEN", token);
+    }
+    let output = command.output().await.map_err(RuntimeError::internal)?;
     if !output.status.success() {
         return Err(RuntimeError::internal(format!(
             "git clone failed: {}",
@@ -408,8 +406,8 @@ async fn ensure_workspace_clone(expected_root: &Path, clone: &IdeCloneRequest) -
         )));
     }
 
-    // Drop the token from the persisted remote immediately; it was only
-    // needed for this one clone operation.
+    // Keep a credential-free remote. Authentication was supplied only to the
+    // clone child process through GIT_ASKPASS, never through argv or the URL.
     let output = Command::new("git")
         .args(["-C"])
         .arg(expected_root)

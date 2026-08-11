@@ -78,12 +78,14 @@ set in every environment; never commit any of these values.
 
 ## Hosted sandbox runtime
 
-Phase 3 runs jailed Firecracker microVMs on an AWS `a1.metal` host in
-`us-east-2`. Vercel uses environment-scoped OIDC roles and short-lived
+Phase 3 runs jailed Firecracker microVMs on an AWS `m7i-flex.large` Spot host
+with nested KVM in `us-east-2`. Vercel uses environment-scoped OIDC roles and short-lived
 credentials to call an IAM-authorized API Gateway endpoint; no long-lived AWS
 access keys are stored in Vercel. The host has no inbound SSH access and is
 managed through AWS Systems Manager. It starts when a workspace needs a
-sandbox and stops itself after 15 minutes without an active microVM.
+sandbox and stops itself after 15 minutes without an active microVM. The Spot
+request uses stop-on-interruption so its encrypted EBS volumes are not
+terminated with the instance; active sessions can still be interrupted.
 
 See [infra/aws/README.md](./infra/aws/README.md) for the architecture, quotas,
 deployment command, diagnostics, and cost-sensitive resources.

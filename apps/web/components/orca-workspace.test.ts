@@ -3,7 +3,31 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applyOrcaWorkspaceBranding,
   autoAddOrcaProject,
+  buildOrcaIframeSource,
 } from "./orca-workspace";
+
+describe("buildOrcaIframeSource", () => {
+  it("keeps the pairing credential and validated project bootstrap in the URL fragment", () => {
+    const source = buildOrcaIframeSource({
+      webClientPath: "/orca/web-index.html",
+      pairingCode: "secret pairing offer",
+      workspacePath:
+        "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+      projectKind: "git",
+    });
+    const url = new URL(source, "https://codev.example");
+
+    expect(url.pathname).toBe("/orca/web-index.html");
+    expect(url.search).toBe("");
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    expect(fragment.get("pairing")).toBe("secret pairing offer");
+    expect(fragment.get("codev")).toBe("1");
+    expect(fragment.get("codevProject")).toBe(
+      "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+    );
+    expect(fragment.get("codevProjectKind")).toBe("git");
+  });
+});
 
 describe("applyOrcaWorkspaceBranding", () => {
   it("replaces the empty-state mark and labels the IDE with its workspace", () => {
@@ -141,59 +165,57 @@ describe("autoAddOrcaProject", () => {
     const doc = document;
     doc.body.innerHTML = `
       <h1>Add a project to get started.</h1>
-      <button aria-label="Add Project">+</button>
+      <button>Add Project</button>
     `;
 
-    doc
-      .querySelector<HTMLButtonElement>('button[aria-label="Add Project"]')
-      ?.addEventListener("click", () => {
-        steps.push("open-add-project-dialog");
-        doc.body.insertAdjacentHTML(
-          "beforeend",
-          `
+    findButtonByText(doc, /^add project$/i)?.addEventListener("click", () => {
+      steps.push("open-add-project-dialog");
+      doc.body.insertAdjacentHTML(
+        "beforeend",
+        `
           <div role="dialog">
             <h2>Add a project</h2>
             <button role="combobox">Local Mac</button>
           </div>
           `,
-        );
-        const hostTrigger = doc.querySelector<HTMLButtonElement>(
-          '[role="dialog"] [role="combobox"]',
-        );
-        hostTrigger?.addEventListener("click", () => {
-          steps.push("open-host-picker");
-          doc.body.insertAdjacentHTML(
-            "beforeend",
-            `
+      );
+      const hostTrigger = doc.querySelector<HTMLButtonElement>(
+        '[role="dialog"] [role="combobox"]',
+      );
+      hostTrigger?.addEventListener("click", () => {
+        steps.push("open-host-picker");
+        doc.body.insertAdjacentHTML(
+          "beforeend",
+          `
             <div role="option">Add remote host</div>
             <div role="option">Local Mac Local - This computer</div>
             <div role="option">CoDev Server Connected - CoDev server</div>
             `,
-          );
-          doc.querySelectorAll('[role="option"]').forEach((option) => {
-            option.addEventListener("click", () => {
-              steps.push(`select-host:${option.textContent}`);
-              if (hostTrigger) hostTrigger.textContent = option.textContent;
-              doc
-                .querySelectorAll('[role="option"]')
-                .forEach((node) => node.remove());
-            });
+        );
+        doc.querySelectorAll('[role="option"]').forEach((option) => {
+          option.addEventListener("click", () => {
+            steps.push(`select-host:${option.textContent}`);
+            if (hostTrigger) hostTrigger.textContent = option.textContent;
+            doc
+              .querySelectorAll('[role="option"]')
+              .forEach((node) => node.remove());
           });
         });
-
-        const dialog = doc.querySelector<HTMLElement>('[role="dialog"]');
-        dialog?.insertAdjacentHTML(
-          "beforeend",
-          `<button>Browse folder Existing Git repository or folder on this host</button>`,
-        );
-        findButtonByText(dialog!, /browse folder/i)?.addEventListener(
-          "click",
-          () => {
-            steps.push(`browse-folder:${hostTrigger?.textContent}`);
-            renderFileBrowser(doc, dialog!, ["home", "orca"], steps);
-          },
-        );
       });
+
+      const dialog = doc.querySelector<HTMLElement>('[role="dialog"]');
+      dialog?.insertAdjacentHTML(
+        "beforeend",
+        `<button>Browse folder Existing Git repository or folder on this host</button>`,
+      );
+      findButtonByText(dialog!, /browse folder/i)?.addEventListener(
+        "click",
+        () => {
+          steps.push(`browse-folder:${hostTrigger?.textContent}`);
+          renderFileBrowser(doc, dialog!, ["home", "orca"], steps);
+        },
+      );
+    });
 
     return doc;
   }
@@ -285,7 +307,7 @@ describe("autoAddOrcaProject", () => {
 
   it("does nothing when Orca already has a project open", async () => {
     document.body.innerHTML = `
-      <button aria-label="Add Project">+</button>
+      <button>Add Project</button>
       <span class="titlebar-app-name-main">CoDev</span>
     `;
 

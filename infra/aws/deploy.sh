@@ -6,9 +6,39 @@ readonly region="${AWS_REGION:-us-east-2}"
 readonly account_id="$(aws sts get-caller-identity --query Account --output text)"
 readonly team_slug="${VERCEL_TEAM_SLUG:-yousef20920s-projects}"
 readonly project_name="${VERCEL_PROJECT_NAME:-codev}"
-readonly instance_type="${CODEV_INSTANCE_TYPE:-a1.metal}"
+readonly instance_type="${CODEV_INSTANCE_TYPE:-m7i-flex.large}"
+readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
+readonly purchase_option="${CODEV_PURCHASE_OPTION:-spot}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
-readonly host_ami_id="${CODEV_HOST_AMI_ID:-ami-0713df58d0d8b3c1c}"
+case "${host_arch}" in
+  x86_64)
+    readonly rust_target="x86_64-unknown-linux-musl"
+    readonly artifact_arch="x86_64"
+    readonly ubuntu_arch="amd64"
+    ;;
+  aarch64)
+    readonly rust_target="aarch64-unknown-linux-musl"
+    readonly artifact_arch="arm64"
+    readonly ubuntu_arch="arm64"
+    ;;
+  *)
+    echo "CODEV_HOST_ARCH must be x86_64 or aarch64" >&2
+    exit 1
+    ;;
+esac
+if [[ "${purchase_option}" != "spot" && "${purchase_option}" != "on-demand" ]]; then
+  echo "CODEV_PURCHASE_OPTION must be spot or on-demand" >&2
+  exit 1
+fi
+host_ami_id="${CODEV_HOST_AMI_ID:-}"
+if [[ -z "${host_ami_id}" ]]; then
+  host_ami_id="$(aws ssm get-parameter \
+    --region "${region}" \
+    --name "/aws/service/canonical/ubuntu/server/24.04/stable/current/${ubuntu_arch}/hvm/ebs-gp3/ami-id" \
+    --query 'Parameter.Value' \
+    --output text)"
+fi
+readonly host_ami_id
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-40}"
 readonly jailer_volume_size_gib="${CODEV_JAILER_VOLUME_SIZE_GIB:-40}"
 readonly monthly_budget_usd="${CODEV_MONTHLY_BUDGET_USD:-75}"
@@ -26,25 +56,25 @@ readonly skip_orca_build="${CODEV_SKIP_ORCA_BUILD:-}"
 build_dir="$(mktemp -d)"
 trap 'rm -rf "${build_dir}"' EXIT
 
-echo "Building CoDev runtime ${release_version} for linux/arm64"
+echo "Building CoDev runtime ${release_version} for linux/${artifact_arch}"
 (
   cd "${repo_root}/services/orchestrator"
-  cargo zigbuild --locked --release --target aarch64-unknown-linux-musl
+  cargo zigbuild --locked --release --target "${rust_target}"
   cp \
-    target/aarch64-unknown-linux-musl/release/orchestrator \
-    "${build_dir}/codev-orchestrator-linux-arm64"
+    "target/${rust_target}/release/orchestrator" \
+    "${build_dir}/codev-orchestrator-linux-${artifact_arch}"
   cp \
-    target/aarch64-unknown-linux-musl/release/guestd \
-    "${build_dir}/codev-guestd-linux-arm64"
+    "target/${rust_target}/release/guestd" \
+    "${build_dir}/codev-guestd-linux-${artifact_arch}"
 )
 
 # Building orca serve from source takes ~15-30 minutes; skip it for
 # orchestrator-only iteration with CODEV_SKIP_ORCA_BUILD=1 once an
-# orca-serve-linux-arm64.tar.gz already exists at the target release version.
+# matching orca-serve archive already exists at the target release version.
 if [[ -n "${skip_orca_build}" ]]; then
   echo "CODEV_SKIP_ORCA_BUILD set; not rebuilding orca serve from source"
 else
-  "${repo_root}/infra/aws/scripts/build-orca-serve.sh" "${build_dir}"
+  "${repo_root}/infra/aws/scripts/build-orca-serve.sh" "${build_dir}" "${host_arch}"
 fi
 
 aws cloudformation deploy \
@@ -54,7 +84,7 @@ aws cloudformation deploy \
   --parameter-overrides "BucketName=${artifact_bucket}" \
   --no-fail-on-empty-changeset
 
-for artifact in codev-orchestrator-linux-arm64 codev-guestd-linux-arm64; do
+for artifact in "codev-orchestrator-linux-${artifact_arch}" "codev-guestd-linux-${artifact_arch}"; do
   aws s3 cp \
     "${build_dir}/${artifact}" \
     "s3://${artifact_bucket}/releases/${release_version}/${artifact}" \
@@ -62,8 +92,8 @@ for artifact in codev-orchestrator-linux-arm64 codev-guestd-linux-arm64; do
     --sse AES256 \
     --only-show-errors
 done
-if [[ -f "${build_dir}/orca-serve-linux-arm64.tar.gz" ]]; then
-  for artifact in orca-serve-linux-arm64.tar.gz orca-serve-linux-arm64.tar.gz.sha256; do
+if [[ -f "${build_dir}/orca-serve-linux-${artifact_arch}.tar.gz" ]]; then
+  for artifact in "orca-serve-linux-${artifact_arch}.tar.gz" "orca-serve-linux-${artifact_arch}.tar.gz.sha256"; do
     aws s3 cp \
       "${build_dir}/${artifact}" \
       "s3://${artifact_bucket}/releases/${release_version}/${artifact}" \
@@ -94,6 +124,8 @@ aws cloudformation deploy \
     "ArtifactBucket=${artifact_bucket}" \
     "ReleaseVersion=${release_version}" \
     "InstanceType=${instance_type}" \
+    "HostArchitecture=${host_arch}" \
+    "PurchaseOption=${purchase_option}" \
     "AvailabilityZone=${availability_zone}" \
     "UbuntuAmi=${host_ami_id}" \
     "HostVolumeSizeGiB=${host_volume_size_gib}" \
