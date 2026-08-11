@@ -364,3 +364,54 @@ test("F2.2 updates the other IDE view when Alex switches files", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("F2.3 renders Alex's selection in Jordan's shared IDE view", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const ideCard = page
+    .getByRole("heading", { name: "Live shared IDE views" })
+    .locator("xpath=ancestor::section");
+  await expect(ideCard.getByLabel("Jordan Lee remote selection")).toContainText(
+    "No remote text selected",
+  );
+
+  await ideCard
+    .getByRole("button", { name: "Select hello function as Alex" })
+    .click();
+
+  await expect(ideCard.getByLabel("Jordan Lee remote selection")).toContainText(
+    "Alex Morgan selected hello function · lines 1–3",
+  );
+  await expect(ideCard.getByText("export function hello() {")).toHaveClass(
+    /ideSelectedLine/,
+  );
+  await expect(ideCard.getByRole("status").last()).toContainText(
+    "with the hello function selected",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F2.3",
+    state: "alex-selects-hello-function",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f2-3\/alex-selects-hello-function\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  await ideCard.getByRole("button", { name: "README.md" }).click();
+  await expect(ideCard.getByLabel("Jordan Lee remote selection")).toContainText(
+    "No remote text selected",
+  );
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    { taskId: "F2.3", state: "selection-cleared-on-file-switch" },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f2-3\/selection-cleared-on-file-switch\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});

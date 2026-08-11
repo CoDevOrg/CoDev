@@ -34,5 +34,27 @@ describe("SharedIdePresenceFixture", () => {
     expect(screen.getByLabelText("Shared editor content")).toHaveTextContent(
       "# CoDev fixture",
     );
+    expect(
+      screen.getByLabelText("Jordan Lee remote selection"),
+    ).toHaveTextContent("No remote text selected");
+  });
+
+  it("renders Alex's selected text in Jordan's shared view", () => {
+    render(<SharedIdePresenceFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select hello function as Alex" }),
+    );
+
+    expect(
+      screen.getByLabelText("Jordan Lee remote selection"),
+    ).toHaveTextContent("Alex Morgan selected hello function · lines 1–3");
+    expect(screen.getByText("export function hello() {")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "README.md" }));
+
+    expect(
+      screen.getByLabelText("Jordan Lee remote selection"),
+    ).toHaveTextContent("No remote text selected");
   });
 });

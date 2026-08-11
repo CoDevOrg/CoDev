@@ -505,6 +505,30 @@
   color: #a1dc69;
 }
 
+.ideSelectionButton {
+  margin-top: 8px;
+  border: 1px solid rgba(161, 220, 105, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(161, 220, 105, 0.08);
+  color: #c8eea6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+}
+
+.ideSelectionButton:hover {
+  background: rgba(161, 220, 105, 0.16);
+}
+
+.ideSelectionButton:disabled {
+  border-color: rgba(220, 230, 203, 0.1);
+  background: transparent;
+  color: #687263;
+  cursor: not-allowed;
+}
+
 .ideEditor {
   display: grid;
   align-content: start;
@@ -540,6 +564,32 @@
   color: #eef2e7;
 }
 
+.ideSelectionMarker,
+.ideSelectionEmpty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #20251d;
+  color: #d8f2bc;
+  font-size: 11px;
+}
+
+.ideSelectionEmpty {
+  color: #899585;
+}
+
+.selectionSwatch {
+  width: 8px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: #e4bd61;
+  box-shadow: 0 0 0 3px rgba(228, 189, 97, 0.12);
+}
+
 .ideCode {
   min-height: 76px;
   margin: 0;
@@ -553,6 +603,19 @@
     SFMono-Regular,
     Menlo,
     monospace;
+}
+
+.ideCodeLine,
+.ideSelectedLine {
+  display: block;
+  border-left: 2px solid transparent;
+  padding-left: 8px;
+}
+
+.ideSelectedLine {
+  border-left-color: #e4bd61;
+  background: rgba(228, 189, 97, 0.12);
+  color: #fff0c1;
 }
 
 .ideSyncNote {

@@ -13,8 +13,23 @@ const filePreviews: Record<string, string> = {
   "tests/hello.test.ts": 'expect(hello()).toBe("hello");',
 };
 
+const helloFunctionSelection = {
+  endLine: 2,
+  label: "hello function",
+  startLine: 0,
+};
+
 export function SharedIdePresenceFixture() {
   const [activeFile, setActiveFile] = useState("src/hello.ts");
+  const [selection, setSelection] = useState<
+    typeof helloFunctionSelection | null
+  >(null);
+
+  const selectFile = (file: string) => {
+    setActiveFile(file);
+    setSelection(null);
+  };
+  const previewLines = (filePreviews[activeFile] ?? "").split("\n");
 
   return (
     <section
@@ -30,8 +45,8 @@ export function SharedIdePresenceFixture() {
       </div>
 
       <p className={styles.presenceIntro}>
-        Alex changes files in the editor while Jordan sees the named active-file
-        state update in the shared IDE.
+        Alex changes files and selects text in the editor while Jordan sees the
+        named active-file and selection state update in the shared IDE.
       </p>
 
       <div className={styles.idePresence} aria-label="IDE presence">
@@ -63,13 +78,21 @@ export function SharedIdePresenceFixture() {
                     : styles.ideFileButton
                 }
                 key={file}
-                onClick={() => setActiveFile(file)}
+                onClick={() => selectFile(file)}
                 type="button"
               >
                 <span aria-hidden="true">·</span>
                 {file}
               </button>
             ))}
+            <button
+              className={styles.ideSelectionButton}
+              disabled={activeFile !== "src/hello.ts"}
+              onClick={() => setSelection(helloFunctionSelection)}
+              type="button"
+            >
+              Select hello function as Alex
+            </button>
           </div>
         </aside>
 
@@ -91,8 +114,45 @@ export function SharedIdePresenceFixture() {
               <strong>Alex Morgan</strong> is viewing <code>{activeFile}</code>
             </span>
           </div>
+          {selection ? (
+            <div
+              className={styles.ideSelectionMarker}
+              aria-label="Jordan Lee remote selection"
+              role="status"
+            >
+              <span className={styles.selectionSwatch} aria-hidden="true" />
+              <span>
+                <strong>Alex Morgan</strong> selected {selection.label} · lines{" "}
+                {selection.startLine + 1}–{selection.endLine + 1}
+              </span>
+            </div>
+          ) : (
+            <div
+              className={styles.ideSelectionEmpty}
+              aria-label="Jordan Lee remote selection"
+              role="status"
+            >
+              No remote text selected
+            </div>
+          )}
           <pre className={styles.ideCode} aria-label="Shared editor content">
-            <code>{filePreviews[activeFile]}</code>
+            <code>
+              {previewLines.map((line, index) => (
+                <span
+                  className={
+                    selection &&
+                    index >= selection.startLine &&
+                    index <= selection.endLine
+                      ? styles.ideSelectedLine
+                      : styles.ideCodeLine
+                  }
+                  key={`${activeFile}-${index}`}
+                >
+                  {line || " "}
+                  {index < previewLines.length - 1 ? "\n" : null}
+                </span>
+              ))}
+            </code>
           </pre>
           <p className={styles.ideSyncNote}>
             Jordan’s editor content stays synchronized separately from presence
@@ -102,7 +162,8 @@ export function SharedIdePresenceFixture() {
       </div>
 
       <p className={styles.viewerStatus} role="status">
-        Jordan sees Alex Morgan viewing <code>{activeFile}</code>.
+        Jordan sees Alex Morgan viewing <code>{activeFile}</code>
+        {selection ? ` with the ${selection.label} selected.` : "."}
       </p>
     </section>
   );
