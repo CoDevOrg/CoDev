@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F3.1 — Define a durable shared-session event schema and ordered turn queue**
+**F3.2 — Render the provider, owner, worktree, state, and ordered transcript**
 
 ## Completed tasks
 
@@ -452,6 +452,45 @@ external filesystem`, and `Merge manually` as resolution choices. No
   endpoint.
 - Next task: F3.1 — define a durable shared-session event schema and ordered
   turn queue.
+
+### F3.1 completion evidence
+
+- Completed: 2026-08-11T23:10:49Z.
+- Changed files: `packages/contracts/src/shared-session.ts`,
+  `packages/contracts/src/events.ts`, `packages/contracts/src/index.ts`,
+  `packages/contracts/src/contracts.test.ts`,
+  `apps/web/components/shared-session-queue-fixture.tsx`,
+  `apps/web/components/shared-session-queue-fixture.test.tsx`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: 19 focused contract tests passed; 1 focused web component test
+  passed; contracts lint and typecheck passed; web lint passed with 0 errors
+  and the same 2 pre-existing warnings; web typecheck passed; web production
+  build passed; targeted Prettier check passed; focused F3.1 Playwright test
+  passed on the built app; `git diff --check` passed.
+- Validated source commit: `3be0bc27dc6a36793db81697d59db6a0de9b9398`.
+- Vercel preview:
+  <https://codev-3d7vniddk-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, clicked `Open shared session`, and confirmed the
+  visible Codex-compatible provider, Alex Morgan owner, `agent-alex` worktree,
+  `Idle · awaiting instruction` state, Durable badge, `0 queued`, and
+  `Queue is empty — no instructions are waiting.` status. No credentials or
+  secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-1/shared-session-idle-queue.png`
+  (Playwright success state), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-1/computer-use-shared-session-idle-queue.jpeg`
+  (Computer Use preview success state).
+- Known limitations: the credential-free preview fixture models the opened
+  shared session and empty queue in browser state; authenticated session
+  persistence continues to use the existing agent session, turn, and event
+  storage paths while later F3 tasks add transcript and co-steering controls.
+- Next task: F3.2 — render the provider, owner, worktree, state, and ordered
+  transcript.
 
 ## Blocked tasks
 
