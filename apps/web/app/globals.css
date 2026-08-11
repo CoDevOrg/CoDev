@@ -357,8 +357,8 @@ select,
   background:
     radial-gradient(
       circle at 78% 7%,
-      rgba(217, 101, 45, 0.18),
-      transparent 22rem
+      rgba(217, 101, 45, 0.28),
+      transparent 32rem
     ),
     radial-gradient(
       circle at 14% 40%,
@@ -376,13 +376,34 @@ select,
     linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 38%),
     repeating-linear-gradient(
       0deg,
-      rgba(23, 59, 45, 0.025) 0,
-      rgba(23, 59, 45, 0.025) 1px,
-      transparent 1px,
-      transparent 5px
+      rgba(23, 59, 45, 0.05) 0,
+      rgba(23, 59, 45, 0.05) 2px,
+      transparent 2px,
+      transparent 12px
     );
+  animation: landing-paper-lines 3.5s linear infinite;
   content: "";
   pointer-events: none;
+}
+
+@keyframes landing-paper-lines {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+
+  to {
+    background-position:
+      0 0,
+      0 -12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page::before {
+    animation: none;
+  }
 }
 
 .landing-grain {
