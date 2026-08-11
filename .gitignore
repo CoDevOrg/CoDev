@@ -4,6 +4,7 @@ dist/
 coverage/
 *.tsbuildinfo
 playwright-report/
+**/artifacts/verification/
 test-results/
 .testsprite/
 .env.local

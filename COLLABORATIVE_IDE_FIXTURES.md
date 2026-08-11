@@ -26,3 +26,6 @@ no passwords, API keys, OAuth grants, or provider credentials.
 The seeded workspace is `CoDev Fixture Workspace` for the public-looking
 repository `acme/codev-fixture`, on `main`, at `/workspace/codev-fixture`. Its
 displayed files are `README.md`, `src/hello.ts`, and `tests/hello.test.ts`.
+
+For the reusable screenshot convention used by browser verification, see
+[COLLABORATIVE_IDE_EVIDENCE.md](./COLLABORATIVE_IDE_EVIDENCE.md).

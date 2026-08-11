@@ -1,8 +1,12 @@
+import { access } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
-test("B0.2 opens the stable fixture workspace ready state", async ({
+import { captureVerificationScreenshot } from "./support/evidence";
+
+test("B0.3 captures the fixture ready state as reusable evidence", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto("/verification/b0-2");
 
   await expect(
@@ -19,4 +23,13 @@ test("B0.2 opens the stable fixture workspace ready state", async ({
       exact: false,
     }),
   ).toBeVisible();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "B0.3",
+    state: "fixture-ready",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/b0-3\/fixture-ready\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
