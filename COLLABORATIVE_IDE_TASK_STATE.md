@@ -6,9 +6,9 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F1.2 — Implement one invite lifecycle slice**
+**F1.3 — Add invite revocation and expiry enforcement**
 
-Read the F1.2 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.3 or
+Read the F1.3 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.4 or
 any later task during the same scheduler run.
 
 ## Completed tasks
@@ -18,6 +18,7 @@ any later task during the same scheduler run.
 | B0.1 — Baseline audit                                           | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                             |
 | B0.2 — Stable local verification fixture and fixture identities | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                |
 | B0.3 — Reusable screenshot/evidence convention                  | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
+| F1.2 — Implement one invite lifecycle slice                     | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                         |
 
 ### B0.2 completion evidence
 
@@ -139,6 +140,36 @@ available` capacity state. Then opened `/workspaces/b0-4` and confirmed the
 - Known limitations: the preview uses the existing credential-free display
   fixture; authenticated membership lifecycle coverage remains in F1.2.
 - Next task: F1.2 — implement one invite lifecycle slice.
+
+### F1.2 completion evidence
+
+- Completed: 2026-08-11T15:11:17Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/invite-lifecycle-fixture.tsx`,
+  `apps/web/components/invite-lifecycle-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused invite component test — 1 passed; focused fixture
+  Playwright suite — 4 passed; targeted Prettier check — passed; web lint — 0
+  errors with the same 2 pre-existing warnings; web typecheck — passed; web
+  production build — passed; `git diff --check` — passed.
+- Validated source commit: `8c02a1a08b05049ca6ced5f54ebe3fa68a11cced`.
+- Vercel preview: <https://codev-odaatatba-yousef20920s-projects.vercel.app>
+  — Ready deployment for the validated source commit.
+- Computer Use flow: opened the Ready preview in a new Chrome tab, opened
+  `/verification/b0-2`, clicked `Create invite` as Alex Morgan, confirmed the
+  visible 24-hour single-use invite, clicked `Accept as Jordan`, and confirmed
+  Jordan Lee was present with the invite control disabled as `Invite already
+used`. No credentials or secrets were entered.
+- Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/f1-2/invite-accepted.png`
+  (Playwright success state); `/Users/yousefmaher/CoDev/artifacts/verification/f1-2/invite-used-edge.png`
+  (Playwright single-use edge state); `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2011.11.17%20AM.jpeg`
+  (Computer Use preview state showing Jordan present and the used-invite edge).
+- Known limitations: the credential-free preview fixture models the two
+  fixture identities in browser state; it does not create a real invitation
+  or request authentication credentials.
+- Next task: F1.3 — add invite revocation and expiry enforcement, including
+  server-side tests.
 
 ## Blocked tasks
 
