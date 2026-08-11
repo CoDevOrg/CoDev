@@ -7,6 +7,7 @@ import {
   collaborationPresenceEntrySchema,
   collaborationServerMessageSchema,
   conflictResolutionInputSchema,
+  presenceCursorSchema,
   type ConflictResolutionInput,
   type CollaborationPresenceEntry,
   type CollaborationServerMessage,
@@ -26,6 +27,7 @@ import * as Y from "yjs";
 
 import { getDatabase } from "@/lib/database";
 import { readSandboxFile, writeSandboxFile } from "@/lib/orchestrator";
+import { appendPresenceEvent } from "@/lib/presence-events";
 
 const MAX_SOCKET_PAYLOAD_BYTES = 128 * 1_024;
 const HEARTBEAT_INTERVAL_MS = 20_000;
@@ -43,6 +45,7 @@ interface Connection {
   worktreeId: string | null;
   subscriptions: Set<string>;
   activePath: string | null;
+  cursor: { anchor: number; head: number } | null;
   resumeFrom: string | null;
   replayedPaths: Set<string>;
   alive: boolean;
@@ -612,6 +615,8 @@ async function subscribe(
     return;
   }
 
+  const previousPath = connection.activePath;
+
   const result = await withDocumentLock(
     workspaceId,
     connection.worktreeId,
@@ -648,6 +653,17 @@ async function subscribe(
     await publish(workspaceId, result.event);
   }
   await refreshPresence(workspaceId, connection);
+  if (previousPath !== path) {
+    await appendPresenceEvent({
+      workspaceId,
+      type: "presence.active_file.changed",
+      data: {
+        userId: connection.user.id,
+        path,
+        previousPath,
+      },
+    });
+  }
 }
 
 async function applyDocumentUpdate(
@@ -801,6 +817,7 @@ async function applyDocumentUpdate(
 function sanitizeAwareness(update: string, user: CollaborationUser) {
   const awareness = new Awareness(new Y.Doc());
   let clientIds: number[] = [];
+  let cursor: { anchor: number; head: number } | null = null;
   awareness.on(
     "update",
     (changes: { added: number[]; updated: number[]; removed: number[] }) => {
@@ -815,6 +832,8 @@ function sanitizeAwareness(update: string, user: CollaborationUser) {
   for (const clientId of clientIds) {
     const state = awareness.states.get(clientId);
     if (state) {
+      const parsedCursor = presenceCursorSchema.safeParse(state.cursor);
+      if (parsedCursor.success) cursor = parsedCursor.data;
       awareness.states.set(clientId, {
         ...state,
         user: {
@@ -826,7 +845,10 @@ function sanitizeAwareness(update: string, user: CollaborationUser) {
       });
     }
   }
-  return encodeBase64(encodeAwarenessUpdate(awareness, clientIds));
+  return {
+    update: encodeBase64(encodeAwarenessUpdate(awareness, clientIds)),
+    cursor,
+  };
 }
 
 async function publishAwareness(
@@ -846,7 +868,8 @@ async function publishAwareness(
     return;
   }
   connection.activePath = path;
-  const cleanUpdate = sanitizeAwareness(update, connection.user);
+  const sanitized = sanitizeAwareness(update, connection.user);
+  const cleanUpdate = sanitized.update;
   const event = {
     type: "awareness" as const,
     worktreeId: connection.worktreeId!,
@@ -873,6 +896,22 @@ async function publishAwareness(
     connection,
   );
   await refreshPresence(workspaceId, connection);
+  if (
+    sanitized.cursor &&
+    (connection.cursor?.anchor !== sanitized.cursor.anchor ||
+      connection.cursor?.head !== sanitized.cursor.head)
+  ) {
+    connection.cursor = sanitized.cursor;
+    await appendPresenceEvent({
+      workspaceId,
+      type: "presence.cursor.changed",
+      data: {
+        userId: connection.user.id,
+        path,
+        cursor: sanitized.cursor,
+      },
+    });
+  }
 }
 
 async function refreshPresence(workspaceId: string, connection: Connection) {
@@ -984,6 +1023,16 @@ async function handleMessage(
       });
       connection.resumeFrom = message.resumeFrom ?? null;
       await refreshPresence(workspaceId, connection);
+      await appendPresenceEvent({
+        workspaceId,
+        type: "presence.joined",
+        data: {
+          userId: connection.user.id,
+          worktreeId,
+          activePath: connection.activePath,
+          cursor: connection.cursor,
+        },
+      });
       return;
     }
     if (!connection.joined) {
@@ -1051,6 +1100,7 @@ export async function handleCollaborationSocket(
     worktreeId: null,
     subscriptions: new Set(),
     activePath: null,
+    cursor: null,
     resumeFrom: null,
     replayedPaths: new Set(),
     alive: true,
@@ -1078,6 +1128,19 @@ export async function handleCollaborationSocket(
   socket.once("close", () => {
     clearInterval(heartbeat);
     room.connections.delete(connection);
+    if (connection.joined) {
+      void appendPresenceEvent({
+        workspaceId,
+        type: "presence.left",
+        data: {
+          userId: connection.user.id,
+          worktreeId: connection.worktreeId,
+          activePath: connection.activePath,
+          cursor: connection.cursor,
+          reason: "disconnect",
+        },
+      }).catch(() => undefined);
+    }
     void removePresence(workspaceId, connection);
     if (room.connections.size === 0) {
       room.polling = false;

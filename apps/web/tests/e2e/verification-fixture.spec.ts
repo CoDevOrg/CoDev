@@ -266,3 +266,61 @@ test("F1.4 refreshes Jordan's Viewer controls after a live role change", async (
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F2.1 shows two fixtures joined to one file with durable presence", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const presenceCard = page
+    .getByRole("heading", {
+      name: "Two fixtures, one file",
+    })
+    .locator("xpath=ancestor::section");
+  await expect(presenceCard).toBeVisible();
+  await presenceCard.getByRole("button", { name: "Join file" }).nth(0).click();
+  await presenceCard.getByRole("button", { name: "Join file" }).nth(0).click();
+
+  await expect(
+    presenceCard.getByText(
+      "Both fixtures are present in src/hello.ts with durable cursor state.",
+    ),
+  ).toBeVisible();
+  await expect(presenceCard.getByLabel("Alex Morgan presence")).toContainText(
+    "present in file",
+  );
+  await expect(presenceCard.getByLabel("Jordan Lee presence")).toContainText(
+    "present in file",
+  );
+  await expect(presenceCard.getByLabel("Shared presence state")).toContainText(
+    "src/hello.ts",
+  );
+  await expect(
+    presenceCard.getByLabel("Durable presence events"),
+  ).toContainText("6 events");
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F2.1",
+    state: "two-fixtures-present",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f2-1\/two-fixtures-present\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  await presenceCard.getByRole("button", { name: "Leave file" }).nth(1).click();
+  await expect(presenceCard.getByLabel("Jordan Lee presence")).toContainText(
+    "not joined",
+  );
+  await expect(presenceCard.getByText("presence.left")).toBeVisible();
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    { taskId: "F2.1", state: "fixture-left" },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f2-1\/fixture-left\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});

@@ -5,6 +5,7 @@ import {
   identifierSchema,
   timestampSchema,
 } from "./domain";
+import { collaborationPathSchema } from "./collaboration";
 
 const eventBaseSchema = z.object({
   id: identifierSchema,
@@ -13,7 +14,58 @@ const eventBaseSchema = z.object({
   createdAt: timestampSchema,
 });
 
+export const presenceCursorSchema = z
+  .object({
+    anchor: z.number().int().nonnegative(),
+    head: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const presenceEventOptions = [
+  eventBaseSchema.extend({
+    type: z.literal("presence.joined"),
+    data: z.object({
+      userId: identifierSchema,
+      worktreeId: identifierSchema.nullable(),
+      activePath: collaborationPathSchema.nullable(),
+      cursor: presenceCursorSchema.nullable(),
+    }),
+  }),
+  eventBaseSchema.extend({
+    type: z.literal("presence.left"),
+    data: z.object({
+      userId: identifierSchema,
+      worktreeId: identifierSchema.nullable(),
+      activePath: collaborationPathSchema.nullable(),
+      cursor: presenceCursorSchema.nullable(),
+      reason: z.enum(["disconnect", "leave", "timeout"]),
+    }),
+  }),
+  eventBaseSchema.extend({
+    type: z.literal("presence.active_file.changed"),
+    data: z.object({
+      userId: identifierSchema,
+      path: collaborationPathSchema,
+      previousPath: collaborationPathSchema.nullable(),
+    }),
+  }),
+  eventBaseSchema.extend({
+    type: z.literal("presence.cursor.changed"),
+    data: z.object({
+      userId: identifierSchema,
+      path: collaborationPathSchema,
+      cursor: presenceCursorSchema,
+    }),
+  }),
+] as const;
+
+export const presenceEventSchema = z.discriminatedUnion(
+  "type",
+  presenceEventOptions,
+);
+
 export const workspaceEventSchema = z.discriminatedUnion("type", [
+  ...presenceEventOptions,
   eventBaseSchema.extend({
     type: z.literal("presence.changed"),
     data: z.object({
@@ -57,3 +109,4 @@ export const workspaceEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export type WorkspaceEvent = z.infer<typeof workspaceEventSchema>;
+export type PresenceEvent = z.infer<typeof presenceEventSchema>;

@@ -326,6 +326,103 @@
   box-shadow: 0 0 0 4px rgba(217, 173, 89, 0.12);
 }
 
+.presenceEvents {
+  grid-column: 1 / -1;
+}
+
+.presenceIntro {
+  margin: -8px 0 18px;
+  color: #aebaa4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.presenceFixtureList {
+  display: grid;
+  gap: 8px;
+}
+
+.presenceFixture {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px;
+  border: 1px solid rgba(220, 230, 203, 0.1);
+  border-radius: 8px;
+  background: #1d211b;
+}
+
+.presenceFixtureIdentity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.presenceFixtureIdentity > div {
+  display: grid;
+  gap: 3px;
+}
+
+.presenceFixtureIdentity > div span {
+  color: #929e8c;
+  font-size: 11px;
+}
+
+.presenceOffline {
+  background: #6b7666;
+  box-shadow: 0 0 0 4px rgba(107, 118, 102, 0.12);
+}
+
+.presenceStateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.presenceStateGrid > div {
+  display: grid;
+  gap: 6px;
+  padding: 11px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.presenceStateGrid code,
+.presenceStateGrid strong {
+  color: #e0e7d8;
+  font-size: 12px;
+}
+
+.presenceEventLog {
+  display: grid;
+  gap: 7px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(220, 230, 203, 0.1);
+}
+
+.presenceEventLogHeader,
+.presenceEventRow {
+  display: grid;
+  grid-template-columns: 34px minmax(190px, 1fr) minmax(120px, 0.7fr);
+  align-items: center;
+  gap: 10px;
+  color: #9fa997;
+  font-size: 11px;
+}
+
+.presenceEventLogHeader {
+  grid-template-columns: 1fr auto;
+}
+
+.presenceEventRow code {
+  color: #c8eea6;
+  font-size: 11px;
+}
+
 .inviteStatus {
   margin: 16px 0 0;
   color: #f2cf8b;

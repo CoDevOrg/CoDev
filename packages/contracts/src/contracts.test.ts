@@ -14,6 +14,7 @@ import {
   createPullRequestSchema,
   terminalPollSchema,
   workspaceEventSchema,
+  presenceEventSchema,
   workspaceRoleCapabilities,
   workspaceRoleCapabilitiesSchema,
   workspaceSchema,
@@ -142,6 +143,73 @@ describe("workspace contracts", () => {
         createdAt: "2026-07-28T12:00:00.000Z",
         type: "claim.changed",
         data: { status: "invented" },
+      }),
+    ).toThrow();
+  });
+
+  it("accepts durable joined, active-file, cursor, and left presence events", () => {
+    const base = {
+      id,
+      workspaceId: id,
+      sequence: 1,
+      createdAt: "2026-07-28T12:00:00.000Z",
+    };
+
+    expect(
+      presenceEventSchema.parse({
+        ...base,
+        type: "presence.joined",
+        data: {
+          userId: id,
+          worktreeId: null,
+          activePath: null,
+          cursor: null,
+        },
+      }).type,
+    ).toBe("presence.joined");
+    expect(
+      presenceEventSchema.parse({
+        ...base,
+        sequence: 2,
+        type: "presence.active_file.changed",
+        data: { userId: id, path: "src/index.ts", previousPath: null },
+      }),
+    ).toMatchObject({ data: { path: "src/index.ts" } });
+    expect(
+      presenceEventSchema.parse({
+        ...base,
+        sequence: 3,
+        type: "presence.cursor.changed",
+        data: {
+          userId: id,
+          path: "src/index.ts",
+          cursor: { anchor: 12, head: 18 },
+        },
+      }),
+    ).toMatchObject({ data: { cursor: { anchor: 12, head: 18 } } });
+    expect(
+      presenceEventSchema.parse({
+        ...base,
+        sequence: 4,
+        type: "presence.left",
+        data: {
+          userId: id,
+          worktreeId: null,
+          activePath: "src/index.ts",
+          cursor: { anchor: 18, head: 18 },
+          reason: "disconnect",
+        },
+      }),
+    ).toMatchObject({ data: { reason: "disconnect" } });
+    expect(() =>
+      presenceEventSchema.parse({
+        ...base,
+        type: "presence.cursor.changed",
+        data: {
+          userId: id,
+          path: "src/index.ts",
+          cursor: { anchor: -1, head: 2 },
+        },
       }),
     ).toThrow();
   });
