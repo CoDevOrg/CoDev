@@ -6,9 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F2.3 — Add cursor/selection rendering for one collaborator**
-
-Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
+**F2.4 — Add reconnect/resubscribe replay for presence and document state**
 
 ## Completed tasks
 
@@ -21,6 +19,7 @@ Read the F2.1 card in `COLLABORATIVE_IDE_EXECUTION.md`.
 | F1.4 — Add member-role management and immediate realtime membership refresh                           | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                  |
 | F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
 | F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                            |
+| F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.             |
 
 ### B0.2 completion evidence
 
@@ -324,6 +323,48 @@ used`. No credentials or secrets were entered.
   unchanged, while active-file presence is rendered as a focused fixture
   surface for browser verification.
 - Next task: F2.3 — add cursor/selection rendering for one collaborator.
+
+### F2.3 completion evidence
+
+- Completed: 2026-08-11T20:09:28Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused component test — 2 passed; focused F2.1/F2.2/F2.3
+  Playwright verification on the built app — 3 passed; targeted Prettier check
+  — passed; repository lint — 0 errors with the same 2 pre-existing warnings;
+  repository typecheck — passed; web production build — passed; `git diff
+--check` — passed. The repository-wide `pnpm format:check` remains blocked
+  by the three pre-existing scheduler Markdown files
+  (`COLLABORATIVE_IDE_BASELINE_AUDIT.md`, `COLLABORATIVE_IDE_EXECUTION.md`,
+  and `COLLABORATIVE_IDE_FEATURES.md`); none were changed.
+- Validated source commit: `f2d5943d0bf8fe5c767cc7193b5f788eea81330a`.
+- Vercel preview: <https://codev-npelt4hy8-yousef20920s-projects.vercel.app> —
+  Ready deployment for `f2d5943`; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, confirmed the shared IDE showed Alex Morgan editing and
+  Jordan Lee observing, clicked `Select hello function as Alex`, and confirmed
+  Jordan’s remote view showed `Alex Morgan selected hello function · lines
+1–3` with the code lines highlighted. Then clicked Alex’s `README.md` file
+  control and confirmed the remote marker changed to `No remote text selected`
+  while the selection control became disabled. No credentials or secrets were
+  entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f2-3/alex-selects-hello-function.png`
+  (Playwright success state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f2-3/selection-cleared-on-file-switch.png`
+  (Playwright file-switch edge),
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%204.08.22%20PM.jpeg`
+  (Computer Use selection marker and highlighted code), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%204.09.05%20PM.jpeg`
+  (Computer Use selection-cleared edge).
+- Known limitations: the credential-free preview fixture models Alex’s
+  selection in browser state; authenticated realtime cursor/selection updates
+  continue to use the existing F2.1 server contract and awareness path.
+- Next task: F2.4 — add reconnect/resubscribe replay for presence and document
+  state.
 
 ## Blocked tasks
 
