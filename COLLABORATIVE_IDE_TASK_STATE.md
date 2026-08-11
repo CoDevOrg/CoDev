@@ -6,9 +6,9 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**B0.4 — Reconcile the two-agent limit with the three-agent requirement**
+**F1.1 — Define/validate Viewer, Collaborator, and Maintainer capabilities**
 
-Read the B0.4 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on B0.5 or
+Read the F1.1 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on F1.2 or
 any later task during the same scheduler run.
 
 ## Completed tasks
@@ -66,6 +66,45 @@ playwright test tests/e2e/verification-fixture.spec.ts` — 1 passed; `git diff
 - Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/b0-3/fixture-ready.png`
   (Playwright success artifact); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%208.09.09%20AM.jpeg`
   (Computer Use preview ready state).
+
+### B0.4 completion evidence
+
+- Completed: 2026-08-11T13:11:40Z.
+- Changed files: `PLAN.md`, `docs/LAUNCH_CHECKLIST.md`,
+  `packages/contracts/src/domain.ts`, `packages/contracts/src/contracts.test.ts`,
+  `apps/web/lib/agent-capacity.ts`, `apps/web/lib/agent-coordination.test.ts`,
+  `apps/web/lib/agent-runtime.ts`, `apps/web/app/globals.css`,
+  `apps/web/components/orca-workspace.tsx`,
+  `apps/web/components/orca-workspace.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/branch/route.ts`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: 15 contract tests passed; 13 focused web tests passed; focused
+  Playwright verification passed with 2 tests; contracts typecheck and lint
+  passed; web typecheck passed; web lint passed with 0 errors and the same 2
+  pre-existing warnings; web production build passed; targeted Prettier check
+  and `git diff --check` passed.
+- Validated source commits: `ab0460358fc4c0c6fe4c7b2e4f935141feeef8bc` and
+  `25566f4fc018a1642b1fe665cf5476ae6ab60d79` (latest).
+- Vercel preview: <https://codev-30iek0zu9-yousef20920s-projects.vercel.app> —
+  Ready deployment for the latest pushed commit.
+- Computer Use flow: opened the latest preview at `/verification/b0-2` and
+  confirmed the ready badge, repository, branch, workspace path, fixture
+  identities, seeded files, and the visible `AGENT WORKTREES — 3 slots
+available` capacity state. Then opened `/workspaces/b0-4` and confirmed the
+  protected workspace redirects to the visible CoDev sign-in state; no real
+  credentials were entered.
+- Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/b0-4/agent-capacity.png`
+  (Playwright success artifact); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%209.11.13%20AM.jpeg`
+  (Computer Use preview capacity state); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%209.11.31%20AM.jpeg`
+  (protected workspace sign-in edge state).
+- Known limitations: the authenticated workspace shell requires a signed-in
+  identity; the approved credential-free fixture was used for the capacity UI
+  flow, and the protected-route redirect was captured as its edge state.
+- Next task: F1.1 — define/validate Viewer, Collaborator, and Maintainer
+  capabilities in the shared contract and server authorization boundary.
 
 ## Blocked tasks
 
