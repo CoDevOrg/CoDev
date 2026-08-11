@@ -14,6 +14,67 @@ const eventBaseSchema = z.object({
   createdAt: timestampSchema,
 });
 
+const sharedSessionEventBaseSchema = eventBaseSchema.extend({
+  sessionId: identifierSchema,
+});
+
+const sharedSessionEventOptions = [
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.created"),
+    data: z.object({
+      ownerId: identifierSchema,
+      worktreeId: identifierSchema,
+      provider: z.string().min(1).max(64),
+      model: z.string().min(1).max(128),
+    }),
+  }),
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.turn.queued"),
+    data: z.object({
+      turnId: identifierSchema,
+      authorId: identifierSchema,
+      prompt: z.string().min(1).max(50_000),
+      queuePosition: z.number().int().positive(),
+    }),
+  }),
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.turn.started"),
+    data: z.object({
+      turnId: identifierSchema,
+      queuePosition: z.number().int().positive(),
+    }),
+  }),
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.turn.completed"),
+    data: z.object({
+      turnId: identifierSchema,
+      queuePosition: z.number().int().positive(),
+      output: z.string(),
+    }),
+  }),
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.turn.interrupted"),
+    data: z.object({
+      turnId: identifierSchema,
+      queuePosition: z.number().int().positive(),
+      reason: z.string().min(1).max(2_000),
+    }),
+  }),
+  sharedSessionEventBaseSchema.extend({
+    type: z.literal("shared_session.turn.failed"),
+    data: z.object({
+      turnId: identifierSchema,
+      queuePosition: z.number().int().positive(),
+      error: z.string().min(1).max(2_000),
+    }),
+  }),
+] as const;
+
+export const sharedSessionEventSchema = z.discriminatedUnion(
+  "type",
+  sharedSessionEventOptions,
+);
+
 export const presenceCursorSchema = z
   .object({
     anchor: z.number().int().nonnegative(),
@@ -66,6 +127,7 @@ export const presenceEventSchema = z.discriminatedUnion(
 
 export const workspaceEventSchema = z.discriminatedUnion("type", [
   ...presenceEventOptions,
+  ...sharedSessionEventOptions,
   eventBaseSchema.extend({
     type: z.literal("presence.changed"),
     data: z.object({
@@ -110,3 +172,4 @@ export const workspaceEventSchema = z.discriminatedUnion("type", [
 
 export type WorkspaceEvent = z.infer<typeof workspaceEventSchema>;
 export type PresenceEvent = z.infer<typeof presenceEventSchema>;
+export type SharedSessionEvent = z.infer<typeof sharedSessionEventSchema>;

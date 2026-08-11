@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentActivityEventSchema,
   agentCapacitySchema,
+  enqueueSharedSessionTurn,
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
   conflictResolutionInputSchema,
@@ -13,6 +14,8 @@ import {
   createPublicationSchema,
   createPullRequestSchema,
   terminalPollSchema,
+  sharedSessionEventSchema,
+  sharedSessionSchema,
   workspaceEventSchema,
   presenceEventSchema,
   workspaceRoleCapabilities,
@@ -226,6 +229,63 @@ describe("workspace contracts", () => {
         createdAt: "2026-07-29T20:00:00.000Z",
       }).type,
     ).toBe("tool.called");
+  });
+
+  it("defines a shared session with an explicitly ordered empty queue", () => {
+    const session = sharedSessionSchema.parse({
+      sessionId: id,
+      workspaceId: id,
+      ownerId: id,
+      worktreeId: id,
+      provider: "codex",
+      model: "gpt-5",
+      state: "idle",
+      activeTurnId: null,
+      streamCursor: 0,
+      queue: [],
+    });
+
+    expect(session.queue).toEqual([]);
+    expect(
+      sharedSessionEventSchema.parse({
+        id,
+        workspaceId: id,
+        sessionId: id,
+        sequence: 1,
+        createdAt: "2026-07-30T12:00:00.000Z",
+        type: "shared_session.created",
+        data: {
+          ownerId: id,
+          worktreeId: id,
+          provider: "codex",
+          model: "gpt-5",
+        },
+      }).type,
+    ).toBe("shared_session.created");
+  });
+
+  it("assigns monotonically increasing positions to queued turns", () => {
+    const first = enqueueSharedSessionTurn([], {
+      id,
+      sessionId: id,
+      authorId: id,
+      prompt: "Inspect the repository",
+      enqueuedAt: "2026-07-30T12:00:00.000Z",
+    });
+    const second = enqueueSharedSessionTurn(first.queue, {
+      id: "019c8c2e-c801-7a53-b556-62475c4a60e8",
+      sessionId: id,
+      authorId: id,
+      prompt: "Summarize the findings",
+      enqueuedAt: "2026-07-30T12:01:00.000Z",
+    });
+
+    expect(second.entry.queuePosition).toBe(2);
+    expect(second.queue.map((entry) => entry.queuePosition)).toEqual([1, 2]);
+    expect(second.queue.map((entry) => entry.prompt)).toEqual([
+      "Inspect the repository",
+      "Summarize the findings",
+    ]);
   });
 });
 

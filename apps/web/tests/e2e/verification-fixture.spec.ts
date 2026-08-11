@@ -529,3 +529,42 @@ test("F2.5 preserves both versions for an external file conflict", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("F3.1 opens an idle shared session with an empty ordered queue", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const sessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await sessionCard
+    .getByRole("button", { name: "Open shared session" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Open shared session")).toBeVisible();
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Codex-compatible",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Idle · awaiting instruction",
+  );
+  await expect(sessionCard.getByLabel("Ordered turn queue")).toContainText(
+    "0 queued",
+  );
+  await expect(
+    sessionCard.getByText("Queue is empty — no instructions are waiting."),
+  ).toBeVisible();
+  await expect(sessionCard.getByRole("status")).toContainText(
+    "Shared session is open and idle with an empty ordered queue.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F3.1",
+    state: "shared-session-idle-queue",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f3-1\/shared-session-idle-queue\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});

@@ -428,6 +428,83 @@
   min-height: 0;
 }
 
+.sharedSession {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.sessionClosed {
+  display: grid;
+  gap: 4px;
+}
+
+.sessionClosed .presenceIntro {
+  margin-bottom: 12px;
+}
+
+.sessionSurface {
+  display: grid;
+  gap: 16px;
+}
+
+.sessionMetadata {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sessionMetadata > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.sessionMetadata strong,
+.sessionMetadata code {
+  overflow: hidden;
+  color: #e0e7d8;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionQueue {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(161, 220, 105, 0.24);
+  border-radius: 8px;
+  background: #1d281a;
+}
+
+.sessionQueueHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sessionQueueHeader > div {
+  display: grid;
+  gap: 5px;
+}
+
+.sessionQueueHeader strong {
+  color: #eef2e7;
+  font-size: 16px;
+}
+
+.sessionQueueEmpty {
+  margin: 0;
+  color: #c8eea6;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .idePresence {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -961,6 +1038,10 @@
   .summary,
   .columns {
     grid-template-columns: 1fr;
+  }
+
+  .sessionMetadata {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .inviteStep {

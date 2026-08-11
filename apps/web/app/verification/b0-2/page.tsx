@@ -7,6 +7,7 @@ import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
 import { MemberRoleManagementFixture } from "@/components/member-role-management-fixture";
 import { PresenceEventsFixture } from "@/components/presence-events-fixture";
 import { SharedIdePresenceFixture } from "@/components/shared-ide-presence-fixture";
+import { SharedSessionQueueFixture } from "@/components/shared-session-queue-fixture";
 import {
   isVerificationFixtureEnabled,
   verificationFixture,
@@ -73,6 +74,7 @@ export default function VerificationFixturePage() {
           <MemberRoleManagementFixture />
           <PresenceEventsFixture />
           <SharedIdePresenceFixture />
+          <SharedSessionQueueFixture />
 
           <section className={styles.card} aria-labelledby="members-heading">
             <div className={styles.cardHeading}>
