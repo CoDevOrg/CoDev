@@ -13,9 +13,9 @@ any later task during the same scheduler run.
 
 ## Completed tasks
 
-| Task | Completed | Evidence |
-| --- | --- | --- |
-| B0.1 — Baseline audit | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure. |
+| Task                                                            | Completed  | Evidence                                                                                                                                                           |
+| --------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B0.1 — Baseline audit                                           | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.              |
 | B0.2 — Stable local verification fixture and fixture identities | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below. |
 
 ### B0.2 completion evidence
@@ -28,12 +28,12 @@ any later task during the same scheduler run.
   `apps/web/tests/e2e/verification-fixture.spec.ts`, and
   `COLLABORATIVE_IDE_FIXTURES.md`.
 - Checks: `pnpm --dir apps/web exec vitest run
-  lib/verification-fixture.test.ts` — 3 passed; targeted Prettier check —
+lib/verification-fixture.test.ts` — 3 passed; targeted Prettier check —
   passed; `pnpm --dir apps/web lint` — 0 errors, 2 pre-existing warnings;
   `pnpm --dir apps/web typecheck` — passed; `pnpm --dir apps/web build` —
   passed; `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 pnpm --dir apps/web exec
-  playwright test tests/e2e/verification-fixture.spec.ts` — 1 passed; `git
-  diff --check` — passed.
+playwright test tests/e2e/verification-fixture.spec.ts` — 1 passed; `git
+diff --check` — passed.
 - Validated source commit: `6f2c471d07b70c41d94b6d709df4289f842d21c9`.
 - Vercel preview: <https://codev-hgs59fup6-yousef20920s-projects.vercel.app>.
 - Computer Use flow: opened the preview URL in a new Chrome tab, navigated to
