@@ -152,3 +152,59 @@ test("F1.2 creates and accepts a single-use invite", async ({
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F1.3 blocks a revoked invite from being accepted", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  await page.getByRole("button", { name: "Create invite" }).click();
+  await page.getByRole("button", { name: "Revoke invite" }).click();
+  await expect(
+    page.getByText("Invite revoked. Jordan can no longer use this link."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Accept as Jordan" }).click();
+
+  await expect(
+    page.getByText(
+      "Jordan cannot join: Alex revoked this invite before acceptance.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Join rejected" }),
+  ).toBeDisabled();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F1.3",
+    state: "invite-revoked-edge",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f1-3\/invite-revoked-edge\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
+test("F1.3 blocks an expired invite from being accepted", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  await page.getByRole("button", { name: "Create invite" }).click();
+  await page.getByRole("button", { name: "Simulate expiry" }).click();
+  await page.getByRole("button", { name: "Accept as Jordan" }).click();
+
+  await expect(
+    page.getByText(
+      "Jordan cannot join: this invite expired before acceptance.",
+    ),
+  ).toBeVisible();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F1.3",
+    state: "invite-expired-edge",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f1-3\/invite-expired-edge\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});

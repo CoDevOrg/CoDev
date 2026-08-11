@@ -19,4 +19,38 @@ describe("InviteLifecycleFixture", () => {
       screen.getByRole("button", { name: "Invite already used" }),
     ).toBeDisabled();
   });
+
+  it("rejects Jordan after Alex revokes the invite", () => {
+    render(<InviteLifecycleFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create invite" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revoke invite" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept as Jordan" }));
+
+    expect(
+      screen.getByText(
+        "Jordan cannot join: Alex revoked this invite before acceptance.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Join rejected" }),
+    ).toBeDisabled();
+  });
+
+  it("rejects Jordan after the invite expires", () => {
+    render(<InviteLifecycleFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create invite" }));
+    fireEvent.click(screen.getByRole("button", { name: "Simulate expiry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept as Jordan" }));
+
+    expect(
+      screen.getByText(
+        "Jordan cannot join: this invite expired before acceptance.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Join rejected" }),
+    ).toBeDisabled();
+  });
 });

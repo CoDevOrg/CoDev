@@ -14,13 +14,23 @@ const recipient = {
   role: "Collaborator",
 };
 
-type InviteStatus = "idle" | "created" | "accepted";
+type InviteStatus = "idle" | "created" | "accepted" | "revoked" | "expired";
 
 export function InviteLifecycleFixture() {
   const [status, setStatus] = useState<InviteStatus>("idle");
+  const [acceptAttempted, setAcceptAttempted] = useState(false);
 
   const inviteCreated = status !== "idle";
   const inviteAccepted = status === "accepted";
+  const inviteBlocked = status === "revoked" || status === "expired";
+
+  function attemptAccept() {
+    if (inviteBlocked) {
+      setAcceptAttempted(true);
+      return;
+    }
+    setStatus("accepted");
+  }
 
   return (
     <section
@@ -33,7 +43,7 @@ export function InviteLifecycleFixture() {
           <h2 id="invite-heading">Invite and accept once</h2>
         </div>
         <span className={styles.count}>
-          {inviteAccepted ? "Live" : "2 steps"}
+          {inviteAccepted ? "Live" : inviteBlocked ? "Blocked" : "2 steps"}
         </span>
       </div>
 
@@ -52,6 +62,24 @@ export function InviteLifecycleFixture() {
           >
             {inviteCreated ? "Invite created" : "Create invite"}
           </button>
+          {inviteCreated && !inviteAccepted && !inviteBlocked ? (
+            <div className={styles.inviteActions}>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={() => setStatus("revoked")}
+              >
+                Revoke invite
+              </button>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={() => setStatus("expired")}
+              >
+                Simulate expiry
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.inviteStep}>
@@ -63,10 +91,18 @@ export function InviteLifecycleFixture() {
           <button
             className={styles.fixtureAction}
             type="button"
-            disabled={!inviteCreated || inviteAccepted}
-            onClick={() => setStatus("accepted")}
+            disabled={
+              !inviteCreated ||
+              inviteAccepted ||
+              (inviteBlocked && acceptAttempted)
+            }
+            onClick={attemptAccept}
           >
-            {inviteAccepted ? "Invite already used" : "Accept as Jordan"}
+            {inviteAccepted
+              ? "Invite already used"
+              : inviteBlocked && acceptAttempted
+                ? "Join rejected"
+                : "Accept as Jordan"}
           </button>
         </div>
       </div>
@@ -80,7 +116,13 @@ export function InviteLifecycleFixture() {
             <span className={styles.label}>Time-limited invite</span>
             <code>/invites/fixture-invite-24h</code>
           </div>
-          <span>Expires in 24 hours · single use</span>
+          <span>
+            {status === "revoked"
+              ? "Revoked by Alex · cannot be accepted"
+              : status === "expired"
+                ? "Expired · cannot be accepted"
+                : "Expires in 24 hours · single use"}
+          </span>
         </div>
       ) : (
         <p className={styles.note}>
@@ -100,7 +142,11 @@ export function InviteLifecycleFixture() {
           <span className={styles.presenceDot} aria-hidden="true" />
           <span>
             <strong>{recipient.name}</strong> ·{" "}
-            {inviteAccepted ? "joined via invite" : "waiting for invite"}
+            {inviteAccepted
+              ? "joined via invite"
+              : inviteBlocked && acceptAttempted
+                ? "join rejected"
+                : "waiting for invite"}
           </span>
         </div>
       </div>
@@ -108,9 +154,17 @@ export function InviteLifecycleFixture() {
       <p className={styles.inviteStatus} role="status">
         {inviteAccepted
           ? "Jordan is now present. This invite was accepted once and cannot be reused."
-          : inviteCreated
-            ? "Invite ready for Jordan to accept."
-            : "Owner action required: create the invite first."}
+          : status === "revoked" && acceptAttempted
+            ? "Jordan cannot join: Alex revoked this invite before acceptance."
+            : status === "expired" && acceptAttempted
+              ? "Jordan cannot join: this invite expired before acceptance."
+              : status === "revoked"
+                ? "Invite revoked. Jordan can no longer use this link."
+                : status === "expired"
+                  ? "Invite expired. Jordan can no longer use this link."
+                  : inviteCreated
+                    ? "Invite ready for Jordan to accept."
+                    : "Owner action required: create the invite first."}
       </p>
     </section>
   );

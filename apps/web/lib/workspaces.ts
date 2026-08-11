@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -39,6 +39,21 @@ export function inviteAllowsUser(
       invite.inviteeEmail.toLowerCase() === user.email?.toLowerCase()) ||
     (invite.inviteeLogin &&
       invite.inviteeLogin.toLowerCase() === user.login.toLowerCase()),
+  );
+}
+
+export function inviteIsAcceptable(
+  invite: {
+    expiresAt: Date;
+    revokedAt: Date | null;
+    acceptedAt: Date | null;
+  },
+  now = new Date(),
+) {
+  return (
+    invite.revokedAt === null &&
+    invite.acceptedAt === null &&
+    invite.expiresAt > now
   );
 }
 
@@ -609,18 +624,11 @@ export async function acceptWorkspaceInvite(token: string, userId: string) {
     const [invite] = await transaction
       .select()
       .from(schema.workspaceInvites)
-      .where(
-        and(
-          eq(schema.workspaceInvites.tokenHash, tokenHash),
-          isNull(schema.workspaceInvites.revokedAt),
-          isNull(schema.workspaceInvites.acceptedAt),
-          gt(schema.workspaceInvites.expiresAt, new Date()),
-        ),
-      )
+      .where(eq(schema.workspaceInvites.tokenHash, tokenHash))
       .limit(1)
       .for("update");
 
-    if (!invite) {
+    if (!invite || !inviteIsAcceptable(invite)) {
       throw new Error("This invite is invalid, expired, or already used.");
     }
 

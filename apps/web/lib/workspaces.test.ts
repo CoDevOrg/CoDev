@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inviteAllowsUser } from "./workspaces";
+import { inviteAllowsUser, inviteIsAcceptable } from "./workspaces";
 
 const user = { email: "alex@example.com", login: "alex_dev" };
 
@@ -47,5 +47,26 @@ describe("workspace invitation identity checks", () => {
         user,
       ),
     ).toBe(true);
+  });
+});
+
+describe("workspace invitation acceptance enforcement", () => {
+  const now = new Date("2026-08-11T15:00:00.000Z");
+  const invite = {
+    expiresAt: new Date("2026-08-12T15:00:00.000Z"),
+    revokedAt: null,
+    acceptedAt: null,
+  };
+
+  it("accepts an active invite", () => {
+    expect(inviteIsAcceptable(invite, now)).toBe(true);
+  });
+
+  it.each([
+    ["revoked", { revokedAt: new Date("2026-08-11T14:00:00.000Z") }],
+    ["expired", { expiresAt: new Date("2026-08-11T14:59:59.000Z") }],
+    ["already accepted", { acceptedAt: new Date("2026-08-11T14:30:00.000Z") }],
+  ])("rejects an %s invite", (_label, override) => {
+    expect(inviteIsAcceptable({ ...invite, ...override }, now)).toBe(false);
   });
 });

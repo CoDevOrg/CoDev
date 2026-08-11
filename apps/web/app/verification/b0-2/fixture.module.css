@@ -163,6 +163,13 @@
   cursor: not-allowed;
 }
 
+.inviteStep .inviteActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 2 / -1;
+}
+
 .inviteTicket {
   display: flex;
   align-items: center;
