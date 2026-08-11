@@ -6,17 +6,18 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**B0.3 — Reusable screenshot/evidence convention**
+**B0.4 — Reconcile the two-agent limit with the three-agent requirement**
 
-Read the B0.3 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on B0.4 or
+Read the B0.4 card in `COLLABORATIVE_IDE_EXECUTION.md`. Do not work on B0.5 or
 any later task during the same scheduler run.
 
 ## Completed tasks
 
-| Task                                                            | Completed  | Evidence                                                                                                                                                           |
-| --------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| B0.1 — Baseline audit                                           | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.              |
-| B0.2 — Stable local verification fixture and fixture identities | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below. |
+| Task                                                            | Completed  | Evidence                                                                                                                                                                          |
+| --------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0.1 — Baseline audit                                           | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                             |
+| B0.2 — Stable local verification fixture and fixture identities | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                |
+| B0.3 — Reusable screenshot/evidence convention                  | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below. |
 
 ### B0.2 completion evidence
 
@@ -44,6 +45,27 @@ diff --check` — passed.
 - Screenshots: `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%207.10.20%20AM.jpeg`
   (preview ready state); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%207.10.47%20AM.jpeg`
   (fixture-disabled 404 edge state).
+
+### B0.3 completion evidence
+
+- Changed files: `.gitignore`, `COLLABORATIVE_IDE_EVIDENCE.md`,
+  `COLLABORATIVE_IDE_FIXTURES.md`,
+  `apps/web/tests/e2e/support/evidence.ts`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: `pnpm exec prettier --check` on the changed Markdown/TypeScript
+  files — passed; `pnpm --dir apps/web lint` — 0 errors, 2 pre-existing
+  warnings; `pnpm --dir apps/web typecheck` — passed; `pnpm --dir apps/web exec
+playwright test tests/e2e/verification-fixture.spec.ts` — 1 passed; `git diff
+--check` — passed.
+- Validated source commit: `af7131f0db94f12049788d017adf095b975ab7c9`.
+- Vercel preview: <https://codev-9qj709unn-yousef20920s-projects.vercel.app> —
+  ready deployment for the validated commit.
+- Computer Use flow: opened the preview in a new Chrome tab, navigated to
+  `/verification/b0-2`, and confirmed the ready badge, repository metadata,
+  both fixture identities, and all three seeded files in the visible UI.
+- Screenshots: `/Users/yousefmaher/CoDev/artifacts/verification/b0-3/fixture-ready.png`
+  (Playwright success artifact); `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%208.09.09%20AM.jpeg`
+  (Computer Use preview ready state).
 
 ## Blocked tasks
 
