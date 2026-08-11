@@ -33,3 +33,22 @@ test("B0.3 captures the fixture ready state as reusable evidence", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("B0.4 shows the reconciled three-agent worktree capacity", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  await expect(page.getByLabel("Agent worktree capacity")).toContainText(
+    "3 slots available",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "B0.4",
+    state: "agent-capacity",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/b0-4\/agent-capacity\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});

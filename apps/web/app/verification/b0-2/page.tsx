@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
+
 import {
   isVerificationFixtureEnabled,
   verificationFixture,
@@ -51,6 +53,10 @@ export default function VerificationFixturePage() {
           <div>
             <span className={styles.label}>Workspace path</span>
             <strong>{verificationFixture.workspacePath}</strong>
+          </div>
+          <div aria-label="Agent worktree capacity">
+            <span className={styles.label}>Agent worktrees</span>
+            <strong>{MAX_PARALLEL_AGENT_SESSIONS} slots available</strong>
           </div>
         </section>
 
