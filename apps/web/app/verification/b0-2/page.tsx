@@ -5,6 +5,7 @@ import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
 import { AgentCapacityFixture } from "@/components/agent-capacity-fixture";
+import { AgentPathClaimFixture } from "@/components/agent-path-claim-fixture";
 import { MemberRoleManagementFixture } from "@/components/member-role-management-fixture";
 import { PresenceEventsFixture } from "@/components/presence-events-fixture";
 import { SharedIdePresenceFixture } from "@/components/shared-ide-presence-fixture";
@@ -159,6 +160,7 @@ export default function VerificationFixturePage() {
           </section>
 
           <AgentCapacityFixture />
+          <AgentPathClaimFixture />
 
           <InviteLifecycleFixture />
           <MemberRoleManagementFixture />

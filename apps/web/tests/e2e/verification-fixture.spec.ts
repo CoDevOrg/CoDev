@@ -179,6 +179,62 @@ test("F4.3 rejects a fourth active session with actionable guidance", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F4.4 requires an exact path claim before an agent write", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const claimCard = page
+    .getByRole("heading", { name: "Agent write claim" })
+    .locator("xpath=ancestor::section");
+  await expect(
+    claimCard.getByRole("button", { name: "Write README.md" }),
+  ).toBeDisabled();
+  await expect(claimCard.getByRole("status")).toContainText(
+    "agent write is blocked",
+  );
+
+  const blockedScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F4.4",
+      state: "write-blocked-before-claim",
+    },
+  );
+  expect(blockedScreenshotPath).toMatch(
+    /artifacts\/verification\/f4-4\/write-blocked-before-claim\.png$/,
+  );
+  await expect.poll(() => access(blockedScreenshotPath)).toBeUndefined();
+
+  await claimCard.getByRole("button", { name: "Start agent claim" }).click();
+  await expect(claimCard.getByText("Claimed path")).toBeVisible();
+  await expect(claimCard.getByText("README.md", { exact: true })).toBeVisible();
+  await expect(
+    claimCard.getByText("fixture-r1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    claimCard.getByText("agent write is now allowed", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    claimCard.getByRole("button", { name: "Write README.md" }),
+  ).toBeEnabled();
+
+  await claimCard.getByRole("button", { name: "Write README.md" }).click();
+  await expect(claimCard.getByRole("status")).toContainText(
+    "Agent write accepted for README.md.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F4.4",
+    state: "claimed-path-write-accepted",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f4-4\/claimed-path-write-accepted\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {
