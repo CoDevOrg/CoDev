@@ -347,6 +347,61 @@ test("F4.6 releases a stopped claim and preserves a checkpoint", async ({
   await expect.poll(() => access(stoppedScreenshotPath)).toBeUndefined();
 });
 
+test("F5.1 prepares an immutable review checkpoint with revision metadata", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const reviewCard = page
+    .getByRole("heading", { name: "Agent review checkpoint" })
+    .locator("xpath=ancestor::section");
+  await expect(reviewCard.getByRole("status")).toContainText(
+    "No review checkpoint prepared yet.",
+  );
+
+  const draftScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F5.1",
+      state: "review-checkpoint-pending",
+    },
+  );
+  expect(draftScreenshotPath).toMatch(
+    /artifacts\/verification\/f5-1\/review-checkpoint-pending\.png$/,
+  );
+  await expect.poll(() => access(draftScreenshotPath)).toBeUndefined();
+
+  await reviewCard.getByRole("button", { name: "Mark review-ready" }).click();
+  await expect(reviewCard.getByRole("status")).toContainText(
+    "Review ready · immutable checkpoint",
+  );
+  await expect(reviewCard.getByRole("status")).toContainText(
+    "Further writes must create a new checkpoint.",
+  );
+  await expect(reviewCard).toContainText("fixture-main-r1");
+  await expect(reviewCard).toContainText("fixture-agent-r2");
+  await expect(reviewCard).toContainText(
+    "sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4",
+  );
+  await expect(
+    reviewCard.getByRole("button", { name: "Checkpoint prepared" }),
+  ).toBeDisabled();
+
+  const readyScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F5.1",
+      state: "review-checkpoint-ready",
+    },
+  );
+  expect(readyScreenshotPath).toMatch(
+    /artifacts\/verification\/f5-1\/review-checkpoint-ready\.png$/,
+  );
+  await expect.poll(() => access(readyScreenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

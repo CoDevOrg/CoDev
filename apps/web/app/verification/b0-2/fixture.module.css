@@ -336,6 +336,89 @@
   margin-top: 12px;
 }
 
+.reviewCheckpointCard {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.reviewCheckpointAttempt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.reviewCheckpointAttempt > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.reviewCheckpointAttempt strong {
+  color: #eef2e7;
+  font-size: 13px;
+}
+
+.reviewCheckpointDetails {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(161, 220, 105, 0.3);
+  border-radius: 8px;
+  background: #1d281a;
+}
+
+.reviewCheckpointStatus {
+  display: grid;
+  gap: 4px;
+}
+
+.reviewCheckpointStatus strong {
+  color: #c8eea6;
+  font-size: 13px;
+}
+
+.reviewCheckpointStatus span {
+  color: #aeb9a7;
+  font-size: 12px;
+}
+
+.reviewMetadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.reviewMetadata > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 10px;
+  border-radius: 7px;
+  background: #20251d;
+}
+
+.reviewMetadata dt {
+  color: #9fa997;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.reviewMetadata dd {
+  overflow: hidden;
+  margin: 0;
+  color: #d9f4c0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .claimRow {
   display: flex;
   justify-content: space-between;
@@ -373,6 +456,15 @@
   .claimAttempt {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .reviewCheckpointAttempt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reviewMetadata {
+    grid-template-columns: 1fr;
   }
 
   .claimActions {
