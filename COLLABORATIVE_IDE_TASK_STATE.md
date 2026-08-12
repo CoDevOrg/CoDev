@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.3 — Reject a fourth active session server-side with an actionable UI error**
+**F4.4 — Implement one exact-path claim before agent writes**
 
 ## Completed tasks
 
@@ -27,6 +27,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F3.4 — Add authorized interrupt/cancellation state with a visible last completed action             | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action. |
 | F3.5 — Restore transcript, queue, and stream cursor after browser refresh                              | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
 | F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot   | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots. |
+| F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance. |
 
 ### B0.2 completion evidence
 
@@ -731,6 +732,46 @@ external filesystem`, and `Merge manually` as resolution choices. No
   data remains backed by the production workspace and orchestrator paths.
 - Next task: F4.3 — reject a fourth active session server-side with an
   actionable UI error.
+
+### F4.3 completion evidence
+
+- Completed: 2026-08-12T07:08:00Z.
+- Changed files: `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
+  `apps/web/app/api/verification/b0-2/agent-capacity/route.ts`,
+  `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/agent-capacity-fixture.test.tsx`,
+  `apps/web/components/agent-capacity-fixture.tsx`,
+  `apps/web/lib/agent-capacity.ts`,
+  `apps/web/lib/agent-coordination.test.ts`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused web unit/component tests — 7 passed; focused F4.3
+  Playwright verification on the rebuilt app — 1 passed; contracts tests — 19
+  passed; targeted Prettier check and `git diff --check` — passed; web lint —
+  0 errors with the same 2 pre-existing warnings; web typecheck and production
+  build — passed; contracts lint and typecheck — passed.
+- Validated source commit: `3fa73497b89349b22f51e1387fa6f20739d835b3`.
+- Vercel preview:
+  <https://codev-i5kcipfwy-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, confirmed the Ready badge and three active workboard
+  slots, clicked `Start fourth session`, and confirmed the server response
+  rendered as `Server rejected the fourth session · HTTP 409` with
+  `All three agent slots are in use. Stop or wait for an active session to
+  finish before starting another.` No credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-3/three-slots-before-fourth-session.jpeg`
+  (Computer Use Ready preview with all three slots),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-3/fourth-session-rejected.jpeg`
+  (Computer Use actionable HTTP 409 state), and
+  `artifacts/verification/f4-3/fourth-session-rejected.png` (focused
+  Playwright error-state artifact).
+- Known limitations: the credential-free preview endpoint models the
+  server-side capacity response without creating a durable agent; the
+  authenticated workspace route now shares the same actionable guard and
+  continues to enforce the three-session limit under its database lock.
+- Next task: F4.4 — implement one exact-path claim before agent writes.
 
 ## Blocked tasks
 
