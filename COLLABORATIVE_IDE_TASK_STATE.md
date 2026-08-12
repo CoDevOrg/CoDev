@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F5.2 — Render a binary-safe diff summary and affected-path list**
+**F5.3 — Reject stale checkpoint approval before any merge action**
 
 ## Completed tasks
 
@@ -31,6 +31,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment. |
 | F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`. |
 | F5.1 — Create an immutable review checkpoint with revision and diff metadata                           | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest. |
+| F5.2 — Render a binary-safe diff summary and affected-path list                                         | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted. |
 
 ### B0.2 completion evidence
 
@@ -933,6 +934,42 @@ external filesystem`, and `Merge manually` as resolution choices. No
   persists review head/base revisions and a diff digest, while binary-safe diff
   rendering is the next F5.2 task.
 - Next task: F5.2 — render a binary-safe diff summary and affected-path list.
+
+### F5.2 completion evidence
+
+- Completed: 2026-08-12T12:10:07Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused review-checkpoint Vitest — 1 passed; focused F5.2
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check and `git diff --check` — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web typecheck and production build — passed. The
+  scheduler ledger's existing Prettier mismatch remains documented and was not
+  reformatted.
+- Validated source commit: `9b7f0a743f5021d66fe8441aea5e18cbc6967980`.
+- Vercel preview: <https://codev-imbkppz5f-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. Computer Use used this exact
+  preview URL.
+- Computer Use flow: opened the Ready preview in a new Chrome tab at
+  `/verification/b0-2`, confirmed the Ready badge and three-slot workboard,
+  clicked `Mark review-ready`, clicked `Open diff review`, and confirmed the
+  visible diff summary (`3 paths changed · 2 text files · 1 binary file`),
+  `+14 −3` text delta, affected paths `README.md`, `src/hello.ts`, and
+  `assets/logo.png`, plus the binary-safe content omission message. No
+  credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-2/diff-review-open.png`
+  (focused Playwright diff/paths panel),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-2/computer-use-diff-review-open.jpeg`
+  (Computer Use final diff/paths panel), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 8.09.30 AM.jpeg`
+  (original Computer Use screenshot capture).
+- Known limitations: the credential-free preview fixture models review diff
+  metadata in browser state; the authenticated review service remains the
+  source of persisted checkpoint and diff data.
+- Next task: F5.3 — reject stale checkpoint approval before any merge action.
 
 ## Blocked tasks
 
