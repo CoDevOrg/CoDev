@@ -843,7 +843,7 @@ index 66bf809..5b482eb 100644
  const CODEV_AGENT_WORKTREE_PATH =
    /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
  let nextRequestId = 0
-@@ -67,3 +71,47 @@ export async function requestCodevProposalDiscard(
+@@ -67,3 +71,50 @@ export async function requestCodevProposalDiscard(
      )
    })
  }
@@ -860,7 +860,10 @@ index 66bf809..5b482eb 100644
 +  }
 +
 +  const requestId = `codev-proposal-create-${++nextRequestId}`
-+  const timeoutMs = options.timeoutMs ?? 15_000
++  // A managed proposal reserves a worktree and waits for its sandbox path to
++  // be provisioned. That can outlast the short interaction timeout used for
++  // lightweight parent-window messages.
++  const timeoutMs = options.timeoutMs ?? 60_000
 +
 +  return await new Promise((resolve, reject) => {
 +    const timeout = targetWindow.setTimeout(() => {
@@ -906,7 +909,7 @@ index a7e7b4f..548aa1c 100644
 
  const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
 
-@@ -61,3 +65,38 @@ describe('requestCodevProposalDiscard', () => {
+@@ -61,3 +65,75 @@ describe('requestCodevProposalDiscard', () => {
      })
    })
  })
@@ -930,6 +933,43 @@ index a7e7b4f..548aa1c 100644
 +    const resultPromise = requestCodevProposalCreate({ window: targetWindow, timeoutMs: 500 })
 +    const request = parent.postMessage.mock.calls[0]?.[0]
 +    expect(request).toEqual({ type: 'codev:create-proposal', requestId: expect.any(String) })
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: { type: 'codev:proposal-create-result', requestId: request.requestId, ok: true }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-create-result',
++      requestId: request.requestId,
++      ok: true
++    })
++  })
++
++  it('allows sandbox worktree provisioning to use the extended default timeout', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    let requestedTimeout: number | undefined
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout: vi.fn((_callback: TimerHandler, timeout?: number) => {
++        requestedTimeout = timeout
++        return 1
++      }),
++      clearTimeout: vi.fn()
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalCreate({ window: targetWindow })
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(requestedTimeout).toBe(60_000)
 +    for (const listener of listeners) {
 +      listener({
 +        origin: 'https://codev.example',
