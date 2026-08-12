@@ -402,6 +402,42 @@ test("F5.1 prepares an immutable review checkpoint with revision metadata", asyn
   await expect.poll(() => access(readyScreenshotPath)).toBeUndefined();
 });
 
+test("F5.2 renders a binary-safe diff summary and affected paths", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const reviewCard = page
+    .getByRole("heading", { name: "Agent review checkpoint" })
+    .locator("xpath=ancestor::section");
+  await reviewCard.getByRole("button", { name: "Mark review-ready" }).click();
+  await reviewCard.getByRole("button", { name: "Open diff review" }).click();
+
+  const diffPanel = reviewCard.getByRole("region", {
+    name: "Review diff and affected paths",
+  });
+  await expect(diffPanel).toContainText(
+    "3 paths changed · 2 text files · 1 binary file",
+  );
+  await expect(diffPanel).toContainText("+14 −3 lines");
+  await expect(diffPanel).toContainText("README.md");
+  await expect(diffPanel).toContainText("src/hello.ts");
+  await expect(diffPanel).toContainText("assets/logo.png");
+  await expect(diffPanel).toContainText("Binary file · content omitted");
+  await expect(diffPanel).toContainText(
+    "Binary content is not rendered as text; review remains safe for binary and generated files.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F5.2",
+    state: "diff-review-open",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f5-2\/diff-review-open\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

@@ -11,10 +11,34 @@ const reviewCheckpoint = Object.freeze({
     "sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4",
 });
 
+const reviewDiff = Object.freeze({
+  summary: "3 paths changed · 2 text files · 1 binary file",
+  additions: 14,
+  deletions: 3,
+  paths: [
+    {
+      path: "README.md",
+      kind: "modified",
+      detail: "+8 −2 lines",
+    },
+    {
+      path: "src/hello.ts",
+      kind: "modified",
+      detail: "+6 −1 line",
+    },
+    {
+      path: "assets/logo.png",
+      kind: "binary",
+      detail: "Binary file · content omitted",
+    },
+  ],
+});
+
 export function AgentReviewCheckpointFixture() {
   const [checkpoint, setCheckpoint] = useState<typeof reviewCheckpoint | null>(
     null,
   );
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   return (
     <section
@@ -74,6 +98,51 @@ export function AgentReviewCheckpointFixture() {
               <dd>{checkpoint.diffDigest}</dd>
             </div>
           </dl>
+          <button
+            className={styles.fixtureAction}
+            type="button"
+            onClick={() => setReviewOpen(true)}
+            disabled={reviewOpen}
+          >
+            {reviewOpen ? "Diff review open" : "Open diff review"}
+          </button>
+          {reviewOpen ? (
+            <div
+              className={styles.reviewDiffPanel}
+              role="region"
+              aria-label="Review diff and affected paths"
+            >
+              <div className={styles.reviewDiffSummary}>
+                <div>
+                  <span className={styles.label}>Diff summary</span>
+                  <strong>{reviewDiff.summary}</strong>
+                </div>
+                <div>
+                  <span className={styles.label}>Text delta</span>
+                  <strong>
+                    +{reviewDiff.additions} −{reviewDiff.deletions} lines
+                  </strong>
+                </div>
+              </div>
+              <div>
+                <span className={styles.label}>Affected paths</span>
+                <ul className={styles.reviewPathList}>
+                  {reviewDiff.paths.map((entry) => (
+                    <li key={entry.path}>
+                      <code>{entry.path}</code>
+                      <span>
+                        {entry.kind} · {entry.detail}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className={styles.reviewBinaryNote}>
+                Binary content is not rendered as text; review remains safe for
+                binary and generated files.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className={styles.fixtureStatus} role="status">

@@ -419,6 +419,68 @@
   white-space: nowrap;
 }
 
+.reviewDiffPanel {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid rgba(161, 220, 105, 0.3);
+  border-radius: 8px;
+  background: #16231a;
+}
+
+.reviewDiffSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.65fr);
+  gap: 12px;
+}
+
+.reviewDiffSummary > div,
+.reviewDiffPanel > div:last-of-type {
+  display: grid;
+  gap: 5px;
+}
+
+.reviewDiffSummary strong {
+  color: #eef2e7;
+  font-size: 13px;
+}
+
+.reviewPathList {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewPathList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #20251d;
+}
+
+.reviewPathList code {
+  color: #d9f4c0;
+  font-size: 12px;
+}
+
+.reviewPathList span {
+  color: #aeb9a7;
+  font-size: 12px;
+  text-align: right;
+}
+
+.reviewBinaryNote {
+  margin: 0;
+  color: #b9d997;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .claimRow {
   display: flex;
   justify-content: space-between;
@@ -465,6 +527,20 @@
 
   .reviewMetadata {
     grid-template-columns: 1fr;
+  }
+
+  .reviewDiffSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .reviewPathList li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .reviewPathList span {
+    text-align: left;
   }
 
   .claimActions {
