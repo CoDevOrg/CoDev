@@ -1109,6 +1109,25 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — Production verification 2026-08-12T20:06:18Z:** Validated the
+  current `main` commit `650c34a5a61457bd5cfbfb603e886fd13f939953` on Ready
+  Production deployment `dpl_HPDTnUQKRkvZ8Np9oxeKudjKWjEp` at
+  <https://codev-xi.vercel.app>. The authenticated Computer Use flow created
+  and opened a disposable Production workspace at
+  `/workspaces/5a161b43-63eb-4d23-ac0c-10df01f4bf72`; its AWS host booted and
+  the embedded native Orca UI loaded. Orca's Agents panel then showed `0
+shown · 0 recent` and `No agent sessions found`. F5.6 only intercepts a
+  native delete for an existing CoDev-managed proposal, but this Production
+  workspace exposes no native flow to create that prerequisite session or
+  proposal. Deleting an ordinary worktree would test only the intended native
+  fallback, not the audited proposal-discard lifecycle, so the required
+  managed-proposal deletion could not be performed. Current task remains
+  F5.6. Screenshot of the authenticated native Orca edge state:
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%204.06.10%20PM.jpeg`.
+  Local checks: focused Vitest (13 passed), `pnpm format:check`, `pnpm lint`
+  (0 errors; 2 existing warnings), `pnpm typecheck`, `pnpm build`, and
+  `git diff --check` passed.
+
 - **F5.6 — verification retry 2026-08-12T19:02:44Z:** Re-ran the
   authenticated Computer Use flow against the Ready preview for source commit
   `5f02d76749fd8454185cf8fc2799872522efa5d2`:
