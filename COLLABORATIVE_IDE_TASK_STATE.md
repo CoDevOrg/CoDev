@@ -1109,6 +1109,12 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — run blocked 2026-08-12T21:02:01Z:** The required initial
+  `git status --short` check found an unrelated untracked
+  `.cursor/settings.json`. Per the run policy, no task inspection,
+  implementation, branch update, deployment, or Computer Use verification was
+  performed. The file was not modified or staged; Current task remains F5.6.
+
 - **F5.6 — Production verification 2026-08-12T20:06:18Z:** Validated the
   current `main` commit `650c34a5a61457bd5cfbfb603e886fd13f939953` on Ready
   Production deployment `dpl_HPDTnUQKRkvZ8Np9oxeKudjKWjEp` at
