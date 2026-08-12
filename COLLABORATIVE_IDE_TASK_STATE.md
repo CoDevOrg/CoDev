@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite**
+**F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout**
 
 ## Completed tasks
 
@@ -28,6 +28,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F3.5 — Restore transcript, queue, and stream cursor after browser refresh                              | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
 | F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot   | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots. |
 | F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance. |
+| F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment. |
 
 ### B0.2 completion evidence
 
@@ -814,8 +815,47 @@ external filesystem`, and `Merge manually` as resolution choices. No
 - Known limitations: the credential-free preview fixture models the claim and
   write gate in browser state; the authenticated agent runtime already calls
   `requireActivePathClaim` before its `write_file` tool writes to a worktree.
-- Next task: F4.5 — surface an overlapping claim as contested; provide
-  reassign or cancel, not silent overwrite.
+
+### F4.5 completion evidence
+
+- Completed: 2026-08-12T09:08:17Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-path-claim-fixture.tsx`,
+  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused claim-fixture Vitest — 3 passed; focused F4.5 Playwright
+  verification on the rebuilt app — 1 passed; targeted Prettier check and
+  `git diff --check` — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web typecheck and production build — passed.
+- The repository-wide scheduler ledger Prettier check remains blocked by its
+  pre-existing formatting mismatch; this evidence was added without
+  reformatting unrelated scheduler history.
+- Validated source commit: `80c4b0d`.
+- Vercel preview: <https://codev-hyd9iwkfh-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. Computer Use used the same
+  exact preview URL.
+- Computer Use flow: opened `/verification/b0-2` in a new Chrome tab,
+  confirmed the Ready badge and three-slot workboard, clicked `Start agent
+  claim` for slot 1, clicked `Request overlapping claim` for slot 2, and
+  confirmed the visible `Contested overlap · no silent overwrite` warning,
+  both `README.md` claims marked Contested, and the write control disabled.
+  Clicked `Reassign to slot 2` and confirmed slot 1 Released, slot 2 Active,
+  and the visible reassignment result. No credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-5/contested-overlap.png`
+  (focused Playwright contested warning),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-5/claim-reassigned.png`
+  (focused Playwright reassignment result),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-5/computer-use-contested-overlap.jpeg`
+  (Computer Use contested warning with both claims), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-5/computer-use-claim-reassigned.jpeg`
+  (Computer Use reassignment result).
+- Known limitations: the credential-free preview fixture models the two
+  overlapping claims and resolution choices in browser state; the authenticated
+  coordination service already persists contested claims and rejects writes
+  unless the session has an active claim.
+- Next task: F4.6 — release claims and preserve a checkpoint on
+  stop/fail/timeout.
 
 ## Blocked tasks
 
