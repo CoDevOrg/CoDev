@@ -146,6 +146,39 @@ test("F4.2 shows the assignment details for every workboard slot", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F4.3 rejects a fourth active session with actionable guidance", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const capacityGuard = page
+    .getByRole("heading", { name: "Fourth-session check" })
+    .locator("xpath=ancestor::section");
+  await expect(
+    capacityGuard.getByRole("button", { name: "Start fourth session" }),
+  ).toBeEnabled();
+
+  await capacityGuard
+    .getByRole("button", { name: "Start fourth session" })
+    .click();
+
+  await expect(capacityGuard.getByRole("alert")).toContainText(
+    "Server rejected the fourth session · HTTP 409",
+  );
+  await expect(capacityGuard.getByRole("alert")).toContainText(
+    "Stop or wait for an active session to finish before starting another.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F4.3",
+    state: "fourth-session-rejected",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f4-3\/fourth-session-rejected\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
+import { AgentCapacityFixture } from "@/components/agent-capacity-fixture";
 import { MemberRoleManagementFixture } from "@/components/member-role-management-fixture";
 import { PresenceEventsFixture } from "@/components/presence-events-fixture";
 import { SharedIdePresenceFixture } from "@/components/shared-ide-presence-fixture";
@@ -156,6 +157,8 @@ export default function VerificationFixturePage() {
                 ))}
             </div>
           </section>
+
+          <AgentCapacityFixture />
 
           <InviteLifecycleFixture />
           <MemberRoleManagementFixture />

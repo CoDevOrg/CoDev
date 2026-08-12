@@ -5,7 +5,11 @@ import {
   claimPatternsOverlap,
   claimSerializationScope,
 } from "./agent-coordination";
-import { summarizeAgentCapacity } from "./agent-capacity";
+import {
+  AGENT_CAPACITY_EXCEEDED_MESSAGE,
+  assertAgentCapacity,
+  summarizeAgentCapacity,
+} from "./agent-capacity";
 
 describe("path claim matching", () => {
   it("detects exact and directory overlaps", () => {
@@ -52,5 +56,12 @@ describe("agent worktree capacity", () => {
         { worktreeStatus: "active" },
       ]).availableSlots,
     ).toBe(0);
+  });
+
+  it("rejects a fourth session with actionable guidance", () => {
+    expect(() => assertAgentCapacity(2)).not.toThrow();
+    expect(() => assertAgentCapacity(3)).toThrow(
+      AGENT_CAPACITY_EXCEEDED_MESSAGE,
+    );
   });
 });

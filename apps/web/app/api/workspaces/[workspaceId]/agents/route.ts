@@ -4,8 +4,6 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
-import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
-
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { apiError, getApiUser } from "@/lib/api";
@@ -29,7 +27,11 @@ import {
 } from "@/lib/workspaces";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { readWorkspaceStateEvents } from "@/lib/workspace-state";
-import { summarizeAgentCapacity } from "@/lib/agent-capacity";
+import {
+  AgentCapacityError,
+  assertAgentCapacity,
+  summarizeAgentCapacity,
+} from "@/lib/agent-capacity";
 import {
   agentAttachmentsSchema,
   toStoredAgentAttachments,
@@ -51,8 +53,6 @@ const createSchema = z.object({
 });
 
 class DuplicateIssueError extends Error {}
-class AgentCapacityError extends Error {}
-
 function isUniqueViolation(error: unknown) {
   return (
     typeof error === "object" &&
@@ -225,11 +225,7 @@ export async function POST(
               inArray(schema.worktrees.status, ["active", "frozen"]),
             ),
           );
-        if (Number(sessionCount?.value ?? 0) >= MAX_PARALLEL_AGENT_SESSIONS) {
-          throw new AgentCapacityError(
-            `A workspace supports at most ${MAX_PARALLEL_AGENT_SESSIONS} agent sessions.`,
-          );
-        }
+        assertAgentCapacity(Number(sessionCount?.value ?? 0));
         const [repository] = await transaction
           .select({ id: schema.workspaces.githubRepositoryId })
           .from(schema.workspaces)
