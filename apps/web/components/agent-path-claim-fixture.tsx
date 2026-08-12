@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import styles from "@/app/verification/b0-2/fixture.module.css";
 
-type ClaimState = "unclaimed" | "claimed" | "written";
+type ClaimState = "unclaimed" | "claimed" | "written" | "stopped";
 type OverlapState = "none" | "contested" | "reassigned" | "cancelled";
 
 const claimedPath = "README.md";
@@ -13,11 +13,24 @@ const claimedRevision = "fixture-r1";
 export function AgentPathClaimFixture() {
   const [claimState, setClaimState] = useState<ClaimState>("unclaimed");
   const [overlapState, setOverlapState] = useState<OverlapState>("none");
+  const [checkpoint, setCheckpoint] = useState<{
+    path: string;
+    revision: string;
+    reason: string;
+  } | null>(null);
 
-  const hasClaim = claimState !== "unclaimed";
+  const hasClaim = claimState === "claimed" || claimState === "written";
   const canWrite =
     claimState === "claimed" &&
     (overlapState === "none" || overlapState === "cancelled");
+  const stopAgent = () => {
+    setClaimState("stopped");
+    setCheckpoint({
+      path: claimedPath,
+      revision: claimedRevision,
+      reason: "Stopped by Alex Morgan before the next write.",
+    });
+  };
 
   return (
     <section
@@ -26,7 +39,7 @@ export function AgentPathClaimFixture() {
     >
       <div className={styles.cardHeading}>
         <div>
-          <span className={styles.kicker}>F4.4 · Write boundary</span>
+          <span className={styles.kicker}>F4.6 · Safe stop</span>
           <h2 id="agent-path-claim-heading">Agent write claim</h2>
         </div>
         <span className={styles.count}>Exact</span>
@@ -59,7 +72,28 @@ export function AgentPathClaimFixture() {
           </button>
         </div>
       </div>
-      {hasClaim && overlapState === "none" ? (
+      {claimState === "stopped" && checkpoint ? (
+        <div className={styles.claimDetails} role="status">
+          <div>
+            <span>Claim status</span>
+            <code>Released</code>
+          </div>
+          <div>
+            <span>Released path</span>
+            <code>{checkpoint.path}</code>
+          </div>
+          <div className={styles.checkpoint} aria-label="Preserved checkpoint">
+            <span>Checkpoint preserved</span>
+            <strong>
+              {checkpoint.path} · {checkpoint.revision}
+            </strong>
+            <small>{checkpoint.reason}</small>
+          </div>
+          <strong>
+            Agent stopped safely · the claim is released for another agent.
+          </strong>
+        </div>
+      ) : hasClaim && overlapState === "none" ? (
         <div className={styles.claimDetails} role="status">
           <div>
             <span>Claimed path</span>
@@ -83,6 +117,13 @@ export function AgentPathClaimFixture() {
               Request overlapping claim
             </button>
           ) : null}
+          <button
+            className={styles.fixtureActionSecondary}
+            type="button"
+            onClick={stopAgent}
+          >
+            Stop agent
+          </button>
         </div>
       ) : overlapState !== "none" ? (
         <>

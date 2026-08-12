@@ -81,4 +81,25 @@ describe("AgentPathClaimFixture", () => {
       screen.getByRole("button", { name: "Write README.md" }),
     ).toBeEnabled();
   });
+
+  it("releases the claim and preserves a checkpoint when the agent stops", () => {
+    render(<AgentPathClaimFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start agent claim" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop agent" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Agent stopped safely",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("claim is released");
+    expect(screen.getByLabelText("Preserved checkpoint")).toHaveTextContent(
+      "README.md · fixture-r1",
+    );
+    expect(screen.getByLabelText("Preserved checkpoint")).toHaveTextContent(
+      "Stopped by Alex Morgan before the next write.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Stop agent" }),
+    ).not.toBeInTheDocument();
+  });
 });

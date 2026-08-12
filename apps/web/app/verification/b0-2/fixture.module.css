@@ -284,6 +284,35 @@
   font-size: 12px;
 }
 
+.checkpoint {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 10px;
+  border: 1px solid rgba(161, 220, 105, 0.3);
+  border-radius: 7px;
+  background: #16231a;
+}
+
+.checkpoint span {
+  color: #b9d997;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.checkpoint strong {
+  color: #eef2e7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+.checkpoint small {
+  color: #aeb9a7;
+  font-size: 12px;
+}
+
 .claimConflict {
   display: grid;
   gap: 5px;

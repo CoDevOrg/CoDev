@@ -293,6 +293,60 @@ test("F4.5 surfaces overlapping claims before an explicit resolution", async ({
   await expect.poll(() => access(resolvedScreenshotPath)).toBeUndefined();
 });
 
+test("F4.6 releases a stopped claim and preserves a checkpoint", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const claimCard = page
+    .getByRole("heading", { name: "Agent write claim" })
+    .locator("xpath=ancestor::section");
+  await claimCard.getByRole("button", { name: "Start agent claim" }).click();
+  await expect(
+    claimCard.getByText("Claim active", { exact: false }),
+  ).toBeVisible();
+
+  const activeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F4.6",
+      state: "active-claim-before-stop",
+    },
+  );
+  expect(activeScreenshotPath).toMatch(
+    /artifacts\/verification\/f4-6\/active-claim-before-stop\.png$/,
+  );
+  await expect.poll(() => access(activeScreenshotPath)).toBeUndefined();
+
+  await claimCard.getByRole("button", { name: "Stop agent" }).click();
+  await expect(claimCard.getByRole("status")).toContainText(
+    "Agent stopped safely",
+  );
+  await expect(claimCard.getByRole("status")).toContainText(
+    "claim is released",
+  );
+  await expect(claimCard.getByLabel("Preserved checkpoint")).toContainText(
+    "README.md · fixture-r1",
+  );
+  await expect(claimCard.getByLabel("Preserved checkpoint")).toContainText(
+    "Stopped by Alex Morgan before the next write.",
+  );
+
+  const stoppedScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F4.6",
+      state: "stopped-claim-checkpoint",
+    },
+  );
+  expect(stoppedScreenshotPath).toMatch(
+    /artifacts\/verification\/f4-6\/stopped-claim-checkpoint\.png$/,
+  );
+  await expect.poll(() => access(stoppedScreenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {
