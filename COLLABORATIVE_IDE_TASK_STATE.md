@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F5.3 — Reject stale checkpoint approval before any merge action**
+**F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution**
 
 ## Completed tasks
 
@@ -32,6 +32,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`. |
 | F5.1 — Create an immutable review checkpoint with revision and diff metadata                           | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest. |
 | F5.2 — Render a binary-safe diff summary and affected-path list                                         | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted. |
+| F5.3 — Reject stale checkpoint approval before any merge action                                        | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started. |
 
 ### B0.2 completion evidence
 
@@ -970,6 +971,41 @@ external filesystem`, and `Merge manually` as resolution choices. No
   metadata in browser state; the authenticated review service remains the
   source of persisted checkpoint and diff data.
 - Next task: F5.3 — reject stale checkpoint approval before any merge action.
+
+### F5.3 completion evidence
+
+- Completed: 2026-08-12T13:09:00Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused review-checkpoint Vitest — 2 passed; focused F5.3
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check — passed; web lint — 0 errors with the same 2 pre-existing warnings;
+  web typecheck — passed; web production build — passed; `git diff --check` —
+  passed.
+- Validated source commit: `df35f38ee6e6f572a8d8e9dcbd2612a2df6d1793`.
+- Vercel preview: <https://codev-8bito4jm1-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. Computer Use used this exact
+  preview URL.
+- Computer Use flow: opened the Ready preview in a new Chrome tab, clicked
+  `Mark review-ready`, advanced the integration head from `fixture-main-r1` to
+  `fixture-main-r2`, clicked `Approve checkpoint`, and confirmed the visible
+  `Stale checkpoint · approval blocked` warning, re-review guidance, disabled
+  approval control, and `No merge action started.` No credentials or secrets
+  were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-3/stale-approval-rejected.png`
+  (focused Playwright stale approval state), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-3/computer-use-stale-approval-rejected.png`
+  (Computer Use final preview state with stale warning).
+- Known limitations: the credential-free preview fixture models the stale
+  approval gate in browser state; the authenticated review service already
+  performs the server-side base/head check before calling the merge
+  orchestrator, while integration success and audit attribution remain the
+  next F5.4 task.
+- Next task: F5.4 — integrate exactly one current reviewed checkpoint with
+  audit attribution.
 
 ## Blocked tasks
 
