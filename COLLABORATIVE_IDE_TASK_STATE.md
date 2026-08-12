@@ -1093,7 +1093,20 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 ## Blocked tasks
 
-_None._
+- **F5.6 — 2026-08-12T16:25:42Z:** Source commit
+  `e3769e22d6f01b5aafcf6f99440816b64aca2e3b` passed the focused Orca and
+  CoDev tests, formatting, lint, typecheck, production build, and patch
+  reproducibility checks; it was pushed and deployed Ready at
+  <https://codev-bijlrqyrq-yousef20920s-projects.vercel.app> (deployment
+  `dpl_9TC56Zsj7qonW8PPnDauwgAefqPr`). Computer Use opened both that exact
+  deployment and its stable branch alias, but each redirected the protected
+  workspace route to `/sign-in`; Google and GitHub sign-in were disabled, and
+  the existing authenticated `codev-xi.vercel.app` session did not transfer
+  across preview hostnames. The required authenticated Orca workspace flow
+  therefore could not be reached without entering or creating credentials and
+  provisioning a disposable managed proposal, so no proposal was deleted and
+  F5.6 remains Current. Screenshot:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-auth-blocker.jpeg`.
 
 ## Update procedure
 
