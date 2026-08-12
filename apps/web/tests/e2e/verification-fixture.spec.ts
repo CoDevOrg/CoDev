@@ -762,3 +762,79 @@ test("F3.4 interrupts a controlled turn and preserves its last completed action"
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F3.5 restores the shared session after refresh without duplicating its queue", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const sessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await sessionCard
+    .getByRole("button", { name: "Open shared session" })
+    .click();
+  await sessionCard
+    .getByRole("button", { name: "Run fixture transcript" })
+    .click();
+  await sessionCard
+    .getByLabel("Instruction to queue")
+    .fill("Inspect the shared session contract.");
+  await sessionCard
+    .getByRole("button", { name: "Queue instruction as Jordan" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Ordered turn queue")).toContainText(
+    "1 queued",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText("3");
+
+  await page.reload();
+
+  const restoredSessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await expect(
+    restoredSessionCard.getByLabel("Open shared session"),
+  ).toBeVisible();
+  await expect(
+    restoredSessionCard.getByLabel("Session metadata"),
+  ).toContainText("Stream cursor3");
+  await expect(
+    restoredSessionCard.getByLabel("Ordered turn queue"),
+  ).toContainText("1 queued");
+  await expect(
+    restoredSessionCard.getByLabel("Queued instruction"),
+  ).toHaveCount(1);
+  await expect(
+    restoredSessionCard.getByLabel("Ordered transcript"),
+  ).toContainText("2 completed turns");
+  await expect(restoredSessionCard.getByRole("status")).toContainText(
+    "Session restored after browser refresh · stream cursor 3 · queued instruction preserved once.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F3.5",
+    state: "shared-session-refresh-recovered",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f3-5\/shared-session-refresh-recovered\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  await expect(
+    restoredSessionCard.getByRole("button", { name: "Instruction queued" }),
+  ).toBeDisabled();
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F3.5",
+      state: "shared-session-refresh-no-duplicate-queue",
+    },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f3-5\/shared-session-refresh-no-duplicate-queue\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});

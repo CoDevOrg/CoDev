@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { z } from "zod";
 
 import {
   enqueueSharedSessionTurn,
   sharedSessionSchema,
+  sharedSessionQueueEntrySchema,
 } from "@codev/contracts";
 
 import styles from "@/app/verification/b0-2/fixture.module.css";
@@ -44,7 +46,95 @@ const fixtureCompletedAction = {
   output: "Repository structure is ready for the shared session.",
 } as const;
 
+const fixtureStorageKey = "codev:verification:f3-5:shared-session";
+const fixtureSnapshotSchema = z.object({
+  isOpen: z.boolean(),
+  hasTranscript: z.boolean(),
+  queue: sharedSessionQueueEntrySchema.array().max(100),
+  streamCursor: z.number().int().nonnegative(),
+});
+type FixtureSnapshot = z.infer<typeof fixtureSnapshotSchema> & {
+  wasRestoredFromStorage: boolean;
+};
+
+const fixtureDefaultSnapshot: FixtureSnapshot = {
+  isOpen: false,
+  hasTranscript: false,
+  queue: [],
+  streamCursor: 0,
+  wasRestoredFromStorage: false,
+};
+let fixtureSnapshotCacheRaw: string | null | undefined;
+let fixtureSnapshotCache = fixtureDefaultSnapshot;
+const fixtureSnapshotListeners = new Set<() => void>();
+
 type ControlledTurnState = "idle" | "running" | "interrupted";
+
+function getFixtureStorage() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getFixtureSnapshot(): FixtureSnapshot {
+  const raw = getFixtureStorage()?.getItem(fixtureStorageKey) ?? null;
+  if (raw === fixtureSnapshotCacheRaw) return fixtureSnapshotCache;
+
+  fixtureSnapshotCacheRaw = raw;
+  if (!raw) {
+    fixtureSnapshotCache = fixtureDefaultSnapshot;
+    return fixtureSnapshotCache;
+  }
+
+  try {
+    fixtureSnapshotCache = {
+      ...fixtureSnapshotSchema.parse(JSON.parse(raw)),
+      wasRestoredFromStorage: true,
+    };
+  } catch {
+    getFixtureStorage()?.removeItem(fixtureStorageKey);
+    fixtureSnapshotCacheRaw = null;
+    fixtureSnapshotCache = fixtureDefaultSnapshot;
+  }
+
+  return fixtureSnapshotCache;
+}
+
+function subscribeToFixtureSnapshot(listener: () => void) {
+  fixtureSnapshotListeners.add(listener);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === fixtureStorageKey) listener();
+  };
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    fixtureSnapshotListeners.delete(listener);
+    window.removeEventListener("storage", handleStorage);
+    if (fixtureSnapshotListeners.size === 0) {
+      fixtureSnapshotCacheRaw = undefined;
+    }
+  };
+}
+
+function persistFixtureSnapshot(snapshot: FixtureSnapshot) {
+  const storage = getFixtureStorage();
+  if (!storage) return;
+
+  const serialized = JSON.stringify({
+    isOpen: snapshot.isOpen,
+    hasTranscript: snapshot.hasTranscript,
+    queue: snapshot.queue,
+    streamCursor: snapshot.streamCursor,
+  });
+  storage.setItem(fixtureStorageKey, serialized);
+  fixtureSnapshotCacheRaw = serialized;
+  fixtureSnapshotCache = snapshot;
+  fixtureSnapshotListeners.forEach((listener) => listener());
+}
 
 const fixtureMembers = {
   alex: {
@@ -65,9 +155,12 @@ const fixtureMembers = {
 } as const;
 
 export function SharedSessionQueueFixture() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [hasTranscript, setHasTranscript] = useState(false);
-  const [queue, setQueue] = useState(fixtureSession.queue);
+  const sessionSnapshot = useSyncExternalStore(
+    subscribeToFixtureSnapshot,
+    getFixtureSnapshot,
+    () => fixtureDefaultSnapshot,
+  );
+  const { hasTranscript, isOpen, queue, streamCursor } = sessionSnapshot;
   const [draftPrompt, setDraftPrompt] = useState("");
   const [controlledTurnState, setControlledTurnState] =
     useState<ControlledTurnState>("idle");
@@ -96,7 +189,11 @@ export function SharedSessionQueueFixture() {
       prompt,
       enqueuedAt: "2026-07-30T12:02:00.000Z",
     });
-    setQueue(result.queue);
+    persistFixtureSnapshot({
+      ...sessionSnapshot,
+      queue: result.queue,
+      streamCursor: sessionSnapshot.streamCursor + 1,
+    });
     setDraftPrompt("");
   }
 
@@ -122,7 +219,9 @@ export function SharedSessionQueueFixture() {
           <button
             className={styles.fixtureAction}
             type="button"
-            onClick={() => setIsOpen(true)}
+            onClick={() =>
+              persistFixtureSnapshot({ ...sessionSnapshot, isOpen: true })
+            }
           >
             Open shared session
           </button>
@@ -159,6 +258,10 @@ export function SharedSessionQueueFixture() {
             <div>
               <span className={styles.label}>Model / configuration</span>
               <strong>{fixtureSession.model} · standard</strong>
+            </div>
+            <div>
+              <span className={styles.label}>Stream cursor</span>
+              <strong>{streamCursor}</strong>
             </div>
           </div>
 
@@ -354,7 +457,16 @@ export function SharedSessionQueueFixture() {
             <button
               className={styles.fixtureAction}
               type="button"
-              onClick={() => setHasTranscript(true)}
+              onClick={() =>
+                persistFixtureSnapshot({
+                  ...sessionSnapshot,
+                  hasTranscript: true,
+                  streamCursor: Math.max(
+                    sessionSnapshot.streamCursor,
+                    fixtureTranscript.length,
+                  ),
+                })
+              }
             >
               Run fixture transcript
             </button>
@@ -405,15 +517,17 @@ export function SharedSessionQueueFixture() {
 
       <p className={styles.viewerStatus} role="status">
         {isOpen
-          ? queue.length > 0
-            ? "Jordan's instruction is queued and attributed for every session member."
-            : controlledTurnState === "interrupted"
-              ? "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member."
-              : controlledTurnState === "running"
-                ? "Controlled turn 3 is running; Jordan can interrupt it with co-steer permission."
-                : hasTranscript
-                  ? "Shared session transcript is complete and ordered by turn."
-                  : "Shared session is open and idle with an empty ordered queue."
+          ? sessionSnapshot.wasRestoredFromStorage
+            ? `Session restored after browser refresh · stream cursor ${streamCursor} · ${queue.length > 0 ? "queued instruction preserved once." : "transcript replayed without duplicate turns."}`
+            : queue.length > 0
+              ? "Jordan's instruction is queued and attributed for every session member."
+              : controlledTurnState === "interrupted"
+                ? "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member."
+                : controlledTurnState === "running"
+                  ? "Controlled turn 3 is running; Jordan can interrupt it with co-steer permission."
+                  : hasTranscript
+                    ? "Shared session transcript is complete and ordered by turn."
+                    : "Shared session is open and idle with an empty ordered queue."
           : "Open the session to view its idle queue."}
       </p>
     </section>

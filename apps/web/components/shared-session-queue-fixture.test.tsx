@@ -1,9 +1,22 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { SharedSessionQueueFixture } from "./shared-session-queue-fixture";
 
 describe("SharedSessionQueueFixture", () => {
+  beforeEach(() => {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+  });
+
   it("opens an idle shared session with an empty durable queue", () => {
     render(<SharedSessionQueueFixture />);
 
@@ -137,5 +150,51 @@ describe("SharedSessionQueueFixture", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member.",
     );
+  });
+
+  it("restores the transcript, queue, and stream cursor after refresh", async () => {
+    const firstRender = render(<SharedSessionQueueFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open shared session" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Run fixture transcript" }),
+    );
+    fireEvent.change(screen.getByLabelText("Instruction to queue"), {
+      target: { value: "Inspect the shared session contract." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Queue instruction as Jordan" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem("codev:verification:f3-5:shared-session"),
+      ).toContain('"streamCursor":3');
+    });
+
+    firstRender.unmount();
+    render(<SharedSessionQueueFixture />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Open shared session")).toBeVisible();
+    });
+    expect(screen.getByLabelText("Session metadata")).toHaveTextContent(
+      "Stream cursor3",
+    );
+    expect(screen.getByLabelText("Ordered turn queue")).toHaveTextContent(
+      "1 queued",
+    );
+    expect(screen.getAllByLabelText("Queued instruction")).toHaveLength(1);
+    expect(screen.getByLabelText("Ordered transcript")).toHaveTextContent(
+      "2 completed turns",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Session restored after browser refresh · stream cursor 3 · queued instruction preserved once.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Instruction queued" }),
+    ).toBeDisabled();
   });
 });
