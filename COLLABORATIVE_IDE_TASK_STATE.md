@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F3.5 — Restore transcript, queue, and stream cursor after browser refresh**
+**F4.1 — Raise the server-side active-session limit from two to three, with contract and limit tests**
 
 ## Completed tasks
 
@@ -25,6 +25,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F3.2 — Render the provider, owner, worktree, state, and ordered transcript                          | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order. |
 | F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                  | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview. |
 | F3.4 — Add authorized interrupt/cancellation state with a visible last completed action             | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action. |
+| F3.5 — Restore transcript, queue, and stream cursor after browser refresh                              | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
 
 ### B0.2 completion evidence
 
@@ -614,6 +615,44 @@ external filesystem`, and `Merge manually` as resolution choices. No
   event storage paths.
 - Next task: F3.5 — restore transcript, queue, and stream cursor after browser
   refresh.
+
+### F3.5 completion evidence
+
+- Completed: 2026-08-12T04:12:21Z.
+- Changed files: `apps/web/components/shared-session-queue-fixture.tsx`,
+  `apps/web/components/shared-session-queue-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused shared-session component tests — 5 passed; focused F3.5
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check passed; web lint — 0 errors with the same 2 pre-existing warnings;
+  web typecheck passed; web production build passed; `git diff --check`
+  passed. The repository-wide format check remains blocked by the three
+  pre-existing scheduler Markdown files recorded in earlier ledger evidence.
+- Validated source commit:
+  `36b09623e9672f9cfcfb09b249a1561eb5601593`.
+- Vercel preview:
+  <https://codev-d9bxtswlc-yousef20920s-projects.vercel.app> — Ready
+  deployment for the validated source commit; branch alias resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, opened the shared session, ran the fixture transcript,
+  entered `Inspect the shared session contract.` as Jordan Lee, queued it once,
+  refreshed Chrome, and confirmed the restored `Completed · 2 turns`
+  transcript, `1 queued` attributed instruction, stream cursor `3`, and
+  `Session restored after browser refresh · stream cursor 3 · queued
+  instruction preserved once.` status. Confirmed the `Instruction queued`
+  control remained disabled, preventing a duplicate queue entry.
+- Screenshots:
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 12.12.11 AM.jpeg`
+  (Computer Use refresh recovery success), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 12.12.21 AM.jpeg`
+  (Computer Use no-duplicate queue edge state).
+- Known limitations: the credential-free preview fixture persists the shared
+  session snapshot in browser storage; authenticated session recovery remains
+  backed by the existing durable session/event paths and provider execution
+  boundary.
+- Next task: F4.1 — raise the server-side active-session limit from two to
+  three, with contract and limit tests.
 
 ## Blocked tasks
 
