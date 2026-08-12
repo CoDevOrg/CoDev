@@ -25,6 +25,30 @@ function roleLabel(role: (typeof verificationFixture.members)[number]["role"]) {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
+const verificationAgentSlots = [
+  {
+    assignment: "Repository map",
+    owner: "Alex Morgan",
+    provider: "Codex",
+    status: "Active",
+    elapsed: "00:18",
+  },
+  {
+    assignment: "Presence replay",
+    owner: "Jordan Lee",
+    provider: "Claude",
+    status: "Active",
+    elapsed: "01:42",
+  },
+  {
+    assignment: "Session recovery",
+    owner: "Casey Rivera",
+    provider: "Codex",
+    status: "Active",
+    elapsed: "03:07",
+  },
+] as const;
+
 export default function VerificationFixturePage() {
   if (!isVerificationFixtureEnabled()) {
     notFound();
@@ -91,19 +115,45 @@ export default function VerificationFixturePage() {
               className={styles.agentSlotList}
               aria-label="Active agent fixture slots"
             >
-              {Array.from(
-                { length: MAX_PARALLEL_AGENT_SESSIONS },
-                (_, index) => (
-                  <article className={styles.agentSlot} key={index}>
+              {verificationAgentSlots
+                .slice(0, MAX_PARALLEL_AGENT_SESSIONS)
+                .map((slot, index) => (
+                  <article
+                    className={styles.agentSlot}
+                    key={slot.assignment}
+                    aria-label={`Agent slot ${index + 1}`}
+                  >
                     <span className={styles.slotNumber}>0{index + 1}</span>
-                    <div>
+                    <div className={styles.agentSlotIdentity}>
                       <strong>Agent slot {index + 1}</strong>
                       <span>Active fixture session</span>
                     </div>
-                    <span className={styles.slotStatus}>Active</span>
+                    <div className={styles.agentSlotDetails}>
+                      <div>
+                        <span>Assignment</span>
+                        <strong>{slot.assignment}</strong>
+                      </div>
+                      <div>
+                        <span>Owner</span>
+                        <strong>{slot.owner}</strong>
+                      </div>
+                      <div>
+                        <span>Provider</span>
+                        <strong>{slot.provider}</strong>
+                      </div>
+                      <div>
+                        <span>Status</span>
+                        <strong className={styles.slotStatus}>
+                          {slot.status}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Elapsed</span>
+                        <strong>{slot.elapsed}</strong>
+                      </div>
+                    </div>
                   </article>
-                ),
-              )}
+                ))}
             </div>
           </section>
 

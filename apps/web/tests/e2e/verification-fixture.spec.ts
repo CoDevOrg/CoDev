@@ -105,6 +105,47 @@ test("F4.1 shows three active fixture agent slots", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F4.2 shows the assignment details for every workboard slot", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const workboard = page
+    .getByRole("heading", { name: "Three active agent slots" })
+    .locator("xpath=ancestor::section");
+  const slots = workboard.getByLabel(/Agent slot/);
+
+  await expect(slots).toHaveCount(3);
+  for (const [index, details] of (
+    [
+      ["Repository map", "Alex Morgan", "Codex", "00:18"],
+      ["Presence replay", "Jordan Lee", "Claude", "01:42"],
+      ["Session recovery", "Casey Rivera", "Codex", "03:07"],
+    ] as const
+  ).entries()) {
+    const slot = slots.nth(index);
+    await expect(slot).toContainText("Assignment");
+    await expect(slot).toContainText("Owner");
+    await expect(slot).toContainText("Provider");
+    await expect(slot).toContainText("Status");
+    await expect(slot).toContainText("Elapsed");
+    await expect(slot).toContainText(details[0]);
+    await expect(slot).toContainText(details[1]);
+    await expect(slot).toContainText(details[2]);
+    await expect(slot).toContainText("Active");
+    await expect(slot).toContainText(details[3]);
+  }
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F4.2",
+    state: "three-slot-workboard",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f4-2\/three-slot-workboard\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {
