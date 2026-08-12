@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F3.4 — Add authorized interrupt/cancellation state with a visible last completed action**
+**F3.5 — Restore transcript, queue, and stream cursor after browser refresh**
 
 ## Completed tasks
 
@@ -24,6 +24,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                        |
 | F3.2 — Render the provider, owner, worktree, state, and ordered transcript                          | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order. |
 | F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                  | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview. |
+| F3.4 — Add authorized interrupt/cancellation state with a visible last completed action             | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action. |
 
 ### B0.2 completion evidence
 
@@ -570,6 +571,49 @@ external filesystem`, and `Merge manually` as resolution choices. No
   existing agent session, turn, and event storage paths.
 - Next task: F3.4 — add authorized interrupt/cancellation state with a visible
   last completed action.
+
+### F3.4 completion evidence
+
+- Completed: 2026-08-12T03:09:37Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/shared-session-queue-fixture.tsx`,
+  `apps/web/components/shared-session-queue-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused shared-session component tests — 4 passed; focused F3.4
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check passed; web lint — 0 errors with the same 2 pre-existing warnings;
+  web typecheck passed; web production build passed; `git diff --check`
+  passed. The repository-wide format check remains blocked by the three
+  pre-existing scheduler Markdown files recorded in earlier ledger evidence.
+- Validated source commit:
+  `0b915d0acc8ac3a1fb8d693feca8444b724aa201`.
+- Vercel preview:
+  <https://codev-mjd5xcqsm-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, opened the shared session, started the controlled
+  fixture turn, and interrupted it as Jordan Lee. Confirmed `Interrupted ·
+  turn 3`, `Cancellation recorded by Jordan Lee`, Alex Morgan’s live observer
+  cancellation state, and the preserved `read_file · README.md` result. Then
+  scrolled to Casey Rivera’s Viewer controls and confirmed `Interrupt turn ·
+  unavailable` remained disabled. No credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-4/interrupted-last-completed-action.png`
+  (Playwright success state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-4/viewer-interrupt-unavailable.png`
+  (Playwright authorization edge state),
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2011.09.08%20PM.jpeg`
+  (Computer Use preview interrupted state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-11%20at%2011.09.20%20PM.jpeg`
+  (Computer Use Viewer edge state).
+- Known limitations: the credential-free preview fixture models the
+  controlled turn and cancellation in browser state; authenticated interrupt
+  authorization and durable provider cancellation continue through the
+  existing `coSteer` permission boundary, interrupt route, and shared-session
+  event storage paths.
+- Next task: F3.5 — restore transcript, queue, and stream cursor after browser
+  refresh.
 
 ## Blocked tasks
 
