@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.4 — Implement one exact-path claim before agent writes**
+**F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite**
 
 ## Completed tasks
 
@@ -772,6 +772,50 @@ external filesystem`, and `Merge manually` as resolution choices. No
   authenticated workspace route now shares the same actionable guard and
   continues to enforce the three-session limit under its database lock.
 - Next task: F4.4 — implement one exact-path claim before agent writes.
+
+### F4.4 completion evidence
+
+- Completed: 2026-08-12T08:11:52Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/agent-path-claim-fixture.tsx`,
+  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused agent coordination and claim-fixture tests — 7 passed;
+  focused F4.4 Playwright verification on the rebuilt app — 1 passed;
+  targeted Prettier check and `git diff --check` — passed; web lint — 0
+  errors with the same 2 pre-existing warnings; web typecheck and production
+  build — passed.
+- The targeted Prettier check for this scheduler metadata file remains
+  blocked by its pre-existing formatting mismatch; no unrelated scheduler
+  history was reformatted. `git diff --check` passed.
+- Validated source commit:
+  `e6eb51936dbc131eaf270f10656cd7180f1b6474`.
+- Vercel preview:
+  <https://codev-72jzbsn86-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit. Computer Use used the Ready branch alias:
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready branch preview at `/verification/b0-2`,
+  confirmed the Ready badge and three-slot workboard, captured the disabled
+  `Write README.md` state before claiming, clicked `Start agent claim`, and
+  confirmed `Claimed path README.md` at revision `fixture-r1`. Then clicked
+  `Write README.md` and confirmed `Agent write accepted for README.md.` No
+  credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-4/write-blocked-before-claim.png`
+  (focused Playwright blocked state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-4/claimed-path-write-accepted.png`
+  (focused Playwright success state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-4/computer-use-write-blocked-before-claim.jpeg`
+  (Computer Use blocked edge), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-4/computer-use-claimed-path-write-accepted.jpeg`
+  (Computer Use success state with the exact path, revision, and accepted
+  write visible).
+- Known limitations: the credential-free preview fixture models the claim and
+  write gate in browser state; the authenticated agent runtime already calls
+  `requireActivePathClaim` before its `write_file` tool writes to a worktree.
+- Next task: F4.5 — surface an overlapping claim as contested; provide
+  reassign or cancel, not silent overwrite.
 
 ## Blocked tasks
 
