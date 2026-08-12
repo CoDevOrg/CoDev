@@ -481,6 +481,71 @@
   line-height: 1.5;
 }
 
+.reviewApprovalPanel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(238, 187, 93, 0.32);
+  border-radius: 8px;
+  background: #2a2418;
+}
+
+.reviewApprovalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reviewApprovalHeader > div {
+  display: grid;
+  gap: 5px;
+}
+
+.reviewApprovalHeader strong {
+  color: #fff0c2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.reviewApprovalState {
+  color: #f0cd83;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reviewApprovalNote,
+.reviewApprovalStatus {
+  margin: 0;
+  color: #cfc0a1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewApprovalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reviewStaleAlert {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(255, 139, 111, 0.45);
+  border-radius: 7px;
+  background: #321e1a;
+  color: #f0c1b3;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewStaleAlert strong {
+  color: #ffe1d4;
+}
+
 .claimRow {
   display: flex;
   justify-content: space-between;

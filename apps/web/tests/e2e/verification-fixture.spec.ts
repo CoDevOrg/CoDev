@@ -438,6 +438,47 @@ test("F5.2 renders a binary-safe diff summary and affected paths", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F5.3 rejects approval for a stale checkpoint before merging", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const reviewCard = page
+    .getByRole("heading", { name: "Agent review checkpoint" })
+    .locator("xpath=ancestor::section");
+  await reviewCard.getByRole("button", { name: "Mark review-ready" }).click();
+  await reviewCard
+    .getByRole("button", { name: "Advance integration head" })
+    .click();
+  await expect(reviewCard).toContainText(
+    "Integration head changed to fixture-main-r2.",
+  );
+
+  await reviewCard.getByRole("button", { name: "Approve checkpoint" }).click();
+
+  const staleAlert = reviewCard.getByRole("alert");
+  await expect(staleAlert).toContainText("Stale checkpoint · approval blocked");
+  await expect(staleAlert).toContainText(
+    "The integration worktree advanced from fixture-main-r1 to fixture-main-r2.",
+  );
+  await expect(staleAlert).toContainText(
+    "Rebase and review again before approval.",
+  );
+  await expect(staleAlert).toContainText("No merge action started.");
+  await expect(
+    reviewCard.getByRole("button", { name: "Approval blocked" }),
+  ).toBeDisabled();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F5.3",
+    state: "stale-approval-rejected",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f5-3\/stale-approval-rejected\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

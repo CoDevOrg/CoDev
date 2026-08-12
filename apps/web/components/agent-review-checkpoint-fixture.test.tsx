@@ -22,7 +22,9 @@ describe("AgentReviewCheckpointFixture", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Further writes must create a new checkpoint.",
     );
-    expect(screen.getByText("fixture-main-r1", { exact: true })).toBeVisible();
+    expect(
+      screen.getAllByText("fixture-main-r1", { exact: true }),
+    ).toHaveLength(2);
     expect(screen.getByText("fixture-agent-r2", { exact: true })).toBeVisible();
     expect(
       screen.getByText(
@@ -56,6 +58,36 @@ describe("AgentReviewCheckpointFixture", () => {
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Diff review open" }),
+    ).toBeDisabled();
+  });
+
+  it("blocks approval when the integration head advances past the checkpoint", () => {
+    render(<AgentReviewCheckpointFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark review-ready" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Advance integration head" }),
+    );
+
+    expect(
+      screen.getByText("Integration head changed to fixture-main-r2.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve checkpoint" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Stale checkpoint · approval blocked",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The integration worktree advanced from fixture-main-r1 to fixture-main-r2.",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "No merge action started.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Approval blocked" }),
     ).toBeDisabled();
   });
 });

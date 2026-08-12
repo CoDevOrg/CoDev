@@ -7,6 +7,7 @@ import styles from "@/app/verification/b0-2/fixture.module.css";
 const reviewCheckpoint = Object.freeze({
   baseRevision: "fixture-main-r1",
   headRevision: "fixture-agent-r2",
+  advancedIntegrationHeadRevision: "fixture-main-r2",
   diffDigest:
     "sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4",
 });
@@ -39,6 +40,9 @@ export function AgentReviewCheckpointFixture() {
     null,
   );
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [integrationHeadRevision, setIntegrationHeadRevision] =
+    useState<string>(reviewCheckpoint.baseRevision);
+  const [approvalBlocked, setApprovalBlocked] = useState(false);
 
   return (
     <section
@@ -143,6 +147,75 @@ export function AgentReviewCheckpointFixture() {
               </p>
             </div>
           ) : null}
+          <div
+            className={styles.reviewApprovalPanel}
+            role="region"
+            aria-label="Review approval gate"
+          >
+            <div className={styles.reviewApprovalHeader}>
+              <div>
+                <span className={styles.label}>Integration head</span>
+                <strong>{integrationHeadRevision}</strong>
+              </div>
+              <span className={styles.reviewApprovalState}>
+                {approvalBlocked ? "Stale" : "Current"}
+              </span>
+            </div>
+            <p className={styles.reviewApprovalNote}>
+              Approval rechecks the integration head before any merge action
+              starts.
+            </p>
+            <div className={styles.reviewApprovalActions}>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={() =>
+                  setIntegrationHeadRevision(
+                    reviewCheckpoint.advancedIntegrationHeadRevision,
+                  )
+                }
+                disabled={
+                  approvalBlocked ||
+                  integrationHeadRevision ===
+                    reviewCheckpoint.advancedIntegrationHeadRevision
+                }
+              >
+                {integrationHeadRevision ===
+                reviewCheckpoint.advancedIntegrationHeadRevision
+                  ? "Integration head advanced"
+                  : "Advance integration head"}
+              </button>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={() => {
+                  if (integrationHeadRevision !== checkpoint.baseRevision) {
+                    setApprovalBlocked(true);
+                  }
+                }}
+                disabled={approvalBlocked}
+              >
+                {approvalBlocked ? "Approval blocked" : "Approve checkpoint"}
+              </button>
+            </div>
+            {integrationHeadRevision !== reviewCheckpoint.baseRevision &&
+            !approvalBlocked ? (
+              <p className={styles.reviewApprovalStatus}>
+                Integration head changed to {integrationHeadRevision}.
+              </p>
+            ) : null}
+            {approvalBlocked ? (
+              <div className={styles.reviewStaleAlert} role="alert">
+                <strong>Stale checkpoint · approval blocked</strong>
+                <span>
+                  The integration worktree advanced from{" "}
+                  {checkpoint.baseRevision} to {integrationHeadRevision}.
+                </span>
+                <span>Rebase and review again before approval.</span>
+                <span>No merge action started.</span>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <p className={styles.fixtureStatus} role="status">
