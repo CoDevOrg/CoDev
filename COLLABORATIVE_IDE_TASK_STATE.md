@@ -1093,20 +1093,24 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 ## Blocked tasks
 
-- **F5.6 — 2026-08-12T16:25:42Z:** Source commit
+- **F5.6 — updated 2026-08-12T16:48:05Z:** Source commit
   `e3769e22d6f01b5aafcf6f99440816b64aca2e3b` passed the focused Orca and
   CoDev tests, formatting, lint, typecheck, production build, and patch
   reproducibility checks; it was pushed and deployed Ready at
   <https://codev-bijlrqyrq-yousef20920s-projects.vercel.app> (deployment
-  `dpl_9TC56Zsj7qonW8PPnDauwgAefqPr`). Computer Use opened both that exact
-  deployment and its stable branch alias, but each redirected the protected
-  workspace route to `/sign-in`; Google and GitHub sign-in were disabled, and
-  the existing authenticated `codev-xi.vercel.app` session did not transfer
-  across preview hostnames. The required authenticated Orca workspace flow
-  therefore could not be reached without entering or creating credentials and
-  provisioning a disposable managed proposal, so no proposal was deleted and
-  F5.6 remains Current. Screenshot:
-  `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-auth-blocker.jpeg`.
+  `dpl_9TC56Zsj7qonW8PPnDauwgAefqPr`). Computer Use created and authenticated a
+  disposable email/password preview account on that exact deployment, clearing
+  the original sign-in blocker. Creating its blank disposable workspace then
+  failed visibly with `OpenFGA authorization is not configured.` The Preview
+  environment has no OpenFGA endpoint, store, authorization model, or client
+  credentials; those values exist only in Production. Copying Production's
+  authorization credentials into Preview would expand a security boundary and
+  is not an authorized verification shortcut. The authenticated Orca workspace
+  and managed proposal therefore still cannot be provisioned, no proposal was
+  deleted, and F5.6 remains Current. Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-auth-blocker.jpeg`
+  and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-openfga-blocker.jpeg`.
 
 ## Update procedure
 
