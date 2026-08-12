@@ -235,6 +235,64 @@ test("F4.4 requires an exact path claim before an agent write", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F4.5 surfaces overlapping claims before an explicit resolution", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const claimCard = page
+    .getByRole("heading", { name: "Agent write claim" })
+    .locator("xpath=ancestor::section");
+  await claimCard.getByRole("button", { name: "Start agent claim" }).click();
+  await claimCard
+    .getByRole("button", { name: "Request overlapping claim" })
+    .click();
+
+  await expect(claimCard.getByRole("alert")).toContainText(
+    "Contested overlap · no silent overwrite",
+  );
+  await expect(claimCard.getByRole("alert")).toContainText(
+    "Reassign or cancel before either agent writes.",
+  );
+  await expect(
+    claimCard.getByRole("button", { name: "Write README.md" }),
+  ).toBeDisabled();
+
+  const contestedScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F4.5",
+      state: "contested-overlap",
+    },
+  );
+  expect(contestedScreenshotPath).toMatch(
+    /artifacts\/verification\/f4-5\/contested-overlap\.png$/,
+  );
+  await expect.poll(() => access(contestedScreenshotPath)).toBeUndefined();
+
+  await claimCard.getByRole("button", { name: "Reassign to slot 2" }).click();
+  await expect(claimCard.getByRole("alert")).toContainText(
+    "Claim reassigned to Agent slot 2",
+  );
+  await expect(
+    claimCard.getByText("README.md · Active", { exact: true }),
+  ).toBeVisible();
+
+  const resolvedScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F4.5",
+      state: "claim-reassigned",
+    },
+  );
+  expect(resolvedScreenshotPath).toMatch(
+    /artifacts\/verification\/f4-5\/claim-reassigned\.png$/,
+  );
+  await expect.poll(() => access(resolvedScreenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

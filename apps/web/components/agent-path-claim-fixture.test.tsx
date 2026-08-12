@@ -28,4 +28,57 @@ describe("AgentPathClaimFixture", () => {
       "Agent write accepted for README.md.",
     );
   });
+
+  it("surfaces an overlap and supports reassigning the claim", () => {
+    render(<AgentPathClaimFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start agent claim" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Request overlapping claim" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Contested overlap · no silent overwrite",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Reassign or cancel before either agent writes.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Write README.md" }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reassign to slot 2" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Claim reassigned to Agent slot 2",
+    );
+    expect(
+      screen.getByText("README.md · Active", { exact: true }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Write README.md" }),
+    ).toBeDisabled();
+  });
+
+  it("supports cancelling an overlap without changing the active claim", () => {
+    render(<AgentPathClaimFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start agent claim" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Request overlapping claim" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel overlapping claim" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Overlapping claim cancelled",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Agent slot 1 keeps README.md",
+    );
+    expect(
+      screen.getByRole("button", { name: "Write README.md" }),
+    ).toBeEnabled();
+  });
 });
