@@ -1109,6 +1109,23 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — repository-backed Production retry blocked 2026-08-12T23:28:03Z:**
+  The user created authenticated Production workspace
+  <https://codev-xi.vercel.app/workspaces/d37dde90-cf85-4c6f-880a-c43fd9491d7b>
+  linked to `yousef20920/CoDev`, removing the prior missing-repository
+  prerequisite. Orca loaded its native Agents panel and showed `Prepare managed
+  proposal`. The first native attempt visibly failed with `CoDev did not
+  confirm the proposal creation. Try again.` A second permitted attempt also
+  failed and left Orca on its Local Mac fallback, where the panel reported
+  `Agent Session History is not available for this execution host` and showed
+  no proposal or worktree. Two Production attempts therefore failed before a
+  managed proposal existed, so no native Delete Worktree/discard action could
+  be performed. F5.6 remains Current; do not begin OI.1. Screenshots:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%207.27.39%20PM.jpeg`
+  (proposal creation not confirmed) and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%207.27.54%20PM.jpeg`
+  (Local Mac fallback/session history unavailable).
+
 - **F5.6 — Production verification retry 2026-08-12T23:02:32Z:** Revalidated
   the exact authenticated Production Orca workspace at
   <https://codev-xi.vercel.app/workspaces/5a161b43-63eb-4d23-ac0c-10df01f4bf72>
