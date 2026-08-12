@@ -518,6 +518,66 @@ test("F5.4 integrates one current checkpoint with audit attribution", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F5.5 discards a proposal and keeps the final state idempotent", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const reviewCard = page
+    .getByRole("heading", { name: "Agent review checkpoint" })
+    .locator("xpath=ancestor::section");
+  await reviewCard.getByRole("button", { name: "Mark review-ready" }).click();
+  await reviewCard.getByRole("button", { name: "Discard proposal" }).click();
+
+  const discardResult = reviewCard.getByRole("status", {
+    name: "Discard result",
+  });
+  await expect(discardResult).toContainText("Proposal discarded · final state");
+  await expect(discardResult).toContainText(
+    "Worktree fixture-agent-1 removed from the sandbox.",
+  );
+  await expect(discardResult).toContainText(
+    "Claims released: README.md and src/**.",
+  );
+  await expect(discardResult).toContainText("Alex Morgan · Maintainer");
+  await expect(discardResult).toContainText("agent.review_discarded");
+  await expect(discardResult).toContainText("Integration checkout");
+  await expect(discardResult).toContainText("Unchanged at fixture-main-r1");
+
+  const discardedScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F5.5",
+      state: "proposal-discarded",
+    },
+  );
+  expect(discardedScreenshotPath).toMatch(
+    /artifacts\/verification\/f5-5\/proposal-discarded\.png$/,
+  );
+  await expect.poll(() => access(discardedScreenshotPath)).toBeUndefined();
+
+  await reviewCard
+    .getByRole("button", { name: "Discard proposal again (idempotent)" })
+    .click();
+  await expect(discardResult).toContainText(
+    "Repeated discard was a no-op; worktree and claims remain removed.",
+  );
+
+  const idempotentScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F5.5",
+      state: "discard-idempotent",
+    },
+  );
+  expect(idempotentScreenshotPath).toMatch(
+    /artifacts\/verification\/f5-5\/discard-idempotent\.png$/,
+  );
+  await expect.poll(() => access(idempotentScreenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

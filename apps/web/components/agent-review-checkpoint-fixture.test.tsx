@@ -116,4 +116,31 @@ describe("AgentReviewCheckpointFixture", () => {
       screen.getByRole("button", { name: "Checkpoint integrated" }),
     ).toBeDisabled();
   });
+
+  it("discards the proposal, releases its claims, and keeps repeats idempotent", () => {
+    render(<AgentReviewCheckpointFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark review-ready" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard proposal" }));
+
+    const result = screen.getByRole("status", { name: "Discard result" });
+    expect(result).toHaveTextContent("Proposal discarded · final state");
+    expect(result).toHaveTextContent(
+      "Worktree fixture-agent-1 removed from the sandbox.",
+    );
+    expect(result).toHaveTextContent("Claims released: README.md and src/**.");
+    expect(result).toHaveTextContent("Alex Morgan · Maintainer");
+    expect(result).toHaveTextContent("agent.review_discarded");
+    expect(result).toHaveTextContent("Integration checkout");
+    expect(result).toHaveTextContent("Unchanged at fixture-main-r1");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Discard proposal again (idempotent)",
+      }),
+    );
+    expect(result).toHaveTextContent(
+      "Repeated discard was a no-op; worktree and claims remain removed.",
+    );
+  });
 });

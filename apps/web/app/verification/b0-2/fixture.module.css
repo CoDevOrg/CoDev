@@ -562,6 +562,31 @@
   color: #d9f7be;
 }
 
+.reviewDiscardPanel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 139, 111, 0.32);
+  border-radius: 8px;
+  background: #2a201c;
+}
+
+.reviewDiscardResult {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(255, 184, 132, 0.45);
+  border-radius: 7px;
+  background: #34231d;
+  color: #f0c9b2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewDiscardResult strong {
+  color: #ffd6be;
+}
+
 .claimRow {
   display: flex;
   justify-content: space-between;

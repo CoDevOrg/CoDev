@@ -41,6 +41,12 @@ const integrationAudit = Object.freeze({
   event: "review.checkpoint_integrated",
 });
 
+const discardAudit = Object.freeze({
+  actor: "Alex Morgan",
+  role: "Maintainer",
+  event: "agent.review_discarded",
+});
+
 export function AgentReviewCheckpointFixture() {
   const [checkpoint, setCheckpoint] = useState<typeof reviewCheckpoint | null>(
     null,
@@ -50,6 +56,8 @@ export function AgentReviewCheckpointFixture() {
     useState<string>(reviewCheckpoint.baseRevision);
   const [approvalBlocked, setApprovalBlocked] = useState(false);
   const [integrationCompleted, setIntegrationCompleted] = useState(false);
+  const [proposalDiscarded, setProposalDiscarded] = useState(false);
+  const [discardRepeated, setDiscardRepeated] = useState(false);
 
   return (
     <section
@@ -76,7 +84,10 @@ export function AgentReviewCheckpointFixture() {
       >
         <div>
           <span className={styles.label}>Agent slot 1 · Repository map</span>
-          <strong>Worktree status: {checkpoint ? "Frozen" : "Active"}</strong>
+          <strong>
+            Worktree status:{" "}
+            {proposalDiscarded ? "Removed" : checkpoint ? "Frozen" : "Active"}
+          </strong>
         </div>
         <button
           className={styles.fixtureAction}
@@ -271,6 +282,81 @@ export function AgentReviewCheckpointFixture() {
                 <span>Duplicate approval is disabled for this checkpoint.</span>
               </div>
             ) : null}
+            <div
+              className={styles.reviewDiscardPanel}
+              role="region"
+              aria-label="Discard proposal action"
+            >
+              <div className={styles.reviewApprovalHeader}>
+                <div>
+                  <span className={styles.label}>Proposal lifecycle</span>
+                  <strong>
+                    {proposalDiscarded
+                      ? "Worktree and claims removed"
+                      : "Keep or discard this proposal"}
+                  </strong>
+                </div>
+                <span className={styles.reviewApprovalState}>
+                  {proposalDiscarded ? "Discarded" : "Reviewable"}
+                </span>
+              </div>
+              <p className={styles.reviewApprovalNote}>
+                Discard removes the fixture worktree and releases its active or
+                contested path claims without changing integration.
+              </p>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={() => {
+                  if (proposalDiscarded) {
+                    setDiscardRepeated(true);
+                    return;
+                  }
+                  setProposalDiscarded(true);
+                }}
+                disabled={integrationCompleted}
+              >
+                {proposalDiscarded
+                  ? "Discard proposal again (idempotent)"
+                  : "Discard proposal"}
+              </button>
+              {proposalDiscarded ? (
+                <div
+                  className={styles.reviewDiscardResult}
+                  role="status"
+                  aria-label="Discard result"
+                >
+                  <strong>Proposal discarded · final state</strong>
+                  <span>
+                    Worktree fixture-agent-1 removed from the sandbox.
+                  </span>
+                  <span>Claims released: README.md and src/**.</span>
+                  <dl className={styles.reviewMetadata}>
+                    <div>
+                      <dt>Discard actor</dt>
+                      <dd>
+                        {discardAudit.actor} · {discardAudit.role}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Audit event</dt>
+                      <dd>
+                        <code>{discardAudit.event}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Integration checkout</dt>
+                      <dd>Unchanged at {reviewCheckpoint.baseRevision}</dd>
+                    </div>
+                  </dl>
+                  <span>
+                    {discardRepeated
+                      ? "Repeated discard was a no-op; worktree and claims remain removed."
+                      : "A repeated discard is a no-op; this proposal remains discarded."}
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : (

@@ -404,6 +404,20 @@ export async function discardAgentWorktree(
           ),
         );
     });
+    await appendWorkspaceEvent({
+      workspaceId,
+      actorId: userId,
+      type: "agent.review_discarded",
+      payload: {
+        sessionId,
+        worktreeId: target.worktreeId,
+        reviewBaseSha: target.reviewBaseSha,
+        reviewHeadSha: target.reviewHeadSha,
+        reviewDiffDigest: target.reviewDiffDigest,
+        sandboxWorktreeRemoved: true,
+        claimsReleased: true,
+      },
+    });
     return { status: "discarded" };
   } catch (error) {
     await recordReviewFailure(target.sessionId, error);
