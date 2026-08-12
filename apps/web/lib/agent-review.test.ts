@@ -1,0 +1,105 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  appendWorkspaceEvent: vi.fn(),
+  deleteSandboxWorktree: vi.fn(),
+  getDatabase: vi.fn(),
+  getWorkspaceForMember: vi.fn(),
+  mergeSandboxWorktree: vi.fn(),
+  requireWorkspacePermission: vi.fn(),
+}));
+
+vi.mock("./audit", () => ({
+  appendWorkspaceEvent: mocks.appendWorkspaceEvent,
+}));
+vi.mock("./access", () => ({
+  requireWorkspacePermission: mocks.requireWorkspacePermission,
+}));
+vi.mock("./database", () => ({ getDatabase: mocks.getDatabase }));
+vi.mock("./orchestrator", () => ({
+  checkpointSandboxWorktree: vi.fn(),
+  deleteSandboxWorktree: mocks.deleteSandboxWorktree,
+  mergeSandboxWorktree: mocks.mergeSandboxWorktree,
+  rebaseSandboxWorktree: vi.fn(),
+  reviewSandboxWorktree: vi.fn(),
+}));
+vi.mock("./workspaces", () => ({
+  getWorkspaceForMember: mocks.getWorkspaceForMember,
+}));
+vi.mock("workflow/api", () => ({ getRun: vi.fn() }));
+
+import { mergeAgentReview } from "./agent-review";
+
+describe("mergeAgentReview", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    const query = {
+      from: vi.fn(),
+      innerJoin: vi.fn(),
+      limit: vi.fn(),
+      select: vi.fn(),
+      where: vi.fn(),
+    };
+    query.select.mockReturnValue(query);
+    query.from.mockReturnValue(query);
+    query.innerJoin.mockReturnValue(query);
+    query.where.mockReturnValue(query);
+    query.limit
+      .mockResolvedValueOnce([
+        {
+          sessionId: "session-1",
+          workflowRunId: null,
+          worktreeId: "worktree-1",
+          worktreeStatus: "frozen",
+          worktreeHeadSha: "agent-r2",
+          reviewHeadSha: "agent-r2",
+          reviewBaseSha: "main-r1",
+          reviewDiffDigest: "sha256:review-digest",
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const updateQuery = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateQuery.set.mockReturnValue(updateQuery);
+    const transaction = { update: vi.fn(() => updateQuery) };
+    const database = {
+      select: vi.fn(() => query),
+      transaction: vi.fn(async (callback) => callback(transaction)),
+    };
+
+    mocks.getDatabase.mockReturnValue(database);
+    mocks.getWorkspaceForMember.mockResolvedValue({ id: "workspace-1" });
+    mocks.requireWorkspacePermission.mockResolvedValue(undefined);
+    mocks.mergeSandboxWorktree.mockResolvedValue({ headSha: "merge-r3" });
+    mocks.deleteSandboxWorktree.mockResolvedValue(undefined);
+    mocks.appendWorkspaceEvent.mockResolvedValue({ id: "event-1" });
+  });
+
+  it("records the approving actor and reviewed revisions after one merge", async () => {
+    await expect(
+      mergeAgentReview("workspace-1", "session-1", "user-1"),
+    ).resolves.toEqual({ headSha: "merge-r3" });
+
+    expect(mocks.appendWorkspaceEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.appendWorkspaceEvent).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      actorId: "user-1",
+      type: "agent.review_merged",
+      payload: {
+        sessionId: "session-1",
+        worktreeId: "worktree-1",
+        integrationWorktreeId: "integration-1",
+        reviewBaseSha: "main-r1",
+        reviewHeadSha: "agent-r2",
+        mergedHeadSha: "merge-r3",
+        reviewDiffDigest: "sha256:review-digest",
+      },
+    });
+  });
+});

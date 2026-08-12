@@ -90,4 +90,30 @@ describe("AgentReviewCheckpointFixture", () => {
       screen.getByRole("button", { name: "Approval blocked" }),
     ).toBeDisabled();
   });
+
+  it("integrates one current checkpoint and records its audit attribution", () => {
+    render(<AgentReviewCheckpointFixture />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark review-ready" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve checkpoint" }));
+
+    const result = screen.getByRole("status", {
+      name: "Integration and audit result",
+    });
+    expect(result).toHaveTextContent(
+      "Integrated exactly one current reviewed checkpoint",
+    );
+    expect(result).toHaveTextContent(
+      "The integration head advanced to fixture-agent-r2.",
+    );
+    expect(result).toHaveTextContent("Alex Morgan · Maintainer");
+    expect(result).toHaveTextContent("review.checkpoint_integrated");
+    expect(result).toHaveTextContent("fixture-main-r1 → fixture-agent-r2");
+    expect(result).toHaveTextContent(
+      "Duplicate approval is disabled for this checkpoint.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Checkpoint integrated" }),
+    ).toBeDisabled();
+  });
 });

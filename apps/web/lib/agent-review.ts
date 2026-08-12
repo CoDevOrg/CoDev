@@ -6,6 +6,7 @@ import { getRun } from "workflow/api";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
+import { appendWorkspaceEvent } from "./audit";
 import { requireWorkspacePermission, type WorkspacePermission } from "./access";
 import {
   checkpointSandboxWorktree,
@@ -340,6 +341,20 @@ export async function mergeAgentReview(
             inArray(schema.pathClaims.status, ["active", "contested"]),
           ),
         );
+    });
+    await appendWorkspaceEvent({
+      workspaceId,
+      actorId: userId,
+      type: "agent.review_merged",
+      payload: {
+        sessionId,
+        worktreeId: target.worktreeId,
+        integrationWorktreeId: target.integrationId,
+        reviewBaseSha: target.reviewBaseSha,
+        reviewHeadSha: target.reviewHeadSha,
+        mergedHeadSha: merged.headSha,
+        reviewDiffDigest: target.reviewDiffDigest,
+      },
     });
     await deleteSandboxWorktree(workspaceId, target.worktreeId).catch(
       () => undefined,

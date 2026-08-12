@@ -479,6 +479,45 @@ test("F5.3 rejects approval for a stale checkpoint before merging", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F5.4 integrates one current checkpoint with audit attribution", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const reviewCard = page
+    .getByRole("heading", { name: "Agent review checkpoint" })
+    .locator("xpath=ancestor::section");
+  await reviewCard.getByRole("button", { name: "Mark review-ready" }).click();
+  await reviewCard.getByRole("button", { name: "Approve checkpoint" }).click();
+
+  const integrationResult = reviewCard.getByRole("status", {
+    name: "Integration and audit result",
+  });
+  await expect(integrationResult).toContainText(
+    "Integrated exactly one current reviewed checkpoint",
+  );
+  await expect(integrationResult).toContainText(
+    "The integration head advanced to fixture-agent-r2.",
+  );
+  await expect(integrationResult).toContainText("Alex Morgan · Maintainer");
+  await expect(integrationResult).toContainText("review.checkpoint_integrated");
+  await expect(integrationResult).toContainText(
+    "fixture-main-r1 → fixture-agent-r2",
+  );
+  await expect(
+    reviewCard.getByRole("button", { name: "Checkpoint integrated" }),
+  ).toBeDisabled();
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F5.4",
+    state: "integration-audit-recorded",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f5-4\/integration-audit-recorded\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

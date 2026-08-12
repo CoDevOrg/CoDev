@@ -35,6 +35,12 @@ const reviewDiff = Object.freeze({
   ],
 });
 
+const integrationAudit = Object.freeze({
+  actor: "Alex Morgan",
+  role: "Maintainer",
+  event: "review.checkpoint_integrated",
+});
+
 export function AgentReviewCheckpointFixture() {
   const [checkpoint, setCheckpoint] = useState<typeof reviewCheckpoint | null>(
     null,
@@ -43,6 +49,7 @@ export function AgentReviewCheckpointFixture() {
   const [integrationHeadRevision, setIntegrationHeadRevision] =
     useState<string>(reviewCheckpoint.baseRevision);
   const [approvalBlocked, setApprovalBlocked] = useState(false);
+  const [integrationCompleted, setIntegrationCompleted] = useState(false);
 
   return (
     <section
@@ -54,7 +61,9 @@ export function AgentReviewCheckpointFixture() {
           <span className={styles.kicker}>F5.1 · Review preparation</span>
           <h2 id="agent-review-checkpoint-heading">Agent review checkpoint</h2>
         </div>
-        <span className={styles.count}>{checkpoint ? "Ready" : "Draft"}</span>
+        <span className={styles.count}>
+          {integrationCompleted ? "Integrated" : checkpoint ? "Ready" : "Draft"}
+        </span>
       </div>
       <p className={styles.note}>
         Freeze the exact fixture worktree revision before a collaborator opens
@@ -158,7 +167,11 @@ export function AgentReviewCheckpointFixture() {
                 <strong>{integrationHeadRevision}</strong>
               </div>
               <span className={styles.reviewApprovalState}>
-                {approvalBlocked ? "Stale" : "Current"}
+                {integrationCompleted
+                  ? "Integrated"
+                  : approvalBlocked
+                    ? "Stale"
+                    : "Current"}
               </span>
             </div>
             <p className={styles.reviewApprovalNote}>
@@ -176,6 +189,7 @@ export function AgentReviewCheckpointFixture() {
                 }
                 disabled={
                   approvalBlocked ||
+                  integrationCompleted ||
                   integrationHeadRevision ===
                     reviewCheckpoint.advancedIntegrationHeadRevision
                 }
@@ -191,11 +205,18 @@ export function AgentReviewCheckpointFixture() {
                 onClick={() => {
                   if (integrationHeadRevision !== checkpoint.baseRevision) {
                     setApprovalBlocked(true);
+                    return;
                   }
+                  setIntegrationHeadRevision(checkpoint.headRevision);
+                  setIntegrationCompleted(true);
                 }}
-                disabled={approvalBlocked}
+                disabled={approvalBlocked || integrationCompleted}
               >
-                {approvalBlocked ? "Approval blocked" : "Approve checkpoint"}
+                {approvalBlocked
+                  ? "Approval blocked"
+                  : integrationCompleted
+                    ? "Checkpoint integrated"
+                    : "Approve checkpoint"}
               </button>
             </div>
             {integrationHeadRevision !== reviewCheckpoint.baseRevision &&
@@ -213,6 +234,41 @@ export function AgentReviewCheckpointFixture() {
                 </span>
                 <span>Rebase and review again before approval.</span>
                 <span>No merge action started.</span>
+              </div>
+            ) : null}
+            {integrationCompleted ? (
+              <div
+                className={styles.reviewIntegrationResult}
+                role="status"
+                aria-label="Integration and audit result"
+              >
+                <strong>
+                  Integrated exactly one current reviewed checkpoint
+                </strong>
+                <span>
+                  The integration head advanced to {checkpoint.headRevision}.
+                </span>
+                <dl className={styles.reviewMetadata}>
+                  <div>
+                    <dt>Merge actor</dt>
+                    <dd>
+                      {integrationAudit.actor} · {integrationAudit.role}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Audit event</dt>
+                    <dd>
+                      <code>{integrationAudit.event}</code>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Reviewed revision</dt>
+                    <dd>
+                      {checkpoint.baseRevision} → {checkpoint.headRevision}
+                    </dd>
+                  </div>
+                </dl>
+                <span>Duplicate approval is disabled for this checkpoint.</span>
               </div>
             ) : null}
           </div>

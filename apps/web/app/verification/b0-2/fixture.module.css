@@ -546,6 +546,22 @@
   color: #ffe1d4;
 }
 
+.reviewIntegrationResult {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(161, 220, 105, 0.45);
+  border-radius: 7px;
+  background: #1d321d;
+  color: #c7dfb4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewIntegrationResult strong {
+  color: #d9f7be;
+}
+
 .claimRow {
   display: flex;
   justify-content: space-between;
