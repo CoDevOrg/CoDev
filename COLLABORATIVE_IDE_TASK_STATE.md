@@ -1109,6 +1109,19 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — Production verification retry 2026-08-12T23:02:32Z:** Revalidated
+  the exact authenticated Production Orca workspace at
+  <https://codev-xi.vercel.app/workspaces/5a161b43-63eb-4d23-ac0c-10df01f4bf72>
+  on current `main` commit `e567157`. The native Agents panel loaded, showed
+  `0 shown · 0 recent`, and exposed `Prepare managed proposal`; clicking it
+  visibly returned `Failed to prepare managed proposal — Connect a GitHub
+  repository before creating an agent.` The workspace remains unlinked, so it
+  has neither a CoDev-managed proposal nor a managed worktree. Deleting its
+  ordinary workspace would only exercise Orca's fallback, not the required
+  audited proposal-discard lifecycle. F5.6 remains Current; do not begin OI.1.
+  Screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%207.02.32%20PM.jpeg`.
+
 - **F5.6 — Production verification retry 2026-08-12T22:02:12Z:** Pushed
   source commit `236a642` (`feat: prepare managed Orca proposals`) directly to
   `main`; Vercel created Ready Production deployment
