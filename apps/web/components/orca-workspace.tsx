@@ -27,7 +27,89 @@ type OrcaConnectResponse = {
 type CodevOrcaMessage =
   | { type: "codev:choose-repository" }
   | { type: "codev:project-ready" }
-  | { type: "codev:project-error"; message?: string };
+  | { type: "codev:project-error"; message?: string }
+  | {
+      type: "codev:discard-proposal";
+      requestId: string;
+      worktreeId: string;
+    };
+
+type CodevProposalDiscardResult =
+  | { managed: false }
+  | { managed: true; ok: true }
+  | { managed: true; ok: false; error: string };
+
+const WORKTREE_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function discardOrcaManagedProposal(
+  workspaceId: string,
+  worktreeId: string,
+  fetcher: typeof fetch = fetch,
+): Promise<CodevProposalDiscardResult> {
+  if (!WORKTREE_ID.test(worktreeId)) {
+    return { managed: false };
+  }
+  try {
+    const sessionsResponse = await fetcher(
+      `/api/workspaces/${workspaceId}/agents`,
+      { cache: "no-store" },
+    );
+    const sessionsPayload = (await sessionsResponse
+      .json()
+      .catch(() => null)) as unknown;
+    if (!sessionsResponse.ok) {
+      throw new Error("CoDev could not inspect managed proposals.");
+    }
+    const sessions =
+      sessionsPayload &&
+      typeof sessionsPayload === "object" &&
+      "sessions" in sessionsPayload &&
+      Array.isArray(sessionsPayload.sessions)
+        ? sessionsPayload.sessions
+        : [];
+    const session = sessions.find(
+      (candidate): candidate is { id: string; worktreeId: string } =>
+        candidate !== null &&
+        typeof candidate === "object" &&
+        "id" in candidate &&
+        typeof candidate.id === "string" &&
+        "worktreeId" in candidate &&
+        candidate.worktreeId === worktreeId,
+    );
+    if (!session) {
+      return { managed: false };
+    }
+
+    const discardResponse = await fetcher(
+      `/api/workspaces/${workspaceId}/agents/${session.id}/discard`,
+      { method: "POST" },
+    );
+    const discardPayload = (await discardResponse.json().catch(() => null)) as {
+      error?: unknown;
+    } | null;
+    if (!discardResponse.ok) {
+      return {
+        managed: true,
+        ok: false,
+        error:
+          typeof discardPayload?.error === "string"
+            ? discardPayload.error
+            : "CoDev could not discard this proposal.",
+      };
+    }
+    return { managed: true, ok: true };
+  } catch (error) {
+    return {
+      managed: true,
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "CoDev could not discard this proposal.",
+    };
+  }
+}
 
 export function buildOrcaIframeSource({
   webClientPath,
@@ -446,6 +528,24 @@ export function OrcaWorkspace({
       }
       if (event.data.type === "codev:choose-repository") {
         setRepositoryDialogOpen(true);
+      } else if (
+        event.data.type === "codev:discard-proposal" &&
+        typeof event.data.requestId === "string" &&
+        typeof event.data.worktreeId === "string"
+      ) {
+        const { requestId, worktreeId } = event.data;
+        void discardOrcaManagedProposal(workspaceId, worktreeId).then(
+          (result) => {
+            iframeRef.current?.contentWindow?.postMessage(
+              {
+                type: "codev:proposal-discard-result",
+                requestId,
+                ...result,
+              },
+              window.location.origin,
+            );
+          },
+        );
       } else if (event.data.type === "codev:project-ready") {
         setIsOpeningProject(false);
       } else if (event.data.type === "codev:project-error") {
@@ -460,7 +560,7 @@ export function OrcaWorkspace({
 
     window.addEventListener("message", receiveOrcaMessage);
     return () => window.removeEventListener("message", receiveOrcaMessage);
-  }, []);
+  }, [workspaceId]);
 
   const retry = useCallback(() => {
     setConnection({ phase: "connecting" });

@@ -206,6 +206,7 @@ the smallest genuinely missing card.
 | F5.3 | Reject stale checkpoint approval before any merge action. | Change integration state, try approval, and capture the stale warning. |
 | F5.4 | Integrate exactly one current reviewed checkpoint with audit attribution. | Approve a fixture checkpoint and capture the integration/audit result. |
 | F5.5 | Discard a proposal idempotently and remove its worktree/claims. | Discard a fixture proposal and capture its final state. |
+| F5.6 | Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle. | Delete a managed proposal from Orca's native dialog and capture the attributed discarded state. |
 
 ### F6/F7 — Provider connections and neutral contract
 

@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F6.1 — Define a provider-connection record with encrypted, server-only credential handling**
+**F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle**
 
 ## Completed tasks
 
@@ -1093,15 +1093,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 ## Blocked tasks
 
-- 2026-08-12T16:02:14Z — This run was asked to wire Orca's native Delete
-  Worktree flow to CoDev's audited proposal-discard lifecycle. That work is an
-  F5.5 integration follow-up, but the authoritative Current task is F6.1
-  (provider-connection records and encrypted server-only credentials). The
-  scheduler contract permits only the Current task and forbids inspecting,
-  planning, or implementing another task. F6.1 remains Current; no source or
-  test files were changed. The blocker can be resolved only by explicitly
-  reprioritizing the Orca integration as the Current task in this ledger or by
-  completing F6.1 first.
+_None._
 
 ## Update procedure
 

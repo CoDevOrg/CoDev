@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 
@@ -6,8 +6,56 @@ import {
   applyOrcaWorkspaceBranding,
   autoAddOrcaProject,
   buildOrcaIframeSource,
+  discardOrcaManagedProposal,
   WorkspaceTopBar,
 } from "./orca-workspace";
+
+describe("discardOrcaManagedProposal", () => {
+  it("maps an Orca worktree to its session and invokes audited discard", async () => {
+    const worktreeId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ sessions: [{ id: "session-1", worktreeId }] }),
+      )
+      .mockResolvedValueOnce(Response.json({ status: "discarded" }));
+
+    await expect(
+      discardOrcaManagedProposal("workspace-1", worktreeId, fetcher),
+    ).resolves.toEqual({ managed: true, ok: true });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "/api/workspaces/workspace-1/agents",
+      { cache: "no-store" },
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "/api/workspaces/workspace-1/agents/session-1/discard",
+      { method: "POST" },
+    );
+  });
+
+  it("leaves ordinary Orca worktrees on the native delete path", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        sessions: [
+          {
+            id: "session-1",
+            worktreeId: "c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      discardOrcaManagedProposal(
+        "workspace-1",
+        "d2487707-933c-4f18-8a5d-f5cf31b0ad2e",
+        fetcher,
+      ),
+    ).resolves.toEqual({ managed: false });
+  });
+});
 
 describe("WorkspaceTopBar", () => {
   it("shows the reconciled three-agent worktree capacity", () => {

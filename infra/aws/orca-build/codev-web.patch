@@ -548,3 +548,283 @@ index eae3a54..6ebcb27 100644
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
+diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
+index 3106ded..0c70382 100644
+--- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
++++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
+@@ -91,7 +91,14 @@ vi.mock('./active-worktree-focus-after-delete', () => ({
+   prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
+ }))
+-
++
++vi.mock('@/web/codev-proposal-discard', () => ({
++  getCodevProposalWorktreeId: (path: string) =>
++    path.includes('/.git/codev-agent-worktrees/') ? path.split('/').at(-1) : null,
++  requestCodevProposalDiscard: vi.fn()
++}))
++
+ import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
++import { requestCodevProposalDiscard } from '@/web/codev-proposal-discard'
+-
++
+ function makeWorktree(id: string, path: string): Worktree {
+   return {
+@@ -148,6 +155,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
+     mocks.state.deleteStateByWorktreeId = {}
+     mocks.buttonProps = []
+     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
++    vi.mocked(requestCodevProposalDiscard).mockReset()
+   })
+-
++
+   it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
+@@ -318,4 +326,37 @@ describe('DeleteWorktreeDialog lineage copy', () => {
+-
++
+     expect(onDeleted).toHaveBeenCalledWith([workspace.id])
+   })
++
++  it('routes a managed CoDev proposal through audited discard and only forgets it locally', async () => {
++    const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++    const workspace = makeWorktree(
++      'Agent proposal',
++      `/srv/codev/workspaces/workspace/.git/codev-agent-worktrees/${worktreeId}`
++    )
++    const onDeleted = vi.fn()
++    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
++    mocks.state.allWorktrees.mockReturnValue([workspace])
++    mocks.state.removeWorktree.mockResolvedValue({ ok: true })
++    vi.mocked(requestCodevProposalDiscard).mockResolvedValue({
++      type: 'codev:proposal-discard-result',
++      requestId: 'request-1',
++      managed: true,
++      ok: true
++    })
++
++    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
++    renderToStaticMarkup(<DeleteWorktreeDialog />)
++    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
++      | { onClick?: (event: never) => void }
++      | undefined
++    deleteButton?.onClick?.(undefined as never)
++
++    await vi.waitFor(() => {
++      expect(mocks.state.removeWorktree).toHaveBeenCalledWith(workspace.id, false, {
++        mode: 'forget-local'
++      })
++    })
++    expect(runWorktreeDeletesInParallel).not.toHaveBeenCalled()
++    expect(onDeleted).toHaveBeenCalledWith([workspace.id])
++  })
+ })
+diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
+index 6bbe058..7123459 100644
+--- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
++++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
+@@ -30,6 +30,10 @@ import {
+   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
+ } from './delete-worktree-dialog-copy'
+ import { translate } from '@/i18n/i18n'
++import {
++  getCodevProposalWorktreeId,
++  requestCodevProposalDiscard
++} from '@/web/codev-proposal-discard'
+-
++
+ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+   const activeModal = useAppStore((s) => s.activeModal)
+@@ -261,6 +265,43 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+       if (dontAskAgain && allowSkipConfirm && !force) {
+         persistDontAskAgainPreference()
+       }
++      if (!force && !isBatchDelete && worktree && getCodevProposalWorktreeId(worktree.path)) {
++        const codevDiscard = requestCodevProposalDiscard(worktree.path)
++        closeModal()
++        void codevDiscard
++          .then(async (response) => {
++            if (response === null || !response.managed) {
++              const deletedIds = await runWorktreeDeletesInParallel([worktree], {
++                force: true,
++                onForceDeleted: handleForceDeletedFromToast
++              })
++              if (deletedIds.length > 0) {
++                onDeleted?.(deletedIds)
++              }
++              return
++            }
++            if (!response.ok) {
++              throw new Error(response.error)
++            }
++            const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
++            const forgotten = await removeWorktree(worktreeId, false, { mode: 'forget-local' })
++            if (!forgotten.ok) {
++              throw new Error(forgotten.error)
++            }
++            commitFocus()
++            onDeleted?.([worktreeId])
++            toast.success('Proposal discarded', {
++              description:
++                'CoDev removed the worktree, released its claims, and recorded the audit event.'
++            })
++          })
++          .catch((error: unknown) => {
++            toast.error('Failed to discard proposal', {
++              description: error instanceof Error ? error.message : String(error)
++            })
++          })
++        return
++      }
+       if (force) {
+         // Why: this branch preserves the legacy "Force Delete" button behavior
+         // inside the dialog — it runs the destructive retry directly without
+@@ -325,6 +366,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+       onDeleted,
+       persistDontAskAgainPreference,
+       removeWorktree,
++      isBatchDelete,
++      worktree,
+       worktreeIds.length,
+       worktreeId,
+       worktrees
+diff --git a/src/renderer/src/web/codev-proposal-discard.test.ts b/src/renderer/src/web/codev-proposal-discard.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/renderer/src/web/codev-proposal-discard.test.ts
+@@ -0,0 +1,63 @@
++import { describe, expect, it, vi } from 'vitest'
++import { getCodevProposalWorktreeId, requestCodevProposalDiscard } from './codev-proposal-discard'
++
++const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++
++describe('getCodevProposalWorktreeId', () => {
++  it('recognizes only CoDev agent worktree paths', () => {
++    expect(
++      getCodevProposalWorktreeId(
++        `/srv/codev/workspaces/workspace/.git/codev-agent-worktrees/${worktreeId}`
++      )
++    ).toBe(worktreeId)
++    expect(getCodevProposalWorktreeId(`/tmp/worktrees/${worktreeId}`)).toBeNull()
++  })
++})
++
++describe('requestCodevProposalDiscard', () => {
++  it('asks the CoDev parent to run the audited discard lifecycle', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout,
++      clearTimeout
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalDiscard(
++      `/srv/codev/workspaces/workspace/.git/codev-agent-worktrees/${worktreeId}`,
++      { window: targetWindow, timeoutMs: 500 }
++    )
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(request).toEqual({
++      type: 'codev:discard-proposal',
++      requestId: expect.any(String),
++      worktreeId
++    })
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: {
++          type: 'codev:proposal-discard-result',
++          requestId: request.requestId,
++          managed: true,
++          ok: true
++        }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-discard-result',
++      requestId: request.requestId,
++      managed: true,
++      ok: true
++    })
++  })
++})
+diff --git a/src/renderer/src/web/codev-proposal-discard.ts b/src/renderer/src/web/codev-proposal-discard.ts
+new file mode 100644
+--- /dev/null
++++ b/src/renderer/src/web/codev-proposal-discard.ts
+@@ -0,0 +1,69 @@
++export type CodevProposalDiscardResponse =
++  | { type: 'codev:proposal-discard-result'; requestId: string; managed: false }
++  | {
++      type: 'codev:proposal-discard-result'
++      requestId: string
++      managed: true
++      ok: true
++    }
++  | {
++      type: 'codev:proposal-discard-result'
++      requestId: string
++      managed: true
++      ok: false
++      error: string
++    }
++
++const CODEV_AGENT_WORKTREE_PATH =
++  /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
++let nextRequestId = 0
++
++export function getCodevProposalWorktreeId(path: string): string | null {
++  return CODEV_AGENT_WORKTREE_PATH.exec(path)?.[1] ?? null
++}
++
++export async function requestCodevProposalDiscard(
++  path: string,
++  options: {
++    window?: Window
++    timeoutMs?: number
++  } = {}
++): Promise<CodevProposalDiscardResponse | null> {
++  const targetWindow = options.window ?? window
++  const worktreeId = getCodevProposalWorktreeId(path)
++  if (!targetWindow.__CODEV_EMBEDDED__ || !worktreeId || targetWindow.parent === targetWindow) {
++    return null
++  }
++
++  const requestId = `codev-proposal-discard-${++nextRequestId}`
++  const timeoutMs = options.timeoutMs ?? 15_000
++
++  return await new Promise((resolve, reject) => {
++    const timeout = targetWindow.setTimeout(() => {
++      targetWindow.removeEventListener('message', receiveResult)
++      reject(new Error('CoDev did not confirm the proposal discard. Try again.'))
++    }, timeoutMs)
++    function receiveResult(event: MessageEvent<unknown>): void {
++      if (
++        event.origin !== targetWindow.location.origin ||
++        event.source !== targetWindow.parent ||
++        !event.data ||
++        typeof event.data !== 'object' ||
++        !('type' in event.data) ||
++        event.data.type !== 'codev:proposal-discard-result' ||
++        !('requestId' in event.data) ||
++        event.data.requestId !== requestId
++      ) {
++        return
++      }
++      targetWindow.clearTimeout(timeout)
++      targetWindow.removeEventListener('message', receiveResult)
++      resolve(event.data as CodevProposalDiscardResponse)
++    }
++    targetWindow.addEventListener('message', receiveResult)
++    targetWindow.parent.postMessage(
++      { type: 'codev:discard-proposal', requestId, worktreeId },
++      targetWindow.location.origin
++    )
++  })
++}
