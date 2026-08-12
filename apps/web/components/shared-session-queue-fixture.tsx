@@ -19,8 +19,26 @@ const fixtureSession = sharedSessionSchema.parse({
   queue: [],
 });
 
+const fixtureTranscript = [
+  {
+    position: 1,
+    author: "Alex Morgan",
+    prompt: "Inspect the repository layout.",
+    tool: "read_file · README.md",
+    output: "Repository structure is ready for the shared session.",
+  },
+  {
+    position: 2,
+    author: "Jordan Lee",
+    prompt: "Summarize the collaboration plan.",
+    tool: "list_files · src/",
+    output: "The session keeps one ordered transcript for every collaborator.",
+  },
+] as const;
+
 export function SharedSessionQueueFixture() {
   const [isOpen, setIsOpen] = useState(false);
+  const [hasTranscript, setHasTranscript] = useState(false);
 
   return (
     <section
@@ -66,7 +84,15 @@ export function SharedSessionQueueFixture() {
             </div>
             <div>
               <span className={styles.label}>State</span>
-              <strong>Idle · awaiting instruction</strong>
+              <strong>
+                {hasTranscript
+                  ? "Completed · 2 turns"
+                  : "Idle · awaiting instruction"}
+              </strong>
+            </div>
+            <div>
+              <span className={styles.label}>Model / configuration</span>
+              <strong>{fixtureSession.model} · standard</strong>
             </div>
           </div>
 
@@ -79,9 +105,57 @@ export function SharedSessionQueueFixture() {
               <span className={styles.liveBadge}>Durable</span>
             </div>
             <p className={styles.sessionQueueEmpty}>
-              Queue is empty — no instructions are waiting.
+              {hasTranscript
+                ? "Queue is empty — the completed transcript is shown below."
+                : "Queue is empty — no instructions are waiting."}
             </p>
           </div>
+
+          {!hasTranscript ? (
+            <button
+              className={styles.fixtureAction}
+              type="button"
+              onClick={() => setHasTranscript(true)}
+            >
+              Run fixture transcript
+            </button>
+          ) : (
+            <div
+              className={styles.sessionTranscript}
+              aria-label="Ordered transcript"
+            >
+              <div className={styles.sessionQueueHeader}>
+                <div>
+                  <span className={styles.label}>Ordered transcript</span>
+                  <strong>{fixtureTranscript.length} completed turns</strong>
+                </div>
+                <span className={styles.liveBadge}>Replayable</span>
+              </div>
+              <div className={styles.transcriptList}>
+                {fixtureTranscript.map((turn) => (
+                  <article
+                    className={styles.transcriptTurn}
+                    key={turn.position}
+                  >
+                    <div className={styles.transcriptTurnHeader}>
+                      <span className={styles.transcriptPosition}>
+                        Turn {turn.position}
+                      </span>
+                      <strong>{turn.author}</strong>
+                    </div>
+                    <p className={styles.transcriptPrompt}>{turn.prompt}</p>
+                    <p className={styles.transcriptTool}>
+                      Tool activity · <code>{turn.tool}</code>
+                    </p>
+                    <p className={styles.transcriptOutput}>
+                      <span className={styles.label}>Output</span>
+                      {turn.output}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
 
           <p className={styles.note}>
             Shared context is the visible session transcript and repository
@@ -92,7 +166,9 @@ export function SharedSessionQueueFixture() {
 
       <p className={styles.viewerStatus} role="status">
         {isOpen
-          ? "Shared session is open and idle with an empty ordered queue."
+          ? hasTranscript
+            ? "Shared session transcript is complete and ordered by turn."
+            : "Shared session is open and idle with an empty ordered queue."
           : "Open the session to view its idle queue."}
       </p>
     </section>

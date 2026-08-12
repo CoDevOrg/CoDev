@@ -449,7 +449,7 @@
 
 .sessionMetadata {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -503,6 +503,73 @@
   color: #c8eea6;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.sessionTranscript {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(161, 220, 105, 0.24);
+  border-radius: 8px;
+  background: #1d281a;
+}
+
+.transcriptList {
+  display: grid;
+  gap: 10px;
+}
+
+.transcriptTurn {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.transcriptTurnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #e0e7d8;
+  font-size: 12px;
+}
+
+.transcriptTurnHeader strong {
+  font-weight: 600;
+}
+
+.transcriptPosition {
+  color: #c8eea6;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.transcriptPrompt,
+.transcriptTool,
+.transcriptOutput {
+  margin: 0;
+  color: #c5cec0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.transcriptPrompt {
+  color: #f0f4ed;
+}
+
+.transcriptTool code {
+  color: #c8eea6;
+  font-size: 11px;
+}
+
+.transcriptOutput {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(161, 220, 105, 0.16);
 }
 
 .idePresence {

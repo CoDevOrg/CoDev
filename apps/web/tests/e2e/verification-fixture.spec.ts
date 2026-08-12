@@ -568,3 +568,55 @@ test("F3.1 opens an idle shared session with an empty ordered queue", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("F3.2 renders shared session metadata and ordered transcript", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const sessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await sessionCard
+    .getByRole("button", { name: "Open shared session" })
+    .click();
+  await sessionCard
+    .getByRole("button", { name: "Run fixture transcript" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Codex-compatible",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Alex Morgan",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "agent-alex",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "gpt-5 · standard",
+  );
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Completed · 2 turns",
+  );
+
+  const transcript = sessionCard.getByLabel("Ordered transcript");
+  await expect(transcript).toContainText("Turn 1");
+  await expect(transcript).toContainText("Alex Morgan");
+  await expect(transcript).toContainText("read_file · README.md");
+  await expect(transcript).toContainText("Turn 2");
+  await expect(transcript).toContainText("Jordan Lee");
+  await expect(transcript).toContainText("list_files · src/");
+  await expect(sessionCard.getByRole("status")).toContainText(
+    "Shared session transcript is complete and ordered by turn.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F3.2",
+    state: "shared-session-ordered-transcript",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f3-2\/shared-session-ordered-transcript\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
