@@ -1093,6 +1093,17 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 ## Blocked tasks
 
+- **F5.6 — verification retry 2026-08-12T18:03:22Z:** Focused Orca/API
+  tests (13 passed), targeted formatting, web lint, web typecheck,
+  production build, and `git diff --check` passed. The Ready branch preview
+  <https://codev-38ohmyoa4-yousef20920s-projects.vercel.app> was opened in
+  Computer Use with the disposable authenticated session. The dashboard
+  showed zero workspaces; opening the native New workspace dialog visibly
+  returned `OpenFGA authorization is not configured.` No managed Orca
+  workspace or proposal could be provisioned, so the native Delete Worktree
+  flow and audited discard remain unverified. F5.6 remains Current. Screenshot:
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%202.03.00%20PM.jpeg`.
+
 - **F5.6 — retry updated 2026-08-12T17:06:22Z:** Focused Orca/API tests
   (11 passed), formatting, lint, typecheck, production build, and
   `git diff --check` passed for source commit `e3769e22d6f01b5aafcf6f99440816b64aca2e3b`.
