@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution**
+**F3.4 — Add authorized interrupt/cancellation state with a visible last completed action**
 
 ## Completed tasks
 
@@ -23,6 +23,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.  |
 | F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                        |
 | F3.2 — Render the provider, owner, worktree, state, and ordered transcript                          | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order. |
+| F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                  | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview. |
 
 ### B0.2 completion evidence
 
@@ -528,6 +529,47 @@ external filesystem`, and `Merge manually` as resolution choices. No
   session and event storage paths.
 - Next task: F3.3 — allow one eligible collaborator to enqueue one instruction
   with attribution.
+
+### F3.3 completion evidence
+
+- Completed: 2026-08-12T01:09:00Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/shared-session-queue-fixture.test.tsx`,
+  `apps/web/components/shared-session-queue-fixture.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused shared-session component tests — 3 passed; focused F3.3
+  Playwright verification on the built app — 1 passed; targeted Prettier
+  check passed; web lint — 0 errors with the same 2 pre-existing warnings;
+  web typecheck passed; web production build passed; `git diff --check`
+  passed. The repository-wide format check remains blocked by the three
+  pre-existing scheduler Markdown files recorded in earlier ledger evidence.
+- Validated source commit: `370b10af34ff4156a3dc707967ba9685424a7993`.
+- Vercel preview:
+  <https://codev-2iuqmfj08-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias also resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a fresh Chrome tab at
+  `/verification/b0-2`, opened the shared session, confirmed the empty-input
+  state and Casey Rivera's Viewer queue control was unavailable, entered
+  `Inspect the shared session contract.` as Jordan Lee, queued it once, and
+  confirmed the visible `1 queued` entry with Jordan's Collaborator
+  attribution, author ID, and Alex Morgan's live observer state. No
+  credentials or secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-3/collaborator-instruction-observed-live.png`
+  (Playwright success state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-3/viewer-queue-unavailable.png`
+  (Playwright edge state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-3/computer-use-collaborator-instruction-observed-live.jpeg`
+  (Computer Use preview success state), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f3-3/computer-use-viewer-queue-unavailable.jpeg`
+  (Computer Use preview edge state).
+- Known limitations: the credential-free preview fixture models the
+  attributed queue and live observer state in browser state; authenticated
+  shared-session persistence and provider execution continue through the
+  existing agent session, turn, and event storage paths.
+- Next task: F3.4 — add authorized interrupt/cancellation state with a visible
+  last completed action.
 
 ## Blocked tasks
 
