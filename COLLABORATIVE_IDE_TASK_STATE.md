@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution**
+**F5.5 — Discard a proposal idempotently and remove its worktree/claims**
 
 ## Completed tasks
 
@@ -33,6 +33,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F5.1 — Create an immutable review checkpoint with revision and diff metadata                           | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest. |
 | F5.2 — Render a binary-safe diff summary and affected-path list                                         | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted. |
 | F5.3 — Reject stale checkpoint approval before any merge action                                        | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started. |
+| F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution. |
 
 ### B0.2 completion evidence
 
@@ -1002,10 +1003,49 @@ external filesystem`, and `Merge manually` as resolution choices. No
 - Known limitations: the credential-free preview fixture models the stale
   approval gate in browser state; the authenticated review service already
   performs the server-side base/head check before calling the merge
-  orchestrator, while integration success and audit attribution remain the
-  next F5.4 task.
+  orchestrator and now records the successful merge audit event; the preview
+  flow itself remains credential-free fixture state.
 - Next task: F5.4 — integrate exactly one current reviewed checkpoint with
   audit attribution.
+
+### F5.4 completion evidence
+
+- Completed: 2026-08-12T14:11:34Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/lib/agent-review.test.ts`, `apps/web/lib/agent-review.ts`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused review and fixture Vitest — 4 passed; focused F5.4
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check — passed; web lint — 0 errors with the same 2 pre-existing warnings;
+  web typecheck — passed; web production build — passed; `git diff --check` —
+  passed.
+- Validated source commit: `6a090a17ebd9fafb1ebe8793e6b1d1076a2cbb65`.
+- Vercel preview: <https://codev-grawvknj2-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. The deployment was checked
+  with Vercel CLI and Computer Use used this exact preview URL.
+- Computer Use flow: opened the Ready preview in a new Chrome tab at
+  `/verification/b0-2`, clicked `Mark review-ready`, clicked `Approve
+  checkpoint` while the integration head was `fixture-main-r1`, and confirmed
+  the visible `Integrated exactly one current reviewed checkpoint` result,
+  integration head `fixture-agent-r2`, disabled `Checkpoint integrated`
+  control, merge actor `Alex Morgan · Maintainer`, audit event
+  `review.checkpoint_integrated`, and reviewed revision
+  `fixture-main-r1 → fixture-agent-r2`. No credentials or secrets were
+  entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-4/integration-audit-recorded.png`
+  (focused Playwright success state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 10.10.43 AM.jpeg`
+  (Computer Use final preview state with integration and audit attribution).
+- Known limitations: the credential-free preview fixture models the
+  checkpoint integration and audit result in browser state; the authenticated
+  merge service now appends `agent.review_merged` with the approving actor,
+  checkpoint revisions, merged head, integration worktree, and diff digest,
+  covered by the focused server test.
+- Next task: F5.5 — discard a proposal idempotently and remove its worktree
+  and claims.
 
 ## Blocked tasks
 
