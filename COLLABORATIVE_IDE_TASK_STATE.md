@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout**
+**F5.1 — Create an immutable review checkpoint with revision and diff metadata**
 
 ## Completed tasks
 
@@ -29,6 +29,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot   | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots. |
 | F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance. |
 | F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment. |
+| F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`. |
 
 ### B0.2 completion evidence
 
@@ -856,6 +857,43 @@ external filesystem`, and `Merge manually` as resolution choices. No
   unless the session has an active claim.
 - Next task: F4.6 — release claims and preserve a checkpoint on
   stop/fail/timeout.
+
+### F4.6 completion evidence
+
+- Completed: 2026-08-12T10:07:48Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-path-claim-fixture.tsx`,
+  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused claim-fixture Vitest — 4 passed; focused F4.6 Playwright
+  verification on the rebuilt app — 1 passed; targeted Prettier check and
+  `git diff --check` — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web typecheck and production build — passed.
+- Validated source commit: `c898f57c334c198ea52452fa67ef1f1ab0cae25a`.
+- Vercel preview: <https://codev-j9gbrqc6s-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. Computer Use used this exact
+  preview URL.
+- Computer Use flow: opened `/verification/b0-2` in a new Chrome tab,
+  confirmed the Ready badge and three-slot workboard, clicked `Start agent
+  claim` for slot 1, captured the active claim, clicked `Stop agent`, and
+  confirmed the visible `Released` claim status plus `Checkpoint preserved`
+  for `README.md · fixture-r1` with the stop reason. No credentials or
+  secrets were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-6/active-claim-before-stop.png`
+  (focused Playwright active-claim state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-6/stopped-claim-checkpoint.png`
+  (focused Playwright released-claim checkpoint),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-6/computer-use-active-claim.jpeg`
+  (Computer Use active claim), and
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-6/computer-use-stopped-claim-checkpoint.jpeg`
+  (Computer Use released claim and preserved checkpoint).
+- Known limitations: the credential-free preview fixture models the stop
+  lifecycle in browser state; the authenticated coordination service already
+  persists path claims, and stop/fail/timeout orchestration remains a follow-up
+  integration concern.
+- Next task: F5.1 — create an immutable review checkpoint with revision and
+  diff metadata.
 
 ## Blocked tasks
 
