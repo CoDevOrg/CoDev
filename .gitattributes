@@ -1,0 +1,3 @@
+# Minified bundles are generated from the pinned Orca source and can contain
+# intentional whitespace at the end of a logical line.
+apps/web/public/orca/assets/*.js -whitespace

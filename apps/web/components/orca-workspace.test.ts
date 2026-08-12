@@ -6,6 +6,7 @@ import {
   applyOrcaWorkspaceBranding,
   autoAddOrcaProject,
   buildOrcaIframeSource,
+  createOrcaManagedProposal,
   discardOrcaManagedProposal,
   WorkspaceTopBar,
 } from "./orca-workspace";
@@ -54,6 +55,29 @@ describe("discardOrcaManagedProposal", () => {
         fetcher,
       ),
     ).resolves.toEqual({ managed: false });
+  });
+});
+
+describe("createOrcaManagedProposal", () => {
+  it("creates an isolated managed proposal without sending provider credentials", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ sessionId: "session-1" }, { status: 201 }),
+      );
+
+    await expect(
+      createOrcaManagedProposal("workspace-1", fetcher),
+    ).resolves.toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith("/api/workspaces/workspace-1/agents", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Managed proposal",
+        draft: true,
+        attachments: [],
+      }),
+    });
   });
 });
 

@@ -41,16 +41,27 @@ import {
   enforceAgentPromptRateLimit,
 } from "@/lib/agent-rate-limit";
 
-const createSchema = z.object({
-  name: z.string().trim().min(1).max(32),
-  prompt: z.string().trim().min(1).max(20_000),
-  model: z.string().trim().min(1).max(120).optional(),
-  provider: z
-    .enum(["openai", "anthropic", "cursor", "bedrock", "azure_foundry"])
-    .optional(),
-  issueNumber: z.number().int().positive().optional(),
-  attachments: agentAttachmentsSchema,
-});
+const createSchema = z
+  .object({
+    name: z.string().trim().min(1).max(32),
+    prompt: z.string().trim().min(1).max(20_000).optional(),
+    draft: z.literal(true).optional(),
+    model: z.string().trim().min(1).max(120).optional(),
+    provider: z
+      .enum(["openai", "anthropic", "cursor", "bedrock", "azure_foundry"])
+      .optional(),
+    issueNumber: z.number().int().positive().optional(),
+    attachments: agentAttachmentsSchema,
+  })
+  .superRefine((input, context) => {
+    if (!input.draft && !input.prompt) {
+      context.addIssue({
+        code: "custom",
+        path: ["prompt"],
+        message: "A prompt is required unless creating a managed proposal.",
+      });
+    }
+  });
 
 class DuplicateIssueError extends Error {}
 function isUniqueViolation(error: unknown) {
@@ -176,17 +187,17 @@ export async function POST(
   try {
     const input = createSchema.parse(await request.json());
     const provider = parseAgentProvider(input.provider, getAgentProvider());
-    const credential = await resolveAgentCredential(
-      user.id,
-      workspaceId,
-      provider,
-    );
+    const credential = input.draft
+      ? undefined
+      : await resolveAgentCredential(user.id, workspaceId, provider);
     const model = await resolveSelectableAgentModel(
       input.model,
       provider,
       credential,
     );
-    await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
+    if (!input.draft) {
+      await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
+    }
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const issue = input.issueNumber
       ? await getExactGitHubIssue(
@@ -299,12 +310,14 @@ export async function POST(
             url: issue.html_url,
           });
         }
-        await transaction.insert(schema.agentTurns).values({
-          sessionId: session.id,
-          authorId: user.id,
-          prompt: input.prompt,
-          attachments: toStoredAgentAttachments(input.attachments),
-        });
+        if (!input.draft) {
+          await transaction.insert(schema.agentTurns).values({
+            sessionId: session.id,
+            authorId: user.id,
+            prompt: input.prompt!,
+            attachments: toStoredAgentAttachments(input.attachments),
+          });
+        }
         const shortId = worktree.id.slice(0, 8);
         const slug = input.name
           .toLowerCase()
@@ -335,7 +348,9 @@ export async function POST(
         reservation.headSha,
         reservation.branchName,
       );
-      await kickAgentSession(reservation.sessionId);
+      if (!input.draft) {
+        await kickAgentSession(reservation.sessionId);
+      }
       return Response.json(
         { sessionId: reservation.sessionId },
         { status: 201 },

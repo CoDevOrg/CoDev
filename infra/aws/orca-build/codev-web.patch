@@ -536,9 +536,9 @@ index eae3a54..6ebcb27 100644
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
 +import { readCodevBootstrap } from './codev-bootstrap'
- 
+
  const App = lazy(() => import('../App'))
- 
+
  function WebRoot(): React.JSX.Element {
 +  const codevBootstrap = useMemo(() => readCodevBootstrap(window.location), [])
 +  window.__CODEV_EMBEDDED__ = codevBootstrap !== null
@@ -828,3 +828,229 @@ new file mode 100644
 +    )
 +  })
 +}
+diff --git a/src/renderer/src/web/codev-proposal-discard.ts b/src/renderer/src/web/codev-proposal-discard.ts
+index 66bf809..5b482eb 100644
+--- a/src/renderer/src/web/codev-proposal-discard.ts
++++ b/src/renderer/src/web/codev-proposal-discard.ts
+@@ -14,6 +14,10 @@ export type CodevProposalDiscardResponse =
+       error: string
+     }
+
++export type CodevProposalCreateResponse =
++  | { type: 'codev:proposal-create-result'; requestId: string; ok: true }
++  | { type: 'codev:proposal-create-result'; requestId: string; ok: false; error: string }
++
+ const CODEV_AGENT_WORKTREE_PATH =
+   /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
+ let nextRequestId = 0
+@@ -67,3 +71,47 @@ export async function requestCodevProposalDiscard(
+     )
+   })
+ }
++
++export async function requestCodevProposalCreate(
++  options: {
++    window?: Window
++    timeoutMs?: number
++  } = {}
++): Promise<CodevProposalCreateResponse | null> {
++  const targetWindow = options.window ?? window
++  if (!targetWindow.__CODEV_EMBEDDED__ || targetWindow.parent === targetWindow) {
++    return null
++  }
++
++  const requestId = `codev-proposal-create-${++nextRequestId}`
++  const timeoutMs = options.timeoutMs ?? 15_000
++
++  return await new Promise((resolve, reject) => {
++    const timeout = targetWindow.setTimeout(() => {
++      targetWindow.removeEventListener('message', receiveResult)
++      reject(new Error('CoDev did not confirm the proposal creation. Try again.'))
++    }, timeoutMs)
++    function receiveResult(event: MessageEvent<unknown>): void {
++      if (
++        event.origin !== targetWindow.location.origin ||
++        event.source !== targetWindow.parent ||
++        !event.data ||
++        typeof event.data !== 'object' ||
++        !('type' in event.data) ||
++        event.data.type !== 'codev:proposal-create-result' ||
++        !('requestId' in event.data) ||
++        event.data.requestId !== requestId
++      ) {
++        return
++      }
++      targetWindow.clearTimeout(timeout)
++      targetWindow.removeEventListener('message', receiveResult)
++      resolve(event.data as CodevProposalCreateResponse)
++    }
++    targetWindow.addEventListener('message', receiveResult)
++    targetWindow.parent.postMessage(
++      { type: 'codev:create-proposal', requestId },
++      targetWindow.location.origin
++    )
++  })
++}
+diff --git a/src/renderer/src/web/codev-proposal-discard.test.ts b/src/renderer/src/web/codev-proposal-discard.test.ts
+index a7e7b4f..548aa1c 100644
+--- a/src/renderer/src/web/codev-proposal-discard.test.ts
++++ b/src/renderer/src/web/codev-proposal-discard.test.ts
+@@ -1,5 +1,9 @@
+ import { describe, expect, it, vi } from 'vitest'
+-import { getCodevProposalWorktreeId, requestCodevProposalDiscard } from './codev-proposal-discard'
++import {
++  getCodevProposalWorktreeId,
++  requestCodevProposalCreate,
++  requestCodevProposalDiscard
++} from './codev-proposal-discard'
+
+ const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
+
+@@ -61,3 +65,38 @@ describe('requestCodevProposalDiscard', () => {
+     })
+   })
+ })
++
++describe('requestCodevProposalCreate', () => {
++  it('asks the CoDev parent to prepare a managed proposal', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout,
++      clearTimeout
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalCreate({ window: targetWindow, timeoutMs: 500 })
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(request).toEqual({ type: 'codev:create-proposal', requestId: expect.any(String) })
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: { type: 'codev:proposal-create-result', requestId: request.requestId, ok: true }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-create-result',
++      requestId: request.requestId,
++      ok: true
++    })
++  })
++})
+diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
+index 83b190a..c530555 100644
+--- a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
++++ b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
+@@ -1,4 +1,4 @@
+-import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
++import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
+ import { Button } from '@/components/ui/button'
+ import { translate } from '@/i18n/i18n'
+ import type {
+@@ -40,6 +40,8 @@ type AiVaultPanelHeaderProps = {
+   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+   onReset: () => void
+   onRefresh: () => void
++  creatingProposal?: boolean
++  onCreateProposal?: () => void
+ }
+
+ export function AiVaultPanelHeader({
+@@ -69,7 +71,9 @@ export function AiVaultPanelHeader({
+   onHideEmptySessionsChange,
+   onSessionLimitChange,
+   onReset,
+-  onRefresh
++  onRefresh,
++  creatingProposal = false,
++  onCreateProposal
+ }: AiVaultPanelHeaderProps): React.JSX.Element {
+   return (
+     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
+@@ -114,6 +118,21 @@ export function AiVaultPanelHeader({
+           </div>
+         </div>
+         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
++          {onCreateProposal ? (
++            <Button
++              type="button"
++              variant="ghost"
++              size="xs"
++              aria-label="Prepare managed proposal"
++              onClick={onCreateProposal}
++              disabled={creatingProposal}
++              aria-busy={creatingProposal}
++              className="h-6 px-1.5 text-[11px]"
++            >
++              {creatingProposal ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />}
++              <span className="@max-[300px]/ai-vault:hidden">Proposal</span>
++            </Button>
++          ) : null}
+           <VaultHostScopeMenu
+             executionHostScope={executionHostScope}
+             hostOptions={hostScopeOptions}
+diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
+index e048925..82efd8d 100644
+--- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
++++ b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
+@@ -49,6 +49,7 @@ import {
+ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
+ import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
+ import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
++import { requestCodevProposalCreate } from '@/web/codev-proposal-discard'
+
+ export default function AiVaultPanel(): React.JSX.Element {
+   const activeWorktreeId = useActiveWorktreeId()
+@@ -88,6 +89,7 @@ export default function AiVaultPanel(): React.JSX.Element {
+     resetViewOptions
+   } = usePersistedAiVaultViewOptions()
+   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
++  const [creatingProposal, setCreatingProposal] = useState(false)
+   const userChangedScopeRef = useRef(false)
+   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
+
+@@ -304,6 +306,27 @@ export default function AiVaultPanel(): React.JSX.Element {
+     })
+   }, [])
+
++  const createProposal = useCallback(() => {
++    setCreatingProposal(true)
++    void requestCodevProposalCreate()
++      .then((result) => {
++        if (result === null) return
++        if (!result.ok) {
++          throw new Error(result.error)
++        }
++        toast.success('Managed proposal prepared', {
++          description: 'CoDev created an isolated worktree. Reloading it in the native workspace now.'
++        })
++        window.setTimeout(() => window.location.reload(), 400)
++      })
++      .catch((error: unknown) => {
++        toast.error('Failed to prepare managed proposal', {
++          description: error instanceof Error ? error.message : String(error)
++        })
++      })
++      .finally(() => setCreatingProposal(false))
++  }, [])
++
+   return (
+     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
+       <AiVaultPanelHeader
+@@ -334,6 +357,8 @@ export default function AiVaultPanel(): React.JSX.Element {
+         onSessionLimitChange={setSessionLimit}
+         onReset={resetViewOptions}
+         onRefresh={() => void refresh({ force: true })}
++        creatingProposal={creatingProposal}
++        onCreateProposal={window.__CODEV_EMBEDDED__ ? createProposal : undefined}
+       />
+
+       {error ? (

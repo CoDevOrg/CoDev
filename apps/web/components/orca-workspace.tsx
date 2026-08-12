@@ -32,12 +32,15 @@ type CodevOrcaMessage =
       type: "codev:discard-proposal";
       requestId: string;
       worktreeId: string;
-    };
+    }
+  | { type: "codev:create-proposal"; requestId: string };
 
 type CodevProposalDiscardResult =
   | { managed: false }
   | { managed: true; ok: true }
   | { managed: true; ok: false; error: string };
+
+type CodevProposalCreateResult = { ok: true } | { ok: false; error: string };
 
 const WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -107,6 +110,44 @@ export async function discardOrcaManagedProposal(
         error instanceof Error
           ? error.message
           : "CoDev could not discard this proposal.",
+    };
+  }
+}
+
+export async function createOrcaManagedProposal(
+  workspaceId: string,
+  fetcher: typeof fetch = fetch,
+): Promise<CodevProposalCreateResult> {
+  try {
+    const response = await fetcher(`/api/workspaces/${workspaceId}/agents`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Managed proposal",
+        draft: true,
+        attachments: [],
+      }),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      error?: unknown;
+    } | null;
+    if (!response.ok) {
+      return {
+        ok: false,
+        error:
+          typeof payload?.error === "string"
+            ? payload.error
+            : "CoDev could not prepare this proposal.",
+      };
+    }
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "CoDev could not prepare this proposal.",
     };
   }
 }
@@ -546,6 +587,21 @@ export function OrcaWorkspace({
             );
           },
         );
+      } else if (
+        event.data.type === "codev:create-proposal" &&
+        typeof event.data.requestId === "string"
+      ) {
+        const { requestId } = event.data;
+        void createOrcaManagedProposal(workspaceId).then((result) => {
+          iframeRef.current?.contentWindow?.postMessage(
+            {
+              type: "codev:proposal-create-result",
+              requestId,
+              ...result,
+            },
+            window.location.origin,
+          );
+        });
       } else if (event.data.type === "codev:project-ready") {
         setIsOpeningProject(false);
       } else if (event.data.type === "codev:project-error") {
