@@ -95,4 +95,47 @@ describe("SharedSessionQueueFixture", () => {
       screen.getByRole("button", { name: "Instruction queued" }),
     ).toBeDisabled();
   });
+
+  it("lets Jordan interrupt a running turn while preserving its last action", () => {
+    render(<SharedSessionQueueFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open shared session" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start controlled fixture turn" }),
+    );
+
+    expect(screen.getByLabelText("Session metadata")).toHaveTextContent(
+      "Running · turn 3",
+    );
+    expect(
+      screen.getByRole("button", { name: "Interrupt running turn as Jordan" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Interrupt turn · unavailable" }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Interrupt running turn as Jordan" }),
+    );
+
+    expect(screen.getByLabelText("Session metadata")).toHaveTextContent(
+      "Interrupted · turn 3",
+    );
+    expect(screen.getByLabelText("Controlled fixture turn")).toHaveTextContent(
+      "Cancellation recorded by Jordan Lee",
+    );
+    expect(screen.getByLabelText("Last completed action")).toHaveTextContent(
+      "read_file · README.mdRepository structure is ready for the shared session.",
+    );
+    expect(
+      screen.getByLabelText("Alex Morgan live observer"),
+    ).toHaveTextContent(
+      "Alex sees Jordan's cancellation and the preserved last completed action.",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member.",
+    );
+  });
 });

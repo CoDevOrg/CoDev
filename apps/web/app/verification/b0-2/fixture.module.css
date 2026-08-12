@@ -505,6 +505,35 @@
   line-height: 1.5;
 }
 
+.sessionTurnPanel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(240, 207, 139, 0.28);
+  border-radius: 8px;
+  background: #241f17;
+}
+
+.lastCompletedAction {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border-radius: 7px;
+  background: #20251d;
+}
+
+.lastCompletedAction strong {
+  color: #f0f4ed;
+  font-size: 12px;
+}
+
+.lastCompletedAction p {
+  margin: 0;
+  color: #c5cec0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .queueEntry {
   display: grid;
   gap: 8px;
@@ -590,6 +619,13 @@
   background: #20251d;
   color: #778070;
   font: inherit;
+}
+
+.ineligibleCoSteer > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .sessionTranscript {

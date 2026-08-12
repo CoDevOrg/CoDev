@@ -39,6 +39,13 @@ const fixtureTranscript = [
   },
 ] as const;
 
+const fixtureCompletedAction = {
+  tool: "read_file · README.md",
+  output: "Repository structure is ready for the shared session.",
+} as const;
+
+type ControlledTurnState = "idle" | "running" | "interrupted";
+
 const fixtureMembers = {
   alex: {
     id: "b0200000-0000-4000-8000-000000000011",
@@ -62,7 +69,21 @@ export function SharedSessionQueueFixture() {
   const [hasTranscript, setHasTranscript] = useState(false);
   const [queue, setQueue] = useState(fixtureSession.queue);
   const [draftPrompt, setDraftPrompt] = useState("");
+  const [controlledTurnState, setControlledTurnState] =
+    useState<ControlledTurnState>("idle");
+  const [interruptedBy, setInterruptedBy] = useState<string | null>(null);
   const queuedInstruction = queue[0];
+
+  function startControlledTurn() {
+    if (controlledTurnState !== "idle") return;
+    setControlledTurnState("running");
+  }
+
+  function interruptControlledTurn() {
+    if (controlledTurnState !== "running") return;
+    setInterruptedBy(fixtureMembers.jordan.name);
+    setControlledTurnState("interrupted");
+  }
 
   function queueJordanInstruction() {
     const prompt = draftPrompt.trim();
@@ -124,11 +145,15 @@ export function SharedSessionQueueFixture() {
             <div>
               <span className={styles.label}>State</span>
               <strong>
-                {queue.length > 0
-                  ? "Queued · awaiting turn"
-                  : hasTranscript
-                    ? "Completed · 2 turns"
-                    : "Idle · awaiting instruction"}
+                {controlledTurnState === "running"
+                  ? "Running · turn 3"
+                  : controlledTurnState === "interrupted"
+                    ? "Interrupted · turn 3"
+                    : queue.length > 0
+                      ? "Queued · awaiting turn"
+                      : hasTranscript
+                        ? "Completed · 2 turns"
+                        : "Idle · awaiting instruction"}
               </strong>
             </div>
             <div>
@@ -173,6 +198,63 @@ export function SharedSessionQueueFixture() {
             )}
           </div>
 
+          <section
+            className={styles.sessionTurnPanel}
+            aria-label="Controlled fixture turn"
+          >
+            <div className={styles.sessionQueueHeader}>
+              <div>
+                <span className={styles.label}>Controlled fixture turn</span>
+                <strong>
+                  {controlledTurnState === "idle"
+                    ? "Ready to run"
+                    : controlledTurnState === "running"
+                      ? "Turn 3 · running"
+                      : "Turn 3 · interrupted"}
+                </strong>
+              </div>
+              <span className={styles.liveBadge}>
+                {controlledTurnState === "interrupted"
+                  ? "Cancellation recorded"
+                  : controlledTurnState === "running"
+                    ? "Live · cancellable"
+                    : "Fixture control"}
+              </span>
+            </div>
+            {controlledTurnState === "idle" ? (
+              <>
+                <p className={styles.observerCopy}>
+                  Start a controlled turn with one completed tool result and a
+                  second tool waiting, so an eligible collaborator can cancel it
+                  safely.
+                </p>
+                <button
+                  className={styles.fixtureAction}
+                  type="button"
+                  onClick={startControlledTurn}
+                >
+                  Start controlled fixture turn
+                </button>
+              </>
+            ) : (
+              <>
+                <p className={styles.observerState} aria-live="polite">
+                  {controlledTurnState === "running"
+                    ? "Tool activity · write_file · waiting for completion."
+                    : `Cancellation recorded by ${interruptedBy}. No further tool calls will run.`}
+                </p>
+                <div
+                  className={styles.lastCompletedAction}
+                  aria-label="Last completed action"
+                >
+                  <span className={styles.label}>Last completed action</span>
+                  <strong>{fixtureCompletedAction.tool}</strong>
+                  <p>{fixtureCompletedAction.output}</p>
+                </div>
+              </>
+            )}
+          </section>
+
           <div className={styles.coSteeringGrid}>
             <section
               className={styles.coSteeringPanel}
@@ -211,6 +293,16 @@ export function SharedSessionQueueFixture() {
                   ? "Instruction queued"
                   : "Queue instruction as Jordan"}
               </button>
+              <button
+                className={styles.fixtureAction}
+                type="button"
+                onClick={interruptControlledTurn}
+                disabled={controlledTurnState !== "running"}
+              >
+                {controlledTurnState === "interrupted"
+                  ? "Turn interrupted"
+                  : "Interrupt running turn as Jordan"}
+              </button>
             </section>
 
             <section
@@ -230,9 +322,13 @@ export function SharedSessionQueueFixture() {
                 Alex sees the same attributed queue as soon as Jordan submits.
               </p>
               <p className={styles.observerState} aria-live="polite">
-                {queue.length > 0
-                  ? `Jordan's instruction is visible to ${fixtureMembers.alex.name}.`
-                  : "Waiting for Jordan to queue one instruction."}
+                {controlledTurnState === "interrupted"
+                  ? "Alex sees Jordan's cancellation and the preserved last completed action."
+                  : controlledTurnState === "running"
+                    ? "Alex sees the running turn and its last completed action."
+                    : queue.length > 0
+                      ? `Jordan's instruction is visible to ${fixtureMembers.alex.name}.`
+                      : "Waiting for Jordan to queue one instruction."}
               </p>
             </section>
           </div>
@@ -244,9 +340,14 @@ export function SharedSessionQueueFixture() {
             <span>
               {fixtureMembers.casey.name} · {fixtureMembers.casey.role}
             </span>
-            <button type="button" disabled>
-              Queue instruction · unavailable
-            </button>
+            <div>
+              <button type="button" disabled>
+                Queue instruction · unavailable
+              </button>
+              <button type="button" disabled>
+                Interrupt turn · unavailable
+              </button>
+            </div>
           </div>
 
           {!hasTranscript ? (
@@ -306,9 +407,13 @@ export function SharedSessionQueueFixture() {
         {isOpen
           ? queue.length > 0
             ? "Jordan's instruction is queued and attributed for every session member."
-            : hasTranscript
-              ? "Shared session transcript is complete and ordered by turn."
-              : "Shared session is open and idle with an empty ordered queue."
+            : controlledTurnState === "interrupted"
+              ? "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member."
+              : controlledTurnState === "running"
+                ? "Controlled turn 3 is running; Jordan can interrupt it with co-steer permission."
+                : hasTranscript
+                  ? "Shared session transcript is complete and ordered by turn."
+                  : "Shared session is open and idle with an empty ordered queue."
           : "Open the session to view its idle queue."}
       </p>
     </section>

@@ -687,3 +687,78 @@ test("F3.3 queues one attributed collaborator instruction for the live observer"
   );
   await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
 });
+
+test("F3.4 interrupts a controlled turn and preserves its last completed action", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const sessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await sessionCard
+    .getByRole("button", { name: "Open shared session" })
+    .click();
+  await sessionCard
+    .getByRole("button", { name: "Start controlled fixture turn" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Running · turn 3",
+  );
+  await expect(
+    sessionCard.getByRole("button", {
+      name: "Interrupt running turn as Jordan",
+    }),
+  ).toBeEnabled();
+  await expect(
+    sessionCard.getByRole("button", { name: "Interrupt turn · unavailable" }),
+  ).toBeDisabled();
+
+  await sessionCard
+    .getByRole("button", { name: "Interrupt running turn as Jordan" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Session metadata")).toContainText(
+    "Interrupted · turn 3",
+  );
+  await expect(sessionCard.getByLabel("Controlled fixture turn")).toContainText(
+    "Cancellation recorded by Jordan Lee",
+  );
+  await expect(sessionCard.getByLabel("Last completed action")).toContainText(
+    "read_file · README.md",
+  );
+  await expect(sessionCard.getByLabel("Last completed action")).toContainText(
+    "Repository structure is ready for the shared session.",
+  );
+  await expect(
+    sessionCard.getByLabel("Alex Morgan live observer"),
+  ).toContainText(
+    "Alex sees Jordan's cancellation and the preserved last completed action.",
+  );
+  await expect(sessionCard.getByRole("status")).toContainText(
+    "Turn 3 was interrupted by Jordan; the last completed action remains visible to every member.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F3.4",
+    state: "interrupted-last-completed-action",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f3-4\/interrupted-last-completed-action\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F3.4",
+      state: "viewer-interrupt-unavailable",
+    },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f3-4\/viewer-interrupt-unavailable\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});
