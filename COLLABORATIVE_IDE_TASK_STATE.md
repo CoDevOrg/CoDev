@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F5.1 — Create an immutable review checkpoint with revision and diff metadata**
+**F5.2 — Render a binary-safe diff summary and affected-path list**
 
 ## Completed tasks
 
@@ -30,6 +30,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance. |
 | F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment. |
 | F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`. |
+| F5.1 — Create an immutable review checkpoint with revision and diff metadata                           | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest. |
 
 ### B0.2 completion evidence
 
@@ -894,6 +895,44 @@ external filesystem`, and `Merge manually` as resolution choices. No
   integration concern.
 - Next task: F5.1 — create an immutable review checkpoint with revision and
   diff metadata.
+
+### F5.1 completion evidence
+
+- Completed: 2026-08-12T11:07:06Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused review-checkpoint Vitest — 1 passed; focused F5.1
+  Playwright verification on the rebuilt app — 1 passed; targeted Prettier
+  check and `git diff --check` — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web typecheck and production build — passed.
+- Validated source commit: `dd156cd8ce59e6217a6b51f797abcfe4d7e238ad`.
+- Vercel preview: <https://codev-hp6vfb0wp-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. Computer Use used this exact
+  preview URL.
+- Computer Use flow: opened `/verification/b0-2` in a new Chrome tab,
+  confirmed the Ready badge and three-slot workboard, captured the pending
+  review state, clicked `Mark review-ready`, and confirmed the worktree changed
+  to `Frozen`, the action became disabled as `Checkpoint prepared`, and the
+  visible `Review ready · immutable checkpoint` showed `fixture-main-r1`,
+  `fixture-agent-r2`, and the SHA-256 diff digest. No credentials or secrets
+  were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-1/review-checkpoint-pending.png`
+  (focused Playwright pending state),
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-1/review-checkpoint-ready.png`
+  (focused Playwright immutable checkpoint),
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 7.06.53 AM.jpeg`
+  (Computer Use pending state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 7.07.06 AM.jpeg`
+  (Computer Use immutable checkpoint).
+- Known limitations: the credential-free preview fixture models checkpoint
+  preparation in browser state; the authenticated review service already
+  persists review head/base revisions and a diff digest, while binary-safe diff
+  rendering is the next F5.2 task.
+- Next task: F5.2 — render a binary-safe diff summary and affected-path list.
 
 ## Blocked tasks
 
