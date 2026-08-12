@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.1 — Raise the server-side active-session limit from two to three, with contract and limit tests**
+**F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot**
 
 ## Completed tasks
 
@@ -653,6 +653,46 @@ external filesystem`, and `Merge manually` as resolution choices. No
   boundary.
 - Next task: F4.1 — raise the server-side active-session limit from two to
   three, with contract and limit tests.
+
+### F4.1 completion evidence
+
+- Completed: 2026-08-12T05:10:52Z.
+- Changed files: `services/orchestrator/src/backend/mod.rs`,
+  `packages/contracts/src/contracts.test.ts`,
+  `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused contracts test — 19 passed; focused Rust backend test — 2
+  passed; Rustfmt and Clippy — passed; contracts lint and typecheck — passed;
+  web lint — 0 errors with the same 2 pre-existing warnings; web typecheck —
+  passed; web production build — passed; focused F4.1 Playwright verification
+  on the rebuilt app — 1 passed; targeted Prettier check and `git diff
+  --check` — passed.
+- The scheduler ledger’s repository-wide Prettier check remains blocked by
+  the pre-existing formatting mismatch in this metadata file; no unrelated
+  scheduler history was reformatted.
+- Validated source commit: `e6edbcb`.
+- Vercel preview:
+  <https://codev-mh8m0105y-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview at `/verification/b0-2` in
+  Chrome and confirmed the visible F4.1 active-capacity card states that the
+  server reserves exactly three concurrent agent sessions. Confirmed all
+  three fixture slots are visible as `Agent slot 1`, `Agent slot 2`, and
+  `Agent slot 3`, each marked `Active`; no credentials or secrets were
+  entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-1/three-active-slots.png`
+  (Playwright success state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 1.10.35 AM.jpeg`
+  (Computer Use Ready preview with all three active slots visible).
+- Known limitations: the credential-free preview fixture renders three
+  deterministic active slots for browser verification; authenticated agent
+  session reservation remains enforced by the production workspace route and
+  orchestrator backend.
+- Next task: F4.2 — make the workboard show assignment, owner, provider,
+  status, and elapsed time for each slot.
 
 ## Blocked tasks
 
