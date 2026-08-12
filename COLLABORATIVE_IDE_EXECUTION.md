@@ -101,8 +101,8 @@ For every task with a visible outcome:
    short description in the task result. Save artifacts under
    `artifacts/verification/<task-id>/` (or report the local screenshot paths
    when the environment owns screenshots).
-8. Commit and push the validated task change to
-   `codex/collaborative-ide-automation`, then use its ready Vercel preview URL
+8. Commit and push the validated task change directly to `main`, then wait for
+   the corresponding Vercel production deployment and use its production URL
    for the required Computer Use flow.
 9. Run the required project-wide checks before completing a feature boundary;
    for a small internal task, run the scoped checks now and defer only the full
@@ -110,8 +110,9 @@ For every task with a visible outcome:
 10. Only after every required check and screenshot has succeeded, mark the
     current task `completed` in `COLLABORATIVE_IDE_TASK_STATE.md`, add its
     evidence, and set the following ordered card as **Current task**.
-11. Commit and push the Markdown ledger update, then end the run immediately.
-    **Never begin, inspect, or plan the next task in the same scheduler run.**
+11. Commit and push the Markdown ledger update. If this was the first completed
+    task in the invocation, repeat this loop once for the newly Current task.
+    If this was the second completed task, end the run immediately.
 
 If the app cannot be opened—for example, required local credentials are
 missing—the agent must still attempt Computer Use, capture the visible blocker,
@@ -120,10 +121,12 @@ advance the ledger.
 
 ## Scheduler invariant
 
-One scheduler invocation owns one task card only. A card may advance the ledger
-only when it is `completed`; a `blocked` card remains the Current task until a
-user resolves the blocker or explicitly changes its priority. This prevents a
-later scheduler invocation from silently skipping unfinished work.
+One scheduler invocation may own at most two ordered task cards, processed
+strictly one after the other. Task 2 may not be inspected, planned, or started
+until task 1 is completed, production-verified, recorded, and pushed. A card
+may advance the ledger only when it is `completed`; a `blocked` card remains
+the Current task and ends the invocation immediately. This prevents parallel
+changes, mixed evidence, and silently skipped work.
 
 ## Visual verification rules
 
@@ -140,33 +143,29 @@ later scheduler invocation from silently skipping unfinished work.
 - Browser automation tests remain required where appropriate; Computer Use is
   additional final evidence, not a replacement for repeatable tests.
 
-## Branch, commit, push, and preview rules
+## Branch, commit, push, and production rules
 
-The scheduler uses one persistent integration branch:
+The scheduler works directly on `main`.
 
-```text
-codex/collaborative-ide-automation
-```
-
-- On its first run, create this branch from the current `origin/main`; on later
-  runs, switch to it and fast-forward from its remote tracking branch.
-- Never push, merge, rebase, or force-push `main`. Never create a production
-  deployment from the scheduler.
+- At the start of a run, switch to `main`, fetch `origin/main`, and update with
+  `git pull --ff-only origin main`. Never rebase, reset, force-push, or merge an
+  unrelated branch.
 - Before making a change, inspect `git status --short`. If unrelated changes
   are present, stop and report them instead of overwriting or absorbing them.
 - Once local checks pass, commit only the current task's source, tests, and
-  required Markdown evidence. Push that commit to the persistent branch.
-- Treat the pushed commit's Vercel preview deployment as a required validation
-  environment. Obtain its preview URL, wait for it to become ready with a
-  bounded wait, then execute the task's required Computer Use flow against it
-  and capture screenshots.
-- Only after preview validation succeeds may the scheduler mark the task
+  required Markdown evidence. Push that commit directly to `origin/main`.
+- Treat the pushed commit's Vercel production deployment as the required
+  validation environment. Obtain its deployment URL, wait for it to become
+  ready with a bounded wait, then execute the task's required Computer Use flow
+  against it and capture screenshots.
+- Only after production validation succeeds may the scheduler mark the task
   complete in the Markdown ledger. Commit and push that ledger update as a
-  separate small commit; record the preview URL and validated source commit in
-  the ledger.
-- If the branch push or preview deployment fails, record the exact failure,
-  leave the task incomplete, and end the run. Do not test or deploy production
-  as a fallback.
+  separate small commit to `main`; record the production URL and validated
+  source commit in the ledger.
+- If the push or production deployment fails, record the exact failure, leave
+  the task incomplete, and end the run. Production access reduces
+  environment-specific blockers but does not permit bypassing failed checks or
+  claiming that blockers cannot occur.
 
 ## Task sequence
 
@@ -314,23 +313,24 @@ the baseline:
 
 ```text
 Work in /Users/yousefmaher/CoDev using COLLABORATIVE_IDE_FEATURES.md and
-COLLABORATIVE_IDE_EXECUTION.md. Read COLLABORATIVE_IDE_TASK_STATE.md; its
-Current task is the one and only task for this run. Use the smallest available
-coding model and low reasoning effort. Read only the assigned card, AGENTS.md,
-relevant source files, and direct tests. Make one observable behavior change,
-add/adjust targeted tests, run them, then use Computer Use to execute the
-card's required UI flow inside the authenticated Orca workspace without
-navigating to a separate feature or verification page. Fixture-only UI cannot
-satisfy completion. Capture the required screenshots and record evidence.
-Work only on the persistent branch `codex/collaborative-ide-automation`; never
-push, merge, rebase, or force-push `main`. After local checks pass, commit and
-push the current task change, wait for its Vercel preview deployment, and use
-Computer Use to verify the required UI flow against the preview URL. Only
-after all validation succeeds, mark this task completed in the Markdown ledger,
-record the preview URL/commit/screenshots, commit and push that ledger update,
-and set the next ordered incomplete card as Current task. End the run
-immediately after that; never start the next card in the same run. Stop after
+COLLABORATIVE_IDE_EXECUTION.md. Read COLLABORATIVE_IDE_TASK_STATE.md; start with
+its Current task. A run may complete at most two tasks sequentially. Do not
+inspect or plan task 2 until task 1 is fully verified, recorded, and pushed.
+Use the smallest available coding model and low reasoning effort. Read only the
+assigned card, AGENTS.md, relevant source files, and direct tests. Make one
+observable behavior change, add/adjust targeted tests, run them, then use
+Computer Use to execute the card's required UI flow inside the authenticated
+Orca workspace without navigating to a separate feature or verification page.
+Fixture-only UI cannot satisfy completion. Capture the required screenshots and
+record evidence. Work directly on `main`; never rebase, reset, force-push, or
+merge an unrelated branch. After local checks pass, commit and push the current
+task change, wait for its Vercel production deployment, and use Computer Use to
+verify the required UI flow against the production URL. Only after all
+validation succeeds, mark this task completed in the Markdown ledger, record
+the production URL/commit/screenshots, commit and push that ledger update, and
+set the next ordered incomplete card as Current task. If this was task 1, run
+the newly Current task once; if this was task 2, end immediately. Stop after
 two failed approaches, a dirty worktree containing unrelated changes, a failed
-push/preview, or a credentials/product/security decision; record the precise
-blocker, leave the Current task unchanged, and do not claim completion.
+push/deployment, or a credentials/product/security decision; record the
+precise blocker, leave the Current task unchanged, and do not claim completion.
 ```

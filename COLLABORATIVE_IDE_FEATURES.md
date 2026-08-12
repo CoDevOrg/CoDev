@@ -64,7 +64,8 @@ build`, `pnpm test:e2e`, `pnpm rust:check`, and `git diff --check` pass, or
 6. Every user-visible control and state is integrated into the authenticated
    Orca workspace at `/workspaces/<workspaceId>` using a native Orca surface.
    The required Computer Use evidence must show the complete flow there on the
-   validated Vercel preview. A `/verification/*` page, standalone React
+   validated Vercel production deployment from `main`. A `/verification/*`
+   page, standalone React
    fixture, localhost-only flow, or parent page outside the Orca iframe does
    not meet this requirement.
 

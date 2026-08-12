@@ -1,8 +1,10 @@
 # Collaborative IDE Task State
 
-This is the persistent state for the two-hour scheduler. A scheduler run may
-work on **only the Current task**. It must update this file only after the task
-has passed its required tests, Computer Use flow, and screenshots.
+This is the persistent state for the scheduler. A scheduler run may complete
+up to **two ordered tasks sequentially**. It starts with the Current task and
+may begin the next ordered task only after the first task has passed its local
+checks, production deployment, Computer Use flow, and screenshots and this
+ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
@@ -1113,7 +1115,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   <https://codev-96z3wfuvo-yousef20920s-projects.vercel.app>. A disposable
   preview account authenticated successfully, but the native New workspace →
   Blank workspace flow visibly returned `OpenFGA authorization is not
-  configured.` No authenticated Orca workspace or managed proposal could be
+configured.` No authenticated Orca workspace or managed proposal could be
   provisioned, so Orca's native Delete Worktree action and CoDev's audited
   discard remain unverified. Current task remains F5.6. Screenshot:
   `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-openfga-blocker-clean-2026-08-12.png`.
@@ -1173,14 +1175,15 @@ When the Current task completes, append one row to **Completed tasks** with:
 - date/time;
 - changed files;
 - commands and results;
-- validated source commit and Vercel preview URL;
+- validated source commit and Vercel production URL;
 - Computer Use flow performed; and
 - screenshot path(s) with a short description.
 
 Then replace **Current task** with the next ordered, incomplete task card from
-`COLLABORATIVE_IDE_EXECUTION.md`, commit and push this ledger update to
-`codex/collaborative-ide-automation`, and end the scheduler run. Do not begin
-the next task.
+`COLLABORATIVE_IDE_EXECUTION.md`, commit and push this ledger update to `main`.
+If this was the first completed task in the invocation, begin that newly
+current task as the second and final task. If this was the second completed
+task, end the run immediately.
 
 When a task is blocked, append the precise blocker to **Blocked tasks**, leave
 the Current task unchanged, and end the scheduler run. Do not skip it.
