@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot**
+**F4.3 — Reject a fourth active session server-side with an actionable UI error**
 
 ## Completed tasks
 
@@ -26,6 +26,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                  | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview. |
 | F3.4 — Add authorized interrupt/cancellation state with a visible last completed action             | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action. |
 | F3.5 — Restore transcript, queue, and stream cursor after browser refresh                              | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
+| F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot   | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots. |
 
 ### B0.2 completion evidence
 
@@ -693,6 +694,43 @@ external filesystem`, and `Merge manually` as resolution choices. No
   orchestrator backend.
 - Next task: F4.2 — make the workboard show assignment, owner, provider,
   status, and elapsed time for each slot.
+
+### F4.2 completion evidence
+
+- Completed: 2026-08-12T06:08:26Z.
+- Changed files: `apps/web/app/verification/b0-2/page.tsx`,
+  `apps/web/app/verification/b0-2/fixture.module.css`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused fixture test — 3 passed; targeted Prettier check and
+  `git diff --check` — passed; web lint — 0 errors with the same 2
+  pre-existing warnings; web typecheck — passed; web production build —
+  passed; focused F4.1/F4.2 Playwright verification — 2 passed.
+- The scheduler ledger’s repository-wide Prettier check remains blocked by
+  the pre-existing formatting mismatch in this metadata file; no unrelated
+  scheduler history was reformatted.
+- Validated source commit:
+  `ece2c8e4236516c23d4a9e11f3135fb2a4fb64c1`.
+- Vercel preview:
+  <https://codev-4lf5fwcnl-yousef20920s-projects.vercel.app> — Ready preview
+  for the validated source commit; branch alias resolved to
+  <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
+- Computer Use flow: opened the Ready preview in a new Chrome tab at
+  `/verification/b0-2`, confirmed the `Ready for browser verification` badge,
+  and verified all three visible slots show Assignment, Owner, Provider,
+  Status, and Elapsed values: Repository map/Alex Morgan/Codex/Active/00:18,
+  Presence replay/Jordan Lee/Claude/Active/01:42, and
+  Session recovery/Casey Rivera/Codex/Active/03:07. No credentials or secrets
+  were entered.
+- Screenshots:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f4-2/three-slot-workboard.png`
+  (Playwright success state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 2.08.10 AM.jpeg`
+  (Computer Use Ready preview with the three-slot workboard).
+- Known limitations: the credential-free preview fixture renders deterministic
+  workboard values for browser verification; authenticated workboard session
+  data remains backed by the production workspace and orchestrator paths.
+- Next task: F4.3 — reject a fourth active session server-side with an
+  actionable UI error.
 
 ## Blocked tasks
 
