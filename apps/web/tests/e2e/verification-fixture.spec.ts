@@ -620,3 +620,70 @@ test("F3.2 renders shared session metadata and ordered transcript", async ({
   );
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
+
+test("F3.3 queues one attributed collaborator instruction for the live observer", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const sessionCard = page
+    .getByRole("heading", { name: "Shared session queue" })
+    .locator("xpath=ancestor::section");
+  await sessionCard
+    .getByRole("button", { name: "Open shared session" })
+    .click();
+
+  await expect(
+    sessionCard.getByRole("button", { name: "Queue instruction as Jordan" }),
+  ).toBeDisabled();
+  await expect(
+    sessionCard.getByRole("button", {
+      name: "Queue instruction · unavailable",
+    }),
+  ).toBeDisabled();
+
+  await sessionCard
+    .getByLabel("Instruction to queue")
+    .fill("Inspect the shared session contract.");
+  await sessionCard
+    .getByRole("button", { name: "Queue instruction as Jordan" })
+    .click();
+
+  await expect(sessionCard.getByLabel("Ordered turn queue")).toContainText(
+    "1 queued",
+  );
+  await expect(sessionCard.getByLabel("Queued instruction")).toContainText(
+    "Jordan Lee · Collaborator",
+  );
+  await expect(sessionCard.getByLabel("Queued instruction")).toContainText(
+    "Inspect the shared session contract.",
+  );
+  await expect(
+    sessionCard.getByLabel("Alex Morgan live observer"),
+  ).toContainText("Jordan's instruction is visible to Alex Morgan.");
+  await expect(sessionCard.getByRole("status")).toContainText(
+    "Jordan's instruction is queued and attributed for every session member.",
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F3.3",
+    state: "collaborator-instruction-observed-live",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f3-3\/collaborator-instruction-observed-live\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+
+  const edgeScreenshotPath = await captureVerificationScreenshot(
+    page,
+    testInfo,
+    {
+      taskId: "F3.3",
+      state: "viewer-queue-unavailable",
+    },
+  );
+  expect(edgeScreenshotPath).toMatch(
+    /artifacts\/verification\/f3-3\/viewer-queue-unavailable\.png$/,
+  );
+  await expect.poll(() => access(edgeScreenshotPath)).toBeUndefined();
+});

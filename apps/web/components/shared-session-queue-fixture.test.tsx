@@ -57,4 +57,42 @@ describe("SharedSessionQueueFixture", () => {
       "Shared session transcript is complete and ordered by turn.",
     );
   });
+
+  it("lets Jordan queue one attributed instruction while Alex observes live", () => {
+    render(<SharedSessionQueueFixture />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open shared session" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Queue instruction as Jordan" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Queue instruction · unavailable" }),
+    ).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Instruction to queue"), {
+      target: { value: "Inspect the shared session contract." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Queue instruction as Jordan" }),
+    );
+
+    expect(screen.getByLabelText("Ordered turn queue")).toHaveTextContent(
+      "1 queued",
+    );
+    expect(screen.getByLabelText("Queued instruction")).toHaveTextContent(
+      "Jordan Lee · CollaboratorInspect the shared session contract.",
+    );
+    expect(
+      screen.getByLabelText("Alex Morgan live observer"),
+    ).toHaveTextContent("Jordan's instruction is visible to Alex Morgan.");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Jordan's instruction is queued and attributed for every session member.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Instruction queued" }),
+    ).toBeDisabled();
+  });
 });

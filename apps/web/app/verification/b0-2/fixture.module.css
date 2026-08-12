@@ -505,6 +505,93 @@
   line-height: 1.5;
 }
 
+.queueEntry {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.coSteeringGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.coSteeringPanel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(220, 230, 203, 0.12);
+  border-radius: 8px;
+  background: #191d17;
+}
+
+.promptLabel {
+  color: #9fa997;
+  font-size: 11px;
+}
+
+.promptInput {
+  min-height: 78px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid rgba(220, 230, 203, 0.18);
+  border-radius: 7px;
+  background: #11140f;
+  color: #f0f4ed;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.promptInput::placeholder {
+  color: #778070;
+}
+
+.promptInput:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.observerCopy,
+.observerState {
+  margin: 0;
+  color: #c5cec0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.observerState {
+  padding: 10px;
+  border-radius: 7px;
+  background: #20251d;
+  color: #c8eea6;
+}
+
+.ineligibleCoSteer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(220, 230, 203, 0.16);
+  border-radius: 8px;
+  color: #9fa997;
+  font-size: 11px;
+}
+
+.ineligibleCoSteer button {
+  padding: 7px 10px;
+  border: 1px solid rgba(220, 230, 203, 0.12);
+  border-radius: 6px;
+  background: #20251d;
+  color: #778070;
+  font: inherit;
+}
+
 .sessionTranscript {
   display: grid;
   gap: 12px;
