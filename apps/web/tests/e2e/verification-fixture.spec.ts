@@ -75,6 +75,36 @@ test("B0.4 shows the reconciled three-agent worktree capacity", async ({
   await expect.poll(() => access(screenshotPath)).toBeUndefined();
 });
 
+test("F4.1 shows three active fixture agent slots", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/verification/b0-2");
+
+  const capacityCard = page
+    .getByRole("heading", { name: "Three active agent slots" })
+    .locator("xpath=ancestor::section");
+  await expect(
+    capacityCard.getByText("exactly three concurrent agent sessions", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    capacityCard.getByLabel("Active agent fixture slots").getByRole("article"),
+  ).toHaveCount(3);
+  await expect(capacityCard.getByText("Active", { exact: true })).toHaveCount(
+    3,
+  );
+
+  const screenshotPath = await captureVerificationScreenshot(page, testInfo, {
+    taskId: "F4.1",
+    state: "three-active-slots",
+  });
+  expect(screenshotPath).toMatch(
+    /artifacts\/verification\/f4-1\/three-active-slots\.png$/,
+  );
+  await expect.poll(() => access(screenshotPath)).toBeUndefined();
+});
+
 test("F1.1 captures the Viewer restriction state", async ({
   page,
 }, testInfo) => {

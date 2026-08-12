@@ -56,6 +56,13 @@ describe("workspace contracts", () => {
         availableSlots: 1,
       }).availableSlots,
     ).toBe(1);
+    expect(
+      agentCapacitySchema.parse({
+        maxActiveSessions: 3,
+        activeSessions: 3,
+        availableSlots: 0,
+      }),
+    ).toMatchObject({ activeSessions: 3, availableSlots: 0 });
     expect(() =>
       agentCapacitySchema.parse({
         maxActiveSessions: 2,

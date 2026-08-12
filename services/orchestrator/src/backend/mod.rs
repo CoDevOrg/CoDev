@@ -14,6 +14,8 @@ use crate::model::{
     WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
+const MAX_ACTIVE_SESSIONS: usize = 3;
+
 #[cfg(target_os = "linux")]
 mod firecracker;
 #[cfg(target_os = "linux")]
@@ -404,7 +406,7 @@ impl FakeBackend {
     pub fn new() -> Self {
         Self {
             instances: RwLock::new(HashMap::new()),
-            max: 2,
+            max: MAX_ACTIVE_SESSIONS,
         }
     }
 
@@ -632,11 +634,9 @@ mod tests {
     use super::*;
     use crate::model::{SandboxLifecycleHooks, SandboxLifecycleOptions};
 
-    #[tokio::test]
-    async fn fake_backend_lifecycle() {
-        let backend = Backend::fake();
-        let request = CreateRequest {
-            workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
+    fn create_request(workspace_id: &str) -> CreateRequest {
+        CreateRequest {
+            workspace_id: workspace_id.into(),
             repository_url: Some("https://github.com/yousef20920/CoDev.git".into()),
             repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
@@ -649,7 +649,31 @@ mod tests {
                     auto_resume: true,
                 },
             },
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn fake_backend_allows_three_active_sessions_and_rejects_the_fourth() {
+        let backend = Backend::fake();
+
+        for index in 1..=MAX_ACTIVE_SESSIONS {
+            backend
+                .create(create_request(&format!("workspace-{index}")))
+                .await
+                .expect("active session within capacity");
+        }
+
+        assert_eq!(backend.active_count().await, MAX_ACTIVE_SESSIONS);
+        assert!(matches!(
+            backend.create(create_request("workspace-four")).await,
+            Err(RuntimeError::CapacityExceeded)
+        ));
+    }
+
+    #[tokio::test]
+    async fn fake_backend_lifecycle() {
+        let backend = Backend::fake();
+        let request = create_request("e010bd2c-a3c1-438f-acef-166287a3b1cb");
         let instance = backend.create(request).await.expect("create");
         assert_eq!(backend.active_count().await, 1);
         assert_eq!(

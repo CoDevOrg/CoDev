@@ -70,6 +70,43 @@ export default function VerificationFixturePage() {
         </section>
 
         <div className={styles.columns}>
+          <section
+            className={`${styles.card} ${styles.agentCapacity}`}
+            aria-labelledby="agent-capacity-heading"
+          >
+            <div className={styles.cardHeading}>
+              <div>
+                <span className={styles.kicker}>F4.1 · Active capacity</span>
+                <h2 id="agent-capacity-heading">Three active agent slots</h2>
+              </div>
+              <span className={styles.count}>
+                {MAX_PARALLEL_AGENT_SESSIONS}
+              </span>
+            </div>
+            <p className={styles.note}>
+              The server reserves exactly three concurrent agent sessions for
+              this workspace.
+            </p>
+            <div
+              className={styles.agentSlotList}
+              aria-label="Active agent fixture slots"
+            >
+              {Array.from(
+                { length: MAX_PARALLEL_AGENT_SESSIONS },
+                (_, index) => (
+                  <article className={styles.agentSlot} key={index}>
+                    <span className={styles.slotNumber}>0{index + 1}</span>
+                    <div>
+                      <strong>Agent slot {index + 1}</strong>
+                      <span>Active fixture session</span>
+                    </div>
+                    <span className={styles.slotStatus}>Active</span>
+                  </article>
+                ),
+              )}
+            </div>
+          </section>
+
           <InviteLifecycleFixture />
           <MemberRoleManagementFixture />
           <PresenceEventsFixture />

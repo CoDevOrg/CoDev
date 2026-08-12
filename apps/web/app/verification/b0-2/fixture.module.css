@@ -106,6 +106,59 @@
   min-height: 0;
 }
 
+.agentCapacity {
+  grid-column: 1 / -1;
+}
+
+.agentSlotList {
+  display: grid;
+  gap: 10px;
+}
+
+.agentSlot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #20251d;
+}
+
+.agentSlot > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.agentSlot > div span {
+  color: #9fa997;
+  font-size: 12px;
+}
+
+.slotNumber {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(161, 220, 105, 0.35);
+  border-radius: 7px;
+  color: #c8eea6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.slotStatus {
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: #c8eea6;
+  background: #273321;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .roleManagement {
   min-height: 0;
 }
