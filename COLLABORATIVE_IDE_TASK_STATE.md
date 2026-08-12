@@ -1107,6 +1107,20 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — verification retry 2026-08-12T19:02:44Z:** Re-ran the
+  authenticated Computer Use flow against the Ready preview for source commit
+  `5f02d76749fd8454185cf8fc2799872522efa5d2`:
+  <https://codev-96z3wfuvo-yousef20920s-projects.vercel.app>. A disposable
+  preview account authenticated successfully, but the native New workspace →
+  Blank workspace flow visibly returned `OpenFGA authorization is not
+  configured.` No authenticated Orca workspace or managed proposal could be
+  provisioned, so Orca's native Delete Worktree action and CoDev's audited
+  discard remain unverified. Current task remains F5.6. Screenshot:
+  `/Users/yousefmaher/CoDev/artifacts/verification/f5-6/preview-openfga-blocker-clean-2026-08-12.png`.
+  Focused Orca/API tests passed (12 tests), targeted Prettier passed, web lint
+  passed with 0 errors and 2 existing warnings, web typecheck passed, and
+  `git diff --check` passed.
+
 - **F5.6 — verification retry 2026-08-12T18:03:22Z:** Focused Orca/API
   tests (13 passed), targeted formatting, web lint, web typecheck,
   production build, and `git diff --check` passed. The Ready branch preview
