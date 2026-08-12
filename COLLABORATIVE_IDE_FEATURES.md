@@ -21,6 +21,18 @@ coding model and requires browser-level verification for every task.
 ## Decisions to hold constant
 
 - The product is browser-first and hosted; it is not a desktop IDE download.
+- Orca is the one and only workspace shell. Every user-visible collaboration,
+  agent, review, provider, terminal, recovery, and administration action must
+  be available inside the authenticated Orca workspace through its existing
+  panels, menus, dialogs, editor decorations, worktree cards, or status bar.
+  A separate CoDev feature page is not an acceptable product surface.
+- CoDev remains the authenticated control plane and source of durable state.
+  Orca owns workspace presentation and local workspace interactions. Extend
+  the pinned Orca source through the maintained CoDev patch and a typed,
+  workspace-bound bridge; do not hand-edit compiled Orca assets.
+- Verification fixtures may exercise contracts, backend behavior, and edge
+  states, but fixture-only UI is test scaffolding rather than a shipped
+  feature. It cannot satisfy user-visible acceptance or completion.
 - One workspace has one canonical integration checkout and up to **three**
   concurrent agent worktrees. A human editor is not counted as an agent.
 - A shared agent session has one durable ordered conversation and one active
@@ -43,12 +55,40 @@ No feature can move to `done` until all of these are true:
    flow, including the relevant disconnect/reconnect or permission edge case.
 2. Unit/contract tests and a focused browser test cover the behavior.
 3. `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm
-   build`, `pnpm test:e2e`, `pnpm rust:check`, and `git diff --check` pass, or
+build`, `pnpm test:e2e`, `pnpm rust:check`, and `git diff --check` pass, or
    a documented, pre-existing failure is separately tracked and approved.
 4. Secrets, workspace membership, and sandbox/worktree boundaries are reviewed
    for the new behavior.
 5. The feature's status, evidence, and any intentional follow-up are recorded
    in this file or its implementation issue before the next feature starts.
+6. Every user-visible control and state is integrated into the authenticated
+   Orca workspace at `/workspaces/<workspaceId>` using a native Orca surface.
+   The required Computer Use evidence must show the complete flow there on the
+   validated Vercel preview. A `/verification/*` page, standalone React
+   fixture, localhost-only flow, or parent page outside the Orca iframe does
+   not meet this requirement.
+
+## Mandatory Orca workspace placement
+
+Use Orca's existing information architecture instead of creating a parallel
+CoDev application inside or beside it:
+
+| Capability                                                       | Required Orca surface                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Presence, active file, cursors, and selections                   | Editor tabs, editor decorations, workspace header, and status indicators |
+| Invites, members, and roles                                      | Workspace Options dialog or native workspace drawer                      |
+| Agent workboard, session state, transcript, queue, and interrupt | Agents panel, Workspace Board, and existing worktree cards               |
+| Path claims and collisions                                       | Explorer decorations, worktree badges, and native conflict dialogs       |
+| Checkpoints, diffs, stale review, integration, and discard       | Source Control, Checks, and native worktree actions/dialogs              |
+| Activity and audit history                                       | Native right-sidebar panel with links to files, sessions, and diffs      |
+| Provider connections                                             | Orca Agents settings, with only redacted metadata in the browser         |
+| Terminal follow mode and input ownership                         | Existing terminal toolbar and status bar                                 |
+| Guardrails, health, and freeze controls                          | Workspace Board, Workspace Options, and status bar                       |
+
+Core behaviors that modify editor decorations, Explorer rows, terminal input,
+or worktree lifecycle must be direct, modular Orca-source integrations. A
+plugin panel is suitable only for self-contained views that do not require
+those deeper workspace hooks.
 
 ## P0 — Collaboration that feels shared
 

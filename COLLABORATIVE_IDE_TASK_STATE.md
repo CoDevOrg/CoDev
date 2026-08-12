@@ -8,33 +8,47 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 **F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle**
 
+## Mandatory Orca workspace completion gate
+
+The Current task remains unchanged. After F5.6 completes, the next ordered
+task is **OI.1**, followed by OI.2–OI.12 from
+`COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
+sequence is complete.
+
+Earlier F1–F5 rows record validated backend contracts and fixture behavior,
+but fixture-only evidence is not proof of a usable product feature. Those
+capabilities become user-visible complete only through the corresponding OI
+card verified inside the authenticated Orca workspace. No future task may use
+`/verification/*`, a standalone fixture, localhost, or UI outside the Orca
+workspace as its required final Computer Use evidence.
+
 ## Completed tasks
 
-| Task                                                                                                  | Completed  | Evidence                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0.1 — Baseline audit                                                                                 | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                                                       |
-| B0.2 — Stable local verification fixture and fixture identities                                       | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                                          |
-| B0.3 — Reusable screenshot/evidence convention                                                        | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below.                           |
-| F1.2 — Implement one invite lifecycle slice                                                           | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                                                   |
-| F1.4 — Add member-role management and immediate realtime membership refresh                           | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                  |
-| F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview. |
-| F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                            |
-| F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.             |
-| F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.  |
-| F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                        |
-| F3.2 — Render the provider, owner, worktree, state, and ordered transcript                          | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order. |
-| F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                  | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview. |
-| F3.4 — Add authorized interrupt/cancellation state with a visible last completed action             | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action. |
-| F3.5 — Restore transcript, queue, and stream cursor after browser refresh                              | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
-| F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot   | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots. |
-| F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance. |
-| F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment. |
-| F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`. |
-| F5.1 — Create an immutable review checkpoint with revision and diff metadata                           | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest. |
-| F5.2 — Render a binary-safe diff summary and affected-path list                                         | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted. |
-| F5.3 — Reject stale checkpoint approval before any merge action                                        | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started. |
-| F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution. |
-| F5.5 — Discard a proposal idempotently and remove its worktree/claims                                  | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op. |
+| Task                                                                                                  | Completed  | Evidence                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0.1 — Baseline audit                                                                                 | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                                                                       |
+| B0.2 — Stable local verification fixture and fixture identities                                       | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                                                          |
+| B0.3 — Reusable screenshot/evidence convention                                                        | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below.                                           |
+| F1.2 — Implement one invite lifecycle slice                                                           | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                                                                   |
+| F1.4 — Add member-role management and immediate realtime membership refresh                           | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                                  |
+| F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview.                 |
+| F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                                            |
+| F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.                             |
+| F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.                  |
+| F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                                        |
+| F3.2 — Render the provider, owner, worktree, state, and ordered transcript                            | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order.                                |
+| F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                    | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview.                                                               |
+| F3.4 — Add authorized interrupt/cancellation state with a visible last completed action               | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action.                                |
+| F3.5 — Restore transcript, queue, and stream cursor after browser refresh                             | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
+| F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot    | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots.                                                                  |
+| F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance.                                                   |
+| F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment.                                          |
+| F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`.                                       |
+| F5.1 — Create an immutable review checkpoint with revision and diff metadata                          | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest.                                        |
+| F5.2 — Render a binary-safe diff summary and affected-path list                                       | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted.                                          |
+| F5.3 — Reject stale checkpoint approval before any merge action                                       | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started.                                              |
+| F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                          |
+| F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
 
 ### B0.2 completion evidence
 
@@ -525,9 +539,9 @@ external filesystem`, and `Merge manually` as resolution choices. No
   <https://codev-git-codex-collaborative-ide-7fac58-yousef20920s-projects.vercel.app>.
 - Computer Use flow: opened the Ready preview in a fresh Chrome tab at
   `/verification/b0-2`, clicked `Open shared session`, clicked `Run fixture
-  transcript`, and confirmed the visible Codex-compatible provider, Alex Morgan
+transcript`, and confirmed the visible Codex-compatible provider, Alex Morgan
   owner, `agent-alex` worktree, `gpt-5 · standard` configuration, `Completed ·
-  2 turns` state, replayable ordered transcript, tool activity, and the Alex
+2 turns` state, replayable ordered transcript, tool activity, and the Alex
   Morgan then Jordan Lee turn order. No credentials or secrets were entered.
 - Screenshots:
   `/Users/yousefmaher/CoDev/artifacts/verification/f3-2/shared-session-ordered-transcript.png`
@@ -604,10 +618,10 @@ external filesystem`, and `Merge manually` as resolution choices. No
 - Computer Use flow: opened the Ready preview in a fresh Chrome tab at
   `/verification/b0-2`, opened the shared session, started the controlled
   fixture turn, and interrupted it as Jordan Lee. Confirmed `Interrupted ·
-  turn 3`, `Cancellation recorded by Jordan Lee`, Alex Morgan’s live observer
+turn 3`, `Cancellation recorded by Jordan Lee`, Alex Morgan’s live observer
   cancellation state, and the preserved `read_file · README.md` result. Then
   scrolled to Casey Rivera’s Viewer controls and confirmed `Interrupt turn ·
-  unavailable` remained disabled. No credentials or secrets were entered.
+unavailable` remained disabled. No credentials or secrets were entered.
 - Screenshots:
   `/Users/yousefmaher/CoDev/artifacts/verification/f3-4/interrupted-last-completed-action.png`
   (Playwright success state),
@@ -649,7 +663,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   refreshed Chrome, and confirmed the restored `Completed · 2 turns`
   transcript, `1 queued` attributed instruction, stream cursor `3`, and
   `Session restored after browser refresh · stream cursor 3 · queued
-  instruction preserved once.` status. Confirmed the `Instruction queued`
+instruction preserved once.` status. Confirmed the `Instruction queued`
   control remained disabled, preventing a duplicate queue entry.
 - Screenshots:
   `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 12.12.11 AM.jpeg`
@@ -676,7 +690,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   web lint — 0 errors with the same 2 pre-existing warnings; web typecheck —
   passed; web production build — passed; focused F4.1 Playwright verification
   on the rebuilt app — 1 passed; targeted Prettier check and `git diff
-  --check` — passed.
+--check` — passed.
 - The scheduler ledger’s repository-wide Prettier check remains blocked by
   the pre-existing formatting mismatch in this metadata file; no unrelated
   scheduler history was reformatted.
@@ -766,7 +780,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   slots, clicked `Start fourth session`, and confirmed the server response
   rendered as `Server rejected the fourth session · HTTP 409` with
   `All three agent slots are in use. Stop or wait for an active session to
-  finish before starting another.` No credentials or secrets were entered.
+finish before starting another.` No credentials or secrets were entered.
 - Screenshots:
   `/Users/yousefmaher/CoDev/artifacts/verification/f4-3/three-slots-before-fourth-session.jpeg`
   (Computer Use Ready preview with all three slots),
@@ -842,7 +856,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   exact preview URL.
 - Computer Use flow: opened `/verification/b0-2` in a new Chrome tab,
   confirmed the Ready badge and three-slot workboard, clicked `Start agent
-  claim` for slot 1, clicked `Request overlapping claim` for slot 2, and
+claim` for slot 1, clicked `Request overlapping claim` for slot 2, and
   confirmed the visible `Contested overlap · no silent overwrite` warning,
   both `README.md` claims marked Contested, and the write control disabled.
   Clicked `Reassign to slot 2` and confirmed slot 1 Released, slot 2 Active,
@@ -880,7 +894,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   preview URL.
 - Computer Use flow: opened `/verification/b0-2` in a new Chrome tab,
   confirmed the Ready badge and three-slot workboard, clicked `Start agent
-  claim` for slot 1, captured the active claim, clicked `Stop agent`, and
+claim` for slot 1, captured the active claim, clicked `Stop agent`, and
   confirmed the visible `Released` claim status plus `Checkpoint preserved`
   for `README.md · fixture-r1` with the stop reason. No credentials or
   secrets were entered.
@@ -1028,7 +1042,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   with Vercel CLI and Computer Use used this exact preview URL.
 - Computer Use flow: opened the Ready preview in a new Chrome tab at
   `/verification/b0-2`, clicked `Mark review-ready`, clicked `Approve
-  checkpoint` while the integration head was `fixture-main-r1`, and confirmed
+checkpoint` while the integration head was `fixture-main-r1`, and confirmed
   the visible `Integrated exactly one current reviewed checkpoint` result,
   integration head `fixture-agent-r2`, disabled `Checkpoint integrated`
   control, merge actor `Alex Morgan · Maintainer`, audit event
@@ -1067,7 +1081,7 @@ external filesystem`, and `Merge manually` as resolution choices. No
   with Vercel CLI and Computer Use used this exact preview URL.
 - Computer Use flow: opened the Ready preview in a new Chrome tab at
   `/verification/b0-2`, clicked `Mark review-ready`, clicked `Discard
-  proposal`, and confirmed the visible `Proposal discarded · final state`,
+proposal`, and confirmed the visible `Proposal discarded · final state`,
   `Worktree fixture-agent-1 removed from the sandbox`, released `README.md`
   and `src/**` claims, unchanged integration revision, Alex Morgan's
   `agent.review_discarded` audit attribution, and `Worktree status: Removed`.
