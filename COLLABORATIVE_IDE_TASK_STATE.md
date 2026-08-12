@@ -1109,6 +1109,29 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — authenticated Production native-worktree blocker 2026-08-12T23:48:58Z:**
+  Pushed source commit `5828cc69270c716d9dc7dc71af2826f27a688928`
+  (`fix: allow Orca proposal provisioning time`) and Vercel completed its
+  Git-triggered Production deployment `dpl_37BMYVJNwgARqfvB8L2ysnA966rK` at
+  <https://codev-1s6e9w91m-yousef20920s-projects.vercel.app>, aliased to
+  <https://codev-xi.vercel.app>. The build log confirms it cloned `main` at
+  `5828cc6`. Local verification passed: targeted CoDev Vitest (11 tests),
+  patched-Orca Vitest (4 tests), patched-Orca typecheck/build, `pnpm lint`
+  (0 errors; 2 existing warnings), `pnpm typecheck`, and `pnpm test`.
+  `pnpm format:check` remains blocked by the ledger's pre-existing formatting
+  mismatch, and the existing B0.3 E2E selector ambiguity remains unrelated.
+  Computer Use reopened authenticated workspace
+  <https://codev-xi.vercel.app/workspaces/d37dde90-cf85-4c6f-880a-c43fd9491d7b>,
+  used Orca's native Agents panel, and received `Managed proposal prepared`.
+  After reconnecting the CoDev Server host, Orca's native Project actions →
+  Show hidden worktrees dialog reported `0 worktrees available to import`; its
+  terminal's `git worktree list --porcelain` likewise showed only the primary
+  worktree. Therefore there is no native CoDev proposal worktree card from
+  which to open Delete Worktree, and the audited discard path cannot be
+  verified. F5.6 remains Current; do not begin OI.1. Screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%207.48.58%20PM.jpeg`
+  (native hidden-worktree dialog with zero importable worktrees).
+
 - **F5.6 — repository-backed Production retry blocked 2026-08-12T23:28:03Z:**
   The user created authenticated Production workspace
   <https://codev-xi.vercel.app/workspaces/d37dde90-cf85-4c6f-880a-c43fd9491d7b>
