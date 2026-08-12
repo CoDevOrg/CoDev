@@ -1093,6 +1093,21 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 ## Blocked tasks
 
+- **F5.6 — retry updated 2026-08-12T17:06:22Z:** Focused Orca/API tests
+  (11 passed), formatting, lint, typecheck, production build, and
+  `git diff --check` passed for source commit `e3769e22d6f01b5aafcf6f99440816b64aca2e3b`.
+  The latest Ready branch preview
+  <https://codev-38ohmyoa4-yousef20920s-projects.vercel.app> accepted a
+  disposable fixture account, but Computer Use could not create the required
+  blank workspace: the native New workspace flow visibly returned
+  `OpenFGA authorization is not configured.` Preview has no OpenFGA endpoint,
+  store, authorization model, or client credentials. Copying Production
+  authorization credentials into Preview is not an authorized verification
+  shortcut. No authenticated Orca workspace or managed proposal was
+  provisioned, so the native Delete Worktree flow and audited discard remain
+  unverified; F5.6 remains Current. Screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-12%20at%201.05.13%20PM.jpeg`.
+
 - **F5.6 — updated 2026-08-12T16:48:05Z:** Source commit
   `e3769e22d6f01b5aafcf6f99440816b64aca2e3b` passed the focused Orca and
   CoDev tests, formatting, lint, typecheck, production build, and patch
