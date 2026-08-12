@@ -1109,6 +1109,14 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — run blocked 2026-08-12T22:00:46Z:** The initial required
+  `git status --short` was clean. After switching to `main`, fetching
+  `origin/main`, and running the required `git pull --ff-only origin main`, a
+  new unrelated untracked `.tmp-f56-production-refreshed.png` appeared. Per
+  the run policy, it was not inspected, modified, staged, or included. No
+  F5.6 implementation, deployment, or Computer Use verification was started;
+  Current task remains F5.6.
+
 - **F5.6 — run blocked 2026-08-12T21:02:01Z:** The required initial
   `git status --short` check found an unrelated untracked
   `.cursor/settings.json`. Per the run policy, no task inspection,
