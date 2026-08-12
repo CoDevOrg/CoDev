@@ -6,7 +6,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 
 ## Current task
 
-**F5.5 — Discard a proposal idempotently and remove its worktree/claims**
+**F6.1 — Define a provider-connection record with encrypted, server-only credential handling**
 
 ## Completed tasks
 
@@ -34,6 +34,7 @@ has passed its required tests, Computer Use flow, and screenshots.
 | F5.2 — Render a binary-safe diff summary and affected-path list                                         | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted. |
 | F5.3 — Reject stale checkpoint approval before any merge action                                        | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started. |
 | F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution. |
+| F5.5 — Discard a proposal idempotently and remove its worktree/claims                                  | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op. |
 
 ### B0.2 completion evidence
 
@@ -1046,6 +1047,49 @@ external filesystem`, and `Merge manually` as resolution choices. No
   covered by the focused server test.
 - Next task: F5.5 — discard a proposal idempotently and remove its worktree
   and claims.
+
+### F5.5 completion evidence
+
+- Completed: 2026-08-12T15:12:25Z.
+- Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
+  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/lib/agent-review.test.ts`, `apps/web/lib/agent-review.ts`, and
+  `apps/web/tests/e2e/verification-fixture.spec.ts`.
+- Checks: focused review and fixture Vitest — 6 passed; focused F5.5
+  Playwright verification on the local rebuilt app — 1 passed; targeted
+  Prettier check — passed; web lint — 0 errors with the same 2 pre-existing
+  warnings; web typecheck and production build — passed; `git diff --check` —
+  passed.
+- Validated source commit: `81ecaaff3aa8625f737c606ef1544cc4a500c250`.
+- Vercel preview: <https://codev-ftbqtyric-yousef20920s-projects.vercel.app> —
+  Ready preview for the validated source commit. The deployment was checked
+  with Vercel CLI and Computer Use used this exact preview URL.
+- Computer Use flow: opened the Ready preview in a new Chrome tab at
+  `/verification/b0-2`, clicked `Mark review-ready`, clicked `Discard
+  proposal`, and confirmed the visible `Proposal discarded · final state`,
+  `Worktree fixture-agent-1 removed from the sandbox`, released `README.md`
+  and `src/**` claims, unchanged integration revision, Alex Morgan's
+  `agent.review_discarded` audit attribution, and `Worktree status: Removed`.
+  Clicked `Discard proposal again (idempotent)` and confirmed the visible
+  `Repeated discard was a no-op; worktree and claims remain removed.` No
+  credentials or secrets were entered.
+- Screenshots:
+  `artifacts/verification/f5-5/proposal-discarded.png` (focused Playwright
+  success state),
+  `artifacts/verification/f5-5/discard-idempotent.png` (focused Playwright
+  repeated-discard edge state),
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 11.12.04 AM.jpeg`
+  (Computer Use final discarded state), and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-12 at 11.12.12 AM.jpeg`
+  (Computer Use repeated-discard no-op state).
+- Known limitations: the credential-free preview fixture models the final
+  discard state in browser state; the authenticated discard service now
+  deletes the sandbox worktree, releases active/contested claims, and appends
+  `agent.review_discarded`, while a repeated call returns the existing
+  discarded state without repeating deletion or audit side effects.
+- Next task: F6.1 — define a provider-connection record with encrypted,
+  server-only credential handling.
 
 ## Blocked tasks
 
