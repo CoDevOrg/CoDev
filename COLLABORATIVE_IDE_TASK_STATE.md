@@ -1109,6 +1109,27 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — Production verification retry 2026-08-12T22:02:12Z:** Pushed
+  source commit `236a642` (`feat: prepare managed Orca proposals`) directly to
+  `main`; Vercel created Ready Production deployment
+  `dpl_7eGvvsFFYgCAbTjkYJ8xCmTapbkM` at
+  <https://codev-i8xyb8mtn-yousef20920s-projects.vercel.app>, aliased to
+  <https://codev-xi.vercel.app>. Local checks passed: focused Vitest (12
+  tests), `pnpm format:check`, `pnpm lint` (0 errors; 2 existing warnings),
+  `pnpm typecheck`, `pnpm build`, Orca patch apply/build validation, and
+  `git diff --check`. Computer Use opened the authenticated Production
+  workspace `/workspaces/5a161b43-63eb-4d23-ac0c-10df01f4bf72`, waited for
+  the cloud host, and confirmed the native Agents panel exposes `Prepare
+  managed proposal`. Clicking it reached the existing workspace-bound CoDev
+  backend but visibly returned `Connect a GitHub repository before creating an
+  agent.` This workspace has no linked repository, so no managed proposal or
+  worktree exists to delete through the audited lifecycle. Current task remains
+  F5.6; do not begin OI.1. Screenshots:
+  `artifacts/verification/f5-6/production-proposal-control.png` (native
+  proposal control) and
+  `artifacts/verification/f5-6/production-repository-required.png` (required
+  repository edge state).
+
 - **F5.6 — run blocked 2026-08-12T22:00:46Z:** The initial required
   `git status --short` was clean. After switching to `main`, fetching
   `origin/main`, and running the required `git pull --ff-only origin main`, a
