@@ -1205,6 +1205,14 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.2 — run blocked 2026-08-13T04:55:19Z:** The required initial
+  `git status --short` found an unrelated modification to
+  `apps/web/next-env.d.ts` (its generated route reference changed from
+  `./.next/dev/types/routes.d.ts` to `./.next/types/routes.d.ts`). Per the
+  run policy, it was not modified, staged, or included. No OI.2 inspection,
+  implementation, deployment, or Computer Use verification was started;
+  Current task remains OI.2.
+
 - **OI.1 — Production status-bar crash blocker 2026-08-13T04:08:00Z:** Two
   implementation attempts were pushed to `main` and Git-triggered Production:
   `17d49a120d7108eebc55585498a3a222b61708d4` (`dpl_cLuRYq4RykSBYs1beCjZ5dFUPrYy`)
