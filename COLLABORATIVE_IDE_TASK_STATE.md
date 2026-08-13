@@ -51,8 +51,8 @@ workspace as its required final Computer Use evidence.
 | F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                          |
 | F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
 | F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
-| OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect     | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                     |
-| OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                 | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                     |
+| OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect      | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                       |
+| OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                  | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                         |
 
 ### B0.2 completion evidence
 
@@ -1141,7 +1141,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   action, confirmed the `Delete Workspace` dialog targeting that Managed
   proposal path, and captured the toast `Proposal discarded` with description
   `CoDev removed the worktree, released its claims, and recorded the audit
-  event.` The native card disappeared; the authenticated agents API showed
+event.` The native card disappeared; the authenticated agents API showed
   both sessions with `worktreeStatus: discarded`, empty `claims`, and
   `discardedAt` set. No credentials or secrets were entered.
 - Screenshots:
@@ -1153,7 +1153,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   and
   `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/f5-6-delete-worktree-dialog.png`.
 - Known limitations: Orca Session History still lists `No agent sessions
-  found` after discard because discarded sessions are not shown there; the
+found` after discard because discarded sessions are not shown there; the
   attributed discarded state is the native toast plus the discarded worktree
   status returned by the workspace-bound agents API. The native confirmation
   copy is `Delete Workspace` for this card type; the same dialog is Orca's
@@ -1184,7 +1184,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`.
 - Computer Use flow: opened the authenticated `yousef20920/CoDev` workspace,
   confirmed the Orca status bar control `CoDev bridge connection status:
-  Connected` with visible `CoDev · Connected`, opened that native status-bar
+Connected` with visible `CoDev · Connected`, opened that native status-bar
   menu, clicked `Disconnect`, confirmed `CoDev · Disconnected`, clicked
   `Reconnect`, and confirmed recovery to `CoDev · Connected` without leaving
   `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`. No credentials or secrets
@@ -1230,10 +1230,10 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - Computer Use flow: opened the authenticated `yousef20920/CoDev` workspace,
   opened native Orca Settings (General), and used the Workspace Invites
   section. Members showed `yousef Abdelhadi @yousef20920 · Maintainer ·
-  Member` with `No additional members have joined.` Created a Collaborator
+Member` with `No additional members have joined.` Created a Collaborator
   link invite; the panel showed `Invite status: Pending`, a 24-hour expiry,
   and `Revoke invite`. Revoked it; the panel showed `Invite status: Revoked.
-  The invitee is not a workspace member.` Membership remained owner-only.
+The invitee is not a workspace member.` Membership remained owner-only.
   No credentials or secrets were entered.
 - Screenshots:
   `artifacts/verification/oi-2/invite-pending.png`,
@@ -1250,6 +1250,16 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   refresh native control availability live.
 
 ## Blocked tasks
+
+- **OI.3 — run blocked 2026-08-13T07:09:00Z:** Implementation commit
+  `7ec36a4` was pushed after focused bridge, API, and Orca build checks passed.
+  GitHub Actions `verify` then failed before any Vercel production deployment:
+  `pnpm format:check` reports the pre-existing
+  `COLLABORATIVE_IDE_TASK_STATE.md` as unformatted. GitHub returned no
+  deployment records for this commit, the connected Vercel integration returned
+  403 while listing deployments, and the linked Vercel CLI project has no new
+  deployment. Therefore no production URL, authenticated Orca flow, or
+  screenshot evidence exists. Current task remains OI.3; do not begin OI.4.
 
 - **OI.3 — run blocked 2026-08-13T06:06:43Z:** The first OI.3 implementation
   attempt added the authenticated member-role endpoint and typed bridge path;
@@ -1291,7 +1301,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603` and Orca rendered, but the
   status bar crashed with React minified error #185 before `CoDev · Connected`
   appeared (`The status bar hit an error. Retry the status bar to remount its
-  controls.`). Retry remounts fail the same way. The likely cause is
+controls.`). Retry remounts fail the same way. The likely cause is
   `useSyncExternalStore` receiving a new `getSnapshot` object on every read.
   The required interrupt/reconnect recovery flow was not reached. OI.1 remains
   Current; do not begin OI.2. Screenshot:
@@ -1309,7 +1319,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T03:02:37Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS again reported: `The Mac is
-  locked and automatic unlock could not unlock it.` No browser state,
+locked and automatic unlock could not unlock it.` No browser state,
   workspace, or data was changed and no screenshot could be captured. F5.6
   remains Current; do not begin OI.1 until the desktop session is manually
   unlocked and the native Delete Worktree → audited proposal-discard flow can
@@ -1318,7 +1328,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T02:01:53Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS again reported: `The Mac is
-  locked and automatic unlock could not unlock it.` No browser state,
+locked and automatic unlock could not unlock it.` No browser state,
   workspace, or data was changed and no screenshot could be captured. F5.6
   remains Current; do not begin OI.1 until the desktop session is manually
   unlocked and the native Delete Worktree → audited proposal-discard flow can
@@ -1327,7 +1337,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T01:02:36Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS again reported: `The Mac is
-  locked and automatic unlock could not unlock it.` No browser state,
+locked and automatic unlock could not unlock it.` No browser state,
   workspace, or data was changed and no screenshot could be captured. F5.6
   remains Current; do not begin OI.1 until the desktop session is manually
   unlocked and the native Delete Worktree → audited proposal-discard flow can
@@ -1336,7 +1346,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T00:02:51Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS reported: `The Mac is locked
-  and automatic unlock could not unlock it.` No browser state, workspace, or
+and automatic unlock could not unlock it.` No browser state, workspace, or
   data was changed and no screenshot could be captured. The existing native
   Delete Worktree → audited proposal-discard implementation remains on
   `main`, but its required authenticated Production UI flow cannot be
@@ -1371,8 +1381,8 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   <https://codev-xi.vercel.app/workspaces/d37dde90-cf85-4c6f-880a-c43fd9491d7b>
   linked to `yousef20920/CoDev`, removing the prior missing-repository
   prerequisite. Orca loaded its native Agents panel and showed `Prepare managed
-  proposal`. The first native attempt visibly failed with `CoDev did not
-  confirm the proposal creation. Try again.` A second permitted attempt also
+proposal`. The first native attempt visibly failed with `CoDev did not
+confirm the proposal creation. Try again.` A second permitted attempt also
   failed and left Orca on its Local Mac fallback, where the panel reported
   `Agent Session History is not available for this execution host` and showed
   no proposal or worktree. Two Production attempts therefore failed before a
@@ -1389,7 +1399,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   on current `main` commit `e567157`. The native Agents panel loaded, showed
   `0 shown · 0 recent`, and exposed `Prepare managed proposal`; clicking it
   visibly returned `Failed to prepare managed proposal — Connect a GitHub
-  repository before creating an agent.` The workspace remains unlinked, so it
+repository before creating an agent.` The workspace remains unlinked, so it
   has neither a CoDev-managed proposal nor a managed worktree. Deleting its
   ordinary workspace would only exercise Orca's fallback, not the required
   audited proposal-discard lifecycle. F5.6 remains Current; do not begin OI.1.
@@ -1407,9 +1417,9 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   `git diff --check`. Computer Use opened the authenticated Production
   workspace `/workspaces/5a161b43-63eb-4d23-ac0c-10df01f4bf72`, waited for
   the cloud host, and confirmed the native Agents panel exposes `Prepare
-  managed proposal`. Clicking it reached the existing workspace-bound CoDev
+managed proposal`. Clicking it reached the existing workspace-bound CoDev
   backend but visibly returned `Connect a GitHub repository before creating an
-  agent.` This workspace has no linked repository, so no managed proposal or
+agent.` This workspace has no linked repository, so no managed proposal or
   worktree exists to delete through the audited lifecycle. Current task remains
   F5.6; do not begin OI.1. Screenshots:
   `artifacts/verification/f5-6/production-proposal-control.png` (native
