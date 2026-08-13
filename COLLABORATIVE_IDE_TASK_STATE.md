@@ -1251,6 +1251,19 @@ The invitee is not a workspace member.` Membership remained owner-only.
 
 ## Blocked tasks
 
+- **OI.3 — run blocked 2026-08-13T10:03:00Z:** The narrow fixture-selector
+  repair was locally validated (`apps/web/tests/e2e/verification-fixture.spec.ts`
+  — 28 passed; the OI.3 member-role route and typed bridge tests — 8 passed),
+  but the required full `pnpm test:e2e` gate still fails in two unrelated
+  anonymous-auth smoke assertions (30 passed, 1 skipped, 2 failed). In
+  `apps/web/tests/e2e/smoke.spec.ts:55`, `/dashboard` remains on
+  `/dashboard` rather than redirecting to `/sign-in`; in
+  `apps/web/tests/e2e/smoke.spec.ts:77`, a workspace API returns HTTP 200
+  rather than the expected anonymous HTTP 401. Per the run policy, the
+  selector repair was reverted, no OI.3 source commit was made, and no
+  deployment or Computer Use verification may begin. Current task remains
+  OI.3; do not begin OI.4.
+
 - **OI.3 — run blocked 2026-08-13T07:22:00Z:** Current `main` commit
   `d6d93d2f092dec87bde3196c6a48dfaa3e4d5ffa` passes local
   `pnpm format:check`, but its GitHub Actions CI run
