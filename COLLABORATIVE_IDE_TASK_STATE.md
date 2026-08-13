@@ -10,6 +10,26 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 **OI.3 — Put member-role management in Orca Workspace Options and refresh native control availability live**
 
+## Run blocker — 2026-08-13
+
+This run stopped before switching branches, pulling, inspecting OI.3, or
+starting implementation because `git status --short` was not clean at the
+required initial check. The pre-existing modified files are:
+
+- `apps/web/components/codev-parent-bridge.test.ts`
+- `apps/web/components/codev-parent-bridge.ts`
+- `apps/web/components/orca-workspace.tsx`
+- `apps/web/lib/workspaces.test.ts`
+- `apps/web/lib/workspaces.ts`
+- `apps/web/next-env.d.ts`
+
+These changes are not attributable to this run and were left untouched. The
+Current task remains OI.3.
+
+The targeted `pnpm exec prettier --check COLLABORATIVE_IDE_TASK_STATE.md`
+check also failed only on pre-existing formatting in historical evidence
+entries outside this run's addition; no broad reformat was applied.
+
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. The Current task is **OI.3**, followed by OI.4–OI.12 from
