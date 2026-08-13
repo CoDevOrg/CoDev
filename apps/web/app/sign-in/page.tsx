@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Session } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -12,6 +13,11 @@ import { clerkAuthConfigured } from "@/lib/identity";
 export const metadata: Metadata = {
   title: "Sign in",
 };
+
+// This route reads the signed-in cookie so it can redirect active users.
+// Explicit dynamic rendering prevents an unsuccessful static pass from ever
+// becoming the browser's error page.
+export const dynamic = "force-dynamic";
 
 function GoogleMark() {
   return (
@@ -53,7 +59,18 @@ export default async function SignInPage({
   searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const clerkEnabled = clerkAuthConfigured();
-  const session = clerkEnabled ? null : await auth();
+  let session: Session | null = null;
+  let sessionCheckUnavailable = false;
+  if (!clerkEnabled) {
+    try {
+      session = await auth();
+    } catch (sessionError) {
+      // Rendering sign-in must remain available even if session verification
+      // has a transient infrastructure failure.
+      console.error("Unable to check the CoDev sign-in session.", sessionError);
+      sessionCheckUnavailable = true;
+    }
+  }
   if (session?.user) redirect("/dashboard");
 
   const { callbackUrl, error } = await searchParams;
@@ -78,9 +95,17 @@ export default async function SignInPage({
           or GitHub.
         </p>
 
+        {sessionCheckUnavailable ? (
+          <div className="inline-alert error" role="alert">
+            We could not check your existing session. You can still sign in or
+            create an account below.
+          </div>
+        ) : null}
+
         {error ? (
           <div className="inline-alert error" role="alert">
-            Sign-in did not complete. Please try again.
+            Sign-in did not complete. Check your email and password, then try
+            again. New accounts need a 15-character passphrase.
           </div>
         ) : null}
 
@@ -164,11 +189,15 @@ export default async function SignInPage({
                   name="password"
                   type="password"
                   autoComplete="current-password"
-                  placeholder="At least 8 characters"
+                  placeholder="15+ characters for a new account"
                   minLength={8}
                   required
                 />
               </label>
+              <p className="auth-password-guidance">
+                New accounts need a 15+ character passphrase. Common passwords
+                are not allowed.
+              </p>
               <button className="auth-submit" type="submit">
                 Continue with email
               </button>

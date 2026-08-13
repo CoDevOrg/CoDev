@@ -12,6 +12,7 @@ import { resolveSignInProviderGate } from "@/lib/auth-sign-in-gate";
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
+import { getNewAccountPasswordError } from "@/lib/password-policy";
 import { mergeUserIntoCanonical } from "@/lib/user-merge";
 
 interface GitHubProfile {
@@ -112,6 +113,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             image: existingUser.avatarUrl,
           };
         }
+
+        if (getNewAccountPasswordError(password)) return null;
 
         const [localUser] = await database
           .insert(schema.users)
