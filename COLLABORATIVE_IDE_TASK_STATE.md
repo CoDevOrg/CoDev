@@ -8,11 +8,11 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.1 — Add a typed, workspace-bound CoDev request/event bridge to the Orca web runtime with visible connection and reconnect state**
+**OI.2 — Put invite creation, acceptance status, revocation, and expiry in Orca Workspace Options using the existing authenticated APIs**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6 is complete. The Current task is **OI.1**, followed by OI.2–OI.12 from
+F5.6 and OI.1 are complete. The Current task is **OI.2**, followed by OI.3–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -51,6 +51,7 @@ workspace as its required final Computer Use evidence.
 | F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                          |
 | F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
 | F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
+| OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect     | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                     |
 
 ### B0.2 completion evidence
 
@@ -1159,6 +1160,48 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   proposals.
 - Next task: OI.1 — add a typed, workspace-bound CoDev request/event bridge
   to the Orca web runtime with visible connection and reconnect state.
+
+### OI.1 completion evidence
+
+- Completed: 2026-08-13T04:37:00Z.
+- Changed files: `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/orca-workspace.tsx`,
+  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused CoDev Vitest (`codev-parent-bridge.test.ts`,
+  `orca-workspace.test.ts`) — 15 passed; patched-Orca Vitest
+  (`codev-bridge.test.ts`, `CodevBridgeStatusSegment.test.tsx`) — 5 passed;
+  patched-Orca `typecheck:web` — passed; `pnpm --dir apps/web lint` — 0 errors,
+  2 pre-existing warnings; `pnpm --dir apps/web typecheck` — passed;
+  `pnpm --dir apps/web build` — passed.
+- Validated source commit: `c95e5a85a2176e652aac1a982e9732b4201e265f`.
+- Production URL: <https://codev-ouboa8nvt-yousef20920s-projects.vercel.app>
+  — Vercel Production deployment `dpl_DeEUJ5uYEQuu4CUES5HQ5Ay2h4pw` (Ready),
+  aliased to <https://codev-xi.vercel.app>. The Git-triggered build cloned
+  `main` at `c95e5a8`. Computer Use used that Production alias at
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`.
+- Computer Use flow: opened the authenticated `yousef20920/CoDev` workspace,
+  confirmed the Orca status bar control `CoDev bridge connection status:
+  Connected` with visible `CoDev · Connected`, opened that native status-bar
+  menu, clicked `Disconnect`, confirmed `CoDev · Disconnected`, clicked
+  `Reconnect`, and confirmed recovery to `CoDev · Connected` without leaving
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`. No credentials or secrets
+  were entered.
+- Screenshots:
+  `artifacts/verification/oi-1/bridge-connected.png`,
+  `artifacts/verification/oi-1/bridge-disconnected.png` (interrupt edge),
+  `artifacts/verification/oi-1/bridge-reconnected.png`,
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-1-bridge-connected.png`,
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-1-bridge-disconnected.png`,
+  and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-1-bridge-reconnected.png`.
+- Known limitations: earlier Production builds crashed the Orca status bar
+  because `useSyncExternalStore` received a new snapshot object on every read
+  (React error #185). Cached per-status snapshots fixed that. Orca Session
+  History is unrelated to this bridge status control.
+- Next task: OI.2 — put invite creation, acceptance status, revocation, and
+  expiry in Orca Workspace Options using the existing authenticated APIs.
 
 ## Blocked tasks
 
