@@ -1109,6 +1109,16 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — Production Computer Use environment blocker 2026-08-13T00:02:51Z:**
+  The required fresh Computer Use attempt against the authenticated Production
+  Orca workspace could not begin because macOS reported: `The Mac is locked
+  and automatic unlock could not unlock it.` No browser state, workspace, or
+  data was changed and no screenshot could be captured. The existing native
+  Delete Worktree → audited proposal-discard implementation remains on
+  `main`, but its required authenticated Production UI flow cannot be
+  revalidated while the desktop session is locked. F5.6 remains Current; do
+  not begin OI.1.
+
 - **F5.6 — authenticated Production native-worktree blocker 2026-08-12T23:48:58Z:**
   Pushed source commit `5828cc69270c716d9dc7dc71af2826f27a688928`
   (`fix: allow Orca proposal provisioning time`) and Vercel completed its
