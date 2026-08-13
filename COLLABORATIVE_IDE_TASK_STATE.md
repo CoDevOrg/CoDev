@@ -1251,6 +1251,18 @@ The invitee is not a workspace member.` Membership remained owner-only.
 
 ## Blocked tasks
 
+- **OI.3 — run blocked 2026-08-13T14:21:35Z:** Production Orca is now
+  reachable and its CoDev bridge reports Connected in authenticated workspace
+  `/workspaces/8c5160a9-f360-4195-83c9-aafeb1258fc2` on
+  <https://codev-xi.vercel.app> (Ready deployment
+  <https://codev-8qp531tzi-yousef20920s-projects.vercel.app>). In native
+  Settings → General, the Member roles section renders correctly but says
+  `No additional members have joined.` The only visible membership is the
+  owner, so no Collaborator exists to change to Viewer and the live control
+  restriction portion of OI.3 cannot be exercised. Screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-13%20at%2010.21.35%20AM.jpeg`.
+  Current task remains OI.3; do not begin OI.4.
+
 - **OI.3 — run blocked 2026-08-13T14:07:10Z:** The actual CoDev Vercel
   project (not the stale linked `web` project) deployed `main` commit
   `7a207c55ead6aabeec51d0d4ab63ae212995f18b`, which contains OI.3
