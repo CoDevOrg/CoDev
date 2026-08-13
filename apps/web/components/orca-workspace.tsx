@@ -40,7 +40,9 @@ type CodevProposalDiscardResult =
   | { managed: true; ok: true }
   | { managed: true; ok: false; error: string };
 
-type CodevProposalCreateResult = { ok: true } | { ok: false; error: string };
+type CodevProposalCreateResult =
+  | { ok: true; worktreeId: string }
+  | { ok: false; error: string };
 
 const WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -130,6 +132,7 @@ export async function createOrcaManagedProposal(
     });
     const payload = (await response.json().catch(() => null)) as {
       error?: unknown;
+      worktreeId?: unknown;
     } | null;
     if (!response.ok) {
       return {
@@ -140,7 +143,15 @@ export async function createOrcaManagedProposal(
             : "CoDev could not prepare this proposal.",
       };
     }
-    return { ok: true };
+    const worktreeId =
+      typeof payload?.worktreeId === "string" ? payload.worktreeId : "";
+    if (!WORKTREE_ID.test(worktreeId)) {
+      return {
+        ok: false,
+        error: "CoDev did not return a managed proposal worktree.",
+      };
+    }
+    return { ok: true, worktreeId };
   } catch (error) {
     return {
       ok: false,

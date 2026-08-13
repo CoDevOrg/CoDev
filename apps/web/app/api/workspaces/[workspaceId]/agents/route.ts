@@ -352,7 +352,10 @@ export async function POST(
         await kickAgentSession(reservation.sessionId);
       }
       return Response.json(
-        { sessionId: reservation.sessionId },
+        {
+          sessionId: reservation.sessionId,
+          worktreeId: reservation.worktreeId,
+        },
         { status: 201 },
       );
     } catch (error) {

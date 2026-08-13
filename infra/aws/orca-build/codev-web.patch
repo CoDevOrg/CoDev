@@ -72,6 +72,326 @@ index 294fc4a..16cde63 100644
    const backgroundTerminalMountRequested = useSyncExternalStore(
      subscribeBackgroundTerminalWorktreeMountRequests,
      hasRequestedBackgroundTerminalWorktreeMount,
+diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
+index e048925..39f6647 100644
+--- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
++++ b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
+@@ -49,6 +49,11 @@ import {
+ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
+ import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
+ import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
++import { activateAndRevealWorktree } from '@/lib/worktree-activation'
++import {
++  openCodevManagedProposalWorktree,
++  requestCodevProposalCreate
++} from '@/web/codev-proposal-discard'
+ 
+ export default function AiVaultPanel(): React.JSX.Element {
+   const activeWorktreeId = useActiveWorktreeId()
+@@ -88,6 +93,7 @@ export default function AiVaultPanel(): React.JSX.Element {
+     resetViewOptions
+   } = usePersistedAiVaultViewOptions()
+   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
++  const [creatingProposal, setCreatingProposal] = useState(false)
+   const userChangedScopeRef = useRef(false)
+   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
+ 
+@@ -304,6 +310,53 @@ export default function AiVaultPanel(): React.JSX.Element {
+     })
+   }, [])
+ 
++  const createProposal = useCallback(() => {
++    setCreatingProposal(true)
++    void requestCodevProposalCreate()
++      .then(async (result) => {
++        if (result === null) return
++        if (!result.ok) {
++          throw new Error(result.error)
++        }
++        const store = useAppStore.getState()
++        const orcaWorktreeId = await openCodevManagedProposalWorktree(result.worktreeId, {
++          repoId: activeWorktree?.repoId ?? activeRepo?.id,
++          createWorktree: (
++            repoId,
++            name,
++            baseBranch,
++            setupDecision,
++            sparseCheckout,
++            telemetrySource,
++            displayName
++          ) =>
++            store.createWorktree(
++              repoId,
++              name,
++              baseBranch,
++              setupDecision,
++              sparseCheckout,
++              telemetrySource,
++              displayName
++            ),
++          updateComment: async (id, comment) => {
++            await store.updateWorktreeMeta(id, { comment })
++          }
++        })
++        activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
++        toast.success('Managed proposal prepared', {
++          description:
++            'CoDev created an isolated worktree. Use Delete Worktree on its native card to discard it.'
++        })
++      })
++      .catch((error: unknown) => {
++        toast.error('Failed to prepare managed proposal', {
++          description: error instanceof Error ? error.message : String(error)
++        })
++      })
++      .finally(() => setCreatingProposal(false))
++  }, [activeRepo?.id, activeWorktree?.repoId])
++
+   return (
+     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
+       <AiVaultPanelHeader
+@@ -334,6 +387,8 @@ export default function AiVaultPanel(): React.JSX.Element {
+         onSessionLimitChange={setSessionLimit}
+         onReset={resetViewOptions}
+         onRefresh={() => void refresh({ force: true })}
++        creatingProposal={creatingProposal}
++        onCreateProposal={window.__CODEV_EMBEDDED__ ? createProposal : undefined}
+       />
+ 
+       {error ? (
+diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
+index 83b190a..c530555 100644
+--- a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
++++ b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
+@@ -1,4 +1,4 @@
+-import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
++import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
+ import { Button } from '@/components/ui/button'
+ import { translate } from '@/i18n/i18n'
+ import type {
+@@ -40,6 +40,8 @@ type AiVaultPanelHeaderProps = {
+   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+   onReset: () => void
+   onRefresh: () => void
++  creatingProposal?: boolean
++  onCreateProposal?: () => void
+ }
+ 
+ export function AiVaultPanelHeader({
+@@ -69,7 +71,9 @@ export function AiVaultPanelHeader({
+   onHideEmptySessionsChange,
+   onSessionLimitChange,
+   onReset,
+-  onRefresh
++  onRefresh,
++  creatingProposal = false,
++  onCreateProposal
+ }: AiVaultPanelHeaderProps): React.JSX.Element {
+   return (
+     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
+@@ -114,6 +118,21 @@ export function AiVaultPanelHeader({
+           </div>
+         </div>
+         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
++          {onCreateProposal ? (
++            <Button
++              type="button"
++              variant="ghost"
++              size="xs"
++              aria-label="Prepare managed proposal"
++              onClick={onCreateProposal}
++              disabled={creatingProposal}
++              aria-busy={creatingProposal}
++              className="h-6 px-1.5 text-[11px]"
++            >
++              {creatingProposal ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />}
++              <span className="@max-[300px]/ai-vault:hidden">Proposal</span>
++            </Button>
++          ) : null}
+           <VaultHostScopeMenu
+             executionHostScope={executionHostScope}
+             hostOptions={hostScopeOptions}
+diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
+index 3106ded..3d8e596 100644
+--- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
++++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
+@@ -91,7 +91,18 @@ vi.mock('./active-worktree-focus-after-delete', () => ({
+   prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
+ }))
+ 
++vi.mock('@/web/codev-proposal-discard', () => ({
++  getCodevProposalWorktreeId: (path: string, comment = '') =>
++    path.includes('/.git/codev-agent-worktrees/')
++      ? path.split('/').at(-1)
++      : comment.startsWith('codev-proposal:')
++        ? comment.slice('codev-proposal:'.length)
++        : null,
++  requestCodevProposalDiscard: vi.fn()
++}))
++
+ import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
++import { requestCodevProposalDiscard } from '@/web/codev-proposal-discard'
+ 
+ function makeWorktree(id: string, path: string): Worktree {
+   return {
+@@ -148,6 +159,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
+     mocks.state.deleteStateByWorktreeId = {}
+     mocks.buttonProps = []
+     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
++    vi.mocked(requestCodevProposalDiscard).mockReset()
+   })
+ 
+   it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
+@@ -318,4 +330,74 @@ describe('DeleteWorktreeDialog lineage copy', () => {
+ 
+     expect(onDeleted).toHaveBeenCalledWith([workspace.id])
+   })
++
++  it('routes a managed CoDev proposal through audited discard then native worktree removal', async () => {
++    const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++    const workspace = makeWorktree(
++      'Agent proposal',
++      `/srv/codev/workspaces/workspace/.git/codev-agent-worktrees/${worktreeId}`
++    )
++    const onDeleted = vi.fn()
++    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
++    mocks.state.allWorktrees.mockReturnValue([workspace])
++    vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([workspace.id])
++    vi.mocked(requestCodevProposalDiscard).mockResolvedValue({
++      type: 'codev:proposal-discard-result',
++      requestId: 'request-1',
++      managed: true,
++      ok: true
++    })
++
++    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
++    renderToStaticMarkup(<DeleteWorktreeDialog />)
++    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
++      | { onClick?: (event: never) => void }
++      | undefined
++    deleteButton?.onClick?.(undefined as never)
++
++    await vi.waitFor(() => {
++      expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
++        force: true,
++        onForceDeleted: expect.any(Function)
++      })
++    })
++    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
++    expect(onDeleted).toHaveBeenCalledWith([workspace.id])
++  })
++
++  it('routes a comment-tagged native CoDev proposal through audited discard', async () => {
++    const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++    const workspace = {
++      ...makeWorktree('Managed proposal', '/srv/codev/workspaces/workspace-agent'),
++      comment: `codev-proposal:${worktreeId}`
++    }
++    const onDeleted = vi.fn()
++    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
++    mocks.state.allWorktrees.mockReturnValue([workspace])
++    vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([workspace.id])
++    vi.mocked(requestCodevProposalDiscard).mockResolvedValue({
++      type: 'codev:proposal-discard-result',
++      requestId: 'request-1',
++      managed: true,
++      ok: true
++    })
++
++    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
++    renderToStaticMarkup(<DeleteWorktreeDialog />)
++    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
++      | { onClick?: (event: never) => void }
++      | undefined
++    deleteButton?.onClick?.(undefined as never)
++
++    await vi.waitFor(() => {
++      expect(onDeleted).toHaveBeenCalledWith([workspace.id])
++    })
++    expect(requestCodevProposalDiscard).toHaveBeenCalledWith(workspace.path, {
++      comment: workspace.comment
++    })
++    expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
++      force: true,
++      onForceDeleted: expect.any(Function)
++    })
++  })
+ })
+diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
+index 6bbe058..c5befa7 100644
+--- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
++++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
+@@ -30,6 +30,10 @@ import {
+   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
+ } from './delete-worktree-dialog-copy'
+ import { translate } from '@/i18n/i18n'
++import {
++  getCodevProposalWorktreeId,
++  requestCodevProposalDiscard
++} from '@/web/codev-proposal-discard'
+ 
+ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+   const activeModal = useAppStore((s) => s.activeModal)
+@@ -261,6 +265,50 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+       if (dontAskAgain && allowSkipConfirm && !force) {
+         persistDontAskAgainPreference()
+       }
++      if (
++        !force &&
++        !isBatchDelete &&
++        worktree &&
++        getCodevProposalWorktreeId(worktree.path, worktree.comment)
++      ) {
++        const codevDiscard = requestCodevProposalDiscard(worktree.path, {
++          comment: worktree.comment
++        })
++        closeModal()
++        void codevDiscard
++          .then(async (response) => {
++            if (response === null || !response.managed) {
++              const deletedIds = await runWorktreeDeletesInParallel([worktree], {
++                force: true,
++                onForceDeleted: handleForceDeletedFromToast
++              })
++              if (deletedIds.length > 0) {
++                onDeleted?.(deletedIds)
++              }
++              return
++            }
++            if (!response.ok) {
++              throw new Error(response.error)
++            }
++            const deletedIds = await runWorktreeDeletesInParallel([worktree], {
++              force: true,
++              onForceDeleted: handleForceDeletedFromToast
++            })
++            if (deletedIds.length > 0) {
++              onDeleted?.(deletedIds)
++            }
++            toast.success('Proposal discarded', {
++              description:
++                'CoDev removed the worktree, released its claims, and recorded the audit event.'
++            })
++          })
++          .catch((error: unknown) => {
++            toast.error('Failed to discard proposal', {
++              description: error instanceof Error ? error.message : String(error)
++            })
++          })
++        return
++      }
+       if (force) {
+         // Why: this branch preserves the legacy "Force Delete" button behavior
+         // inside the dialog — it runs the destructive retry directly without
+@@ -325,6 +373,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
+       onDeleted,
+       persistDontAskAgainPreference,
+       removeWorktree,
++      isBatchDelete,
++      worktree,
+       worktreeIds.length,
+       worktreeId,
+       worktrees
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
 index 5ecc70a..31b7c0e 100644
 --- a/src/renderer/src/env.d.ts
@@ -527,172 +847,20 @@ index 0000000..0aa361a
 +  }
 +  return false
 +}
-diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..6ebcb27 100644
---- a/src/renderer/src/web/main.tsx
-+++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,16 @@ import {
- import { installWebPreloadApi } from './web-preload-api'
- import { I18nProvider } from '../i18n/I18nProvider'
- import { translate } from '../i18n/i18n'
-+import { readCodevBootstrap } from './codev-bootstrap'
-
- const App = lazy(() => import('../App'))
-
- function WebRoot(): React.JSX.Element {
-+  const codevBootstrap = useMemo(() => readCodevBootstrap(window.location), [])
-+  window.__CODEV_EMBEDDED__ = codevBootstrap !== null
-+  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
-+  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
-+  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
-   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
-   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
-   // the instant save path; mobile/legacy-unknown offers must be shown/probed.
-diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
-index 3106ded..0c70382 100644
---- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
-+++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
-@@ -91,7 +91,14 @@ vi.mock('./active-worktree-focus-after-delete', () => ({
-   prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
- }))
--
-+
-+vi.mock('@/web/codev-proposal-discard', () => ({
-+  getCodevProposalWorktreeId: (path: string) =>
-+    path.includes('/.git/codev-agent-worktrees/') ? path.split('/').at(-1) : null,
-+  requestCodevProposalDiscard: vi.fn()
-+}))
-+
- import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
-+import { requestCodevProposalDiscard } from '@/web/codev-proposal-discard'
--
-+
- function makeWorktree(id: string, path: string): Worktree {
-   return {
-@@ -148,6 +155,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
-     mocks.state.deleteStateByWorktreeId = {}
-     mocks.buttonProps = []
-     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
-+    vi.mocked(requestCodevProposalDiscard).mockReset()
-   })
--
-+
-   it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
-@@ -318,4 +326,37 @@ describe('DeleteWorktreeDialog lineage copy', () => {
--
-+
-     expect(onDeleted).toHaveBeenCalledWith([workspace.id])
-   })
-+
-+  it('routes a managed CoDev proposal through audited discard and only forgets it locally', async () => {
-+    const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
-+    const workspace = makeWorktree(
-+      'Agent proposal',
-+      `/srv/codev/workspaces/workspace/.git/codev-agent-worktrees/${worktreeId}`
-+    )
-+    const onDeleted = vi.fn()
-+    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
-+    mocks.state.allWorktrees.mockReturnValue([workspace])
-+    mocks.state.removeWorktree.mockResolvedValue({ ok: true })
-+    vi.mocked(requestCodevProposalDiscard).mockResolvedValue({
-+      type: 'codev:proposal-discard-result',
-+      requestId: 'request-1',
-+      managed: true,
-+      ok: true
-+    })
-+
-+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
-+    renderToStaticMarkup(<DeleteWorktreeDialog />)
-+    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
-+      | { onClick?: (event: never) => void }
-+      | undefined
-+    deleteButton?.onClick?.(undefined as never)
-+
-+    await vi.waitFor(() => {
-+      expect(mocks.state.removeWorktree).toHaveBeenCalledWith(workspace.id, false, {
-+        mode: 'forget-local'
-+      })
-+    })
-+    expect(runWorktreeDeletesInParallel).not.toHaveBeenCalled()
-+    expect(onDeleted).toHaveBeenCalledWith([workspace.id])
-+  })
- })
-diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
-index 6bbe058..7123459 100644
---- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
-+++ b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
-@@ -30,6 +30,10 @@ import {
-   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
- } from './delete-worktree-dialog-copy'
- import { translate } from '@/i18n/i18n'
-+import {
-+  getCodevProposalWorktreeId,
-+  requestCodevProposalDiscard
-+} from '@/web/codev-proposal-discard'
--
-+
- const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
-   const activeModal = useAppStore((s) => s.activeModal)
-@@ -261,6 +265,43 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
-       if (dontAskAgain && allowSkipConfirm && !force) {
-         persistDontAskAgainPreference()
-       }
-+      if (!force && !isBatchDelete && worktree && getCodevProposalWorktreeId(worktree.path)) {
-+        const codevDiscard = requestCodevProposalDiscard(worktree.path)
-+        closeModal()
-+        void codevDiscard
-+          .then(async (response) => {
-+            if (response === null || !response.managed) {
-+              const deletedIds = await runWorktreeDeletesInParallel([worktree], {
-+                force: true,
-+                onForceDeleted: handleForceDeletedFromToast
-+              })
-+              if (deletedIds.length > 0) {
-+                onDeleted?.(deletedIds)
-+              }
-+              return
-+            }
-+            if (!response.ok) {
-+              throw new Error(response.error)
-+            }
-+            const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
-+            const forgotten = await removeWorktree(worktreeId, false, { mode: 'forget-local' })
-+            if (!forgotten.ok) {
-+              throw new Error(forgotten.error)
-+            }
-+            commitFocus()
-+            onDeleted?.([worktreeId])
-+            toast.success('Proposal discarded', {
-+              description:
-+                'CoDev removed the worktree, released its claims, and recorded the audit event.'
-+            })
-+          })
-+          .catch((error: unknown) => {
-+            toast.error('Failed to discard proposal', {
-+              description: error instanceof Error ? error.message : String(error)
-+            })
-+          })
-+        return
-+      }
-       if (force) {
-         // Why: this branch preserves the legacy "Force Delete" button behavior
-         // inside the dialog — it runs the destructive retry directly without
-@@ -325,6 +366,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
-       onDeleted,
-       persistDontAskAgainPreference,
-       removeWorktree,
-+      isBatchDelete,
-+      worktree,
-       worktreeIds.length,
-       worktreeId,
-       worktrees
 diff --git a/src/renderer/src/web/codev-proposal-discard.test.ts b/src/renderer/src/web/codev-proposal-discard.test.ts
 new file mode 100644
+index 0000000..c059710
 --- /dev/null
 +++ b/src/renderer/src/web/codev-proposal-discard.test.ts
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,245 @@
 +import { describe, expect, it, vi } from 'vitest'
-+import { getCodevProposalWorktreeId, requestCodevProposalDiscard } from './codev-proposal-discard'
++import {
++  codevProposalComment,
++  getCodevProposalWorktreeId,
++  openCodevManagedProposalWorktree,
++  requestCodevProposalCreate,
++  requestCodevProposalDiscard
++} from './codev-proposal-discard'
 +
 +const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
 +
@@ -704,6 +872,51 @@ new file mode 100644
 +      )
 +    ).toBe(worktreeId)
 +    expect(getCodevProposalWorktreeId(`/tmp/worktrees/${worktreeId}`)).toBeNull()
++  })
++
++  it('recognizes a native Orca worktree tagged with the CoDev proposal comment', () => {
++    expect(getCodevProposalWorktreeId('/srv/codev/workspaces/workspace-agent', '')).toBeNull()
++    expect(
++      getCodevProposalWorktreeId(
++        '/srv/codev/workspaces/workspace-agent',
++        codevProposalComment(worktreeId)
++      )
++    ).toBe(worktreeId)
++  })
++})
++
++describe('openCodevManagedProposalWorktree', () => {
++  it('creates a native Orca worktree card tagged for audited discard', async () => {
++    const createWorktree = vi.fn().mockResolvedValue({ worktree: { id: 'orca-wt-1' } })
++    const updateComment = vi.fn().mockResolvedValue(undefined)
++
++    await expect(
++      openCodevManagedProposalWorktree(worktreeId, {
++        repoId: 'repo-1',
++        createWorktree,
++        updateComment
++      })
++    ).resolves.toBe('orca-wt-1')
++    expect(createWorktree).toHaveBeenCalledWith(
++      'repo-1',
++      'codev-c1f9fe13',
++      undefined,
++      'skip',
++      undefined,
++      undefined,
++      'Managed proposal'
++    )
++    expect(updateComment).toHaveBeenCalledWith('orca-wt-1', codevProposalComment(worktreeId))
++  })
++
++  it('requires an open workspace project before creating the native card', async () => {
++    await expect(
++      openCodevManagedProposalWorktree(worktreeId, {
++        repoId: null,
++        createWorktree: vi.fn(),
++        updateComment: vi.fn()
++      })
++    ).rejects.toThrow('Open the workspace project before preparing a managed proposal.')
 +  })
 +})
 +
@@ -753,12 +966,144 @@ new file mode 100644
 +      ok: true
 +    })
 +  })
++
++  it('asks the CoDev parent using a tagged native worktree comment', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout,
++      clearTimeout
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalDiscard('/srv/codev/workspaces/workspace-agent', {
++      window: targetWindow,
++      timeoutMs: 500,
++      comment: codevProposalComment(worktreeId)
++    })
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(request).toEqual({
++      type: 'codev:discard-proposal',
++      requestId: expect.any(String),
++      worktreeId
++    })
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: {
++          type: 'codev:proposal-discard-result',
++          requestId: request.requestId,
++          managed: true,
++          ok: true
++        }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-discard-result',
++      requestId: request.requestId,
++      managed: true,
++      ok: true
++    })
++  })
++})
++
++describe('requestCodevProposalCreate', () => {
++  it('asks the CoDev parent to prepare a managed proposal', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout,
++      clearTimeout
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalCreate({ window: targetWindow, timeoutMs: 500 })
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(request).toEqual({ type: 'codev:create-proposal', requestId: expect.any(String) })
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: {
++          type: 'codev:proposal-create-result',
++          requestId: request.requestId,
++          ok: true,
++          worktreeId
++        }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-create-result',
++      requestId: request.requestId,
++      ok: true,
++      worktreeId
++    })
++  })
++
++  it('allows sandbox worktree provisioning to use the extended default timeout', async () => {
++    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
++    const parent = { postMessage: vi.fn() }
++    let requestedTimeout: number | undefined
++    const targetWindow = {
++      __CODEV_EMBEDDED__: true,
++      parent,
++      location: { origin: 'https://codev.example' },
++      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.add(listener),
++      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
++        listeners.delete(listener),
++      setTimeout: vi.fn((_callback: TimerHandler, timeout?: number) => {
++        requestedTimeout = timeout
++        return 1
++      }),
++      clearTimeout: vi.fn()
++    } as unknown as Window
++
++    const resultPromise = requestCodevProposalCreate({ window: targetWindow })
++    const request = parent.postMessage.mock.calls[0]?.[0]
++    expect(requestedTimeout).toBe(60_000)
++    for (const listener of listeners) {
++      listener({
++        origin: 'https://codev.example',
++        source: parent,
++        data: {
++          type: 'codev:proposal-create-result',
++          requestId: request.requestId,
++          ok: true,
++          worktreeId
++        }
++      } as unknown as MessageEvent<unknown>)
++    }
++
++    await expect(resultPromise).resolves.toEqual({
++      type: 'codev:proposal-create-result',
++      requestId: request.requestId,
++      ok: true,
++      worktreeId
++    })
++  })
 +})
 diff --git a/src/renderer/src/web/codev-proposal-discard.ts b/src/renderer/src/web/codev-proposal-discard.ts
 new file mode 100644
+index 0000000..05d7117
 --- /dev/null
 +++ b/src/renderer/src/web/codev-proposal-discard.ts
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,164 @@
 +export type CodevProposalDiscardResponse =
 +  | { type: 'codev:proposal-discard-result'; requestId: string; managed: false }
 +  | {
@@ -775,12 +1120,59 @@ new file mode 100644
 +      error: string
 +    }
 +
++export type CodevProposalCreateResponse =
++  | { type: 'codev:proposal-create-result'; requestId: string; ok: true; worktreeId: string }
++  | { type: 'codev:proposal-create-result'; requestId: string; ok: false; error: string }
++
 +const CODEV_AGENT_WORKTREE_PATH =
 +  /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
++const CODEV_PROPOSAL_COMMENT =
++  /^codev-proposal:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i
++const CODEV_WORKTREE_ID =
++  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 +let nextRequestId = 0
 +
-+export function getCodevProposalWorktreeId(path: string): string | null {
-+  return CODEV_AGENT_WORKTREE_PATH.exec(path)?.[1] ?? null
++export function codevProposalComment(worktreeId: string): string {
++  return `codev-proposal:${worktreeId}`
++}
++
++export function getCodevProposalWorktreeId(path: string, comment = ''): string | null {
++  return CODEV_AGENT_WORKTREE_PATH.exec(path)?.[1] ?? CODEV_PROPOSAL_COMMENT.exec(comment)?.[1] ?? null
++}
++
++export async function openCodevManagedProposalWorktree(
++  worktreeId: string,
++  options: {
++    repoId: string | null | undefined
++    createWorktree: (
++      repoId: string,
++      name: string,
++      baseBranch?: string,
++      setupDecision?: 'inherit' | 'run' | 'skip',
++      sparseCheckout?: undefined,
++      telemetrySource?: undefined,
++      displayName?: string
++    ) => Promise<{ worktree: { id: string } }>
++    updateComment: (orcaWorktreeId: string, comment: string) => Promise<void>
++  }
++): Promise<string> {
++  if (!options.repoId) {
++    throw new Error('Open the workspace project before preparing a managed proposal.')
++  }
++  if (!CODEV_WORKTREE_ID.test(worktreeId)) {
++    throw new Error('CoDev did not return a managed proposal worktree.')
++  }
++  const created = await options.createWorktree(
++    options.repoId,
++    `codev-${worktreeId.slice(0, 8)}`,
++    undefined,
++    'skip',
++    undefined,
++    undefined,
++    'Managed proposal'
++  )
++  await options.updateComment(created.worktree.id, codevProposalComment(worktreeId))
++  return created.worktree.id
 +}
 +
 +export async function requestCodevProposalDiscard(
@@ -788,10 +1180,11 @@ new file mode 100644
 +  options: {
 +    window?: Window
 +    timeoutMs?: number
++    comment?: string
 +  } = {}
 +): Promise<CodevProposalDiscardResponse | null> {
 +  const targetWindow = options.window ?? window
-+  const worktreeId = getCodevProposalWorktreeId(path)
++  const worktreeId = getCodevProposalWorktreeId(path, options.comment ?? '')
 +  if (!targetWindow.__CODEV_EMBEDDED__ || !worktreeId || targetWindow.parent === targetWindow) {
 +    return null
 +  }
@@ -828,25 +1221,6 @@ new file mode 100644
 +    )
 +  })
 +}
-diff --git a/src/renderer/src/web/codev-proposal-discard.ts b/src/renderer/src/web/codev-proposal-discard.ts
-index 66bf809..5b482eb 100644
---- a/src/renderer/src/web/codev-proposal-discard.ts
-+++ b/src/renderer/src/web/codev-proposal-discard.ts
-@@ -14,6 +14,10 @@ export type CodevProposalDiscardResponse =
-       error: string
-     }
-
-+export type CodevProposalCreateResponse =
-+  | { type: 'codev:proposal-create-result'; requestId: string; ok: true }
-+  | { type: 'codev:proposal-create-result'; requestId: string; ok: false; error: string }
-+
- const CODEV_AGENT_WORKTREE_PATH =
-   /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
- let nextRequestId = 0
-@@ -67,3 +71,50 @@ export async function requestCodevProposalDiscard(
-     )
-   })
- }
 +
 +export async function requestCodevProposalCreate(
 +  options: {
@@ -894,203 +1268,24 @@ index 66bf809..5b482eb 100644
 +    )
 +  })
 +}
-diff --git a/src/renderer/src/web/codev-proposal-discard.test.ts b/src/renderer/src/web/codev-proposal-discard.test.ts
-index a7e7b4f..548aa1c 100644
---- a/src/renderer/src/web/codev-proposal-discard.test.ts
-+++ b/src/renderer/src/web/codev-proposal-discard.test.ts
-@@ -1,5 +1,9 @@
- import { describe, expect, it, vi } from 'vitest'
--import { getCodevProposalWorktreeId, requestCodevProposalDiscard } from './codev-proposal-discard'
-+import {
-+  getCodevProposalWorktreeId,
-+  requestCodevProposalCreate,
-+  requestCodevProposalDiscard
-+} from './codev-proposal-discard'
-
- const worktreeId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
-
-@@ -61,3 +65,75 @@ describe('requestCodevProposalDiscard', () => {
-     })
-   })
- })
-+
-+describe('requestCodevProposalCreate', () => {
-+  it('asks the CoDev parent to prepare a managed proposal', async () => {
-+    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
-+    const parent = { postMessage: vi.fn() }
-+    const targetWindow = {
-+      __CODEV_EMBEDDED__: true,
-+      parent,
-+      location: { origin: 'https://codev.example' },
-+      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
-+        listeners.add(listener),
-+      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
-+        listeners.delete(listener),
-+      setTimeout,
-+      clearTimeout
-+    } as unknown as Window
-+
-+    const resultPromise = requestCodevProposalCreate({ window: targetWindow, timeoutMs: 500 })
-+    const request = parent.postMessage.mock.calls[0]?.[0]
-+    expect(request).toEqual({ type: 'codev:create-proposal', requestId: expect.any(String) })
-+    for (const listener of listeners) {
-+      listener({
-+        origin: 'https://codev.example',
-+        source: parent,
-+        data: { type: 'codev:proposal-create-result', requestId: request.requestId, ok: true }
-+      } as unknown as MessageEvent<unknown>)
-+    }
-+
-+    await expect(resultPromise).resolves.toEqual({
-+      type: 'codev:proposal-create-result',
-+      requestId: request.requestId,
-+      ok: true
-+    })
-+  })
-+
-+  it('allows sandbox worktree provisioning to use the extended default timeout', async () => {
-+    const listeners = new Set<(event: MessageEvent<unknown>) => void>()
-+    const parent = { postMessage: vi.fn() }
-+    let requestedTimeout: number | undefined
-+    const targetWindow = {
-+      __CODEV_EMBEDDED__: true,
-+      parent,
-+      location: { origin: 'https://codev.example' },
-+      addEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
-+        listeners.add(listener),
-+      removeEventListener: (_type: string, listener: (event: MessageEvent<unknown>) => void) =>
-+        listeners.delete(listener),
-+      setTimeout: vi.fn((_callback: TimerHandler, timeout?: number) => {
-+        requestedTimeout = timeout
-+        return 1
-+      }),
-+      clearTimeout: vi.fn()
-+    } as unknown as Window
-+
-+    const resultPromise = requestCodevProposalCreate({ window: targetWindow })
-+    const request = parent.postMessage.mock.calls[0]?.[0]
-+    expect(requestedTimeout).toBe(60_000)
-+    for (const listener of listeners) {
-+      listener({
-+        origin: 'https://codev.example',
-+        source: parent,
-+        data: { type: 'codev:proposal-create-result', requestId: request.requestId, ok: true }
-+      } as unknown as MessageEvent<unknown>)
-+    }
-+
-+    await expect(resultPromise).resolves.toEqual({
-+      type: 'codev:proposal-create-result',
-+      requestId: request.requestId,
-+      ok: true
-+    })
-+  })
-+})
-diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
-index 83b190a..c530555 100644
---- a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
-+++ b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
-@@ -1,4 +1,4 @@
--import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
-+import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
- import { Button } from '@/components/ui/button'
- import { translate } from '@/i18n/i18n'
- import type {
-@@ -40,6 +40,8 @@ type AiVaultPanelHeaderProps = {
-   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
-   onReset: () => void
-   onRefresh: () => void
-+  creatingProposal?: boolean
-+  onCreateProposal?: () => void
- }
-
- export function AiVaultPanelHeader({
-@@ -69,7 +71,9 @@ export function AiVaultPanelHeader({
-   onHideEmptySessionsChange,
-   onSessionLimitChange,
-   onReset,
--  onRefresh
-+  onRefresh,
-+  creatingProposal = false,
-+  onCreateProposal
- }: AiVaultPanelHeaderProps): React.JSX.Element {
-   return (
-     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
-@@ -114,6 +118,21 @@ export function AiVaultPanelHeader({
-           </div>
-         </div>
-         <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
-+          {onCreateProposal ? (
-+            <Button
-+              type="button"
-+              variant="ghost"
-+              size="xs"
-+              aria-label="Prepare managed proposal"
-+              onClick={onCreateProposal}
-+              disabled={creatingProposal}
-+              aria-busy={creatingProposal}
-+              className="h-6 px-1.5 text-[11px]"
-+            >
-+              {creatingProposal ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />}
-+              <span className="@max-[300px]/ai-vault:hidden">Proposal</span>
-+            </Button>
-+          ) : null}
-           <VaultHostScopeMenu
-             executionHostScope={executionHostScope}
-             hostOptions={hostScopeOptions}
-diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
-index e048925..82efd8d 100644
---- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
-+++ b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
-@@ -49,6 +49,7 @@ import {
- import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
- import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
- import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
-+import { requestCodevProposalCreate } from '@/web/codev-proposal-discard'
-
- export default function AiVaultPanel(): React.JSX.Element {
-   const activeWorktreeId = useActiveWorktreeId()
-@@ -88,6 +89,7 @@ export default function AiVaultPanel(): React.JSX.Element {
-     resetViewOptions
-   } = usePersistedAiVaultViewOptions()
-   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-+  const [creatingProposal, setCreatingProposal] = useState(false)
-   const userChangedScopeRef = useRef(false)
-   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
-
-@@ -304,6 +306,27 @@ export default function AiVaultPanel(): React.JSX.Element {
-     })
-   }, [])
-
-+  const createProposal = useCallback(() => {
-+    setCreatingProposal(true)
-+    void requestCodevProposalCreate()
-+      .then((result) => {
-+        if (result === null) return
-+        if (!result.ok) {
-+          throw new Error(result.error)
-+        }
-+        toast.success('Managed proposal prepared', {
-+          description: 'CoDev created an isolated worktree. Reloading it in the native workspace now.'
-+        })
-+        window.setTimeout(() => window.location.reload(), 400)
-+      })
-+      .catch((error: unknown) => {
-+        toast.error('Failed to prepare managed proposal', {
-+          description: error instanceof Error ? error.message : String(error)
-+        })
-+      })
-+      .finally(() => setCreatingProposal(false))
-+  }, [])
-+
-   return (
-     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
-       <AiVaultPanelHeader
-@@ -334,6 +357,8 @@ export default function AiVaultPanel(): React.JSX.Element {
-         onSessionLimitChange={setSessionLimit}
-         onReset={resetViewOptions}
-         onRefresh={() => void refresh({ force: true })}
-+        creatingProposal={creatingProposal}
-+        onCreateProposal={window.__CODEV_EMBEDDED__ ? createProposal : undefined}
-       />
-
-       {error ? (
+diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
+index eae3a54..6ebcb27 100644
+--- a/src/renderer/src/web/main.tsx
++++ b/src/renderer/src/web/main.tsx
+@@ -19,10 +19,16 @@ import {
+ import { installWebPreloadApi } from './web-preload-api'
+ import { I18nProvider } from '../i18n/I18nProvider'
+ import { translate } from '../i18n/i18n'
++import { readCodevBootstrap } from './codev-bootstrap'
+ 
+ const App = lazy(() => import('../App'))
+ 
+ function WebRoot(): React.JSX.Element {
++  const codevBootstrap = useMemo(() => readCodevBootstrap(window.location), [])
++  window.__CODEV_EMBEDDED__ = codevBootstrap !== null
++  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
++  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
++  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
+   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
+   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
+   // the instant save path; mobile/legacy-unknown offers must be shown/probed.

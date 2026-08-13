@@ -60,15 +60,22 @@ describe("discardOrcaManagedProposal", () => {
 
 describe("createOrcaManagedProposal", () => {
   it("creates an isolated managed proposal without sending provider credentials", async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        Response.json({ sessionId: "session-1" }, { status: 201 }),
-      );
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json(
+        {
+          sessionId: "session-1",
+          worktreeId: "c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+        },
+        { status: 201 },
+      ),
+    );
 
     await expect(
       createOrcaManagedProposal("workspace-1", fetcher),
-    ).resolves.toEqual({ ok: true });
+    ).resolves.toEqual({
+      ok: true,
+      worktreeId: "c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+    });
     expect(fetcher).toHaveBeenCalledWith("/api/workspaces/workspace-1/agents", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -77,6 +84,21 @@ describe("createOrcaManagedProposal", () => {
         draft: true,
         attachments: [],
       }),
+    });
+  });
+
+  it("rejects a create response that omits the managed worktree id", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ sessionId: "session-1" }, { status: 201 }),
+      );
+
+    await expect(
+      createOrcaManagedProposal("workspace-1", fetcher),
+    ).resolves.toEqual({
+      ok: false,
+      error: "CoDev did not return a managed proposal worktree.",
     });
   });
 });
