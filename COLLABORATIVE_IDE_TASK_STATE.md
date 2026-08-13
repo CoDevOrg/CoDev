@@ -8,12 +8,11 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle**
+**OI.1 — Add a typed, workspace-bound CoDev request/event bridge to the Orca web runtime with visible connection and reconnect state**
 
 ## Mandatory Orca workspace completion gate
 
-The Current task remains unchanged. After F5.6 completes, the next ordered
-task is **OI.1**, followed by OI.2–OI.12 from
+F5.6 is complete. The Current task is **OI.1**, followed by OI.2–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -51,6 +50,7 @@ workspace as its required final Computer Use evidence.
 | F5.3 — Reject stale checkpoint approval before any merge action                                       | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started.                                              |
 | F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                          |
 | F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
+| F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
 
 ### B0.2 completion evidence
 
@@ -1106,6 +1106,59 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   discarded state without repeating deletion or audit side effects.
 - Next task: F6.1 — define a provider-connection record with encrypted,
   server-only credential handling.
+
+### F5.6 completion evidence
+
+- Completed: 2026-08-13T03:49:00Z.
+- Changed files: `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
+  `apps/web/components/orca-workspace.tsx`,
+  `apps/web/components/orca-workspace.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused CoDev Vitest
+  (`orca-workspace.test.ts`, `agent-session-route.test.ts`,
+  `agent-review.test.ts`) — 15 passed; patched-Orca Vitest
+  (`codev-proposal-discard.test.ts`, `DeleteWorktreeDialog.test.tsx`) — 17
+  passed; patched-Orca `typecheck:web` — passed; targeted Prettier on the
+  CoDev task TypeScript files — passed; `pnpm --dir apps/web lint` — 0 errors,
+  2 pre-existing warnings; `pnpm --dir apps/web typecheck` — passed;
+  `pnpm --dir apps/web build` — passed. Repo-wide `pnpm format:check` remains
+  blocked by pre-existing scheduler Markdown formatting.
+- Validated source commit: `f5a6ed34f45eccf53aab65ea014429fe3b14d996`.
+- Production URL: <https://codev-cq8d8cfn1-yousef20920s-projects.vercel.app>
+  — Vercel Production deployment `dpl_2WBbL8CdH6NX9kvDNkpCpT6BSnbM` (Ready),
+  aliased to <https://codev-xi.vercel.app>. The Git-triggered build cloned
+  `main` at `f5a6ed3`. Computer Use used that Production alias at
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`.
+- Computer Use flow: signed in as yousef20920 on Production, opened the
+  linked `yousef20920/CoDev` workspace at
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`, dismissed the dictation
+  tip, opened the Agents panel, clicked `Prepare managed proposal`, and
+  confirmed a native worktree card titled `Managed proposal` (branch
+  `codev-58ba9775`, later `codev-94d74ff0`). Opened the card's native Delete
+  action, confirmed the `Delete Workspace` dialog targeting that Managed
+  proposal path, and captured the toast `Proposal discarded` with description
+  `CoDev removed the worktree, released its claims, and recorded the audit
+  event.` The native card disappeared; the authenticated agents API showed
+  both sessions with `worktreeStatus: discarded`, empty `claims`, and
+  `discardedAt` set. No credentials or secrets were entered.
+- Screenshots:
+  `artifacts/verification/f5-6/proposal-discarded.png` (Production Orca
+  success toast),
+  `artifacts/verification/f5-6/delete-worktree-dialog.png` (native Delete
+  Workspace dialog for the Managed proposal card),
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/f5-6-proposal-discarded.png`,
+  and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/f5-6-delete-worktree-dialog.png`.
+- Known limitations: Orca Session History still lists `No agent sessions
+  found` after discard because discarded sessions are not shown there; the
+  attributed discarded state is the native toast plus the discarded worktree
+  status returned by the workspace-bound agents API. The native confirmation
+  copy is `Delete Workspace` for this card type; the same dialog is Orca's
+  Delete Worktree confirmation and is intercepted for CoDev-managed
+  proposals.
+- Next task: OI.1 — add a typed, workspace-bound CoDev request/event bridge
+  to the Orca web runtime with visible connection and reconnect state.
 
 ## Blocked tasks
 
