@@ -1251,6 +1251,23 @@ The invitee is not a workspace member.` Membership remained owner-only.
 
 ## Blocked tasks
 
+- **OI.3 — Production Computer Use environment blocker 2026-08-13T11:07:22Z:**
+  The OI.3 source already on `main` and the scoped fixture-selector repair in
+  `05676183dece4f3f9a8e37af7026d0a10272eb34` passed local verification:
+  focused bridge/workspace tests (14), patched Orca build/typecheck,
+  `pnpm format:check`, `pnpm lint` (0 errors, 2 existing warnings),
+  `pnpm typecheck`, `pnpm test` (222 passed, 1 skipped), `pnpm build`,
+  `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and
+  `git diff --check`. Vercel Git-triggered Production deployment
+  `dpl_Fyxx6QBSZGXBr1YHKcRS1pEtwKSg` is Ready at
+  <https://codev-7zg1mk3ba-yousef20920s-projects.vercel.app>; its build log
+  confirms `main` commit `0567618`. Computer Use could not start the required
+  authenticated `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603` Orca flow
+  because macOS reported: `The Mac is locked and automatic unlock could not
+unlock it. Ask the user to unlock the Mac manually before continuing.` No
+  workspace state changed and no screenshot was captured. Current task remains
+  OI.3; do not begin OI.4.
+
 - **OI.3 — run blocked 2026-08-13T10:03:00Z:** The narrow fixture-selector
   repair was locally validated (`apps/web/tests/e2e/verification-fixture.spec.ts`
   — 28 passed; the OI.3 member-role route and typed bridge tests — 8 passed),
