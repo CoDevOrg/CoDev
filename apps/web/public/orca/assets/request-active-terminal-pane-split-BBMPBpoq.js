@@ -1,0 +1,1 @@
+import{a as e}from"./terminal-DKwUj_m0.js";function t(t){window.dispatchEvent(new CustomEvent(e,{detail:t}))}export{t};

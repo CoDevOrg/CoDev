@@ -392,6 +392,217 @@ index 6bbe058..c5befa7 100644
        worktreeIds.length,
        worktreeId,
        worktrees
+diff --git a/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.test.tsx b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.test.tsx
+new file mode 100644
+index 0000000..1e7e790
+--- /dev/null
++++ b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.test.tsx
+@@ -0,0 +1,41 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevBridgeStatusView } from './CodevBridgeStatusSegment'
++
++describe('CodevBridgeStatusView', () => {
++  it('renders connected status for the workspace-bound CoDev bridge', () => {
++    const html = renderToStaticMarkup(
++      <CodevBridgeStatusView
++        snapshot={{
++          status: 'connected',
++          label: 'CoDev · Connected',
++          detail: 'Workspace-bound request bridge is connected.'
++        }}
++        compact={false}
++        iconOnly={false}
++        onInterrupt={() => undefined}
++        onReconnect={() => undefined}
++      />
++    )
++    expect(html).toContain('CoDev bridge connection status: Connected')
++    expect(html).toContain('CoDev · Connected')
++  })
++
++  it('renders reconnect after an interrupted bridge', () => {
++    const html = renderToStaticMarkup(
++      <CodevBridgeStatusView
++        snapshot={{
++          status: 'disconnected',
++          label: 'CoDev · Disconnected',
++          detail: 'Workspace-bound request bridge is interrupted.'
++        }}
++        compact={false}
++        iconOnly={false}
++        onInterrupt={() => undefined}
++        onReconnect={() => undefined}
++      />
++    )
++    expect(html).toContain('CoDev bridge connection status: Disconnected')
++    expect(html).toContain('CoDev · Disconnected')
++  })
++})
+diff --git a/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
+new file mode 100644
+index 0000000..5b97d6b
+--- /dev/null
++++ b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
+@@ -0,0 +1,132 @@
++import { Loader2, Radio } from 'lucide-react'
++import { useSyncExternalStore, type JSX } from 'react'
++import {
++  DropdownMenu,
++  DropdownMenuContent,
++  DropdownMenuTrigger
++} from '@/components/ui/dropdown-menu'
++import {
++  getCodevBridgeSnapshot,
++  interruptCodevBridge,
++  reconnectCodevBridge,
++  subscribeCodevBridge,
++  type CodevBridgeSnapshot
++} from '@/web/codev-bridge'
++
++function statusDotClass(status: CodevBridgeSnapshot['status']): string {
++  if (status === 'connected') {
++    return 'bg-emerald-500'
++  }
++  if (status === 'reconnecting') {
++    return 'bg-yellow-500'
++  }
++  return 'bg-muted-foreground/40'
++}
++
++export function CodevBridgeStatusView({
++  snapshot,
++  compact,
++  iconOnly,
++  onInterrupt,
++  onReconnect
++}: {
++  snapshot: CodevBridgeSnapshot
++  compact: boolean
++  iconOnly: boolean
++  onInterrupt: () => void
++  onReconnect: () => void
++}): JSX.Element {
++  const actionLabel =
++    snapshot.status === 'connected'
++      ? 'Disconnect'
++      : snapshot.status === 'disconnected'
++        ? 'Reconnect'
++        : null
++
++  return (
++    <DropdownMenu>
++      <DropdownMenuTrigger asChild>
++        <button
++          type="button"
++          className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
++          aria-label={`CoDev bridge connection status: ${snapshot.status === 'connected' ? 'Connected' : snapshot.status === 'reconnecting' ? 'Reconnecting' : 'Disconnected'}`}
++        >
++          {iconOnly ? (
++            <span className="inline-flex items-center gap-1">
++              {snapshot.status === 'reconnecting' ? (
++                <Loader2 className="size-3 animate-spin text-yellow-500" />
++              ) : (
++                <Radio className="size-3 text-muted-foreground" />
++              )}
++              <span className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`} />
++            </span>
++          ) : (
++            <span className="inline-flex items-center gap-1.5">
++              {snapshot.status === 'reconnecting' ? (
++                <Loader2 className="size-3 animate-spin text-yellow-500" />
++              ) : (
++                <Radio
++                  className={`size-3 ${snapshot.status === 'connected' ? 'text-emerald-500' : 'text-muted-foreground'}`}
++                />
++              )}
++              {!compact ? (
++                <span className="text-[11px] text-muted-foreground">{snapshot.label}</span>
++              ) : null}
++              <span className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`} />
++            </span>
++          )}
++        </button>
++      </DropdownMenuTrigger>
++      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-72 p-1">
++        <div className="flex items-center gap-2.5 px-2 py-1.5">
++          <span className={`size-1.5 shrink-0 rounded-full ${statusDotClass(snapshot.status)}`} />
++          <div className="min-w-0 flex-1">
++            <div className="truncate text-[12px] font-medium">CoDev</div>
++            <div className="truncate text-[10px] text-muted-foreground">{snapshot.detail}</div>
++          </div>
++          {actionLabel ? (
++            <button
++              type="button"
++              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
++              onClick={() => {
++                if (snapshot.status === 'connected') {
++                  onInterrupt()
++                  return
++                }
++                onReconnect()
++              }}
++            >
++              {actionLabel}
++            </button>
++          ) : null}
++        </div>
++      </DropdownMenuContent>
++    </DropdownMenu>
++  )
++}
++
++export function CodevBridgeStatusSegment({
++  compact,
++  iconOnly
++}: {
++  compact: boolean
++  iconOnly: boolean
++}): JSX.Element | null {
++  const snapshot = useSyncExternalStore(
++    subscribeCodevBridge,
++    getCodevBridgeSnapshot,
++    getCodevBridgeSnapshot
++  )
++  if (typeof window !== 'undefined' && !window.__CODEV_EMBEDDED__) {
++    return null
++  }
++  return (
++    <CodevBridgeStatusView
++      snapshot={snapshot}
++      compact={compact}
++      iconOnly={iconOnly}
++      onInterrupt={interruptCodevBridge}
++      onReconnect={reconnectCodevBridge}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/status-bar/StatusBar.tsx b/src/renderer/src/components/status-bar/StatusBar.tsx
+index 9d7534e..fb66fc5 100644
+--- a/src/renderer/src/components/status-bar/StatusBar.tsx
++++ b/src/renderer/src/components/status-bar/StatusBar.tsx
+@@ -124,6 +124,11 @@ const PortsStatusSegment = lazyWithRetry(() =>
+ const SshStatusSegment = lazyWithRetry(() =>
+   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+ )
++const CodevBridgeStatusSegment = lazyWithRetry(() =>
++  import('./CodevBridgeStatusSegment').then((module) => ({
++    default: module.CodevBridgeStatusSegment
++  }))
++)
+ 
+ export type CodexStatusRuntimeTarget = {
+   runtime: 'host' | 'wsl'
+@@ -2358,6 +2363,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
+             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
+           ) : null}
+           {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
++          {typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? (
++            <CodevBridgeStatusSegment compact={compact} iconOnly={iconOnly} />
++          ) : null}
+           {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+         </React.Suspense>
+         {showFloatingTerminalToggle && (
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
 index 5ecc70a..31b7c0e 100644
 --- a/src/renderer/src/env.d.ts
@@ -491,6 +702,339 @@ index 0000000..d3cbea7
 +  }
 +
 +  return { projectPath, projectKind, ...(projectName ? { projectName } : {}) }
++}
+diff --git a/src/renderer/src/web/codev-bridge.test.ts b/src/renderer/src/web/codev-bridge.test.ts
+new file mode 100644
+index 0000000..7e44659
+--- /dev/null
++++ b/src/renderer/src/web/codev-bridge.test.ts
+@@ -0,0 +1,79 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { createCodevBridge } from './codev-bridge'
++
++type Posted = { data: { type: string; generation: number }; origin: string }
++
++function createHost() {
++  const listeners = new Set<(event: MessageEvent) => void>()
++  const posted: Posted[] = []
++  const host = {
++    __CODEV_EMBEDDED__: true,
++    location: { origin: 'https://codev.example' },
++    parent: {
++      postMessage(data: unknown, origin: string) {
++        posted.push({ data: data as { type: string; generation: number }, origin })
++      }
++    },
++    addEventListener(_type: string, listener: EventListener) {
++      listeners.add(listener as (event: MessageEvent) => void)
++    },
++    removeEventListener(_type: string, listener: EventListener) {
++      listeners.delete(listener as (event: MessageEvent) => void)
++    }
++  }
++  return {
++    host,
++    posted,
++    ack(generation = posted.at(-1)?.data.generation ?? 1) {
++      const event = {
++        origin: 'https://codev.example',
++        data: { type: 'codev:bridge-hello-ack', generation, workspaceBound: true }
++      } as MessageEvent
++      for (const listener of listeners) {
++        listener(event)
++      }
++    }
++  }
++}
++
++describe('createCodevBridge', () => {
++  afterEach(() => {
++    vi.useRealTimers()
++  })
++
++  it('shows connected status after a workspace-bound hello ack', () => {
++    const { host, posted, ack } = createHost()
++    const bridge = createCodevBridge(host)
++
++    bridge.start()
++    expect(bridge.getSnapshot().label).toBe('CoDev · Reconnecting')
++    expect(posted[0]).toEqual({
++      data: { type: 'codev:bridge-hello', generation: 1 },
++      origin: 'https://codev.example'
++    })
++
++    ack()
++    expect(bridge.getSnapshot()).toMatchObject({
++      status: 'connected',
++      label: 'CoDev · Connected'
++    })
++    bridge.dispose()
++  })
++
++  it('interrupts the bridge and recovers after reconnect', () => {
++    const { host, posted, ack } = createHost()
++    const bridge = createCodevBridge(host)
++    bridge.start()
++    ack()
++
++    bridge.interrupt()
++    expect(posted.at(-1)?.data).toEqual({ type: 'codev:bridge-interrupt', generation: 1 })
++    expect(bridge.getSnapshot().label).toBe('CoDev · Disconnected')
++
++    bridge.reconnect()
++    expect(posted.at(-1)?.data).toEqual({ type: 'codev:bridge-hello', generation: 2 })
++    ack(2)
++    expect(bridge.getSnapshot().status).toBe('connected')
++    bridge.dispose()
++  })
++})
+diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
+new file mode 100644
+index 0000000..56a60e3
+--- /dev/null
++++ b/src/renderer/src/web/codev-bridge.ts
+@@ -0,0 +1,242 @@
++export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
++
++export type CodevBridgeSnapshot = {
++  status: CodevBridgeStatus
++  label: string
++  detail: string
++}
++
++type CodevBridgeParentMessage =
++  | { type: 'codev:bridge-hello-ack'; generation: number; workspaceBound: true }
++  | { type: 'codev:bridge-pong'; generation: number }
++
++type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
++  __CODEV_EMBEDDED__?: boolean
++  location: { origin: string }
++  parent: { postMessage: (data: unknown, origin: string) => void }
++}
++
++const DISCONNECTED_SNAPSHOT: CodevBridgeSnapshot = {
++  status: 'disconnected',
++  label: 'CoDev · Disconnected',
++  detail: 'Workspace-bound request bridge is interrupted.'
++}
++
++function snapshotFor(status: CodevBridgeStatus): CodevBridgeSnapshot {
++  if (status === 'connected') {
++    return {
++      status,
++      label: 'CoDev · Connected',
++      detail: 'Workspace-bound request bridge is connected.'
++    }
++  }
++  if (status === 'reconnecting') {
++    return {
++      status,
++      label: 'CoDev · Reconnecting',
++      detail: 'Workspace-bound request bridge is recovering.'
++    }
++  }
++  return DISCONNECTED_SNAPSHOT
++}
++
++function isParentMessage(data: unknown, generation: number): data is CodevBridgeParentMessage {
++  if (!data || typeof data !== 'object' || !('type' in data)) {
++    return false
++  }
++  const message = data as { type?: unknown; generation?: unknown; workspaceBound?: unknown }
++  if (message.generation !== generation) {
++    return false
++  }
++  if (message.type === 'codev:bridge-hello-ack') {
++    return message.workspaceBound === true
++  }
++  return message.type === 'codev:bridge-pong'
++}
++
++export function createCodevBridge(host: CodevBridgeHost): {
++  getSnapshot: () => CodevBridgeSnapshot
++  subscribe: (listener: () => void) => () => void
++  start: () => void
++  interrupt: () => void
++  reconnect: () => void
++  dispose: () => void
++} {
++  let generation = 0
++  let status: CodevBridgeStatus = 'disconnected'
++  let pingTimer: ReturnType<typeof setInterval> | null = null
++  let pongTimer: ReturnType<typeof setTimeout> | null = null
++  let helloTimer: ReturnType<typeof setTimeout> | null = null
++  let started = false
++  const listeners = new Set<() => void>()
++
++  const emit = (): void => {
++    for (const listener of listeners) {
++      listener()
++    }
++  }
++
++  const setStatus = (next: CodevBridgeStatus): void => {
++    if (status === next) {
++      return
++    }
++    status = next
++    emit()
++  }
++
++  const clearTimers = (): void => {
++    if (pingTimer) {
++      clearInterval(pingTimer)
++      pingTimer = null
++    }
++    if (pongTimer) {
++      clearTimeout(pongTimer)
++      pongTimer = null
++    }
++    if (helloTimer) {
++      clearTimeout(helloTimer)
++      helloTimer = null
++    }
++  }
++
++  const post = (data: { type: string; generation: number }): void => {
++    host.parent.postMessage(data, host.location.origin)
++  }
++
++  const expectPong = (): void => {
++    if (pongTimer) {
++      clearTimeout(pongTimer)
++    }
++    pongTimer = setTimeout(() => {
++      if (status !== 'connected') {
++        return
++      }
++      setStatus('reconnecting')
++      clearTimers()
++      sendHello()
++    }, 2500)
++  }
++
++  const startPinging = (): void => {
++    if (pingTimer) {
++      clearInterval(pingTimer)
++    }
++    pingTimer = setInterval(() => {
++      if (status !== 'connected') {
++        return
++      }
++      post({ type: 'codev:bridge-ping', generation })
++      expectPong()
++    }, 4000)
++  }
++
++  const sendHello = (): void => {
++    generation += 1
++    setStatus('reconnecting')
++    post({ type: 'codev:bridge-hello', generation })
++    if (helloTimer) {
++      clearTimeout(helloTimer)
++    }
++    helloTimer = setTimeout(() => {
++      if (status === 'reconnecting') {
++        sendHello()
++      }
++    }, 2500)
++  }
++
++  const onMessage = (event: Event): void => {
++    const message = event as MessageEvent
++    if (message.origin !== host.location.origin || !isParentMessage(message.data, generation)) {
++      return
++    }
++    if (message.data.type === 'codev:bridge-hello-ack') {
++      if (helloTimer) {
++        clearTimeout(helloTimer)
++        helloTimer = null
++      }
++      setStatus('connected')
++      startPinging()
++      return
++    }
++    if (pongTimer) {
++      clearTimeout(pongTimer)
++      pongTimer = null
++    }
++  }
++
++  return {
++    getSnapshot: () => snapshotFor(status),
++    subscribe(listener) {
++      listeners.add(listener)
++      return () => {
++        listeners.delete(listener)
++      }
++    },
++    start() {
++      if (!host.__CODEV_EMBEDDED__ || host.parent === (host as unknown as Window) || started) {
++        return
++      }
++      started = true
++      host.addEventListener('message', onMessage)
++      sendHello()
++    },
++    interrupt() {
++      if (!started || status === 'disconnected') {
++        return
++      }
++      const currentGeneration = generation
++      clearTimers()
++      post({ type: 'codev:bridge-interrupt', generation: currentGeneration })
++      setStatus('disconnected')
++    },
++    reconnect() {
++      if (!started) {
++        this.start()
++        return
++      }
++      if (status === 'connected' || status === 'reconnecting') {
++        return
++      }
++      sendHello()
++    },
++    dispose() {
++      clearTimers()
++      host.removeEventListener('message', onMessage)
++      started = false
++      status = 'disconnected'
++    }
++  }
++}
++
++let singleton: ReturnType<typeof createCodevBridge> | null = null
++
++export function startCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): void {
++  if (!singleton) {
++    singleton = createCodevBridge(host)
++  }
++  singleton.start()
++}
++
++export function getCodevBridgeSnapshot(): CodevBridgeSnapshot {
++  return singleton?.getSnapshot() ?? DISCONNECTED_SNAPSHOT
++}
++
++export function subscribeCodevBridge(listener: () => void): () => void {
++  if (!singleton) {
++    return () => undefined
++  }
++  return singleton.subscribe(listener)
++}
++
++export function interruptCodevBridge(): void {
++  singleton?.interrupt()
++}
++
++export function reconnectCodevBridge(): void {
++  singleton?.reconnect()
++}
++
++export function resetCodevBridgeForTests(): void {
++  singleton?.dispose()
++  singleton = null
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
@@ -1269,14 +1813,15 @@ index 0000000..05d7117
 +  })
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..6ebcb27 100644
+index eae3a54..2bb5bf4 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,16 @@ import {
+@@ -19,10 +19,20 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
 +import { readCodevBootstrap } from './codev-bootstrap'
++import { startCodevBridge } from './codev-bridge'
  
  const App = lazy(() => import('../App'))
  
@@ -1286,6 +1831,9 @@ index eae3a54..6ebcb27 100644
 +  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
 +  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
++  if (codevBootstrap !== null) {
++    startCodevBridge()
++  }
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.

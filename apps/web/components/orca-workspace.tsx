@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  isCodevBridgeClientMessage,
+  replyToCodevBridgeMessage,
+  type CodevParentBridgeSession,
+} from "@/components/codev-parent-bridge";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
@@ -33,7 +39,10 @@ type CodevOrcaMessage =
       requestId: string;
       worktreeId: string;
     }
-  | { type: "codev:create-proposal"; requestId: string };
+  | { type: "codev:create-proposal"; requestId: string }
+  | { type: "codev:bridge-hello"; generation: number }
+  | { type: "codev:bridge-ping"; generation: number }
+  | { type: "codev:bridge-interrupt"; generation: number };
 
 type CodevProposalDiscardResult =
   | { managed: false }
@@ -561,6 +570,9 @@ export function OrcaWorkspace({
   const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
+  const codevBridgeSessionRef = useRef<CodevParentBridgeSession>(
+    EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  );
 
   useEffect(() => {
     return () => {
@@ -576,6 +588,20 @@ export function OrcaWorkspace({
         !event.data ||
         typeof event.data !== "object"
       ) {
+        return;
+      }
+      if (isCodevBridgeClientMessage(event.data)) {
+        const { session, reply } = replyToCodevBridgeMessage(
+          codevBridgeSessionRef.current,
+          event.data,
+        );
+        codevBridgeSessionRef.current = session;
+        if (reply) {
+          iframeRef.current?.contentWindow?.postMessage(
+            reply,
+            window.location.origin,
+          );
+        }
         return;
       }
       if (event.data.type === "codev:choose-repository") {

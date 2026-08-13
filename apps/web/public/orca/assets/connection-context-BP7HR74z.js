@@ -1,0 +1,1 @@
+import{$u as e,It as t,Lt as n,s as r}from"./web-index-BWpAxozO.js";function i(e){return n(r.getState(),e)}function a(t){return!t||e(t)?.type===`folder`?!0:i(t)!==void 0}function o(e,n){return t(r.getState(),e,n)}export{o as n,a as r,i as t};
