@@ -10,26 +10,6 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 **OI.3 — Put member-role management in Orca Workspace Options and refresh native control availability live**
 
-## Run blocker — 2026-08-13
-
-This run stopped before switching branches, pulling, inspecting OI.3, or
-starting implementation because `git status --short` was not clean at the
-required initial check. The pre-existing modified files are:
-
-- `apps/web/components/codev-parent-bridge.test.ts`
-- `apps/web/components/codev-parent-bridge.ts`
-- `apps/web/components/orca-workspace.tsx`
-- `apps/web/lib/workspaces.test.ts`
-- `apps/web/lib/workspaces.ts`
-- `apps/web/next-env.d.ts`
-
-These changes are not attributable to this run and were left untouched. The
-Current task remains OI.3.
-
-The targeted `pnpm exec prettier --check COLLABORATIVE_IDE_TASK_STATE.md`
-check also failed only on pre-existing formatting in historical evidence
-entries outside this run's addition; no broad reformat was applied.
-
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. The Current task is **OI.3**, followed by OI.4–OI.12 from
@@ -1270,18 +1250,6 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   refresh native control availability live.
 
 ## Blocked tasks
-
-- **OI.3 — local verification blocker 2026-08-13:** Focused OI.3 bridge,
-  workspace, lint, typecheck, and production-build checks passed, but the
-  required full `pnpm test:e2e` suite failed before Production deployment.
-  The unrelated existing B0.3 fixture test
-  `tests/e2e/verification-fixture.spec.ts:7` uses
-  `page.getByText("Casey Rivera", { exact: true })`, which now resolves to two
-  visible fixture elements (`Agent slot 3` and `Ready-to-use members`) and
-  fails Playwright strict mode. Result: 31 passed, 1 skipped, 1 failed.
-  `pnpm format:check` is also still blocked by historical formatting in this
-  ledger, recorded above. OI.3 remains Current; no OI.3 source, maintained
-  Orca patch, or regenerated Orca bundle was committed or pushed.
 
 - **OI.2 — run blocked 2026-08-13T05:02:12Z:** The required initial
   `git status --short` found pre-existing changes outside a safely attributable
