@@ -1162,6 +1162,14 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.1 — run blocked 2026-08-13T04:01:08Z:** The required initial
+  `git status --short` found an unrelated modification to
+  `apps/web/next-env.d.ts` (its generated route reference changed from
+  `./.next/dev/types/routes.d.ts` to `./.next/types/routes.d.ts`). Per the
+  run policy, it was not modified, staged, or included. No OI.1 inspection,
+  implementation, deployment, or Computer Use verification was started;
+  Current task remains OI.1.
+
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T03:02:37Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS again reported: `The Mac is
