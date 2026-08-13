@@ -441,12 +441,12 @@ index 0000000..1e7e790
 +})
 diff --git a/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
 new file mode 100644
-index 0000000..c2dbf91
+index 0000000..acaf3b5
 --- /dev/null
 +++ b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,139 @@
 +import { Loader2, Radio } from 'lucide-react'
-+import { useSyncExternalStore, type JSX } from 'react'
++import { useEffect, useSyncExternalStore, type JSX } from 'react'
 +import {
 +  DropdownMenu,
 +  DropdownMenuContent,
@@ -561,14 +561,16 @@ index 0000000..c2dbf91
 +  iconOnly: boolean
 +}): JSX.Element | null {
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
-+  if (embedded) {
-+    startCodevBridge()
-+  }
 +  const snapshot = useSyncExternalStore(
 +    subscribeCodevBridge,
 +    getCodevBridgeSnapshot,
 +    getCodevBridgeSnapshot
 +  )
++  useEffect(() => {
++    if (embedded) {
++      startCodevBridge()
++    }
++  }, [embedded])
 +  if (!embedded) {
 +    return null
 +  }
@@ -706,10 +708,10 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-bridge.test.ts b/src/renderer/src/web/codev-bridge.test.ts
 new file mode 100644
-index 0000000..7e44659
+index 0000000..a88fd34
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.test.ts
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,95 @@
 +import { afterEach, describe, expect, it, vi } from 'vitest'
 +import { createCodevBridge } from './codev-bridge'
 +
@@ -788,13 +790,29 @@ index 0000000..7e44659
 +    expect(bridge.getSnapshot().status).toBe('connected')
 +    bridge.dispose()
 +  })
++
++  it('returns a referentially stable snapshot while status is unchanged', () => {
++    const { host, ack } = createHost()
++    const bridge = createCodevBridge(host)
++    expect(bridge.getSnapshot()).toBe(bridge.getSnapshot())
++
++    bridge.start()
++    expect(bridge.getSnapshot()).toBe(bridge.getSnapshot())
++    expect(bridge.getSnapshot().status).toBe('reconnecting')
++
++    ack()
++    const connected = bridge.getSnapshot()
++    expect(connected).toBe(bridge.getSnapshot())
++    expect(connected.status).toBe('connected')
++    bridge.dispose()
++  })
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..6bda915
+index 0000000..9905c8f
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,241 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -813,28 +831,26 @@ index 0000000..6bda915
 +  parent: { postMessage: (data: unknown, origin: string) => void }
 +}
 +
-+const DISCONNECTED_SNAPSHOT: CodevBridgeSnapshot = {
-+  status: 'disconnected',
-+  label: 'CoDev · Disconnected',
-+  detail: 'Workspace-bound request bridge is interrupted.'
++const SNAPSHOTS: Record<CodevBridgeStatus, CodevBridgeSnapshot> = {
++  connected: {
++    status: 'connected',
++    label: 'CoDev · Connected',
++    detail: 'Workspace-bound request bridge is connected.'
++  },
++  reconnecting: {
++    status: 'reconnecting',
++    label: 'CoDev · Reconnecting',
++    detail: 'Workspace-bound request bridge is recovering.'
++  },
++  disconnected: {
++    status: 'disconnected',
++    label: 'CoDev · Disconnected',
++    detail: 'Workspace-bound request bridge is interrupted.'
++  }
 +}
 +
 +function snapshotFor(status: CodevBridgeStatus): CodevBridgeSnapshot {
-+  if (status === 'connected') {
-+    return {
-+      status,
-+      label: 'CoDev · Connected',
-+      detail: 'Workspace-bound request bridge is connected.'
-+    }
-+  }
-+  if (status === 'reconnecting') {
-+    return {
-+      status,
-+      label: 'CoDev · Reconnecting',
-+      detail: 'Workspace-bound request bridge is recovering.'
-+    }
-+  }
-+  return DISCONNECTED_SNAPSHOT
++  return SNAPSHOTS[status]
 +}
 +
 +function isParentMessage(data: unknown, generation: number): data is CodevBridgeParentMessage {
