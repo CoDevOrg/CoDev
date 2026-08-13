@@ -8,11 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.3 — Put member-role management in Orca Workspace Options and refresh native control availability live**
+**OI.4 — Render named presence and active-file state in Orca's editor chrome**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, and OI.2 are complete. The Current task is **OI.3**, followed by OI.4–OI.12 from
+F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
+owner's direction**, with its required two-member role-change verification
+remaining outstanding. The Current task is **OI.4**, followed by OI.5–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -1250,6 +1252,13 @@ The invitee is not a workspace member.` Membership remained owner-only.
   refresh native control availability live.
 
 ## Blocked tasks
+
+- **OI.3 — deferred by owner 2026-08-13T14:22:00Z:** The owner explicitly
+  authorized advancing to OI.4 without claiming OI.3 complete. The native
+  Member roles control is deployed and reachable in Production, but its required
+  Collaborator-to-Viewer live-control verification remains outstanding because
+  the available authenticated workspace has no additional member. Resume and
+  verify OI.3 when a Collaborator is available.
 
 - **OI.3 — run blocked 2026-08-13T14:21:35Z:** Production Orca is now
   reachable and its CoDev bridge reports Connected in authenticated workspace
