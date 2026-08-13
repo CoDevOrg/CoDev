@@ -1251,6 +1251,18 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.3 — run blocked 2026-08-13T06:06:43Z:** The first OI.3 implementation
+  attempt added the authenticated member-role endpoint and typed bridge path;
+  focused CoDev Vitest passed (17 tests). The maintained Orca patch validation
+  then failed twice before any assets were rebuilt: `pnpm orca:web` reported
+  `error: corrupt patch at line 620`, then after correcting that new-file hunk
+  count it reported `error: corrupt patch at line 786` in the Workspace
+  Options patch hunk. Per the two-unsuccessful-attempt limit, no source commit,
+  deployment, or Computer Use verification was started. The uncommitted OI.3
+  source/patch changes remain unstaged for repair in a future run; this ledger
+  update records only the blocker. Current task remains OI.3; do not begin
+  OI.4.
+
 - **OI.2 — run blocked 2026-08-13T05:02:12Z:** The required initial
   `git status --short` found pre-existing changes outside a safely attributable
   OI.2 task scope: the generated `apps/web/next-env.d.ts` route reference and
