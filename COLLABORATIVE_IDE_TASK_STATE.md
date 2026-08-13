@@ -1205,6 +1205,16 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.2 — run blocked 2026-08-13T05:02:12Z:** The required initial
+  `git status --short` found pre-existing changes outside a safely attributable
+  OI.2 task scope: the generated `apps/web/next-env.d.ts` route reference and
+  534 deleted compiled files under `apps/web/public/orca/assets/`. Several
+  accompanying source edits appear invite-related, but they also predate this
+  run and cannot be safely adopted while the compiled-asset changes conflict
+  with the maintained-patch-only policy. Per the run policy, none of these
+  files was modified, staged, or included. No OI.2 implementation, deployment,
+  or Computer Use verification was started; Current task remains OI.2.
+
 - **OI.2 — run blocked 2026-08-13T04:55:19Z:** The required initial
   `git status --short` found an unrelated modification to
   `apps/web/next-env.d.ts` (its generated route reference changed from
