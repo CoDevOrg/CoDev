@@ -1251,6 +1251,19 @@ The invitee is not a workspace member.` Membership remained owner-only.
 
 ## Blocked tasks
 
+- **OI.3 — run blocked 2026-08-13T07:22:00Z:** Current `main` commit
+  `d6d93d2f092dec87bde3196c6a48dfaa3e4d5ffa` passes local
+  `pnpm format:check`, but its GitHub Actions CI run
+  <https://github.com/yousef20920/CoDev/actions/runs/31676622629> fails in
+  `pnpm test:e2e` before a Vercel Production deployment can be created. The
+  failure is the pre-existing B0.3 fixture assertion at
+  `apps/web/tests/e2e/verification-fixture.spec.ts:27`: exact text
+  `Casey Rivera` now resolves to both Agent slot 3 and Ready-to-use members
+  (31 passed, 1 failed). The linked Vercel CLI project lists no deployment for
+  this `main` commit, so no Production URL, authenticated Orca role-change
+  flow, or screenshot evidence exists. Current task remains OI.3; do not
+  begin OI.4.
+
 - **OI.3 — run blocked 2026-08-13T07:09:00Z:** Implementation commit
   `7ec36a4` was pushed after focused bridge, API, and Orca build checks passed.
   GitHub Actions `verify` then failed before any Vercel production deployment:
