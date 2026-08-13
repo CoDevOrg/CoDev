@@ -1251,6 +1251,18 @@ The invitee is not a workspace member.` Membership remained owner-only.
 
 ## Blocked tasks
 
+- **OI.3 — run blocked 2026-08-13T12:02:19Z:** The Current task remains
+  blocked on the required Production Computer Use verification. The prior
+  implementation and selector-repair commit
+  `05676183dece4f3f9a8e37af7026d0a10272eb34` already passed the full local
+  gate and deployed Ready at
+  <https://codev-7zg1mk3ba-yousef20920s-projects.vercel.app>, but its required
+  authenticated Orca flow at
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603` cannot be started while
+  macOS reports that it is locked and cannot be automatically unlocked. No
+  workspace state changed and no Computer Use screenshot was captured. Current
+  task remains OI.3; do not begin OI.4.
+
 - **OI.3 — Production Computer Use environment blocker 2026-08-13T11:07:22Z:**
   The OI.3 source already on `main` and the scoped fixture-selector repair in
   `05676183dece4f3f9a8e37af7026d0a10272eb34` passed local verification:
