@@ -8,11 +8,11 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.2 — Put invite creation, acceptance status, revocation, and expiry in Orca Workspace Options using the existing authenticated APIs**
+**OI.3 — Put member-role management in Orca Workspace Options and refresh native control availability live**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6 and OI.1 are complete. The Current task is **OI.2**, followed by OI.3–OI.12 from
+F5.6, OI.1, and OI.2 are complete. The Current task is **OI.3**, followed by OI.4–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -52,6 +52,7 @@ workspace as its required final Computer Use evidence.
 | F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
 | F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
 | OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect     | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                     |
+| OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                 | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                     |
 
 ### B0.2 completion evidence
 
@@ -1202,6 +1203,51 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   History is unrelated to this bridge status control.
 - Next task: OI.2 — put invite creation, acceptance status, revocation, and
   expiry in Orca Workspace Options using the existing authenticated APIs.
+
+### OI.2 completion evidence
+
+- Completed: 2026-08-13T05:06:00Z.
+- Changed files: `apps/web/lib/workspaces.ts`,
+  `apps/web/lib/workspaces.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/invites/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/orca-workspace.tsx`,
+  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused CoDev Vitest (`workspaces.test.ts`,
+  `codev-parent-bridge.test.ts`, `orca-workspace.test.ts`) — 25 passed;
+  patched-Orca Vitest (`codev-bridge.test.ts`,
+  `CodevWorkspaceInvitesSection.test.tsx`) — 6 passed; patched-Orca
+  `typecheck:web` — passed; `pnpm --dir apps/web lint` — 0 errors, 2
+  pre-existing warnings; `pnpm --dir apps/web typecheck` — passed;
+  `pnpm --dir apps/web build` — passed.
+- Validated source commit: `fbe4a9750983bb6303146dff77e055c064483621`.
+- Production URL: <https://codev-j974zsa4a-yousef20920s-projects.vercel.app>
+  — Vercel Production deployment `dpl_3cZQMA6xyWbYGnd3HZmbRYxtDdnh` (Ready),
+  aliased to <https://codev-xi.vercel.app>. Computer Use used that Production
+  alias at `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603`.
+- Computer Use flow: opened the authenticated `yousef20920/CoDev` workspace,
+  opened native Orca Settings (General), and used the Workspace Invites
+  section. Members showed `yousef Abdelhadi @yousef20920 · Maintainer ·
+  Member` with `No additional members have joined.` Created a Collaborator
+  link invite; the panel showed `Invite status: Pending`, a 24-hour expiry,
+  and `Revoke invite`. Revoked it; the panel showed `Invite status: Revoked.
+  The invitee is not a workspace member.` Membership remained owner-only.
+  No credentials or secrets were entered.
+- Screenshots:
+  `artifacts/verification/oi-2/invite-pending.png`,
+  `artifacts/verification/oi-2/invite-revoked.png` (revoke/membership edge),
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-2-invite-pending.png`,
+  and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-2-invite-revoked.png`.
+- Known limitations: expiry is shown from the existing 24-hour invite
+  contract; Production verification used revoke rather than waiting for
+  expiry. TestSprite cannot open this authenticated workspace (the linked
+  project account has 0 workspaces and 404s the workspace URL). Invite URLs
+  include a single-use token and were not copied into this ledger.
+- Next task: OI.3 — put member-role management in Orca Workspace Options and
+  refresh native control availability live.
 
 ## Blocked tasks
 
