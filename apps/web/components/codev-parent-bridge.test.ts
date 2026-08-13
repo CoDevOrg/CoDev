@@ -152,4 +152,67 @@ describe("codev parent bridge", () => {
       }),
     ).toBe(false);
   });
+
+  it("updates a member role only through the typed workspace-bound bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const memberUserId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json({
+        members: [
+          {
+            userId: memberUserId,
+            login: "jordan",
+            name: "Jordan Lee",
+            accessRole: "viewer",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-member-update",
+          method: "members.update",
+          params: { memberUserId, accessRole: "viewer" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { members: [{ login: "jordan", accessRole: "viewer" }] },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      `/api/workspaces/workspace-1/members/${memberUserId}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accessRole: "viewer" }),
+      },
+    );
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-invalid-member-update",
+          method: "members.update",
+          params: { memberUserId: "not-a-member", accessRole: "viewer" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: "A valid workspace member is required.",
+    });
+  });
 });

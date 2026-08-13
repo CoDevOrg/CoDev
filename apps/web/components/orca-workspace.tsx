@@ -49,7 +49,11 @@ type CodevOrcaMessage =
       type: "codev:bridge-request";
       generation: number;
       requestId: string;
-      method: "invites.list" | "invites.create" | "invites.revoke";
+      method:
+        | "invites.list"
+        | "invites.create"
+        | "invites.revoke"
+        | "members.update";
       params?: Record<string, unknown>;
     };
 

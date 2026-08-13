@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
 import {
+  listWorkspaceMembers,
   updateMemberAccessRole,
   updateMemberCapabilities,
 } from "@/lib/workspaces";
@@ -40,7 +41,17 @@ export async function PATCH(
     } else {
       return apiError(new Error("A member role is required."), 400);
     }
-    return Response.json({ ok: true });
+    const members = await listWorkspaceMembers(workspaceId);
+    return Response.json({
+      ok: true,
+      members: members.map((member) => ({
+        userId: member.userId,
+        login: member.login,
+        name: member.name,
+        role: member.role,
+        accessRole: member.accessRole,
+      })),
+    });
   } catch (error) {
     return apiError(error);
   }

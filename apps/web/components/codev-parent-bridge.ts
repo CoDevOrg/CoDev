@@ -12,16 +12,17 @@ export type CodevBridgeParentMessage =
   | { type: "codev:bridge-hello-ack"; generation: number; workspaceBound: true }
   | { type: "codev:bridge-pong"; generation: number };
 
-export type CodevBridgeInviteMethod =
+export type CodevBridgeMethod =
   | "invites.list"
   | "invites.create"
-  | "invites.revoke";
+  | "invites.revoke"
+  | "members.update";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
   generation: number;
   requestId: string;
-  method: CodevBridgeInviteMethod;
+  method: CodevBridgeMethod;
   params?: Record<string, unknown>;
 };
 
@@ -42,10 +43,11 @@ export const EMPTY_CODEV_PARENT_BRIDGE_SESSION: CodevParentBridgeSession = {
 const INVITE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACCESS_ROLES = ["co_steer", "reviewer", "viewer"] as const;
-const BRIDGE_METHODS = new Set<CodevBridgeInviteMethod>([
+const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "invites.list",
   "invites.create",
   "invites.revoke",
+  "members.update",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -102,7 +104,7 @@ export function isCodevBridgeRequestMessage(
   }
   if (
     typeof message.method !== "string" ||
-    !BRIDGE_METHODS.has(message.method as CodevBridgeInviteMethod)
+    !BRIDGE_METHODS.has(message.method as CodevBridgeMethod)
   ) {
     return false;
   }
@@ -227,6 +229,33 @@ export async function executeCodevBridgeRequest(
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(jsonError(payload, "CoDev could not create this invite."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "members.update") {
+      const memberUserId = request.params?.memberUserId;
+      const accessRole = request.params?.accessRole;
+      if (typeof memberUserId !== "string" || !INVITE_ID.test(memberUserId)) {
+        return fail("A valid workspace member is required.");
+      }
+      if (
+        typeof accessRole !== "string" ||
+        !ACCESS_ROLES.includes(accessRole as (typeof ACCESS_ROLES)[number])
+      ) {
+        return fail("A valid member role is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/members/${memberUserId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ accessRole }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not update this member."));
       }
       return succeed(payload);
     }

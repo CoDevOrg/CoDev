@@ -1,0 +1,1 @@
+import{Hv as e,Kv as t,hv as n}from"./web-index-O_x6cT_z.js";var r=t(e(),1);n();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};
