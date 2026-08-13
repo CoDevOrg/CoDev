@@ -24,7 +24,9 @@ test("B0.3 captures the fixture ready state as reusable evidence", async ({
   await expect(
     memberCard.getByText("Jordan Lee", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Casey Rivera", { exact: true })).toBeVisible();
+  await expect(
+    memberCard.getByText("Casey Rivera", { exact: true }),
+  ).toBeVisible();
   await expect(
     page
       .getByRole("heading", { name: "Seeded files" })
