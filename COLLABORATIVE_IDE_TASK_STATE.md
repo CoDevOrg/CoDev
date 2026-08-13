@@ -1271,6 +1271,18 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.3 — local verification blocker 2026-08-13:** Focused OI.3 bridge,
+  workspace, lint, typecheck, and production-build checks passed, but the
+  required full `pnpm test:e2e` suite failed before Production deployment.
+  The unrelated existing B0.3 fixture test
+  `tests/e2e/verification-fixture.spec.ts:7` uses
+  `page.getByText("Casey Rivera", { exact: true })`, which now resolves to two
+  visible fixture elements (`Agent slot 3` and `Ready-to-use members`) and
+  fails Playwright strict mode. Result: 31 passed, 1 skipped, 1 failed.
+  `pnpm format:check` is also still blocked by historical formatting in this
+  ledger, recorded above. OI.3 remains Current; no OI.3 source, maintained
+  Orca patch, or regenerated Orca bundle was committed or pushed.
+
 - **OI.2 — run blocked 2026-08-13T05:02:12Z:** The required initial
   `git status --short` found pre-existing changes outside a safely attributable
   OI.2 task scope: the generated `apps/web/next-env.d.ts` route reference and
