@@ -441,10 +441,10 @@ index 0000000..1e7e790
 +})
 diff --git a/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
 new file mode 100644
-index 0000000..5b97d6b
+index 0000000..c2dbf91
 --- /dev/null
 +++ b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.tsx
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,137 @@
 +import { Loader2, Radio } from 'lucide-react'
 +import { useSyncExternalStore, type JSX } from 'react'
 +import {
@@ -456,6 +456,7 @@ index 0000000..5b97d6b
 +  getCodevBridgeSnapshot,
 +  interruptCodevBridge,
 +  reconnectCodevBridge,
++  startCodevBridge,
 +  subscribeCodevBridge,
 +  type CodevBridgeSnapshot
 +} from '@/web/codev-bridge'
@@ -559,12 +560,16 @@ index 0000000..5b97d6b
 +  compact: boolean
 +  iconOnly: boolean
 +}): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  if (embedded) {
++    startCodevBridge()
++  }
 +  const snapshot = useSyncExternalStore(
 +    subscribeCodevBridge,
 +    getCodevBridgeSnapshot,
 +    getCodevBridgeSnapshot
 +  )
-+  if (typeof window !== 'undefined' && !window.__CODEV_EMBEDDED__) {
++  if (!embedded) {
 +    return null
 +  }
 +  return (
@@ -578,22 +583,18 @@ index 0000000..5b97d6b
 +  )
 +}
 diff --git a/src/renderer/src/components/status-bar/StatusBar.tsx b/src/renderer/src/components/status-bar/StatusBar.tsx
-index 9d7534e..fb66fc5 100644
+index 9d7534e..eb8829d 100644
 --- a/src/renderer/src/components/status-bar/StatusBar.tsx
 +++ b/src/renderer/src/components/status-bar/StatusBar.tsx
-@@ -124,6 +124,11 @@ const PortsStatusSegment = lazyWithRetry(() =>
- const SshStatusSegment = lazyWithRetry(() =>
-   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
- )
-+const CodevBridgeStatusSegment = lazyWithRetry(() =>
-+  import('./CodevBridgeStatusSegment').then((module) => ({
-+    default: module.CodevBridgeStatusSegment
-+  }))
-+)
- 
- export type CodexStatusRuntimeTarget = {
-   runtime: 'host' | 'wsl'
-@@ -2358,6 +2363,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
+@@ -72,6 +72,7 @@ import {
+ import { UpdateStatusSegment } from './UpdateStatusSegment'
+ import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
+ import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
++import { CodevBridgeStatusSegment } from './CodevBridgeStatusSegment'
+ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+ import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+ import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+@@ -2358,6 +2359,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
              <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
            ) : null}
            {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
@@ -790,10 +791,10 @@ index 0000000..7e44659
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..56a60e3
+index 0000000..6bda915
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,243 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -1006,22 +1007,23 @@ index 0000000..56a60e3
 +
 +let singleton: ReturnType<typeof createCodevBridge> | null = null
 +
-+export function startCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): void {
++function ensureCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): ReturnType<typeof createCodevBridge> {
 +  if (!singleton) {
 +    singleton = createCodevBridge(host)
 +  }
-+  singleton.start()
++  return singleton
++}
++
++export function startCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): void {
++  ensureCodevBridge(host).start()
 +}
 +
 +export function getCodevBridgeSnapshot(): CodevBridgeSnapshot {
-+  return singleton?.getSnapshot() ?? DISCONNECTED_SNAPSHOT
++  return ensureCodevBridge().getSnapshot()
 +}
 +
 +export function subscribeCodevBridge(listener: () => void): () => void {
-+  if (!singleton) {
-+    return () => undefined
-+  }
-+  return singleton.subscribe(listener)
++  return ensureCodevBridge().subscribe(listener)
 +}
 +
 +export function interruptCodevBridge(): void {
@@ -1813,15 +1815,14 @@ index 0000000..05d7117
 +  })
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..2bb5bf4 100644
+index eae3a54..6ebcb27 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,20 @@ import {
+@@ -19,10 +19,16 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
 +import { readCodevBootstrap } from './codev-bootstrap'
-+import { startCodevBridge } from './codev-bridge'
  
  const App = lazy(() => import('../App'))
  
@@ -1831,9 +1832,6 @@ index eae3a54..2bb5bf4 100644
 +  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
 +  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
-+  if (codevBootstrap !== null) {
-+    startCodevBridge()
-+  }
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.

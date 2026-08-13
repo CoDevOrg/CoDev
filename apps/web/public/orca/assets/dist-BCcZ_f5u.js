@@ -1,1 +1,0 @@
-import{Kv as e,Xv as t,yv as n}from"./web-index-BWpAxozO.js";var r=t(e(),1);n();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};
