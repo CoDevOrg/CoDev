@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  executeCodevBridgeRequest,
   isCodevBridgeClientMessage,
+  isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
@@ -42,7 +44,14 @@ type CodevOrcaMessage =
   | { type: "codev:create-proposal"; requestId: string }
   | { type: "codev:bridge-hello"; generation: number }
   | { type: "codev:bridge-ping"; generation: number }
-  | { type: "codev:bridge-interrupt"; generation: number };
+  | { type: "codev:bridge-interrupt"; generation: number }
+  | {
+      type: "codev:bridge-request";
+      generation: number;
+      requestId: string;
+      method: "invites.list" | "invites.create" | "invites.revoke";
+      params?: Record<string, unknown>;
+    };
 
 type CodevProposalDiscardResult =
   | { managed: false }
@@ -602,6 +611,19 @@ export function OrcaWorkspace({
             window.location.origin,
           );
         }
+        return;
+      }
+      if (isCodevBridgeRequestMessage(event.data)) {
+        void executeCodevBridgeRequest(
+          workspaceId,
+          event.data,
+          codevBridgeSessionRef.current,
+        ).then((reply) => {
+          iframeRef.current?.contentWindow?.postMessage(
+            reply,
+            window.location.origin,
+          );
+        });
         return;
       }
       if (event.data.type === "codev:choose-repository") {

@@ -57,6 +57,26 @@ export function inviteIsAcceptable(
   );
 }
 
+export type WorkspaceInvitePublicStatus =
+  | "pending"
+  | "accepted"
+  | "revoked"
+  | "expired";
+
+export function workspaceInvitePublicStatus(
+  invite: {
+    expiresAt: Date;
+    revokedAt: Date | null;
+    acceptedAt: Date | null;
+  },
+  now = new Date(),
+): WorkspaceInvitePublicStatus {
+  if (invite.acceptedAt) return "accepted";
+  if (invite.revokedAt) return "revoked";
+  if (invite.expiresAt <= now) return "expired";
+  return "pending";
+}
+
 export class WorkspaceLifecycleError extends Error {
   constructor(
     message: string,
@@ -594,9 +614,64 @@ export async function createWorkspaceInvite(
         options.allowLink ?? (!options.inviteeEmail && !options.inviteeLogin),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    .returning({ id: schema.workspaceInvites.id });
+    .returning({
+      id: schema.workspaceInvites.id,
+      expiresAt: schema.workspaceInvites.expiresAt,
+      accessRole: schema.workspaceInvites.accessRole,
+    });
 
-  return { id: invite?.id, token };
+  if (!invite?.id) {
+    throw new Error("The invite could not be created.");
+  }
+
+  return {
+    id: invite.id,
+    token,
+    expiresAt: invite.expiresAt,
+    accessRole: invite.accessRole,
+  };
+}
+
+export async function listWorkspaceInviteState(
+  workspaceId: string,
+  userId: string,
+) {
+  await requireWorkspacePermission(workspaceId, userId, "view");
+  const now = new Date();
+  const invites = await getDatabase()
+    .select({
+      id: schema.workspaceInvites.id,
+      accessRole: schema.workspaceInvites.accessRole,
+      inviteeEmail: schema.workspaceInvites.inviteeEmail,
+      inviteeLogin: schema.workspaceInvites.inviteeLogin,
+      allowLink: schema.workspaceInvites.allowLink,
+      expiresAt: schema.workspaceInvites.expiresAt,
+      revokedAt: schema.workspaceInvites.revokedAt,
+      acceptedAt: schema.workspaceInvites.acceptedAt,
+      createdAt: schema.workspaceInvites.createdAt,
+    })
+    .from(schema.workspaceInvites)
+    .where(eq(schema.workspaceInvites.workspaceId, workspaceId))
+    .orderBy(desc(schema.workspaceInvites.createdAt))
+    .limit(20);
+  const members = await listWorkspaceMembers(workspaceId);
+  return {
+    invites: invites.map((invite) => ({
+      inviteId: invite.id,
+      accessRole: invite.accessRole,
+      invitee: invite.inviteeEmail ?? invite.inviteeLogin,
+      allowLink: invite.allowLink,
+      expiresAt: invite.expiresAt.toISOString(),
+      status: workspaceInvitePublicStatus(invite, now),
+    })),
+    members: members.map((member) => ({
+      userId: member.userId,
+      login: member.login,
+      name: member.name,
+      role: member.role,
+      accessRole: member.accessRole,
+    })),
+  };
 }
 
 export async function revokeWorkspaceInvite(

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { inviteAllowsUser, inviteIsAcceptable } from "./workspaces";
+import {
+  inviteAllowsUser,
+  inviteIsAcceptable,
+  workspaceInvitePublicStatus,
+} from "./workspaces";
 
 const user = { email: "alex@example.com", login: "alex_dev" };
 
@@ -68,5 +72,36 @@ describe("workspace invitation acceptance enforcement", () => {
     ["already accepted", { acceptedAt: new Date("2026-08-11T14:30:00.000Z") }],
   ])("rejects an %s invite", (_label, override) => {
     expect(inviteIsAcceptable({ ...invite, ...override }, now)).toBe(false);
+  });
+});
+
+describe("workspace invitation public status", () => {
+  const now = new Date("2026-08-13T05:00:00.000Z");
+  const invite = {
+    expiresAt: new Date("2026-08-14T05:00:00.000Z"),
+    revokedAt: null as Date | null,
+    acceptedAt: null as Date | null,
+  };
+
+  it("reports pending, accepted, revoked, and expired states", () => {
+    expect(workspaceInvitePublicStatus(invite, now)).toBe("pending");
+    expect(
+      workspaceInvitePublicStatus(
+        { ...invite, acceptedAt: new Date("2026-08-13T04:00:00.000Z") },
+        now,
+      ),
+    ).toBe("accepted");
+    expect(
+      workspaceInvitePublicStatus(
+        { ...invite, revokedAt: new Date("2026-08-13T04:30:00.000Z") },
+        now,
+      ),
+    ).toBe("revoked");
+    expect(
+      workspaceInvitePublicStatus(
+        { ...invite, expiresAt: new Date("2026-08-13T04:59:59.000Z") },
+        now,
+      ),
+    ).toBe("expired");
   });
 });

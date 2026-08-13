@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  executeCodevBridgeRequest,
   isCodevBridgeClientMessage,
+  isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
 } from "./codev-parent-bridge";
 
@@ -69,5 +71,85 @@ describe("codev parent bridge", () => {
         generation: 1,
       }),
     ).toBe(true);
+  });
+
+  it("creates and revokes invites through the workspace-bound request bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const inviteId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          inviteId,
+          inviteUrl: "https://codev.example/invites/token",
+          expiresInHours: 24,
+          status: "pending",
+          members: [
+            { login: "alex", name: "Alex Morgan", accessRole: "owner" },
+          ],
+          invites: [{ inviteId, status: "pending" }],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          members: [
+            { login: "alex", name: "Alex Morgan", accessRole: "owner" },
+          ],
+          invites: [{ inviteId, status: "revoked" }],
+        }),
+      );
+
+    const created = await executeCodevBridgeRequest(
+      "workspace-1",
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-create",
+        method: "invites.create",
+        params: { accessRole: "reviewer" },
+      },
+      connected,
+      fetcher,
+    );
+    expect(created.ok).toBe(true);
+    expect(created.result).toMatchObject({
+      inviteId,
+      status: "pending",
+    });
+
+    const revoked = await executeCodevBridgeRequest(
+      "workspace-1",
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-revoke",
+        method: "invites.revoke",
+        params: { inviteId },
+      },
+      connected,
+      fetcher,
+    );
+    expect(revoked).toMatchObject({
+      ok: true,
+      result: {
+        revokedInviteId: inviteId,
+        invites: [{ inviteId, status: "revoked" }],
+        members: [{ login: "alex" }],
+      },
+    });
+    expect(isCodevBridgeRequestMessage({ token: "secret" })).toBe(false);
+    expect(
+      isCodevBridgeRequestMessage({
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-1",
+        method: "invites.create",
+        params: { token: "secret" },
+      }),
+    ).toBe(false);
   });
 });

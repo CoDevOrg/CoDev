@@ -211,6 +211,391 @@ index 83b190a..c530555 100644
            <VaultHostScopeMenu
              executionHostScope={executionHostScope}
              hostOptions={hostScopeOptions}
+diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
+new file mode 100644
+index 0000000..10fa378
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
+@@ -0,0 +1,58 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevWorkspaceInvitesView } from './CodevWorkspaceInvitesSection'
++
++describe('CodevWorkspaceInvitesView', () => {
++  it('shows a pending invite and current members after create', () => {
++    const html = renderToStaticMarkup(
++      <CodevWorkspaceInvitesView
++        connected
++        members={[{ login: 'alex', name: 'Alex Morgan', role: 'owner', accessRole: 'owner' }]}
++        invites={[
++          {
++            inviteId: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++            accessRole: 'reviewer',
++            status: 'pending',
++            expiresAt: '2026-08-14T05:00:00.000Z',
++            inviteUrl: 'https://codev.example/invites/token'
++          }
++        ]}
++        accessRole="reviewer"
++        busy=""
++        message="Invite ready. It expires in 24 hours and can be used once."
++        onAccessRoleChange={() => undefined}
++        onCreate={() => undefined}
++        onRevoke={() => undefined}
++      />
++    )
++    expect(html).toContain('Invite status: Pending')
++    expect(html).toContain('Alex Morgan @alex · Maintainer · Member')
++    expect(html).toContain('No additional members have joined.')
++    expect(html).toContain('Revoke invite')
++  })
++
++  it('shows revoked status and that the invitee is not a member', () => {
++    const html = renderToStaticMarkup(
++      <CodevWorkspaceInvitesView
++        connected
++        members={[{ login: 'alex', name: 'Alex Morgan', role: 'owner', accessRole: 'owner' }]}
++        invites={[
++          {
++            inviteId: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++            accessRole: 'reviewer',
++            status: 'revoked'
++          }
++        ]}
++        accessRole="reviewer"
++        busy=""
++        message="Invite revoked. The invitee is not a workspace member."
++        onAccessRoleChange={() => undefined}
++        onCreate={() => undefined}
++        onRevoke={() => undefined}
++      />
++    )
++    expect(html).toContain('Invite status: Revoked. The invitee is not a workspace member.')
++    expect(html).toContain('No additional members have joined.')
++    expect(html).not.toContain('Revoke invite')
++  })
++})
+diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx
+new file mode 100644
+index 0000000..d2a5320
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx
+@@ -0,0 +1,294 @@
++import { useEffect, useState, type JSX } from 'react'
++import { Button } from '@/components/ui/button'
++import { SettingsSubsectionHeader } from './SettingsFormControls'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge,
++  type CodevBridgeSnapshot
++} from '@/web/codev-bridge'
++
++export type CodevInviteAccessRole = 'viewer' | 'reviewer' | 'co_steer'
++
++export type CodevInviteRecord = {
++  inviteId: string
++  accessRole: CodevInviteAccessRole | 'owner'
++  invitee?: string | null
++  allowLink?: boolean
++  expiresAt?: string
++  status: 'pending' | 'accepted' | 'revoked' | 'expired'
++  inviteUrl?: string
++}
++
++export type CodevInviteMember = {
++  userId?: string
++  login: string
++  name: string | null
++  role?: string
++  accessRole: string
++}
++
++const ROLE_LABELS: Record<string, string> = {
++  owner: 'Maintainer',
++  co_steer: 'Maintainer',
++  reviewer: 'Collaborator',
++  viewer: 'Viewer'
++}
++
++function roleLabel(accessRole: string): string {
++  return ROLE_LABELS[accessRole] ?? accessRole
++}
++
++function statusLabel(status: CodevInviteRecord['status']): string {
++  if (status === 'pending') return 'Pending'
++  if (status === 'accepted') return 'Accepted'
++  if (status === 'revoked') return 'Revoked'
++  return 'Expired'
++}
++
++export function CodevWorkspaceInvitesView({
++  connected,
++  members,
++  invites,
++  accessRole,
++  busy,
++  message,
++  onAccessRoleChange,
++  onCreate,
++  onRevoke
++}: {
++  connected: boolean
++  members: CodevInviteMember[]
++  invites: CodevInviteRecord[]
++  accessRole: CodevInviteAccessRole
++  busy: string
++  message: string
++  onAccessRoleChange: (role: CodevInviteAccessRole) => void
++  onCreate: () => void
++  onRevoke: (inviteId: string) => void
++}): JSX.Element {
++  const additionalMembers = members.filter(
++    (member) => member.role !== 'owner' && member.accessRole !== 'owner'
++  )
++  const latestInvite = invites[0] ?? null
++
++  return (
++    <div id="codev-workspace-invites" className="scroll-mt-6 space-y-3" data-codev-invites="true">
++      <SettingsSubsectionHeader
++        title="Invites"
++        description="Create a revocable, expiring invite. Acceptance, revocation, and expiry update membership here."
++      />
++      {!connected ? (
++        <p className="text-xs text-muted-foreground">
++          Connect the CoDev bridge to manage workspace invites.
++        </p>
++      ) : null}
++      <section aria-label="Workspace members" className="space-y-2">
++        <h4 className="text-xs font-medium text-muted-foreground">Members</h4>
++        <ul className="space-y-1">
++          {members.map((member) => (
++            <li key={member.login} className="text-sm">
++              {member.name ?? member.login} @{member.login} · {roleLabel(member.accessRole)} ·
++              Member
++            </li>
++          ))}
++        </ul>
++        {additionalMembers.length === 0 ? (
++          <p className="text-xs text-muted-foreground">
++            No additional members have joined.
++          </p>
++        ) : null}
++      </section>
++      <div className="flex flex-wrap items-center gap-2">
++        <label className="text-xs text-muted-foreground" htmlFor="codev-invite-role">
++          Invite role
++        </label>
++        <select
++          id="codev-invite-role"
++          aria-label="Invite role"
++          className="h-8 rounded-md border border-border bg-background px-2 text-xs"
++          value={accessRole}
++          disabled={!connected || busy === 'create'}
++          onChange={(event) => onAccessRoleChange(event.target.value as CodevInviteAccessRole)}
++        >
++          <option value="viewer">Viewer</option>
++          <option value="reviewer">Collaborator</option>
++          <option value="co_steer">Maintainer</option>
++        </select>
++        <Button
++          type="button"
++          size="sm"
++          disabled={!connected || busy === 'create'}
++          onClick={onCreate}
++        >
++          {busy === 'create' ? 'Creating…' : 'Create invite'}
++        </Button>
++      </div>
++      {invites.map((invite) => (
++        <article
++          key={invite.inviteId}
++          className="space-y-1 rounded-md border border-border p-3"
++          aria-label={`Invite ${statusLabel(invite.status).toLowerCase()}`}
++        >
++          <p role="status" className="text-sm">
++            Invite status: {statusLabel(invite.status)}
++            {invite.status === 'revoked' || invite.status === 'expired'
++              ? '. The invitee is not a workspace member.'
++              : invite.status === 'accepted'
++                ? '. The invitee is a workspace member.'
++                : ` · ${roleLabel(invite.accessRole)} · expires ${
++                    invite.expiresAt
++                      ? new Date(invite.expiresAt).toLocaleString()
++                      : 'in 24 hours'
++                  }`}
++          </p>
++          {invite.inviteUrl ? (
++            <p className="break-all font-mono text-[11px] text-muted-foreground">{invite.inviteUrl}</p>
++          ) : null}
++          {invite.status === 'pending' ? (
++            <Button
++              type="button"
++              size="sm"
++              variant="outline"
++              disabled={busy === invite.inviteId}
++              onClick={() => onRevoke(invite.inviteId)}
++            >
++              {busy === invite.inviteId ? 'Revoking…' : 'Revoke invite'}
++            </Button>
++          ) : null}
++        </article>
++      ))}
++      {latestInvite ? null : connected ? (
++        <p className="text-xs text-muted-foreground">No invites yet.</p>
++      ) : null}
++      {message ? (
++        <p className="text-xs text-muted-foreground" role="status">
++          {message}
++        </p>
++      ) : null}
++    </div>
++  )
++}
++
++type InviteStatePayload = {
++  members?: CodevInviteMember[]
++  invites?: CodevInviteRecord[]
++  inviteId?: string
++  inviteUrl?: string
++  status?: CodevInviteRecord['status']
++  expiresAt?: string
++  accessRole?: CodevInviteAccessRole
++}
++
++function mergeInviteUrls(
++  invites: CodevInviteRecord[],
++  urls: Record<string, string>,
++  created?: { inviteId?: string; inviteUrl?: string }
++): { invites: CodevInviteRecord[]; urls: Record<string, string> } {
++  const nextUrls = { ...urls }
++  if (created?.inviteId && created.inviteUrl) {
++    nextUrls[created.inviteId] = created.inviteUrl
++  }
++  return {
++    urls: nextUrls,
++    invites: invites.map((invite) =>
++      nextUrls[invite.inviteId] ? { ...invite, inviteUrl: nextUrls[invite.inviteId] } : invite
++    )
++  }
++}
++
++export function CodevWorkspaceInvitesSection(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [snapshot, setSnapshot] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
++  const [members, setMembers] = useState<CodevInviteMember[]>([])
++  const [invites, setInvites] = useState<CodevInviteRecord[]>([])
++  const [inviteUrls, setInviteUrls] = useState<Record<string, string>>({})
++  const [accessRole, setAccessRole] = useState<CodevInviteAccessRole>('reviewer')
++  const [busy, setBusy] = useState('')
++  const [message, setMessage] = useState('')
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setSnapshot(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  useEffect(() => {
++    if (!embedded || snapshot.status !== 'connected') {
++      return
++    }
++    let cancelled = false
++    void requestCodevBridge<InviteStatePayload>('invites.list')
++      .then((result) => {
++        if (cancelled) {
++          return
++        }
++        const merged = mergeInviteUrls(result.invites ?? [], inviteUrls)
++        setMembers(result.members ?? [])
++        setInvites(merged.invites)
++        setInviteUrls(merged.urls)
++      })
++      .catch((error: unknown) => {
++        if (!cancelled) {
++          setMessage(error instanceof Error ? error.message : 'CoDev could not load invites.')
++        }
++      })
++    return () => {
++      cancelled = true
++    }
++    // Load once per connection; inviteUrls is session-local and should not retrigger.
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [embedded, snapshot.status])
++
++  if (!embedded) {
++    return null
++  }
++
++  async function createInvite(): Promise<void> {
++    setBusy('create')
++    setMessage('')
++    try {
++      const result = await requestCodevBridge<InviteStatePayload>('invites.create', { accessRole })
++      const merged = mergeInviteUrls(result.invites ?? [], inviteUrls, result)
++      setMembers(result.members ?? [])
++      setInvites(merged.invites)
++      setInviteUrls(merged.urls)
++      setMessage('Invite ready. It expires in 24 hours and can be used once.')
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'CoDev could not create this invite.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  async function revokeInvite(inviteId: string): Promise<void> {
++    setBusy(inviteId)
++    setMessage('')
++    try {
++      const result = await requestCodevBridge<InviteStatePayload>('invites.revoke', { inviteId })
++      const merged = mergeInviteUrls(result.invites ?? [], inviteUrls)
++      setMembers(result.members ?? [])
++      setInvites(merged.invites)
++      setInviteUrls(merged.urls)
++      setMessage('Invite revoked. The invitee is not a workspace member.')
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'CoDev could not revoke this invite.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  return (
++    <CodevWorkspaceInvitesView
++      connected={snapshot.status === 'connected'}
++      members={members}
++      invites={invites}
++      accessRole={accessRole}
++      busy={busy}
++      message={message}
++      onAccessRoleChange={setAccessRole}
++      onCreate={() => void createInvite()}
++      onRevoke={(inviteId) => void revokeInvite(inviteId)}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
+index 4405810..4f946db 100644
+--- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
++++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
+@@ -4,6 +4,7 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
+ import { SearchableSetting } from './SearchableSetting'
+ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+ import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
++import { CodevWorkspaceInvitesSection } from './CodevWorkspaceInvitesSection'
+ import { translate } from '@/i18n/i18n'
+ 
+ type GeneralWorkspaceSettingsSectionProps = {
+@@ -28,6 +29,8 @@ export function GeneralWorkspaceSettingsSection({
+         )}
+       />
+ 
++      <CodevWorkspaceInvitesSection />
++
+       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+ 
+       <SearchableSetting
 diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
 index 3106ded..3d8e596 100644
 --- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
@@ -708,14 +1093,14 @@ index 0000000..d3cbea7
 +}
 diff --git a/src/renderer/src/web/codev-bridge.test.ts b/src/renderer/src/web/codev-bridge.test.ts
 new file mode 100644
-index 0000000..a88fd34
+index 0000000..4234955
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.test.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,153 @@
 +import { afterEach, describe, expect, it, vi } from 'vitest'
 +import { createCodevBridge } from './codev-bridge'
 +
-+type Posted = { data: { type: string; generation: number }; origin: string }
++type Posted = { data: Record<string, unknown> & { type: string; generation: number }; origin: string }
 +
 +function createHost() {
 +  const listeners = new Set<(event: MessageEvent) => void>()
@@ -725,7 +1110,7 @@ index 0000000..a88fd34
 +    location: { origin: 'https://codev.example' },
 +    parent: {
 +      postMessage(data: unknown, origin: string) {
-+        posted.push({ data: data as { type: string; generation: number }, origin })
++        posted.push({ data: data as Posted['data'], origin })
 +      }
 +    },
 +    addEventListener(_type: string, listener: EventListener) {
@@ -742,6 +1127,15 @@ index 0000000..a88fd34
 +      const event = {
 +        origin: 'https://codev.example',
 +        data: { type: 'codev:bridge-hello-ack', generation, workspaceBound: true }
++      } as MessageEvent
++      for (const listener of listeners) {
++        listener(event)
++      }
++    },
++    respond(data: Record<string, unknown>) {
++      const event = {
++        origin: 'https://codev.example',
++        data
 +      } as MessageEvent
 +      for (const listener of listeners) {
 +        listener(event)
@@ -806,13 +1200,62 @@ index 0000000..a88fd34
 +    expect(connected.status).toBe('connected')
 +    bridge.dispose()
 +  })
++
++  it('creates and revokes invites over the connected request bridge', async () => {
++    const { host, posted, ack, respond } = createHost()
++    const bridge = createCodevBridge(host)
++    bridge.start()
++    ack()
++
++    const inviteId = 'c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++    const createdPromise = bridge.request('invites.create', { accessRole: 'reviewer' })
++    const createRequest = posted.at(-1)?.data as unknown as {
++      type: string
++      requestId: string
++      method: string
++      params?: Record<string, unknown>
++    }
++    expect(createRequest).toMatchObject({
++      type: 'codev:bridge-request',
++      method: 'invites.create',
++      params: { accessRole: 'reviewer' }
++    })
++    respond({
++      type: 'codev:bridge-response',
++      generation: 1,
++      requestId: createRequest.requestId,
++      ok: true,
++      result: { inviteId, status: 'pending' }
++    })
++    await expect(createdPromise).resolves.toEqual({ inviteId, status: 'pending' })
++
++    const revokedPromise = bridge.request('invites.revoke', { inviteId })
++    const revokeRequest = posted.at(-1)?.data as unknown as { requestId: string; method: string }
++    expect(revokeRequest.method).toBe('invites.revoke')
++    respond({
++      type: 'codev:bridge-response',
++      generation: 1,
++      requestId: revokeRequest.requestId,
++      ok: true,
++      result: {
++        revokedInviteId: inviteId,
++        invites: [{ inviteId, status: 'revoked' }],
++        members: [{ login: 'alex', name: 'Alex Morgan', accessRole: 'owner' }]
++      }
++    })
++    await expect(revokedPromise).resolves.toMatchObject({
++      revokedInviteId: inviteId,
++      invites: [{ status: 'revoked' }]
++    })
++    bridge.dispose()
++  })
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..9905c8f
+index 0000000..de5da35
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,241 @@
+@@ -0,0 +1,324 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -824,6 +1267,16 @@ index 0000000..9905c8f
 +type CodevBridgeParentMessage =
 +  | { type: 'codev:bridge-hello-ack'; generation: number; workspaceBound: true }
 +  | { type: 'codev:bridge-pong'; generation: number }
++  | {
++      type: 'codev:bridge-response'
++      generation: number
++      requestId: string
++      ok: boolean
++      result?: unknown
++      error?: string
++    }
++
++export type CodevBridgeRequestMethod = 'invites.list' | 'invites.create' | 'invites.revoke'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -857,12 +1310,21 @@ index 0000000..9905c8f
 +  if (!data || typeof data !== 'object' || !('type' in data)) {
 +    return false
 +  }
-+  const message = data as { type?: unknown; generation?: unknown; workspaceBound?: unknown }
++  const message = data as {
++    type?: unknown
++    generation?: unknown
++    workspaceBound?: unknown
++    requestId?: unknown
++    ok?: unknown
++  }
 +  if (message.generation !== generation) {
 +    return false
 +  }
 +  if (message.type === 'codev:bridge-hello-ack') {
 +    return message.workspaceBound === true
++  }
++  if (message.type === 'codev:bridge-response') {
++    return typeof message.requestId === 'string' && typeof message.ok === 'boolean'
 +  }
 +  return message.type === 'codev:bridge-pong'
 +}
@@ -871,6 +1333,7 @@ index 0000000..9905c8f
 +  getSnapshot: () => CodevBridgeSnapshot
 +  subscribe: (listener: () => void) => () => void
 +  start: () => void
++  request: (method: CodevBridgeRequestMethod, params?: Record<string, unknown>) => Promise<unknown>
 +  interrupt: () => void
 +  reconnect: () => void
 +  dispose: () => void
@@ -882,6 +1345,14 @@ index 0000000..9905c8f
 +  let helloTimer: ReturnType<typeof setTimeout> | null = null
 +  let started = false
 +  const listeners = new Set<() => void>()
++  const pending = new Map<
++    string,
++    {
++      resolve: (value: unknown) => void
++      reject: (error: Error) => void
++      timer: ReturnType<typeof setTimeout>
++    }
++  >()
 +
 +  const emit = (): void => {
 +    for (const listener of listeners) {
@@ -912,7 +1383,15 @@ index 0000000..9905c8f
 +    }
 +  }
 +
-+  const post = (data: { type: string; generation: number }): void => {
++  const rejectPending = (error: Error): void => {
++    for (const request of pending.values()) {
++      clearTimeout(request.timer)
++      request.reject(error)
++    }
++    pending.clear()
++  }
++
++  const post = (data: Record<string, unknown> & { type: string; generation: number }): void => {
 +    host.parent.postMessage(data, host.location.origin)
 +  }
 +
@@ -971,6 +1450,20 @@ index 0000000..9905c8f
 +      startPinging()
 +      return
 +    }
++    if (message.data.type === 'codev:bridge-response') {
++      const pendingRequest = pending.get(message.data.requestId)
++      if (!pendingRequest) {
++        return
++      }
++      pending.delete(message.data.requestId)
++      clearTimeout(pendingRequest.timer)
++      if (message.data.ok) {
++        pendingRequest.resolve(message.data.result)
++        return
++      }
++      pendingRequest.reject(new Error(message.data.error || 'CoDev could not complete this request.'))
++      return
++    }
 +    if (pongTimer) {
 +      clearTimeout(pongTimer)
 +      pongTimer = null
@@ -993,12 +1486,37 @@ index 0000000..9905c8f
 +      host.addEventListener('message', onMessage)
 +      sendHello()
 +    },
++    request(method: CodevBridgeRequestMethod, params?: Record<string, unknown>): Promise<unknown> {
++      if (!started || status !== 'connected') {
++        return Promise.reject(new Error('CoDev bridge is not connected.'))
++      }
++      const requestId =
++        globalThis.crypto && 'randomUUID' in globalThis.crypto
++          ? globalThis.crypto.randomUUID()
++          : `req-${Date.now()}-${Math.random().toString(16).slice(2)}`
++      const currentGeneration = generation
++      return new Promise((resolve, reject) => {
++        const timer = setTimeout(() => {
++          pending.delete(requestId)
++          reject(new Error('CoDev invite request timed out.'))
++        }, 15_000)
++        pending.set(requestId, { resolve, reject, timer })
++        post({
++          type: 'codev:bridge-request',
++          generation: currentGeneration,
++          requestId,
++          method,
++          ...(params ? { params } : {})
++        })
++      })
++    },
 +    interrupt() {
 +      if (!started || status === 'disconnected') {
 +        return
 +      }
 +      const currentGeneration = generation
 +      clearTimers()
++      rejectPending(new Error('CoDev bridge is disconnected.'))
 +      post({ type: 'codev:bridge-interrupt', generation: currentGeneration })
 +      setStatus('disconnected')
 +    },
@@ -1014,6 +1532,7 @@ index 0000000..9905c8f
 +    },
 +    dispose() {
 +      clearTimers()
++      rejectPending(new Error('CoDev bridge is disconnected.'))
 +      host.removeEventListener('message', onMessage)
 +      started = false
 +      status = 'disconnected'
@@ -1048,6 +1567,13 @@ index 0000000..9905c8f
 +
 +export function reconnectCodevBridge(): void {
 +  singleton?.reconnect()
++}
++
++export function requestCodevBridge<T = unknown>(
++  method: CodevBridgeRequestMethod,
++  params?: Record<string, unknown>
++): Promise<T> {
++  return ensureCodevBridge().request(method, params) as Promise<T>
 +}
 +
 +export function resetCodevBridgeForTests(): void {
