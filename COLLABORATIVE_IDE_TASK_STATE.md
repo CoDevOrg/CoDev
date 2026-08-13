@@ -1162,6 +1162,23 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **OI.1 — Production status-bar crash blocker 2026-08-13T04:08:00Z:** Two
+  implementation attempts were pushed to `main` and Git-triggered Production:
+  `17d49a120d7108eebc55585498a3a222b61708d4` (`dpl_cLuRYq4RykSBYs1beCjZ5dFUPrYy`)
+  and the follow-up `815d0d7ecd011a8aa303a724f6e83138aa46911d`
+  (`dpl_EUNSW2MPGzv7mMY3C6x3vYGmnsPy`, Ready at
+  <https://codev-48bmcsa4n-yousef20920s-projects.vercel.app>, aliased to
+  <https://codev-xi.vercel.app>). Computer Use opened authenticated
+  `/workspaces/c14bbbe0-5db7-4901-a354-9e6f12da7603` and Orca rendered, but the
+  status bar crashed with React minified error #185 before `CoDev · Connected`
+  appeared (`The status bar hit an error. Retry the status bar to remount its
+  controls.`). Retry remounts fail the same way. The likely cause is
+  `useSyncExternalStore` receiving a new `getSnapshot` object on every read.
+  The required interrupt/reconnect recovery flow was not reached. OI.1 remains
+  Current; do not begin OI.2. Screenshot:
+  `artifacts/verification/oi-1/status-bar-crash.png` and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-1-status-bar-crash.png`.
+
 - **OI.1 — run blocked 2026-08-13T04:01:08Z:** The required initial
   `git status --short` found an unrelated modification to
   `apps/web/next-env.d.ts` (its generated route reference changed from
