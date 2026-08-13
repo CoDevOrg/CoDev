@@ -1109,6 +1109,15 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 ## Blocked tasks
 
+- **F5.6 — Production Computer Use environment blocker 2026-08-13T03:02:37Z:**
+  The required fresh Computer Use attempt against the authenticated Production
+  Orca workspace could not begin because macOS again reported: `The Mac is
+  locked and automatic unlock could not unlock it.` No browser state,
+  workspace, or data was changed and no screenshot could be captured. F5.6
+  remains Current; do not begin OI.1 until the desktop session is manually
+  unlocked and the native Delete Worktree → audited proposal-discard flow can
+  be completed on Production.
+
 - **F5.6 — Production Computer Use environment blocker 2026-08-13T02:01:53Z:**
   The required fresh Computer Use attempt against the authenticated Production
   Orca workspace could not begin because macOS again reported: `The Mac is
