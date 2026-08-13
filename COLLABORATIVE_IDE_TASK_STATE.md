@@ -25,6 +25,24 @@ card verified inside the authenticated Orca workspace. No future task may use
 `/verification/*`, a standalone fixture, localhost, or UI outside the Orca
 workspace as its required final Computer Use evidence.
 
+## Run blockers
+
+- **OI.4 — local browser-suite blocker 2026-08-13T15:13:00Z:** The OI.4
+  source patch, authenticated workspace-bound presence route, regenerated Orca
+  web client, and focused bridge test are present locally. The maintained Orca
+  patch passed pinned-source `typecheck:web` and `build:web`; `pnpm
+format:check`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
+typecheck`, `pnpm test` (226 passed, 1 skipped), `pnpm build`, and `pnpm
+rust:check` passed. The mandatory `pnpm test:e2e` failed before deployment:
+  26 passed, 1 skipped, and 6 failed. F5.2–F5.5 each timed out waiting for
+  review fixture controls (`Open diff review`, `Advance integration head`,
+  `Approve checkpoint`, and `Discard proposal`); F1.2 did not render `Expires
+in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
+  These fixture-flow failures are outside OI.4's editor-presence scope. No
+  OI.4 source changes were committed, pushed, deployed, or verified in
+  Production; no screenshot was captured. Current task remains OI.4; do not
+  begin OI.5.
+
 ## Completed tasks
 
 | Task                                                                                                  | Completed  | Evidence                                                                                                                                                                                                                    |
