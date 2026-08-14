@@ -1652,6 +1652,46 @@ button {
   color: rgba(23, 59, 45, 0.42);
 }
 
+.auth-password-guidance {
+  color: rgba(23, 59, 45, 0.76);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-password-guidance p {
+  margin: 0 0 8px;
+  font-weight: 650;
+}
+
+.auth-password-guidance ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-password-guidance li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-password-guidance li > span {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
+  font-weight: 800;
+}
+
+.auth-password-guidance .met {
+  color: #18794e;
+}
+
+.auth-password-guidance .unmet {
+  color: rgba(23, 59, 45, 0.68);
+}
+
 .auth-submit {
   min-height: 48px;
   margin-top: 3px;

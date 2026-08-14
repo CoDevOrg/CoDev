@@ -11,11 +11,15 @@ const signInErrorPage = readFileSync(
   resolve(process.cwd(), "app/sign-in/error.tsx"),
   "utf8",
 );
+const credentialsSignInForm = readFileSync(
+  resolve(process.cwd(), "components/credentials-sign-in-form.tsx"),
+  "utf8",
+);
 
 describe("sign-in provider layout", () => {
   it("places OAuth providers before the email form and omits setup messaging", () => {
     expect(signInPage.indexOf("auth-oauth-buttons")).toBeLessThan(
-      signInPage.indexOf("auth-credentials-form"),
+      signInPage.lastIndexOf("CredentialsSignInForm"),
     );
     expect(signInPage).toContain("<GoogleMark />");
     expect(signInPage).toContain("<GitHubMark />");
@@ -28,9 +32,15 @@ describe("sign-in provider layout", () => {
     expect(signInPage).toContain(
       "You can still sign in or\n            create an account below.",
     );
-    expect(signInPage).toContain(
-      "New accounts need a 15+ character passphrase.",
+    expect(signInPage).toContain("CredentialsSignin");
+    expect(signInPage).toContain("CredentialsSignInForm");
+    expect(credentialsSignInForm).toContain(
+      'aria-label="New account password requirements"',
     );
+    expect(credentialsSignInForm).toContain(
+      "getNewAccountPasswordRequirements",
+    );
+    expect(signInPage).toContain("AuthError");
     expect(signInErrorPage).toContain("We could not load sign-in.");
     expect(signInErrorPage).toContain("Try again");
   });

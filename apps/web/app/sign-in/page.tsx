@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { Session } from "next-auth";
+import { AuthError } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -8,6 +9,7 @@ import { isGitHubAuthConfigured, isGoogleAuthConfigured } from "@codev/config";
 import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/app-chrome";
 import { ClerkSignIn } from "@/components/clerk-sign-in";
+import { CredentialsSignInForm } from "@/components/credentials-sign-in-form";
 import { clerkAuthConfigured } from "@/lib/identity";
 
 export const metadata: Metadata = {
@@ -104,8 +106,8 @@ export default async function SignInPage({
 
         {error ? (
           <div className="inline-alert error" role="alert">
-            Sign-in did not complete. Check your email and password, then try
-            again. New accounts need a 15-character passphrase.
+            Sign-in did not complete. Check your details and try again. New
+            accounts must meet every password requirement below.
           </div>
         ) : null}
 
@@ -151,57 +153,30 @@ export default async function SignInPage({
               <span>or use email</span>
             </div>
 
-            <form
-              className="auth-credentials-form"
+            <CredentialsSignInForm
               action={async (formData) => {
                 "use server";
-                await signIn("credentials", {
-                  name: String(formData.get("name") ?? ""),
-                  email: String(formData.get("email") ?? ""),
-                  password: String(formData.get("password") ?? ""),
-                  redirectTo: safeCallback,
-                });
+                try {
+                  await signIn("credentials", {
+                    name: String(formData.get("name") ?? ""),
+                    email: String(formData.get("email") ?? ""),
+                    password: String(formData.get("password") ?? ""),
+                    redirectTo: safeCallback,
+                  });
+                } catch (signInError) {
+                  if (
+                    signInError instanceof AuthError &&
+                    signInError.type === "CredentialsSignin"
+                  ) {
+                    redirect(
+                      `/sign-in?error=CredentialsSignin&callbackUrl=${encodeURIComponent(safeCallback)}`,
+                    );
+                  }
+
+                  throw signInError;
+                }
               }}
-            >
-              <label>
-                <span>Name</span>
-                <input
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Your name"
-                  required
-                />
-              </label>
-              <label>
-                <span>Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  required
-                />
-              </label>
-              <label>
-                <span>Password</span>
-                <input
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="15+ characters for a new account"
-                  minLength={8}
-                  required
-                />
-              </label>
-              <p className="auth-password-guidance">
-                New accounts need a 15+ character passphrase. Common passwords
-                are not allowed.
-              </p>
-              <button className="auth-submit" type="submit">
-                Continue with email
-              </button>
-            </form>
+            />
           </div>
         )}
 
