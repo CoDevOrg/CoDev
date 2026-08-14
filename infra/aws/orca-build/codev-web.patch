@@ -2706,7 +2706,7 @@ new file mode 100644
 index 0000000..7e1f2d3
 --- /dev/null
 +++ b/src/renderer/src/components/editor/codev-cursor-decorations.ts
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,162 @@
 +import { useEffect, useRef, useState } from 'react'
 +import type { editor } from 'monaco-editor'
 +import {
@@ -2725,6 +2725,8 @@ index 0000000..7e1f2d3
 +  viewerId?: string
 +  members?: CodevCursorMember[]
 +}
++
++export const CURSOR_HEARTBEAT_MS = 20_000
 +
 +function memberLabel(member: CodevCursorMember): string {
 +  return member.user.name?.trim() || member.user.login
@@ -2826,7 +2828,7 @@ index 0000000..7e1f2d3
 +          if (!disposed) setMembers([])
 +        })
 +    }
-+    const publishSelection = (): void => {
++    const publishSelection = (force = false): void => {
 +      const model = editorInstance.getModel()
 +      const selection = editorInstance.getSelection()
 +      if (!model || !selection) return
@@ -2835,19 +2837,22 @@ index 0000000..7e1f2d3
 +        head: model.getOffsetAt(selection.getPosition())
 +      }
 +      const key = `${relativePath}:${cursor.anchor}:${cursor.head}`
-+      if (key === lastCursorRef.current) return
-+      lastCursorRef.current = key
-+      void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor }).catch(
-+        () => undefined
-+      )
++      if (!force && key === lastCursorRef.current) return
++      void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor })
++        .then(() => {
++          lastCursorRef.current = key
++        })
++        .catch(() => undefined)
 +    }
 +    refresh()
 +    publishSelection()
-+    const selectionSubscription = editorInstance.onDidChangeCursorSelection(publishSelection)
++    const selectionSubscription = editorInstance.onDidChangeCursorSelection(() => publishSelection())
++    const cursorHeartbeat = window.setInterval(() => publishSelection(true), CURSOR_HEARTBEAT_MS)
 +    const poll = window.setInterval(refresh, 1_000)
 +    return () => {
 +      disposed = true
 +      selectionSubscription.dispose()
++      window.clearInterval(cursorHeartbeat)
 +      window.clearInterval(poll)
 +    }
 +  }, [connected, editorInstance, relativePath])
@@ -2869,11 +2874,15 @@ new file mode 100644
 index 0000000..4b0e5e2
 --- /dev/null
 +++ b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,40 @@
 +import { describe, expect, it } from 'vitest'
-+import { selectRemoteCursors } from './codev-cursor-decorations'
++import { CURSOR_HEARTBEAT_MS, selectRemoteCursors } from './codev-cursor-decorations'
 +
 +describe('selectRemoteCursors', () => {
++  it('keeps publishing an unchanged selection for the presence TTL heartbeat', () => {
++    expect(CURSOR_HEARTBEAT_MS).toBeLessThan(60_000)
++  })
++
 +  it('keeps only another collaborator’s cursor for the active editor path', () => {
 +    const cursors = selectRemoteCursors(
 +      [

@@ -1,0 +1,1 @@
+import{Ov as e}from"./web-index-g7q3_sQt.js";var t=e(`chevron-right`,[[`path`,{d:`m9 18 6-6-6-6`,key:`mthhwq`}]]);export{t};

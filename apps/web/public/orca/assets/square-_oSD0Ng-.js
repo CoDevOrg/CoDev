@@ -1,0 +1,1 @@
+import{Ov as e}from"./web-index-g7q3_sQt.js";var t=e(`square`,[[`rect`,{width:`18`,height:`18`,x:`3`,y:`3`,rx:`2`,key:`afitv7`}]]);export{t};

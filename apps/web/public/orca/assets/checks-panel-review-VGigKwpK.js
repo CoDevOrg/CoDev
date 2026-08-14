@@ -1,0 +1,1 @@
+import{Xn as e}from"./web-index-g7q3_sQt.js";function t(t){return e(t)}function n({hostedReview:e,pr:n,linkedGitLabMR:r,linkedBitbucketPR:i,linkedAzureDevOpsPR:a,linkedGiteaPR:o}){return(e?.provider===`gitlab`?e:null)||(r!==null||i!==null||a!==null||o!==null?null:n?t(n):null)}export{n,t};
