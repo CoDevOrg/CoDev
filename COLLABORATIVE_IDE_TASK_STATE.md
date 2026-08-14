@@ -27,6 +27,15 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.4 — dirty working tree blocker 2026-08-14T10:02:17Z:** Before any
+  OI.4 work, `git status --short` found 1,457 pre-existing changes: 6 modified
+  files, 724 deleted files, and 727 untracked files. This includes
+  `apps/web/next-env.d.ts`, OI.4 bridge/server edits, and a large uncommitted
+  replacement of `apps/web/public/orca/assets/`. Per the run policy, this
+  automation did not switch branches, pull, inspect task implementation files,
+  modify, stage, or include those changes. Current task remains OI.4; do not
+  begin OI.5 until the worktree is reconciled by its owner.
+
 - **OI.4 — dirty working tree blocker 2026-08-14T09:02:01Z:** Before any
   OI.4 work, `git status --short` found 1,457 pre-existing changes: 6 modified
   files, 724 deleted files, and 727 untracked files. This includes
