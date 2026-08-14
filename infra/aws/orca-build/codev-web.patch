@@ -289,7 +289,7 @@ index 0000000..d2a5320
 +  requestCodevBridge,
 +  subscribeCodevBridge,
 +  type CodevBridgeSnapshot
-+} from '@/web/codev-bridge'
++} from '../../web/codev-bridge'
 +
 +export type CodevInviteAccessRole = 'viewer' | 'reviewer' | 'co_steer'
 +
@@ -1452,7 +1452,7 @@ new file mode 100644
 index 0000000..de5da35
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,331 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -1480,6 +1480,7 @@ index 0000000..de5da35
 +  | 'members.update'
 +  | 'presence.list'
 +  | 'presence.update'
++  | 'presence.cursor.update'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -2700,6 +2701,252 @@ index 0000000..fb69080
 +    expect(html).toContain('viewing README.md')
 +  })
 +})
+diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.ts b/src/renderer/src/components/editor/codev-cursor-decorations.ts
+new file mode 100644
+index 0000000..7e1f2d3
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-cursor-decorations.ts
+@@ -0,0 +1,157 @@
++import { useEffect, useRef, useState } from 'react'
++import type { editor } from 'monaco-editor'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '@/web/codev-bridge'
++
++export type CodevCursorMember = {
++  user: { id: string; login: string; name: string | null }
++  path: string | null
++  cursor: { anchor: number; head: number } | null
++}
++
++type PresencePayload = {
++  viewerId?: string
++  members?: CodevCursorMember[]
++}
++
++function memberLabel(member: CodevCursorMember): string {
++  return member.user.name?.trim() || member.user.login
++}
++
++export function selectRemoteCursors(
++  members: CodevCursorMember[],
++  viewerId: string | null,
++  path: string
++): CodevCursorMember[] {
++  return members.filter(
++    (member) =>
++      viewerId !== null &&
++      member.user.id !== viewerId &&
++      member.path === path &&
++      member.cursor !== null
++  )
++}
++
++function cursorDecorations(
++  editorInstance: editor.IStandaloneCodeEditor,
++  members: CodevCursorMember[]
++): editor.IModelDeltaDecoration[] {
++  const model = editorInstance.getModel()
++  if (!model) return []
++  const maxOffset = model.getValueLength()
++  return members.flatMap((member) => {
++    const cursor = member.cursor
++    if (!cursor) return []
++    const anchor = Math.min(cursor.anchor, maxOffset)
++    const head = Math.min(cursor.head, maxOffset)
++    const start = model.getPositionAt(Math.min(anchor, head))
++    const end = model.getPositionAt(Math.max(anchor, head))
++    const caret = model.getPositionAt(head)
++    const label = memberLabel(member)
++    const result: editor.IModelDeltaDecoration[] = [
++      {
++        range: {
++          startLineNumber: caret.lineNumber,
++          startColumn: caret.column,
++          endLineNumber: caret.lineNumber,
++          endColumn: caret.column
++        },
++        options: {
++          afterContentClassName: 'codev-remote-cursor',
++          hoverMessage: { value: `${label}'s cursor` }
++        }
++      }
++    ]
++    if (anchor !== head) {
++      result.push({
++        range: {
++          startLineNumber: start.lineNumber,
++          startColumn: start.column,
++          endLineNumber: end.lineNumber,
++          endColumn: end.column
++        },
++        options: {
++          inlineClassName: 'codev-remote-selection',
++          hoverMessage: { value: `${label}'s selection` }
++        }
++      })
++    }
++    return result
++  })
++}
++
++export function useCodevCursorDecorations({
++  editor: editorInstance,
++  relativePath
++}: {
++  editor: editor.IStandaloneCodeEditor | null
++  relativePath: string
++}): void {
++  const [connected, setConnected] = useState(
++    () => getCodevBridgeSnapshot().status === 'connected'
++  )
++  const [viewerId, setViewerId] = useState<string | null>(null)
++  const [members, setMembers] = useState<CodevCursorMember[]>([])
++  const lastCursorRef = useRef('')
++  const decorationIdsRef = useRef<string[]>([])
++
++  useEffect(
++    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
++    []
++  )
++
++  useEffect(() => {
++    if (!editorInstance || !relativePath || !connected) return
++    let disposed = false
++    const refresh = (): void => {
++      void requestCodevBridge<PresencePayload>('presence.list')
++        .then((payload) => {
++          if (disposed) return
++          setViewerId(typeof payload.viewerId === 'string' ? payload.viewerId : null)
++          setMembers(Array.isArray(payload.members) ? payload.members : [])
++        })
++        .catch(() => {
++          if (!disposed) setMembers([])
++        })
++    }
++    const publishSelection = (): void => {
++      const model = editorInstance.getModel()
++      const selection = editorInstance.getSelection()
++      if (!model || !selection) return
++      const cursor = {
++        anchor: model.getOffsetAt(selection.getSelectionStart()),
++        head: model.getOffsetAt(selection.getPosition())
++      }
++      const key = `${relativePath}:${cursor.anchor}:${cursor.head}`
++      if (key === lastCursorRef.current) return
++      lastCursorRef.current = key
++      void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor }).catch(
++        () => undefined
++      )
++    }
++    refresh()
++    publishSelection()
++    const selectionSubscription = editorInstance.onDidChangeCursorSelection(publishSelection)
++    const poll = window.setInterval(refresh, 1_000)
++    return () => {
++      disposed = true
++      selectionSubscription.dispose()
++      window.clearInterval(poll)
++    }
++  }, [connected, editorInstance, relativePath])
++
++  useEffect(() => {
++    if (!editorInstance) return
++    const remote = selectRemoteCursors(members, viewerId, relativePath)
++    decorationIdsRef.current = editorInstance.deltaDecorations(
++      decorationIdsRef.current,
++      cursorDecorations(editorInstance, remote)
++    )
++    return () => {
++      decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, [])
++    }
++  }, [editorInstance, members, relativePath, viewerId])
++}
+diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.test.ts b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
+new file mode 100644
+index 0000000..4b0e5e2
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from 'vitest'
++import { selectRemoteCursors } from './codev-cursor-decorations'
++
++describe('selectRemoteCursors', () => {
++  it('keeps only another collaborator’s cursor for the active editor path', () => {
++    const cursors = selectRemoteCursors(
++      [
++        {
++          user: { id: 'alex', login: 'alex', name: 'Alex Morgan' },
++          path: 'README.md',
++          cursor: { anchor: 3, head: 12 }
++        },
++        {
++          user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
++          path: 'README.md',
++          cursor: { anchor: 0, head: 0 }
++        },
++        {
++          user: { id: 'sam', login: 'sam', name: 'Sam Lee' },
++          path: 'src/presence.ts',
++          cursor: { anchor: 1, head: 4 }
++        }
++      ],
++      'alex',
++      'README.md'
++    )
++
++    expect(cursors).toEqual([
++      {
++        user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
++        path: 'README.md',
++        cursor: { anchor: 0, head: 0 }
++      }
++    ])
++  })
++})
+diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
+index 21789d4..a94cce1 100644
+--- a/src/renderer/src/components/editor/MonacoEditor.tsx
++++ b/src/renderer/src/components/editor/MonacoEditor.tsx
+@@ -62,5 +62,6 @@ import {
+ import { installMonacoE2EProbe } from './monaco-e2e-probe'
+ import { monacoFindOptions } from './monaco-find-options'
+ import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
++import { useCodevCursorDecorations } from './codev-cursor-decorations'
+ 
+ type MonacoEditorProps = {
+@@ -118,4 +119,5 @@ export default function MonacoEditor({
+   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
++  useCodevCursorDecorations({ editor: mountedEditor, relativePath })
+   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
+diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
+index 039414d..53d5fe0 100644
+--- a/src/renderer/src/assets/main.css
++++ b/src/renderer/src/assets/main.css
+@@ -2168,4 +2168,19 @@
+   opacity: 0.92;
+ }
+ 
++/* CoDev editor awareness is intentionally an inline Monaco decoration so it
++   stays aligned with text through wrapping, scrolling, and reconnect replay. */
++.monaco-editor .codev-remote-selection {
++  background: color-mix(in srgb, var(--primary) 28%, transparent);
++  border-bottom: 1px solid color-mix(in srgb, var(--primary) 72%, transparent);
++}
++
++.monaco-editor .codev-remote-cursor {
++  border-left: 2px solid var(--primary);
++  display: inline-block;
++  height: 1.35em;
++  margin-left: -1px;
++  vertical-align: text-bottom;
++}
++
+ /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
 diff --git a/src/renderer/src/components/tab-bar/TabBar.tsx b/src/renderer/src/components/tab-bar/TabBar.tsx
 index 2ebecc5..32289ea 100644
 --- a/src/renderer/src/components/tab-bar/TabBar.tsx

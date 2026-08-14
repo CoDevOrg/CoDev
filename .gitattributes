@@ -1,3 +1,5 @@
 # Minified bundles are generated from the pinned Orca source and can contain
 # intentional whitespace at the end of a logical line.
 apps/web/public/orca/assets/*.js -whitespace
+# Unified-diff context intentionally represents blank lines with one space.
+infra/aws/orca-build/codev-web.patch -whitespace

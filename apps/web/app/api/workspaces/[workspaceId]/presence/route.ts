@@ -9,10 +9,17 @@ import { apiError, getApiUser } from "@/lib/api";
 import {
   listWorkspacePresenceEntries,
   recordOrcaActiveFile,
+  recordOrcaCursor,
 } from "@/lib/collaboration-server";
 import { getDatabase } from "@/lib/database";
 
 const activeFileSchema = z.object({ path: collaborationPathSchema });
+const cursorSchema = activeFileSchema.extend({
+  cursor: z.object({
+    anchor: z.number().int().nonnegative(),
+    head: z.number().int().nonnegative(),
+  }),
+});
 
 async function getAuthorizedUser(workspaceId: string) {
   const sessionUser = await getApiUser();
@@ -44,10 +51,15 @@ export async function GET(
 ) {
   try {
     const { workspaceId } = await context.params;
-    await getAuthorizedUser(workspaceId);
+    const user = await getAuthorizedUser(workspaceId);
     const presence = await listWorkspacePresenceEntries(workspaceId);
     return Response.json({
-      members: presence.map(({ user, path }) => ({ user, path })),
+      viewerId: user.id,
+      members: presence.map(({ user, path, cursor }) => ({
+        user,
+        path,
+        cursor,
+      })),
     });
   } catch (error) {
     return apiError(error, statusFor(error));
@@ -61,8 +73,19 @@ export async function POST(
   try {
     const { workspaceId } = await context.params;
     const user = await getAuthorizedUser(workspaceId);
-    const { path } = activeFileSchema.parse(await request.json());
-    await recordOrcaActiveFile(workspaceId, user, path);
+    const payload = await request.json();
+    const cursor = cursorSchema.safeParse(payload);
+    if (cursor.success) {
+      await recordOrcaCursor(
+        workspaceId,
+        user,
+        cursor.data.path,
+        cursor.data.cursor,
+      );
+    } else {
+      const { path } = activeFileSchema.parse(payload);
+      await recordOrcaActiveFile(workspaceId, user, path);
+    }
     return Response.json({ ok: true });
   } catch (error) {
     return apiError(error, statusFor(error));

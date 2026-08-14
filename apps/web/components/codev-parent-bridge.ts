@@ -18,7 +18,8 @@ export type CodevBridgeMethod =
   | "invites.revoke"
   | "members.update"
   | "presence.list"
-  | "presence.update";
+  | "presence.update"
+  | "presence.cursor.update";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -52,6 +53,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "members.update",
   "presence.list",
   "presence.update",
+  "presence.cursor.update",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -212,17 +214,38 @@ export async function executeCodevBridgeRequest(
       return succeed(payload);
     }
 
-    if (request.method === "presence.update") {
+    if (
+      request.method === "presence.update" ||
+      request.method === "presence.cursor.update"
+    ) {
       const path = request.params?.path;
       if (typeof path !== "string" || !path.trim()) {
         return fail("A workspace-relative active file is required.");
+      }
+      const body: { path: string; cursor?: { anchor: number; head: number } } =
+        { path };
+      if (request.method === "presence.cursor.update") {
+        const cursor = request.params?.cursor;
+        if (
+          !cursor ||
+          typeof cursor !== "object" ||
+          typeof (cursor as { anchor?: unknown }).anchor !== "number" ||
+          !Number.isInteger((cursor as { anchor: number }).anchor) ||
+          (cursor as { anchor: number }).anchor < 0 ||
+          typeof (cursor as { head?: unknown }).head !== "number" ||
+          !Number.isInteger((cursor as { head: number }).head) ||
+          (cursor as { head: number }).head < 0
+        ) {
+          return fail("A valid editor cursor is required.");
+        }
+        body.cursor = cursor as { anchor: number; head: number };
       }
       const response = await fetcher(
         `/api/workspaces/${workspaceId}/presence`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ path }),
+          body: JSON.stringify(body),
         },
       );
       const payload = await readJson(response);

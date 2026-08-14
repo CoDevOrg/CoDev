@@ -180,10 +180,50 @@ export async function recordOrcaActiveFile(
   user: CollaborationUser,
   path: string,
 ) {
+  let cursor: { anchor: number; head: number } | null = null;
+  try {
+    const raw = await redisClient().hget(
+      presenceHashKey(workspaceId),
+      `orca:${user.id}`,
+    );
+    const existing = raw
+      ? collaborationPresenceEntrySchema.safeParse(JSON.parse(raw))
+      : null;
+    if (existing?.success && existing.data.path === path) {
+      cursor = existing.data.cursor;
+    }
+  } catch {
+    // The write below remains authoritative when a prior presence read fails.
+  }
+  return recordOrcaPresence(workspaceId, user, path, cursor, false);
+}
+
+/**
+ * Stores the editor selection using the existing short-lived, authorized
+ * presence record. Cursor offsets are document-relative and never expose a
+ * connection credential to the embedded Orca client.
+ */
+export async function recordOrcaCursor(
+  workspaceId: string,
+  user: CollaborationUser,
+  path: string,
+  cursor: { anchor: number; head: number },
+) {
+  return recordOrcaPresence(workspaceId, user, path, cursor, true);
+}
+
+async function recordOrcaPresence(
+  workspaceId: string,
+  user: CollaborationUser,
+  path: string,
+  cursor: { anchor: number; head: number } | null,
+  emitCursorEvent: boolean,
+) {
   const entry = collaborationPresenceEntrySchema.parse({
     connectionId: `orca:${user.id}`,
     user,
     path,
+    cursor,
     lastSeenAt: new Date().toISOString(),
   });
   const now = Date.now();
@@ -204,6 +244,13 @@ export async function recordOrcaActiveFile(
     type: "presence.active_file.changed",
     data: { userId: user.id, path, previousPath: null },
   });
+  if (emitCursorEvent && entry.cursor) {
+    await appendPresenceEvent({
+      workspaceId,
+      type: "presence.cursor.changed",
+      data: { userId: user.id, path, cursor: entry.cursor },
+    });
+  }
   return entry;
 }
 
@@ -966,6 +1013,7 @@ async function refreshPresence(workspaceId: string, connection: Connection) {
     connectionId: connection.id,
     user: connection.user,
     path: connection.activePath,
+    cursor: connection.cursor,
     lastSeenAt: new Date().toISOString(),
   };
   const now = Date.now();

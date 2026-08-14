@@ -274,4 +274,40 @@ describe("codev parent bridge", () => {
       },
     );
   });
+
+  it("sends only validated cursor offsets through the workspace-bound bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ ok: true }));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-cursor-update",
+          method: "presence.cursor.update",
+          params: { path: "README.md", cursor: { anchor: 4, head: 18 } },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/presence",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "README.md",
+          cursor: { anchor: 4, head: 18 },
+        }),
+      },
+    );
+  });
 });

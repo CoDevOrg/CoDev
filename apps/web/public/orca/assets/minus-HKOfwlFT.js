@@ -1,1 +1,0 @@
-import{Ov as e}from"./web-index-yc6hidYJ.js";var t=e(`minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};

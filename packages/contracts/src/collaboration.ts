@@ -112,6 +112,14 @@ export const collaborationPresenceEntrySchema = z.object({
   connectionId: z.string().min(1),
   user: collaborationUserSchema,
   path: collaborationPathSchema.nullable(),
+  cursor: z
+    .object({
+      anchor: z.number().int().nonnegative(),
+      head: z.number().int().nonnegative(),
+    })
+    .strict()
+    .nullable()
+    .default(null),
   lastSeenAt: timestampSchema,
 });
 
