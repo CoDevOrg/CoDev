@@ -27,6 +27,21 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.4 — Production authentication blocker 2026-08-14T17:03:48Z:** The
+  required initial `git status --short` was clean; `main` was already current
+  after `git switch main`, `git fetch origin main`, and `git pull --ff-only
+origin main`. The already-validated OI.4 implementation commit `534d86c`
+  remains Ready in Production at
+  `https://codev-gsaml18sz-yousef20920s-projects.vercel.app`. Computer Use
+  opened that exact deployment in a fresh Chrome tab and navigated to
+  `/dashboard`, which redirected to the visible CoDev sign-in screen. No
+  authenticated Production identity or workspace was available, and no
+  credentials were entered. Therefore the required two-identity Orca editor
+  flow at `/workspaces/<workspaceId>` could not start; Current task remains
+  OI.4 and OI.5 must not begin. Screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%201.03.34%20PM.jpeg`
+  (exact Production deployment sign-in blocker).
+
 - **OI.4 — Production Computer Use blocker 2026-08-14T15:05:39Z:** Local
   verification passed for the already-pushed implementation commit `534d86c`
   (`pnpm format:check`, `pnpm lint` with 2 existing warnings, `pnpm typecheck`,
