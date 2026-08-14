@@ -27,6 +27,13 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.5 — dirty working tree blocker 2026-08-14T22:01:34Z:** Before any
+  OI.5 work, the required initial `git status --short` found the pre-existing
+  modified file `apps/web/next-env.d.ts`. Per the run policy, this automation
+  did not switch branches, pull, inspect task implementation files, modify,
+  stage, or include that user-owned change. Current task remains OI.5; do not
+  begin OI.6 until the worktree is reconciled by its owner.
+
 - **OI.5 — dirty working tree blocker 2026-08-14T21:01:37Z:** Before any
   OI.5 work, the required initial `git status --short` found the pre-existing
   modified file `apps/web/next-env.d.ts` (its generated routes reference
