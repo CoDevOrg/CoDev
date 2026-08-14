@@ -8,7 +8,7 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.4 — Render named presence and active-file state in Orca's editor chrome**
+**OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor**
 
 ## Mandatory Orca workspace completion gate
 
@@ -255,6 +255,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
 | OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect      | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                       |
 | OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                  | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                         |
+| OI.4 — Render named presence and active-file state in Orca's editor chrome                            | 2026-08-14 | [OI.4 completion evidence](#oi4-completion-evidence) — Two authenticated Production identities opened the shared Orca workspace; Jordan saw both names and Alex's remote `README.md` state in the editor chrome.            |
 
 ### B0.2 completion evidence
 
@@ -1450,6 +1451,38 @@ The invitee is not a workspace member.` Membership remained owner-only.
   include a single-use token and were not copied into this ledger.
 - Next task: OI.3 — put member-role management in Orca Workspace Options and
   refresh native control availability live.
+
+### OI.4 completion evidence
+
+- Completed: 2026-08-14T18:03:24Z.
+- Changed files: `apps/web/app/api/workspaces/[workspaceId]/presence/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/presence/route.test.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/lib/collaboration-server.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: `pnpm format:check`, `pnpm lint` (2 pre-existing warnings), `pnpm
+typecheck`, `pnpm test` (226 passed, 1 skipped), `pnpm build`, `pnpm
+test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
+  all passed for the validated implementation.
+- Validated source commit: `534d86cd814b54d296a51d95c6907a5695c5d9c1`.
+- Production URL: <https://www.trycodev.com> (the Ready Production alias for
+  `main` commit `b6803f6c7a360cdf0c6ffa261cc30008bb81385c`); source commit
+  `534d86c` was also Ready at
+  <https://codev-gsaml18sz-yousef20920s-projects.vercel.app>.
+- Computer Use flow: created an authenticated shared Production workspace at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` as CoDev Test Jordan,
+  created a native Collaborator invite in Orca Settings → General → Invites,
+  accepted it as CoDev Test Alex in an independent Incognito session, and
+  opened `README.md` as Alex and `src/presence.ts` as Jordan. Jordan's native
+  editor chrome showed `CoDev Test Jordan, CoDev Test Alex viewing README.md`.
+  The test workspace was initialized as a repository inside Orca and contains
+  only the two harmless presence-flow files.
+- Screenshot: `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%202.03.24%20PM.jpeg`
+  (Production Orca final named-presence and remote-active-file state).
+- Next task: OI.5 — render collaborator cursor/selection state and reconnect
+  replay in Orca's editor.
 
 ## Blocked tasks
 
