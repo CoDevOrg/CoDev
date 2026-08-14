@@ -1511,6 +1511,27 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 
 ## Blocked tasks
 
+- **OI.5 — Production host-capacity blocker 2026-08-14T20:49:28Z:** Follow-up
+  source commit `fce33b67ed5002d1f5d8ba97c99f321dea46a889`
+  (`fix: refresh Orca cursor presence`) adds a 20-second Source-editor cursor
+  heartbeat, below the server's 60-second presence TTL, so a stationary
+  selection is republished while a second client reconnects. Its maintained
+  Orca patch and regenerated static web client passed pinned `typecheck:web`
+  and `build:web`; `pnpm format:check`, `pnpm lint` (0 errors, 2 existing
+  warnings), `pnpm typecheck`, `pnpm test` (229 passed, 1 skipped), `pnpm
+  build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git
+  diff --check` also passed. Vercel Git-triggered Production deployment
+  `dpl_C5NRmN8cjQxoDUJeHFrZTVV4JDEJ` is Ready at
+  <https://codev-95q2cigns-yousef20920s-projects.vercel.app>. Computer Use
+  authenticated the CoDev Test Jordan identity against that exact deployment
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`, but its
+  Firecracker host cannot start: AWS reports no Spot capacity for
+  `i-0acd559bc217c52d4`. Therefore the required two-identity native
+  selection/reconnect flow cannot be run on this exact Production deployment;
+  no completion claim or success screenshot is recorded. Current task remains
+  OI.5; do not begin OI.6. Error screenshot:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%204.49.28%20PM.jpeg`.
+
 - **OI.5 — Production cursor/reconnect verification blocker 2026-08-14T20:16:00Z:**
   Source commit `7f99154b554da5b1e7ea265ec1f8fcff0404f285`
   (`feat: render collaborator cursors in Orca`) is pushed to `main`; Vercel
