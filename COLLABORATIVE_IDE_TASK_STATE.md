@@ -27,6 +27,22 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.5 — local browser-suite blocker 2026-08-14T19:15:56Z:** The required
+  initial `git status --short` was clean and `main` was current after
+  `git fetch origin main` and `git pull --ff-only origin main`. The OI.5
+  implementation adds validated, workspace-bound cursor updates and native
+  Monaco cursor/selection decorations through the maintained Orca patch.
+  Focused bridge tests (7), contracts tests (19), patched Orca cursor test,
+  patched Orca `typecheck:web`/`build:web`, `pnpm format:check`, `pnpm lint`
+  (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (229 passed,
+  1 skipped), `pnpm build`, and `pnpm rust:check` passed. The required
+  `pnpm test:e2e` did not pass: 31 tests passed, 1 skipped, and the unrelated
+  protected-workspace smoke test failed because `getByLabel("Password")`
+  resolves to both the password input and `New account password requirements`
+  list on the existing sign-in page. No OI.5 source is committed, pushed,
+  deployed, or Production-verified; no screenshot exists. Current task remains
+  OI.5 and OI.6 must not begin.
+
 - **OI.4 — Production authentication blocker 2026-08-14T17:03:48Z:** The
   required initial `git status --short` was clean; `main` was already current
   after `git switch main`, `git fetch origin main`, and `git pull --ff-only
