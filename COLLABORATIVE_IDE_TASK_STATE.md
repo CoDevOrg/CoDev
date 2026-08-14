@@ -27,6 +27,15 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.5 — dirty working tree blocker 2026-08-14T20:02:42Z:** Before any
+  OI.5 work, the required initial `git status --short` found 1,080
+  pre-existing changes: 199 modified paths, 754 deleted paths, and 535
+  untracked paths. This includes OI.5 presence/bridge/server edits and a
+  large uncommitted Orca asset replacement. Per the run policy, this
+  automation did not switch branches, pull, inspect task implementation
+  files, modify, stage, or include those changes. Current task remains OI.5;
+  do not begin OI.6 until the worktree is reconciled by its owner.
+
 - **OI.5 — local browser-suite blocker 2026-08-14T19:15:56Z:** The required
   initial `git status --short` was clean and `main` was current after
   `git fetch origin main` and `git pull --ff-only origin main`. The OI.5
