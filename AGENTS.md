@@ -27,3 +27,12 @@ Use Apple's open-source [container](https://github.com/apple/container) tool whe
 - Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
 - Preserve the separation between Vercel-hosted control services and AWS-hosted Firecracker infrastructure.
 - Add or update tests with every behavior change.
+
+## Production Test Accounts
+
+For authenticated Production UI verification, use the local-only account
+details in
+`/Users/yousefmaher/.codex/automations/codev-one-verified-task-per-run/test-accounts.md`.
+This file is intentionally outside the repository and must never be committed
+or copied into source, tests, screenshots, logs, or user-visible output unless
+the owner explicitly requests the credentials.
