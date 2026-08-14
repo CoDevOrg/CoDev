@@ -16,7 +16,9 @@ export type CodevBridgeMethod =
   | "invites.list"
   | "invites.create"
   | "invites.revoke"
-  | "members.update";
+  | "members.update"
+  | "presence.list"
+  | "presence.update";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -48,6 +50,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "invites.create",
   "invites.revoke",
   "members.update",
+  "presence.list",
+  "presence.update",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -196,6 +200,38 @@ export async function executeCodevBridgeRequest(
   }
 
   try {
+    if (request.method === "presence.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/presence`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load presence."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "presence.update") {
+      const path = request.params?.path;
+      if (typeof path !== "string" || !path.trim()) {
+        return fail("A workspace-relative active file is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/presence`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not update presence."));
+      }
+      return succeed(payload);
+    }
+
     if (request.method === "invites.list") {
       const response = await fetcher(`/api/workspaces/${workspaceId}/invites`, {
         cache: "no-store",

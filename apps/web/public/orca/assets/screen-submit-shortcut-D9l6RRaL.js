@@ -1,0 +1,1 @@
+import{t as e}from"./shortcut-platform-DB-I9WfZ.js";function t(t){return t.isComposing||t.nativeEvent?.isComposing||t.key!==`Enter`||t.altKey||t.shiftKey?!1:e()===`darwin`?!!t.metaKey&&!t.ctrlKey:!!t.ctrlKey&&!t.metaKey}function n(){return e()===`darwin`?`⌘`:`Ctrl`}function r(){return e()===`darwin`?`⌘ Enter`:`Ctrl+Enter`}export{r as n,t as r,n as t};

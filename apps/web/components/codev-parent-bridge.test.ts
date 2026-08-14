@@ -215,4 +215,63 @@ describe("codev parent bridge", () => {
       error: "A valid workspace member is required.",
     });
   });
+
+  it("reads and updates active-file presence through the workspace-bound bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          members: [
+            {
+              user: { id: "user-1", login: "alex", name: "Alex Morgan" },
+              path: "src/hello.ts",
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-presence-list",
+          method: "presence.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { members: [{ path: "src/hello.ts" }] },
+    });
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-presence-update",
+          method: "presence.update",
+          params: { path: "README.md" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenLastCalledWith(
+      "/api/workspaces/workspace-1/presence",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "README.md" }),
+      },
+    );
+  });
 });

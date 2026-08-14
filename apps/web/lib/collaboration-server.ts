@@ -126,6 +126,16 @@ function presenceExpiryKey(workspaceId: string) {
  * this list only while their realtime presence heartbeat is current.
  */
 export async function listWorkspacePresence(workspaceId: string) {
+  return (await listWorkspacePresenceEntries(workspaceId)).map(
+    (entry) => entry.user,
+  );
+}
+
+/**
+ * Returns active collaboration identities with their redacted active file.
+ * Callers must enforce workspace membership before exposing this state.
+ */
+export async function listWorkspacePresenceEntries(workspaceId: string) {
   try {
     const client = redisClient();
     if (client.status === "wait") await client.connect();
@@ -152,13 +162,49 @@ export async function listWorkspacePresence(workspaceId: string) {
 
     return [...people.values()]
       .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
-      .slice(0, 5)
-      .map((entry) => entry.user);
+      .slice(0, 5);
   } catch {
     // Presence is an enhancement. An unavailable realtime service simply
     // leaves the preview in its neutral state.
     return [];
   }
+}
+
+/**
+ * Orca's editor tabs use the same short-lived presence store as the realtime
+ * collaboration socket. The stable per-user key keeps tab changes current
+ * without exposing a connection token to the embedded client.
+ */
+export async function recordOrcaActiveFile(
+  workspaceId: string,
+  user: CollaborationUser,
+  path: string,
+) {
+  const entry = collaborationPresenceEntrySchema.parse({
+    connectionId: `orca:${user.id}`,
+    user,
+    path,
+    lastSeenAt: new Date().toISOString(),
+  });
+  const now = Date.now();
+  const hashKey = presenceHashKey(workspaceId);
+  const expiryKey = presenceExpiryKey(workspaceId);
+  const client = redisClient();
+  const expired = await client.zrangebyscore(expiryKey, 0, now);
+  const transaction = client.multi();
+  if (expired.length) transaction.hdel(hashKey, ...expired);
+  transaction.zremrangebyscore(expiryKey, 0, now);
+  transaction.hset(hashKey, entry.connectionId, JSON.stringify(entry));
+  transaction.zadd(expiryKey, now + PRESENCE_TTL_MS, entry.connectionId);
+  transaction.pexpire(hashKey, PRESENCE_TTL_MS * 2);
+  transaction.pexpire(expiryKey, PRESENCE_TTL_MS * 2);
+  await transaction.exec();
+  await appendPresenceEvent({
+    workspaceId,
+    type: "presence.active_file.changed",
+    data: { userId: user.id, path, previousPath: null },
+  });
+  return entry;
 }
 
 function documentLockKey(
