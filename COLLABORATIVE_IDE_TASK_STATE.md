@@ -1511,6 +1511,32 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 
 ## Blocked tasks
 
+- **OI.5 — Production cursor/reconnect verification blocker 2026-08-14T20:16:00Z:**
+  Source commit `7f99154b554da5b1e7ea265ec1f8fcff0404f285`
+  (`feat: render collaborator cursors in Orca`) is pushed to `main`; Vercel
+  Git-triggered Production deployment `dpl_HwmP6MqjV4kQDuFFXyqtAfpbMirY` is
+  Ready at <https://codev-fjqu4w2y0-yousef20920s-projects.vercel.app> (the
+  canonical Production domain redirects to <https://www.trycodev.com>). Local
+  checks passed: focused cursor/bridge/contracts tests, patched Orca
+  `typecheck:web` and `build:web`, `pnpm format:check`, `pnpm lint` (0 errors,
+  2 existing warnings), `pnpm typecheck`, `pnpm test` (229 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and
+  `git diff --check`. Computer Use authenticated CoDev Test Jordan and CoDev
+  Test Alex in independent Chrome windows, opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`, and showed both identities
+  in Orca's native presence strip for `README.md`. Jordan then selected the
+  complete source-editor document. The second client did not complete the
+  required final verification: changing it to the source editor reset its
+  selected workspace, and a browser reconnect restored the workspace/terminal
+  shell but not the remote source-editor cursor. Reopening `README.md` showed
+  only Alex in the presence strip, so no native remote cursor/selection
+  decoration or replay-once success screenshot exists. Current task remains
+  OI.5; do not begin OI.6. Screenshots:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%204.13.27%20PM.jpeg`
+  (two-identity named-presence state) and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%204.14.43%20PM.jpeg`
+  (post-reconnect Orca state without the replayed remote cursor).
+
 - **OI.3 — deferred by owner 2026-08-13T14:22:00Z:** The owner explicitly
   authorized advancing to OI.4 without claiming OI.3 complete. The native
   Member roles control is deployed and reachable in Production, but its required
