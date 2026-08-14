@@ -27,6 +27,20 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.4 — Production Computer Use blocker 2026-08-14T15:05:39Z:** Local
+  verification passed for the already-pushed implementation commit `534d86c`
+  (`pnpm format:check`, `pnpm lint` with 2 existing warnings, `pnpm typecheck`,
+  `pnpm test` with 226 passed/1 skipped, `pnpm build`, `pnpm test:e2e` with 32
+  passed/1 skipped, `pnpm rust:check`, and `git diff --check`). The exact
+  Production deployment is Ready at
+  `https://codev-gsaml18sz-yousef20920s-projects.vercel.app` and Vercel records
+  commit `534d86cd814b54d296a51d95c6907a5695c5d9c1`. The required authenticated
+  Orca workspace flow could not start: the only available Chrome session is
+  actively being used for a Vercel domain-purchase checkout containing billing
+  information, so this automation did not navigate, dismiss, or otherwise
+  interact with that user-owned session. No Production Orca screenshot exists;
+  Current task remains OI.4 and OI.5 must not begin.
+
 - **OI.4 — dirty working tree blocker 2026-08-14T14:01:40Z:** Before any
   OI.4 work, `git status --short` found 1,457 pre-existing changes: 6 modified
   files, 724 deleted files, and 727 untracked files. This includes
