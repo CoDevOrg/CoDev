@@ -933,4 +933,86 @@ describe("codev parent bridge", () => {
       { cache: "no-store" },
     );
   });
+
+  it("saves and revokes a personal provider connection through the workspace-bound request bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fixtureKey = "sk-test-codev-f62-fixture-key0001";
+    const saved = {
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      connections: [
+        {
+          provider: "openai",
+          status: "connected",
+          lastFour: "0001",
+          suppliedBy: "CoDev Test Jordan",
+        },
+      ],
+    };
+    const revoked = {
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      connections: [{ provider: "openai", status: "not_connected" }],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(saved))
+      .mockResolvedValueOnce(Response.json(revoked));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-connections-put",
+          method: "connections.put",
+          params: { provider: "openai", apiKey: fixtureKey },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: saved });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      "/api/workspaces/workspace-1/connections",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "openai", apiKey: fixtureKey }),
+        cache: "no-store",
+      },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-connections-revoke",
+          method: "connections.revoke",
+          params: { provider: "openai" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: revoked });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      "/api/workspaces/workspace-1/connections?provider=openai",
+      { method: "DELETE", cache: "no-store" },
+    );
+    expect(JSON.stringify(saved)).not.toContain(fixtureKey);
+    expect(
+      isCodevBridgeRequestMessage({
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-connections-put",
+        method: "connections.put",
+        params: { provider: "openai", apiKey: fixtureKey },
+      }),
+    ).toBe(true);
+  });
 });

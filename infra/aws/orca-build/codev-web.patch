@@ -2172,16 +2172,40 @@ index 8da2783..41186fe 100644
            <FolderWorkspacePrChecksPanel
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
 new file mode 100644
-index 0000000..bf99739
+index 0000000..24a3103
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,85 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevProviderConnectionsView } from './CodevProviderConnectionsSection'
 +
++const disconnectedSnapshot = {
++  viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
++  connections: [
++    {
++      provider: 'openai' as const,
++      label: 'OpenAI',
++      status: 'not_connected' as const,
++      credentialType: null,
++      lastFour: null,
++      suppliedBy: null,
++      scope: 'personal' as const
++    },
++    {
++      provider: 'anthropic' as const,
++      label: 'Anthropic',
++      status: 'not_connected' as const,
++      credentialType: null,
++      lastFour: null,
++      suppliedBy: null,
++      scope: 'personal' as const
++    }
++  ]
++}
++
 +describe('CodevProviderConnectionsView', () => {
-+  it('shows connected status with last four digits and never renders the secret', () => {
++  it('shows connected status with last four digits and a revoke control, never the secret', () => {
 +    const html = renderToStaticMarkup(
 +      <CodevProviderConnectionsView
 +        connected
@@ -2213,19 +2237,38 @@ index 0000000..bf99739
 +    expect(html).toContain('Provider connections')
 +    expect(html).toContain('OpenAI')
 +    expect(html).toContain('Connected · API key · supplied by CoDev Test Jordan · ending 9kQ2')
++    expect(html).toContain('Replace key')
++    expect(html).toContain('Revoke')
 +    expect(html).toContain('Anthropic')
 +    expect(html).toContain('Not connected')
++    expect(html).toContain('Save key')
 +    expect(html).not.toContain('sk-')
 +    expect(html).not.toContain('ciphertext')
++    expect(html).not.toContain('9kQ2secret')
++  })
++
++  it('shows a save control for a disconnected provider and an error without echoing the key', () => {
++    const html = renderToStaticMarkup(
++      <CodevProviderConnectionsView
++        connected
++        snapshot={disconnectedSnapshot}
++        message="Enter a valid OpenAI API key."
++      />
++    )
++    expect(html).toContain('Save key')
++    expect(html).toContain('Enter a valid OpenAI API key.')
++    expect(html).not.toContain('Revoke')
++    expect(html).not.toContain('sk-test-codev-f62-fixture-key0001')
 +  })
 +})
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
 new file mode 100644
-index 0000000..f12d373
+index 0000000..9c196cc
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,220 @@
 +import { useEffect, useState, type JSX } from 'react'
++import { Button } from '@/components/ui/button'
 +import { SettingsSubsectionHeader } from './SettingsFormControls'
 +import {
 +  getCodevBridgeSnapshot,
@@ -2249,6 +2292,10 @@ index 0000000..f12d373
 +  connections: CodevProviderConnection[]
 +}
 +
++export type CodevProviderConnectionDrafts = Partial<
++  Record<CodevProviderConnection['provider'], string>
++>
++
 +function statusLabel(connection: CodevProviderConnection): string {
 +  if (connection.status !== 'connected') return 'Not connected'
 +  const ending = connection.lastFour ? ` · ending ${connection.lastFour}` : ''
@@ -2259,10 +2306,22 @@ index 0000000..f12d373
 +
 +export function CodevProviderConnectionsView({
 +  connected,
-+  snapshot
++  snapshot,
++  drafts = {},
++  busy = '',
++  message = '',
++  onDraftChange,
++  onSave,
++  onRevoke
 +}: {
 +  connected: boolean
 +  snapshot: CodevProviderConnectionSnapshot | null
++  drafts?: CodevProviderConnectionDrafts
++  busy?: string
++  message?: string
++  onDraftChange?: (provider: CodevProviderConnection['provider'], value: string) => void
++  onSave?: (provider: CodevProviderConnection['provider']) => void
++  onRevoke?: (provider: CodevProviderConnection['provider']) => void
 +}): JSX.Element {
 +  return (
 +    <div
@@ -2272,24 +2331,75 @@ index 0000000..f12d373
 +    >
 +      <SettingsSubsectionHeader
 +        title="Provider connections"
-+        description="Personal OpenAI and Anthropic connections stay encrypted on the CoDev server. This workspace only shows whether a connection exists — never the secret."
++        description="Add, replace, or revoke a personal OpenAI or Anthropic API key. Keys stay encrypted on the CoDev server and are never shown after you save them."
 +      />
 +      {!connected ? (
-+        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to view provider connection status.</p>
++        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to manage provider connections.</p>
 +      ) : (
 +        <ul className="space-y-2" aria-label="Provider connection status">
-+          {(snapshot?.connections ?? []).map((connection) => (
-+            <li
-+              key={connection.provider}
-+              className="rounded-md border border-border p-3"
-+              aria-label={`${connection.label} connection`}
-+            >
-+              <p className="text-sm font-medium">{connection.label}</p>
-+              <p className="mt-1 text-xs text-muted-foreground">{statusLabel(connection)}</p>
-+            </li>
-+          ))}
++          {(snapshot?.connections ?? []).map((connection) => {
++            const saving = busy === `save:${connection.provider}`
++            const revoking = busy === `revoke:${connection.provider}`
++            const disabled = !connected || busy !== ''
++            return (
++              <li
++                key={connection.provider}
++                className="space-y-2 rounded-md border border-border p-3"
++                aria-label={`${connection.label} connection`}
++                data-codev-connection-status={connection.status}
++              >
++                <p className="text-sm font-medium">{connection.label}</p>
++                <p className="text-xs text-muted-foreground">{statusLabel(connection)}</p>
++                <div className="flex flex-wrap items-center gap-2">
++                  <label className="sr-only" htmlFor={`codev-connection-key-${connection.provider}`}>
++                    {connection.label} API key
++                  </label>
++                  <input
++                    id={`codev-connection-key-${connection.provider}`}
++                    type="password"
++                    autoComplete="off"
++                    spellCheck={false}
++                    aria-label={`${connection.label} API key`}
++                    placeholder="Paste API key"
++                    className="h-8 min-w-[12rem] flex-1 rounded-md border border-border bg-background px-2 text-xs"
++                    value={drafts[connection.provider] ?? ''}
++                    disabled={disabled}
++                    onChange={(event) => onDraftChange?.(connection.provider, event.target.value)}
++                  />
++                  <Button
++                    type="button"
++                    size="sm"
++                    disabled={disabled}
++                    onClick={() => onSave?.(connection.provider)}
++                  >
++                    {saving
++                      ? 'Saving…'
++                      : connection.status === 'connected'
++                        ? 'Replace key'
++                        : 'Save key'}
++                  </Button>
++                  {connection.status === 'connected' ? (
++                    <Button
++                      type="button"
++                      size="sm"
++                      variant="outline"
++                      disabled={disabled}
++                      onClick={() => onRevoke?.(connection.provider)}
++                    >
++                      {revoking ? 'Revoking…' : 'Revoke'}
++                    </Button>
++                  ) : null}
++                </div>
++              </li>
++            )
++          })}
 +        </ul>
 +      )}
++      {message ? (
++        <p className="text-xs text-muted-foreground" role="status">
++          {message}
++        </p>
++      ) : null}
 +    </div>
 +  )
 +}
@@ -2298,6 +2408,9 @@ index 0000000..f12d373
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
 +  const [bridge, setBridge] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
 +  const [snapshot, setSnapshot] = useState<CodevProviderConnectionSnapshot | null>(null)
++  const [drafts, setDrafts] = useState<CodevProviderConnectionDrafts>({})
++  const [busy, setBusy] = useState('')
++  const [message, setMessage] = useState('')
 +
 +  useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
 +
@@ -2316,12 +2429,61 @@ index 0000000..f12d373
 +    }
 +  }, [embedded, bridge.status])
 +
++  async function save(provider: CodevProviderConnection['provider']): Promise<void> {
++    const apiKey = drafts[provider]?.trim() ?? ''
++    setBusy(`save:${provider}`)
++    setMessage('')
++    try {
++      const result = await requestCodevBridge<CodevProviderConnectionSnapshot>('connections.put', {
++        provider,
++        apiKey
++      })
++      setSnapshot(result)
++      setDrafts((current) => ({ ...current, [provider]: '' }))
++      setMessage(`${provider === 'openai' ? 'OpenAI' : 'Anthropic'} key saved.`)
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'The key could not be saved.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  async function revoke(provider: CodevProviderConnection['provider']): Promise<void> {
++    setBusy(`revoke:${provider}`)
++    setMessage('')
++    try {
++      const result = await requestCodevBridge<CodevProviderConnectionSnapshot>(
++        'connections.revoke',
++        { provider }
++      )
++      setSnapshot(result)
++      setDrafts((current) => ({ ...current, [provider]: '' }))
++      setMessage(`${provider === 'openai' ? 'OpenAI' : 'Anthropic'} connection revoked.`)
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'The connection could not be revoked.')
++    } finally {
++      setBusy('')
++    }
++  }
++
 +  if (!embedded) return null
 +
 +  return (
 +    <CodevProviderConnectionsView
 +      connected={bridge.status === 'connected'}
 +      snapshot={snapshot}
++      drafts={drafts}
++      busy={busy}
++      message={message}
++      onDraftChange={(provider, value) =>
++        setDrafts((current) => ({ ...current, [provider]: value }))
++      }
++      onSave={(provider) => {
++        void save(provider)
++      }}
++      onRevoke={(provider) => {
++        void revoke(provider)
++      }}
 +    />
 +  )
 +}
@@ -5797,10 +5959,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..4632864
+index 0000000..7978baf
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,350 @@
+@@ -0,0 +1,352 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -5848,6 +6010,8 @@ index 0000000..4632864
 +  | 'review.merge'
 +  | 'activity.list'
 +  | 'connections.list'
++  | 'connections.put'
++  | 'connections.revoke'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

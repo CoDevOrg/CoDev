@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  publicProviderConnectionPayload,
   secretKeysInValue,
   toProviderConnectionRecord,
   toProviderConnectionSnapshot,
@@ -51,5 +52,14 @@ describe("provider connection view", () => {
       true,
     );
     expect(secretKeysInValue(snapshot)).toEqual([]);
+  });
+
+  it("rejects a payload that still contains the submitted API key", () => {
+    expect(() =>
+      publicProviderConnectionPayload(
+        { status: "connected", apiKey: "sk-test-codev-f62-fixture-key0001" },
+        "sk-test-codev-f62-fixture-key0001",
+      ),
+    ).toThrow(/must not include secrets|must not echo/i);
   });
 });

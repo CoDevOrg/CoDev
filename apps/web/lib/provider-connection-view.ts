@@ -116,3 +116,22 @@ export function secretKeysInValue(
   }
   return found;
 }
+
+export function publicProviderConnectionPayload<T>(
+  value: T,
+  submittedSecret?: string,
+): T {
+  if (secretKeysInValue(value).length > 0) {
+    throw new Error("Provider connection responses must not include secrets.");
+  }
+  if (
+    submittedSecret &&
+    submittedSecret.length >= 8 &&
+    JSON.stringify(value).includes(submittedSecret)
+  ) {
+    throw new Error(
+      "Provider connection responses must not echo the submitted key.",
+    );
+  }
+  return value;
+}

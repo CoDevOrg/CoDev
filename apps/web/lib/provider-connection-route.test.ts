@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   getApiUser: vi.fn(),
   requireWorkspacePermission: vi.fn(),
   loadProviderConnectionSnapshot: vi.fn(),
+  savePersonalProviderConnection: vi.fn(),
+  revokePersonalProviderConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -19,12 +21,19 @@ vi.mock("@/lib/access", () => ({
 }));
 vi.mock("@/lib/provider-connection-server", () => ({
   loadProviderConnectionSnapshot: mocks.loadProviderConnectionSnapshot,
+  savePersonalProviderConnection: mocks.savePersonalProviderConnection,
+  revokePersonalProviderConnection: mocks.revokePersonalProviderConnection,
 }));
 
-import { GET as getConnections } from "@/app/api/workspaces/[workspaceId]/connections/route";
+import {
+  DELETE as deleteConnection,
+  GET as getConnections,
+  PUT as putConnection,
+} from "@/app/api/workspaces/[workspaceId]/connections/route";
 
 const workspaceId = "bed7a975-eccf-4742-85c6-cab41ce02830";
-const snapshot = {
+const fixtureKey = "sk-test-codev-f62-fixture-key0001";
+const connectedSnapshot = {
   viewer: { id: "user-1", name: "CoDev Test Jordan" },
   connections: [
     {
@@ -32,7 +41,7 @@ const snapshot = {
       label: "OpenAI",
       status: "connected",
       credentialType: "API_KEY",
-      lastFour: "9kQ2",
+      lastFour: "0001",
       suppliedBy: "CoDev Test Jordan",
       scope: "personal",
     },
@@ -47,12 +56,32 @@ const snapshot = {
     },
   ],
 };
+const disconnectedSnapshot = {
+  ...connectedSnapshot,
+  connections: connectedSnapshot.connections.map((row) =>
+    row.provider === "openai"
+      ? {
+          ...row,
+          status: "not_connected",
+          credentialType: null,
+          lastFour: null,
+          suppliedBy: null,
+        }
+      : row,
+  ),
+};
 
 describe("provider connection route", () => {
   beforeEach(() => {
     mocks.getApiUser.mockResolvedValue({ id: "user-1", name: "Jordan" });
     mocks.requireWorkspacePermission.mockResolvedValue(undefined);
-    mocks.loadProviderConnectionSnapshot.mockResolvedValue(snapshot);
+    mocks.loadProviderConnectionSnapshot.mockResolvedValue(
+      disconnectedSnapshot,
+    );
+    mocks.savePersonalProviderConnection.mockResolvedValue(connectedSnapshot);
+    mocks.revokePersonalProviderConnection.mockResolvedValue(
+      disconnectedSnapshot,
+    );
   });
 
   afterEach(() => {
@@ -67,10 +96,49 @@ describe("provider connection route", () => {
       { params: Promise.resolve({ workspaceId }) },
     );
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(snapshot);
+    await expect(response.json()).resolves.toEqual(disconnectedSnapshot);
     expect(mocks.loadProviderConnectionSnapshot).toHaveBeenCalledWith({
       id: "user-1",
       name: "Jordan",
     });
+  });
+
+  it("saves a personal API key and returns only redacted connection status", async () => {
+    const response = await putConnection(
+      new Request(
+        `http://codev.test/api/workspaces/${workspaceId}/connections`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider: "openai", apiKey: fixtureKey }),
+        },
+      ),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toEqual(connectedSnapshot);
+    expect(JSON.stringify(payload)).not.toContain(fixtureKey);
+    expect(mocks.savePersonalProviderConnection).toHaveBeenCalledWith(
+      { id: "user-1", name: "Jordan" },
+      "openai",
+      fixtureKey,
+    );
+  });
+
+  it("revokes a personal API key and returns the disconnected snapshot", async () => {
+    const response = await deleteConnection(
+      new Request(
+        `http://codev.test/api/workspaces/${workspaceId}/connections?provider=openai`,
+        { method: "DELETE" },
+      ),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(disconnectedSnapshot);
+    expect(mocks.revokePersonalProviderConnection).toHaveBeenCalledWith(
+      { id: "user-1", name: "Jordan" },
+      "openai",
+    );
   });
 });

@@ -38,7 +38,9 @@ export type CodevBridgeMethod =
   | "review.advance"
   | "review.merge"
   | "activity.list"
-  | "connections.list";
+  | "connections.list"
+  | "connections.put"
+  | "connections.revoke";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -92,6 +94,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "review.merge",
   "activity.list",
   "connections.list",
+  "connections.put",
+  "connections.revoke",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -464,6 +468,54 @@ export async function executeCodevBridgeRequest(
       if (!response.ok) {
         return fail(
           jsonError(payload, "CoDev could not load provider connections."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "connections.put") {
+      const provider = request.params?.provider;
+      const apiKey = request.params?.apiKey;
+      if (provider !== "openai" && provider !== "anthropic") {
+        return fail("Choose OpenAI or Anthropic.");
+      }
+      if (typeof apiKey !== "string" || apiKey.trim().length < 20) {
+        return fail("Enter a valid API key.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/connections`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider, apiKey: apiKey.trim() }),
+          cache: "no-store",
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not save this provider connection."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "connections.revoke") {
+      const provider = request.params?.provider;
+      if (provider !== "openai" && provider !== "anthropic") {
+        return fail("Choose OpenAI or Anthropic.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/connections?provider=${provider}`,
+        { method: "DELETE", cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            "CoDev could not revoke this provider connection.",
+          ),
         );
       }
       return succeed(payload);
