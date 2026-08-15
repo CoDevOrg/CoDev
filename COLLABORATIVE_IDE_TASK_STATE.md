@@ -27,6 +27,30 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.10 — Production Computer Use authentication blocker 2026-08-15T10:04:00Z:**
+  The required initial `git status --short` was clean. This run then used
+  `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
+  main`; `main` remains current at
+  `5c5da5e1dcd2fd08bdb02250e2a26c5726ef6a7e` (`fix: provision a folder sandbox
+  so review checkpoints can freeze`). OI.10 source is already on `main` from
+  `49c945b3` and follow-up sandbox/visibility fixes; no product source was
+  changed in this run. GitHub records Ready Production deployment `5919321656`
+  for that exact commit at
+  `https://codev-7qyl4wdue-yousef20920s-projects.vercel.app`, which aliases
+  `https://www.trycodev.com` (the unique `*.vercel.app` host is Vercel
+  SSO-protected for unauthenticated requests). Computer Use opened
+  `https://www.trycodev.com/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`
+  and was redirected to the Production sign-in page at
+  `https://trycodev.com/sign-in` (`Welcome to CoDev.` with name/email/password
+  plus Google and GitHub buttons). The mandated local-only test-account file at
+  `/Users/yousefmaher/.codex/automations/codev-one-verified-task-per-run/test-accounts.md`
+  is absent from this cloud environment, so the run did not guess passwords or
+  use OAuth. The required authenticated Orca Source Control checkpoint and
+  Checks binary-safe diff flow therefore cannot start. Current task remains
+  OI.10; do not begin OI.11. Screenshot evidence:
+  `/tmp/codev-oi10-verify/01-signin-blocker.png` and
+  `/tmp/computer-use/9eea6.webp`.
+
 - **OI.9 — Production verification completed 2026-08-15T09:03:00Z:** Active
   and contested path claims are live in Orca's native Explorer and worktree
   cards, with reassign and cancel instead of silent overwrite. Source commit
