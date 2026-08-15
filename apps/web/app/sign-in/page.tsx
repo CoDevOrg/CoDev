@@ -58,7 +58,11 @@ function GitHubMark() {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
+  searchParams: Promise<{
+    callbackUrl?: string;
+    error?: string;
+    mode?: string;
+  }>;
 }) {
   const clerkEnabled = clerkAuthConfigured();
   let session: Session | null = null;
@@ -75,7 +79,7 @@ export default async function SignInPage({
   }
   if (session?.user) redirect("/dashboard");
 
-  const { callbackUrl, error } = await searchParams;
+  const { callbackUrl, error, mode } = await searchParams;
   const githubConfigured = isGitHubAuthConfigured();
   const googleConfigured = isGoogleAuthConfigured();
   const safeCallback =
@@ -93,8 +97,8 @@ export default async function SignInPage({
         <p className="eyebrow">Sign in</p>
         <h1>Welcome to CoDev.</h1>
         <p>
-          Sign in with your name, email, and password, or continue with Google
-          or GitHub.
+          Continue with Google or GitHub, or sign in with the email you already
+          use. New to CoDev? Create an account below.
         </p>
 
         {sessionCheckUnavailable ? (
@@ -106,8 +110,8 @@ export default async function SignInPage({
 
         {error ? (
           <div className="inline-alert error" role="alert">
-            Sign-in did not complete. Check your details and try again. New
-            accounts must meet every password requirement below.
+            That email or password did not work. Sign in with your existing
+            account, or create a new one below.
           </div>
         ) : null}
 
@@ -154,10 +158,13 @@ export default async function SignInPage({
             </div>
 
             <CredentialsSignInForm
+              initialMode={mode === "sign-up" ? "sign-up" : "sign-in"}
               action={async (formData) => {
                 "use server";
+                const intent = String(formData.get("intent") ?? "sign-in");
                 try {
                   await signIn("credentials", {
+                    intent,
                     name: String(formData.get("name") ?? ""),
                     email: String(formData.get("email") ?? ""),
                     password: String(formData.get("password") ?? ""),
@@ -168,8 +175,10 @@ export default async function SignInPage({
                     signInError instanceof AuthError &&
                     signInError.type === "CredentialsSignin"
                   ) {
+                    const nextMode =
+                      intent === "sign-up" ? "sign-up" : "sign-in";
                     redirect(
-                      `/sign-in?error=CredentialsSignin&callbackUrl=${encodeURIComponent(safeCallback)}`,
+                      `/sign-in?error=CredentialsSignin&mode=${nextMode}&callbackUrl=${encodeURIComponent(safeCallback)}`,
                     );
                   }
 

@@ -37,6 +37,19 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".auth-page .auth-submit {");
   });
 
+  it("keeps auth password guidance readable on the dark card", () => {
+    expect(appTheme).toContain(
+      ".auth-page .auth-password-guidance,\n.auth-page .auth-password-guidance p,\n.auth-page .auth-password-guidance .unmet {",
+    );
+    expect(appTheme).toContain("color: var(--codev-beige-200);");
+    expect(appTheme).toContain(".auth-page .auth-password-guidance .met {");
+    expect(appTheme).toContain("color: var(--codev-beige-100);");
+    expect(appTheme).toContain(
+      ".auth-page .auth-password-guidance .met > span {",
+    );
+    expect(appTheme).toContain("color: var(--codev-orange-400);");
+  });
+
   it("gives public landing pages the same palette and full-width layout", () => {
     expect(appTheme).toContain(".landing-page {");
     expect(appTheme).toContain("--landing-paper: var(--codev-forest-950);");

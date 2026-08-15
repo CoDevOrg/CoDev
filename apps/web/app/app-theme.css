@@ -282,7 +282,7 @@
 }
 
 .auth-page .auth-credentials-form input::placeholder {
-  color: var(--muted-2);
+  color: var(--codev-sage-300);
 }
 
 .auth-page .auth-submit {
@@ -293,6 +293,28 @@
 
 .auth-page .auth-submit:hover {
   background: var(--codev-orange-400);
+}
+
+.auth-page .auth-mode-switch {
+  color: var(--muted);
+}
+
+.auth-page .auth-mode-switch button {
+  color: var(--codev-orange-400);
+}
+
+.auth-page .auth-password-guidance,
+.auth-page .auth-password-guidance p,
+.auth-page .auth-password-guidance .unmet {
+  color: var(--codev-beige-200);
+}
+
+.auth-page .auth-password-guidance .met {
+  color: var(--codev-beige-100);
+}
+
+.auth-page .auth-password-guidance .met > span {
+  color: var(--codev-orange-400);
 }
 
 .auth-page .github-button,

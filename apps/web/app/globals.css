@@ -1712,6 +1712,25 @@ button {
   color: rgba(23, 59, 45, 0.68);
 }
 
+.auth-mode-switch {
+  margin: 2px 0 0;
+  color: rgba(23, 59, 45, 0.72);
+  font-size: 14px;
+  text-align: center;
+}
+
+.auth-mode-switch button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--landing-orange, #d9642c);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .auth-submit {
   min-height: 48px;
   margin-top: 3px;

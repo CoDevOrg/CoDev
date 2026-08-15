@@ -26,7 +26,7 @@ describe("sign-in provider layout", () => {
     expect(signInPage).not.toContain("OAuth setup pending");
   });
 
-  it("keeps a recoverable sign-in experience and explains the new password policy", () => {
+  it("keeps a recoverable sign-in experience and a separate create-account path", () => {
     expect(signInPage).toContain('dynamic = "force-dynamic"');
     expect(signInPage).toContain("sessionCheckUnavailable");
     expect(signInPage).toContain(
@@ -34,6 +34,10 @@ describe("sign-in provider layout", () => {
     );
     expect(signInPage).toContain("CredentialsSignin");
     expect(signInPage).toContain("CredentialsSignInForm");
+    expect(signInPage).toContain('initialMode={mode === "sign-up"');
+    expect(credentialsSignInForm).toContain('name="intent"');
+    expect(credentialsSignInForm).toContain("Create an account");
+    expect(credentialsSignInForm).toContain("Sign in with email");
     expect(credentialsSignInForm).toContain(
       'aria-label="New account password requirements"',
     );

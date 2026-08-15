@@ -9,10 +9,13 @@ import Google from "next-auth/providers/google";
 import { schema } from "@codev/db";
 
 import { resolveSignInProviderGate } from "@/lib/auth-sign-in-gate";
+import {
+  parseCredentialsFields,
+  resolveCredentialsAuthorizeStep,
+} from "@/lib/credentials-auth";
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
-import { getNewAccountPasswordError } from "@/lib/password-policy";
 import { mergeUserIntoCanonical } from "@/lib/user-merge";
 
 interface GitHubProfile {
@@ -69,21 +72,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: "Email and password",
       credentials: {
+        intent: { label: "Intent", type: "text" },
         name: { label: "Name", type: "text" },
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const name =
-          typeof credentials?.name === "string" ? credentials.name.trim() : "";
-        const email =
-          typeof credentials?.email === "string"
-            ? credentials.email.trim().toLowerCase()
-            : "";
-        const password =
-          typeof credentials?.password === "string" ? credentials.password : "";
+        const { intent, name, email, password } = parseCredentialsFields({
+          intent: credentials?.intent,
+          name: credentials?.name,
+          email: credentials?.email,
+          password: credentials?.password,
+        });
 
-        if (!name || !email || password.length < 8) return null;
+        if (!email || !password) return null;
 
         const database = getDatabase();
         const [existingUser] = await database
@@ -98,9 +100,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .where(eq(schema.users.email, email))
           .limit(1);
 
-        if (existingUser) {
+        const step = resolveCredentialsAuthorizeStep({
+          intent,
+          name,
+          email,
+          password,
+          existingUser: Boolean(existingUser),
+        });
+
+        if (step === "reject") return null;
+
+        if (step === "verify-existing") {
           if (
-            !existingUser.passwordHash ||
+            !existingUser?.passwordHash ||
             !(await verifyPassword(password, existingUser.passwordHash))
           ) {
             return null;
@@ -113,8 +125,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             image: existingUser.avatarUrl,
           };
         }
-
-        if (getNewAccountPasswordError(password)) return null;
 
         const [localUser] = await database
           .insert(schema.users)

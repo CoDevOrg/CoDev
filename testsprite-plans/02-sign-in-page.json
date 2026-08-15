@@ -6,7 +6,7 @@
   "planSteps": [
     {
       "type": "action",
-      "description": "Navigate to https://codev-xi.vercel.app/sign-in"
+      "description": "Navigate to https://trycodev.com/sign-in"
     },
     {
       "type": "assertion",
@@ -14,15 +14,11 @@
     },
     {
       "type": "assertion",
-      "description": "An input labeled 'Name' is visible"
+      "description": "An input labeled 'Email' and an input labeled 'Password' are visible, and no input labeled 'Name' is shown until Create an account is chosen"
     },
     {
       "type": "assertion",
-      "description": "An input labeled 'Email' is visible"
-    },
-    {
-      "type": "assertion",
-      "description": "An input labeled 'Password' is visible"
+      "description": "A button labeled 'Sign in with email' and a button labeled 'Create an account' are visible"
     },
     {
       "type": "assertion",

@@ -59,9 +59,11 @@ test("protected workspace routes require GitHub identity", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Welcome to CoDev." }),
   ).toBeVisible();
-  await expect(page.getByLabel("Name")).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Password" })).toBeVisible();
+  await expect(page.getByLabel("Name")).toHaveCount(0);
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await expect(page.getByLabel("Name")).toBeVisible();
 });
 
 test("workspace APIs reject anonymous requests", async ({ request }) => {
