@@ -227,7 +227,10 @@ export async function POST(
           .where(eq(schema.workspaces.id, workspaceId))
           .limit(1)
           .for("update");
-        if (workspaceState?.status !== "ready") {
+        if (
+          workspaceState?.status !== "ready" &&
+          !(input.draft && !workspace.githubRepositoryId)
+        ) {
           throw new WorkspaceLifecycleError(
             "The workspace is not ready for a new agent. Try again after it resumes.",
           );
