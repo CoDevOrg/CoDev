@@ -1371,10 +1371,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
-index 0000000..193de4e
+index 0000000..26fb7b2
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,138 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevSharedSessionViewPanel, type CodevSharedSessionView } from './CodevSharedSessionPanel'
@@ -1481,6 +1481,36 @@ index 0000000..193de4e
 +    )
 +    expect(html).toContain('Queue instruction · unavailable')
 +    expect(html).toContain('Interrupt turn · unavailable')
++  })
++
++  it('shows a revoked-connection block without dropping the completed transcript', () => {
++    const html = renderToStaticMarkup(
++      <CodevSharedSessionViewPanel
++        connected
++        restored={false}
++        viewer={{ id: 'b0200000-0000-4000-8000-000000000012', name: 'Jordan Lee', canCoSteer: true }}
++        view={{
++          ...view,
++          session: { ...view.session, state: 'idle', queue: [] },
++          attributedQueue: [],
++          connectionBlocked:
++            'This OpenAI connection was revoked or is not connected. Reconnect a key in Settings before starting another turn. The existing session is unchanged.'
++        }}
++        draftPrompt="Inspect README.md"
++        busy=""
++        message=""
++        onDraftChange={() => undefined}
++        onRefresh={() => undefined}
++        onStartControlled={() => undefined}
++        onQueue={() => undefined}
++        onInterrupt={() => undefined}
++      />
++    )
++    expect(html).toContain('Provider connection blocked')
++    expect(html).toContain('This OpenAI connection was revoked or is not connected')
++    expect(html).toContain('Repository structure is ready for the shared session.')
++    expect(html).toContain('Queue instruction')
++    expect(html).not.toContain('1 queued')
 +  })
 +})
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
@@ -1656,10 +1686,10 @@ index 0000000..b887627
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
 new file mode 100644
-index 0000000..b3dc285
+index 0000000..f394e2a
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
-@@ -0,0 +1,341 @@
+@@ -0,0 +1,351 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -1701,6 +1731,7 @@ index 0000000..b3dc285
 +  attributedQueue?: CodevSharedQueueEntry[]
 +  transcript: CodevSharedTranscriptTurn[]
 +  lastCompletedAction: { tool: string; output: string } | null
++  connectionBlocked?: string | null
 +}
 +
 +export type CodevSharedSessionSnapshot = {
@@ -1726,6 +1757,7 @@ index 0000000..b3dc285
 +  viewerName: string
 +): string {
 +  if (!connected) return 'Waiting for the workspace-bound CoDev bridge.'
++  if (view?.connectionBlocked) return view.connectionBlocked
 +  if (!view) {
 +    return 'Prepare a managed proposal from this Agents panel to open a shared session.'
 +  }
@@ -1995,7 +2027,15 @@ index 0000000..b3dc285
 +        </div>
 +      )}
 +
-+      <p className="mt-2 text-xs text-muted-foreground" role="status">
++      <p
++        className="mt-2 text-xs text-muted-foreground"
++        role={view?.connectionBlocked || message ? 'alert' : 'status'}
++        aria-label={
++          view?.connectionBlocked || /revoked or is not connected/i.test(message)
++            ? 'Provider connection blocked'
++            : 'Shared session status'
++        }
++      >
 +        {message || statusMessage(connected, restored, view, viewer?.name ?? 'You')}
 +      </p>
 +    </section>

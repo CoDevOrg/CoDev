@@ -116,6 +116,25 @@ describe("shared session view", () => {
       tool: CONTROLLED_LAST_ACTION_TOOL,
       output: CONTROLLED_LAST_ACTION_OUTPUT,
     });
+    expect(view.connectionBlocked).toBeNull();
+  });
+
+  it("surfaces a revoked provider connection without dropping the transcript", () => {
+    const view = toSharedSessionView(
+      session({
+        status: "idle",
+        lastError:
+          "This OpenAI connection was revoked or is not connected. Reconnect a key in Settings before starting another turn. The existing session is unchanged.",
+      }),
+    );
+
+    expect(view.connectionBlocked).toMatch(/OpenAI connection was revoked/);
+    expect(view.transcript).toEqual([
+      expect.objectContaining({
+        status: "completed",
+        output: CONTROLLED_LAST_ACTION_OUTPUT,
+      }),
+    ]);
   });
 
   it("keeps the queued instruction and last completed action after interrupt", () => {

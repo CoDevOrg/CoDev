@@ -4,6 +4,8 @@ import {
   type SharedSession,
 } from "@codev/contracts";
 
+import { isProviderConnectionBlockMessage } from "./provider-turn-auth";
+
 export const CONTROLLED_SHARED_TURN_PROMPT = "Controlled shared-session turn";
 export const CONTROLLED_LAST_ACTION_TOOL = "read_file · README.md";
 export const CONTROLLED_LAST_ACTION_OUTPUT =
@@ -48,6 +50,7 @@ export type SharedSessionView = {
   }>;
   transcript: SharedSessionTranscriptTurn[];
   lastCompletedAction: SharedSessionLastAction | null;
+  connectionBlocked: string | null;
 };
 
 export type SharedSessionSnapshot = {
@@ -87,6 +90,7 @@ export type SharedSessionListItem = {
   createdBy: string;
   ownerName?: string | null;
   ownerLogin?: string | null;
+  lastError?: string | null;
   createdAt: Date | string;
   turns: SharedSessionListTurn[];
   events: SharedSessionListEvent[];
@@ -221,5 +225,8 @@ export function toSharedSessionView(
       output: turn.output ?? turn.lastError ?? null,
     })),
     lastCompletedAction: lastCompletedSharedAction(session),
+    connectionBlocked: isProviderConnectionBlockMessage(session.lastError)
+      ? (session.lastError ?? null)
+      : null,
   };
 }

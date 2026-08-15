@@ -8,6 +8,10 @@ import { schema } from "@codev/db";
 import { getWorkspaceAccess } from "./access";
 import { listAgentSessions } from "./agent-runtime";
 import { getDatabase } from "./database";
+import {
+  ProviderConnectionRequiredError,
+  assertProviderConnectionForTurn,
+} from "./provider-turn-auth";
 import { assertTurnQuota } from "./quotas";
 import {
   CONTROLLED_LAST_ACTION_OUTPUT,
@@ -46,6 +50,7 @@ function asListItem(
     createdBy: session.createdBy,
     ownerName: session.ownerName,
     ownerLogin: session.ownerLogin,
+    lastError: session.lastError,
     createdAt: session.createdAt,
     turns: session.turns.map((turn) => ({
       id: turn.id,
@@ -101,6 +106,7 @@ async function requireSession(workspaceId: string, sessionId: string) {
     .select({
       id: schema.agentSessions.id,
       status: schema.agentSessions.status,
+      provider: schema.agentSessions.provider,
       workflowRunId: schema.agentSessions.workflowRunId,
     })
     .from(schema.agentSessions)
@@ -115,6 +121,21 @@ async function requireSession(workspaceId: string, sessionId: string) {
     throw new SharedSessionError("Agent session not found.", 404);
   }
   return session;
+}
+
+async function requireLiveProviderConnection(
+  workspaceId: string,
+  userId: string,
+  provider: string,
+) {
+  try {
+    await assertProviderConnectionForTurn(userId, workspaceId, provider);
+  } catch (error) {
+    if (error instanceof ProviderConnectionRequiredError) {
+      throw new SharedSessionError(error.message, error.status);
+    }
+    throw error;
+  }
 }
 
 async function recordSharedEvent(input: {
@@ -149,6 +170,7 @@ export async function startControlledSharedSessionTurn(
     return loadSharedSessionSnapshot(workspaceId, user);
   }
 
+  await requireLiveProviderConnection(workspaceId, user.id, session.provider);
   await assertTurnQuota(user.id, sessionId);
 
   const turns = await getDatabase()
@@ -235,7 +257,8 @@ export async function enqueueSharedSessionInstruction(
   if (!trimmed) {
     throw new SharedSessionError("An instruction is required.", 400);
   }
-  await requireSession(workspaceId, sessionId);
+  const session = await requireSession(workspaceId, sessionId);
+  await requireLiveProviderConnection(workspaceId, user.id, session.provider);
   await assertTurnQuota(user.id, sessionId);
 
   const now = new Date();

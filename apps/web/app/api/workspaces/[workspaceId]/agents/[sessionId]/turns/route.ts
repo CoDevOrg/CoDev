@@ -10,7 +10,10 @@ import {
   resolveSelectableAgentModel,
 } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
-import { resolveAgentCredential } from "@/lib/credentials";
+import {
+  ProviderConnectionRequiredError,
+  assertProviderConnectionForTurn,
+} from "@/lib/provider-turn-auth";
 import { getDatabase } from "@/lib/database";
 import { assertTurnQuota, QuotaError, quotaResponse } from "@/lib/quotas";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
@@ -68,7 +71,7 @@ export async function POST(
       .limit(1);
     if (!session) return apiError(new Error("Agent session not found."), 404);
     const provider = parseAgentProvider(session.provider);
-    const credential = await resolveAgentCredential(
+    const credential = await assertProviderConnectionForTurn(
       user.id,
       workspaceId,
       provider,
@@ -106,6 +109,12 @@ export async function POST(
           status: 429,
           headers: { "Retry-After": String(error.retryAfterSeconds) },
         },
+      );
+    }
+    if (error instanceof ProviderConnectionRequiredError) {
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: error.status },
       );
     }
     if (error instanceof QuotaError) return quotaResponse(error);

@@ -12,12 +12,15 @@ import {
   getAgentModel,
   parseAgentProvider,
 } from "./ai-model";
-import { resolveAgentCredential } from "./credentials";
 import {
   requireCursorApiKey,
   runCursorCloudAgent,
 } from "./cursor-agent-runtime";
 import { getDatabase } from "./database";
+import {
+  ProviderConnectionRequiredError,
+  assertProviderConnectionForTurn,
+} from "./provider-turn-auth";
 import { normalizeTokenUsage } from "./token-usage";
 import {
   createCoordinationMessage,
@@ -896,11 +899,24 @@ export async function runAgentTurn(turnId: string) {
 
   const context = await loadAgentContext(turnId);
   const provider = parseAgentProvider(context.provider);
-  const credential = await resolveAgentCredential(
-    context.authorId,
-    context.workspaceId,
-    provider,
-  );
+  let credential;
+  try {
+    credential = await assertProviderConnectionForTurn(
+      context.authorId,
+      context.workspaceId,
+      provider,
+    );
+  } catch (error) {
+    if (error instanceof ProviderConnectionRequiredError) {
+      await failCurrentTurnKeepSession(
+        turnId,
+        context.sessionId,
+        error.message,
+      );
+      return;
+    }
+    throw error;
+  }
 
   const history = await getDatabase()
     .select({
@@ -1055,6 +1071,33 @@ export async function runAgentTurn(turnId: string) {
     output: finalOutput,
     ...(totalUsage ? { usage: totalUsage } : {}),
   });
+}
+
+export async function failCurrentTurnKeepSession(
+  turnId: string,
+  sessionId: string,
+  message: string,
+) {
+  const now = new Date();
+  const clipped = message.slice(0, 2_000);
+  await getDatabase()
+    .update(schema.agentTurns)
+    .set({
+      status: "failed",
+      lastError: clipped,
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(schema.agentTurns.id, turnId));
+  await getDatabase()
+    .update(schema.agentSessions)
+    .set({
+      status: "idle",
+      lastError: clipped,
+      workflowRunId: null,
+      updatedAt: now,
+    })
+    .where(eq(schema.agentSessions.id, sessionId));
 }
 
 export async function failAgentSession(sessionId: string, message: string) {

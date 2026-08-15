@@ -39,6 +39,7 @@ import { GET as getShared } from "@/app/api/workspaces/[workspaceId]/agents/shar
 import { POST as enqueue } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/queue/route";
 import { POST as startControlled } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/controlled/route";
 import { POST as interrupt } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/interrupt/route";
+import { SharedSessionError } from "@/lib/shared-session-server";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 const sessionId = "f3100000-0000-4000-8000-000000000001";
@@ -138,6 +139,27 @@ describe("shared agent session routes", () => {
       userId,
       "coSteer",
     );
+  });
+
+  it("blocks a queued instruction after the provider connection is revoked", async () => {
+    mocks.enqueueSharedSessionInstruction.mockRejectedValueOnce(
+      new SharedSessionError(
+        "This OpenAI connection was revoked or is not connected. Reconnect a key in Settings before starting another turn. The existing session is unchanged.",
+        409,
+      ),
+    );
+    const response = await enqueue(
+      new Request("https://codev.test", {
+        method: "POST",
+        body: JSON.stringify({ prompt: "Inspect README.md" }),
+      }),
+      { params: Promise.resolve({ workspaceId, sessionId }) },
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "This OpenAI connection was revoked or is not connected. Reconnect a key in Settings before starting another turn. The existing session is unchanged.",
+    });
   });
 
   it("starts a controlled turn and interrupts it while preserving the last action", async () => {
