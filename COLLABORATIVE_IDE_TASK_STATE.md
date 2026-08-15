@@ -27,6 +27,31 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.6 — Production native-resolution blocker 2026-08-15T01:56:02Z:**
+  The required initial `git status --short` was clean and `main` was advanced
+  with `git switch main`, `git fetch origin main`, and `git pull --ff-only
+  origin main` at `957c39c60e70f1b0874a42a6916803f9b3071efb`. Commit
+  `d040f64bcefa2f4115f0e9106a5906b415ff70c3` (`feat: surface Orca file
+  conflicts`) passed targeted bridge/API tests, `pnpm lint` (0 errors, 2
+  existing warnings), `pnpm typecheck`, `pnpm test` (230 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
+  and `git diff --check`. `pnpm format:check` remains blocked only by the
+  pre-existing formatting violation in this ledger. The exact Vercel
+  Production deployment was Ready at
+  `https://codev-54amhjpty-yousef20920s-projects.vercel.app`
+  (`dpl_FE1q8cwR3uQoqiwtoEc93KnPGbE`), with the authenticated flow exercised
+  through `https://www.trycodev.com/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`.
+  Computer Use opened `README.md` in Orca, made a live Rich Editor
+  collaborative revision, then appended an external revision from Orca's
+  terminal. Orca displayed its existing disk-change warning with only
+  `Compare`, `Reload from Disk`, and `Keep My Edits`; the shipped `External
+  file conflict` dialog and its preserve-both resolution choices did not
+  appear. Screenshot evidence:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%209.55.51%20PM.jpeg`.
+  Current task remains OI.6; do not begin OI.7 until the native dialog is
+  triggered by this real production flow and its successful final state is
+  captured.
+
 - **OI.5 — Production two-identity verification blocker 2026-08-15T00:42:11Z:**
   The required initial `git status --short` was clean and `main` was current
   after `git switch main`, `git fetch origin main`, and `git pull --ff-only
