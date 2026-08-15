@@ -8,14 +8,15 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials.**
+**F7.1 — Normalize one provider's durable turn/status/output/tool events.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, and F6.4 are complete. **OI.3 is
-explicitly deferred at the owner's direction**, with its required two-member
-role-change verification remaining outstanding. The Current task is **F6.5**,
-the OAuth fixture-callback card from `COLLABORATIVE_IDE_EXECUTION.md`.
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, and F6.5 are complete.
+**OI.3 is explicitly deferred at the owner's direction**, with its required
+two-member role-change verification remaining outstanding. The Current task
+is **F7.1**, the provider-neutral event card from
+`COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -25,6 +26,23 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F6.5 — Production verification completed 2026-08-15T23:19:00Z:** Source
+  `e3fe16fcdc81a07b018eff99952b27cd51661f7d` is on `main`. Vercel Production
+  `dpl_F1CjFtDEwG1CRd3dkGUrcNuAhjnN` is Ready at
+  `https://codev-i7i3zt9p5-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. After a leftover Orca
+  process on port 7000 was stopped (port 7001 left running), Retry opened
+  native Orca. Settings → General → **Provider connections** showed
+  **OpenAI Codex · Fixture callback · ready**. **Connect with OpenAI**
+  completed in-page and showed **Connected · OAuth · supplied by CoDev Test
+  Jordan · ending fx01** plus **Connected · fixture callback**. The page
+  stayed on the workspace URL; ChatGPT consent was not opened. No secret
+  was displayed. TestSprite backend test
+  `17919dc0-3347-4b0e-9131-4f9dabd84d89` passed (unauthenticated POST
+  fixture OAuth returns 401 without tokens). See F6.5 completion evidence.
+  Current task is now F7.1.
 
 - **F6.4 — Production verification completed 2026-08-15T22:32:00Z:** Source
   `994e1f7ed822eb7abdfd1c7498b333e3ab2a0e36` is on `main`. Vercel Production
@@ -782,6 +800,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed. |
 | F6.3 — Reauthorize every turn and block the next turn after a connection is revoked | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret. |
 | F6.4 — Research and document an official OAuth flow for one provider before implementing it | 2026-08-15 | [F6.4 completion evidence](#f64-completion-evidence) — Production Orca Settings showed OpenAI Codex OAuth as Planned · unavailable with a disabled Connect control and no consent UI. |
+| F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials | 2026-08-15 | [F6.5 completion evidence](#f65-completion-evidence) — Production Orca Settings completed OpenAI OAuth through a fixture callback and showed Connected · OAuth ending fx01 without opening ChatGPT. |
 
 ### B0.2 completion evidence
 
@@ -2549,6 +2568,54 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 - Next task: F6.5 — implement OAuth only after the documented
   provider-specific design is approved and testable without real
   credentials.
+
+### F6.5 completion evidence
+
+- Completed: 2026-08-15T23:19:00Z.
+- Changed files: `apps/web/lib/provider-oauth-fixture.ts`,
+  `apps/web/lib/provider-oauth-fixture.test.ts`,
+  `apps/web/lib/provider-connection-view.ts`,
+  `apps/web/lib/provider-connection-view.test.ts`,
+  `apps/web/lib/provider-connection-server.ts`,
+  `apps/web/lib/provider-connection-route.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `docs/provider-oauth-openai-codex.md`, `docs/OAUTH_SETUP.md`,
+  `COLLABORATIVE_IDE_FEATURES.md`, `infra/aws/orca-build/codev-web.patch`,
+  and regenerated vendored Orca web assets under `apps/web/public/orca/`.
+- Checks: focused connection/OAuth/bridge tests (26 passed), patched-Orca
+  provider-connections tests (4 passed), patched-Orca `typecheck:web`,
+  `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
+  test` (307 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed,
+  1 skipped), `pnpm rust:check`, and `git diff --check`. TestSprite
+  backend test `17919dc0-3347-4b0e-9131-4f9dabd84d89` (run
+  `dfbb76c4-a897-4250-9e6d-04ec852640aa`) passed against Production:
+  unauthenticated POST `{ oauth: "fixture" }` returned 401 without tokens.
+- Validated source commit: `e3fe16fcdc81a07b018eff99952b27cd51661f7d`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_F1CjFtDEwG1CRd3dkGUrcNuAhjnN` at
+  <https://codev-i7i3zt9p5-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. A leftover
+  `orca-ide --serve` on port 7000 was stopped; the other workspace on port
+  7001 was left running. Retry opened native Orca. Settings → General →
+  **Provider connections** showed **OpenAI Codex · Fixture callback ·
+  ready**. Clicking **Connect with OpenAI** stayed on the workspace URL
+  and showed **Connected · OAuth · supplied by CoDev Test Jordan · ending
+  fx01**, **Connected · fixture callback**, and **OpenAI connected with a
+  fixture OAuth callback.** ChatGPT consent was not opened. No secret was
+  displayed. Native Orca **AI Provider Accounts (OPTIONAL)** was not used.
+- Screenshots: `file:///tmp/codev-f65-verify/f6-5-oauth-fixture-ready.png`
+  (fixture callback ready),
+  `file:///tmp/codev-f65-verify/f6-5-oauth-fixture-connected.png`
+  (Connected · OAuth ending fx01). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f6-5/`.
+- Known limitations: the fixture token cannot call OpenAI. Real ChatGPT
+  consent remains out of band. F7.1 is next.
+- Next task: F7.1 — normalize one provider's durable turn/status/output/tool
+  events.
 
 ## Blocked tasks
 
