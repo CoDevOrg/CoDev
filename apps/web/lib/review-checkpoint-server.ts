@@ -6,7 +6,11 @@ import { z } from "zod";
 import { getWorkspaceAccess } from "./access";
 import { prepareAgentReview } from "./agent-review";
 import { listAgentSessions } from "./agent-runtime";
-import { reviewSandboxWorktree } from "./orchestrator";
+import {
+  executeInSandbox,
+  OrchestratorError,
+  reviewSandboxWorktree,
+} from "./orchestrator";
 import {
   toReviewSnapshot,
   type ReviewSession,
@@ -78,8 +82,30 @@ async function loadReviewDiffs(workspaceId: string, sessions: ReviewSession[]) {
           session.reviewBaseSha as string,
         );
         return [session.worktreeId, review.diff] as const;
-      } catch {
-        return null;
+      } catch (error) {
+        if (
+          !(error instanceof OrchestratorError && error.status === 403) ||
+          !session.reviewHeadSha
+        ) {
+          return null;
+        }
+        const diffed = await executeInSandbox(workspaceId, {
+          command: [
+            "git",
+            "--no-pager",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            `${session.reviewBaseSha}...${session.reviewHeadSha}`,
+            "--",
+          ],
+          worktreeId: session.worktreeId,
+        });
+        if (diffed.exitCode !== 0) return null;
+        return [
+          session.worktreeId,
+          diffed.output.replace(/\r\n/g, "\n"),
+        ] as const;
       }
     }),
   );
