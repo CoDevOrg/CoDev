@@ -55,20 +55,20 @@ export async function ensureWorkspaceRuntimeReady(
 ) {
   await requireWorkspacePermission(workspaceId, userId, permission);
   const runtime = await getWorkspaceRuntime(workspaceId);
-  if (runtime?.status === "ready") {
-    try {
-      await getSandbox(workspaceId);
-      await recordWorkspaceHeartbeat(workspaceId);
-      return;
-    } catch (error) {
-      if (
-        !(
-          error instanceof OrchestratorError &&
-          (error.status === 404 || error.status === 403 || error.status === 503)
-        )
-      ) {
-        throw error;
-      }
+  try {
+    await getSandbox(workspaceId);
+    await recordWorkspaceHeartbeat(workspaceId);
+    return;
+  } catch (error) {
+    if (
+      !(
+        error instanceof OrchestratorError &&
+        (error.status === 404 || error.status === 403 || error.status === 503)
+      )
+    ) {
+      throw error;
+    }
+    if (runtime?.status === "ready") {
       // The host may have stopped, restarted, or been replaced while the database
       // still says the runtime is ready. Wake host if stopped and treat missing runtime as stopped.
       await Promise.resolve(requestHostWake()).catch(() => undefined);

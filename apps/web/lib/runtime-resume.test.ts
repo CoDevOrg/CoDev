@@ -87,6 +87,20 @@ describe("workspace runtime resume", () => {
     );
   });
 
+  it("reuses a live sandbox for review without a GitHub repository", async () => {
+    mocks.getWorkspaceRuntime.mockResolvedValue({ status: "opening" });
+
+    await ensureWorkspaceRuntimeReady("workspace-1", "user-1", "review");
+
+    expect(mocks.requireWorkspacePermission).toHaveBeenCalledWith(
+      "workspace-1",
+      "user-1",
+      "review",
+    );
+    expect(mocks.recordWorkspaceHeartbeat).toHaveBeenCalledWith("workspace-1");
+    expect(mocks.beginWorkspaceProvisioning).not.toHaveBeenCalled();
+  });
+
   it("reprovisions when the database points to a missing sandbox", async () => {
     mocks.getSandbox.mockRejectedValue(
       new OrchestratorError("sandbox not found", 404),
@@ -121,6 +135,9 @@ describe("workspace runtime resume", () => {
   });
 
   it("passes reviewer permission through snapshot provisioning", async () => {
+    mocks.getSandbox.mockRejectedValue(
+      new OrchestratorError("sandbox not found", 404),
+    );
     mocks.getWorkspaceRuntime.mockResolvedValue({ status: "hibernated" });
     mocks.getWorkspaceForMember.mockResolvedValue({
       repository: "acme/demo",
