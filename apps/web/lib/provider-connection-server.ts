@@ -1,11 +1,11 @@
 import "server-only";
 
 import {
-  deleteOpenAICredential,
   deleteProviderCredential,
   getProviderCredentialStatus,
   saveAnthropicCredential,
   saveOpenAICredential,
+  saveProviderCredential,
 } from "./credentials";
 import {
   publicProviderConnectionPayload,
@@ -13,6 +13,11 @@ import {
   type ProviderConnectionProvider,
   type ProviderConnectionSnapshot,
 } from "./provider-connection-view";
+import {
+  OPENAI_OAUTH_FIXTURE_CODE,
+  fixtureOpenAiOAuthTokens,
+  isOpenAiOAuthFixtureCode,
+} from "./provider-oauth-fixture";
 import { displayMemberName } from "./shared-session-view";
 
 type ConnectionUser = {
@@ -56,15 +61,35 @@ export async function savePersonalProviderConnection(
   );
 }
 
+export async function completeFixtureOpenAiOAuth(
+  user: ConnectionUser,
+  code = OPENAI_OAUTH_FIXTURE_CODE,
+): Promise<ProviderConnectionSnapshot> {
+  if (!isOpenAiOAuthFixtureCode(code)) {
+    throw new Error("Use the CoDev fixture OAuth callback, not provider consent.");
+  }
+  const tokens = fixtureOpenAiOAuthTokens();
+  await saveProviderCredential({
+    scopeType: "USER",
+    scopeId: user.id,
+    provider: "openai",
+    credentialType: "OAUTH_TOKEN",
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: tokens.expiresAt,
+    lastFour: tokens.lastFour,
+  });
+  return publicProviderConnectionPayload(
+    await loadProviderConnectionSnapshot(user),
+    tokens.accessToken,
+  );
+}
+
 export async function revokePersonalProviderConnection(
   user: ConnectionUser,
   provider: ProviderConnectionProvider,
 ): Promise<ProviderConnectionSnapshot> {
-  if (provider === "openai") {
-    await deleteOpenAICredential(user.id);
-  } else {
-    await deleteProviderCredential("USER", user.id, "anthropic");
-  }
+  await deleteProviderCredential("USER", user.id, provider);
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
   );

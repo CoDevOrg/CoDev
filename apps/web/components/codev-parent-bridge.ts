@@ -40,6 +40,7 @@ export type CodevBridgeMethod =
   | "activity.list"
   | "connections.list"
   | "connections.put"
+  | "connections.oauth"
   | "connections.revoke";
 
 export type CodevBridgeRequestMessage = {
@@ -95,6 +96,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "activity.list",
   "connections.list",
   "connections.put",
+  "connections.oauth",
   "connections.revoke",
 ]);
 const CREDENTIAL_KEYS = new Set([
@@ -495,6 +497,31 @@ export async function executeCodevBridgeRequest(
       if (!response.ok) {
         return fail(
           jsonError(payload, "CoDev could not save this provider connection."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "connections.oauth") {
+      if (request.params?.provider !== "openai") {
+        return fail("OpenAI Codex is the only fixture OAuth connection.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/connections`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
+          cache: "no-store",
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            "CoDev could not complete the fixture OAuth callback.",
+          ),
         );
       }
       return succeed(payload);

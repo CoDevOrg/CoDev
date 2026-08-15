@@ -207,8 +207,8 @@ agent without exposing their secret to teammates or the sandbox.
   narrow scopes, explicit disconnect, and the provider's documented flow.
   The first Orca connection is OpenAI Codex; see
   [docs/provider-oauth-openai-codex.md](./docs/provider-oauth-openai-codex.md).
-  F6.4 documents that flow and shows it as planned/unavailable. F6.5 may
-  enable it only with a mock/fixture callback.
+  F6.4 documents that flow. F6.5 enables Connect only through a
+  mock/fixture callback that never opens ChatGPT consent.
 - The first supported providers are OpenAI/Codex-compatible and Anthropic;
   Cursor support is treated as a separate integration discovery task rather
   than assuming it accepts a generic API key or OAuth token.

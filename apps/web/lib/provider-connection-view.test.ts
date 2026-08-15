@@ -53,9 +53,34 @@ describe("provider connection view", () => {
       true,
     );
     expect(snapshot.oauth).toEqual(OPENAI_OAUTH_PLAN);
-    expect(snapshot.oauth.status).toBe("unavailable");
-    expect(snapshot.oauth.summary).toBe("Planned · unavailable");
+    expect(snapshot.oauth.status).toBe("available");
+    expect(snapshot.oauth.summary).toBe("Fixture callback · ready");
     expect(secretKeysInValue(snapshot)).toEqual([]);
+  });
+
+  it("marks OpenAI OAuth as connected through the fixture callback without exposing tokens", () => {
+    const snapshot = toProviderConnectionSnapshot({
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      statuses: {
+        openai: {
+          credentialType: "OAUTH_TOKEN",
+          lastFour: "fx01",
+          encryptedAccessToken: "kms-v1.oauth-ciphertext",
+          accessToken: "oa-test-codev-f65-fixture-token-fx01",
+        },
+      },
+    });
+    const openai = snapshot.connections.find((row) => row.provider === "openai");
+    expect(openai).toMatchObject({
+      status: "connected",
+      credentialType: "OAUTH_TOKEN",
+      lastFour: "fx01",
+      suppliedBy: "CoDev Test Jordan",
+    });
+    expect(snapshot.oauth.summary).toBe("Connected · fixture callback");
+    expect(JSON.stringify(snapshot)).not.toMatch(
+      /oa-test-codev|ciphertext|auth\.openai\.com/i,
+    );
   });
 
   it("rejects a payload that still contains the submitted API key", () => {

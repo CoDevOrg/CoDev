@@ -19,7 +19,7 @@ export type ProviderConnectionViewer = {
   name: string;
 };
 
-export type ProviderOAuthPlanStatus = "unavailable";
+export type ProviderOAuthPlanStatus = "unavailable" | "available";
 
 export type ProviderOAuthPlan = {
   provider: "openai";
@@ -31,12 +31,29 @@ export type ProviderOAuthPlan = {
 
 export const OPENAI_OAUTH_PLAN: ProviderOAuthPlan = {
   provider: "openai",
-  status: "unavailable",
+  status: "available",
   label: "Connect with OpenAI",
-  summary: "Planned · unavailable",
+  summary: "Fixture callback · ready",
   reason:
-    "Official OpenAI Codex OAuth is documented and not enabled in this workspace yet. Use an API key for now.",
+    "Connect uses a CoDev fixture callback. ChatGPT consent is not opened.",
 };
+
+export function toOpenAiOAuthPlan(
+  connection: ProviderConnectionRecord | undefined,
+): ProviderOAuthPlan {
+  if (
+    connection?.status === "connected" &&
+    connection.credentialType === "OAUTH_TOKEN"
+  ) {
+    return {
+      ...OPENAI_OAUTH_PLAN,
+      summary: "Connected · fixture callback",
+      reason:
+        "OpenAI is connected through the CoDev fixture OAuth callback. ChatGPT consent was not used.",
+    };
+  }
+  return OPENAI_OAUTH_PLAN;
+}
 
 export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
@@ -112,17 +129,20 @@ export function toProviderConnectionSnapshot(input: {
     Record<ProviderConnectionProvider, ProviderCredentialStatus | null>
   >;
 }): ProviderConnectionSnapshot {
+  const connections = PROVIDERS.map((provider) =>
+    toProviderConnectionRecord({
+      provider: provider.provider,
+      label: provider.label,
+      status: input.statuses[provider.provider] ?? null,
+      suppliedBy: input.viewer.name,
+    }),
+  );
   return {
     viewer: input.viewer,
-    connections: PROVIDERS.map((provider) =>
-      toProviderConnectionRecord({
-        provider: provider.provider,
-        label: provider.label,
-        status: input.statuses[provider.provider] ?? null,
-        suppliedBy: input.viewer.name,
-      }),
+    connections,
+    oauth: toOpenAiOAuthPlan(
+      connections.find((row) => row.provider === "openai"),
     ),
-    oauth: OPENAI_OAUTH_PLAN,
   };
 }
 

@@ -1,8 +1,8 @@
 # F6.4 — Official OpenAI Codex OAuth design
 
-Status: **documented, not enabled** in the Orca workspace connection UI.
-Implementation is **F6.5** and must use a mock/fixture callback. Do not automate
-a real ChatGPT consent screen.
+Status: **F6.5 fixture callback enabled** in the Orca workspace connection UI.
+Connect completes through a CoDev mock/fixture callback. Do not automate a real
+ChatGPT consent screen.
 
 This is the approved provider-specific design for connecting **OpenAI** through
 official Codex/ChatGPT OAuth. Anthropic/Claude OAuth remains out of scope for
@@ -55,9 +55,10 @@ CoDev's origin, not the CLI loopback:
 https://www.trycodev.com/api/auth/oauth/codex/callback
 ```
 
-Until that fixture path exists, Orca must show OAuth as **planned and
-unavailable** and keep API-key save/revoke as the only live connection
-control.
+F6.5 implements that fixture path. Orca **Connect with OpenAI** POSTs
+`{ provider: "openai", oauth: "fixture" }` to the workspace connections API.
+The server persists an encrypted fixture `OAUTH_TOKEN` ending `fx01` and never
+opens `auth.openai.com`.
 
 ## Planned CoDev mapping (F6.5)
 

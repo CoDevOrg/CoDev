@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   loadProviderConnectionSnapshot: vi.fn(),
   savePersonalProviderConnection: vi.fn(),
   revokePersonalProviderConnection: vi.fn(),
+  completeFixtureOpenAiOAuth: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -23,11 +24,13 @@ vi.mock("@/lib/provider-connection-server", () => ({
   loadProviderConnectionSnapshot: mocks.loadProviderConnectionSnapshot,
   savePersonalProviderConnection: mocks.savePersonalProviderConnection,
   revokePersonalProviderConnection: mocks.revokePersonalProviderConnection,
+  completeFixtureOpenAiOAuth: mocks.completeFixtureOpenAiOAuth,
 }));
 
 import {
   DELETE as deleteConnection,
   GET as getConnections,
+  POST as postConnection,
   PUT as putConnection,
 } from "@/app/api/workspaces/[workspaceId]/connections/route";
 
@@ -56,6 +59,37 @@ const connectedSnapshot = {
     },
   ],
 };
+const oauthConnectedSnapshot = {
+  viewer: { id: "user-1", name: "CoDev Test Jordan" },
+  connections: [
+    {
+      provider: "openai",
+      label: "OpenAI",
+      status: "connected",
+      credentialType: "OAUTH_TOKEN",
+      lastFour: "fx01",
+      suppliedBy: "CoDev Test Jordan",
+      scope: "personal",
+    },
+    {
+      provider: "anthropic",
+      label: "Anthropic",
+      status: "not_connected",
+      credentialType: null,
+      lastFour: null,
+      suppliedBy: null,
+      scope: "personal",
+    },
+  ],
+  oauth: {
+    provider: "openai",
+    status: "available",
+    label: "Connect with OpenAI",
+    summary: "Connected · fixture callback",
+    reason:
+      "OpenAI is connected through the CoDev fixture OAuth callback. ChatGPT consent was not used.",
+  },
+};
 const disconnectedSnapshot = {
   ...connectedSnapshot,
   connections: connectedSnapshot.connections.map((row) =>
@@ -82,6 +116,7 @@ describe("provider connection route", () => {
     mocks.revokePersonalProviderConnection.mockResolvedValue(
       disconnectedSnapshot,
     );
+    mocks.completeFixtureOpenAiOAuth.mockResolvedValue(oauthConnectedSnapshot);
   });
 
   afterEach(() => {
@@ -124,6 +159,30 @@ describe("provider connection route", () => {
       "openai",
       fixtureKey,
     );
+  });
+
+  it("completes OpenAI OAuth through the fixture callback without echoing tokens", async () => {
+    const response = await postConnection(
+      new Request(
+        `http://codev.test/api/workspaces/${workspaceId}/connections`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
+        },
+      ),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toEqual(oauthConnectedSnapshot);
+    expect(JSON.stringify(payload)).not.toMatch(
+      /oa-test-codev|auth\.openai\.com|authorize/i,
+    );
+    expect(mocks.completeFixtureOpenAiOAuth).toHaveBeenCalledWith({
+      id: "user-1",
+      name: "Jordan",
+    });
   });
 
   it("revokes a personal API key and returns the disconnected snapshot", async () => {

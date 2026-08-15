@@ -47,7 +47,7 @@ provider requires a confidential client.
 The app never exposes provider credentials or token-exchange responses in the
 browser.
 
-Orca Settings → General → **Provider connections** does not start OAuth yet.
-OpenAI Codex OAuth is documented in
-[provider-oauth-openai-codex.md](./provider-oauth-openai-codex.md) and shown as
-**Planned · unavailable** until F6.5 lands a mock/fixture callback.
+Orca Settings → General → **Provider connections** can complete OpenAI Codex
+OAuth through the CoDev fixture callback documented in
+[provider-oauth-openai-codex.md](./provider-oauth-openai-codex.md). That control
+never opens ChatGPT consent.
