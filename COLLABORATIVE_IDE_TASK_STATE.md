@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version**
+**OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.6**, followed by OI.7–OI.12 from
+remaining outstanding. The Current task is **OI.7**, followed by OI.8–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -26,6 +26,17 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.6 — Production verification completed 2026-08-15T06:14:00Z:** The owner
+  overrode the two-attempt cap and directed a native-surface fix. Source commit
+  `35837e4c4127b2942852ee648c6b93103b662578` is on `main`. Vercel Production
+  `dpl_9SgLmM6ZzLHB5jMckaiSPfQJaFys` is Ready at
+  `https://codev-7w13lqohr-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` opened `README.md`, made a
+  collaborative editor revision, appended an external revision from Orca's
+  native terminal, and captured the native banner plus Compare dialog with both
+  versions preserved. See OI.6 completion evidence.
 
 - **OI.6 — Two-attempt cap remains in force 2026-08-15T04:38:00Z:** The
   required initial `git status --short` was clean. This run then used
@@ -391,6 +402,8 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect      | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                       |
 | OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                  | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                         |
 | OI.4 — Render named presence and active-file state in Orca's editor chrome                            | 2026-08-14 | [OI.4 completion evidence](#oi4-completion-evidence) — Two authenticated Production identities opened the shared Orca workspace; Jordan saw both names and Alex's remote `README.md` state in the editor chrome.            |
+| OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor               | 2026-08-15 | [OI.5 completion evidence](#oi5-completion-evidence) — Two authenticated Production identities showed native remote selection decorations and reconnect replay in the Source editor.                                        |
+| OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version            | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                   |
 
 ### B0.2 completion evidence
 
@@ -1655,6 +1668,48 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   (recovered native selection and Connected bridge).
 - Next task: OI.6 — surface external-file conflicts in Orca's editor without
   overwriting either version.
+
+### OI.6 completion evidence
+
+- Completed: 2026-08-15T06:14:00Z.
+- Changed files: `packages/contracts/src/domain.ts`,
+  `packages/contracts/src/contracts.test.ts`,
+  `apps/web/lib/collaboration-server.ts`,
+  `apps/web/lib/collaboration-server.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/collaboration/conflicts/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/collaboration/conflicts/route.test.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused contracts/bridge/collaboration tests, patched Orca
+  `typecheck:web` plus banner/compare/conflict unit tests (21 passed),
+  `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm test`
+  (231 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped),
+  `pnpm rust:check`, and `git diff --check`. `pnpm format:check` remains blocked
+  only by the pre-existing formatting violation in this ledger.
+- Validated source commit: `35837e4c4127b2942852ee648c6b93103b662578`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_9SgLmM6ZzLHB5jMckaiSPfQJaFys` at
+  <https://codev-7w13lqohr-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Alex against that exact
+  Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Opened `README.md` in
+  Orca, typed a collaborative editor revision, ran an append from a native
+  `orca-ws-` terminal tab, then returned to `README.md`. Orca's native
+  disk-change banner said both versions are preserved and offered Compare,
+  Reload from Disk, and Keep My Edits. Compare opened the External file
+  conflict dialog with disk on the left, collaborative edits on the right,
+  a merge field, and Save manual merge.
+- Screenshots: `file:///tmp/codev-oi6-verify/oi-6-banner.png` (native
+  preserve-both banner) and
+  `file:///tmp/codev-oi6-verify/oi-6-compare.png` (Compare dialog with both
+  versions and Save manual merge). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-6-banner.png`
+  and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-6-compare.png`.
+- Next task: OI.7 — put shared agent metadata, transcript, queue, interrupt,
+  and refresh recovery in Orca's Agents panel.
 
 ## Blocked tasks
 
