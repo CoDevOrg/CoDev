@@ -1,1 +1,0 @@
-import{Ag as e,bm as t,em as n,jg as r}from"./web-index-DL8sS2BZ.js";function i(r,i){if(!r)return[];let a=new Set(e(i)),o=[];for(let e of t){if(a.has(e))continue;let t=n(e);(r[t]??[]).length>0&&o.push({agent:e,actionId:t})}return o}function a(e){return r(e.defaultTuiAgent===`blank`?null:e.defaultTuiAgent,e.detectedAgentIds??[],e.disabledTuiAgents)}export{a as n,i as t};

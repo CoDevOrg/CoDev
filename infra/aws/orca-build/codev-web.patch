@@ -1662,6 +1662,68 @@ index 1b62145..82ad1c9 100644
            </span>
            {nodeStatus ? (
              <span
+diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
+index f9587ab..17b7307 100644
+--- a/src/renderer/src/components/right-sidebar/index.tsx
++++ b/src/renderer/src/components/right-sidebar/index.tsx
+@@ -175,7 +175,8 @@ function RightSidebarInner(): React.JSX.Element {
+       getVisibleRightSidebarActivityItems(activityItems, {
+         isFolder,
+         isFolderWorkspace,
+-        isSshRepo
++        isSshRepo,
++        keepGitTabs: typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
+       }),
+     [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+   )
+diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.test.ts b/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.test.ts
+index 01c44ba..3d6f2c4 100644
+--- a/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.test.ts
++++ b/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.test.ts
+@@ -78,4 +78,21 @@ describe('getVisibleRightSidebarActivityItems', () => {
+       }).map((item) => item.id)
+     ).toEqual(['explorer', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+   })
++
++  it('keeps Source Control visible for CoDev folder workspaces', () => {
++    expect(
++      getVisibleRightSidebarActivityItems(items, {
++        isFolder: true,
++        isFolderWorkspace: true,
++        isSshRepo: false,
++        keepGitTabs: true
++      }).map((item) => item.id)
++    ).toEqual([
++      'explorer',
++      'workspaces',
++      'pr-checks',
++      'source-control',
++      'plugin:orca-samples.my-plugin/dashboard'
++    ])
++  })
+ })
+diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.ts b/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.ts
+index bcb65fa..5730757 100644
+--- a/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.ts
++++ b/src/renderer/src/components/right-sidebar/right-sidebar-activity-visibility.ts
+@@ -4,14 +4,15 @@ type RightSidebarActivityVisibilityState = {
+   isFolder: boolean
+   isFolderWorkspace: boolean
+   isSshRepo: boolean
++  keepGitTabs?: boolean
+ }
+ 
+ export function getVisibleRightSidebarActivityItems(
+   items: ActivityBarItem[],
+-  { isFolder, isFolderWorkspace, isSshRepo }: RightSidebarActivityVisibilityState
++  { isFolder, isFolderWorkspace, isSshRepo, keepGitTabs = false }: RightSidebarActivityVisibilityState
+ ): ActivityBarItem[] {
+   return items.filter((item) => {
+-    if (item.gitOnly && isFolder) {
++    if (item.gitOnly && isFolder && !keepGitTabs) {
+       return false
+     }
+     if (item.folderOnly && !isFolderWorkspace) {
 diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
 index 8da2783..9974250 100644
 --- a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
@@ -2845,10 +2907,10 @@ index 0000000..7471849
 +}
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
 new file mode 100644
-index 0000000..264d957
+index 0000000..e66679b
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,85 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import {
@@ -2931,14 +2993,15 @@ index 0000000..264d957
 +    expect(html).toContain('Diff review open')
 +    expect(html).not.toContain('zcmV-')
 +    expect(selectCodevReviewCheckpoint([prepared], 'w2')?.slot).toBe(2)
++    expect(selectCodevReviewCheckpoint([prepared], null)?.slot).toBe(2)
 +  })
 +})
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
 new file mode 100644
-index 0000000..b5c8bb5
+index 0000000..4856a88
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,196 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -2983,8 +3046,15 @@ index 0000000..b5c8bb5
 +  checkpoints: CodevReviewCheckpoint[],
 +  worktreeId: string | null
 +): CodevReviewCheckpoint | null {
-+  if (!worktreeId) return null
-+  return checkpoints.find((checkpoint) => checkpoint.worktreeId === worktreeId) ?? null
++  if (worktreeId) {
++    const matched = checkpoints.find((checkpoint) => checkpoint.worktreeId === worktreeId)
++    if (matched) return matched
++  }
++  return (
++    checkpoints.find((checkpoint) => !checkpoint.prepared) ??
++    checkpoints.find((checkpoint) => Boolean(checkpoint.sessionId)) ??
++    null
++  )
 +}
 +
 +export function CodevReviewCheckpointViewPanel({
