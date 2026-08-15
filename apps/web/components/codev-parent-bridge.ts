@@ -37,7 +37,8 @@ export type CodevBridgeMethod =
   | "review.prepare"
   | "review.advance"
   | "review.merge"
-  | "activity.list";
+  | "activity.list"
+  | "connections.list";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -90,6 +91,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "review.advance",
   "review.merge",
   "activity.list",
+  "connections.list",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -451,6 +453,20 @@ export async function executeCodevBridgeRequest(
         created: sessionId && worktreeId ? { sessionId, worktreeId } : null,
         rejection: null,
       });
+    }
+
+    if (request.method === "connections.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/connections`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load provider connections."),
+        );
+      }
+      return succeed(payload);
     }
 
     if (request.method === "activity.list") {

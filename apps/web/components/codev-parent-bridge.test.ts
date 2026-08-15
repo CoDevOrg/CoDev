@@ -894,4 +894,43 @@ describe("codev parent bridge", () => {
       { cache: "no-store" },
     );
   });
+
+  it("loads redacted provider connections through the workspace-bound request bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const connections = {
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      connections: [
+        {
+          provider: "openai",
+          status: "connected",
+          lastFour: "9kQ2",
+          suppliedBy: "CoDev Test Jordan",
+        },
+      ],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(connections));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-connections-list",
+          method: "connections.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: connections });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/connections",
+      { cache: "no-store" },
+    );
+  });
 });

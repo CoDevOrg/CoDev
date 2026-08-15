@@ -2170,6 +2170,161 @@ index 8da2783..41186fe 100644
          {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
          {effectiveTab === 'pr-checks' && (
            <FolderWorkspacePrChecksPanel
+diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
+new file mode 100644
+index 0000000..bf99739
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
+@@ -0,0 +1,43 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevProviderConnectionsView } from './CodevProviderConnectionsSection'
++
++describe('CodevProviderConnectionsView', () => {
++  it('shows connected status with last four digits and never renders the secret', () => {
++    const html = renderToStaticMarkup(
++      <CodevProviderConnectionsView
++        connected
++        snapshot={{
++          viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
++          connections: [
++            {
++              provider: 'openai',
++              label: 'OpenAI',
++              status: 'connected',
++              credentialType: 'API_KEY',
++              lastFour: '9kQ2',
++              suppliedBy: 'CoDev Test Jordan',
++              scope: 'personal'
++            },
++            {
++              provider: 'anthropic',
++              label: 'Anthropic',
++              status: 'not_connected',
++              credentialType: null,
++              lastFour: null,
++              suppliedBy: null,
++              scope: 'personal'
++            }
++          ]
++        }}
++      />
++    )
++    expect(html).toContain('Provider connections')
++    expect(html).toContain('OpenAI')
++    expect(html).toContain('Connected · API key · supplied by CoDev Test Jordan · ending 9kQ2')
++    expect(html).toContain('Anthropic')
++    expect(html).toContain('Not connected')
++    expect(html).not.toContain('sk-')
++    expect(html).not.toContain('ciphertext')
++  })
++})
+diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
+new file mode 100644
+index 0000000..f12d373
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
+@@ -0,0 +1,100 @@
++import { useEffect, useState, type JSX } from 'react'
++import { SettingsSubsectionHeader } from './SettingsFormControls'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge,
++  type CodevBridgeSnapshot
++} from '@/web/codev-bridge'
++
++export type CodevProviderConnection = {
++  provider: 'openai' | 'anthropic'
++  label: string
++  status: 'connected' | 'not_connected'
++  credentialType: 'API_KEY' | 'OAUTH_TOKEN' | null
++  lastFour: string | null
++  suppliedBy: string | null
++  scope: 'personal'
++}
++
++export type CodevProviderConnectionSnapshot = {
++  viewer: { id: string; name: string }
++  connections: CodevProviderConnection[]
++}
++
++function statusLabel(connection: CodevProviderConnection): string {
++  if (connection.status !== 'connected') return 'Not connected'
++  const ending = connection.lastFour ? ` · ending ${connection.lastFour}` : ''
++  const owner = connection.suppliedBy ? ` · supplied by ${connection.suppliedBy}` : ''
++  const kind = connection.credentialType === 'OAUTH_TOKEN' ? 'OAuth' : 'API key'
++  return `Connected · ${kind}${owner}${ending}`
++}
++
++export function CodevProviderConnectionsView({
++  connected,
++  snapshot
++}: {
++  connected: boolean
++  snapshot: CodevProviderConnectionSnapshot | null
++}): JSX.Element {
++  return (
++    <div
++      id="codev-provider-connections"
++      className="scroll-mt-6 space-y-3"
++      data-codev-provider-connections="true"
++    >
++      <SettingsSubsectionHeader
++        title="Provider connections"
++        description="Personal OpenAI and Anthropic connections stay encrypted on the CoDev server. This workspace only shows whether a connection exists — never the secret."
++      />
++      {!connected ? (
++        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to view provider connection status.</p>
++      ) : (
++        <ul className="space-y-2" aria-label="Provider connection status">
++          {(snapshot?.connections ?? []).map((connection) => (
++            <li
++              key={connection.provider}
++              className="rounded-md border border-border p-3"
++              aria-label={`${connection.label} connection`}
++            >
++              <p className="text-sm font-medium">{connection.label}</p>
++              <p className="mt-1 text-xs text-muted-foreground">{statusLabel(connection)}</p>
++            </li>
++          ))}
++        </ul>
++      )}
++    </div>
++  )
++}
++
++export function CodevProviderConnectionsSection(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [bridge, setBridge] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
++  const [snapshot, setSnapshot] = useState<CodevProviderConnectionSnapshot | null>(null)
++
++  useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
++
++  useEffect(() => {
++    if (!embedded || bridge.status !== 'connected') return
++    let cancelled = false
++    void requestCodevBridge<CodevProviderConnectionSnapshot>('connections.list')
++      .then((result) => {
++        if (!cancelled) setSnapshot(result)
++      })
++      .catch(() => {
++        if (!cancelled) setSnapshot(null)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [embedded, bridge.status])
++
++  if (!embedded) return null
++
++  return (
++    <CodevProviderConnectionsView
++      connected={bridge.status === 'connected'}
++      snapshot={snapshot}
++    />
++  )
++}
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
 new file mode 100644
 index 0000000..10fa378
@@ -2732,24 +2887,26 @@ index 0000000..02180a7
 +  )
 +}
 diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-index 4405810..3784386 100644
+index 4405810..4e85d95 100644
 --- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 +++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-@@ -4,6 +4,8 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
+@@ -4,6 +4,9 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
  import { SearchableSetting } from './SearchableSetting'
  import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
  import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 +import { CodevWorkspaceInvitesSection } from './CodevWorkspaceInvitesSection'
 +import { CodevWorkspaceMemberRolesSection } from './CodevWorkspaceMemberRolesSection'
++import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
  import { translate } from '@/i18n/i18n'
  
  type GeneralWorkspaceSettingsSectionProps = {
-@@ -28,6 +30,9 @@ export function GeneralWorkspaceSettingsSection({
+@@ -28,6 +31,10 @@ export function GeneralWorkspaceSettingsSection({
          )}
        />
  
 +      <CodevWorkspaceInvitesSection />
 +      <CodevWorkspaceMemberRolesSection />
++      <CodevProviderConnectionsSection />
 +
        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
  
@@ -5640,10 +5797,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..605d8c3
+index 0000000..4632864
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,349 @@
+@@ -0,0 +1,350 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -5690,6 +5847,7 @@ index 0000000..605d8c3
 +  | 'review.advance'
 +  | 'review.merge'
 +  | 'activity.list'
++  | 'connections.list'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
