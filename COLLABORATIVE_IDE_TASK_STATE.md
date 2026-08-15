@@ -27,6 +27,22 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.5 — Production two-identity verification blocker 2026-08-15T00:42:11Z:**
+  The required initial `git status --short` was clean and `main` was current
+  after `git switch main`, `git fetch origin main`, and `git pull --ff-only
+  origin main` at `1fd8234`. OI.5 source remains deployed by commit
+  `fce33b67ed5002d1f5d8ba97c99f321dea46a889`; its recorded Production URL
+  `https://codev-95q2cigns-yousef20920s-projects.vercel.app` remains reachable
+  but is Vercel SSO-protected for an unauthenticated request. Computer Use
+  confirmed an authenticated Orca workspace is available, but it has only one
+  visible member. The mandated local-only two-identity test-account file at
+  `/Users/yousefmaher/.codex/automations/codev-one-verified-task-per-run/test-accounts.md`
+  is absent, so this run cannot safely authenticate a second identity to
+  demonstrate the native cursor/selection decoration and reconnect replay.
+  No source was changed. Current task remains OI.5; do not begin OI.6 until
+  the test identities are restored or another authorized second identity is
+  available.
+
 - **OI.5 — dirty working tree blocker 2026-08-15T00:00:32Z:** Before any
   OI.5 work, the required initial `git status --short` found the pre-existing
   modified file `apps/web/next-env.d.ts`. Per the run policy, this automation
