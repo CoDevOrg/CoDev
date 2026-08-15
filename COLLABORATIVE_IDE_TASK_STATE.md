@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.9 — Put active and contested path claims in Orca's Explorer and worktree cards with reassign/cancel controls**
+**OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.9**, followed by OI.10–OI.12 from
+remaining outstanding. The Current task is **OI.10**, followed by OI.11–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -26,6 +26,17 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.9 — Production verification completed 2026-08-15T09:03:00Z:** Active
+  and contested path claims are live in Orca's native Explorer and worktree
+  cards, with reassign and cancel instead of silent overwrite. Source commit
+  `f2123cd0b7d46b33bb18fa3a913d78b80eddc987` is on `main`. Vercel Production
+  `dpl_9QZpQFCLSvu2MNAn7qaNoz9wyrsM` is Ready at
+  `https://codev-1rtd6sj4a-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` claimed `README.md` from
+  slot 1, contested it from slot 2, captured native Explorer and worktree
+  warnings, then reassigned the path to slot 2. See OI.9 completion evidence.
 
 - **OI.8 — Production verification completed 2026-08-15T08:42:00Z:** The
   three-slot workboard and fourth-session rejection are live in Orca's native
@@ -1832,6 +1843,50 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-8-fourth-rejected.png`.
 - Next task: OI.9 — put active and contested path claims in Orca's Explorer
   and worktree cards with reassign/cancel controls.
+
+### OI.9 completion evidence
+
+- Completed: 2026-08-15T09:03:00Z.
+- Changed files: `apps/web/lib/path-claims-view.ts`,
+  `apps/web/lib/path-claims-view.test.ts`,
+  `apps/web/lib/path-claims-server.ts`,
+  `apps/web/lib/path-claims-routes.test.ts`,
+  `apps/web/lib/agent-coordination.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/claims/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/claims/reassign/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/claims/cancel/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/tests/e2e/smoke.spec.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused path-claim/bridge tests, `pnpm lint` (0 errors, 2 existing
+  warnings), `pnpm typecheck`, `pnpm test` (255 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
+  and `git diff --check`. `pnpm format:check` remains blocked only by the
+  pre-existing formatting violation in this ledger.
+- Validated source commit: `f2123cd0b7d46b33bb18fa3a913d78b80eddc987`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_9QZpQFCLSvu2MNAn7qaNoz9wyrsM` at
+  <https://codev-1rtd6sj4a-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against that exact
+  Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Orca's native Explorer
+  showed an active `README.md` claim on slot 1, then a contested overlap from
+  slot 2 with "Contested overlap · no silent overwrite", a `CONTESTED` file
+  badge, and Reassign/Cancel controls. The native Workspace Board worktree
+  card showed the same contested warning. Reassigning to slot 2 released
+  slot 1's claim and left slot 2 Active with "Claim reassigned to Agent slot 2".
+- Screenshots: `file:///tmp/codev-oi9-verify/13-contested-explorer.png`
+  (native Explorer contested warning),
+  `file:///tmp/codev-oi9-verify/14-contested-worktree.png` (worktree-card
+  contested warning), and
+  `file:///tmp/codev-oi9-verify/15-reassigned.png` (claim released to slot 2).
+  Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-9-contested-explorer.png`,
+  `oi-9-contested-worktree.png`, and `oi-9-reassigned.png`.
+- Next task: OI.10 — put review checkpoint metadata and binary-safe diffs in
+  Orca Source Control and Checks.
 
 ## Blocked tasks
 
