@@ -19,7 +19,9 @@ export type CodevBridgeMethod =
   | "members.update"
   | "presence.list"
   | "presence.update"
-  | "presence.cursor.update";
+  | "presence.cursor.update"
+  | "conflicts.list"
+  | "conflicts.resolve";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -54,6 +56,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "presence.list",
   "presence.update",
   "presence.cursor.update",
+  "conflicts.list",
+  "conflicts.resolve",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -210,6 +214,36 @@ export async function executeCodevBridgeRequest(
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(jsonError(payload, "CoDev could not load presence."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "conflicts.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/collaboration/conflicts`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load file conflicts."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "conflicts.resolve") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/collaboration/conflicts/resolve`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(request.params ?? {}),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not resolve this file conflict."),
+        );
       }
       return succeed(payload);
     }

@@ -72,6 +72,399 @@ index 294fc4a..16cde63 100644
    const backgroundTerminalMountRequested = useSyncExternalStore(
      subscribeBackgroundTerminalWorktreeMountRequests,
      hasRequestedBackgroundTerminalWorktreeMount,
+diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
+index 85d6a2c..735e43a 100644
+--- a/src/renderer/src/assets/main.css
++++ b/src/renderer/src/assets/main.css
+@@ -2169,6 +2169,37 @@ html.native-shell .app-layout {
+   opacity: 0.92;
+ }
+ 
++/* CoDev editor awareness is intentionally an inline Monaco decoration so it
++   stays aligned with text through wrapping, scrolling, and reconnect replay. */
++.monaco-editor .codev-remote-selection {
++  background: color-mix(in srgb, var(--primary) 28%, transparent);
++  border-bottom: 1px solid color-mix(in srgb, var(--primary) 72%, transparent);
++}
++
++.monaco-editor .codev-remote-cursor {
++  border-left: 2px solid var(--primary);
++  display: inline-block;
++  height: 1.35em;
++  margin-left: -1px;
++  vertical-align: text-bottom;
++}
++
++.codev-conflict-resolution {
++  position: absolute; z-index: 20; top: 12px; right: 12px;
++  width: min(720px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto;
++  padding: 14px; border: 1px solid color-mix(in srgb, var(--destructive) 58%, var(--border));
++  border-radius: 8px; background: var(--background); box-shadow: 0 16px 40px rgb(0 0 0 / 38%); color: var(--foreground);
++}
++.codev-conflict-resolution-heading, .codev-conflict-actions, .codev-conflict-versions { display: flex; gap: 10px; }
++.codev-conflict-resolution-heading { align-items: baseline; justify-content: space-between; }
++.codev-conflict-resolution p { margin: 8px 0; font-size: 12px; }
++.codev-conflict-versions > label, .codev-conflict-merge { display: grid; flex: 1; gap: 4px; font-size: 12px; font-weight: 600; }
++.codev-conflict-resolution textarea { min-height: 86px; width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 4px; padding: 7px; background: var(--muted); color: inherit; font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
++.codev-conflict-merge { margin-top: 10px; }
++.codev-conflict-actions { margin-top: 10px; flex-wrap: wrap; }
++.codev-conflict-actions button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; }
++.codev-conflict-error { color: var(--destructive); }
++
+ /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
+    render inside a `.context-view` wrapper → `.workbench-hover-container` →
+    `.workbench-hover.compact`, positioned above the target button. The wrapper's
+diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
+index 1571869..b9a6a50 100644
+--- a/src/renderer/src/components/editor/MonacoEditor.tsx
++++ b/src/renderer/src/components/editor/MonacoEditor.tsx
+@@ -66,6 +66,8 @@ import {
+ import { installMonacoE2EProbe } from './monaco-e2e-probe'
+ import { monacoFindOptions } from './monaco-find-options'
+ import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
++import { useCodevCursorDecorations } from './codev-cursor-decorations'
++import { requestCodevBridge } from '@/web/codev-bridge'
+ 
+ type MonacoEditorProps = {
+   fileId: string
+@@ -94,6 +96,15 @@ type MarkdownCommentPopoverState = Omit<MonacoMarkdownSelectionAnnotationTarget,
+   selectedText?: string
+ }
+ 
++type CodevConflict = {
++  worktreeId: string
++  path: string
++  snapshotRevision: string
++  filesystemRevision: string
++  collaborativeContents: string
++  filesystemContents: string
++}
++
+ export default function MonacoEditor({
+   fileId,
+   filePath,
+@@ -118,6 +129,7 @@ export default function MonacoEditor({
+   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
++  useCodevCursorDecorations({ editor: mountedEditor, relativePath })
+   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
+   const modelKeyRef = useRef<string | null>(null)
+   const languageRef = useRef(language)
+@@ -175,6 +187,73 @@ export default function MonacoEditor({
+   const contentRef = useRef(content)
+   contentRef.current = content
+   const lastSyncedContentRef = useRef<string>(content)
++  const [codevConflict, setCodevConflict] = useState<CodevConflict | null>(null)
++  const [mergedConflictContents, setMergedConflictContents] = useState('')
++  const [resolvingConflict, setResolvingConflict] = useState(false)
++  const [conflictError, setConflictError] = useState<string | null>(null)
++  useEffect(() => {
++    if (!relativePath) return
++    let disposed = false
++    const refresh = (): void => {
++      void requestCodevBridge<{ conflicts?: unknown }>('conflicts.list')
++        .then((payload) => {
++          if (disposed || !Array.isArray(payload.conflicts)) return
++          const conflict = payload.conflicts.find(
++            (item): item is CodevConflict =>
++              Boolean(item) && typeof item === 'object' &&
++              (item as { path?: unknown }).path === relativePath &&
++              typeof (item as { worktreeId?: unknown }).worktreeId === 'string' &&
++              typeof (item as { snapshotRevision?: unknown }).snapshotRevision === 'string' &&
++              typeof (item as { filesystemRevision?: unknown }).filesystemRevision === 'string' &&
++              typeof (item as { collaborativeContents?: unknown }).collaborativeContents === 'string' &&
++              typeof (item as { filesystemContents?: unknown }).filesystemContents === 'string'
++          ) ?? null
++          setCodevConflict(conflict)
++          if (conflict) setMergedConflictContents((current) => current || conflict.collaborativeContents)
++        })
++        .catch(() => undefined)
++    }
++    refresh()
++    const poll = window.setInterval(refresh, 2_000)
++    return () => {
++      disposed = true
++      window.clearInterval(poll)
++    }
++  }, [relativePath])
++  const resolveCodevConflict = async (
++    strategy: 'collaboration' | 'filesystem' | 'merged'
++  ): Promise<void> => {
++    if (!codevConflict || resolvingConflict) return
++    setResolvingConflict(true)
++    setConflictError(null)
++    try {
++      await requestCodevBridge('conflicts.resolve', {
++        worktreeId: codevConflict.worktreeId,
++        path: codevConflict.path,
++        strategy,
++        expectedSnapshotRevision: codevConflict.snapshotRevision,
++        expectedFilesystemRevision: codevConflict.filesystemRevision,
++        ...(strategy === 'merged' ? { mergedContents: mergedConflictContents } : {})
++      })
++      const nextContents =
++        strategy === 'filesystem'
++          ? codevConflict.filesystemContents
++          : strategy === 'merged'
++            ? mergedConflictContents
++            : null
++      if (nextContents !== null) {
++        lastSyncedContentRef.current = nextContents
++        onContentChange(nextContents)
++        onSave(nextContents)
++      }
++      setCodevConflict(null)
++      setMergedConflictContents('')
++    } catch (reason) {
++      setConflictError(reason instanceof Error ? reason.message : 'CoDev could not resolve this file conflict.')
++    } finally {
++      setResolvingConflict(false)
++    }
++  }
+   const markdownComments = useMemo(
+     () =>
+       (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isMarkdownComment(c)),
+@@ -803,6 +882,25 @@ export default function MonacoEditor({
+           onSubmit={handleSubmitMarkdownComment}
+         />
+       )}
++      {codevConflict && (
++        <section className="codev-conflict-resolution" role="alertdialog" aria-label="External file conflict">
++          <div className="codev-conflict-resolution-heading">
++            <strong>External file conflict</strong><span>{codevConflict.path}</span>
++          </div>
++          <p>Both versions are preserved. Choose one or merge them before continuing.</p>
++          <div className="codev-conflict-versions">
++            <label>Collaborative editor<textarea readOnly value={codevConflict.collaborativeContents} aria-label="Collaborative editor version" /></label>
++            <label>External filesystem<textarea readOnly value={codevConflict.filesystemContents} aria-label="External filesystem version" /></label>
++          </div>
++          <label className="codev-conflict-merge">Merge manually<textarea value={mergedConflictContents} onChange={(event) => setMergedConflictContents(event.target.value)} aria-label="Merged file contents" /></label>
++          {conflictError && <p className="codev-conflict-error">{conflictError}</p>}
++          <div className="codev-conflict-actions">
++            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('collaboration')}>Keep collaborative editor</button>
++            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('filesystem')}>Use external filesystem</button>
++            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('merged')}>Save manual merge</button>
++          </div>
++        </section>
++      )}
+       {selectionAnnotationTarget && shouldShowMarkdownAnnotations && !commentPopover ? (
+         <button
+           type="button"
+diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.test.ts b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
+new file mode 100644
+index 0000000..9a056de
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
+@@ -0,0 +1,40 @@
++import { describe, expect, it } from 'vitest'
++import { CURSOR_HEARTBEAT_MS, selectRemoteCursors } from './codev-cursor-decorations'
++
++describe('selectRemoteCursors', () => {
++  it('keeps publishing an unchanged selection for the presence TTL heartbeat', () => {
++    expect(CURSOR_HEARTBEAT_MS).toBeLessThan(60_000)
++  })
++
++  it('keeps only another collaborator’s cursor for the active editor path', () => {
++    const cursors = selectRemoteCursors(
++      [
++        {
++          user: { id: 'alex', login: 'alex', name: 'Alex Morgan' },
++          path: 'README.md',
++          cursor: { anchor: 3, head: 12 }
++        },
++        {
++          user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
++          path: 'README.md',
++          cursor: { anchor: 0, head: 0 }
++        },
++        {
++          user: { id: 'sam', login: 'sam', name: 'Sam Lee' },
++          path: 'src/presence.ts',
++          cursor: { anchor: 1, head: 4 }
++        }
++      ],
++      'alex',
++      'README.md'
++    )
++
++    expect(cursors).toEqual([
++      {
++        user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
++        path: 'README.md',
++        cursor: { anchor: 0, head: 0 }
++      }
++    ])
++  })
++})
+diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.ts b/src/renderer/src/components/editor/codev-cursor-decorations.ts
+new file mode 100644
+index 0000000..c989885
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-cursor-decorations.ts
+@@ -0,0 +1,162 @@
++import { useEffect, useRef, useState } from 'react'
++import type { editor } from 'monaco-editor'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '@/web/codev-bridge'
++
++export type CodevCursorMember = {
++  user: { id: string; login: string; name: string | null }
++  path: string | null
++  cursor: { anchor: number; head: number } | null
++}
++
++type PresencePayload = {
++  viewerId?: string
++  members?: CodevCursorMember[]
++}
++
++export const CURSOR_HEARTBEAT_MS = 20_000
++
++function memberLabel(member: CodevCursorMember): string {
++  return member.user.name?.trim() || member.user.login
++}
++
++export function selectRemoteCursors(
++  members: CodevCursorMember[],
++  viewerId: string | null,
++  path: string
++): CodevCursorMember[] {
++  return members.filter(
++    (member) =>
++      viewerId !== null &&
++      member.user.id !== viewerId &&
++      member.path === path &&
++      member.cursor !== null
++  )
++}
++
++function cursorDecorations(
++  editorInstance: editor.IStandaloneCodeEditor,
++  members: CodevCursorMember[]
++): editor.IModelDeltaDecoration[] {
++  const model = editorInstance.getModel()
++  if (!model) return []
++  const maxOffset = model.getValueLength()
++  return members.flatMap((member) => {
++    const cursor = member.cursor
++    if (!cursor) return []
++    const anchor = Math.min(cursor.anchor, maxOffset)
++    const head = Math.min(cursor.head, maxOffset)
++    const start = model.getPositionAt(Math.min(anchor, head))
++    const end = model.getPositionAt(Math.max(anchor, head))
++    const caret = model.getPositionAt(head)
++    const label = memberLabel(member)
++    const result: editor.IModelDeltaDecoration[] = [
++      {
++        range: {
++          startLineNumber: caret.lineNumber,
++          startColumn: caret.column,
++          endLineNumber: caret.lineNumber,
++          endColumn: caret.column
++        },
++        options: {
++          afterContentClassName: 'codev-remote-cursor',
++          hoverMessage: { value: `${label}'s cursor` }
++        }
++      }
++    ]
++    if (anchor !== head) {
++      result.push({
++        range: {
++          startLineNumber: start.lineNumber,
++          startColumn: start.column,
++          endLineNumber: end.lineNumber,
++          endColumn: end.column
++        },
++        options: {
++          inlineClassName: 'codev-remote-selection',
++          hoverMessage: { value: `${label}'s selection` }
++        }
++      })
++    }
++    return result
++  })
++}
++
++export function useCodevCursorDecorations({
++  editor: editorInstance,
++  relativePath
++}: {
++  editor: editor.IStandaloneCodeEditor | null
++  relativePath: string
++}): void {
++  const [connected, setConnected] = useState(
++    () => getCodevBridgeSnapshot().status === 'connected'
++  )
++  const [viewerId, setViewerId] = useState<string | null>(null)
++  const [members, setMembers] = useState<CodevCursorMember[]>([])
++  const lastCursorRef = useRef('')
++  const decorationIdsRef = useRef<string[]>([])
++
++  useEffect(
++    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
++    []
++  )
++
++  useEffect(() => {
++    if (!editorInstance || !relativePath || !connected) return
++    let disposed = false
++    const refresh = (): void => {
++      void requestCodevBridge<PresencePayload>('presence.list')
++        .then((payload) => {
++          if (disposed) return
++          setViewerId(typeof payload.viewerId === 'string' ? payload.viewerId : null)
++          setMembers(Array.isArray(payload.members) ? payload.members : [])
++        })
++        .catch(() => {
++          if (!disposed) setMembers([])
++        })
++    }
++    const publishSelection = (force = false): void => {
++      const model = editorInstance.getModel()
++      const selection = editorInstance.getSelection()
++      if (!model || !selection) return
++      const cursor = {
++        anchor: model.getOffsetAt(selection.getSelectionStart()),
++        head: model.getOffsetAt(selection.getPosition())
++      }
++      const key = `${relativePath}:${cursor.anchor}:${cursor.head}`
++      if (!force && key === lastCursorRef.current) return
++      void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor })
++        .then(() => {
++          lastCursorRef.current = key
++        })
++        .catch(() => undefined)
++    }
++    refresh()
++    publishSelection()
++    const selectionSubscription = editorInstance.onDidChangeCursorSelection(() => publishSelection())
++    const cursorHeartbeat = window.setInterval(() => publishSelection(true), CURSOR_HEARTBEAT_MS)
++    const poll = window.setInterval(refresh, 1_000)
++    return () => {
++      disposed = true
++      selectionSubscription.dispose()
++      window.clearInterval(cursorHeartbeat)
++      window.clearInterval(poll)
++    }
++  }, [connected, editorInstance, relativePath])
++
++  useEffect(() => {
++    if (!editorInstance) return
++    const remote = selectRemoteCursors(members, viewerId, relativePath)
++    decorationIdsRef.current = editorInstance.deltaDecorations(
++      decorationIdsRef.current,
++      cursorDecorations(editorInstance, remote)
++    )
++    return () => {
++      decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, [])
++    }
++  }, [editorInstance, members, relativePath, viewerId])
++}
 diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
 index e048925..39f6647 100644
 --- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
@@ -277,7 +670,7 @@ index 0000000..10fa378
 +})
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx
 new file mode 100644
-index 0000000..d2a5320
+index 0000000..702c883
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.tsx
 @@ -0,0 +1,294 @@
@@ -577,6 +970,7 @@ index 0000000..d2a5320
 +}
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.test.tsx
 new file mode 100644
+index 0000000..d318d50
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.test.tsx
 @@ -0,0 +1,37 @@
@@ -619,6 +1013,7 @@ new file mode 100644
 +})
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.tsx b/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.tsx
 new file mode 100644
+index 0000000..02180a7
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevWorkspaceMemberRolesSection.tsx
 @@ -0,0 +1,148 @@
@@ -771,7 +1166,7 @@ new file mode 100644
 +  )
 +}
 diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-index 4405810..4f946db 100644
+index 4405810..3784386 100644
 --- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 +++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 @@ -4,6 +4,8 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
@@ -1188,6 +1583,157 @@ index 9d7534e..eb8829d 100644
            {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
          </React.Suspense>
          {showFloatingTerminalToggle && (
+diff --git a/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx b/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx
+new file mode 100644
+index 0000000..17fb114
+--- /dev/null
++++ b/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx
+@@ -0,0 +1,26 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevPresenceView } from './CodevPresenceSegment'
++
++describe('CodevPresenceView', () => {
++  it('renders named collaborators and their remote active file in editor chrome', () => {
++    const html = renderToStaticMarkup(
++      <CodevPresenceView
++        activePath="src/hello.ts"
++        members={[
++          {
++            user: { id: 'alex', login: 'alex', name: 'Alex Morgan' },
++            path: 'src/hello.ts'
++          },
++          {
++            user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
++            path: 'README.md'
++          }
++        ]}
++      />
++    )
++    expect(html).toContain('CoDev editor presence')
++    expect(html).toContain('Alex Morgan, Jordan Lee')
++    expect(html).toContain('viewing README.md')
++  })
++})
+diff --git a/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
+new file mode 100644
+index 0000000..d2406c6
+--- /dev/null
++++ b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
+@@ -0,0 +1,82 @@
++import { useEffect, useMemo, useState } from 'react'
++import { Users } from 'lucide-react'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '@/web/codev-bridge'
++
++export type CodevPresenceMember = {
++  user: { id: string; login: string; name: string | null }
++  path: string | null
++}
++
++type PresencePayload = { members?: CodevPresenceMember[] }
++
++function memberLabel(member: CodevPresenceMember): string {
++  return member.user.name?.trim() || member.user.login
++}
++
++export function CodevPresenceView({
++  activePath,
++  members
++}: {
++  activePath: string | null
++  members: CodevPresenceMember[]
++}): React.JSX.Element | null {
++  const namedMembers = members.slice(0, 3)
++  if (!activePath || namedMembers.length === 0) {
++    return null
++  }
++  const remote = namedMembers.filter((member) => member.path && member.path !== activePath)
++  const title = remote.length
++    ? `${remote.map(memberLabel).join(', ')} viewing ${remote[0]?.path}`
++    : `${namedMembers.map(memberLabel).join(', ')} viewing ${activePath}`
++  return (
++    <div
++      aria-label="CoDev editor presence"
++      className="mx-1 flex min-w-0 items-center gap-1.5 self-center rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground"
++      title={title}
++    >
++      <Users aria-hidden="true" className="size-3 shrink-0" />
++      <span className="truncate font-medium text-foreground">
++        {namedMembers.map(memberLabel).join(', ')}
++      </span>
++      {remote.length ? <span className="truncate">viewing {remote[0]?.path}</span> : null}
++    </div>
++  )
++}
++
++export function CodevPresenceSegment({ activePath }: { activePath: string | null }): React.JSX.Element | null {
++  const [connected, setConnected] = useState(() => getCodevBridgeSnapshot().status === 'connected')
++  const [members, setMembers] = useState<CodevPresenceMember[]>([])
++
++  useEffect(
++    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
++    []
++  )
++
++  useEffect(() => {
++    if (!connected || !activePath) return
++    let disposed = false
++    const refresh = (): void => {
++      void requestCodevBridge<PresencePayload>('presence.list')
++        .then((payload) => {
++          if (!disposed) setMembers(Array.isArray(payload.members) ? payload.members : [])
++        })
++        .catch(() => {
++          if (!disposed) setMembers([])
++        })
++    }
++    void requestCodevBridge('presence.update', { path: activePath }).then(refresh).catch(() => undefined)
++    refresh()
++    const timer = window.setInterval(refresh, 5_000)
++    return () => {
++      disposed = true
++      window.clearInterval(timer)
++    }
++  }, [activePath, connected])
++
++  const visibleMembers = useMemo(() => members.filter((member) => member.path), [members])
++  return <CodevPresenceView activePath={activePath} members={visibleMembers} />
++}
+diff --git a/src/renderer/src/components/tab-bar/TabBar.tsx b/src/renderer/src/components/tab-bar/TabBar.tsx
+index 2ebecc5..32289ea 100644
+--- a/src/renderer/src/components/tab-bar/TabBar.tsx
++++ b/src/renderer/src/components/tab-bar/TabBar.tsx
+@@ -80,6 +80,7 @@ import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+ import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
+ import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
++import { CodevPresenceSegment } from './CodevPresenceSegment'
+ 
+ const isWindows = navigator.userAgent.includes('Windows')
+ const isMacOs = navigator.userAgent.includes('Mac')
+@@ -797,6 +798,10 @@ function TabBarInner({
+     () => new Map((editorFiles ?? []).map((f) => [f.tabId ?? f.id, f])),
+     [editorFiles]
+   )
++  const activeEditorPath =
++    activeTabType === 'editor'
++      ? (editorFiles ?? []).find((file) => (file.tabId ?? file.id) === activeFileId)?.relativePath ?? null
++      : null
+   const browserMap = useMemo(
+     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
+     [browserTabs]
+@@ -1188,6 +1193,7 @@ function TabBarInner({
+           <TabStripScrollIndicator metrics={tabStripOverflowState} />
+         </div>
+       </SortableContext>
++      <CodevPresenceSegment activePath={activeEditorPath} />
+       {tabStripOverflowState.hasOverflow ? (
+         <Tooltip>
+           <TooltipTrigger asChild>
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
 index 5ecc70a..31b7c0e 100644
 --- a/src/renderer/src/env.d.ts
@@ -1449,10 +1995,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..de5da35
+index 0000000..706964b
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,333 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -1481,6 +2027,8 @@ index 0000000..de5da35
 +  | 'presence.list'
 +  | 'presence.update'
 +  | 'presence.cursor.update'
++  | 'conflicts.list'
++  | 'conflicts.resolve'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -2581,409 +3129,3 @@ index eae3a54..6ebcb27 100644
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
-diff --git a/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
-new file mode 100644
-index 0000000..d839e8e
---- /dev/null
-+++ b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
-@@ -0,0 +1,82 @@
-+import { useEffect, useMemo, useState } from 'react'
-+import { Users } from 'lucide-react'
-+import {
-+  getCodevBridgeSnapshot,
-+  requestCodevBridge,
-+  subscribeCodevBridge
-+} from '@/web/codev-bridge'
-+
-+export type CodevPresenceMember = {
-+  user: { id: string; login: string; name: string | null }
-+  path: string | null
-+}
-+
-+type PresencePayload = { members?: CodevPresenceMember[] }
-+
-+function memberLabel(member: CodevPresenceMember): string {
-+  return member.user.name?.trim() || member.user.login
-+}
-+
-+export function CodevPresenceView({
-+  activePath,
-+  members
-+}: {
-+  activePath: string | null
-+  members: CodevPresenceMember[]
-+}): React.JSX.Element | null {
-+  const namedMembers = members.slice(0, 3)
-+  if (!activePath || namedMembers.length === 0) {
-+    return null
-+  }
-+  const remote = namedMembers.filter((member) => member.path && member.path !== activePath)
-+  const title = remote.length
-+    ? `${remote.map(memberLabel).join(', ')} viewing ${remote[0]?.path}`
-+    : `${namedMembers.map(memberLabel).join(', ')} viewing ${activePath}`
-+  return (
-+    <div
-+      aria-label="CoDev editor presence"
-+      className="mx-1 flex min-w-0 items-center gap-1.5 self-center rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground"
-+      title={title}
-+    >
-+      <Users aria-hidden="true" className="size-3 shrink-0" />
-+      <span className="truncate font-medium text-foreground">
-+        {namedMembers.map(memberLabel).join(', ')}
-+      </span>
-+      {remote.length ? <span className="truncate">viewing {remote[0]?.path}</span> : null}
-+    </div>
-+  )
-+}
-+
-+export function CodevPresenceSegment({ activePath }: { activePath: string | null }): React.JSX.Element | null {
-+  const [connected, setConnected] = useState(() => getCodevBridgeSnapshot().status === 'connected')
-+  const [members, setMembers] = useState<CodevPresenceMember[]>([])
-+
-+  useEffect(
-+    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
-+    []
-+  )
-+
-+  useEffect(() => {
-+    if (!connected || !activePath) return
-+    let disposed = false
-+    const refresh = (): void => {
-+      void requestCodevBridge<PresencePayload>('presence.list')
-+        .then((payload) => {
-+          if (!disposed) setMembers(Array.isArray(payload.members) ? payload.members : [])
-+        })
-+        .catch(() => {
-+          if (!disposed) setMembers([])
-+        })
-+    }
-+    void requestCodevBridge('presence.update', { path: activePath }).then(refresh).catch(() => undefined)
-+    refresh()
-+    const timer = window.setInterval(refresh, 5_000)
-+    return () => {
-+      disposed = true
-+      window.clearInterval(timer)
-+    }
-+  }, [activePath, connected])
-+
-+  const visibleMembers = useMemo(() => members.filter((member) => member.path), [members])
-+  return <CodevPresenceView activePath={activePath} members={visibleMembers} />
-+}
-diff --git a/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx b/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx
-new file mode 100644
-index 0000000..fb69080
---- /dev/null
-+++ b/src/renderer/src/components/tab-bar/CodevPresenceSegment.test.tsx
-@@ -0,0 +1,26 @@
-+import { renderToStaticMarkup } from 'react-dom/server'
-+import { describe, expect, it } from 'vitest'
-+import { CodevPresenceView } from './CodevPresenceSegment'
-+
-+describe('CodevPresenceView', () => {
-+  it('renders named collaborators and their remote active file in editor chrome', () => {
-+    const html = renderToStaticMarkup(
-+      <CodevPresenceView
-+        activePath="src/hello.ts"
-+        members={[
-+          {
-+            user: { id: 'alex', login: 'alex', name: 'Alex Morgan' },
-+            path: 'src/hello.ts'
-+          },
-+          {
-+            user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
-+            path: 'README.md'
-+          }
-+        ]}
-+      />
-+    )
-+    expect(html).toContain('CoDev editor presence')
-+    expect(html).toContain('Alex Morgan, Jordan Lee')
-+    expect(html).toContain('viewing README.md')
-+  })
-+})
-diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.ts b/src/renderer/src/components/editor/codev-cursor-decorations.ts
-new file mode 100644
-index 0000000..7e1f2d3
---- /dev/null
-+++ b/src/renderer/src/components/editor/codev-cursor-decorations.ts
-@@ -0,0 +1,162 @@
-+import { useEffect, useRef, useState } from 'react'
-+import type { editor } from 'monaco-editor'
-+import {
-+  getCodevBridgeSnapshot,
-+  requestCodevBridge,
-+  subscribeCodevBridge
-+} from '@/web/codev-bridge'
-+
-+export type CodevCursorMember = {
-+  user: { id: string; login: string; name: string | null }
-+  path: string | null
-+  cursor: { anchor: number; head: number } | null
-+}
-+
-+type PresencePayload = {
-+  viewerId?: string
-+  members?: CodevCursorMember[]
-+}
-+
-+export const CURSOR_HEARTBEAT_MS = 20_000
-+
-+function memberLabel(member: CodevCursorMember): string {
-+  return member.user.name?.trim() || member.user.login
-+}
-+
-+export function selectRemoteCursors(
-+  members: CodevCursorMember[],
-+  viewerId: string | null,
-+  path: string
-+): CodevCursorMember[] {
-+  return members.filter(
-+    (member) =>
-+      viewerId !== null &&
-+      member.user.id !== viewerId &&
-+      member.path === path &&
-+      member.cursor !== null
-+  )
-+}
-+
-+function cursorDecorations(
-+  editorInstance: editor.IStandaloneCodeEditor,
-+  members: CodevCursorMember[]
-+): editor.IModelDeltaDecoration[] {
-+  const model = editorInstance.getModel()
-+  if (!model) return []
-+  const maxOffset = model.getValueLength()
-+  return members.flatMap((member) => {
-+    const cursor = member.cursor
-+    if (!cursor) return []
-+    const anchor = Math.min(cursor.anchor, maxOffset)
-+    const head = Math.min(cursor.head, maxOffset)
-+    const start = model.getPositionAt(Math.min(anchor, head))
-+    const end = model.getPositionAt(Math.max(anchor, head))
-+    const caret = model.getPositionAt(head)
-+    const label = memberLabel(member)
-+    const result: editor.IModelDeltaDecoration[] = [
-+      {
-+        range: {
-+          startLineNumber: caret.lineNumber,
-+          startColumn: caret.column,
-+          endLineNumber: caret.lineNumber,
-+          endColumn: caret.column
-+        },
-+        options: {
-+          afterContentClassName: 'codev-remote-cursor',
-+          hoverMessage: { value: `${label}'s cursor` }
-+        }
-+      }
-+    ]
-+    if (anchor !== head) {
-+      result.push({
-+        range: {
-+          startLineNumber: start.lineNumber,
-+          startColumn: start.column,
-+          endLineNumber: end.lineNumber,
-+          endColumn: end.column
-+        },
-+        options: {
-+          inlineClassName: 'codev-remote-selection',
-+          hoverMessage: { value: `${label}'s selection` }
-+        }
-+      })
-+    }
-+    return result
-+  })
-+}
-+
-+export function useCodevCursorDecorations({
-+  editor: editorInstance,
-+  relativePath
-+}: {
-+  editor: editor.IStandaloneCodeEditor | null
-+  relativePath: string
-+}): void {
-+  const [connected, setConnected] = useState(
-+    () => getCodevBridgeSnapshot().status === 'connected'
-+  )
-+  const [viewerId, setViewerId] = useState<string | null>(null)
-+  const [members, setMembers] = useState<CodevCursorMember[]>([])
-+  const lastCursorRef = useRef('')
-+  const decorationIdsRef = useRef<string[]>([])
-+
-+  useEffect(
-+    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
-+    []
-+  )
-+
-+  useEffect(() => {
-+    if (!editorInstance || !relativePath || !connected) return
-+    let disposed = false
-+    const refresh = (): void => {
-+      void requestCodevBridge<PresencePayload>('presence.list')
-+        .then((payload) => {
-+          if (disposed) return
-+          setViewerId(typeof payload.viewerId === 'string' ? payload.viewerId : null)
-+          setMembers(Array.isArray(payload.members) ? payload.members : [])
-+        })
-+        .catch(() => {
-+          if (!disposed) setMembers([])
-+        })
-+    }
-+    const publishSelection = (force = false): void => {
-+      const model = editorInstance.getModel()
-+      const selection = editorInstance.getSelection()
-+      if (!model || !selection) return
-+      const cursor = {
-+        anchor: model.getOffsetAt(selection.getSelectionStart()),
-+        head: model.getOffsetAt(selection.getPosition())
-+      }
-+      const key = `${relativePath}:${cursor.anchor}:${cursor.head}`
-+      if (!force && key === lastCursorRef.current) return
-+      void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor })
-+        .then(() => {
-+          lastCursorRef.current = key
-+        })
-+        .catch(() => undefined)
-+    }
-+    refresh()
-+    publishSelection()
-+    const selectionSubscription = editorInstance.onDidChangeCursorSelection(() => publishSelection())
-+    const cursorHeartbeat = window.setInterval(() => publishSelection(true), CURSOR_HEARTBEAT_MS)
-+    const poll = window.setInterval(refresh, 1_000)
-+    return () => {
-+      disposed = true
-+      selectionSubscription.dispose()
-+      window.clearInterval(cursorHeartbeat)
-+      window.clearInterval(poll)
-+    }
-+  }, [connected, editorInstance, relativePath])
-+
-+  useEffect(() => {
-+    if (!editorInstance) return
-+    const remote = selectRemoteCursors(members, viewerId, relativePath)
-+    decorationIdsRef.current = editorInstance.deltaDecorations(
-+      decorationIdsRef.current,
-+      cursorDecorations(editorInstance, remote)
-+    )
-+    return () => {
-+      decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, [])
-+    }
-+  }, [editorInstance, members, relativePath, viewerId])
-+}
-diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.test.ts b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
-new file mode 100644
-index 0000000..4b0e5e2
---- /dev/null
-+++ b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
-@@ -0,0 +1,40 @@
-+import { describe, expect, it } from 'vitest'
-+import { CURSOR_HEARTBEAT_MS, selectRemoteCursors } from './codev-cursor-decorations'
-+
-+describe('selectRemoteCursors', () => {
-+  it('keeps publishing an unchanged selection for the presence TTL heartbeat', () => {
-+    expect(CURSOR_HEARTBEAT_MS).toBeLessThan(60_000)
-+  })
-+
-+  it('keeps only another collaborator’s cursor for the active editor path', () => {
-+    const cursors = selectRemoteCursors(
-+      [
-+        {
-+          user: { id: 'alex', login: 'alex', name: 'Alex Morgan' },
-+          path: 'README.md',
-+          cursor: { anchor: 3, head: 12 }
-+        },
-+        {
-+          user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
-+          path: 'README.md',
-+          cursor: { anchor: 0, head: 0 }
-+        },
-+        {
-+          user: { id: 'sam', login: 'sam', name: 'Sam Lee' },
-+          path: 'src/presence.ts',
-+          cursor: { anchor: 1, head: 4 }
-+        }
-+      ],
-+      'alex',
-+      'README.md'
-+    )
-+
-+    expect(cursors).toEqual([
-+      {
-+        user: { id: 'jordan', login: 'jordan', name: 'Jordan Lee' },
-+        path: 'README.md',
-+        cursor: { anchor: 0, head: 0 }
-+      }
-+    ])
-+  })
-+})
-diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
-index 21789d4..a94cce1 100644
---- a/src/renderer/src/components/editor/MonacoEditor.tsx
-+++ b/src/renderer/src/components/editor/MonacoEditor.tsx
-@@ -62,5 +62,6 @@ import {
- import { installMonacoE2EProbe } from './monaco-e2e-probe'
- import { monacoFindOptions } from './monaco-find-options'
- import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
-+import { useCodevCursorDecorations } from './codev-cursor-decorations'
- 
- type MonacoEditorProps = {
-@@ -118,4 +119,5 @@ export default function MonacoEditor({
-   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
-   const editorContainerRef = useRef<HTMLDivElement | null>(null)
-   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
-+  useCodevCursorDecorations({ editor: mountedEditor, relativePath })
-   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
-diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 039414d..53d5fe0 100644
---- a/src/renderer/src/assets/main.css
-+++ b/src/renderer/src/assets/main.css
-@@ -2168,4 +2168,19 @@
-   opacity: 0.92;
- }
- 
-+/* CoDev editor awareness is intentionally an inline Monaco decoration so it
-+   stays aligned with text through wrapping, scrolling, and reconnect replay. */
-+.monaco-editor .codev-remote-selection {
-+  background: color-mix(in srgb, var(--primary) 28%, transparent);
-+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 72%, transparent);
-+}
-+
-+.monaco-editor .codev-remote-cursor {
-+  border-left: 2px solid var(--primary);
-+  display: inline-block;
-+  height: 1.35em;
-+  margin-left: -1px;
-+  vertical-align: text-bottom;
-+}
-+
- /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
-diff --git a/src/renderer/src/components/tab-bar/TabBar.tsx b/src/renderer/src/components/tab-bar/TabBar.tsx
-index 2ebecc5..32289ea 100644
---- a/src/renderer/src/components/tab-bar/TabBar.tsx
-+++ b/src/renderer/src/components/tab-bar/TabBar.tsx
-@@ -80,6 +80,7 @@ import { canToggleNativeChat } from '../native-chat/native-chat-availability'
- import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
- import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
- import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-+import { CodevPresenceSegment } from './CodevPresenceSegment'
-
- const isWindows = navigator.userAgent.includes('Windows')
- const isMacOs = navigator.userAgent.includes('Mac')
-@@ -797,6 +798,10 @@ function TabBarInner({
-     () => new Map((editorFiles ?? []).map((f) => [f.tabId ?? f.id, f])),
-     [editorFiles]
-   )
-+  const activeEditorPath =
-+    activeTabType === 'editor'
-+      ? (editorFiles ?? []).find((file) => (file.tabId ?? file.id) === activeFileId)?.relativePath ?? null
-+      : null
-   const browserMap = useMemo(
-     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
-     [browserTabs]
-@@ -1188,6 +1193,7 @@ function TabBarInner({
-           <TabStripScrollIndicator metrics={tabStripOverflowState} />
-         </div>
-       </SortableContext>
-+      <CodevPresenceSegment activePath={activeEditorPath} />
-       {tabStripOverflowState.hasOverflow ? (
-         <Tooltip>
-           <TooltipTrigger asChild>

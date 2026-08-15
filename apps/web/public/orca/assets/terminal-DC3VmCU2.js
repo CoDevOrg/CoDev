@@ -1,1 +1,0 @@
-import{Ov as e}from"./web-index-g7q3_sQt.js";var t=e(`terminal`,[[`path`,{d:`M12 19h8`,key:`baeox8`}],[`path`,{d:`m4 17 6-6-6-6`,key:`1yngyt`}]]);export{t};

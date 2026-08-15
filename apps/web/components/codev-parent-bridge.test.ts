@@ -310,4 +310,64 @@ describe("codev parent bridge", () => {
       },
     );
   });
+
+  it("lists and resolves conflicts only through the workspace-bound bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          conflicts: [{ path: "src/hello.ts", snapshotRevision: "r1" }],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ strategy: "collaboration" }));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-conflicts-list",
+          method: "conflicts.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { conflicts: [{ path: "src/hello.ts" }] },
+    });
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-conflicts-resolve",
+          method: "conflicts.resolve",
+          params: { path: "src/hello.ts", strategy: "collaboration" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { strategy: "collaboration" },
+    });
+    expect(fetcher).toHaveBeenLastCalledWith(
+      "/api/workspaces/workspace-1/collaboration/conflicts/resolve",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "src/hello.ts",
+          strategy: "collaboration",
+        }),
+      },
+    );
+  });
 });

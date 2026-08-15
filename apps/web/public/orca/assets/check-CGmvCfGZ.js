@@ -1,1 +1,0 @@
-import{Ov as e}from"./web-index-g7q3_sQt.js";var t=e(`check`,[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]);export{t};

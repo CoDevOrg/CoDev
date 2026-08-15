@@ -71,6 +71,15 @@ interface Snapshot {
   conflictFilesystemRevision: string | null;
 }
 
+export type CollaborationConflict = {
+  worktreeId: string;
+  path: string;
+  snapshotRevision: string;
+  filesystemRevision: string;
+  collaborativeContents: string;
+  filesystemContents: string;
+};
+
 export function classifyFilesystemReconciliation(input: {
   snapshotContents: string;
   collaborativeContents: string;
@@ -515,6 +524,52 @@ async function resolveWorktree(workspaceId: string, requested?: string) {
     .where(and(...conditions))
     .limit(1);
   return worktree?.id ?? null;
+}
+
+/**
+ * Returns unresolved integration-checkout conflicts with both preserved text
+ * versions. This is deliberately server-side: Orca gets authorized workspace
+ * file contents, never a sandbox credential or filesystem handle.
+ */
+export async function listCollaborationConflicts(
+  workspaceId: string,
+): Promise<CollaborationConflict[]> {
+  const worktreeId = await resolveWorktree(workspaceId);
+  if (!worktreeId) return [];
+
+  const snapshots = await getDatabase()
+    .select({
+      path: schema.yjsSnapshots.path,
+      revision: schema.yjsSnapshots.revision,
+      update: schema.yjsSnapshots.update,
+      conflictFilesystemRevision:
+        schema.yjsSnapshots.conflictFilesystemRevision,
+    })
+    .from(schema.yjsSnapshots)
+    .where(
+      and(
+        eq(schema.yjsSnapshots.worktreeId, worktreeId),
+        eq(schema.yjsSnapshots.hasConflict, true),
+      ),
+    )
+    .orderBy(schema.yjsSnapshots.path);
+
+  return Promise.all(
+    snapshots.map(async (snapshot) => {
+      const file = await readSandboxFile(workspaceId, snapshot.path);
+      return {
+        worktreeId,
+        path: snapshot.path,
+        snapshotRevision: snapshot.revision,
+        filesystemRevision:
+          snapshot.conflictFilesystemRevision ?? file.revision,
+        collaborativeContents: docFromUpdate(snapshot.update)
+          .getText("content")
+          .toString(),
+        filesystemContents: file.contents,
+      };
+    }),
+  );
 }
 
 async function sandboxWorktreeScope(worktreeId: string) {
