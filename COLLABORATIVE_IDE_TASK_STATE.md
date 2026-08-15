@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F7.1 — Normalize one provider's durable turn/status/output/tool events.**
+**F7.2 — Add explicit capability flags and unavailable-control explanations.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, and F6.5 are complete.
-**OI.3 is explicitly deferred at the owner's direction**, with its required
-two-member role-change verification remaining outstanding. The Current task
-is **F7.1**, the provider-neutral event card from
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, F6.5, and F7.1 are
+complete. **OI.3 is explicitly deferred at the owner's direction**, with
+its required two-member role-change verification remaining outstanding.
+The Current task is **F7.2**, the capability-flag card from
 `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
@@ -26,6 +26,22 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F7.1 — Production verification completed 2026-08-15T23:28:00Z:** Source
+  `058d70a2df8c3508bcdfcb04705e20caa7440ac7` is on `main`. Vercel Production
+  `dpl_EhXdDB2ZWSszRhG9jcGofKpm991K` is Ready at
+  `https://codev-aqj32mj0o-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` and opened native Orca
+  Agents. **Start controlled turn** ran the fixture OpenAI shared session
+  (`provider openai`, running). **Standardized events** showed 8 events:
+  turn / status / output for the completed seed, turn / status for the
+  running controlled turn, plus tool call, tool result, and usage
+  (`12 in / 24 out`). No secret was displayed. TestSprite backend test
+  `5222f2b8-3262-483f-b67f-8087038647a3` passed (unauthenticated GET
+  `/agents/shared` and POST `/controlled` return 401 without
+  `providerEvents` or tokens). See F7.1 completion evidence. Current task
+  is now F7.2.
 
 - **F6.5 — Production verification completed 2026-08-15T23:19:00Z:** Source
   `e3fe16fcdc81a07b018eff99952b27cd51661f7d` is on `main`. Vercel Production
@@ -2616,6 +2632,52 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   consent remains out of band. F7.1 is next.
 - Next task: F7.1 — normalize one provider's durable turn/status/output/tool
   events.
+
+### F7.1 completion evidence
+
+- Completed: 2026-08-15T23:28:00Z.
+- Changed files: `apps/web/lib/provider-event-view.ts`,
+  `apps/web/lib/provider-event-view.test.ts`,
+  `apps/web/lib/shared-session-view.ts`,
+  `apps/web/lib/shared-session-view.test.ts`,
+  `apps/web/lib/shared-session-server.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused provider-event and shared-session tests (9 passed),
+  patched-Orca shared-session panel tests (3 passed), `pnpm lint` (0
+  errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (309
+  passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1
+  skipped), `pnpm rust:check`, and `git diff --check`. `pnpm
+  format:check` still fails on pre-existing files
+  (`workboard-view.test.ts`, `COLLABORATIVE_IDE_TASK_STATE.md`, and
+  others) that this task did not change. TestSprite backend test
+  `5222f2b8-3262-483f-b67f-8087038647a3` (run
+  `4651427a-f0f9-43af-8b09-4e0c58fbba96`) passed against Production:
+  unauthenticated GET `/agents/shared` and POST `/controlled` returned
+  401 without `providerEvents` or tokens.
+- Validated source commit: `058d70a2df8c3508bcdfcb04705e20caa7440ac7`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_EhXdDB2ZWSszRhG9jcGofKpm991K` at
+  <https://codev-aqj32mj0o-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Agents showed the durable shared session (`provider openai`).
+  **Start controlled turn** started a fixture session. **Standardized
+  events** listed turn, status, output, tool call, tool result, and
+  usage (`12 in / 24 out`) for the completed seed plus the running
+  controlled turn. No secret was displayed. Native Orca **AI Provider
+  Accounts (OPTIONAL)** was not used.
+- Screenshots: `file:///tmp/codev-f71-verify/f7-1-standardized-events.png`
+  (Agents panel with Standardized events),
+  `file:///tmp/codev-f71-verify/f7-1-standardized-events-scrolled.png`
+  (full event kinds including usage). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f7-1/`.
+- Known limitations: this normalizes one fixture OpenAI session. F7.2
+  adds capability flags; F7.3 adds explicit turn-level provider
+  switching.
+- Next task: F7.2 — add explicit capability flags and unavailable-control
+  explanations.
 
 ## Blocked tasks
 
