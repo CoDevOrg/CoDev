@@ -27,6 +27,16 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.6 — Two-attempt cap remains in force 2026-08-15T04:38:00Z:** The
+  required initial `git status --short` was clean. This run then used
+  `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
+  main`; `main` remains current at `36b1b1c67593d403ca6761d6bebbf81e1050890c`.
+  The committed ledger already records two unsuccessful OI.6
+  implementation/Production-verification attempts, and the execution contract
+  stops after two unsuccessful approaches. No third implementation attempt,
+  source inspection, local checks, deployment, or UI verification was started.
+  Current task remains OI.6; do not begin OI.7.
+
 - **OI.6 — Two-attempt cap remains in force 2026-08-15T03:01:39Z:** The
   required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
