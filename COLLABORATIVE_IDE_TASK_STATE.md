@@ -27,6 +27,23 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.12 — dirty worktree blocker 2026-08-15T21:12:00Z:** The required
+  initial `git status --short` was still not clean. `main` is current at
+  `7861168e58227a77fddf5189da34e6b45eb17f1e` (`docs: record OI.12 dirty
+  worktree blocker`). The same unrelated local files remain and were not
+  overwritten or included: modified `apps/web/app/app-theme.css`,
+  `apps/web/app/globals.css`, `apps/web/app/sign-in/page.tsx`,
+  `apps/web/components/credentials-sign-in-form.test.tsx`,
+  `apps/web/components/credentials-sign-in-form.tsx`,
+  `apps/web/components/sign-in-layout.test.ts`,
+  `apps/web/tests/e2e/smoke.spec.ts`, and `packages/config/src/index.ts`;
+  untracked `apps/web/app/actions/password-reset.ts`,
+  `apps/web/app/forgot-password/`, `apps/web/app/reset-password/`,
+  `apps/web/components/reset-password-form.tsx`,
+  `apps/web/lib/password-reset-mail.ts`, `apps/web/lib/password-reset.test.ts`,
+  and `apps/web/lib/password-reset.ts`. No OI.12 product source was changed.
+  Current task remains OI.12; do not begin F6.1.
+
 - **OI.12 — dirty worktree blocker 2026-08-15T21:01:00Z:** The required
   initial `git status --short` was not clean. `main` is current and matches
   `origin/main` at `ca921669002ae53442502616e005457d517e8e91` (`docs: record
