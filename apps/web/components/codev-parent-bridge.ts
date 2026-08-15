@@ -28,7 +28,11 @@ export type CodevBridgeMethod =
   | "agents.interrupt"
   | "agents.startControlled"
   | "workboard.list"
-  | "workboard.create";
+  | "workboard.create"
+  | "claims.list"
+  | "claims.create"
+  | "claims.reassign"
+  | "claims.cancel";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -72,6 +76,10 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "agents.startControlled",
   "workboard.list",
   "workboard.create",
+  "claims.list",
+  "claims.create",
+  "claims.reassign",
+  "claims.cancel",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -411,10 +419,7 @@ export async function executeCodevBridgeRequest(
       }
       if (!createResponse.ok) {
         return fail(
-          jsonError(
-            createPayload,
-            "CoDev could not start this agent session.",
-          ),
+          jsonError(createPayload, "CoDev could not start this agent session."),
         );
       }
       const sessionId =
@@ -436,6 +441,105 @@ export async function executeCodevBridgeRequest(
         created: sessionId && worktreeId ? { sessionId, worktreeId } : null,
         rejection: null,
       });
+    }
+
+    if (request.method === "claims.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/claims`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load path claims."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "claims.create") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const body: {
+        sessionId: string;
+        contest?: boolean;
+        path?: string;
+        intent?: string;
+        revision?: string;
+      } = { sessionId };
+      if (typeof request.params?.contest === "boolean") {
+        body.contest = request.params.contest;
+      }
+      if (
+        typeof request.params?.path === "string" &&
+        request.params.path.trim()
+      ) {
+        body.path = request.params.path.trim();
+      }
+      if (
+        typeof request.params?.intent === "string" &&
+        request.params.intent.trim()
+      ) {
+        body.intent = request.params.intent.trim();
+      }
+      if (
+        typeof request.params?.revision === "string" &&
+        request.params.revision.trim()
+      ) {
+        body.revision = request.params.revision.trim();
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/claims`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            request.params?.contest
+              ? "CoDev could not contest this path claim."
+              : "CoDev could not create this path claim.",
+          ),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (
+      request.method === "claims.reassign" ||
+      request.method === "claims.cancel"
+    ) {
+      const claimId = request.params?.claimId;
+      if (typeof claimId !== "string" || !INVITE_ID.test(claimId)) {
+        return fail("A valid path claim is required.");
+      }
+      const action =
+        request.method === "claims.reassign" ? "reassign" : "cancel";
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/claims/${action}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ claimId }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            action === "reassign"
+              ? "CoDev could not reassign this path claim."
+              : "CoDev could not cancel this path claim.",
+          ),
+        );
+      }
+      return succeed(payload);
     }
 
     if (request.method === "conflicts.resolve") {

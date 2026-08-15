@@ -225,6 +225,169 @@ export async function releasePathClaim(
   return claim;
 }
 
+async function workspaceSessionIds(
+  workspaceId: string,
+  database: DatabaseExecutor = getDatabase(),
+) {
+  const sessions = await database
+    .select({ id: schema.agentSessions.id })
+    .from(schema.agentSessions)
+    .where(eq(schema.agentSessions.workspaceId, workspaceId));
+  return sessions.map((session) => session.id);
+}
+
+async function restoreUncontestedClaims(
+  sessionIds: string[],
+  database: DatabaseExecutor,
+) {
+  if (!sessionIds.length) return;
+  const live = await database
+    .select()
+    .from(schema.pathClaims)
+    .where(
+      and(
+        inArray(schema.pathClaims.sessionId, sessionIds),
+        inArray(schema.pathClaims.status, ["active", "contested"]),
+        gt(schema.pathClaims.expiresAt, new Date()),
+      ),
+    );
+  const stillContested = new Set<string>();
+  for (let left = 0; left < live.length; left += 1) {
+    for (let right = left + 1; right < live.length; right += 1) {
+      const first = live[left];
+      const second = live[right];
+      if (
+        first &&
+        second &&
+        claimPatternsOverlap(first.pathGlob, second.pathGlob)
+      ) {
+        stillContested.add(first.id);
+        stillContested.add(second.id);
+      }
+    }
+  }
+  const toActivate = live.filter(
+    (claim) => claim.status === "contested" && !stillContested.has(claim.id),
+  );
+  if (!toActivate.length) return;
+  await database
+    .update(schema.pathClaims)
+    .set({ status: "active", updatedAt: new Date() })
+    .where(
+      inArray(
+        schema.pathClaims.id,
+        toActivate.map((claim) => claim.id),
+      ),
+    );
+}
+
+export async function listWorkspaceLivePathClaims(workspaceId: string) {
+  const sessionIds = await workspaceSessionIds(workspaceId);
+  await expireClaims(sessionIds);
+  if (!sessionIds.length) return [];
+  return getDatabase()
+    .select()
+    .from(schema.pathClaims)
+    .where(
+      and(
+        inArray(schema.pathClaims.sessionId, sessionIds),
+        inArray(schema.pathClaims.status, ["active", "contested", "released"]),
+        gt(schema.pathClaims.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(asc(schema.pathClaims.createdAt));
+}
+
+export async function reassignPathClaim(
+  workspaceId: string,
+  keepClaimId: string,
+) {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${claimSerializationScope(workspaceId)}))`,
+    );
+    const sessionIds = await workspaceSessionIds(workspaceId, transaction);
+    if (!sessionIds.length) throw new Error("Active path claim not found.");
+    await expireClaims(sessionIds, transaction);
+    const [keep] = await transaction
+      .select()
+      .from(schema.pathClaims)
+      .where(
+        and(
+          eq(schema.pathClaims.id, keepClaimId),
+          inArray(schema.pathClaims.sessionId, sessionIds),
+          inArray(schema.pathClaims.status, ["active", "contested"]),
+          gt(schema.pathClaims.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    if (!keep) throw new Error("Active path claim not found.");
+    const live = await transaction
+      .select()
+      .from(schema.pathClaims)
+      .where(
+        and(
+          inArray(schema.pathClaims.sessionId, sessionIds),
+          inArray(schema.pathClaims.status, ["active", "contested"]),
+          gt(schema.pathClaims.expiresAt, new Date()),
+        ),
+      );
+    const overlaps = live.filter(
+      (claim) =>
+        claim.id !== keep.id &&
+        claimPatternsOverlap(claim.pathGlob, keep.pathGlob),
+    );
+    if (overlaps.length) {
+      await transaction
+        .update(schema.pathClaims)
+        .set({ status: "released", updatedAt: new Date() })
+        .where(
+          inArray(
+            schema.pathClaims.id,
+            overlaps.map((claim) => claim.id),
+          ),
+        );
+    }
+    const [updated] = await transaction
+      .update(schema.pathClaims)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(schema.pathClaims.id, keep.id))
+      .returning();
+    if (!updated) throw new Error("Active path claim not found.");
+    await restoreUncontestedClaims(sessionIds, transaction);
+    return updated;
+  });
+}
+
+export async function cancelOverlappingPathClaim(
+  workspaceId: string,
+  claimId: string,
+) {
+  return getDatabase().transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${claimSerializationScope(workspaceId)}))`,
+    );
+    const sessionIds = await workspaceSessionIds(workspaceId, transaction);
+    if (!sessionIds.length) throw new Error("Active path claim not found.");
+    await expireClaims(sessionIds, transaction);
+    const [claim] = await transaction
+      .update(schema.pathClaims)
+      .set({ status: "released", updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.pathClaims.id, claimId),
+          inArray(schema.pathClaims.sessionId, sessionIds),
+          inArray(schema.pathClaims.status, ["active", "contested"]),
+          gt(schema.pathClaims.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+    if (!claim) throw new Error("Active path claim not found.");
+    await restoreUncontestedClaims(sessionIds, transaction);
+    return claim;
+  });
+}
+
 export async function requireActivePathClaim(
   workspaceId: string,
   sessionId: string,

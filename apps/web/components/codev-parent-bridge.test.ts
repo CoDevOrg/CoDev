@@ -611,4 +611,110 @@ describe("codev parent bridge", () => {
       }),
     });
   });
+
+  it("lists, creates, reassigns, and cancels workspace path claims", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const sessionId = "aa22f527-8992-4814-95a2-070f1b01fc9f";
+    const claimId = "bb33f527-8992-4814-95a2-070f1b01fc9f";
+    const snapshot = {
+      groups: [{ path: "README.md", contested: true }],
+      notice: null,
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(Response.json(snapshot, { status: 201 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          ...snapshot,
+          notice: "Claim reassigned to Agent slot 2",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          ...snapshot,
+          notice: "Overlapping claim cancelled",
+        }),
+      );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-claims-list",
+          method: "claims.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: snapshot });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/claims",
+      { cache: "no-store" },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-claims-create",
+          method: "claims.create",
+          params: { sessionId, contest: true },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/claims",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, contest: true }),
+      },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-claims-reassign",
+          method: "claims.reassign",
+          params: { claimId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { notice: "Claim reassigned to Agent slot 2" },
+    });
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-claims-cancel",
+          method: "claims.cancel",
+          params: { claimId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { notice: "Overlapping claim cancelled" },
+    });
+  });
 });

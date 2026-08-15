@@ -1622,6 +1622,46 @@ index 0000000..b3dc285
 +    </section>
 +  )
 +}
+diff --git a/src/renderer/src/components/right-sidebar/FileExplorer.tsx b/src/renderer/src/components/right-sidebar/FileExplorer.tsx
+index 9e22f01..658ad29 100644
+--- a/src/renderer/src/components/right-sidebar/FileExplorer.tsx
++++ b/src/renderer/src/components/right-sidebar/FileExplorer.tsx
+@@ -17,6 +17,7 @@ import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+ import { FileExplorerNameFilter } from './FileExplorerNameFilter'
+ import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
+ import { FileExplorerToolbar } from './FileExplorerToolbar'
++import { CodevPathClaimsPanel } from '../sidebar/CodevPathClaimsPanel'
+ import { SearchFilters } from './SearchFilters'
+ import { SearchQueryRow } from './SearchQueryRow'
+ import { SearchResultsPane } from './SearchResultsPane'
+@@ -679,6 +680,7 @@ function FileExplorerFiles(): React.JSX.Element {
+           showDotfiles={showDotfiles}
+           onToggleDotfiles={handleToggleDotfiles}
+         />
++        <CodevPathClaimsPanel />
+         <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
+           {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
+              switch does not remount or shift when changing modes. */}
+diff --git a/src/renderer/src/components/right-sidebar/FileExplorerRow.tsx b/src/renderer/src/components/right-sidebar/FileExplorerRow.tsx
+index 1b62145..82ad1c9 100644
+--- a/src/renderer/src/components/right-sidebar/FileExplorerRow.tsx
++++ b/src/renderer/src/components/right-sidebar/FileExplorerRow.tsx
+@@ -48,6 +48,7 @@ import { STATUS_LABELS } from './status-display'
+ import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
+ import type { TreeNode } from './file-explorer-types'
+ import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
++import { CodevExplorerPathClaimBadge } from '../sidebar/codev-path-claims-store'
+ import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+ import { translate } from '@/i18n/i18n'
+ import { extractIpcErrorMessage } from '@/lib/ipc-error'
+@@ -653,6 +654,7 @@ export function FileExplorerRow({
+             }}
+           >
+             {node.name}
++            <CodevExplorerPathClaimBadge relativePath={node.relativePath} />
+           </span>
+           {nodeStatus ? (
+             <span
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
 new file mode 100644
 index 0000000..10fa378
@@ -2206,12 +2246,458 @@ index 4405810..3784386 100644
        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
  
        <SearchableSetting
+diff --git a/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx b/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx
+new file mode 100644
+index 0000000..b5210dc
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx
+@@ -0,0 +1,120 @@
++import { useCallback, useEffect, useState, type JSX } from 'react'
++import { toast } from 'sonner'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import { publishCodevPathClaims } from './codev-path-claims-store'
++import {
++  CodevPathClaimsViewPanel,
++  targetPathClaimGroup,
++  type CodevPathClaimsSnapshot
++} from './CodevPathClaimsView'
++
++export { CodevPathClaimsViewPanel, type CodevPathClaimsSnapshot } from './CodevPathClaimsView'
++
++function applySnapshot(result: CodevPathClaimsSnapshot): CodevPathClaimsSnapshot {
++  publishCodevPathClaims(result)
++  return result
++}
++
++export function CodevPathClaimsPanel(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [bridge, setBridge] = useState(() => getCodevBridgeSnapshot())
++  const [snapshot, setSnapshot] = useState<CodevPathClaimsSnapshot | null>(null)
++  const [busy, setBusy] = useState('')
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setBridge(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  const refresh = useCallback(async () => {
++    if (!embedded || bridge.status !== 'connected') return
++    setBusy('refresh')
++    try {
++      const result = await requestCodevBridge<CodevPathClaimsSnapshot>('claims.list')
++      setSnapshot(applySnapshot(result))
++    } catch (error: unknown) {
++      toast.error('Failed to load path claims', {
++        description: error instanceof Error ? error.message : String(error)
++      })
++    } finally {
++      setBusy('')
++    }
++  }, [bridge.status, embedded])
++
++  useEffect(() => {
++    if (!embedded || bridge.status !== 'connected') return
++    void refresh()
++  }, [bridge.status, embedded, refresh])
++
++  const run = useCallback(
++    async (busyKey: string, action: () => Promise<CodevPathClaimsSnapshot>) => {
++      setBusy(busyKey)
++      try {
++        setSnapshot(applySnapshot(await action()))
++      } catch (error: unknown) {
++        toast.error('Path claim failed', {
++          description: error instanceof Error ? error.message : String(error)
++        })
++      } finally {
++        setBusy('')
++      }
++    },
++    []
++  )
++
++  if (!embedded) {
++    return null
++  }
++
++  const slots = (snapshot?.slots ?? []).filter((slot) => slot.occupied && slot.sessionId)
++  const group = targetPathClaimGroup(snapshot?.groups ?? [], snapshot?.defaultPath)
++  const canCoSteer = Boolean(snapshot?.viewer?.canCoSteer)
++
++  return (
++    <CodevPathClaimsViewPanel
++      connected={bridge.status === 'connected'}
++      snapshot={snapshot}
++      busy={busy}
++      canCoSteer={canCoSteer}
++      onRefresh={() => {
++        void refresh()
++      }}
++      onClaim={() => {
++        const sessionId = slots[0]?.sessionId
++        if (!sessionId) return
++        void run('create', () =>
++          requestCodevBridge<CodevPathClaimsSnapshot>('claims.create', { sessionId })
++        )
++      }}
++      onOverlap={() => {
++        const sessionId = slots[1]?.sessionId
++        if (!sessionId) return
++        void run('overlap', () =>
++          requestCodevBridge<CodevPathClaimsSnapshot>('claims.create', {
++            sessionId,
++            contest: true
++          })
++        )
++      }}
++      onReassign={() => {
++        const claimId = group?.reassignClaimId
++        if (!claimId) return
++        void run('reassign', () =>
++          requestCodevBridge<CodevPathClaimsSnapshot>('claims.reassign', { claimId })
++        )
++      }}
++      onCancel={() => {
++        const claimId = group?.overlappingClaimId
++        if (!claimId) return
++        void run('cancel', () =>
++          requestCodevBridge<CodevPathClaimsSnapshot>('claims.cancel', { claimId })
++        )
++      }}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/sidebar/CodevPathClaimsView.test.tsx b/src/renderer/src/components/sidebar/CodevPathClaimsView.test.tsx
+new file mode 100644
+index 0000000..475585f
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevPathClaimsView.test.tsx
+@@ -0,0 +1,117 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevPathClaimsViewPanel, type CodevPathClaimGroup } from './CodevPathClaimsView'
++
++const contested: CodevPathClaimGroup = {
++  path: 'README.md',
++  contested: true,
++  warningTitle: 'Contested overlap · no silent overwrite',
++  warningDetail:
++    'Agent slot 2 requested README.md, which is already claimed by Agent slot 1. Reassign or cancel before either agent writes.',
++  keepClaimId: 'claim-1',
++  overlappingClaimId: 'claim-2',
++  reassignSlot: 2,
++  reassignClaimId: 'claim-2',
++  claims: [
++    {
++      id: 'claim-1',
++      sessionId: 's1',
++      slot: 1,
++      assignment: 'Repository map',
++      owner: 'Alex Morgan',
++      worktreeId: 'w1',
++      worktree: 'one',
++      path: 'README.md',
++      intent: 'Prepare an exact write claim',
++      revision: 'HEAD',
++      status: 'contested',
++      displayStatus: 'Contested',
++      expiresAt: '2026-08-15T08:15:00.000Z'
++    },
++    {
++      id: 'claim-2',
++      sessionId: 's2',
++      slot: 2,
++      assignment: 'Documentation sync',
++      owner: 'Jordan Lee',
++      worktreeId: 'w2',
++      worktree: 'two',
++      path: 'README.md',
++      intent: 'Prepare an exact write claim',
++      revision: 'HEAD',
++      status: 'contested',
++      displayStatus: 'Contested',
++      expiresAt: '2026-08-15T08:15:00.000Z'
++    }
++  ]
++}
++
++describe('CodevPathClaimsViewPanel', () => {
++  it('renders contested Explorer warnings and reassign/cancel controls', () => {
++    const html = renderToStaticMarkup(
++      <CodevPathClaimsViewPanel
++        connected
++        snapshot={{
++          viewer: { id: 'u1', name: 'Jordan Lee', canCoSteer: true },
++          slots: [
++            { slot: 1, occupied: true, sessionId: 's1', assignment: 'Repository map' },
++            { slot: 2, occupied: true, sessionId: 's2', assignment: 'Documentation sync' }
++          ],
++          groups: [contested],
++          defaultPath: 'README.md',
++          notice: null
++        }}
++        busy=""
++        canCoSteer
++        onRefresh={() => undefined}
++        onClaim={() => undefined}
++        onOverlap={() => undefined}
++        onReassign={() => undefined}
++        onCancel={() => undefined}
++      />
++    )
++    expect(html).toContain('Contested overlap · no silent overwrite')
++    expect(html).toContain('Reassign or cancel before either agent writes.')
++    expect(html).toContain('README.md · Contested')
++    expect(html).toContain('Reassign to slot 2')
++    expect(html).toContain('Cancel overlapping claim')
++  })
++
++  it('shows the reassignment notice after the overlap is resolved', () => {
++    const html = renderToStaticMarkup(
++      <CodevPathClaimsViewPanel
++        connected
++        snapshot={{
++          viewer: { id: 'u1', name: 'Jordan Lee', canCoSteer: true },
++          groups: [
++            {
++              ...contested,
++              contested: false,
++              warningTitle: null,
++              warningDetail: null,
++              overlappingClaimId: null,
++              reassignSlot: null,
++              reassignClaimId: null,
++              claims: [
++                { ...contested.claims[0]!, status: 'released', displayStatus: 'Released' },
++                { ...contested.claims[1]!, status: 'active', displayStatus: 'Active' }
++              ]
++            }
++          ],
++          notice: 'Claim reassigned to Agent slot 2'
++        }}
++        busy=""
++        canCoSteer
++        onRefresh={() => undefined}
++        onClaim={() => undefined}
++        onOverlap={() => undefined}
++        onReassign={() => undefined}
++        onCancel={() => undefined}
++      />
++    )
++    expect(html).toContain('Claim reassigned to Agent slot 2')
++    expect(html).toContain('README.md · Released')
++    expect(html).toContain('README.md · Active')
++    expect(html).not.toContain('Reassign to slot 2')
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/CodevPathClaimsView.tsx b/src/renderer/src/components/sidebar/CodevPathClaimsView.tsx
+new file mode 100644
+index 0000000..90b5c93
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevPathClaimsView.tsx
+@@ -0,0 +1,191 @@
++import type { JSX } from 'react'
++import { Button } from '@/components/ui/button'
++
++export type CodevPathClaimRecord = {
++  id: string
++  sessionId: string
++  slot: 1 | 2 | 3 | null
++  assignment: string
++  owner: string
++  worktreeId: string | null
++  worktree: string
++  path: string
++  intent: string
++  revision: string
++  status: 'active' | 'contested' | 'released'
++  displayStatus: 'Active' | 'Contested' | 'Released' | 'Cancelled'
++  expiresAt: string
++}
++
++export type CodevPathClaimGroup = {
++  path: string
++  contested: boolean
++  warningTitle: string | null
++  warningDetail: string | null
++  claims: CodevPathClaimRecord[]
++  keepClaimId: string | null
++  overlappingClaimId: string | null
++  reassignSlot: 1 | 2 | 3 | null
++  reassignClaimId: string | null
++}
++
++export type CodevPathClaimSlot = {
++  slot: 1 | 2 | 3
++  occupied: boolean
++  sessionId: string | null
++  assignment: string
++}
++
++export type CodevPathClaimsSnapshot = {
++  viewer?: { id: string; name: string; canCoSteer: boolean }
++  slots?: CodevPathClaimSlot[]
++  groups?: CodevPathClaimGroup[]
++  claims?: CodevPathClaimRecord[]
++  defaultPath?: string
++  defaultRevision?: string
++  notice?: string | null
++}
++
++export function targetPathClaimGroup(
++  groups: CodevPathClaimGroup[],
++  defaultPath = 'README.md'
++): CodevPathClaimGroup | null {
++  return (
++    groups.find((group) => group.contested) ??
++    groups.find((group) => group.path === defaultPath) ??
++    groups[0] ??
++    null
++  )
++}
++
++export function CodevPathClaimsViewPanel({
++  connected,
++  snapshot,
++  busy,
++  canCoSteer,
++  onRefresh,
++  onClaim,
++  onOverlap,
++  onReassign,
++  onCancel
++}: {
++  connected: boolean
++  snapshot: CodevPathClaimsSnapshot | null
++  busy: string
++  canCoSteer: boolean
++  onRefresh: () => void
++  onClaim: () => void
++  onOverlap: () => void
++  onReassign: () => void
++  onCancel: () => void
++}): JSX.Element {
++  const groups = snapshot?.groups ?? []
++  const slots = (snapshot?.slots ?? []).filter((slot) => slot.occupied && slot.sessionId)
++  const group = targetPathClaimGroup(groups, snapshot?.defaultPath)
++  const path = group?.path ?? snapshot?.defaultPath ?? 'README.md'
++  const live = group?.claims.filter((claim) => claim.status === 'active' || claim.status === 'contested') ?? []
++  const canStart = Boolean(slots[0]?.sessionId) && live.length === 0
++  const canOverlap = Boolean(slots[1]?.sessionId) && live.length === 1 && !group?.contested
++  const canResolve = Boolean(group?.contested && group.reassignClaimId)
++
++  return (
++    <section
++      className="border-b border-border px-3 py-2"
++      aria-labelledby="codev-path-claims-heading"
++      data-codev-path-claims="true"
++    >
++      <div className="mb-1 flex items-start justify-between gap-2">
++        <div>
++          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++            CoDev · path claims
++          </p>
++          <h2 id="codev-path-claims-heading" className="text-sm font-semibold">
++            Explorer write claims
++          </h2>
++        </div>
++        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
++          {busy === 'refresh' ? 'Refreshing…' : 'Refresh claims'}
++        </Button>
++      </div>
++      <p className="mb-2 text-[11px] text-muted-foreground">
++        {connected
++          ? `Agent slot 1 must claim ${path} before a write is allowed. Overlaps stay contested until reassigned or cancelled.`
++          : 'Waiting for the workspace-bound CoDev bridge.'}
++      </p>
++      {group?.contested && group.warningTitle ? (
++        <div className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs" role="alert">
++          <strong>{group.warningTitle}</strong>
++          {group.warningDetail ? <p className="mt-1">{group.warningDetail}</p> : null}
++        </div>
++      ) : snapshot?.notice ? (
++        <div className="mb-2 rounded-md border border-border bg-background/80 p-2 text-xs" role="alert">
++          <strong>{snapshot.notice}</strong>
++        </div>
++      ) : live.length > 0 ? (
++        <p className="mb-2 text-xs" role="status">
++          Claim active · agent write is now allowed.
++        </p>
++      ) : (
++        <p className="mb-2 text-xs text-muted-foreground" role="status">
++          No active path claim · agent write is blocked.
++        </p>
++      )}
++      {group ? (
++        <div className="mb-2 space-y-1" aria-label="Overlapping claims">
++          {group.claims.map((claim) => (
++            <div key={claim.id} className="flex items-center justify-between gap-2 text-[11px]">
++              <span>
++                Agent slot {claim.slot ?? '—'} · {claim.assignment}
++              </span>
++              <code>
++                {claim.path} · {claim.displayStatus}
++              </code>
++            </div>
++          ))}
++        </div>
++      ) : null}
++      <div className="flex flex-wrap items-center gap-2">
++        <Button
++          type="button"
++          size="sm"
++          disabled={!connected || !canCoSteer || !canStart || Boolean(busy)}
++          onClick={onClaim}
++        >
++          {busy === 'create' ? 'Claiming…' : live.length > 0 ? 'Path claimed' : 'Start agent claim'}
++        </Button>
++        <Button
++          type="button"
++          size="sm"
++          variant="ghost"
++          disabled={!connected || !canCoSteer || !canOverlap || Boolean(busy)}
++          onClick={onOverlap}
++        >
++          {busy === 'overlap' ? 'Contesting…' : 'Request overlapping claim'}
++        </Button>
++        {canResolve ? (
++          <>
++            <Button
++              type="button"
++              size="sm"
++              disabled={!connected || !canCoSteer || Boolean(busy)}
++              onClick={onReassign}
++            >
++              {busy === 'reassign'
++                ? 'Reassigning…'
++                : `Reassign to slot ${group?.reassignSlot ?? 2}`}
++            </Button>
++            <Button
++              type="button"
++              size="sm"
++              variant="ghost"
++              disabled={!connected || !canCoSteer || Boolean(busy)}
++              onClick={onCancel}
++            >
++              {busy === 'cancel' ? 'Cancelling…' : 'Cancel overlapping claim'}
++            </Button>
++          </>
++        ) : null}
++      </div>
++    </section>
++  )
++}
 diff --git a/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx b/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx
 new file mode 100644
-index 0000000..12f42d8
+index 0000000..819665a
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,168 @@
 +import { useCallback, useEffect, useState, type JSX } from 'react'
 +import { toast } from 'sonner'
 +import { useAppStore } from '@/store'
@@ -2224,6 +2710,8 @@ index 0000000..12f42d8
 +} from '../../web/codev-bridge'
 +import { openCodevManagedProposalWorktree } from '../../web/codev-proposal-discard'
 +import { publishCodevWorkboard, setCodevWorkboardStartSession } from './codev-workboard-store'
++import { publishCodevPathClaims } from './codev-path-claims-store'
++import type { CodevPathClaimsSnapshot } from './CodevPathClaimsView'
 +import {
 +  CodevWorkboardViewPanel,
 +  type CodevWorkboardCapacity,
@@ -2277,6 +2765,11 @@ index 0000000..12f42d8
 +      setCanCoSteer(next.canCoSteer)
 +      if (!next.rejection) {
 +        setRejection(null)
++      }
++      try {
++        publishCodevPathClaims(await requestCodevBridge<CodevPathClaimsSnapshot>('claims.list'))
++      } catch {
++        // Why: workboard still renders if claims are unavailable; Explorer retries independently.
 +      }
 +    } catch (error: unknown) {
 +      toast.error('Failed to load workboard', {
@@ -2898,6 +3391,295 @@ index d399803..6c696de 100644
                onColumnResizeStart={onColumnResizeStart}
                onColumnResizeKeyDown={onColumnResizeKeyDown}
              />
+diff --git a/src/renderer/src/components/sidebar/codev-path-claims-store.test.tsx b/src/renderer/src/components/sidebar/codev-path-claims-store.test.tsx
+new file mode 100644
+index 0000000..a3ab9e4
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/codev-path-claims-store.test.tsx
+@@ -0,0 +1,114 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import {
++  CodevExplorerPathClaimBadge,
++  CodevWorktreePathClaims,
++  publishCodevPathClaims
++} from './codev-path-claims-store'
++
++describe('CodevExplorerPathClaimBadge', () => {
++  it('marks a contested README.md row in Explorer', () => {
++    publishCodevPathClaims({
++      groups: [
++        {
++          path: 'README.md',
++          contested: true,
++          warningTitle: 'Contested overlap · no silent overwrite',
++          warningDetail: 'Reassign or cancel before either agent writes.',
++          keepClaimId: 'claim-1',
++          overlappingClaimId: 'claim-2',
++          reassignSlot: 2,
++          reassignClaimId: 'claim-2',
++          claims: [
++            {
++              id: 'claim-1',
++              sessionId: 's1',
++              slot: 1,
++              assignment: 'Repository map',
++              owner: 'Alex',
++              worktreeId: 'w1',
++              worktree: 'one',
++              path: 'README.md',
++              intent: 'write',
++              revision: 'HEAD',
++              status: 'contested',
++              displayStatus: 'Contested',
++              expiresAt: '2026-08-15T08:15:00.000Z'
++            }
++          ]
++        }
++      ]
++    })
++    const html = renderToStaticMarkup(<CodevExplorerPathClaimBadge relativePath="README.md" />)
++    expect(html).toContain('README.md Contested')
++    expect(html).toContain('Contested')
++    publishCodevPathClaims(null)
++  })
++})
++
++describe('CodevWorktreePathClaims', () => {
++  it('shows the contested warning and reassign control on a worktree card', () => {
++    publishCodevPathClaims({
++      notice: null,
++      groups: [
++        {
++          path: 'README.md',
++          contested: true,
++          warningTitle: 'Contested overlap · no silent overwrite',
++          warningDetail: null,
++          keepClaimId: 'claim-1',
++          overlappingClaimId: 'claim-2',
++          reassignSlot: 2,
++          reassignClaimId: 'claim-2',
++          claims: [
++            {
++              id: 'claim-2',
++              sessionId: 's2',
++              slot: 2,
++              assignment: 'Documentation sync',
++              owner: 'Jordan',
++              worktreeId: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++              worktree: 'two',
++              path: 'README.md',
++              intent: 'write',
++              revision: 'HEAD',
++              status: 'contested',
++              displayStatus: 'Contested',
++              expiresAt: '2026-08-15T08:15:00.000Z'
++            }
++          ]
++        }
++      ],
++      claims: [
++        {
++          id: 'claim-2',
++          sessionId: 's2',
++          slot: 2,
++          assignment: 'Documentation sync',
++          owner: 'Jordan',
++          worktreeId: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++          worktree: 'two',
++          path: 'README.md',
++          intent: 'write',
++          revision: 'HEAD',
++          status: 'contested',
++          displayStatus: 'Contested',
++          expiresAt: '2026-08-15T08:15:00.000Z'
++        }
++      ]
++    })
++    const html = renderToStaticMarkup(
++      <CodevWorktreePathClaims
++        worktree={{
++          path: '/tmp/repo',
++          comment: 'codev-proposal:c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++        }}
++      />
++    )
++    expect(html).toContain('Contested overlap · no silent overwrite')
++    expect(html).toContain('README.md · Contested')
++    expect(html).toContain('Reassign to slot 2')
++    expect(html).toContain('Cancel overlapping claim')
++    publishCodevPathClaims(null)
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/codev-path-claims-store.tsx b/src/renderer/src/components/sidebar/codev-path-claims-store.tsx
+new file mode 100644
+index 0000000..9fcd695
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/codev-path-claims-store.tsx
+@@ -0,0 +1,163 @@
++import { useSyncExternalStore, type JSX } from 'react'
++import type { Worktree } from '../../../../shared/types'
++import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
++import { requestCodevBridge } from '../../web/codev-bridge'
++import { Button } from '@/components/ui/button'
++import {
++  targetPathClaimGroup,
++  type CodevPathClaimGroup,
++  type CodevPathClaimRecord,
++  type CodevPathClaimsSnapshot
++} from './CodevPathClaimsView'
++
++let snapshot: CodevPathClaimsSnapshot | null = null
++const listeners = new Set<() => void>()
++
++export function publishCodevPathClaims(next: CodevPathClaimsSnapshot | null): void {
++  snapshot = next
++  for (const listener of listeners) {
++    listener()
++  }
++}
++
++function subscribe(listener: () => void): () => void {
++  listeners.add(listener)
++  return () => {
++    listeners.delete(listener)
++  }
++}
++
++function getSnapshot(): CodevPathClaimsSnapshot | null {
++  return snapshot
++}
++
++export function useCodevPathClaims(): CodevPathClaimsSnapshot | null {
++  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
++}
++
++export function claimGroupForPath(
++  groups: CodevPathClaimGroup[],
++  relativePath: string
++): CodevPathClaimGroup | null {
++  return (
++    groups.find((group) => {
++      if (group.path === relativePath) return true
++      if (group.path.endsWith('/**')) {
++        const directory = group.path.slice(0, -3)
++        return relativePath === directory || relativePath.startsWith(`${directory}/`)
++      }
++      return false
++    }) ?? null
++  )
++}
++
++export function CodevExplorerPathClaimBadge({
++  relativePath
++}: {
++  relativePath: string
++}): JSX.Element | null {
++  const claims = useCodevPathClaims()
++  const group = claimGroupForPath(claims?.groups ?? [], relativePath)
++  if (!group) {
++    return null
++  }
++  const live = group.claims.some((claim) => claim.status === 'active' || claim.status === 'contested')
++  if (!live && !group.claims.length) {
++    return null
++  }
++  const label = group.contested ? 'Contested' : group.claims.some((claim) => claim.status === 'active') ? 'Claimed' : 'Released'
++  return (
++    <span
++      className="ml-1 shrink-0 rounded-sm border border-border px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
++      aria-label={`${relativePath} ${label}`}
++      data-codev-path-claim={group.contested ? 'contested' : 'active'}
++    >
++      {label}
++    </span>
++  )
++}
++
++function claimsForWorktree(
++  claims: CodevPathClaimsSnapshot | null,
++  worktree: Pick<Worktree, 'path' | 'comment'>
++): { slotClaims: CodevPathClaimRecord[]; group: CodevPathClaimGroup | null } {
++  const worktreeId = getCodevProposalWorktreeId(worktree.path, worktree.comment)
++  const groups = claims?.groups ?? []
++  const slotClaims = (claims?.claims ?? []).filter((claim) => claim.worktreeId === worktreeId)
++  const group =
++    groups.find((entry) => entry.claims.some((claim) => claim.worktreeId === worktreeId)) ??
++    targetPathClaimGroup(groups)
++  return { slotClaims, group }
++}
++
++export function CodevWorktreePathClaims({
++  worktree
++}: {
++  worktree: Pick<Worktree, 'path' | 'comment'>
++}): JSX.Element | null {
++  const claims = useCodevPathClaims()
++  const { slotClaims, group } = claimsForWorktree(claims, worktree)
++  if (!slotClaims.length && !group?.contested) {
++    return null
++  }
++  const thisClaim = slotClaims[0] ?? null
++  const canReassign = Boolean(group?.contested && thisClaim && (thisClaim.status === 'active' || thisClaim.status === 'contested'))
++  const canCancel = Boolean(group?.contested && thisClaim && thisClaim.id === group?.overlappingClaimId)
++
++  return (
++    <div
++      className="mt-2 border-t border-worktree-sidebar-border pt-2 text-[11px]"
++      aria-label="Worktree path claims"
++      data-codev-worktree-claims="true"
++    >
++      {group?.contested && group.warningTitle ? (
++        <div className="mb-1 rounded-sm border border-destructive/40 bg-destructive/10 p-1.5" role="alert">
++          <strong>{group.warningTitle}</strong>
++        </div>
++      ) : claims?.notice ? (
++        <div className="mb-1 text-xs" role="status">
++          {claims.notice}
++        </div>
++      ) : null}
++      {slotClaims.map((claim) => (
++        <div key={claim.id} className="flex items-center justify-between gap-2">
++          <span>Path claim</span>
++          <code>
++            {claim.path} · {claim.displayStatus}
++          </code>
++        </div>
++      ))}
++      {canReassign || canCancel ? (
++        <div className="mt-2 flex flex-wrap gap-1">
++          {canReassign && thisClaim ? (
++            <Button
++              type="button"
++              size="sm"
++              onClick={() => {
++                void requestCodevBridge<CodevPathClaimsSnapshot>('claims.reassign', {
++                  claimId: thisClaim.id
++                }).then(publishCodevPathClaims)
++              }}
++            >
++              Reassign to slot {thisClaim.slot ?? 2}
++            </Button>
++          ) : null}
++          {canCancel && group?.overlappingClaimId ? (
++            <Button
++              type="button"
++              size="sm"
++              variant="ghost"
++              onClick={() => {
++                void requestCodevBridge<CodevPathClaimsSnapshot>('claims.cancel', {
++                  claimId: group.overlappingClaimId
++                }).then(publishCodevPathClaims)
++              }}
++            >
++              Cancel overlapping claim
++            </Button>
++          ) : null}
++        </div>
++      ) : null}
++    </div>
++  )
++}
 diff --git a/src/renderer/src/components/sidebar/codev-workboard-store.test.tsx b/src/renderer/src/components/sidebar/codev-workboard-store.test.tsx
 new file mode 100644
 index 0000000..4d16c39
@@ -2945,14 +3727,15 @@ index 0000000..4d16c39
 +})
 diff --git a/src/renderer/src/components/sidebar/codev-workboard-store.tsx b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
 new file mode 100644
-index 0000000..2edfa3c
+index 0000000..bd4626a
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,90 @@
 +import { useSyncExternalStore, type JSX } from 'react'
 +import type { Worktree } from '../../../../shared/types'
 +import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
 +import type { CodevWorkboardSlot, CodevWorkboardSnapshot } from './CodevWorkboardView'
++import { CodevWorktreePathClaims } from './codev-path-claims-store'
 +
 +let snapshot: CodevWorkboardSnapshot | null = null
 +let startSession: (() => Promise<void>) | null = null
@@ -3031,6 +3814,9 @@ index 0000000..2edfa3c
 +      <div>
 +        <span className="block text-[10px] uppercase text-muted-foreground">Current task</span>
 +        <strong>{slot.currentTask}</strong>
++      </div>
++      <div className="col-span-2">
++        <CodevWorktreePathClaims worktree={worktree} />
 +      </div>
 +    </div>
 +  )
@@ -3661,10 +4447,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..646cf3d
+index 0000000..a635052
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,344 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -3702,6 +4488,10 @@ index 0000000..646cf3d
 +  | 'agents.startControlled'
 +  | 'workboard.list'
 +  | 'workboard.create'
++  | 'claims.list'
++  | 'claims.create'
++  | 'claims.reassign'
++  | 'claims.cancel'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

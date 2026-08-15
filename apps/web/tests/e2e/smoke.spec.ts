@@ -125,6 +125,7 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
   for (const endpoint of [
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/publications",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/events",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/claims",
   ]) {
     const response = await request.get(endpoint);
     expect(response.status()).toBe(401);
@@ -149,6 +150,9 @@ test("workspace APIs reject anonymous requests", async ({ request }) => {
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/merge",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/discard",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/claims",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/claims",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/claims/reassign",
+    "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/claims/cancel",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/agents/aa22f527-8992-4814-95a2-070f1b01fc9f/messages",
     "/api/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb/collaboration/conflicts/resolve",
   ]) {
