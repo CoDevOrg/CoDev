@@ -8,15 +8,15 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions**
+**OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to native files, sessions, and diffs**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.11**, followed by OI.12 from
-`COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
-sequence is complete.
+remaining outstanding. The Current task is **OI.12**, the last Orca
+convergence card from `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin
+until that sequence is complete.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -26,6 +26,21 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.11 — Production verification completed 2026-08-15T19:28:00Z:** Stale-review
+  rejection and exactly-once attributed integration are live in Orca's native
+  Source Control review actions. Follow-up source commit
+  `a5aa75ceccf9e252214769022fb81aaadad3fb36` is on `main` (OI.11 feature
+  `dffbcb1a54855a7159b38304e2935d067f49e04b` plus the sandbox-diff listing
+  fix). Vercel Production `dpl_2zztPjaZD6XzXvydwW7wUxw32NQw` is Ready at
+  `https://codev-hbrjby1ek-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` advanced the integration
+  head, captured **Stale checkpoint · approval blocked** with **No merge
+  action started**, prepared a current checkpoint, and captured **Integrated
+  exactly one current reviewed checkpoint** attributed to CoDev Test Jordan
+  as Maintainer with audit event `agent.review_merged`. See OI.11 completion
+  evidence.
 
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T14:57:36Z:**
   The required initial `git status --short` was clean. This run then used
@@ -2115,6 +2130,45 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `oi-10-checkpoint.png`, and `oi-10-checks-diff.png`.
 - Next task: OI.11 — put stale-review rejection and exactly-once
   integration in Orca's native review actions.
+
+### OI.11 completion evidence
+
+- Completed: 2026-08-15T19:28:00Z.
+- Changed files: `apps/web/lib/review-checkpoint-server.ts` and
+  `apps/web/lib/review-checkpoint-server.test.ts`. OI.11 native review
+  actions were already on `main` from `dffbcb1a`; this follow-up keeps the
+  Source Control snapshot visible when the 403 diff fallback cannot find the
+  sandbox after a host reboot.
+- Checks: focused `lib/review-checkpoint-server.test.ts`,
+  `lib/review-checkpoint-routes.test.ts`, and
+  `lib/review-checkpoint-view.test.ts` (10 passed), Prettier on the changed
+  files, ESLint on the changed files, `tsc --noEmit` in `apps/web`, and
+  `git diff --check`.
+- Validated source commit: `a5aa75ceccf9e252214769022fb81aaadad3fb36`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_2zztPjaZD6XzXvydwW7wUxw32NQw` at
+  <https://codev-hbrjby1ek-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against that exact
+  Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Orca Source Control
+  showed Agent slot 3 as review-ready. Advancing the integration head
+  changed the approval gate to **Stale**, with **Approval blocked**,
+  **Stale checkpoint · approval blocked**, the head move from `775cb7e5…`
+  to `8261a6f0…`, **Rebase and review again before approval**, and **No
+  merge action started**. Preparing a current checkpoint restored
+  **Current**, then **Approve checkpoint** produced **Integrated exactly
+  one current reviewed checkpoint**, merge actor CoDev Test Jordan ·
+  Maintainer, audit event `agent.review_merged`, and **Duplicate approval
+  is disabled for this checkpoint.**
+- Screenshots: `file:///tmp/codev-oi11-verify/00-checkpoint-current.png`
+  (current prepared checkpoint),
+  `file:///tmp/codev-oi11-verify/01-stale-blocked.png` (stale rejection),
+  and `file:///tmp/codev-oi11-verify/02-integrated.png` (attributed
+  exactly-once integration). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-11-checkpoint-current.png`,
+  `oi-11-stale-blocked.png`, and `oi-11-integrated.png`.
+- Next task: OI.12 — add the durable activity/audit view as an Orca
+  right-sidebar panel linked to native files, sessions, and diffs.
 
 ## Blocked tasks
 
