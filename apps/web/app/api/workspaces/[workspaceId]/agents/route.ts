@@ -177,15 +177,18 @@ export async function POST(
     );
   }
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
-  if (!workspace.repository || workspace.githubRepositoryId === null) {
-    return apiError(
-      new Error("Connect a GitHub repository before creating an agent."),
-      409,
-    );
-  }
 
   try {
     const input = createSchema.parse(await request.json());
+    if (
+      !input.draft &&
+      (!workspace.repository || workspace.githubRepositoryId === null)
+    ) {
+      return apiError(
+        new Error("Connect a GitHub repository before creating an agent."),
+        409,
+      );
+    }
     const provider = parseAgentProvider(input.provider, getAgentProvider());
     const credential = input.draft
       ? undefined
@@ -199,13 +202,14 @@ export async function POST(
       await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     }
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
-    const issue = input.issueNumber
-      ? await getExactGitHubIssue(
-          user.id,
-          workspace.repository,
-          input.issueNumber,
-        )
-      : null;
+    const issue =
+      input.issueNumber && workspace.repository
+        ? await getExactGitHubIssue(
+            user.id,
+            workspace.repository,
+            input.issueNumber,
+          )
+        : null;
     let reservation;
     try {
       reservation = await getDatabase().transaction(async (transaction) => {
@@ -242,10 +246,11 @@ export async function POST(
           .from(schema.workspaces)
           .where(eq(schema.workspaces.id, workspaceId))
           .limit(1);
-        if (!repository || repository.id === null) {
-          throw new Error("Workspace repository not found.");
-        }
+        const githubRepositoryId = repository?.id ?? null;
         if (issue) {
+          if (githubRepositoryId === null) {
+            throw new Error("Workspace repository not found.");
+          }
           const [existingAssignment] = await transaction
             .select({ id: schema.githubIssueAssignments.id })
             .from(schema.githubIssueAssignments)
@@ -253,7 +258,7 @@ export async function POST(
               and(
                 eq(
                   schema.githubIssueAssignments.githubRepositoryId,
-                  repository.id,
+                  githubRepositoryId,
                 ),
                 eq(schema.githubIssueAssignments.issueNumber, issue.number),
               ),
@@ -300,10 +305,13 @@ export async function POST(
           .returning({ id: schema.agentSessions.id });
         if (!session) throw new Error("Could not create the agent session.");
         if (issue) {
+          if (githubRepositoryId === null) {
+            throw new Error("Workspace repository not found.");
+          }
           await transaction.insert(schema.githubIssueAssignments).values({
             workspaceId,
             sessionId: session.id,
-            githubRepositoryId: repository.id,
+            githubRepositoryId,
             issueNumber: issue.number,
             githubIssueId: BigInt(issue.id),
             title: issue.title,
