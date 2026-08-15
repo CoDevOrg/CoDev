@@ -22,7 +22,11 @@ export type CodevBridgeMethod =
   | "presence.cursor.update"
   | "conflicts.list"
   | "conflicts.report"
-  | "conflicts.resolve";
+  | "conflicts.resolve"
+  | "agents.list"
+  | "agents.enqueue"
+  | "agents.interrupt"
+  | "agents.startControlled";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -60,6 +64,10 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "conflicts.list",
   "conflicts.report",
   "conflicts.resolve",
+  "agents.list",
+  "agents.enqueue",
+  "agents.interrupt",
+  "agents.startControlled",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -253,6 +261,82 @@ export async function executeCodevBridgeRequest(
       if (!response.ok) {
         return fail(
           jsonError(payload, "CoDev could not record this file conflict."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/shared`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load shared agent sessions."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.startControlled") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/controlled`,
+        { method: "POST" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not start this controlled turn."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.enqueue") {
+      const sessionId = request.params?.sessionId;
+      const prompt = request.params?.prompt;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      if (typeof prompt !== "string" || !prompt.trim()) {
+        return fail("An instruction is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/queue`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prompt: prompt.trim() }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not queue this instruction."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.interrupt") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/interrupt`,
+        { method: "POST" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not interrupt this agent turn."),
         );
       }
       return succeed(payload);

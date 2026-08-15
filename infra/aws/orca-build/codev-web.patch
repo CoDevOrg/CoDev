@@ -833,13 +833,14 @@ index 0000000..0d6cb67
 +  })
 +}
 diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
-index e048925..39f6647 100644
+index e048925..ba0cc30 100644
 --- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
 +++ b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
-@@ -49,6 +49,11 @@ import {
+@@ -49,6 +49,12 @@ import {
  import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
  import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
  import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
++import { CodevSharedSessionPanel } from './CodevSharedSessionPanel'
 +import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 +import {
 +  openCodevManagedProposalWorktree,
@@ -848,15 +849,16 @@ index e048925..39f6647 100644
  
  export default function AiVaultPanel(): React.JSX.Element {
    const activeWorktreeId = useActiveWorktreeId()
-@@ -88,6 +93,7 @@ export default function AiVaultPanel(): React.JSX.Element {
+@@ -88,6 +94,8 @@ export default function AiVaultPanel(): React.JSX.Element {
      resetViewOptions
    } = usePersistedAiVaultViewOptions()
    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
 +  const [creatingProposal, setCreatingProposal] = useState(false)
++  const [sharedRefreshToken, setSharedRefreshToken] = useState(0)
    const userChangedScopeRef = useRef(false)
    const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
  
-@@ -304,6 +310,53 @@ export default function AiVaultPanel(): React.JSX.Element {
+@@ -304,6 +312,54 @@ export default function AiVaultPanel(): React.JSX.Element {
      })
    }, [])
  
@@ -894,6 +896,7 @@ index e048925..39f6647 100644
 +          }
 +        })
 +        activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
++        setSharedRefreshToken((current) => current + 1)
 +        toast.success('Managed proposal prepared', {
 +          description:
 +            'CoDev created an isolated worktree. Use Delete Worktree on its native card to discard it.'
@@ -910,15 +913,31 @@ index e048925..39f6647 100644
    return (
      <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
        <AiVaultPanelHeader
-@@ -334,6 +387,8 @@ export default function AiVaultPanel(): React.JSX.Element {
+@@ -333,7 +389,12 @@ export default function AiVaultPanel(): React.JSX.Element {
+         onHideEmptySessionsChange={setHideEmptySessions}
          onSessionLimitChange={setSessionLimit}
          onReset={resetViewOptions}
-         onRefresh={() => void refresh({ force: true })}
+-        onRefresh={() => void refresh({ force: true })}
++        onRefresh={() => {
++          setSharedRefreshToken((current) => current + 1)
++          void refresh({ force: true })
++        }}
 +        creatingProposal={creatingProposal}
 +        onCreateProposal={window.__CODEV_EMBEDDED__ ? createProposal : undefined}
        />
  
        {error ? (
+@@ -344,6 +405,10 @@ export default function AiVaultPanel(): React.JSX.Element {
+ 
+       <AiVaultScanIssueBanners scanResult={scanResult} />
+ 
++      {typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? (
++        <CodevSharedSessionPanel refreshToken={sharedRefreshToken} />
++      ) : null}
++
+       <AiVaultSessionVirtualList
+         groups={groups}
+         collapsedGroups={collapsedGroups}
 diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
 index 83b190a..c530555 100644
 --- a/src/renderer/src/components/right-sidebar/AiVaultPanelHeader.tsx
@@ -971,6 +990,638 @@ index 83b190a..c530555 100644
            <VaultHostScopeMenu
              executionHostScope={executionHostScope}
              hostOptions={hostScopeOptions}
+diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
+new file mode 100644
+index 0000000..193de4e
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
+@@ -0,0 +1,108 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevSharedSessionViewPanel, type CodevSharedSessionView } from './CodevSharedSessionPanel'
++
++const view: CodevSharedSessionView = {
++  session: {
++    sessionId: 'f3100000-0000-4000-8000-000000000001',
++    ownerId: 'b0200000-0000-4000-8000-000000000011',
++    worktreeId: 'f3100000-0000-4000-8000-000000000002',
++    provider: 'openai',
++    model: 'gpt-5',
++    state: 'interrupted',
++    activeTurnId: null,
++    streamCursor: 3,
++    queue: [
++      {
++        id: 'f3100000-0000-4000-8000-000000000004',
++        authorId: 'b0200000-0000-4000-8000-000000000012',
++        prompt: 'Summarize the collaboration plan.',
++        queuePosition: 1
++      }
++    ]
++  },
++  name: 'Shared',
++  ownerName: 'Alex Morgan',
++  worktreeName: 'agent-alex',
++  model: 'gpt-5',
++  attributedQueue: [
++    {
++      id: 'f3100000-0000-4000-8000-000000000004',
++      authorId: 'b0200000-0000-4000-8000-000000000012',
++      authorName: 'Jordan Lee',
++      prompt: 'Summarize the collaboration plan.',
++      queuePosition: 1
++    }
++  ],
++  transcript: [
++    {
++      position: 1,
++      turnId: 'f3100000-0000-4000-8000-000000000003',
++      authorId: 'b0200000-0000-4000-8000-000000000011',
++      authorName: 'Alex Morgan',
++      prompt: 'Inspect the repository layout.',
++      status: 'completed',
++      tool: 'read_file · README.md',
++      output: 'Repository structure is ready for the shared session.'
++    }
++  ],
++  lastCompletedAction: {
++    tool: 'read_file · README.md',
++    output: 'Repository structure is ready for the shared session.'
++  }
++}
++
++describe('CodevSharedSessionViewPanel', () => {
++  it('renders metadata, attributed queue, last completed action, and refresh recovery', () => {
++    const html = renderToStaticMarkup(
++      <CodevSharedSessionViewPanel
++        connected
++        restored
++        viewer={{ id: 'b0200000-0000-4000-8000-000000000012', name: 'Jordan Lee', canCoSteer: true }}
++        view={view}
++        draftPrompt=""
++        busy=""
++        message=""
++        onDraftChange={() => undefined}
++        onRefresh={() => undefined}
++        onStartControlled={() => undefined}
++        onQueue={() => undefined}
++        onInterrupt={() => undefined}
++      />
++    )
++    expect(html).toContain('Shared session')
++    expect(html).toContain('openai')
++    expect(html).toContain('Alex Morgan')
++    expect(html).toContain('agent-alex')
++    expect(html).toContain('Interrupted · controlled turn')
++    expect(html).toContain('1 queued')
++    expect(html).toContain('Jordan Lee')
++    expect(html).toContain('authorId b0200000-0000-4000-8000-000000000012')
++    expect(html).toContain('Last completed action')
++    expect(html).toContain('read_file · README.md')
++    expect(html).toContain('Session restored after browser refresh · stream cursor 3 · queued instruction preserved once.')
++    expect(html).toContain('Instruction queued')
++    expect(html).toContain('Turn interrupted')
++  })
++
++  it('disables co-steer actions for viewers', () => {
++    const html = renderToStaticMarkup(
++      <CodevSharedSessionViewPanel
++        connected
++        restored={false}
++        viewer={{ id: 'viewer', name: 'Casey Rivera', canCoSteer: false }}
++        view={{ ...view, session: { ...view.session, state: 'running', queue: [] } }}
++        draftPrompt="Inspect README.md"
++        busy=""
++        message=""
++        onDraftChange={() => undefined}
++        onRefresh={() => undefined}
++        onStartControlled={() => undefined}
++        onQueue={() => undefined}
++        onInterrupt={() => undefined}
++      />
++    )
++    expect(html).toContain('Queue instruction · unavailable')
++    expect(html).toContain('Interrupt turn · unavailable')
++  })
++})
+diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
+new file mode 100644
+index 0000000..b887627
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
+@@ -0,0 +1,165 @@
++import { useEffect, useState, type JSX } from 'react'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import {
++  CodevSharedSessionViewPanel,
++  type CodevSharedSessionSnapshot,
++  type CodevSharedSessionView
++} from './CodevSharedSessionView'
++
++export {
++  CodevSharedSessionViewPanel,
++  type CodevSharedQueueEntry,
++  type CodevSharedSessionSnapshot,
++  type CodevSharedSessionView,
++  type CodevSharedTranscriptTurn
++} from './CodevSharedSessionView'
++
++function pickSession(
++  sessions: CodevSharedSessionView[],
++  selectedId: string | null
++): CodevSharedSessionView | null {
++  if (sessions.length === 0) return null
++  return (
++    sessions.find((session) => session.session.sessionId === selectedId) ??
++    sessions[sessions.length - 1] ??
++    null
++  )
++}
++
++export function CodevSharedSessionPanel({
++  refreshToken = 0
++}: {
++  refreshToken?: number
++}): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [snapshot, setSnapshot] = useState(() => getCodevBridgeSnapshot())
++  const [viewer, setViewer] = useState<{ id: string; name: string; canCoSteer: boolean } | null>(
++    null
++  )
++  const [sessions, setSessions] = useState<CodevSharedSessionView[]>([])
++  const [selectedId, setSelectedId] = useState<string | null>(null)
++  const [draftPrompt, setDraftPrompt] = useState('')
++  const [busy, setBusy] = useState('')
++  const [message, setMessage] = useState('')
++  const [restored, setRestored] = useState(false)
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setSnapshot(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  useEffect(() => {
++    if (!embedded || snapshot.status !== 'connected') return
++    let cancelled = false
++    setBusy('refresh')
++    void requestCodevBridge<CodevSharedSessionSnapshot>('agents.list')
++      .then((result) => {
++        if (cancelled) return
++        const nextSessions = result.sharedSessions ?? []
++        setViewer(result.viewer ?? null)
++        setSessions(nextSessions)
++        setSelectedId((current) => pickSession(nextSessions, current)?.session.sessionId ?? null)
++        setRestored(
++          nextSessions.some(
++            (session) =>
++              session.session.streamCursor > 0 ||
++              session.session.queue.length > 0 ||
++              session.transcript.length > 0
++          )
++        )
++        setMessage('')
++      })
++      .catch((error: unknown) => {
++        if (!cancelled) {
++          setMessage(error instanceof Error ? error.message : 'CoDev could not load shared sessions.')
++        }
++      })
++      .finally(() => {
++        if (!cancelled) setBusy('')
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [embedded, snapshot.status, refreshToken])
++
++  if (!embedded) return null
++
++  const view = pickSession(sessions, selectedId)
++  const sessionId = view?.session.sessionId
++
++  async function applySnapshot(result: CodevSharedSessionSnapshot): Promise<void> {
++    const nextSessions = result.sharedSessions ?? []
++    setViewer(result.viewer ?? null)
++    setSessions(nextSessions)
++    setSelectedId((current) => pickSession(nextSessions, current)?.session.sessionId ?? null)
++  }
++
++  async function run(
++    action: string,
++    request: () => Promise<CodevSharedSessionSnapshot>
++  ): Promise<void> {
++    if (!sessionId) return
++    setBusy(action)
++    setMessage('')
++    try {
++      await applySnapshot(await request())
++      setRestored(false)
++      if (action === 'queue') setDraftPrompt('')
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'CoDev could not update the shared session.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  return (
++    <CodevSharedSessionViewPanel
++      connected={snapshot.status === 'connected'}
++      restored={restored}
++      viewer={viewer}
++      view={view}
++      draftPrompt={draftPrompt}
++      busy={busy}
++      message={message}
++      onDraftChange={setDraftPrompt}
++      onRefresh={() => {
++        setBusy('refresh')
++        void requestCodevBridge<CodevSharedSessionSnapshot>('agents.list')
++          .then((result) => {
++            void applySnapshot(result)
++            setRestored(true)
++            setMessage('')
++          })
++          .catch((error: unknown) => {
++            setMessage(
++              error instanceof Error ? error.message : 'CoDev could not load shared sessions.'
++            )
++          })
++          .finally(() => setBusy(''))
++      }}
++      onStartControlled={() =>
++        void run('controlled', () =>
++          requestCodevBridge<CodevSharedSessionSnapshot>('agents.startControlled', { sessionId })
++        )
++      }
++      onQueue={() =>
++        void run('queue', () =>
++          requestCodevBridge<CodevSharedSessionSnapshot>('agents.enqueue', {
++            sessionId,
++            prompt: draftPrompt
++          })
++        )
++      }
++      onInterrupt={() =>
++        void run('interrupt', () =>
++          requestCodevBridge<CodevSharedSessionSnapshot>('agents.interrupt', { sessionId })
++        )
++      }
++    />
++  )
++}
+diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
+new file mode 100644
+index 0000000..b3dc285
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
+@@ -0,0 +1,341 @@
++import type { JSX } from 'react'
++import { Button } from '@/components/ui/button'
++
++export type CodevSharedQueueEntry = {
++  id: string
++  authorId: string
++  authorName?: string
++  prompt: string
++  queuePosition: number
++}
++
++export type CodevSharedTranscriptTurn = {
++  position: number
++  turnId: string
++  authorId: string
++  authorName: string
++  prompt: string
++  status: 'completed' | 'interrupted' | 'failed'
++  tool: string | null
++  output: string | null
++}
++
++export type CodevSharedSessionView = {
++  session: {
++    sessionId: string
++    ownerId: string
++    worktreeId: string
++    provider: string
++    model: string
++    state: string
++    activeTurnId: string | null
++    streamCursor: number
++    queue: CodevSharedQueueEntry[]
++  }
++  name: string
++  ownerName: string
++  worktreeName: string
++  model: string
++  attributedQueue?: CodevSharedQueueEntry[]
++  transcript: CodevSharedTranscriptTurn[]
++  lastCompletedAction: { tool: string; output: string } | null
++}
++
++export type CodevSharedSessionSnapshot = {
++  viewer?: { id: string; name: string; canCoSteer: boolean }
++  sharedSessions?: CodevSharedSessionView[]
++}
++
++function stateLabel(view: CodevSharedSessionView): string {
++  const { state, queue } = view.session
++  if (state === 'running') return 'Running · controlled turn'
++  if (state === 'interrupted') return 'Interrupted · controlled turn'
++  if (queue.length > 0) return 'Queued · awaiting turn'
++  if (view.transcript.length > 0) {
++    return `Completed · ${view.transcript.length} turns`
++  }
++  return 'Idle · awaiting instruction'
++}
++
++function statusMessage(
++  connected: boolean,
++  restored: boolean,
++  view: CodevSharedSessionView | null,
++  viewerName: string
++): string {
++  if (!connected) return 'Waiting for the workspace-bound CoDev bridge.'
++  if (!view) {
++    return 'Prepare a managed proposal from this Agents panel to open a shared session.'
++  }
++  const queue = view.session.queue
++  if (restored) {
++    return `Session restored after browser refresh · stream cursor ${view.session.streamCursor} · ${
++      queue.length > 0
++        ? 'queued instruction preserved once.'
++        : 'transcript replayed without duplicate turns.'
++    }`
++  }
++  if (queue.length > 0) {
++    return `${queue.length === 1 ? "Collaborator's instruction is" : 'Queued instructions are'} queued and attributed for every session member.`
++  }
++  if (view.session.state === 'interrupted') {
++    return 'The controlled turn was interrupted; the last completed action remains visible to every member.'
++  }
++  if (view.session.state === 'running') {
++    return `${viewerName} can interrupt the running turn with co-steer permission.`
++  }
++  return 'Shared session is open and idle with an empty ordered queue.'
++}
++
++export function CodevSharedSessionViewPanel({
++  connected,
++  restored,
++  viewer,
++  view,
++  draftPrompt,
++  busy,
++  message,
++  onDraftChange,
++  onRefresh,
++  onStartControlled,
++  onQueue,
++  onInterrupt
++}: {
++  connected: boolean
++  restored: boolean
++  viewer: { id: string; name: string; canCoSteer: boolean } | null
++  view: CodevSharedSessionView | null
++  draftPrompt: string
++  busy: string
++  message: string
++  onDraftChange: (value: string) => void
++  onRefresh: () => void
++  onStartControlled: () => void
++  onQueue: () => void
++  onInterrupt: () => void
++}): JSX.Element {
++  const canCoSteer = Boolean(viewer?.canCoSteer)
++  const queue = view?.attributedQueue ?? view?.session.queue ?? []
++  const queued = queue[0] ?? null
++  const running = view?.session.state === 'running'
++  const interrupted = view?.session.state === 'interrupted'
++
++  return (
++    <section
++      className="border-b border-sidebar-border px-3 py-3"
++      aria-labelledby="codev-shared-session-heading"
++      data-codev-shared-session="true"
++    >
++      <div className="mb-2 flex items-start justify-between gap-2">
++        <div>
++          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++            CoDev · durable shared session
++          </p>
++          <h2 id="codev-shared-session-heading" className="text-sm font-semibold">
++            Shared session
++          </h2>
++        </div>
++        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
++          {busy === 'refresh' ? 'Refreshing…' : 'Refresh shared session'}
++        </Button>
++      </div>
++
++      {!view ? (
++        <p className="text-xs text-muted-foreground">
++          Prepare a managed proposal from this Agents panel to open a shared session. The shared
++          context is this visible conversation and repository state, not provider credentials.
++        </p>
++      ) : (
++        <div className="space-y-3">
++          <div
++            className="grid grid-cols-2 gap-2 text-xs"
++            aria-label="Session metadata"
++          >
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Provider</span>
++              <strong>{view.session.provider}</strong>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Owner</span>
++              <strong>{view.ownerName}</strong>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Worktree</span>
++              <code>{view.worktreeName}</code>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">State</span>
++              <strong>{stateLabel(view)}</strong>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">
++                Model / configuration
++              </span>
++              <strong>{view.model} · standard</strong>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Stream cursor</span>
++              <strong>{view.session.streamCursor}</strong>
++            </div>
++          </div>
++
++          <div aria-label="Ordered turn queue" className="space-y-1">
++            <div className="flex items-center justify-between text-xs">
++              <span className="text-[10px] uppercase text-muted-foreground">Ordered turn queue</span>
++              <strong>{queue.length} queued</strong>
++            </div>
++            {!queued ? (
++              <p className="text-xs text-muted-foreground">
++                {view.transcript.length > 0
++                  ? 'Queue is empty — the completed transcript is shown below.'
++                  : 'Queue is empty — no instructions are waiting.'}
++              </p>
++            ) : (
++              <div className="rounded-md border border-sidebar-border p-2 text-xs" aria-label="Queued instruction">
++                <div className="flex justify-between gap-2">
++                  <span>Turn {queued.queuePosition}</span>
++                  <strong>
++                    {'authorName' in queued && queued.authorName
++                      ? queued.authorName
++                      : viewer?.id === queued.authorId
++                        ? viewer.name
++                        : 'Collaborator'}
++                  </strong>
++                </div>
++                <p className="mt-1">{queued.prompt}</p>
++                <p className="mt-1 text-muted-foreground">
++                  Attribution · <code>authorId {queued.authorId}</code>
++                </p>
++              </div>
++            )}
++          </div>
++
++          <div aria-label="Controlled shared-session turn" className="space-y-2">
++            <div className="flex items-center justify-between text-xs">
++              <span className="text-[10px] uppercase text-muted-foreground">Controlled turn</span>
++              <strong>
++                {running ? 'Running' : interrupted ? 'Interrupted' : 'Ready to run'}
++              </strong>
++            </div>
++            {running || interrupted ? (
++              <>
++                <p className="text-xs" aria-live="polite">
++                  {running
++                    ? 'Tool activity · write_file · waiting for completion.'
++                    : 'Cancellation recorded. No further tool calls will run.'}
++                </p>
++                {view.lastCompletedAction ? (
++                  <div
++                    className="rounded-md border border-sidebar-border p-2 text-xs"
++                    aria-label="Last completed action"
++                  >
++                    <span className="block text-[10px] uppercase text-muted-foreground">
++                      Last completed action
++                    </span>
++                    <strong>{view.lastCompletedAction.tool}</strong>
++                    <p>{view.lastCompletedAction.output}</p>
++                  </div>
++                ) : null}
++              </>
++            ) : (
++              <p className="text-xs text-muted-foreground">
++                Start a controlled turn with one completed tool result so an eligible collaborator can
++                cancel it without calling the provider again.
++              </p>
++            )}
++            <div className="flex flex-wrap gap-2">
++              <Button
++                type="button"
++                size="sm"
++                variant="outline"
++                disabled={!canCoSteer || running || busy !== ''}
++                onClick={onStartControlled}
++              >
++                {canCoSteer ? 'Start controlled turn' : 'Start controlled turn · unavailable'}
++              </Button>
++              <Button
++                type="button"
++                size="sm"
++                variant="outline"
++                disabled={!canCoSteer || !running || busy !== ''}
++                onClick={onInterrupt}
++              >
++                {!canCoSteer
++                  ? 'Interrupt turn · unavailable'
++                  : interrupted
++                    ? 'Turn interrupted'
++                    : 'Interrupt running turn'}
++              </Button>
++            </div>
++          </div>
++
++          <div aria-label={`${viewer?.name ?? 'Collaborator'} collaborator controls`} className="space-y-2">
++            <label className="block text-xs" htmlFor="codev-shared-session-prompt">
++              Instruction to queue
++            </label>
++            <textarea
++              id="codev-shared-session-prompt"
++              className="min-h-16 w-full rounded-md border border-sidebar-border bg-background px-2 py-1 text-xs"
++              value={draftPrompt}
++              onChange={(event) => onDraftChange(event.target.value)}
++              placeholder="Ask the shared agent to inspect a file…"
++              disabled={!canCoSteer || queue.length > 0 || busy !== ''}
++            />
++            <Button
++              type="button"
++              size="sm"
++              disabled={!canCoSteer || !draftPrompt.trim() || queue.length > 0 || busy !== ''}
++              onClick={onQueue}
++            >
++              {!canCoSteer
++                ? 'Queue instruction · unavailable'
++                : queue.length > 0
++                  ? 'Instruction queued'
++                  : 'Queue instruction'}
++            </Button>
++          </div>
++
++          {view.transcript.length > 0 ? (
++            <div aria-label="Ordered transcript" className="space-y-2">
++              <div className="flex items-center justify-between text-xs">
++                <span className="text-[10px] uppercase text-muted-foreground">Ordered transcript</span>
++                <strong>{view.transcript.length} completed turns</strong>
++              </div>
++              {view.transcript.map((turn) => (
++                <article key={turn.turnId} className="rounded-md border border-sidebar-border p-2 text-xs">
++                  <div className="flex justify-between gap-2">
++                    <span>Turn {turn.position}</span>
++                    <strong>
++                      {turn.authorName} · {turn.status}
++                    </strong>
++                  </div>
++                  <p className="mt-1">{turn.prompt}</p>
++                  {turn.tool ? (
++                    <p className="mt-1 text-muted-foreground">
++                      Tool activity · <code>{turn.tool}</code>
++                    </p>
++                  ) : null}
++                  {turn.output ? (
++                    <p className="mt-1">
++                      <span className="text-[10px] uppercase text-muted-foreground">Output</span>
++                      {turn.output}
++                    </p>
++                  ) : null}
++                </article>
++              ))}
++            </div>
++          ) : null}
++
++          <p className="text-[11px] text-muted-foreground">
++            Shared context is the visible session transcript and repository state. No provider
++            credentials or hidden account context are shared.
++          </p>
++        </div>
++      )}
++
++      <p className="mt-2 text-xs text-muted-foreground" role="status">
++        {message || statusMessage(connected, restored, view, viewer?.name ?? 'You')}
++      </p>
++    </section>
++  )
++}
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
 new file mode 100644
 index 0000000..10fa378
@@ -2362,10 +3013,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..1f6c274
+index 0000000..cb37976
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,334 @@
+@@ -0,0 +1,338 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -2397,6 +3048,10 @@ index 0000000..1f6c274
 +  | 'conflicts.list'
 +  | 'conflicts.report'
 +  | 'conflicts.resolve'
++  | 'agents.list'
++  | 'agents.enqueue'
++  | 'agents.interrupt'
++  | 'agents.startControlled'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

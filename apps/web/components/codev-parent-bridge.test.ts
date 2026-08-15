@@ -414,4 +414,123 @@ describe("codev parent bridge", () => {
       },
     );
   });
+
+  it("lists, queues, interrupts, and starts a controlled shared agent turn", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const sessionId = "f3100000-0000-4000-8000-000000000001";
+    const snapshot = {
+      viewer: { id: "user-1", name: "Jordan Lee", canCoSteer: true },
+      sharedSessions: [
+        {
+          session: {
+            sessionId,
+            state: "running",
+            streamCursor: 2,
+            queue: [{ authorId: "user-1", prompt: "Inspect README.md" }],
+          },
+        },
+      ],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(
+        Response.json({
+          ...snapshot,
+          sharedSessions: [
+            {
+              session: {
+                sessionId,
+                state: "interrupted",
+                streamCursor: 3,
+                queue: [{ authorId: "user-1", prompt: "Inspect README.md" }],
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json(snapshot));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-list",
+          method: "agents.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: snapshot });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/shared",
+      { cache: "no-store" },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-enqueue",
+          method: "agents.enqueue",
+          params: { sessionId, prompt: "Inspect README.md" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenCalledWith(
+      `/api/workspaces/workspace-1/agents/${sessionId}/queue`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: "Inspect README.md" }),
+      },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-interrupt",
+          method: "agents.interrupt",
+          params: { sessionId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { sharedSessions: [{ session: { state: "interrupted" } }] },
+    });
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-controlled",
+          method: "agents.startControlled",
+          params: { sessionId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenLastCalledWith(
+      `/api/workspaces/workspace-1/agents/${sessionId}/controlled`,
+      { method: "POST" },
+    );
+  });
 });

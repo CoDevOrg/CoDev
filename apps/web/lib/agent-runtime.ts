@@ -1089,6 +1089,10 @@ export async function listAgentSessions(workspaceId: string) {
   const sessions = await getDatabase()
     .select({
       id: schema.agentSessions.id,
+      workspaceId: schema.agentSessions.workspaceId,
+      createdBy: schema.agentSessions.createdBy,
+      ownerName: schema.users.name,
+      ownerLogin: schema.users.login,
       name: schema.agentSessions.name,
       model: schema.agentSessions.model,
       provider: schema.agentSessions.provider,
@@ -1118,6 +1122,7 @@ export async function listAgentSessions(workspaceId: string) {
       schema.githubIssueAssignments,
       eq(schema.agentSessions.id, schema.githubIssueAssignments.sessionId),
     )
+    .leftJoin(schema.users, eq(schema.agentSessions.createdBy, schema.users.id))
     .where(eq(schema.agentSessions.workspaceId, workspaceId))
     .orderBy(asc(schema.agentSessions.createdAt));
   return Promise.all(
@@ -1126,6 +1131,9 @@ export async function listAgentSessions(workspaceId: string) {
         getDatabase()
           .select({
             id: schema.agentTurns.id,
+            authorId: schema.agentTurns.authorId,
+            authorName: schema.users.name,
+            authorLogin: schema.users.login,
             prompt: schema.agentTurns.prompt,
             attachments: schema.agentTurns.attachments,
             status: schema.agentTurns.status,
@@ -1134,11 +1142,16 @@ export async function listAgentSessions(workspaceId: string) {
             createdAt: schema.agentTurns.createdAt,
           })
           .from(schema.agentTurns)
+          .leftJoin(
+            schema.users,
+            eq(schema.agentTurns.authorId, schema.users.id),
+          )
           .where(eq(schema.agentTurns.sessionId, session.id))
           .orderBy(asc(schema.agentTurns.createdAt)),
         getDatabase()
           .select({
             id: schema.agentEvents.id,
+            turnId: schema.agentEvents.turnId,
             type: schema.agentEvents.type,
             payload: schema.agentEvents.payload,
             createdAt: schema.agentEvents.createdAt,
