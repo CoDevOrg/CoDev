@@ -19,9 +19,29 @@ export type ProviderConnectionViewer = {
   name: string;
 };
 
+export type ProviderOAuthPlanStatus = "unavailable";
+
+export type ProviderOAuthPlan = {
+  provider: "openai";
+  status: ProviderOAuthPlanStatus;
+  label: string;
+  summary: string;
+  reason: string;
+};
+
+export const OPENAI_OAUTH_PLAN: ProviderOAuthPlan = {
+  provider: "openai",
+  status: "unavailable",
+  label: "Connect with OpenAI",
+  summary: "Planned · unavailable",
+  reason:
+    "Official OpenAI Codex OAuth is documented and not enabled in this workspace yet. Use an API key for now.",
+};
+
 export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
   connections: ProviderConnectionRecord[];
+  oauth: ProviderOAuthPlan;
 };
 
 export type ProviderCredentialStatus = {
@@ -102,6 +122,7 @@ export function toProviderConnectionSnapshot(input: {
         suppliedBy: input.viewer.name,
       }),
     ),
+    oauth: OPENAI_OAUTH_PLAN,
   };
 }
 

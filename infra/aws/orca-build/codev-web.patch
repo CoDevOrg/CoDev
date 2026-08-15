@@ -2212,10 +2212,10 @@ index 8da2783..41186fe 100644
            <FolderWorkspacePrChecksPanel
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
 new file mode 100644
-index 0000000..24a3103
+index 0000000..54a162e
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,103 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevProviderConnectionsView } from './CodevProviderConnectionsSection'
@@ -2300,13 +2300,31 @@ index 0000000..24a3103
 +    expect(html).not.toContain('Revoke')
 +    expect(html).not.toContain('sk-test-codev-f62-fixture-key0001')
 +  })
++
++  it('shows OpenAI OAuth as planned and unavailable without a consent control', () => {
++    const html = renderToStaticMarkup(
++      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
++    )
++    expect(html).toContain('Official OAuth')
++    expect(html).toContain('OpenAI Codex · Planned · unavailable')
++    expect(html).toContain('Connect with OpenAI')
++    expect(html).toContain('aria-label="OpenAI OAuth planned unavailable"')
++    expect(html).toContain('data-codev-oauth-status="unavailable"')
++    expect(html).toContain(
++      'Official OpenAI Codex OAuth is documented and not enabled in this workspace yet. Use an API key for now.'
++    )
++    expect(html).toContain('disabled')
++    expect(html).not.toContain('authorize')
++    expect(html).not.toContain('deviceauth')
++    expect(html).not.toContain('sk-')
++  })
 +})
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
 new file mode 100644
-index 0000000..9c196cc
+index 0000000..f4063bc
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,263 @@
 +import { useEffect, useState, type JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -2327,9 +2345,27 @@ index 0000000..9c196cc
 +  scope: 'personal'
 +}
 +
++export type CodevProviderOAuthPlan = {
++  provider: 'openai'
++  status: 'unavailable'
++  label: string
++  summary: string
++  reason: string
++}
++
++export const OPENAI_OAUTH_PLAN: CodevProviderOAuthPlan = {
++  provider: 'openai',
++  status: 'unavailable',
++  label: 'Connect with OpenAI',
++  summary: 'Planned · unavailable',
++  reason:
++    'Official OpenAI Codex OAuth is documented and not enabled in this workspace yet. Use an API key for now.'
++}
++
 +export type CodevProviderConnectionSnapshot = {
 +  viewer: { id: string; name: string }
 +  connections: CodevProviderConnection[]
++  oauth?: CodevProviderOAuthPlan
 +}
 +
 +export type CodevProviderConnectionDrafts = Partial<
@@ -2435,6 +2471,31 @@ index 0000000..9c196cc
 +          })}
 +        </ul>
 +      )}
++      {connected ? (
++        <div
++          id="codev-provider-oauth"
++          className="space-y-2 rounded-md border border-dashed border-border p-3"
++          data-codev-oauth-status={(snapshot?.oauth ?? OPENAI_OAUTH_PLAN).status}
++          aria-label="OpenAI OAuth planned unavailable"
++        >
++          <p className="text-sm font-medium">Official OAuth</p>
++          <p className="text-xs text-muted-foreground">
++            OpenAI Codex · {(snapshot?.oauth ?? OPENAI_OAUTH_PLAN).summary}
++          </p>
++          <Button
++            type="button"
++            size="sm"
++            variant="outline"
++            disabled
++            aria-label={(snapshot?.oauth ?? OPENAI_OAUTH_PLAN).label}
++          >
++            {(snapshot?.oauth ?? OPENAI_OAUTH_PLAN).label}
++          </Button>
++          <p className="text-xs text-muted-foreground" role="status">
++            {(snapshot?.oauth ?? OPENAI_OAUTH_PLAN).reason}
++          </p>
++        </div>
++      ) : null}
 +      {message ? (
 +        <p className="text-xs text-muted-foreground" role="status">
 +          {message}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  OPENAI_OAUTH_PLAN,
   publicProviderConnectionPayload,
   secretKeysInValue,
   toProviderConnectionRecord,
@@ -51,6 +52,9 @@ describe("provider connection view", () => {
     expect(snapshot.connections.every((row) => row.lastFour === null)).toBe(
       true,
     );
+    expect(snapshot.oauth).toEqual(OPENAI_OAUTH_PLAN);
+    expect(snapshot.oauth.status).toBe("unavailable");
+    expect(snapshot.oauth.summary).toBe("Planned · unavailable");
     expect(secretKeysInValue(snapshot)).toEqual([]);
   });
 
