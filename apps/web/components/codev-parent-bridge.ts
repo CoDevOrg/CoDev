@@ -32,7 +32,9 @@ export type CodevBridgeMethod =
   | "claims.list"
   | "claims.create"
   | "claims.reassign"
-  | "claims.cancel";
+  | "claims.cancel"
+  | "review.list"
+  | "review.prepare";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -80,6 +82,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "claims.create",
   "claims.reassign",
   "claims.cancel",
+  "review.list",
+  "review.prepare",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -441,6 +445,42 @@ export async function executeCodevBridgeRequest(
         created: sessionId && worktreeId ? { sessionId, worktreeId } : null,
         rejection: null,
       });
+    }
+
+    if (request.method === "review.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/reviews`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load review checkpoints."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "review.prepare") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/reviews`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not prepare this review checkpoint."),
+        );
+      }
+      return succeed(payload);
     }
 
     if (request.method === "claims.list") {

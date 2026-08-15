@@ -717,4 +717,75 @@ describe("codev parent bridge", () => {
       result: { notice: "Overlapping claim cancelled" },
     });
   });
+
+  it("loads and prepares review checkpoints through the workspace-bound request bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const sessionId = "aa22f527-8992-4814-95a2-070f1b01fc9f";
+    const snapshot = {
+      viewer: { id: "user-1", name: "Jordan Lee", canReview: true },
+      checkpoints: [
+        {
+          sessionId,
+          prepared: true,
+          summary: "2 paths changed · 1 text file · 1 binary file",
+          paths: [
+            {
+              path: "assets/logo.png",
+              kind: "binary",
+              detail: "Binary file · content omitted",
+            },
+          ],
+        },
+      ],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(Response.json(snapshot));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-review-list",
+          method: "review.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: snapshot });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/reviews",
+      { cache: "no-store" },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-review-prepare",
+          method: "review.prepare",
+          params: { sessionId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: snapshot });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/reviews",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      },
+    );
+    expect(JSON.stringify(snapshot)).not.toContain("diff --git ");
+  });
 });

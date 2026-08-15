@@ -1662,6 +1662,43 @@ index 1b62145..82ad1c9 100644
            </span>
            {nodeStatus ? (
              <span
+diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
+index 8da2783..9974250 100644
+--- a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
++++ b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
+@@ -2,6 +2,7 @@ import { Suspense } from 'react'
+ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+ import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+ import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
++import { CodevReviewCheckpointPanel } from '../sidebar/CodevReviewCheckpointPanel'
+ 
+ const FileExplorer = lazy(() => import('./FileExplorer'))
+ const SourceControl = lazy(() => import('./SourceControl'))
+@@ -25,8 +26,22 @@ export function RightSidebarPanelContent({
+     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+       <Suspense fallback={null}>
+         {effectiveTab === 'explorer' && <FileExplorer />}
+-        {effectiveTab === 'source-control' && <SourceControl />}
+-        {effectiveTab === 'checks' && <ChecksPanel />}
++        {effectiveTab === 'source-control' && (
++          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
++            <CodevReviewCheckpointPanel surface="source-control" />
++            <div className="min-h-0 flex-1 overflow-hidden">
++              <SourceControl />
++            </div>
++          </div>
++        )}
++        {effectiveTab === 'checks' && (
++          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
++            <CodevReviewCheckpointPanel surface="checks" />
++            <div className="min-h-0 flex-1 overflow-hidden">
++              <ChecksPanel />
++            </div>
++          </div>
++        )}
+         {/* Why: SSH port forwarding still depends on the raw ports.detect data,
+             which the workspace-scoped status bar popover intentionally does not
+             expose. Keep this panel reachable only for SSH worktrees. */}
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
 new file mode 100644
 index 0000000..10fa378
@@ -2689,6 +2726,405 @@ index 0000000..90b5c93
 +          </>
 +        ) : null}
 +      </div>
++    </section>
++  )
++}
+diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx
+new file mode 100644
+index 0000000..7471849
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx
+@@ -0,0 +1,108 @@
++import { useCallback, useEffect, useState, type JSX } from 'react'
++import { toast } from 'sonner'
++import { useAppStore } from '@/store'
++import { useActiveWorktree } from '@/store/selectors'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
++import {
++  CodevReviewCheckpointViewPanel,
++  selectCodevReviewCheckpoint,
++  type CodevReviewSnapshot
++} from './CodevReviewCheckpointView'
++
++export { CodevReviewCheckpointViewPanel, type CodevReviewSnapshot } from './CodevReviewCheckpointView'
++
++let sharedDiffOpen = false
++
++export function CodevReviewCheckpointPanel({
++  surface
++}: {
++  surface: 'source-control' | 'checks'
++}): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const activeWorktree = useActiveWorktree()
++  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
++  const worktreeId = activeWorktree
++    ? getCodevProposalWorktreeId(activeWorktree.path, activeWorktree.comment)
++    : null
++  const [bridge, setBridge] = useState(() => getCodevBridgeSnapshot())
++  const [snapshot, setSnapshot] = useState<CodevReviewSnapshot | null>(null)
++  const [busy, setBusy] = useState('')
++  const [diffOpen, setDiffOpen] = useState(sharedDiffOpen)
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setBridge(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  const refresh = useCallback(async () => {
++    if (!embedded || bridge.status !== 'connected') return
++    setBusy('refresh')
++    try {
++      const result = await requestCodevBridge<CodevReviewSnapshot>('review.list')
++      setSnapshot(result)
++    } catch (error: unknown) {
++      toast.error('Failed to load review checkpoint', {
++        description: error instanceof Error ? error.message : String(error)
++      })
++    } finally {
++      setBusy('')
++    }
++  }, [bridge.status, embedded])
++
++  useEffect(() => {
++    if (!embedded || bridge.status !== 'connected') return
++    void refresh()
++  }, [bridge.status, embedded, refresh])
++
++  if (!embedded) {
++    return null
++  }
++
++  const checkpoint = selectCodevReviewCheckpoint(snapshot?.checkpoints ?? [], worktreeId)
++  const canReview = Boolean(snapshot?.viewer?.canReview)
++
++  return (
++    <CodevReviewCheckpointViewPanel
++      surface={surface}
++      connected={bridge.status === 'connected'}
++      snapshot={snapshot}
++      checkpoint={checkpoint}
++      busy={busy}
++      canReview={canReview}
++      diffOpen={diffOpen}
++      onRefresh={() => {
++        void refresh()
++      }}
++      onPrepare={() => {
++        const sessionId = checkpoint?.sessionId
++        if (!sessionId) return
++        setBusy('prepare')
++        void requestCodevBridge<CodevReviewSnapshot>('review.prepare', { sessionId })
++          .then((result) => {
++            setSnapshot(result)
++          })
++          .catch((error: unknown) => {
++            toast.error('Failed to mark review-ready', {
++              description: error instanceof Error ? error.message : String(error)
++            })
++          })
++          .finally(() => {
++            setBusy('')
++          })
++      }}
++      onOpenDiff={() => {
++        sharedDiffOpen = true
++        setDiffOpen(true)
++        if (surface === 'source-control') {
++          setRightSidebarTab('checks')
++        }
++      }}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
+new file mode 100644
+index 0000000..264d957
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
+@@ -0,0 +1,84 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import {
++  CodevReviewCheckpointViewPanel,
++  selectCodevReviewCheckpoint,
++  type CodevReviewCheckpoint
++} from './CodevReviewCheckpointView'
++
++const prepared: CodevReviewCheckpoint = {
++  sessionId: 's1',
++  slot: 2,
++  assignment: 'Documentation sync',
++  worktreeId: 'w2',
++  worktree: 'agent-managed-proposal-two',
++  worktreeStatus: 'Frozen',
++  prepared: true,
++  baseRevision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
++  headRevision: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
++  diffDigest: 'sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4a',
++  summary: '3 paths changed · 2 text files · 1 binary file',
++  additions: 14,
++  deletions: 3,
++  paths: [
++    { path: 'README.md', kind: 'modified', detail: '+8 −2 lines' },
++    { path: 'src/hello.ts', kind: 'modified', detail: '+6 −1 line' },
++    { path: 'assets/logo.png', kind: 'binary', detail: 'Binary file · content omitted' }
++  ]
++}
++
++describe('CodevReviewCheckpointViewPanel', () => {
++  it('renders Source Control checkpoint metadata after mark review-ready', () => {
++    const html = renderToStaticMarkup(
++      <CodevReviewCheckpointViewPanel
++        surface="source-control"
++        connected
++        snapshot={{ checkpoints: [prepared] }}
++        checkpoint={prepared}
++        busy=""
++        canReview
++        diffOpen={false}
++        onRefresh={() => undefined}
++        onPrepare={() => undefined}
++        onOpenDiff={() => undefined}
++      />
++    )
++    expect(html).toContain('Review ready · immutable checkpoint')
++    expect(html).toContain('Further writes must create a new checkpoint.')
++    expect(html).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
++    expect(html).toContain('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
++    expect(html).toContain('sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4a')
++    expect(html).toContain('Checkpoint prepared')
++    expect(html).toContain('Open diff review')
++    expect(html).not.toContain('GIT binary patch')
++  })
++
++  it('renders Checks binary-safe diff paths after opening the review', () => {
++    const html = renderToStaticMarkup(
++      <CodevReviewCheckpointViewPanel
++        surface="checks"
++        connected
++        snapshot={{ checkpoints: [prepared] }}
++        checkpoint={prepared}
++        busy=""
++        canReview
++        diffOpen
++        onRefresh={() => undefined}
++        onPrepare={() => undefined}
++        onOpenDiff={() => undefined}
++      />
++    )
++    expect(html).toContain('3 paths changed · 2 text files · 1 binary file')
++    expect(html).toContain('+14 −3 lines')
++    expect(html).toContain('README.md')
++    expect(html).toContain('src/hello.ts')
++    expect(html).toContain('assets/logo.png')
++    expect(html).toContain('Binary file · content omitted')
++    expect(html).toContain(
++      'Binary content is not rendered as text; review remains safe for binary and generated files.'
++    )
++    expect(html).toContain('Diff review open')
++    expect(html).not.toContain('zcmV-')
++    expect(selectCodevReviewCheckpoint([prepared], 'w2')?.slot).toBe(2)
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
+new file mode 100644
+index 0000000..b5c8bb5
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
+@@ -0,0 +1,189 @@
++import type { JSX } from 'react'
++import { Button } from '@/components/ui/button'
++
++export type CodevReviewDiffPath = {
++  path: string
++  kind: 'added' | 'deleted' | 'modified' | 'binary'
++  detail: string
++}
++
++export type CodevReviewCheckpoint = {
++  sessionId: string
++  slot: 1 | 2 | 3 | null
++  assignment: string
++  worktreeId: string
++  worktree: string
++  worktreeStatus: string
++  prepared: boolean
++  baseRevision: string | null
++  headRevision: string | null
++  diffDigest: string | null
++  summary: string | null
++  additions: number
++  deletions: number
++  paths: CodevReviewDiffPath[]
++}
++
++export type CodevReviewSlot = {
++  slot: 1 | 2 | 3
++  occupied: boolean
++  sessionId: string | null
++  worktreeId: string | null
++  assignment: string
++}
++
++export type CodevReviewSnapshot = {
++  viewer?: { id: string; name: string; canReview: boolean }
++  slots?: CodevReviewSlot[]
++  checkpoints?: CodevReviewCheckpoint[]
++}
++
++export function selectCodevReviewCheckpoint(
++  checkpoints: CodevReviewCheckpoint[],
++  worktreeId: string | null
++): CodevReviewCheckpoint | null {
++  if (!worktreeId) return null
++  return checkpoints.find((checkpoint) => checkpoint.worktreeId === worktreeId) ?? null
++}
++
++export function CodevReviewCheckpointViewPanel({
++  surface,
++  connected,
++  snapshot,
++  checkpoint,
++  busy,
++  canReview,
++  diffOpen,
++  onRefresh,
++  onPrepare,
++  onOpenDiff
++}: {
++  surface: 'source-control' | 'checks'
++  connected: boolean
++  snapshot: CodevReviewSnapshot | null
++  checkpoint: CodevReviewCheckpoint | null
++  busy: string
++  canReview: boolean
++  diffOpen: boolean
++  onRefresh: () => void
++  onPrepare: () => void
++  onOpenDiff: () => void
++}): JSX.Element {
++  const headingId =
++    surface === 'source-control' ? 'codev-review-checkpoint-heading' : 'codev-review-diff-heading'
++  const prepared = Boolean(checkpoint?.prepared)
++  const showDiff = diffOpen && prepared
++  const canPrepare = Boolean(checkpoint?.sessionId) && !prepared && canReview && connected
++
++  return (
++    <section
++      className="shrink-0 border-b border-border px-3 py-2"
++      aria-labelledby={headingId}
++      data-codev-review-checkpoint={surface}
++    >
++      <div className="mb-1 flex items-start justify-between gap-2">
++        <div>
++          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++            CoDev · review checkpoint
++          </p>
++          <h2 id={headingId} className="text-sm font-semibold">
++            {surface === 'source-control' ? 'Source Control checkpoint' : 'Checks diff review'}
++          </h2>
++        </div>
++        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
++          {busy === 'refresh' ? 'Refreshing…' : 'Refresh review'}
++        </Button>
++      </div>
++      <p className="mb-2 text-[11px] text-muted-foreground">
++        {connected
++          ? checkpoint
++            ? `Agent slot ${checkpoint.slot ?? '—'} · ${checkpoint.assignment}`
++            : 'Select a managed proposal worktree to mark it review-ready.'
++          : 'Waiting for the workspace-bound CoDev bridge.'}
++      </p>
++      {prepared ? (
++        <div className="mb-2 space-y-2" role="status" aria-label="Immutable review checkpoint">
++          <div>
++            <strong className="block text-xs">Review ready · immutable checkpoint</strong>
++            <span className="text-[11px] text-muted-foreground">
++              Further writes must create a new checkpoint.
++            </span>
++          </div>
++          <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px]">
++            <dt className="text-muted-foreground">Base revision</dt>
++            <dd>
++              <code>{checkpoint?.baseRevision}</code>
++            </dd>
++            <dt className="text-muted-foreground">Proposed revision</dt>
++            <dd>
++              <code>{checkpoint?.headRevision}</code>
++            </dd>
++            <dt className="text-muted-foreground">Diff digest</dt>
++            <dd>
++              <code>{checkpoint?.diffDigest}</code>
++            </dd>
++          </dl>
++        </div>
++      ) : (
++        <p className="mb-2 text-xs text-muted-foreground" role="status">
++          No review checkpoint prepared yet.
++        </p>
++      )}
++      <div className="flex flex-wrap items-center gap-2">
++        {surface === 'source-control' ? (
++          <Button type="button" size="sm" disabled={!canPrepare || Boolean(busy)} onClick={onPrepare}>
++            {busy === 'prepare'
++              ? 'Preparing…'
++              : prepared
++                ? 'Checkpoint prepared'
++                : 'Mark review-ready'}
++          </Button>
++        ) : null}
++        <Button
++          type="button"
++          size="sm"
++          variant={surface === 'source-control' ? 'ghost' : 'default'}
++          disabled={!connected || !prepared || diffOpen || Boolean(busy)}
++          onClick={onOpenDiff}
++        >
++          {diffOpen ? 'Diff review open' : 'Open diff review'}
++        </Button>
++      </div>
++      {showDiff && prepared ? (
++        <div className="mt-2 space-y-2" role="region" aria-label="Review diff and affected paths">
++          <div className="grid grid-cols-2 gap-2 text-[11px]">
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Diff summary</span>
++              <strong>{checkpoint?.summary ?? 'Diff summary unavailable until the sandbox is reachable.'}</strong>
++            </div>
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Text delta</span>
++              <strong>
++                +{checkpoint?.additions ?? 0} −{checkpoint?.deletions ?? 0} lines
++              </strong>
++            </div>
++          </div>
++          <div>
++            <span className="block text-[10px] uppercase text-muted-foreground">Affected paths</span>
++            <ul className="mt-1 space-y-1 text-[11px]">
++              {(checkpoint?.paths ?? []).map((entry) => (
++                <li key={entry.path} className="flex items-center justify-between gap-2">
++                  <code>{entry.path}</code>
++                  <span>
++                    {entry.kind} · {entry.detail}
++                  </span>
++                </li>
++              ))}
++            </ul>
++          </div>
++          <p className="text-[11px] text-muted-foreground">
++            Binary content is not rendered as text; review remains safe for binary and generated files.
++          </p>
++        </div>
++      ) : null}
++      {snapshot?.viewer && !canReview ? (
++        <p className="mt-2 text-[11px] text-muted-foreground">Reviewer capability is required to mark a checkpoint.</p>
++      ) : null}
 +    </section>
 +  )
 +}
@@ -4447,10 +4883,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..a635052
+index 0000000..25ef8cd
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,344 @@
+@@ -0,0 +1,346 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -4492,6 +4928,8 @@ index 0000000..a635052
 +  | 'claims.create'
 +  | 'claims.reassign'
 +  | 'claims.cancel'
++  | 'review.list'
++  | 'review.prepare'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -4714,7 +5152,7 @@ index 0000000..a635052
 +        const timer = setTimeout(() => {
 +          pending.delete(requestId)
 +          reject(new Error('CoDev request timed out.'))
-+        }, 15_000)
++        }, method === 'review.prepare' ? 60_000 : 15_000)
 +        pending.set(requestId, { resolve, reject, timer })
 +        post({
 +          type: 'codev:bridge-request',
