@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   getApiUser: vi.fn(),
   requireWorkspacePermission: vi.fn(),
   loadReviewSnapshot: vi.fn(),
-  prepareWorkspaceReview: vi.fn(),
+  applyWorkspaceReviewAction: vi.fn(),
   ensureWorkspaceRuntimeReady: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock("@/lib/access", () => ({
 }));
 vi.mock("@/lib/review-checkpoint-server", () => ({
   loadReviewSnapshot: mocks.loadReviewSnapshot,
-  prepareWorkspaceReview: mocks.prepareWorkspaceReview,
+  applyWorkspaceReviewAction: mocks.applyWorkspaceReviewAction,
 }));
 vi.mock("@/lib/runtime-resume", () => ({
   ensureWorkspaceRuntimeReady: mocks.ensureWorkspaceRuntimeReady,
@@ -60,7 +60,7 @@ describe("review checkpoint routes", () => {
     mocks.getApiUser.mockResolvedValue({ id: userId, name: "Jordan Lee" });
     mocks.requireWorkspacePermission.mockResolvedValue(undefined);
     mocks.loadReviewSnapshot.mockResolvedValue(snapshot);
-    mocks.prepareWorkspaceReview.mockResolvedValue(snapshot);
+    mocks.applyWorkspaceReviewAction.mockResolvedValue(snapshot);
     mocks.ensureWorkspaceRuntimeReady.mockResolvedValue(undefined);
   });
 
@@ -93,11 +93,58 @@ describe("review checkpoint routes", () => {
       userId,
       "review",
     );
-    expect(mocks.prepareWorkspaceReview).toHaveBeenCalledWith(
+    expect(mocks.applyWorkspaceReviewAction).toHaveBeenCalledWith(
       workspaceId,
       { id: userId, name: "Jordan Lee" },
       { sessionId },
     );
+  });
+
+  it("merges a current checkpoint through the review action", async () => {
+    const integrated = {
+      ...snapshot,
+      approval: { state: "integrated", blocked: false, mergeStarted: false },
+      integration: {
+        actor: "Jordan Lee",
+        role: "Maintainer",
+        event: "agent.review_merged",
+        mergedHeadSha: "d".repeat(40),
+      },
+    };
+    mocks.applyWorkspaceReviewAction.mockResolvedValueOnce(integrated);
+    const response = await prepareReview(
+      new Request("http://codev.test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "merge", sessionId }),
+      }),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(integrated);
+    expect(mocks.applyWorkspaceReviewAction).toHaveBeenCalledWith(
+      workspaceId,
+      { id: userId, name: "Jordan Lee" },
+      { action: "merge", sessionId },
+    );
+  });
+
+  it("advances the integration head through the review action", async () => {
+    const stale = {
+      ...snapshot,
+      approval: { state: "stale", blocked: true, mergeStarted: false },
+    };
+    mocks.applyWorkspaceReviewAction.mockResolvedValueOnce(stale);
+    const response = await prepareReview(
+      new Request("http://codev.test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "advance" }),
+      }),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(stale);
   });
 
   it("requires authentication", async () => {

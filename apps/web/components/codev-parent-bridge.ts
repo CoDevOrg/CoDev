@@ -34,7 +34,9 @@ export type CodevBridgeMethod =
   | "claims.reassign"
   | "claims.cancel"
   | "review.list"
-  | "review.prepare";
+  | "review.prepare"
+  | "review.advance"
+  | "review.merge";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -84,6 +86,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "claims.cancel",
   "review.list",
   "review.prepare",
+  "review.advance",
+  "review.merge",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -461,9 +465,22 @@ export async function executeCodevBridgeRequest(
       return succeed(payload);
     }
 
-    if (request.method === "review.prepare") {
+    if (
+      request.method === "review.prepare" ||
+      request.method === "review.advance" ||
+      request.method === "review.merge"
+    ) {
+      const action =
+        request.method === "review.advance"
+          ? "advance"
+          : request.method === "review.merge"
+            ? "merge"
+            : "prepare";
       const sessionId = request.params?.sessionId;
-      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+      if (
+        action !== "advance" &&
+        (typeof sessionId !== "string" || !INVITE_ID.test(sessionId))
+      ) {
         return fail("A valid agent session is required.");
       }
       const response = await fetcher(
@@ -471,13 +488,22 @@ export async function executeCodevBridgeRequest(
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId }),
+          body: JSON.stringify(
+            action === "advance" ? { action } : { action, sessionId },
+          ),
         },
       );
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(
-          jsonError(payload, "CoDev could not prepare this review checkpoint."),
+          jsonError(
+            payload,
+            action === "merge"
+              ? "CoDev could not integrate this review checkpoint."
+              : action === "advance"
+                ? "CoDev could not advance the integration head."
+                : "CoDev could not prepare this review checkpoint.",
+          ),
         );
       }
       return succeed(payload);

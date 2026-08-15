@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatDiffDigest,
+  isStaleReviewCheckpoint,
+  reviewRoleLabel,
   selectReviewCheckpoint,
   snapshotOmitsRawDiff,
+  toReviewApproval,
   toReviewSnapshot,
   type ReviewSession,
 } from "./review-checkpoint-view";
@@ -50,7 +53,13 @@ zcmV-00a&K)0i|tQ
 describe("review checkpoint view", () => {
   it("maps prepared checkpoint metadata and a binary-safe diff without raw patch text", () => {
     const snapshot = toReviewSnapshot({
-      viewer: { id: "user-1", name: "Jordan Lee", canReview: true },
+      viewer: {
+        id: "user-1",
+        name: "Jordan Lee",
+        role: "Maintainer",
+        canReview: true,
+        canMerge: true,
+      },
       sessions: [
         session({
           id: "session-1",
@@ -64,6 +73,7 @@ describe("review checkpoint view", () => {
         session({ id: "session-2", name: "Documentation sync" }),
       ],
       diffs: { "worktree-session-1": binaryDiff },
+      integrationHeadRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       now,
     });
 
@@ -72,6 +82,7 @@ describe("review checkpoint view", () => {
       slot: 1,
       assignment: "Repository map",
       prepared: true,
+      stale: false,
       baseRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       headRevision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       diffDigest:
@@ -100,14 +111,94 @@ describe("review checkpoint view", () => {
     expect(formatDiffDigest("abc")).toBe("sha256:abc");
     expect(formatDiffDigest("sha256:abc")).toBe("sha256:abc");
     const snapshot = toReviewSnapshot({
-      viewer: { id: "user-1", name: "Jordan Lee", canReview: true },
+      viewer: {
+        id: "user-1",
+        name: "Jordan Lee",
+        role: "Maintainer",
+        canReview: true,
+        canMerge: true,
+      },
       sessions: [session({ id: "session-1" })],
       now,
     });
     expect(snapshot.checkpoints[0]).toMatchObject({
       prepared: false,
+      stale: false,
       summary: null,
       paths: [],
     });
+    expect(snapshot.approval).toEqual({
+      state: "current",
+      blocked: false,
+      mergeStarted: false,
+    });
+  });
+
+  it("marks a prepared checkpoint stale after the integration head advances", () => {
+    const snapshot = toReviewSnapshot({
+      viewer: {
+        id: "user-1",
+        name: "Jordan Lee",
+        role: "Maintainer",
+        canReview: true,
+        canMerge: true,
+      },
+      sessions: [
+        session({
+          id: "session-1",
+          worktreeStatus: "frozen",
+          reviewBaseSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          reviewHeadSha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          reviewDiffDigest: "digest",
+        }),
+      ],
+      integrationHeadRevision: "cccccccccccccccccccccccccccccccccccccccc",
+      now,
+    });
+    expect(snapshot.checkpoints[0]?.stale).toBe(true);
+    expect(snapshot.approval).toEqual({
+      state: "stale",
+      blocked: true,
+      mergeStarted: false,
+    });
+    expect(
+      isStaleReviewCheckpoint(
+        snapshot.checkpoints[0]!,
+        snapshot.integrationHeadRevision,
+      ),
+    ).toBe(true);
+  });
+
+  it("records exactly-once attributed integration and disables a second merge", () => {
+    const integration = {
+      actor: "Jordan Lee",
+      role: "Maintainer" as const,
+      event: "agent.review_merged" as const,
+      baseRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      headRevision: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      mergedHeadSha: "dddddddddddddddddddddddddddddddddddddddd",
+    };
+    const snapshot = toReviewSnapshot({
+      viewer: {
+        id: "user-1",
+        name: "Jordan Lee",
+        role: "Maintainer",
+        canReview: true,
+        canMerge: true,
+      },
+      sessions: [session({ id: "session-1", worktreeStatus: "merged" })],
+      integrationHeadRevision: integration.mergedHeadSha,
+      integration,
+      now,
+    });
+    expect(snapshot.checkpoints).toEqual([]);
+    expect(snapshot.approval).toEqual({
+      state: "integrated",
+      blocked: false,
+      mergeStarted: false,
+    });
+    expect(snapshot.integration).toEqual(integration);
+    expect(toReviewApproval({ integration })).toEqual(snapshot.approval);
+    expect(reviewRoleLabel("owner")).toBe("Maintainer");
   });
 });

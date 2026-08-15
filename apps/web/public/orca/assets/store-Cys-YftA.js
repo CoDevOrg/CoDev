@@ -1,0 +1,1 @@
+import{r as e}from"./web-index-DG2rk86-.js";export{e as useAppStore};

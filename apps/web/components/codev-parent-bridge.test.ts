@@ -741,10 +741,26 @@ describe("codev parent bridge", () => {
         },
       ],
     };
+    const stale = {
+      ...snapshot,
+      approval: { state: "stale", blocked: true, mergeStarted: false },
+    };
+    const integrated = {
+      ...snapshot,
+      approval: { state: "integrated", blocked: false, mergeStarted: false },
+      integration: {
+        actor: "Jordan Lee",
+        role: "Maintainer",
+        event: "agent.review_merged",
+        mergedHeadSha: "d".repeat(40),
+      },
+    };
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(snapshot))
-      .mockResolvedValueOnce(Response.json(snapshot));
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(Response.json(stale))
+      .mockResolvedValueOnce(Response.json(integrated));
 
     await expect(
       executeCodevBridgeRequest(
@@ -783,7 +799,52 @@ describe("codev parent bridge", () => {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ action: "prepare", sessionId }),
+      },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-review-advance",
+          method: "review.advance",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: stale });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/reviews",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "advance" }),
+      },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-review-merge",
+          method: "review.merge",
+          params: { sessionId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: integrated });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/reviews",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "merge", sessionId }),
       },
     );
     expect(JSON.stringify(snapshot)).not.toContain("diff --git ");

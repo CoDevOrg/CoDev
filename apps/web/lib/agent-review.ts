@@ -430,6 +430,70 @@ export async function rebaseAgentReview(
   }
 }
 
+export async function advanceIntegrationHead(
+  workspaceId: string,
+  userId: string,
+) {
+  const workspace = await getWorkspaceForMember(workspaceId, userId);
+  if (!workspace) throw new ReviewActionError("Workspace not found.", 404);
+  try {
+    await requireWorkspacePermission(workspaceId, userId, "merge");
+  } catch (error) {
+    throw new ReviewActionError(
+      error instanceof Error
+        ? error.message
+        : "Merge capability is required to advance the integration head.",
+      error instanceof Error && "status" in error ? Number(error.status) : 403,
+    );
+  }
+  const [integration] = await getDatabase()
+    .select({
+      id: schema.worktrees.id,
+      headSha: schema.worktrees.headSha,
+    })
+    .from(schema.worktrees)
+    .where(
+      and(
+        eq(schema.worktrees.workspaceId, workspaceId),
+        eq(schema.worktrees.kind, "integration"),
+      ),
+    )
+    .limit(1);
+  if (!integration) {
+    throw new ReviewActionError("Integration worktree not found.", 409);
+  }
+  const committed = await gitInWorktree(workspaceId, integration.id, [
+    "-c",
+    "user.name=CoDev",
+    "-c",
+    "user.email=agent@codev.dev",
+    "commit",
+    "--allow-empty",
+    "--no-gpg-sign",
+    "-m",
+    "CoDev integration head advance",
+  ]);
+  if (committed.exitCode !== 0) {
+    throw new ReviewActionError(
+      committed.output.trim() || "Could not advance the integration head.",
+      502,
+    );
+  }
+  const head = await gitInWorktree(workspaceId, integration.id, [
+    "rev-parse",
+    "HEAD",
+  ]);
+  const headSha = parseHeadSha(head.output);
+  if (headSha === integration.headSha) {
+    throw new ReviewActionError("The integration head did not advance.", 409);
+  }
+  await getDatabase()
+    .update(schema.worktrees)
+    .set({ headSha, updatedAt: new Date() })
+    .where(eq(schema.worktrees.id, integration.id));
+  return { headSha, previousHeadSha: integration.headSha };
+}
+
 export async function mergeAgentReview(
   workspaceId: string,
   sessionId: string,

@@ -3,8 +3,8 @@ import { requireWorkspacePermission } from "@/lib/access";
 import { ReviewActionError } from "@/lib/agent-review";
 import { OrchestratorError } from "@/lib/orchestrator";
 import {
+  applyWorkspaceReviewAction,
   loadReviewSnapshot,
-  prepareWorkspaceReview,
 } from "@/lib/review-checkpoint-server";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 
@@ -48,7 +48,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     await ensureWorkspaceRuntimeReady(workspaceId, user.id, "review");
     return Response.json(
-      await prepareWorkspaceReview(workspaceId, user, await request.json()),
+      await applyWorkspaceReviewAction(workspaceId, user, await request.json()),
     );
   } catch (error) {
     if (error instanceof ReviewActionError)

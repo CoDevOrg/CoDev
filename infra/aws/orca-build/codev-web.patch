@@ -2793,10 +2793,10 @@ index 0000000..90b5c93
 +}
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx
 new file mode 100644
-index 0000000..7471849
+index 0000000..cba4c78
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointPanel.tsx
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,142 @@
 +import { useCallback, useEffect, useState, type JSX } from 'react'
 +import { toast } from 'sonner'
 +import { useAppStore } from '@/store'
@@ -2865,6 +2865,7 @@ index 0000000..7471849
 +
 +  const checkpoint = selectCodevReviewCheckpoint(snapshot?.checkpoints ?? [], worktreeId)
 +  const canReview = Boolean(snapshot?.viewer?.canReview)
++  const canMerge = Boolean(snapshot?.viewer?.canMerge)
 +
 +  return (
 +    <CodevReviewCheckpointViewPanel
@@ -2874,6 +2875,7 @@ index 0000000..7471849
 +      checkpoint={checkpoint}
 +      busy={busy}
 +      canReview={canReview}
++      canMerge={canMerge}
 +      diffOpen={diffOpen}
 +      onRefresh={() => {
 +        void refresh()
@@ -2895,6 +2897,38 @@ index 0000000..7471849
 +            setBusy('')
 +          })
 +      }}
++      onAdvance={() => {
++        setBusy('advance')
++        void requestCodevBridge<CodevReviewSnapshot>('review.advance')
++          .then((result) => {
++            setSnapshot(result)
++          })
++          .catch((error: unknown) => {
++            toast.error('Failed to advance integration head', {
++              description: error instanceof Error ? error.message : String(error)
++            })
++          })
++          .finally(() => {
++            setBusy('')
++          })
++      }}
++      onMerge={() => {
++        const sessionId = checkpoint?.sessionId
++        if (!sessionId) return
++        setBusy('merge')
++        void requestCodevBridge<CodevReviewSnapshot>('review.merge', { sessionId })
++          .then((result) => {
++            setSnapshot(result)
++          })
++          .catch((error: unknown) => {
++            toast.error('Failed to integrate checkpoint', {
++              description: error instanceof Error ? error.message : String(error)
++            })
++          })
++          .finally(() => {
++            setBusy('')
++          })
++      }}
 +      onOpenDiff={() => {
 +        sharedDiffOpen = true
 +        setDiffOpen(true)
@@ -2907,10 +2941,10 @@ index 0000000..7471849
 +}
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
 new file mode 100644
-index 0000000..e66679b
+index 0000000..b2ea618
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,165 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import {
@@ -3001,13 +3035,87 @@ index 0000000..e66679b
 +      )?.slot
 +    ).toBe(2)
 +  })
++
++  it('renders stale-review rejection after the integration head advances', () => {
++    const html = renderToStaticMarkup(
++      <CodevReviewCheckpointViewPanel
++        surface="source-control"
++        connected
++        snapshot={{
++          viewer: { id: 'u1', name: 'Jordan Lee', role: 'Maintainer', canReview: true, canMerge: true },
++          checkpoints: [{ ...prepared, stale: true }],
++          integrationHeadRevision: 'cccccccccccccccccccccccccccccccccccccccc',
++          approval: { state: 'stale', blocked: true, mergeStarted: false }
++        }}
++        checkpoint={{ ...prepared, stale: true }}
++        busy=""
++        canReview
++        canMerge
++        diffOpen={false}
++        onRefresh={() => undefined}
++        onPrepare={() => undefined}
++        onAdvance={() => undefined}
++        onMerge={() => undefined}
++        onOpenDiff={() => undefined}
++      />
++    )
++    expect(html).toContain('Stale')
++    expect(html).toContain('Stale checkpoint · approval blocked')
++    expect(html).toContain('The integration worktree advanced from')
++    expect(html).toContain('cccccccccccccccccccccccccccccccccccccccc')
++    expect(html).toContain('Rebase and review again before approval.')
++    expect(html).toContain('No merge action started.')
++    expect(html).toContain('Approval blocked')
++    expect(html).toContain('Prepare current checkpoint')
++    expect(html).toContain('Integration head advanced')
++  })
++
++  it('renders exactly-once attributed integration and disables a second approval', () => {
++    const html = renderToStaticMarkup(
++      <CodevReviewCheckpointViewPanel
++        surface="source-control"
++        connected
++        snapshot={{
++          viewer: { id: 'u1', name: 'Jordan Lee', role: 'Maintainer', canReview: true, canMerge: true },
++          checkpoints: [],
++          integrationHeadRevision: 'dddddddddddddddddddddddddddddddddddddddd',
++          approval: { state: 'integrated', blocked: false, mergeStarted: false },
++          integration: {
++            actor: 'Jordan Lee',
++            role: 'Maintainer',
++            event: 'agent.review_merged',
++            baseRevision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
++            headRevision: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
++            mergedHeadSha: 'dddddddddddddddddddddddddddddddddddddddd'
++          }
++        }}
++        checkpoint={null}
++        busy=""
++        canReview
++        canMerge
++        diffOpen={false}
++        onRefresh={() => undefined}
++        onPrepare={() => undefined}
++        onAdvance={() => undefined}
++        onMerge={() => undefined}
++        onOpenDiff={() => undefined}
++      />
++    )
++    expect(html).toContain('Integrated exactly one current reviewed checkpoint')
++    expect(html).toContain('The integration head advanced to dddddddddddddddddddddddddddddddddddddddd')
++    expect(html).toContain('Jordan Lee · Maintainer')
++    expect(html).toContain('agent.review_merged')
++    expect(html).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa → bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
++    expect(html).toContain('Duplicate approval is disabled for this checkpoint.')
++    expect(html).toContain('Checkpoint integrated')
++  })
 +})
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
 new file mode 100644
-index 0000000..4856a88
+index 0000000..e04e673
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,332 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -3025,6 +3133,7 @@ index 0000000..4856a88
 +  worktree: string
 +  worktreeStatus: string
 +  prepared: boolean
++  stale?: boolean
 +  baseRevision: string | null
 +  headRevision: string | null
 +  diffDigest: string | null
@@ -3042,10 +3151,34 @@ index 0000000..4856a88
 +  assignment: string
 +}
 +
++export type CodevReviewApproval = {
++  state: 'current' | 'stale' | 'integrated'
++  blocked: boolean
++  mergeStarted: boolean
++}
++
++export type CodevReviewIntegration = {
++  actor: string
++  role: string
++  event: 'agent.review_merged'
++  baseRevision: string
++  headRevision: string
++  mergedHeadSha: string
++}
++
 +export type CodevReviewSnapshot = {
-+  viewer?: { id: string; name: string; canReview: boolean }
++  viewer?: {
++    id: string
++    name: string
++    role?: string
++    canReview: boolean
++    canMerge?: boolean
++  }
 +  slots?: CodevReviewSlot[]
 +  checkpoints?: CodevReviewCheckpoint[]
++  integrationHeadRevision?: string | null
++  approval?: CodevReviewApproval
++  integration?: CodevReviewIntegration | null
 +}
 +
 +export function selectCodevReviewCheckpoint(
@@ -3074,9 +3207,12 @@ index 0000000..4856a88
 +  checkpoint,
 +  busy,
 +  canReview,
++  canMerge = false,
 +  diffOpen,
 +  onRefresh,
 +  onPrepare,
++  onAdvance,
++  onMerge,
 +  onOpenDiff
 +}: {
 +  surface: 'source-control' | 'checks'
@@ -3085,16 +3221,40 @@ index 0000000..4856a88
 +  checkpoint: CodevReviewCheckpoint | null
 +  busy: string
 +  canReview: boolean
++  canMerge?: boolean
 +  diffOpen: boolean
 +  onRefresh: () => void
 +  onPrepare: () => void
++  onAdvance?: () => void
++  onMerge?: () => void
 +  onOpenDiff: () => void
 +}): JSX.Element {
 +  const headingId =
 +    surface === 'source-control' ? 'codev-review-checkpoint-heading' : 'codev-review-diff-heading'
-+  const prepared = Boolean(checkpoint?.prepared)
-+  const showDiff = diffOpen && prepared
-+  const canPrepare = Boolean(checkpoint?.sessionId) && !prepared && canReview && connected
++  const integration = snapshot?.integration ?? null
++  const approval = snapshot?.approval
++  const integrationHead =
++    snapshot?.integrationHeadRevision ?? (integration ? integration.mergedHeadSha : checkpoint?.baseRevision)
++  const stale = Boolean(
++    approval?.state === 'stale' ||
++      checkpoint?.stale ||
++      (checkpoint?.prepared &&
++        checkpoint.baseRevision &&
++        integrationHead &&
++        checkpoint.baseRevision !== integrationHead)
++  )
++  const integrated = Boolean(integration || approval?.state === 'integrated')
++  const prepared = Boolean(checkpoint?.prepared) || integrated
++  const showDiff = diffOpen && Boolean(checkpoint?.prepared)
++  const canPrepare =
++    Boolean(checkpoint?.sessionId) &&
++    canReview &&
++    connected &&
++    !integrated &&
++    (!checkpoint?.prepared || stale)
++  const canAdvance = Boolean(onAdvance) && canMerge && connected && prepared && !integrated && !stale
++  const canApprove = Boolean(onMerge) && canMerge && connected && prepared && !integrated && !stale
++  const approvalState = integrated ? 'Integrated' : stale ? 'Stale' : 'Current'
 +
 +  return (
 +    <section
@@ -3119,10 +3279,12 @@ index 0000000..4856a88
 +        {connected
 +          ? checkpoint
 +            ? `Agent slot ${checkpoint.slot ?? '—'} · ${checkpoint.assignment}`
-+            : 'Select a managed proposal worktree to mark it review-ready.'
++            : integrated
++              ? 'The reviewed checkpoint is now the integration head.'
++              : 'Select a managed proposal worktree to mark it review-ready.'
 +          : 'Waiting for the workspace-bound CoDev bridge.'}
 +      </p>
-+      {prepared ? (
++      {prepared && !integrated ? (
 +        <div className="mb-2 space-y-2" role="status" aria-label="Immutable review checkpoint">
 +          <div>
 +            <strong className="block text-xs">Review ready · immutable checkpoint</strong>
@@ -3145,7 +3307,7 @@ index 0000000..4856a88
 +            </dd>
 +          </dl>
 +        </div>
-+      ) : (
++      ) : integrated ? null : (
 +        <p className="mb-2 text-xs text-muted-foreground" role="status">
 +          No review checkpoint prepared yet.
 +        </p>
@@ -3155,39 +3317,41 @@ index 0000000..4856a88
 +          <Button type="button" size="sm" disabled={!canPrepare || Boolean(busy)} onClick={onPrepare}>
 +            {busy === 'prepare'
 +              ? 'Preparing…'
-+              : prepared
-+                ? 'Checkpoint prepared'
-+                : 'Mark review-ready'}
++              : stale
++                ? 'Prepare current checkpoint'
++                : prepared
++                  ? 'Checkpoint prepared'
++                  : 'Mark review-ready'}
 +          </Button>
 +        ) : null}
 +        <Button
 +          type="button"
 +          size="sm"
 +          variant={surface === 'source-control' ? 'ghost' : 'default'}
-+          disabled={!connected || !prepared || diffOpen || Boolean(busy)}
++          disabled={!connected || !prepared || diffOpen || Boolean(busy) || integrated}
 +          onClick={onOpenDiff}
 +        >
 +          {diffOpen ? 'Diff review open' : 'Open diff review'}
 +        </Button>
 +      </div>
-+      {showDiff && prepared ? (
++      {showDiff && checkpoint?.prepared ? (
 +        <div className="mt-2 space-y-2" role="region" aria-label="Review diff and affected paths">
 +          <div className="grid grid-cols-2 gap-2 text-[11px]">
 +            <div>
 +              <span className="block text-[10px] uppercase text-muted-foreground">Diff summary</span>
-+              <strong>{checkpoint?.summary ?? 'Diff summary unavailable until the sandbox is reachable.'}</strong>
++              <strong>{checkpoint.summary ?? 'Diff summary unavailable until the sandbox is reachable.'}</strong>
 +            </div>
 +            <div>
 +              <span className="block text-[10px] uppercase text-muted-foreground">Text delta</span>
 +              <strong>
-+                +{checkpoint?.additions ?? 0} −{checkpoint?.deletions ?? 0} lines
++                +{checkpoint.additions} −{checkpoint.deletions} lines
 +              </strong>
 +            </div>
 +          </div>
 +          <div>
 +            <span className="block text-[10px] uppercase text-muted-foreground">Affected paths</span>
 +            <ul className="mt-1 space-y-1 text-[11px]">
-+              {(checkpoint?.paths ?? []).map((entry) => (
++              {checkpoint.paths.map((entry) => (
 +                <li key={entry.path} className="flex items-center justify-between gap-2">
 +                  <code>{entry.path}</code>
 +                  <span>
@@ -3202,8 +3366,84 @@ index 0000000..4856a88
 +          </p>
 +        </div>
 +      ) : null}
++      {prepared ? (
++        <div className="mt-3 space-y-2" role="region" aria-label="Review approval gate">
++          <div className="flex items-start justify-between gap-2">
++            <div>
++              <span className="block text-[10px] uppercase text-muted-foreground">Integration head</span>
++              <strong className="text-[11px]">
++                <code>{integrationHead ?? 'unavailable'}</code>
++              </strong>
++            </div>
++            <span className="text-[11px] font-medium">{approvalState}</span>
++          </div>
++          <p className="text-[11px] text-muted-foreground">
++            Approval rechecks the integration head before any merge action starts.
++          </p>
++          <div className="flex flex-wrap items-center gap-2">
++            <Button
++              type="button"
++              size="sm"
++              variant="ghost"
++              disabled={!canAdvance || Boolean(busy)}
++              onClick={onAdvance}
++            >
++              {busy === 'advance'
++                ? 'Advancing…'
++                : stale || integrated
++                  ? 'Integration head advanced'
++                  : 'Advance integration head'}
++            </Button>
++            <Button type="button" size="sm" disabled={!canApprove || Boolean(busy)} onClick={onMerge}>
++              {busy === 'merge'
++                ? 'Integrating…'
++                : stale
++                  ? 'Approval blocked'
++                  : integrated
++                    ? 'Checkpoint integrated'
++                    : 'Approve checkpoint'}
++            </Button>
++          </div>
++          {stale && !integrated ? (
++            <div className="space-y-1 text-[11px]" role="alert">
++              <strong className="block">Stale checkpoint · approval blocked</strong>
++              <span className="block">
++                The integration worktree advanced from {checkpoint?.baseRevision} to {integrationHead}.
++              </span>
++              <span className="block">Rebase and review again before approval.</span>
++              <span className="block">No merge action started.</span>
++            </div>
++          ) : null}
++          {integrated && integration ? (
++            <div className="space-y-1 text-[11px]" role="status" aria-label="Integration and audit result">
++              <strong className="block">Integrated exactly one current reviewed checkpoint</strong>
++              <span className="block">The integration head advanced to {integration.mergedHeadSha}.</span>
++              <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
++                <dt className="text-muted-foreground">Merge actor</dt>
++                <dd>
++                  {integration.actor} · {integration.role}
++                </dd>
++                <dt className="text-muted-foreground">Audit event</dt>
++                <dd>
++                  <code>{integration.event}</code>
++                </dd>
++                <dt className="text-muted-foreground">Reviewed revision</dt>
++                <dd>
++                  {integration.baseRevision} → {integration.headRevision}
++                </dd>
++              </dl>
++              <span className="block">Duplicate approval is disabled for this checkpoint.</span>
++            </div>
++          ) : null}
++        </div>
++      ) : null}
 +      {snapshot?.viewer && !canReview ? (
 +        <p className="mt-2 text-[11px] text-muted-foreground">Reviewer capability is required to mark a checkpoint.</p>
++      ) : null}
++      {snapshot?.viewer && prepared && !canMerge ? (
++        <p className="mt-2 text-[11px] text-muted-foreground">
++          Merge capability is required to approve or advance integration.
++        </p>
 +      ) : null}
 +    </section>
 +  )
@@ -4963,10 +5203,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..25ef8cd
+index 0000000..e7c3681
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,348 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -5010,6 +5250,8 @@ index 0000000..25ef8cd
 +  | 'claims.cancel'
 +  | 'review.list'
 +  | 'review.prepare'
++  | 'review.advance'
++  | 'review.merge'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -5232,7 +5474,7 @@ index 0000000..25ef8cd
 +        const timer = setTimeout(() => {
 +          pending.delete(requestId)
 +          reject(new Error('CoDev request timed out.'))
-+        }, method === 'review.prepare' ? 60_000 : 15_000)
++        }, method === 'review.prepare' || method === 'review.advance' || method === 'review.merge' ? 60_000 : 15_000)
 +        pending.set(requestId, { resolve, reject, timer })
 +        post({
 +          type: 'codev:bridge-request',

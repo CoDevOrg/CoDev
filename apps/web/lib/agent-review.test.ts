@@ -81,6 +81,53 @@ describe("mergeAgentReview", () => {
     mocks.appendWorkspaceEvent.mockResolvedValue({ id: "event-1" });
   });
 
+  it("rejects a stale checkpoint before any merge action starts", async () => {
+    const query = {
+      from: vi.fn(),
+      innerJoin: vi.fn(),
+      limit: vi.fn(),
+      select: vi.fn(),
+      where: vi.fn(),
+    };
+    query.select.mockReturnValue(query);
+    query.from.mockReturnValue(query);
+    query.innerJoin.mockReturnValue(query);
+    query.where.mockReturnValue(query);
+    query.limit
+      .mockResolvedValueOnce([
+        {
+          sessionId: "session-1",
+          workflowRunId: null,
+          worktreeId: "worktree-1",
+          worktreeStatus: "frozen",
+          worktreeHeadSha: "agent-r2",
+          reviewHeadSha: "agent-r2",
+          reviewBaseSha: "main-r1",
+          reviewDiffDigest: "sha256:review-digest",
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r2" }])
+      .mockResolvedValueOnce([]);
+    const updateQuery = {
+      set: vi.fn(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    updateQuery.set.mockReturnValue(updateQuery);
+    mocks.getDatabase.mockReturnValue({
+      select: vi.fn(() => query),
+      update: vi.fn(() => updateQuery),
+    });
+
+    await expect(
+      mergeAgentReview("workspace-1", "session-1", "user-1"),
+    ).rejects.toMatchObject({
+      message: "The integration worktree advanced. Rebase and review again.",
+      status: 409,
+    });
+    expect(mocks.mergeSandboxWorktree).not.toHaveBeenCalled();
+    expect(mocks.appendWorkspaceEvent).not.toHaveBeenCalled();
+  });
+
   it("records the approving actor and reviewed revisions after one merge", async () => {
     await expect(
       mergeAgentReview("workspace-1", "session-1", "user-1"),
