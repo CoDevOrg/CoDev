@@ -8,6 +8,7 @@ import { schema } from "@codev/db";
 import { getWorkspaceAccess } from "./access";
 import { listAgentSessions } from "./agent-runtime";
 import { getDatabase } from "./database";
+import { fixtureProviderUsagePayload } from "./provider-event-view";
 import {
   ProviderConnectionRequiredError,
   assertProviderConnectionForTurn,
@@ -209,6 +210,7 @@ export async function startControlledSharedSessionTurn(
           name: CONTROLLED_LAST_ACTION_TOOL,
           text: CONTROLLED_LAST_ACTION_OUTPUT,
           turnId: seed.id,
+          ...fixtureProviderUsagePayload(),
         },
       });
     }

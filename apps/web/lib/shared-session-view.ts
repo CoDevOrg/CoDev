@@ -4,6 +4,10 @@ import {
   type SharedSession,
 } from "@codev/contracts";
 
+import {
+  toNormalizedProviderEvents,
+  type NormalizedProviderEvent,
+} from "./provider-event-view";
 import { isProviderConnectionBlockMessage } from "./provider-turn-auth";
 
 export const CONTROLLED_SHARED_TURN_PROMPT = "Controlled shared-session turn";
@@ -51,6 +55,7 @@ export type SharedSessionView = {
   transcript: SharedSessionTranscriptTurn[];
   lastCompletedAction: SharedSessionLastAction | null;
   connectionBlocked: string | null;
+  providerEvents: NormalizedProviderEvent[];
 };
 
 export type SharedSessionSnapshot = {
@@ -228,5 +233,6 @@ export function toSharedSessionView(
     connectionBlocked: isProviderConnectionBlockMessage(session.lastError)
       ? (session.lastError ?? null)
       : null,
+    providerEvents: toNormalizedProviderEvents(session),
   };
 }

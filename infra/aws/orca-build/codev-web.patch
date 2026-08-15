@@ -1371,10 +1371,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
-index 0000000..26fb7b2
+index 0000000..b3fa5f8
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,179 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevSharedSessionViewPanel, type CodevSharedSessionView } from './CodevSharedSessionPanel'
@@ -1426,7 +1426,44 @@ index 0000000..26fb7b2
 +  lastCompletedAction: {
 +    tool: 'read_file · README.md',
 +    output: 'Repository structure is ready for the shared session.'
-+  }
++  },
++  providerEvents: [
++    {
++      id: 'turn-1',
++      kind: 'turn',
++      label: 'Turn',
++      detail: 'Inspect the repository layout.',
++      turnId: 'f3100000-0000-4000-8000-000000000003'
++    },
++    {
++      id: 'status-1',
++      kind: 'status',
++      label: 'Status',
++      detail: 'completed',
++      turnId: 'f3100000-0000-4000-8000-000000000003'
++    },
++    {
++      id: 'output-1',
++      kind: 'output',
++      label: 'Output',
++      detail: 'Repository structure is ready for the shared session.',
++      turnId: 'f3100000-0000-4000-8000-000000000003'
++    },
++    {
++      id: 'tool-1',
++      kind: 'tool_call',
++      label: 'Tool call',
++      detail: 'read_file · README.md',
++      turnId: 'f3100000-0000-4000-8000-000000000003'
++    },
++    {
++      id: 'result-1',
++      kind: 'tool_result',
++      label: 'Tool result',
++      detail: 'Repository structure is ready for the shared session.',
++      turnId: 'f3100000-0000-4000-8000-000000000003'
++    }
++  ]
 +}
 +
 +describe('CodevSharedSessionViewPanel', () => {
@@ -1460,6 +1497,10 @@ index 0000000..26fb7b2
 +    expect(html).toContain('Session restored after browser refresh · stream cursor 3 · queued instruction preserved once.')
 +    expect(html).toContain('Instruction queued')
 +    expect(html).toContain('Turn interrupted')
++    expect(html).toContain('Standardized events')
++    expect(html).toContain('Tool call')
++    expect(html).toContain('Tool result')
++    expect(html).toContain('data-codev-provider-event="turn"')
 +  })
 +
 +  it('disables co-steer actions for viewers', () => {
@@ -1686,10 +1727,10 @@ index 0000000..b887627
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
 new file mode 100644
-index 0000000..f394e2a
+index 0000000..8ccf543
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,383 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -1732,6 +1773,13 @@ index 0000000..f394e2a
 +  transcript: CodevSharedTranscriptTurn[]
 +  lastCompletedAction: { tool: string; output: string } | null
 +  connectionBlocked?: string | null
++  providerEvents?: Array<{
++    id: string
++    kind: string
++    label: string
++    detail: string
++    turnId: string | null
++  }>
 +}
 +
 +export type CodevSharedSessionSnapshot = {
@@ -2017,6 +2065,31 @@ index 0000000..f394e2a
 +                  ) : null}
 +                </article>
 +              ))}
++            </div>
++          ) : null}
++
++          {(view.providerEvents ?? []).length > 0 ? (
++            <div aria-label="Standardized provider events" className="space-y-2">
++              <div className="flex items-center justify-between text-xs">
++                <span className="text-[10px] uppercase text-muted-foreground">
++                  Standardized events
++                </span>
++                <strong>{view.providerEvents?.length} events</strong>
++              </div>
++              <ol className="space-y-1">
++                {(view.providerEvents ?? []).map((event) => (
++                  <li
++                    key={event.id}
++                    className="rounded-md border border-sidebar-border px-2 py-1 text-xs"
++                    data-codev-provider-event={event.kind}
++                  >
++                    <strong className="uppercase tracking-wide text-[10px] text-muted-foreground">
++                      {event.label}
++                    </strong>
++                    <p>{event.detail}</p>
++                  </li>
++                ))}
++              </ol>
 +            </div>
 +          ) : null}
 +

@@ -117,6 +117,15 @@ describe("shared session view", () => {
       output: CONTROLLED_LAST_ACTION_OUTPUT,
     });
     expect(view.connectionBlocked).toBeNull();
+    expect(view.providerEvents.map((event) => event.kind)).toEqual(
+      expect.arrayContaining([
+        "turn",
+        "status",
+        "output",
+        "tool_call",
+        "tool_result",
+      ]),
+    );
   });
 
   it("surfaces a revoked provider connection without dropping the transcript", () => {
