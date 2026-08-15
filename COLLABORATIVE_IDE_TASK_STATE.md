@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials**
+**F6.3 — Reauthorize every turn and block the next turn after a connection is revoked**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, and F6.1 are complete. **OI.3 is explicitly deferred
-at the owner's direction**, with its required two-member role-change
-verification remaining outstanding. The Current task is **F6.2**, the
-API-key add/replace/revoke card from `COLLABORATIVE_IDE_EXECUTION.md`.
+F5.6, OI.1, OI.2, OI.12, F6.1, and F6.2 are complete. **OI.3 is explicitly
+deferred at the owner's direction**, with its required two-member role-change
+verification remaining outstanding. The Current task is **F6.3**, the
+revoked-connection turn-block card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -25,6 +25,20 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F6.2 — Production verification completed 2026-08-15T22:05:00Z:** Source
+  `5c17d022463e07bcd05d6f8bb4d39775edb2f014` is on `main`. Vercel Production
+  `dpl_4e9DY37wfiHtySuDqruwB8owV8Df` is Ready at
+  `https://codev-83lh6yspt-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`, opened native Orca
+  Settings → General → **Provider connections**, saved a test-only OpenAI
+  API key, captured **Connected · API key · supplied by CoDev Test Jordan ·
+  ending 0001** with an empty key field, then revoked it and captured
+  **Not connected** plus **OpenAI connection revoked.** No secret was
+  displayed. TestSprite backend test `50636536-15ee-4544-9bee-973ba9161c58`
+  passed (unauthenticated PUT/DELETE return 401 without echoing the key).
+  See F6.2 completion evidence. Current task is now F6.3.
 
 - **F6.1 — Production verification completed 2026-08-15T21:53:00Z:** Source
   `b2639911884f0210d3bbe7b32f2344da46b17b93` is on `main`. Vercel Production
@@ -733,6 +747,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions | 2026-08-15 | [OI.11 completion evidence](#oi11-completion-evidence) — Production Orca blocked a stale checkpoint, then integrated one current reviewed checkpoint attributed to CoDev Test Jordan. |
 | OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events. |
 | F6.1 — Define a provider-connection record with encrypted, server-only credential handling | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed. |
+| F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed. |
 
 ### B0.2 completion evidence
 
@@ -2359,6 +2374,53 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `COLLABORATIVE_IDE_TASK_STATE.md`, not on F6.1 product files.
 - Next task: F6.2 — implement API-key add/replace/revoke for one provider
   using test-only credentials.
+
+### F6.2 completion evidence
+
+- Completed: 2026-08-15T22:05:00Z.
+- Changed files: `apps/web/lib/provider-connection-view.ts`,
+  `apps/web/lib/provider-connection-view.test.ts`,
+  `apps/web/lib/provider-connection-server.ts`,
+  `apps/web/lib/provider-connection-route.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused provider-connection/bridge tests (21 passed), patched-Orca
+  panel tests (2 passed), patched-Orca `typecheck:web`, `pnpm lint` (0
+  errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (298 passed,
+  1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm
+  rust:check`, and `git diff --check`. TestSprite backend test
+  `50636536-15ee-4544-9bee-973ba9161c58` (run
+  `b1d86df8-79b0-410c-8b45-c8dcdd9774c4`) passed against Production:
+  unauthenticated PUT/DELETE `/api/workspaces/.../connections` returned 401
+  without echoing the submitted fixture key.
+- Validated source commit: `5c17d022463e07bcd05d6f8bb4d39775edb2f014`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_4e9DY37wfiHtySuDqruwB8owV8Df` at
+  <https://codev-83lh6yspt-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Settings → General → **Provider connections** started with OpenAI
+  **Not connected**. Saving a test-only OpenAI API key showed
+  **Connected · API key · supplied by CoDev Test Jordan · ending 0001**,
+  **OpenAI key saved.**, Replace key + Revoke, and an empty password field.
+  Revoke then showed **Not connected**, **Save key**, and **OpenAI
+  connection revoked.** Anthropic stayed **Not connected**. No secret was
+  displayed. Native Orca **AI Provider Accounts (OPTIONAL)** was not used.
+- Screenshots: `file:///tmp/codev-f62-verify/f6-2-openai-connected.png`
+  (connected status after save),
+  `file:///tmp/codev-f62-verify/f6-2-openai-revoked.png` (revoked / not
+  connected). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f6-2/`.
+- Known limitations: turn-level reauthorization after revoke is F6.3. The
+  TestSprite CLI warned that the fixture `sk-test-` string looks like a
+  hardcoded credential; it is a non-secret test key used only to assert
+  that unauthenticated mutation responses do not echo it.
+- Next task: F6.3 — reauthorize every turn and block the next turn after a
+  connection is revoked.
 
 ## Blocked tasks
 
