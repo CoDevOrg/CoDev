@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F6.4 — Research and document an official OAuth flow for one provider before implementing it. No consent UI yet.**
+**F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, and F6.3 are complete. **OI.3 is
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, and F6.4 are complete. **OI.3 is
 explicitly deferred at the owner's direction**, with its required two-member
-role-change verification remaining outstanding. The Current task is **F6.4**,
-the OAuth research/documentation card from `COLLABORATIVE_IDE_EXECUTION.md`.
+role-change verification remaining outstanding. The Current task is **F6.5**,
+the OAuth fixture-callback card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -25,6 +25,21 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F6.4 — Production verification completed 2026-08-15T22:32:00Z:** Source
+  `994e1f7ed822eb7abdfd1c7498b333e3ab2a0e36` is on `main`. Vercel Production
+  `dpl_G8ZJ18TwfT7BDKQxJTquPkSdNYBk` is Ready at
+  `https://codev-n5z1hhdq3-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` and opened native Orca
+  Settings → General → **Provider connections**. Official OAuth showed
+  **OpenAI Codex · Planned · unavailable**, a disabled **Connect with OpenAI**
+  control, and `Official OpenAI Codex OAuth is documented and not enabled in
+  this workspace yet. Use an API key for now.` No consent UI opened and no
+  secret was displayed. TestSprite backend test
+  `61c6f795-fb43-429b-ba31-0690ac3fecd1` passed (unauthenticated GET
+  `/connections` returns 401 without OAuth tokens). See F6.4 completion
+  evidence. Current task is now F6.5.
 
 - **F6.3 — Production verification completed 2026-08-15T22:24:00Z:** Source
   `1294a98812a0a26869d25f8a674965bc393964ab` is on `main`. Vercel Production
@@ -766,6 +781,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | F6.1 — Define a provider-connection record with encrypted, server-only credential handling | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed. |
 | F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed. |
 | F6.3 — Reauthorize every turn and block the next turn after a connection is revoked | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret. |
+| F6.4 — Research and document an official OAuth flow for one provider before implementing it | 2026-08-15 | [F6.4 completion evidence](#f64-completion-evidence) — Production Orca Settings showed OpenAI Codex OAuth as Planned · unavailable with a disabled Connect control and no consent UI. |
 
 ### B0.2 completion evidence
 
@@ -2491,6 +2507,48 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   OAuth is F6.4.
 - Next task: F6.4 — research and document an official OAuth flow for one
   provider before implementing it. No consent UI yet.
+
+### F6.4 completion evidence
+
+- Completed: 2026-08-15T22:32:00Z.
+- Changed files: `docs/provider-oauth-openai-codex.md`,
+  `docs/OAUTH_SETUP.md`, `COLLABORATIVE_IDE_FEATURES.md`,
+  `apps/web/lib/provider-connection-view.ts`,
+  `apps/web/lib/provider-connection-view.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused provider-connection tests (6 passed), patched-Orca
+  provider-connections panel tests (3 passed), `pnpm lint` (0 errors, 2
+  existing warnings), `pnpm typecheck`, `pnpm test` (302 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
+  and `git diff --check`. TestSprite backend test
+  `61c6f795-fb43-429b-ba31-0690ac3fecd1` (run
+  `1643acad-708a-463d-9db5-0b51099ca6a3`) passed against Production:
+  unauthenticated GET `/api/workspaces/.../connections` returned 401 without
+  OAuth tokens or authorize URLs.
+- Validated source commit: `994e1f7ed822eb7abdfd1c7498b333e3ab2a0e36`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_G8ZJ18TwfT7BDKQxJTquPkSdNYBk` at
+  <https://codev-n5z1hhdq3-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Settings → General → **Provider connections** showed OpenAI and
+  Anthropic **Not connected**, then **Official OAuth** with **OpenAI Codex
+  · Planned · unavailable**, a disabled **Connect with OpenAI** button,
+  and copy that official Codex OAuth is documented and not enabled yet.
+  No consent redirect, device-code poll, or secret was shown. Native Orca
+  **AI Provider Accounts (OPTIONAL)** was not used.
+- Screenshots:
+  `file:///tmp/codev-f64-verify/f6-4-oauth-planned-unavailable.png`
+  (planned/unavailable Official OAuth). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f6-4/`.
+- Known limitations: F6.5 may enable Connect only with a mock/fixture
+  callback. Computer Use must never automate ChatGPT consent. The design
+  is `docs/provider-oauth-openai-codex.md`.
+- Next task: F6.5 — implement OAuth only after the documented
+  provider-specific design is approved and testable without real
+  credentials.
 
 ## Blocked tasks
 
