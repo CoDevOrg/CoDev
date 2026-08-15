@@ -36,7 +36,8 @@ export type CodevBridgeMethod =
   | "review.list"
   | "review.prepare"
   | "review.advance"
-  | "review.merge";
+  | "review.merge"
+  | "activity.list";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -88,6 +89,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "review.prepare",
   "review.advance",
   "review.merge",
+  "activity.list",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -449,6 +451,35 @@ export async function executeCodevBridgeRequest(
         created: sessionId && worktreeId ? { sessionId, worktreeId } : null,
         rejection: null,
       });
+    }
+
+    if (request.method === "activity.list") {
+      const params = new URLSearchParams();
+      if (
+        request.params?.kind === "file" ||
+        request.params?.kind === "session" ||
+        request.params?.kind === "diff"
+      ) {
+        params.set("kind", request.params.kind);
+      }
+      if (
+        typeof request.params?.query === "string" &&
+        request.params.query.trim()
+      ) {
+        params.set("query", request.params.query.trim());
+      }
+      const query = params.toString();
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/events${query ? `?${query}` : ""}`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load workspace activity."),
+        );
+      }
+      return succeed(payload);
     }
 
     if (request.method === "review.list") {

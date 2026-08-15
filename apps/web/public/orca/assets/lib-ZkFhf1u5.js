@@ -1,1 +1,0 @@
-import{r as e}from"./lib-DB5T-mZA.js";function t(t){e(t,[/\r?\n|\r/g,n])}function n(){return{type:`break`}}function r(){return function(e){t(e)}}export{r as t};

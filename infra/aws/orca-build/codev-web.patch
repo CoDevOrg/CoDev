@@ -1,3 +1,39 @@
+diff --git a/src/main/persistence-right-sidebar-tab.test.ts b/src/main/persistence-right-sidebar-tab.test.ts
+index fcaf48a..52dd600 100644
+--- a/src/main/persistence-right-sidebar-tab.test.ts
++++ b/src/main/persistence-right-sidebar-tab.test.ts
+@@ -16,7 +16,16 @@ vi.mock('electron', () => ({
+ import { normalizeRightSidebarTab } from './persistence'
+ 
+ describe('normalizeRightSidebarTab', () => {
+-  it.each(['explorer', 'search', 'vault', 'workspaces', 'source-control', 'checks', 'ports'])(
++  it.each([
++    'explorer',
++    'search',
++    'vault',
++    'workspaces',
++    'source-control',
++    'checks',
++    'ports',
++    'activity'
++  ])(
+     'preserves the built-in %s tab',
+     (tab) => {
+       expect(normalizeRightSidebarTab(tab)).toBe(tab)
+diff --git a/src/main/persistence.ts b/src/main/persistence.ts
+index c5b3e6d..c740715 100644
+--- a/src/main/persistence.ts
++++ b/src/main/persistence.ts
+@@ -856,7 +856,8 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
+     tab === 'pr-checks' ||
+     tab === 'source-control' ||
+     tab === 'checks' ||
+-    tab === 'ports'
++    tab === 'ports' ||
++    tab === 'activity'
+   ) {
+     return tab
+   }
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
 index 294fc4a..16cde63 100644
 --- a/src/renderer/src/App.tsx
@@ -990,6 +1026,349 @@ index 83b190a..c530555 100644
            <VaultHostScopeMenu
              executionHostScope={executionHostScope}
              hostOptions={hostScopeOptions}
+diff --git a/src/renderer/src/components/right-sidebar/CodevActivityAuditPanel.tsx b/src/renderer/src/components/right-sidebar/CodevActivityAuditPanel.tsx
+new file mode 100644
+index 0000000..204ccca
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevActivityAuditPanel.tsx
+@@ -0,0 +1,81 @@
++import { useCallback, useEffect, useState, type JSX } from 'react'
++import { useAppStore } from '@/store'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import {
++  CodevActivityAuditViewPanel,
++  type CodevActivityEvent,
++  type CodevActivityJumpKind,
++  type CodevActivitySnapshot
++} from './CodevActivityAuditView'
++
++export { CodevActivityAuditViewPanel, type CodevActivitySnapshot } from './CodevActivityAuditView'
++
++export function CodevActivityAuditPanel(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
++  const [bridge, setBridge] = useState(() => getCodevBridgeSnapshot())
++  const [snapshot, setSnapshot] = useState<CodevActivitySnapshot | null>(null)
++  const [kind, setKind] = useState<'all' | CodevActivityJumpKind>('all')
++  const [query, setQuery] = useState('')
++  const [busy, setBusy] = useState('')
++  const [jumped, setJumped] = useState('')
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setBridge(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  const refresh = useCallback(async () => {
++    if (!embedded || bridge.status !== 'connected') return
++    setBusy('refresh')
++    try {
++      const result = await requestCodevBridge<CodevActivitySnapshot>('activity.list')
++      setSnapshot(result)
++    } catch (error: unknown) {
++      setSnapshot(null)
++      setJumped(error instanceof Error ? error.message : 'CoDev could not load workspace activity.')
++    } finally {
++      setBusy('')
++    }
++  }, [bridge.status, embedded])
++
++  useEffect(() => {
++    void refresh()
++  }, [refresh])
++
++  if (!embedded) return null
++
++  function jump(event: CodevActivityEvent): void {
++    if (!event.jump) return
++    setRightSidebarTab(event.jump.surface)
++    const surfaceLabel =
++      event.jump.surface === 'explorer'
++        ? 'Explorer'
++        : event.jump.surface === 'vault'
++          ? 'Agents'
++          : 'Checks'
++    setJumped(`Jumped to ${surfaceLabel} · ${event.type}`)
++  }
++
++  return (
++    <CodevActivityAuditViewPanel
++      connected={bridge.status === 'connected'}
++      snapshot={snapshot}
++      kind={kind}
++      query={query}
++      busy={busy}
++      jumped={jumped}
++      onKindChange={setKind}
++      onQueryChange={setQuery}
++      onRefresh={() => {
++        void refresh()
++      }}
++      onJump={jump}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/right-sidebar/CodevActivityAuditView.test.tsx b/src/renderer/src/components/right-sidebar/CodevActivityAuditView.test.tsx
+new file mode 100644
+index 0000000..15be7b3
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevActivityAuditView.test.tsx
+@@ -0,0 +1,71 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevActivityAuditViewPanel, type CodevActivitySnapshot } from './CodevActivityAuditView'
++
++const snapshot: CodevActivitySnapshot = {
++  viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
++  filters: { kind: 'diff', query: 'review_merged' },
++  events: [
++    {
++      id: 'event-1',
++      sequence: 12,
++      type: 'agent.review_merged',
++      actor: 'CoDev Test Jordan',
++      summary: 'CoDev Test Jordan integrated a reviewed checkpoint',
++      createdAt: '2026-08-15T19:28:00.000Z',
++      path: null,
++      sessionId: 'session-3',
++      jump: {
++        kind: 'diff',
++        surface: 'checks',
++        label: 'Open Checks · diff',
++        path: null,
++        sessionId: 'session-3'
++      }
++    }
++  ],
++  filtered: [],
++}
++
++describe('CodevActivityAuditViewPanel', () => {
++  it('renders a filtered audit event and its native jump control', () => {
++    const html = renderToStaticMarkup(
++      <CodevActivityAuditViewPanel
++        connected
++        snapshot={snapshot}
++        kind="diff"
++        query="review_merged"
++        busy=""
++        jumped=""
++        onKindChange={() => undefined}
++        onQueryChange={() => undefined}
++        onRefresh={() => undefined}
++        onJump={() => undefined}
++      />
++    )
++    expect(html).toContain('Workspace activity')
++    expect(html).toContain('Activity filter')
++    expect(html).toContain('CoDev Test Jordan integrated a reviewed checkpoint')
++    expect(html).toContain('agent.review_merged')
++    expect(html).toContain('Open Checks · diff')
++  })
++
++  it('shows the empty filter state and a completed jump', () => {
++    const html = renderToStaticMarkup(
++      <CodevActivityAuditViewPanel
++        connected
++        snapshot={{ ...snapshot, events: [] }}
++        kind="file"
++        query="missing"
++        busy=""
++        jumped="Jumped to Checks · agent.review_merged"
++        onKindChange={() => undefined}
++        onQueryChange={() => undefined}
++        onRefresh={() => undefined}
++        onJump={() => undefined}
++      />
++    )
++    expect(html).toContain('No matching activity events.')
++    expect(html).toContain('Jumped to Checks · agent.review_merged')
++  })
++})
+diff --git a/src/renderer/src/components/right-sidebar/CodevActivityAuditView.tsx b/src/renderer/src/components/right-sidebar/CodevActivityAuditView.tsx
+new file mode 100644
+index 0000000..7965918
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevActivityAuditView.tsx
+@@ -0,0 +1,173 @@
++import type { JSX } from 'react'
++import { Button } from '@/components/ui/button'
++
++export type CodevActivityJumpKind = 'file' | 'session' | 'diff'
++
++export type CodevActivityJump = {
++  kind: CodevActivityJumpKind
++  surface: 'explorer' | 'vault' | 'checks'
++  label: string
++  path: string | null
++  sessionId: string | null
++}
++
++export type CodevActivityEvent = {
++  id: string
++  sequence: number
++  type: string
++  actor: string
++  summary: string
++  createdAt: string
++  path: string | null
++  sessionId: string | null
++  jump: CodevActivityJump | null
++}
++
++export type CodevActivitySnapshot = {
++  viewer?: { id: string; name: string }
++  events: CodevActivityEvent[]
++  filters: { kind: 'all' | CodevActivityJumpKind; query: string }
++  filtered: CodevActivityEvent[]
++}
++
++export function filterCodevActivityEvents(
++  events: CodevActivityEvent[],
++  kind: 'all' | CodevActivityJumpKind,
++  query: string
++): CodevActivityEvent[] {
++  const needle = query.trim().toLowerCase()
++  return events.filter((event) => {
++    if (kind !== 'all' && event.jump?.kind !== kind) return false
++    if (!needle) return true
++    return (
++      event.summary.toLowerCase().includes(needle) ||
++      event.type.toLowerCase().includes(needle) ||
++      event.actor.toLowerCase().includes(needle) ||
++      (event.path?.toLowerCase().includes(needle) ?? false)
++    )
++  })
++}
++
++export function CodevActivityAuditViewPanel({
++  connected,
++  snapshot,
++  kind,
++  query,
++  busy,
++  jumped,
++  onKindChange,
++  onQueryChange,
++  onRefresh,
++  onJump
++}: {
++  connected: boolean
++  snapshot: CodevActivitySnapshot | null
++  kind: 'all' | CodevActivityJumpKind
++  query: string
++  busy: string
++  jumped: string
++  onKindChange: (kind: 'all' | CodevActivityJumpKind) => void
++  onQueryChange: (query: string) => void
++  onRefresh: () => void
++  onJump: (event: CodevActivityEvent) => void
++}): JSX.Element {
++  const rows = filterCodevActivityEvents(snapshot?.events ?? [], kind, query)
++  return (
++    <section
++      className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2"
++      aria-labelledby="codev-activity-heading"
++      data-codev-activity-audit="true"
++    >
++      <div className="mb-2 flex items-start justify-between gap-2">
++        <div>
++          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++            CoDev · audit
++          </p>
++          <h2 id="codev-activity-heading" className="text-sm font-semibold">
++            Workspace activity
++          </h2>
++        </div>
++        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
++          {busy === 'refresh' ? 'Refreshing…' : 'Refresh activity'}
++        </Button>
++      </div>
++      <p className="mb-2 text-[11px] text-muted-foreground" role="status">
++        {connected
++          ? 'Durable workspace actions appear here. Filter an event, then jump to Explorer, Agents, or Checks.'
++          : 'Waiting for the workspace-bound CoDev bridge.'}
++      </p>
++      <div className="mb-2 flex flex-col gap-2">
++        <label className="text-[11px]" htmlFor="codev-activity-filter">
++          Activity filter
++          <select
++            id="codev-activity-filter"
++            aria-label="Activity filter"
++            className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
++            value={kind}
++            onChange={(event) => onKindChange(event.target.value as 'all' | CodevActivityJumpKind)}
++          >
++            <option value="all">All events</option>
++            <option value="file">Files</option>
++            <option value="session">Sessions</option>
++            <option value="diff">Diffs</option>
++          </select>
++        </label>
++        <label className="text-[11px]" htmlFor="codev-activity-query">
++          Filter query
++          <input
++            id="codev-activity-query"
++            aria-label="Filter query"
++            className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
++            value={query}
++            placeholder="review_merged"
++            onChange={(event) => onQueryChange(event.target.value)}
++          />
++        </label>
++      </div>
++      {jumped ? (
++        <p className="mb-2 text-xs" role="status" aria-label="Activity jump result">
++          {jumped}
++        </p>
++      ) : null}
++      <div className="min-h-0 flex-1 overflow-auto" role="list" aria-label="Workspace activity events">
++        {rows.length === 0 ? (
++          <p className="text-xs text-muted-foreground" role="status">
++            No matching activity events.
++          </p>
++        ) : (
++          rows.map((event) => (
++            <article
++              key={event.id}
++              className="mb-2 rounded-md border border-border p-2"
++              role="listitem"
++              aria-label={event.summary}
++            >
++              <p className="text-xs font-medium">{event.summary}</p>
++              <p className="mt-1 text-[11px] text-muted-foreground">
++                <code>{event.type}</code>
++                {event.path ? (
++                  <>
++                    {' · '}
++                    <code>{event.path}</code>
++                  </>
++                ) : null}
++              </p>
++              {event.jump ? (
++                <Button
++                  type="button"
++                  size="sm"
++                  className="mt-2"
++                  disabled={!connected}
++                  aria-label={event.jump.label}
++                  onClick={() => onJump(event)}
++                >
++                  {event.jump.label}
++                </Button>
++              ) : null}
++            </article>
++          ))
++        )}
++      </div>
++    </section>
++  )
++}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
 index 0000000..193de4e
@@ -1663,10 +2042,31 @@ index 1b62145..82ad1c9 100644
            {nodeStatus ? (
              <span
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index f9587ab..17b7307 100644
+index f9587ab..ba118e0 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
-@@ -175,7 +175,8 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -1,6 +1,6 @@
+ /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
+ import React, { useEffect, useMemo, useRef, useState } from 'react'
+-import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
++import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow } from 'lucide-react'
+ import { useAppStore } from '@/store'
+ import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
+ import { useRepoById } from '@/store/selectors'
+@@ -156,6 +156,12 @@ function RightSidebarInner(): React.JSX.Element {
+         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
+         sshOnly: true
+       },
++      {
++        id: 'activity',
++        icon: History,
++        title: translate('auto.components.right.sidebar.index.codevActivity', 'Activity'),
++        shortcut: ''
++      },
+       // Why: plugin panels append after the built-in tabs so core navigation
+       // keeps stable positions regardless of which plugins are installed.
+       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
+@@ -175,7 +181,8 @@ function RightSidebarInner(): React.JSX.Element {
        getVisibleRightSidebarActivityItems(activityItems, {
          isFolder,
          isFolderWorkspace,
@@ -1725,18 +2125,19 @@ index bcb65fa..5730757 100644
      }
      if (item.folderOnly && !isFolderWorkspace) {
 diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
-index 8da2783..9974250 100644
+index 8da2783..41186fe 100644
 --- a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
 +++ b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
-@@ -2,6 +2,7 @@ import { Suspense } from 'react'
+@@ -2,6 +2,8 @@ import { Suspense } from 'react'
  import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
  import type { ActiveRightSidebarTab } from '@/store/slices/editor'
  import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 +import { CodevReviewCheckpointPanel } from '../sidebar/CodevReviewCheckpointPanel'
++import { CodevActivityAuditPanel } from './CodevActivityAuditPanel'
  
  const FileExplorer = lazy(() => import('./FileExplorer'))
  const SourceControl = lazy(() => import('./SourceControl'))
-@@ -25,8 +26,22 @@ export function RightSidebarPanelContent({
+@@ -25,8 +27,22 @@ export function RightSidebarPanelContent({
      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
        <Suspense fallback={null}>
          {effectiveTab === 'explorer' && <FileExplorer />}
@@ -1761,6 +2162,14 @@ index 8da2783..9974250 100644
          {/* Why: SSH port forwarding still depends on the raw ports.detect data,
              which the workspace-scoped status bar popover intentionally does not
              expose. Keep this panel reachable only for SSH worktrees. */}
+@@ -34,6 +50,7 @@ export function RightSidebarPanelContent({
+           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
+         )}
+         {effectiveTab === 'vault' && <AiVaultPanel />}
++        {effectiveTab === 'activity' && <CodevActivityAuditPanel />}
+         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
+         {effectiveTab === 'pr-checks' && (
+           <FolderWorkspacePrChecksPanel
 diff --git a/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx b/src/renderer/src/components/settings/CodevWorkspaceInvitesSection.test.tsx
 new file mode 100644
 index 0000000..10fa378
@@ -4957,6 +5366,20 @@ index 5ecc70a..31b7c0e 100644
      __paneManagers?: Map<string, PaneManager>
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
      __terminalParkingDebug?: {
+diff --git a/src/renderer/src/store/right-sidebar-route.ts b/src/renderer/src/store/right-sidebar-route.ts
+index 38bddf6..ba44d11 100644
+--- a/src/renderer/src/store/right-sidebar-route.ts
++++ b/src/renderer/src/store/right-sidebar-route.ts
+@@ -43,7 +43,8 @@ export function normalizeRightSidebarRoute(
+     tab === 'pr-checks' ||
+     tab === 'source-control' ||
+     tab === 'checks' ||
+-    tab === 'ports'
++    tab === 'ports' ||
++    tab === 'activity'
+   ) {
+     return {
+       rightSidebarTab: tab,
 diff --git a/src/renderer/src/store/slices/ui.ts b/src/renderer/src/store/slices/ui.ts
 index b738f18..af3054d 100644
 --- a/src/renderer/src/store/slices/ui.ts
@@ -4972,6 +5395,20 @@ index b738f18..af3054d 100644
      if (modal === 'add-repo' || modal === 'create-worktree') {
        get().recordFeatureInteraction?.('workspace-creation')
      }
+diff --git a/src/renderer/src/store/slices/worktrees.ts b/src/renderer/src/store/slices/worktrees.ts
+index 9b639b0..8fc68ec 100644
+--- a/src/renderer/src/store/slices/worktrees.ts
++++ b/src/renderer/src/store/slices/worktrees.ts
+@@ -2484,7 +2484,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
+         tab === 'workspaces' ||
+         tab === 'source-control' ||
+         tab === 'checks' ||
+-        tab === 'ports'
++        tab === 'ports' ||
++        tab === 'activity'
+       ) {
+         out[id] = tab
+       } else {
 diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
 new file mode 100644
 index 0000000..d27fbca
@@ -5203,10 +5640,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..e7c3681
+index 0000000..605d8c3
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,348 @@
+@@ -0,0 +1,349 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -5252,6 +5689,7 @@ index 0000000..e7c3681
 +  | 'review.prepare'
 +  | 'review.advance'
 +  | 'review.merge'
++  | 'activity.list'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean
@@ -6352,3 +6790,15 @@ index eae3a54..6ebcb27 100644
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index cfa041d..84fe0a6 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -3344,6 +3344,7 @@ export type RightSidebarTab =
+   | 'source-control'
+   | 'checks'
+   | 'ports'
++  | 'activity'
+   // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
+   // static union stays closed while plugin tabs remain type-representable.
+   | `plugin:${string}`

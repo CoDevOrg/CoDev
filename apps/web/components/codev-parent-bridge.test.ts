@@ -849,4 +849,49 @@ describe("codev parent bridge", () => {
     );
     expect(JSON.stringify(snapshot)).not.toContain("diff --git ");
   });
+
+  it("loads the durable activity timeline through the workspace-bound request bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const activity = {
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      filters: { kind: "diff", query: "review_merged" },
+      filtered: [
+        {
+          id: "event-1",
+          type: "agent.review_merged",
+          summary: "CoDev Test Jordan integrated a reviewed checkpoint",
+          jump: {
+            kind: "diff",
+            surface: "checks",
+            label: "Open Checks · diff",
+          },
+        },
+      ],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(activity));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-activity-list",
+          method: "activity.list",
+          params: { kind: "diff", query: "review_merged" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: activity });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/events?kind=diff&query=review_merged",
+      { cache: "no-store" },
+    );
+  });
 });
