@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor**
+**OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.4**, followed by OI.5–OI.12 from
+remaining outstanding. The Current task is **OI.6**, followed by OI.7–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -1547,6 +1547,43 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   (Production Orca final named-presence and remote-active-file state).
 - Next task: OI.5 — render collaborator cursor/selection state and reconnect
   replay in Orca's editor.
+
+### OI.5 completion evidence
+
+- Completed: 2026-08-15T01:09:18Z.
+- Changed files: `apps/web/app/api/workspaces/[workspaceId]/presence/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/presence/route.test.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/lib/collaboration-server.ts`, `infra/aws/orca-build/codev-web.patch`,
+  and the regenerated vendored Orca web assets under `apps/web/public/orca/`.
+- Checks: focused bridge tests (7), contracts tests (19), patched Orca cursor
+  test, pinned `typecheck:web` and `build:web`, `pnpm format:check`, `pnpm lint`
+  (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (229 passed,
+  1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm
+  rust:check`, and `git diff --check` passed for the validated implementation.
+- Validated source commit: `fce33b67ed5002d1f5d8ba97c99f321dea46a889`.
+  The Git-triggered Production deployment for the current `main` commit
+  `ca4f4e04b04680379ab54bd0af664c52f42c262b` is Ready at
+  <https://codev-h0l5gigv0-yousef20920s-projects.vercel.app> and serves
+  <https://www.trycodev.com>.
+- Computer Use flow: used independent authenticated Production sessions for
+  CoDev Test Alex and CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Alex opened `README.md`
+  in Orca's native Source editor and selected the complete document. Jordan
+  opened the same Source editor and observed Alex's native remote selection
+  decoration and both identities in the editor presence strip. Jordan then
+  reloaded the workspace, observed the explicit connecting state, and, after
+  recovery, opened `README.md` again: the bridge reported Connected and the
+  current Alex selection/decorated editor state returned once.
+- Screenshots: `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%209.07.54%20PM.jpeg`
+  (initial native remote selection),
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%209.08.14%20PM.jpeg`
+  (reconnecting edge state), and
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%209.09.18%20PM.jpeg`
+  (recovered native selection and Connected bridge).
+- Next task: OI.6 — surface external-file conflicts in Orca's editor without
+  overwriting either version.
 
 ## Blocked tasks
 
