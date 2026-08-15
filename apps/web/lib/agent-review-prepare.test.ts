@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   checkpointSandboxWorktree: vi.fn(),
   createSandboxWorktree: vi.fn(),
+  executeInSandbox: vi.fn(),
   getDatabase: vi.fn(),
   getWorkspaceForMember: vi.fn(),
   requireWorkspacePermission: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("./orchestrator", () => ({
   checkpointSandboxWorktree: mocks.checkpointSandboxWorktree,
   createSandboxWorktree: mocks.createSandboxWorktree,
   deleteSandboxWorktree: vi.fn(),
+  executeInSandbox: mocks.executeInSandbox,
   mergeSandboxWorktree: vi.fn(),
   rebaseSandboxWorktree: vi.fn(),
   reviewSandboxWorktree: mocks.reviewSandboxWorktree,
@@ -113,5 +115,32 @@ describe("prepareAgentReview", () => {
       integrationSha,
     );
     expect(mocks.checkpointSandboxWorktree).toHaveBeenCalledTimes(2);
+  });
+
+  it("freezes the checkpoint through exec when the review API is forbidden", async () => {
+    mocks.checkpointSandboxWorktree.mockReset();
+    mocks.checkpointSandboxWorktree.mockRejectedValue(
+      new OrchestratorError("Sandbox service returned HTTP 403.", 403),
+    );
+    mocks.reviewSandboxWorktree.mockRejectedValue(
+      new OrchestratorError("Sandbox service returned HTTP 403.", 403),
+    );
+    mocks.executeInSandbox
+      .mockResolvedValueOnce({ output: "", exitCode: 0 })
+      .mockResolvedValueOnce({ output: "", exitCode: 1 })
+      .mockResolvedValueOnce({ output: "", exitCode: 0 })
+      .mockResolvedValueOnce({ output: `${headSha}\n`, exitCode: 0 })
+      .mockResolvedValueOnce({
+        output: "diff --git a/oi10-review.txt b/oi10-review.txt\n",
+        exitCode: 0,
+      });
+
+    await expect(
+      prepareAgentReview("workspace-1", "session-1", "user-1"),
+    ).resolves.toMatchObject({
+      headSha,
+      baseSha: integrationSha,
+    });
+    expect(mocks.executeInSandbox).toHaveBeenCalled();
   });
 });
