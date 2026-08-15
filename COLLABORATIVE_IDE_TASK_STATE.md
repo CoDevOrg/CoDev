@@ -27,6 +27,32 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.12 — Production workspace provisioning blocker 2026-08-15T20:37:00Z:**
+  The required initial `git status --short` was clean. This run used
+  `git switch main` was unnecessary because `main` was already current, then
+  `git fetch origin main` and `git pull --ff-only origin main`. OI.12 source
+  was implemented and pushed to `main` as
+  `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3` (`feat: add durable Orca activity
+  audit panel`). Focused activity/bridge tests (16 passed), patched-Orca
+  Vitest (`CodevActivityAuditView.test.tsx`,
+  `persistence-right-sidebar-tab.test.ts`, 14 passed), patched-Orca
+  `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
+  typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
+  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
+  passed. GitHub records Ready Production deployment `5924437667` for that
+  exact commit. Vercel Production `dpl_C8SJzJWwyWtYxGEBBkFBz6sbcH1j` is Ready
+  at `https://codev-f577m9h4l-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan
+  against that exact deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. The workspace page
+  reported **Could not open the workspace — Orca IDE process exited before
+  reporting readiness**. Retry reproduced the same failure immediately, so
+  the required Activity-panel filter-and-jump flow inside native Orca could
+  not start. Current task remains OI.12; do not begin F6.1. Screenshot
+  evidence: `artifacts/verification/oi-12/01-orca-process-exited.png`,
+  `/tmp/codev-oi12-verify/01-orca-process-exited.png`, and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-12-workspace-open-error.png`.
+
 - **OI.11 — Production verification completed 2026-08-15T19:28:00Z:** Stale-review
   rejection and exactly-once attributed integration are live in Orca's native
   Source Control review actions. Follow-up source commit
