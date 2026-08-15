@@ -29,22 +29,9 @@
   --landing-orange: var(--codev-orange-500);
   --landing-green-line: rgba(242, 237, 224, 0.12);
   overflow-x: clip;
-  background:
-    radial-gradient(
-      circle at 84% 8%,
-      rgba(217, 101, 45, 0.28),
-      transparent 32rem
-    ),
-    radial-gradient(
-      circle at 12% 36%,
-      rgba(82, 126, 104, 0.2),
-      transparent 34rem
-    ),
-    var(--landing-paper);
+  background: var(--landing-paper);
   color: var(--landing-ink);
   color-scheme: dark;
-  background-size: 135% 135%;
-  animation: codev-page-ambient 26s ease-in-out infinite alternate;
 }
 
 .landing-page::before {
@@ -59,9 +46,29 @@
     );
 }
 
+.landing-ambient-orb-a {
+  background: radial-gradient(
+    circle,
+    rgba(217, 101, 45, 0.34) 0%,
+    transparent 68%
+  );
+  animation: codev-page-ambient 26s ease-in-out infinite alternate;
+}
+
+.landing-ambient-orb-b {
+  background: radial-gradient(
+    circle,
+    rgba(82, 126, 104, 0.26) 0%,
+    transparent 70%
+  );
+}
+
 .landing-grain {
-  opacity: 0.07;
-  mix-blend-mode: screen;
+  opacity: 0.08;
+  background-image: radial-gradient(
+    rgba(242, 237, 224, 0.28) 0.55px,
+    transparent 0.7px
+  );
 }
 
 .landing-nav,
@@ -165,8 +172,6 @@
     var(--surface);
   color: var(--ink);
   color-scheme: dark;
-  background-size: 135% 135%;
-  animation: codev-page-ambient 26s ease-in-out infinite alternate;
 }
 
 .app-page .app-nav {
@@ -637,21 +642,17 @@
 }
 
 @keyframes codev-page-ambient {
-  0% {
-    background-position: 0% 0%;
+  from {
+    transform: translate3d(0, 0, 0);
   }
-  50% {
-    background-position: 48% 22%;
-  }
-  100% {
-    background-position: 100% 70%;
+  to {
+    transform: translate3d(40px, -32px, 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-page,
-  .app-page,
-  .auth-page,
+  .landing-ambient-orb-a,
+  .landing-ambient-orb-b,
   .home-welcome-hero::after,
   .home-hub-shell::before,
   .home-hub-shell::after {

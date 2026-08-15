@@ -42,6 +42,10 @@ export default async function HomePage() {
 
   return (
     <main className="landing-page">
+      <div className="landing-ambient" aria-hidden="true">
+        <span className="landing-ambient-orb landing-ambient-orb-a" />
+        <span className="landing-ambient-orb landing-ambient-orb-b" />
+      </div>
       <div className="landing-grain" aria-hidden="true" />
       <header className="landing-nav">
         <Brand />

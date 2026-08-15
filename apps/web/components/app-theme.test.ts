@@ -7,6 +7,7 @@ const appTheme = readFileSync(
   resolve(process.cwd(), "app/app-theme.css"),
   "utf8",
 );
+const globals = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 describe("CoDev product theme", () => {
   it("sets one dark palette for every AppChrome product page", () => {
@@ -47,5 +48,17 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain("@keyframes codev-page-ambient {");
     expect(appTheme).toContain("animation: codev-page-ambient 26s");
     expect(appTheme).toContain("@media (prefers-reduced-motion: reduce) {");
+  });
+
+  it("moves landing atmosphere with compositor transforms instead of full-page paints", () => {
+    expect(appTheme).toContain("transform: translate3d(40px, -32px, 0);");
+    expect(appTheme).not.toContain("background-position: 48% 22%");
+    expect(appTheme).not.toContain("background-size: 135% 135%");
+    expect(appTheme).not.toContain("mix-blend-mode: screen");
+    expect(globals).toContain(".landing-ambient");
+    expect(globals).toContain("position: fixed");
+    expect(globals).not.toContain("feTurbulence");
+    expect(globals).not.toContain("landing-paper-lines");
+    expect(globals).not.toContain("mix-blend-mode: multiply");
   });
 });
