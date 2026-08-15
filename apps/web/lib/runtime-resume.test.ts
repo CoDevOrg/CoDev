@@ -5,9 +5,11 @@ const mocks = vi.hoisted(() => ({
   clearWorkspaceSnapshot: vi.fn(),
   getHostState: vi.fn(),
   getSandbox: vi.fn(),
+  createSandboxWorktree: vi.fn(),
   getWorkspaceForMember: vi.fn(),
   getWorkspaceSnapshot: vi.fn(),
   getWorkspaceRuntime: vi.fn(),
+  listActiveAgentWorktrees: vi.fn(),
   markWorkspaceReady: vi.fn(),
   markWorkspaceStopped: vi.fn(),
   provisionSandbox: vi.fn(),
@@ -43,6 +45,7 @@ vi.mock("./orchestrator", () => ({
     }
   },
   getSandbox: mocks.getSandbox,
+  createSandboxWorktree: mocks.createSandboxWorktree,
   provisionSandbox: mocks.provisionSandbox,
   waitForOrchestrator: mocks.waitForOrchestrator,
 }));
@@ -50,6 +53,7 @@ vi.mock("./workspaces", () => ({
   beginWorkspaceProvisioning: mocks.beginWorkspaceProvisioning,
   getWorkspaceForMember: mocks.getWorkspaceForMember,
   getWorkspaceRuntime: mocks.getWorkspaceRuntime,
+  listActiveAgentWorktrees: mocks.listActiveAgentWorktrees,
   markWorkspaceFailed: vi.fn(),
   markWorkspaceReady: mocks.markWorkspaceReady,
   markWorkspaceStopped: mocks.markWorkspaceStopped,
@@ -64,6 +68,8 @@ describe("workspace runtime resume", () => {
     vi.resetAllMocks();
     mocks.getWorkspaceRuntime.mockResolvedValue({ status: "ready" });
     mocks.getSandbox.mockResolvedValue({ id: "sandbox-1" });
+    mocks.listActiveAgentWorktrees.mockResolvedValue([]);
+    mocks.createSandboxWorktree.mockResolvedValue(undefined);
   });
 
   it("allows reviewers to wake a runtime for diff review", async () => {
@@ -173,6 +179,54 @@ describe("workspace runtime resume", () => {
       "workspace-1",
       "sandbox-1",
       "head-sha",
+    );
+    expect(mocks.createSandboxWorktree).not.toHaveBeenCalled();
+  });
+
+  it("provisions a snapshot sandbox for review without a GitHub repository", async () => {
+    mocks.getSandbox.mockRejectedValue(
+      new OrchestratorError("sandbox not found", 404),
+    );
+    mocks.getWorkspaceRuntime.mockResolvedValue({ status: "opening" });
+    mocks.getWorkspaceForMember.mockResolvedValue({
+      repository: "",
+      repositoryVisibility: "none",
+      baseSha: "",
+      ownerId: "owner-1",
+    });
+    mocks.beginWorkspaceProvisioning.mockResolvedValue(
+      new Date("2026-07-31T00:00:00.000Z"),
+    );
+    mocks.getHostState.mockResolvedValue("running");
+    mocks.listActiveAgentWorktrees.mockResolvedValue([
+      { id: "wt-1", name: "agent-one" },
+    ]);
+    const headSha = "a".repeat(40);
+    mocks.provisionSandbox.mockResolvedValue({
+      id: "sandbox-folder",
+      headSha,
+    });
+
+    await ensureWorkspaceRuntimeReady("workspace-1", "user-1", "review");
+
+    expect(mocks.provisionSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        repositoryUrl: null,
+        baseSha: "0".repeat(40),
+        resumeFromSnapshot: false,
+      }),
+    );
+    const snapshot = mocks.provisionSandbox.mock.calls[0]?.[0]
+      ?.repositorySnapshot as { files: { path: string }[] };
+    expect(snapshot.files.map((file) => file.path)).toEqual([
+      "README.md",
+      "assets/logo.png",
+    ]);
+    expect(mocks.createSandboxWorktree).toHaveBeenCalledWith(
+      "workspace-1",
+      "wt-1",
+      headSha,
     );
   });
 });

@@ -12,6 +12,8 @@ type Context = {
   params: Promise<{ workspaceId: string }>;
 };
 
+export const maxDuration = 300;
+
 export async function GET(_request: Request, { params }: Context) {
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);

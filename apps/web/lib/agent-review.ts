@@ -10,8 +10,10 @@ import { appendWorkspaceEvent } from "./audit";
 import { requireWorkspacePermission, type WorkspacePermission } from "./access";
 import {
   checkpointSandboxWorktree,
+  createSandboxWorktree,
   deleteSandboxWorktree,
   mergeSandboxWorktree,
+  OrchestratorError,
   rebaseSandboxWorktree,
   reviewSandboxWorktree,
   type SandboxWorktreeReview,
@@ -195,6 +197,34 @@ export class ReviewActionError extends Error {
   }
 }
 
+const COMMIT_SHA = /^[0-9a-f]{40}$/;
+
+function isMissingWorktreeError(error: unknown) {
+  return (
+    error instanceof OrchestratorError &&
+    (error.status === 400 || error.status === 404) &&
+    /worktree not found/i.test(error.message)
+  );
+}
+
+async function checkpointSandboxWorktreeOrCreate(
+  workspaceId: string,
+  worktreeId: string,
+  expectedHeadSha: string,
+) {
+  try {
+    return await checkpointSandboxWorktree(
+      workspaceId,
+      worktreeId,
+      expectedHeadSha,
+    );
+  } catch (error) {
+    if (!isMissingWorktreeError(error)) throw error;
+    await createSandboxWorktree(workspaceId, worktreeId, expectedHeadSha);
+    return checkpointSandboxWorktree(workspaceId, worktreeId, expectedHeadSha);
+  }
+}
+
 export async function prepareAgentReview(
   workspaceId: string,
   sessionId: string,
@@ -209,10 +239,19 @@ export async function prepareAgentReview(
   await assertReviewable(target);
   await stopAgentForReview(target);
   try {
-    const checkpoint = await checkpointSandboxWorktree(
+    const expectedHeadSha = COMMIT_SHA.test(target.worktreeHeadSha)
+      ? target.worktreeHeadSha
+      : target.integrationHeadSha;
+    if (!COMMIT_SHA.test(expectedHeadSha)) {
+      throw new ReviewActionError(
+        "This worktree has no reviewable revision yet.",
+        409,
+      );
+    }
+    const checkpoint = await checkpointSandboxWorktreeOrCreate(
       workspaceId,
       target.worktreeId,
-      target.worktreeHeadSha,
+      expectedHeadSha,
     );
     if (checkpoint.headSha !== target.worktreeHeadSha) {
       await getDatabase()

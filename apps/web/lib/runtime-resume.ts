@@ -5,11 +5,12 @@ import {
   E2B_LIFECYCLE_OPTIONS,
   getWorkspaceSnapshot,
 } from "./hibernation";
-import { getRepositorySnapshot } from "./github";
+import { getRepositorySnapshot, type RepositorySnapshot } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import { recordWorkspaceHeartbeat } from "./heartbeat";
 import { requireWorkspacePermission } from "./access";
 import {
+  createSandboxWorktree,
   getSandbox,
   OrchestratorError,
   provisionSandbox,
@@ -20,11 +21,52 @@ import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
   getWorkspaceRuntime,
+  listActiveAgentWorktrees,
   markWorkspaceFailed,
   markWorkspaceReady,
   markWorkspaceStopped,
   WorkspaceLifecycleError,
 } from "./workspaces";
+
+const EMPTY_COMMIT_SHA = "0".repeat(40);
+const COMMIT_SHA = /^[0-9a-f]{40}$/;
+
+function folderRepositorySnapshot(): RepositorySnapshot {
+  const readme = "CoDev folder workspace\n";
+  const binary = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02,
+  ]);
+  const files = [
+    {
+      path: "README.md",
+      mode: "100644" as const,
+      contentBase64: Buffer.from(readme).toString("base64"),
+    },
+    {
+      path: "assets/logo.png",
+      mode: "100644" as const,
+      contentBase64: binary.toString("base64"),
+    },
+  ];
+  return {
+    files,
+    totalBytes: Buffer.byteLength(readme) + binary.length,
+  };
+}
+
+async function materializeAgentWorktrees(workspaceId: string, headSha: string) {
+  const worktrees = await listActiveAgentWorktrees(workspaceId);
+  for (const worktree of worktrees) {
+    try {
+      await createSandboxWorktree(workspaceId, worktree.id, headSha);
+    } catch (error) {
+      if (error instanceof OrchestratorError && error.status === 409) {
+        continue;
+      }
+      throw error;
+    }
+  }
+}
 
 const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
@@ -80,11 +122,7 @@ export async function ensureWorkspaceRuntimeReady(
   if (!workspace) {
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
   }
-  if (!workspace.repository || !workspace.baseSha) {
-    throw new WorkspaceLifecycleError(
-      "Connect a GitHub repository before using the sandbox.",
-    );
-  }
+  const githubConnected = Boolean(workspace.repository && workspace.baseSha);
   await assertVmMinuteQuota(workspace.ownerId);
   const expiresAt = await beginWorkspaceProvisioning(
     workspaceId,
@@ -101,26 +139,35 @@ export async function ensureWorkspaceRuntimeReady(
     const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
     const repositorySnapshot = persistedSnapshot?.snapshot
       ? persistedSnapshot.snapshot
-      : workspace.repositoryVisibility === "private"
+      : githubConnected && workspace.repositoryVisibility === "private"
         ? await getRepositorySnapshot(
             userId,
             workspace.repository,
             workspace.baseSha,
           )
-        : undefined;
+        : githubConnected
+          ? undefined
+          : folderRepositorySnapshot();
     const sandbox = await provisionSandbox({
       workspaceId,
       repositoryUrl: repositorySnapshot
         ? null
         : `https://github.com/${workspace.repository}.git`,
       ...(repositorySnapshot ? { repositorySnapshot } : {}),
-      baseSha: workspace.baseSha,
+      baseSha: COMMIT_SHA.test(workspace.baseSha)
+        ? workspace.baseSha
+        : githubConnected
+          ? workspace.baseSha
+          : EMPTY_COMMIT_SHA,
       expiresAt: expiresAt.toISOString(),
       resumeFromSnapshot: Boolean(persistedSnapshot),
       lifecycle: E2B_LIFECYCLE_OPTIONS,
     });
     await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
     if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);
+    if (!githubConnected) {
+      await materializeAgentWorktrees(workspaceId, sandbox.headSha);
+    }
     return sandbox;
   } catch (error) {
     await markWorkspaceFailed(workspaceId, error).catch(() => undefined);

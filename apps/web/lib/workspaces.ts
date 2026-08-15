@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -243,6 +243,22 @@ export async function getWorkspaceForMember(
     .limit(1);
 
   return workspace;
+}
+
+export async function listActiveAgentWorktrees(workspaceId: string) {
+  return getDatabase()
+    .select({
+      id: schema.worktrees.id,
+      name: schema.worktrees.name,
+    })
+    .from(schema.worktrees)
+    .where(
+      and(
+        eq(schema.worktrees.workspaceId, workspaceId),
+        eq(schema.worktrees.kind, "agent"),
+        inArray(schema.worktrees.status, ["active", "frozen"]),
+      ),
+    );
 }
 
 export async function syncWorkspaceToDefaultBranch(

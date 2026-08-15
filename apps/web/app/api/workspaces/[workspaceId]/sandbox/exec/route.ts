@@ -5,6 +5,8 @@ import { requireWorkspacePermission } from "@/lib/access";
 import { executeInSandbox } from "@/lib/orchestrator";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 
+export const maxDuration = 300;
+
 const requestSchema = z.object({
   command: z.array(z.string().min(1).max(4_096)).min(1).max(32),
   workingDir: z.string().max(4_096).optional(),
