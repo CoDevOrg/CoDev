@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards**
+**OI.9 — Put active and contested path claims in Orca's Explorer and worktree cards with reassign/cancel controls**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.8**, followed by OI.9–OI.12 from
+remaining outstanding. The Current task is **OI.9**, followed by OI.10–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -26,6 +26,17 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.8 — Production verification completed 2026-08-15T08:42:00Z:** The
+  three-slot workboard and fourth-session rejection are live in Orca's native
+  Workspace Board and worktree cards. Source commit
+  `9e5791902f6aa7c5b77d30ef239e8cd202bf8c35` is on `main`. Vercel Production
+  `dpl_GmiquVAw42cku18Ky3rhHdc2YHv4` is Ready at
+  `https://codev-1ra5418nz-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` showed three occupied
+  native slots plus worktree cards, then captured HTTP 409 for a fourth
+  session. See OI.8 completion evidence.
 
 - **OI.7 — Production verification completed 2026-08-15T07:04:00Z:** Shared
   agent metadata, transcript, attributed queue, interrupt, and refresh recovery
@@ -416,6 +427,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor               | 2026-08-15 | [OI.5 completion evidence](#oi5-completion-evidence) — Two authenticated Production identities showed native remote selection decorations and reconnect replay in the Source editor.                                        |
 | OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version            | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                   |
 | OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel | 2026-08-15 | [OI.7 completion evidence](#oi7-completion-evidence) — Production Orca Agents panel showed one durable ordered conversation, Alex's attributed queue, interrupt plus last completed tool, and refresh restore without a duplicate provider call. |
+| OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards | 2026-08-15 | [OI.8 completion evidence](#oi8-completion-evidence) — Production Orca Workspace Board showed three occupied native slots and worktree cards, then rejected a fourth session with HTTP 409. |
 
 ### B0.2 completion evidence
 
@@ -1778,6 +1790,48 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `oi-7-alex-refreshed.png`, and `oi-7-jordan-refreshed.png`.
 - Next task: OI.8 — put the three-slot workboard and fourth-session rejection
   in Orca's Workspace Board and worktree cards.
+
+### OI.8 completion evidence
+
+- Completed: 2026-08-15T08:42:00Z.
+- Changed files: `apps/web/lib/workboard-view.ts`,
+  `apps/web/lib/workboard-view.test.ts`,
+  `apps/web/lib/workboard-server.ts`,
+  `apps/web/lib/workboard-routes.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/workboard/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/orca-workspace.tsx`,
+  `apps/web/components/orca-workspace.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused workboard/bridge tests, `pnpm lint` (0 errors, 2 existing
+  warnings), `pnpm typecheck`, `pnpm test` (244 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
+  and `git diff --check`. `pnpm format:check` remains blocked only by the
+  pre-existing formatting violation in this ledger.
+- Validated source commit: `9e5791902f6aa7c5b77d30ef239e8cd202bf8c35`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_GmiquVAw42cku18Ky3rhHdc2YHv4` at
+  <https://codev-1ra5418nz-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against that exact
+  Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Opened Orca's native
+  Workspace board. The board showed three occupied agent slots with
+  assignment, owner, provider, status, worktree, current task, and elapsed
+  time, plus matching native In progress worktree cards. Starting a fourth
+  session returned HTTP 409 with "All three agent slots are in use. Stop or
+  wait for an active session to finish before starting another."
+- Screenshots: `file:///tmp/codev-oi8-verify/12-three-slots.png` (three
+  occupied slots and native worktree cards) and
+  `file:///tmp/codev-oi8-verify/13-fourth-rejected.png` (server-side fourth
+  session HTTP 409). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-8-three-slots.png`
+  and
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-8-fourth-rejected.png`.
+- Next task: OI.9 — put active and contested path claims in Orca's Explorer
+  and worktree cards with reassign/cancel controls.
 
 ## Blocked tasks
 
