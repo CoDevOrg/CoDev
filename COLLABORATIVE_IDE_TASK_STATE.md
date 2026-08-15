@@ -27,6 +27,35 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.11 — Production Computer Use authentication blocker 2026-08-15T11:12:00Z:**
+  The required initial `git status --short` was clean. This run then used
+  `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
+  main`. OI.11 source was implemented and pushed to `main` as
+  `dffbcb1a54855a7159b38304e2935d067f49e04b` (`feat: put stale-review
+  rejection and exactly-once integration in Orca`). Focused review/bridge
+  tests, `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`,
+  `pnpm test` (273 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32
+  passed, 1 skipped), `pnpm rust:check`, and `git diff --check` passed.
+  `pnpm format:check` remains blocked only by the pre-existing formatting
+  violations in this ledger and `apps/web/lib/workboard-view.test.ts`.
+  GitHub records Ready Production deployment `5919829904` for that exact
+  commit at
+  `https://codev-o22mkezqs-yousef20920s-projects.vercel.app`, which aliases
+  `https://www.trycodev.com` (the unique `*.vercel.app` host is Vercel
+  SSO-protected for unauthenticated requests). Computer Use opened
+  `https://www.trycodev.com/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`
+  and was redirected to the Production sign-in page at
+  `https://trycodev.com/sign-in` (`Welcome to CoDev.` with name/email/password
+  plus Google and GitHub buttons). The mandated local-only test-account file
+  at
+  `/Users/yousefmaher/.codex/automations/codev-one-verified-task-per-run/test-accounts.md`
+  is absent from this cloud environment, so the run did not guess passwords
+  or use OAuth. The required authenticated Orca Source Control stale-rejection
+  and exactly-once attributed integration flow therefore cannot start.
+  Current task remains OI.11; do not begin OI.12. Screenshot evidence:
+  `/tmp/codev-oi11-verify/01-signin-blocker.webp` and
+  `/tmp/computer-use/537ec.webp`.
+
 - **OI.10 — Production verification completed 2026-08-15T10:31:00Z:** Review
   checkpoint metadata and binary-safe diffs are live in Orca Source Control
   and Checks. Source commit
