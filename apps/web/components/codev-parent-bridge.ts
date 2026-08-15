@@ -21,6 +21,7 @@ export type CodevBridgeMethod =
   | "presence.update"
   | "presence.cursor.update"
   | "conflicts.list"
+  | "conflicts.report"
   | "conflicts.resolve";
 
 export type CodevBridgeRequestMessage = {
@@ -57,6 +58,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "presence.update",
   "presence.cursor.update",
   "conflicts.list",
+  "conflicts.report",
   "conflicts.resolve",
 ]);
 const CREDENTIAL_KEYS = new Set([
@@ -226,6 +228,32 @@ export async function executeCodevBridgeRequest(
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(jsonError(payload, "CoDev could not load file conflicts."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "conflicts.report") {
+      const path = request.params?.path;
+      const collaborativeContents = request.params?.collaborativeContents;
+      if (typeof path !== "string" || !path.trim()) {
+        return fail("A workspace-relative file path is required.");
+      }
+      if (typeof collaborativeContents !== "string") {
+        return fail("The collaborative editor contents are required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/collaboration/conflicts`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path, collaborativeContents }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not record this file conflict."),
+        );
       }
       return succeed(payload);
     }

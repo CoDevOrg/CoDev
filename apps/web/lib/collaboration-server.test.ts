@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyFilesystemReconciliation } from "./collaboration-server";
+import {
+  classifyFilesystemReconciliation,
+  collaborativeConflictRevision,
+} from "./collaboration-server";
 
 describe("filesystem collaboration reconciliation", () => {
   it("ingests an external edit when the collaborative copy is unchanged", () => {
@@ -23,6 +26,18 @@ describe("filesystem collaboration reconciliation", () => {
         filesystemRevision: "r2",
       }),
     ).toBe("conflict");
+  });
+
+  it("stamps a stable editor revision that is distinct from the filesystem", () => {
+    expect(collaborativeConflictRevision("local edit")).toBe(
+      collaborativeConflictRevision("local edit"),
+    );
+    expect(collaborativeConflictRevision("local edit")).not.toBe(
+      collaborativeConflictRevision("terminal edit"),
+    );
+    expect(collaborativeConflictRevision("local edit")).toMatch(
+      /^editor-[0-9a-f]{24}$/,
+    );
   });
 
   it("does not reconcile an unchanged filesystem revision", () => {

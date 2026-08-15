@@ -298,6 +298,12 @@ export const coordinationMessageSchema = z.object({
   createdAt: timestampSchema,
 });
 
+export const conflictReportInputSchema = z.object({
+  worktreeId: identifierSchema.optional(),
+  path: claimPathSchema,
+  collaborativeContents: z.string().max(2 * 1_024 * 1_024),
+});
+
 export const conflictResolutionInputSchema = z
   .object({
     worktreeId: identifierSchema.optional(),
@@ -439,6 +445,7 @@ export type CoordinationMessage = z.infer<typeof coordinationMessageSchema>;
 export type CoordinationMessageInput = z.infer<
   typeof coordinationMessageInputSchema
 >;
+export type ConflictReportInput = z.infer<typeof conflictReportInputSchema>;
 export type ConflictResolutionInput = z.infer<
   typeof conflictResolutionInputSchema
 >;

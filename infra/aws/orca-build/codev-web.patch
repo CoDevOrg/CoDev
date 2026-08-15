@@ -73,10 +73,10 @@ index 294fc4a..16cde63 100644
      subscribeBackgroundTerminalWorktreeMountRequests,
      hasRequestedBackgroundTerminalWorktreeMount,
 diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
-index 85d6a2c..735e43a 100644
+index 85d6a2c..1b4b5f7 100644
 --- a/src/renderer/src/assets/main.css
 +++ b/src/renderer/src/assets/main.css
-@@ -2169,6 +2169,37 @@ html.native-shell .app-layout {
+@@ -2169,6 +2169,42 @@ html.native-shell .app-layout {
    opacity: 0.92;
  }
  
@@ -95,55 +95,364 @@ index 85d6a2c..735e43a 100644
 +  vertical-align: text-bottom;
 +}
 +
-+.codev-conflict-resolution {
-+  position: absolute; z-index: 20; top: 12px; right: 12px;
-+  width: min(720px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto;
-+  padding: 14px; border: 1px solid color-mix(in srgb, var(--destructive) 58%, var(--border));
-+  border-radius: 8px; background: var(--background); box-shadow: 0 16px 40px rgb(0 0 0 / 38%); color: var(--foreground);
++.codev-conflict-merge {
++  display: grid;
++  gap: 4px;
++  width: 100%;
++  font-size: 12px;
++  font-weight: 600;
 +}
-+.codev-conflict-resolution-heading, .codev-conflict-actions, .codev-conflict-versions { display: flex; gap: 10px; }
-+.codev-conflict-resolution-heading { align-items: baseline; justify-content: space-between; }
-+.codev-conflict-resolution p { margin: 8px 0; font-size: 12px; }
-+.codev-conflict-versions > label, .codev-conflict-merge { display: grid; flex: 1; gap: 4px; font-size: 12px; font-weight: 600; }
-+.codev-conflict-resolution textarea { min-height: 86px; width: 100%; resize: vertical; border: 1px solid var(--border); border-radius: 4px; padding: 7px; background: var(--muted); color: inherit; font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
-+.codev-conflict-merge { margin-top: 10px; }
-+.codev-conflict-actions { margin-top: 10px; flex-wrap: wrap; }
-+.codev-conflict-actions button { padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; }
-+.codev-conflict-error { color: var(--destructive); }
++.codev-conflict-merge textarea {
++  min-height: 72px;
++  width: 100%;
++  resize: vertical;
++  border: 1px solid var(--border);
++  border-radius: 4px;
++  padding: 7px;
++  background: var(--muted);
++  color: inherit;
++  font-family: var(--font-mono);
++  font-size: 11px;
++  font-weight: 400;
++}
 +
  /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
     render inside a `.context-view` wrapper → `.workbench-hover-container` →
     `.workbench-hover.compact`, positioned above the target button. The wrapper's
+diff --git a/src/renderer/src/components/editor/ExternalFileChangeBanner.test.tsx b/src/renderer/src/components/editor/ExternalFileChangeBanner.test.tsx
+index eae2909..cc2f68c 100644
+--- a/src/renderer/src/components/editor/ExternalFileChangeBanner.test.tsx
++++ b/src/renderer/src/components/editor/ExternalFileChangeBanner.test.tsx
+@@ -71,8 +71,9 @@ describe('ExternalFileChangeBanner', () => {
+       <ExternalFileChangeBanner file={file} currentContent="buffer" reloadContent={vi.fn()} />
+     )
+     expect(html).toContain('role="alert"')
++    expect(html).toContain('aria-label="External file conflict"')
+     expect(html).toContain('changed on disk')
+-    expect(html).toContain('Saving will overwrite')
++    expect(html).toContain('Both versions are preserved')
+     expect(html).toContain('Compare')
+     expect(html).toContain('Reload from Disk')
+     expect(html).toContain('Keep My Edits')
+diff --git a/src/renderer/src/components/editor/ExternalFileChangeBanner.tsx b/src/renderer/src/components/editor/ExternalFileChangeBanner.tsx
+index dda2fd2..7c3d884 100644
+--- a/src/renderer/src/components/editor/ExternalFileChangeBanner.tsx
++++ b/src/renderer/src/components/editor/ExternalFileChangeBanner.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState } from 'react'
++import React, { useEffect, useState } from 'react'
+ import { TriangleAlert } from 'lucide-react'
+ import { toast } from 'sonner'
+ import { Button } from '@/components/ui/button'
+@@ -9,6 +9,13 @@ import { useAppStore } from '@/store'
+ import { translate } from '@/i18n/i18n'
+ import type { OpenFile } from '@/store/slices/editor'
+ import { ExternalFileChangeCompareDialog } from './ExternalFileChangeCompareDialog'
++import {
++  CODEV_EXTERNAL_FILE_CONFLICT_BANNER,
++  CODEV_EXTERNAL_FILE_CONFLICT_LABEL,
++  type CodevExternalFileConflict,
++  reportCodevExternalFileConflict,
++  resolveCodevExternalFileConflict
++} from './codev-external-file-conflict'
+ import { getDiskBaselineSignature } from './diff-content-signature'
+ import { trackExternalChangeConflictAction } from './editor-external-change-telemetry'
+ 
+@@ -123,14 +130,69 @@ export function ExternalFileChangeBanner({
+   reloadContent: (file: OpenFile) => void
+ }): React.JSX.Element {
+   const [compareOpen, setCompareOpen] = useState(false)
++  const [codevConflict, setCodevConflict] = useState<CodevExternalFileConflict | null>(null)
++
++  useEffect(() => {
++    let cancelled = false
++    void reportCodevExternalFileConflict({
++      path: file.relativePath,
++      collaborativeContents: currentContent
++    }).then((conflict) => {
++      if (!cancelled) {
++        setCodevConflict(conflict)
++      }
++    })
++    return () => {
++      cancelled = true
++    }
++  }, [currentContent, file.relativePath])
++
++  const resolveThen = (
++    strategy: 'collaboration' | 'filesystem',
++    apply: () => void
++  ): void => {
++    void (async () => {
++      if (codevConflict) {
++        try {
++          await resolveCodevExternalFileConflict({
++            conflict: codevConflict,
++            strategy
++          })
++        } catch {
++          // Native recovery still applies if durable resolution is unavailable.
++        }
++      }
++      apply()
++    })()
++  }
+ 
+   const handleReload = (): void => {
+     trackExternalChangeConflictAction(file, 'reload')
+-    reloadTabContentFromDisk(file, reloadContent)
++    resolveThen('filesystem', () => reloadTabContentFromDisk(file, reloadContent))
+   }
+   const handleKeepEdits = (): void => {
+     trackExternalChangeConflictAction(file, 'keep')
+-    keepTabEditsOverExternalChange(file)
++    resolveThen('collaboration', () => keepTabEditsOverExternalChange(file))
++  }
++  const handleMerge = (mergedContents: string): void => {
++    void (async () => {
++      if (codevConflict) {
++        try {
++          await resolveCodevExternalFileConflict({
++            conflict: codevConflict,
++            strategy: 'merged',
++            mergedContents
++          })
++        } catch {
++          // Fall through to keep the merged buffer locally.
++        }
++      }
++      const state = useAppStore.getState()
++      state.setEditorDraft(file.id, mergedContents)
++      state.markFileDirty(file.id, false)
++      state.setExternalMutation(file.id, null)
++      reloadContent(file)
++    })()
+   }
+   const handleCompare = (): void => {
+     trackExternalChangeConflictAction(file, 'compare')
+@@ -140,7 +202,11 @@ export function ExternalFileChangeBanner({
+   return (
+     // Why: role=alert because the banner appears asynchronously (an agent
+     // rewrote the file) — screen readers must announce it unprompted.
+-    <div role="alert" className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs">
++    <div
++      role="alert"
++      aria-label={CODEV_EXTERNAL_FILE_CONFLICT_LABEL}
++      className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs"
++    >
+       <div className="flex items-center justify-between gap-3">
+         <div className="flex min-w-0 items-center gap-2">
+           <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+@@ -148,8 +214,8 @@ export function ExternalFileChangeBanner({
+               end of the sentence is the part the user must not lose. */}
+           <span className="min-w-0 font-medium text-foreground">
+             {translate(
+-              'auto.components.editor.ExternalFileChangeBanner.7c41e90d12',
+-              'This file changed on disk while you have unsaved edits. Saving will overwrite the newer disk content.'
++              'auto.components.editor.ExternalFileChangeBanner.codevPreserveBoth',
++              CODEV_EXTERNAL_FILE_CONFLICT_BANNER
+             )}
+           </span>
+         </div>
+@@ -179,6 +245,7 @@ export function ExternalFileChangeBanner({
+           onOpenChange={setCompareOpen}
+           onReload={handleReload}
+           onKeepEdits={handleKeepEdits}
++          onMerge={handleMerge}
+         />
+       )}
+     </div>
+diff --git a/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.test.tsx b/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.test.tsx
+index 2a90600..f0f8bfe 100644
+--- a/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.test.tsx
++++ b/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.test.tsx
+@@ -86,10 +86,12 @@ describe('ExternalFileChangeCompareDialog', () => {
+       />
+     )
+ 
+-    expect(document.body.textContent).toContain('File changed on disk')
++    expect(document.body.textContent).toContain('External file conflict')
++    expect(document.body.textContent).toContain('Both versions are preserved')
+     expect(document.body.textContent).toContain('original:disk version|modified:buffer version')
+     expect(document.body.textContent).toContain('Reload from Disk')
+     expect(document.body.textContent).toContain('Keep My Edits')
++    expect(document.body.textContent).toContain('Save manual merge')
+   })
+ 
+   it('surfaces a read failure instead of a blank comparison', async () => {
+diff --git a/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx b/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx
+index cb8230c..979a4f5 100644
+--- a/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx
++++ b/src/renderer/src/components/editor/ExternalFileChangeCompareDialog.tsx
+@@ -17,6 +17,10 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+ import { useAppStore } from '@/store'
+ import type { OpenFile } from '@/store/slices/editor'
+ import { translate } from '@/i18n/i18n'
++import {
++  CODEV_EXTERNAL_FILE_CONFLICT_COMPARE,
++  CODEV_EXTERNAL_FILE_CONFLICT_LABEL
++} from './codev-external-file-conflict'
+ 
+ const DiffViewer = lazy(() => import('./DiffViewer'))
+ 
+@@ -35,7 +39,8 @@ export function ExternalFileChangeCompareDialog({
+   open,
+   onOpenChange,
+   onReload,
+-  onKeepEdits
++  onKeepEdits,
++  onMerge
+ }: {
+   file: OpenFile
+   /** The tab's live buffer — the unsaved edits the user would keep. */
+@@ -44,8 +49,10 @@ export function ExternalFileChangeCompareDialog({
+   onOpenChange: (open: boolean) => void
+   onReload: () => void
+   onKeepEdits: () => void
++  onMerge?: (mergedContents: string) => void
+ }): React.JSX.Element {
+   const [diskState, setDiskState] = useState<DiskReadState>({ kind: 'loading' })
++  const [mergedContents, setMergedContents] = useState(currentContent)
+ 
+   useEffect(() => {
+     if (!open) {
+@@ -53,6 +60,7 @@ export function ExternalFileChangeCompareDialog({
+     }
+     let cancelled = false
+     setDiskState({ kind: 'loading' })
++    setMergedContents(currentContent)
+     // Why: read at open time — the banner can be minutes old and the agent
+     // may have written again since; the comparison must show current disk.
+     void readRuntimeFileContent({
+@@ -89,7 +97,8 @@ export function ExternalFileChangeCompareDialog({
+     file.relativePath,
+     file.worktreeId,
+     file.runtimeEnvironmentId,
+-    file.externalSshTargetId
++    file.externalSshTargetId,
++    currentContent
+   ])
+ 
+   const language = detectLanguage(file.relativePath)
+@@ -100,14 +109,14 @@ export function ExternalFileChangeCompareDialog({
+         <DialogHeader className="border-b border-border/60 p-4">
+           <DialogTitle>
+             {translate(
+-              'auto.components.editor.ExternalFileChangeCompareDialog.4b8de20a11',
+-              'File changed on disk'
++              'auto.components.editor.ExternalFileChangeCompareDialog.codevPreserveBothTitle',
++              CODEV_EXTERNAL_FILE_CONFLICT_LABEL
+             )}
+           </DialogTitle>
+           <DialogDescription>
+             {translate(
+-              'auto.components.editor.ExternalFileChangeCompareDialog.90cc31e4d7',
+-              'Disk version on the left, your unsaved edits on the right.'
++              'auto.components.editor.ExternalFileChangeCompareDialog.codevPreserveBoth',
++              CODEV_EXTERNAL_FILE_CONFLICT_COMPARE
+             )}
+           </DialogDescription>
+         </DialogHeader>
+@@ -163,35 +172,57 @@ export function ExternalFileChangeCompareDialog({
+             </Suspense>
+           )}
+         </div>
+-        <DialogFooter className="border-t border-border/60 p-4">
+-          <Button
+-            type="button"
+-            size="sm"
+-            variant="outline"
+-            onClick={() => {
+-              onOpenChange(false)
+-              onReload()
+-            }}
+-          >
+-            {translate(
+-              'auto.components.editor.ExternalFileChangeCompareDialog.3fa2b8d417',
+-              'Reload from Disk'
+-            )}
+-          </Button>
+-          <Button
+-            type="button"
+-            size="sm"
+-            variant="ghost"
+-            onClick={() => {
+-              onOpenChange(false)
+-              onKeepEdits()
+-            }}
+-          >
+-            {translate(
+-              'auto.components.editor.ExternalFileChangeCompareDialog.a95d02c644',
+-              'Keep My Edits'
+-            )}
+-          </Button>
++        <DialogFooter className="flex-col items-stretch gap-3 border-t border-border/60 p-4 sm:flex-col">
++          {diskState.kind === 'ready' && (
++            <label className="codev-conflict-merge">
++              Merge manually
++              <textarea
++                value={mergedContents}
++                onChange={(event) => setMergedContents(event.target.value)}
++                aria-label="Merged file contents"
++              />
++            </label>
++          )}
++          <div className="flex flex-wrap justify-end gap-2">
++            <Button
++              type="button"
++              size="sm"
++              variant="outline"
++              onClick={() => {
++                onOpenChange(false)
++                onReload()
++              }}
++            >
++              {translate(
++                'auto.components.editor.ExternalFileChangeCompareDialog.3fa2b8d417',
++                'Reload from Disk'
++              )}
++            </Button>
++            <Button
++              type="button"
++              size="sm"
++              variant="ghost"
++              onClick={() => {
++                onOpenChange(false)
++                onKeepEdits()
++              }}
++            >
++              {translate(
++                'auto.components.editor.ExternalFileChangeCompareDialog.a95d02c644',
++                'Keep My Edits'
++              )}
++            </Button>
++            <Button
++              type="button"
++              size="sm"
++              onClick={() => {
++                onOpenChange(false)
++                onMerge?.(mergedContents)
++              }}
++            >
++              Save manual merge
++            </Button>
++          </div>
+         </DialogFooter>
+       </DialogContent>
+     </Dialog>
 diff --git a/src/renderer/src/components/editor/MonacoEditor.tsx b/src/renderer/src/components/editor/MonacoEditor.tsx
-index 1571869..b9a6a50 100644
+index 1571869..4a75e92 100644
 --- a/src/renderer/src/components/editor/MonacoEditor.tsx
 +++ b/src/renderer/src/components/editor/MonacoEditor.tsx
-@@ -66,6 +66,8 @@ import {
+@@ -66,6 +66,7 @@ import {
  import { installMonacoE2EProbe } from './monaco-e2e-probe'
  import { monacoFindOptions } from './monaco-find-options'
  import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 +import { useCodevCursorDecorations } from './codev-cursor-decorations'
-+import { requestCodevBridge } from '@/web/codev-bridge'
  
  type MonacoEditorProps = {
    fileId: string
-@@ -94,6 +96,15 @@ type MarkdownCommentPopoverState = Omit<MonacoMarkdownSelectionAnnotationTarget,
-   selectedText?: string
- }
- 
-+type CodevConflict = {
-+  worktreeId: string
-+  path: string
-+  snapshotRevision: string
-+  filesystemRevision: string
-+  collaborativeContents: string
-+  filesystemContents: string
-+}
-+
- export default function MonacoEditor({
-   fileId,
-   filePath,
-@@ -118,6 +129,7 @@ export default function MonacoEditor({
+@@ -118,6 +119,7 @@ export default function MonacoEditor({
    const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
    const editorContainerRef = useRef<HTMLDivElement | null>(null)
    const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
@@ -151,106 +460,6 @@ index 1571869..b9a6a50 100644
    const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
    const modelKeyRef = useRef<string | null>(null)
    const languageRef = useRef(language)
-@@ -175,6 +187,73 @@ export default function MonacoEditor({
-   const contentRef = useRef(content)
-   contentRef.current = content
-   const lastSyncedContentRef = useRef<string>(content)
-+  const [codevConflict, setCodevConflict] = useState<CodevConflict | null>(null)
-+  const [mergedConflictContents, setMergedConflictContents] = useState('')
-+  const [resolvingConflict, setResolvingConflict] = useState(false)
-+  const [conflictError, setConflictError] = useState<string | null>(null)
-+  useEffect(() => {
-+    if (!relativePath) return
-+    let disposed = false
-+    const refresh = (): void => {
-+      void requestCodevBridge<{ conflicts?: unknown }>('conflicts.list')
-+        .then((payload) => {
-+          if (disposed || !Array.isArray(payload.conflicts)) return
-+          const conflict = payload.conflicts.find(
-+            (item): item is CodevConflict =>
-+              Boolean(item) && typeof item === 'object' &&
-+              (item as { path?: unknown }).path === relativePath &&
-+              typeof (item as { worktreeId?: unknown }).worktreeId === 'string' &&
-+              typeof (item as { snapshotRevision?: unknown }).snapshotRevision === 'string' &&
-+              typeof (item as { filesystemRevision?: unknown }).filesystemRevision === 'string' &&
-+              typeof (item as { collaborativeContents?: unknown }).collaborativeContents === 'string' &&
-+              typeof (item as { filesystemContents?: unknown }).filesystemContents === 'string'
-+          ) ?? null
-+          setCodevConflict(conflict)
-+          if (conflict) setMergedConflictContents((current) => current || conflict.collaborativeContents)
-+        })
-+        .catch(() => undefined)
-+    }
-+    refresh()
-+    const poll = window.setInterval(refresh, 2_000)
-+    return () => {
-+      disposed = true
-+      window.clearInterval(poll)
-+    }
-+  }, [relativePath])
-+  const resolveCodevConflict = async (
-+    strategy: 'collaboration' | 'filesystem' | 'merged'
-+  ): Promise<void> => {
-+    if (!codevConflict || resolvingConflict) return
-+    setResolvingConflict(true)
-+    setConflictError(null)
-+    try {
-+      await requestCodevBridge('conflicts.resolve', {
-+        worktreeId: codevConflict.worktreeId,
-+        path: codevConflict.path,
-+        strategy,
-+        expectedSnapshotRevision: codevConflict.snapshotRevision,
-+        expectedFilesystemRevision: codevConflict.filesystemRevision,
-+        ...(strategy === 'merged' ? { mergedContents: mergedConflictContents } : {})
-+      })
-+      const nextContents =
-+        strategy === 'filesystem'
-+          ? codevConflict.filesystemContents
-+          : strategy === 'merged'
-+            ? mergedConflictContents
-+            : null
-+      if (nextContents !== null) {
-+        lastSyncedContentRef.current = nextContents
-+        onContentChange(nextContents)
-+        onSave(nextContents)
-+      }
-+      setCodevConflict(null)
-+      setMergedConflictContents('')
-+    } catch (reason) {
-+      setConflictError(reason instanceof Error ? reason.message : 'CoDev could not resolve this file conflict.')
-+    } finally {
-+      setResolvingConflict(false)
-+    }
-+  }
-   const markdownComments = useMemo(
-     () =>
-       (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isMarkdownComment(c)),
-@@ -803,6 +882,25 @@ export default function MonacoEditor({
-           onSubmit={handleSubmitMarkdownComment}
-         />
-       )}
-+      {codevConflict && (
-+        <section className="codev-conflict-resolution" role="alertdialog" aria-label="External file conflict">
-+          <div className="codev-conflict-resolution-heading">
-+            <strong>External file conflict</strong><span>{codevConflict.path}</span>
-+          </div>
-+          <p>Both versions are preserved. Choose one or merge them before continuing.</p>
-+          <div className="codev-conflict-versions">
-+            <label>Collaborative editor<textarea readOnly value={codevConflict.collaborativeContents} aria-label="Collaborative editor version" /></label>
-+            <label>External filesystem<textarea readOnly value={codevConflict.filesystemContents} aria-label="External filesystem version" /></label>
-+          </div>
-+          <label className="codev-conflict-merge">Merge manually<textarea value={mergedConflictContents} onChange={(event) => setMergedConflictContents(event.target.value)} aria-label="Merged file contents" /></label>
-+          {conflictError && <p className="codev-conflict-error">{conflictError}</p>}
-+          <div className="codev-conflict-actions">
-+            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('collaboration')}>Keep collaborative editor</button>
-+            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('filesystem')}>Use external filesystem</button>
-+            <button type="button" disabled={resolvingConflict} onClick={() => void resolveCodevConflict('merged')}>Save manual merge</button>
-+          </div>
-+        </section>
-+      )}
-       {selectionAnnotationTarget && shouldShowMarkdownAnnotations && !commentPopover ? (
-         <button
-           type="button"
 diff --git a/src/renderer/src/components/editor/codev-cursor-decorations.test.ts b/src/renderer/src/components/editor/codev-cursor-decorations.test.ts
 new file mode 100644
 index 0000000..9a056de
@@ -464,6 +673,164 @@ index 0000000..c989885
 +      decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, [])
 +    }
 +  }, [editorInstance, members, relativePath, viewerId])
++}
+diff --git a/src/renderer/src/components/editor/codev-external-file-conflict.test.ts b/src/renderer/src/components/editor/codev-external-file-conflict.test.ts
+new file mode 100644
+index 0000000..597a74b
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-external-file-conflict.test.ts
+@@ -0,0 +1,68 @@
++import { describe, expect, it, vi } from 'vitest'
++import {
++  CODEV_EXTERNAL_FILE_CONFLICT_BANNER,
++  CODEV_EXTERNAL_FILE_CONFLICT_LABEL,
++  codevConflictPath,
++  isCodevExternalFileConflict,
++  reportCodevExternalFileConflict,
++  resolveCodevExternalFileConflict
++} from './codev-external-file-conflict'
++
++const requestCodevBridge = vi.hoisted(() => vi.fn())
++vi.mock('@/web/codev-bridge', () => ({
++  requestCodevBridge
++}))
++
++const conflict = {
++  worktreeId: '4dbbf95e-08fe-4a6f-84e9-a5d85000da8e',
++  path: 'README.md',
++  snapshotRevision: 'editor-r1',
++  filesystemRevision: 'filesystem-r2',
++  collaborativeContents: 'collaborative README',
++  filesystemContents: 'terminal README'
++}
++
++describe('codev external file conflict', () => {
++  it('keeps only a workspace-relative file path', () => {
++    expect(codevConflictPath('/README.md')).toBe('README.md')
++    expect(codevConflictPath('../secret')).toBeNull()
++    expect(codevConflictPath('')).toBeNull()
++  })
++
++  it('accepts a preserved-both conflict snapshot', () => {
++    expect(isCodevExternalFileConflict(conflict)).toBe(true)
++    expect(isCodevExternalFileConflict({ path: 'README.md' })).toBe(false)
++    expect(CODEV_EXTERNAL_FILE_CONFLICT_LABEL).toBe('External file conflict')
++    expect(CODEV_EXTERNAL_FILE_CONFLICT_BANNER).toContain('Both versions are preserved')
++  })
++
++  it('reports the native editor buffer without sending an Orca worktree id', async () => {
++    requestCodevBridge.mockResolvedValueOnce(conflict)
++
++    await expect(
++      reportCodevExternalFileConflict({
++        path: 'README.md',
++        collaborativeContents: 'collaborative README'
++      })
++    ).resolves.toEqual(conflict)
++    expect(requestCodevBridge).toHaveBeenCalledWith('conflicts.report', {
++      path: 'README.md',
++      collaborativeContents: 'collaborative README'
++    })
++  })
++
++  it('resolves through the workspace-bound bridge using the reported revisions', async () => {
++    requestCodevBridge.mockResolvedValueOnce({ strategy: 'collaboration' })
++
++    await resolveCodevExternalFileConflict({
++      conflict,
++      strategy: 'collaboration'
++    })
++    expect(requestCodevBridge).toHaveBeenCalledWith('conflicts.resolve', {
++      path: 'README.md',
++      strategy: 'collaboration',
++      expectedSnapshotRevision: 'editor-r1',
++      expectedFilesystemRevision: 'filesystem-r2'
++    })
++  })
++})
+diff --git a/src/renderer/src/components/editor/codev-external-file-conflict.ts b/src/renderer/src/components/editor/codev-external-file-conflict.ts
+new file mode 100644
+index 0000000..0d6cb67
+--- /dev/null
++++ b/src/renderer/src/components/editor/codev-external-file-conflict.ts
+@@ -0,0 +1,78 @@
++import { requestCodevBridge } from '@/web/codev-bridge'
++
++export const CODEV_EXTERNAL_FILE_CONFLICT_LABEL = 'External file conflict'
++export const CODEV_EXTERNAL_FILE_CONFLICT_BANNER =
++  'This file changed on disk while you have unsaved edits. Both versions are preserved. Choose one or merge them before continuing.'
++export const CODEV_EXTERNAL_FILE_CONFLICT_COMPARE =
++  'Both versions are preserved. Disk is on the left, your collaborative edits are on the right. Choose one or merge them before continuing.'
++
++export type CodevExternalFileConflict = {
++  worktreeId: string
++  path: string
++  snapshotRevision: string
++  filesystemRevision: string
++  collaborativeContents: string
++  filesystemContents: string
++}
++
++export function codevConflictPath(relativePath: string): string | null {
++  const path = relativePath.replace(/^\/+/, '').trim()
++  if (
++    !path ||
++    path.includes('\0') ||
++    path.split('/').some((part) => part === '.' || part === '..')
++  ) {
++    return null
++  }
++  return path
++}
++
++export function isCodevExternalFileConflict(
++  value: unknown
++): value is CodevExternalFileConflict {
++  if (!value || typeof value !== 'object') {
++    return false
++  }
++  const conflict = value as Record<string, unknown>
++  return (
++    typeof conflict.worktreeId === 'string' &&
++    typeof conflict.path === 'string' &&
++    typeof conflict.snapshotRevision === 'string' &&
++    typeof conflict.filesystemRevision === 'string' &&
++    typeof conflict.collaborativeContents === 'string' &&
++    typeof conflict.filesystemContents === 'string'
++  )
++}
++
++export async function reportCodevExternalFileConflict(input: {
++  path: string
++  collaborativeContents: string
++}): Promise<CodevExternalFileConflict | null> {
++  const path = codevConflictPath(input.path)
++  if (!path) {
++    return null
++  }
++  try {
++    const payload = await requestCodevBridge<unknown>('conflicts.report', {
++      path,
++      collaborativeContents: input.collaborativeContents
++    })
++    return isCodevExternalFileConflict(payload) ? payload : null
++  } catch {
++    return null
++  }
++}
++
++export async function resolveCodevExternalFileConflict(input: {
++  conflict: CodevExternalFileConflict
++  strategy: 'collaboration' | 'filesystem' | 'merged'
++  mergedContents?: string
++}): Promise<void> {
++  await requestCodevBridge('conflicts.resolve', {
++    path: input.conflict.path,
++    strategy: input.strategy,
++    expectedSnapshotRevision: input.conflict.snapshotRevision,
++    expectedFilesystemRevision: input.conflict.filesystemRevision,
++    ...(input.strategy === 'merged' ? { mergedContents: input.mergedContents ?? '' } : {})
++  })
 +}
 diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
 index e048925..39f6647 100644
@@ -1995,10 +2362,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..706964b
+index 0000000..1f6c274
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,333 @@
+@@ -0,0 +1,334 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -2028,6 +2395,7 @@ index 0000000..706964b
 +  | 'presence.update'
 +  | 'presence.cursor.update'
 +  | 'conflicts.list'
++  | 'conflicts.report'
 +  | 'conflicts.resolve'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {

@@ -1,13 +1,15 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   collaborationClientMessageSchema,
   collaborationPresenceEntrySchema,
   collaborationServerMessageSchema,
+  conflictReportInputSchema,
   conflictResolutionInputSchema,
   presenceCursorSchema,
+  type ConflictReportInput,
   type ConflictResolutionInput,
   type CollaborationPresenceEntry,
   type CollaborationServerMessage,
@@ -92,6 +94,10 @@ export function classifyFilesystemReconciliation(input: {
   return input.collaborativeContents === input.snapshotContents
     ? ("ingest" as const)
     : ("conflict" as const);
+}
+
+export function collaborativeConflictRevision(contents: string): string {
+  return `editor-${createHash("sha256").update(contents).digest("hex").slice(0, 24)}`;
 }
 
 type StreamEvent = Extract<
@@ -1306,6 +1312,89 @@ export const collaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
 
 export class CollaborationConflictResolutionError extends Error {
   readonly status = 409;
+}
+
+const PRESERVED_CONFLICT_MESSAGE =
+  "The collaborative document and sandbox file both changed. Neither version was overwritten.";
+
+export async function reportCollaborationConflict(
+  workspaceId: string,
+  rawInput: unknown,
+): Promise<CollaborationConflict> {
+  const input: ConflictReportInput = conflictReportInputSchema.parse(rawInput);
+  const worktreeId = await resolveWorktree(workspaceId, input.worktreeId);
+  if (!worktreeId) throw new Error("Active worktree not found.");
+
+  const conflict = await withDocumentLock(
+    workspaceId,
+    worktreeId,
+    input.path,
+    async () => {
+      const file = await readSandboxFile(
+        workspaceId,
+        input.path,
+        await sandboxWorktreeScope(worktreeId),
+      );
+      const loaded = await loadSnapshot(worktreeId, input.path);
+      const collaborativeContents = input.collaborativeContents;
+      if (
+        loaded?.hasConflict &&
+        loaded.conflictFilesystemRevision === file.revision &&
+        docFromUpdate(loaded.update).getText("content").toString() ===
+          collaborativeContents
+      ) {
+        return {
+          worktreeId,
+          path: input.path,
+          snapshotRevision: loaded.revision,
+          filesystemRevision: file.revision,
+          collaborativeContents,
+          filesystemContents: file.contents,
+        };
+      }
+
+      const doc = new Y.Doc();
+      doc.getText("content").insert(0, collaborativeContents);
+      const encoded = encodedDocument(doc);
+      const snapshotRevision =
+        loaded &&
+        docFromUpdate(loaded.update).getText("content").toString() ===
+          collaborativeContents
+          ? loaded.revision
+          : collaborativeConflictRevision(collaborativeContents);
+      await saveSnapshot(
+        {
+          worktreeId,
+          path: input.path,
+          revision: snapshotRevision,
+          ...encoded,
+          filesystemContents:
+            loaded?.filesystemContents ?? collaborativeContents,
+          filesystemRevision: loaded?.filesystemRevision ?? null,
+          hasConflict: true,
+          conflictFilesystemRevision: file.revision,
+        },
+        file.revision,
+      );
+      return {
+        worktreeId,
+        path: input.path,
+        snapshotRevision,
+        filesystemRevision: file.revision,
+        collaborativeContents,
+        filesystemContents: file.contents,
+      };
+    },
+  );
+  await publish(workspaceId, {
+    type: "conflict",
+    worktreeId,
+    path: input.path,
+    snapshotRevision: conflict.snapshotRevision,
+    filesystemRevision: conflict.filesystemRevision,
+    message: PRESERVED_CONFLICT_MESSAGE,
+  });
+  return conflict;
 }
 
 export async function resolveCollaborationConflict(

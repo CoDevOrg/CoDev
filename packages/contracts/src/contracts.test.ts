@@ -6,6 +6,7 @@ import {
   enqueueSharedSessionTurn,
   collaborationClientMessageSchema,
   collaborationServerMessageSchema,
+  conflictReportInputSchema,
   conflictResolutionInputSchema,
   coordinationMessageInputSchema,
   createPathClaimSchema,
@@ -373,6 +374,18 @@ describe("agent coordination contracts", () => {
         responseToId: id,
       }),
     ).toThrow();
+  });
+
+  it("accepts a native editor report that preserves both versions", () => {
+    expect(
+      conflictReportInputSchema.parse({
+        path: "README.md",
+        collaborativeContents: "editor revision",
+      }),
+    ).toEqual({
+      path: "README.md",
+      collaborativeContents: "editor revision",
+    });
   });
 
   it("requires merged contents only for manual merges", () => {

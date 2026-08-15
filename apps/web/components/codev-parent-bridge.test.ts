@@ -323,6 +323,15 @@ describe("codev parent bridge", () => {
           conflicts: [{ path: "src/hello.ts", snapshotRevision: "r1" }],
         }),
       )
+      .mockResolvedValueOnce(
+        Response.json({
+          path: "README.md",
+          snapshotRevision: "editor-r1",
+          filesystemRevision: "filesystem-r2",
+          collaborativeContents: "editor README",
+          filesystemContents: "terminal README",
+        }),
+      )
       .mockResolvedValueOnce(Response.json({ strategy: "collaboration" }));
 
     await expect(
@@ -341,6 +350,41 @@ describe("codev parent bridge", () => {
       ok: true,
       result: { conflicts: [{ path: "src/hello.ts" }] },
     });
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-conflicts-report",
+          method: "conflicts.report",
+          params: {
+            path: "README.md",
+            collaborativeContents: "editor README",
+          },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        path: "README.md",
+        collaborativeContents: "editor README",
+        filesystemContents: "terminal README",
+      },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/collaboration/conflicts",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "README.md",
+          collaborativeContents: "editor README",
+        }),
+      },
+    );
     await expect(
       executeCodevBridgeRequest(
         "workspace-1",

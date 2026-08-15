@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   getApiUser: vi.fn(),
   requireWorkspacePermission: vi.fn(),
   listCollaborationConflicts: vi.fn(),
+  reportCollaborationConflict: vi.fn(),
+  ensureWorkspaceRuntimeReady: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -19,9 +21,13 @@ vi.mock("@/lib/access", () => ({
 }));
 vi.mock("@/lib/collaboration-server", () => ({
   listCollaborationConflicts: mocks.listCollaborationConflicts,
+  reportCollaborationConflict: mocks.reportCollaborationConflict,
+}));
+vi.mock("@/lib/runtime-resume", () => ({
+  ensureWorkspaceRuntimeReady: mocks.ensureWorkspaceRuntimeReady,
 }));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 const userId = "2f2387ed-4a63-4b05-88cc-266d65f7b82b";
@@ -63,6 +69,52 @@ describe("workspace collaboration conflicts route", () => {
       workspaceId,
       userId,
       "view",
+    );
+  });
+
+  it("records a native editor conflict without overwriting either version", async () => {
+    mocks.reportCollaborationConflict.mockResolvedValue({
+      worktreeId: "4dbbf95e-08fe-4a6f-84e9-a5d85000da8e",
+      path: "README.md",
+      snapshotRevision: "editor-r1",
+      filesystemRevision: "filesystem-r2",
+      collaborativeContents: "collaborative README",
+      filesystemContents: "terminal README",
+    });
+
+    const response = await POST(
+      new Request("https://codev.test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "README.md",
+          collaborativeContents: "collaborative README",
+        }),
+      }),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      path: "README.md",
+      collaborativeContents: "collaborative README",
+      filesystemContents: "terminal README",
+    });
+    expect(mocks.requireWorkspacePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "edit",
+    );
+    expect(mocks.ensureWorkspaceRuntimeReady).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+    );
+    expect(mocks.reportCollaborationConflict).toHaveBeenCalledWith(
+      workspaceId,
+      {
+        path: "README.md",
+        collaborativeContents: "collaborative README",
+      },
     );
   });
 });
