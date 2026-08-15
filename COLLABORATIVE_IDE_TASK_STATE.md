@@ -8,15 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to native files, sessions, and diffs**
+**F6.1 — Define a provider-connection record with encrypted, server-only credential handling**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
+F5.6, OI.1, OI.2, and OI.12 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.12**, the last Orca
-convergence card from `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin
-until that sequence is complete.
+remaining outstanding. The Current task is **F6.1**, the first provider-
+connection card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -26,6 +25,23 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.12 — Production verification completed 2026-08-15T21:25:00Z:** The
+  unrelated local password-reset work was committed separately as
+  `553b4c28e286868c0157a9a420913c03d9f245c2` so the tree was clean. OI.12
+  source was already on `main` as
+  `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3`. Computer Use authenticated
+  CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. The first open still
+  showed **Orca IDE process exited before reporting readiness** because a
+  leftover `orca-ide --serve` for this workspace (pid 879, port 7000, ppid
+  1) outlived the orchestrator child; a second spawn then died on the
+  Electron singleton lock. After that leftover process was stopped on the
+  Firecracker host, Retry opened native Orca. The right-sidebar **Activity**
+  panel listed durable events; filtering Diffs + `review_merged` isolated
+  `agent.review_merged`; **Open Checks · diff** jumped to Checks. A
+  Sessions query with no match showed **No matching activity events.** See
+  OI.12 completion evidence. Current task is now F6.1.
 
 - **OI.12 — dirty worktree blocker 2026-08-15T21:12:00Z:** The required
   initial `git status --short` was still not clean. `main` is current at
@@ -700,6 +716,10 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version            | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                   |
 | OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel | 2026-08-15 | [OI.7 completion evidence](#oi7-completion-evidence) — Production Orca Agents panel showed one durable ordered conversation, Alex's attributed queue, interrupt plus last completed tool, and refresh restore without a duplicate provider call. |
 | OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards | 2026-08-15 | [OI.8 completion evidence](#oi8-completion-evidence) — Production Orca Workspace Board showed three occupied native slots and worktree cards, then rejected a fourth session with HTTP 409. |
+| OI.9 — Put active and contested path claims in Orca's Explorer and worktree cards with reassign/cancel | 2026-08-15 | [OI.9 completion evidence](#oi9-completion-evidence) — Production Orca Explorer and worktree cards showed contested `README.md` claims, then reassigned the path. |
+| OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks | 2026-08-15 | [OI.10 completion evidence](#oi10-completion-evidence) — Production Orca Source Control showed a frozen checkpoint and Checks rendered a binary-safe affected-path list. |
+| OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions | 2026-08-15 | [OI.11 completion evidence](#oi11-completion-evidence) — Production Orca blocked a stale checkpoint, then integrated one current reviewed checkpoint attributed to CoDev Test Jordan. |
+| OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events. |
 
 ### B0.2 completion evidence
 
@@ -1753,8 +1773,8 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
   deletes the sandbox worktree, releases active/contested claims, and appends
   `agent.review_discarded`, while a repeated call returns the existing
   discarded state without repeating deletion or audit side effects.
-- Next task: F6.1 — define a provider-connection record with encrypted,
-  server-only credential handling.
+- Next task: F5.6 — wire Orca's native Delete Worktree flow to CoDev's
+  audited proposal-discard lifecycle.
 
 ### F5.6 completion evidence
 
@@ -2234,6 +2254,52 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `oi-11-stale-blocked.png`, and `oi-11-integrated.png`.
 - Next task: OI.12 — add the durable activity/audit view as an Orca
   right-sidebar panel linked to native files, sessions, and diffs.
+
+### OI.12 completion evidence
+
+- Completed: 2026-08-15T21:25:00Z.
+- Changed files (already on `main` from the OI.12 source commit):
+  `apps/web/lib/activity-audit-view.ts`,
+  `apps/web/lib/activity-audit-view.test.ts`,
+  `apps/web/lib/activity-audit-server.ts`,
+  `apps/web/lib/activity-audit-route.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/events/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  assets under `apps/web/public/orca/`. This run also landed unrelated
+  password-reset work as `553b4c28` so the scheduler worktree was clean.
+- Checks (from the source commit): focused activity/bridge tests (16
+  passed), patched-Orca Vitest (`CodevActivityAuditView.test.tsx`,
+  `persistence-right-sidebar-tab.test.ts`, 14 passed), patched-Orca
+  `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
+  typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
+  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
+  --check`.
+- Validated source commit: `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3`.
+- Production URL: <https://www.trycodev.com> (Ready alias including that
+  commit; later Production `553b4c28` at
+  <https://codev-d8i88r6jt-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. A leftover
+  host `orca-ide` process for this workspace caused **Orca IDE process
+  exited before reporting readiness**; after that process was stopped,
+  Retry opened native Orca. Right-sidebar **Activity** listed durable
+  events including `agent.review_merged`. Filtering Diffs +
+  `review_merged` isolated that event; **Open Checks · diff** jumped to
+  Checks. Filtering Sessions with `no-such-session-xyz` showed **No
+  matching activity events.**
+- Screenshots: `file:///tmp/codev-oi12-verify/oi-12-activity-panel.png`
+  (Activity timeline),
+  `file:///tmp/codev-oi12-verify/oi-12-activity-filter-diff.png` (Diffs
+  filter), `file:///tmp/codev-oi12-verify/oi-12-jump-checks.png` (jump to
+  Checks), and
+  `file:///tmp/codev-oi12-verify/oi-12-activity-empty-filter.png` (empty
+  filter). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/oi-12/`.
+- Next task: F6.1 — define a provider-connection record with encrypted,
+  server-only credential handling.
 
 ## Blocked tasks
 
