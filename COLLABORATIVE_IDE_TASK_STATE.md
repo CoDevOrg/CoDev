@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel**
+**OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.7**, followed by OI.8–OI.12 from
+remaining outstanding. The Current task is **OI.8**, followed by OI.9–OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -26,6 +26,17 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.7 — Production verification completed 2026-08-15T07:04:00Z:** Shared
+  agent metadata, transcript, attributed queue, interrupt, and refresh recovery
+  are live in Orca's native Agents panel. Feature commit `b6aeb4f` plus draft
+  session follow-ups through `ebca05ee7e3c3c7c5e5c073c762166d31eb8b1f9` are on
+  `main`. Vercel Production `dpl_9frWfVeyrL44rx5VWV3ZNPABSGVW` is Ready at
+  `https://codev-ai8307c0k-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` queued Alex's attributed
+  instruction, interrupted Jordan's controlled turn, and recovered the same
+  transcript/queue/stream cursor after refresh. See OI.7 completion evidence.
 
 - **OI.6 — Production verification completed 2026-08-15T06:14:00Z:** The owner
   overrode the two-attempt cap and directed a native-surface fix. Source commit
@@ -404,6 +415,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.4 — Render named presence and active-file state in Orca's editor chrome                            | 2026-08-14 | [OI.4 completion evidence](#oi4-completion-evidence) — Two authenticated Production identities opened the shared Orca workspace; Jordan saw both names and Alex's remote `README.md` state in the editor chrome.            |
 | OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor               | 2026-08-15 | [OI.5 completion evidence](#oi5-completion-evidence) — Two authenticated Production identities showed native remote selection decorations and reconnect replay in the Source editor.                                        |
 | OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version            | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                   |
+| OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel | 2026-08-15 | [OI.7 completion evidence](#oi7-completion-evidence) — Production Orca Agents panel showed one durable ordered conversation, Alex's attributed queue, interrupt plus last completed tool, and refresh restore without a duplicate provider call. |
 
 ### B0.2 completion evidence
 
@@ -1710,6 +1722,62 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-6-compare.png`.
 - Next task: OI.7 — put shared agent metadata, transcript, queue, interrupt,
   and refresh recovery in Orca's Agents panel.
+
+### OI.7 completion evidence
+
+- Completed: 2026-08-15T07:04:00Z.
+- Changed files: `apps/web/lib/shared-session-view.ts`,
+  `apps/web/lib/shared-session-view.test.ts`,
+  `apps/web/lib/shared-session-server.ts`,
+  `apps/web/lib/shared-session-routes.test.ts`,
+  `apps/web/lib/agent-runtime.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/shared/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/queue/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/controlled/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/interrupt/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused shared-session/bridge tests (14 targeted), `pnpm lint` (0
+  errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (237 passed, 1
+  skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped),
+  `pnpm rust:check`, and `git diff --check`. `pnpm format:check` remains
+  blocked only by the pre-existing formatting violation in this ledger.
+- Validated source commit: `ebca05ee7e3c3c7c5e5c073c762166d31eb8b1f9`
+  (feature `b6aeb4f35d602bab0918d38ab4801ea58ff29460` plus draft-session
+  follow-ups `c053786`, `34102af`).
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_9frWfVeyrL44rx5VWV3ZNPABSGVW` at
+  <https://codev-ai8307c0k-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan and CoDev Test Alex
+  against that exact Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Jordan opened Orca's
+  native Agents panel, prepared a managed proposal, and started a controlled
+  turn. The panel showed provider `openai`, owner CoDev Test Jordan, worktree
+  `agent-managed-proposal-795287ab`, model `gpt-5.6-luna · standard`, last
+  completed `read_file · README.md`, and Jordan's inspect transcript. Alex
+  queued one attributed instruction (`authorId
+  dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
+  controlled turn; both identities then saw `Interrupted · controlled turn`,
+  "Cancellation recorded. No further tool calls will run.", the last completed
+  tool result, and the queued instruction still present. Refresh recovered
+  transcript, queue, and stream cursor `4` with "queued instruction preserved
+  once" and no duplicate provider call.
+- Screenshots: `file:///tmp/codev-oi7-verify/12-jordan-controlled.png`
+  (Jordan metadata + controlled turn),
+  `file:///tmp/codev-oi7-verify/22-alex-queued.png` (Alex attributed queue),
+  `file:///tmp/codev-oi7-verify/23-alex-interrupted.png` (interrupt + last
+  completed action), `file:///tmp/codev-oi7-verify/24-alex-refreshed.png`
+  (Alex refresh restore), and
+  `file:///tmp/codev-oi7-verify/13-jordan-refreshed.png` (Jordan recovered the
+  same durable state). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-7-jordan-controlled.png`,
+  `oi-7-alex-queued.png`, `oi-7-alex-interrupted.png`,
+  `oi-7-alex-refreshed.png`, and `oi-7-jordan-refreshed.png`.
+- Next task: OI.8 — put the three-slot workboard and fourth-session rejection
+  in Orca's Workspace Board and worktree cards.
 
 ## Blocked tasks
 
