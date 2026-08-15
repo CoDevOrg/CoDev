@@ -27,6 +27,32 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.6 — Production native-surface mismatch blocker 2026-08-15T02:06:41Z:**
+  The required initial `git status --short` was clean and `main` was advanced
+  using `git switch main`, `git fetch origin main`, and `git pull --ff-only
+  origin main` at `06d7a5cf6dd4e7503ce1dd0d5dc6008b3352d08e`. No source was
+  changed. Vercel Production deployment
+  `https://codev-bog8vo3lx-yousef20920s-projects.vercel.app`
+  (`dpl_6YuR3eedh9esZoRdkYH34qMzibqv`) is Ready and aliases
+  `https://www.trycodev.com`. Computer Use used the authenticated Orca
+  workspace at
+  `https://www.trycodev.com/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`,
+  opened the externally modified `README.md`, and switched to its native
+  Source editor. The standard Orca disk-change banner remained visible with
+  only `Compare`, `Reload from Disk`, and `Keep My Edits`; the expected
+  `External file conflict` dialog did not render. Source inspection identifies
+  two disjoint paths: the OI.6 patch adds its dialog only to `MonacoEditor`
+  after `conflicts.list` returns a server snapshot marked `hasConflict`, while
+  the real terminal-change flow is handled by Orca's
+  `ExternalFileChangeBanner`/`ExternalFileChangeCompareDialog` and never
+  creates that snapshot. The next implementation must integrate preserve-both
+  resolution into that native external-change surface (and bridge/durable
+  recording as required), rather than polling an unreachable conflict record.
+  Screenshot evidence:
+  `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%2010.03.34%20PM.jpeg`.
+  This is the second unsuccessful OI.6 implementation/verification attempt;
+  Current task remains OI.6 and do not begin OI.7.
+
 - **OI.6 — Production native-resolution blocker 2026-08-15T01:56:02Z:**
   The required initial `git status --short` was clean and `main` was advanced
   with `git switch main`, `git fetch origin main`, and `git pull --ff-only
