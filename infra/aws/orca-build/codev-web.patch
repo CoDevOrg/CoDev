@@ -2910,7 +2910,7 @@ new file mode 100644
 index 0000000..e66679b
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.test.tsx
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,91 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import {
@@ -2994,6 +2994,12 @@ index 0000000..e66679b
 +    expect(html).not.toContain('zcmV-')
 +    expect(selectCodevReviewCheckpoint([prepared], 'w2')?.slot).toBe(2)
 +    expect(selectCodevReviewCheckpoint([prepared], null)?.slot).toBe(2)
++    expect(
++      selectCodevReviewCheckpoint(
++        [{ ...prepared, sessionId: 's0', slot: 1, worktreeId: 'w1', prepared: false }, prepared],
++        null
++      )?.slot
++    ).toBe(2)
 +  })
 +})
 diff --git a/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
@@ -3001,7 +3007,7 @@ new file mode 100644
 index 0000000..4856a88
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/CodevReviewCheckpointView.tsx
-@@ -0,0 +1,196 @@
+@@ -0,0 +1,200 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -3049,6 +3055,10 @@ index 0000000..4856a88
 +  if (worktreeId) {
 +    const matched = checkpoints.find((checkpoint) => checkpoint.worktreeId === worktreeId)
 +    if (matched) return matched
++  }
++  const prepared = checkpoints.filter((checkpoint) => checkpoint.prepared)
++  if (prepared.length > 0) {
++    return prepared[prepared.length - 1] ?? null
 +  }
 +  return (
 +    checkpoints.find((checkpoint) => !checkpoint.prepared) ??

@@ -219,7 +219,7 @@ async function gitInWorktree(
   args: string[],
 ) {
   return executeInSandbox(workspaceId, {
-    command: ["git", ...args],
+    command: ["git", "--no-pager", ...args],
     worktreeId,
   });
 }
