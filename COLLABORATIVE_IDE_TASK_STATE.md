@@ -27,6 +27,16 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.6 — Two-attempt cap remains in force 2026-08-15T03:01:39Z:** The
+  required initial `git status --short` was clean. This run then used
+  `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
+  main`; `main` remains current at `d6b6d328dd916806de85c0ce5dae10ec0425b3c6`.
+  The immediately preceding ledger entry records the second unsuccessful
+  OI.6 implementation/Production-verification attempt, whose native Orca
+  external-change flow bypasses the shipped conflict dialog. Per the task
+  contract, no third implementation attempt, local checks, deployment, or UI
+  verification was started. Current task remains OI.6; do not begin OI.7.
+
 - **OI.6 — Production native-surface mismatch blocker 2026-08-15T02:06:41Z:**
   The required initial `git status --short` was clean and `main` was advanced
   using `git switch main`, `git fetch origin main`, and `git pull --ff-only
