@@ -8,13 +8,13 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks**
+**OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions**
 
 ## Mandatory Orca workspace completion gate
 
 F5.6, OI.1, and OI.2 are complete. **OI.3 is explicitly deferred at the
 owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **OI.10**, followed by OI.11–OI.12 from
+remaining outstanding. The Current task is **OI.11**, followed by OI.12 from
 `COLLABORATIVE_IDE_EXECUTION.md`; F6.1 must not begin until that convergence
 sequence is complete.
 
@@ -26,6 +26,18 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **OI.10 — Production verification completed 2026-08-15T10:31:00Z:** Review
+  checkpoint metadata and binary-safe diffs are live in Orca Source Control
+  and Checks. Source commit
+  `4ed413bb722306efd818dadc832b76f7c1068353` is on `main`. Vercel Production
+  `dpl_7phGjptdzq3ySrmsKrfyZC1jx7Tu` is Ready at
+  `https://codev-bggosiz4o-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Authenticated Production verification at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` prepared slot 3, showed
+  Checkpoint prepared with a `sha256:` digest, and opened Checks with
+  `2 paths changed · 1 text file · 1 binary file`, `oi10-review.txt`, and
+  `Binary file · content omitted`. See OI.10 completion evidence.
 
 - **OI.10 — Production Computer Use authentication blocker 2026-08-15T10:04:00Z:**
   The required initial `git status --short` was clean. This run then used
@@ -1911,6 +1923,53 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `oi-9-contested-worktree.png`, and `oi-9-reassigned.png`.
 - Next task: OI.10 — put review checkpoint metadata and binary-safe diffs in
   Orca Source Control and Checks.
+
+### OI.10 completion evidence
+
+- Completed: 2026-08-15T10:31:00Z.
+- Changed files: `apps/web/lib/review-checkpoint-view.ts`,
+  `apps/web/lib/review-checkpoint-view.test.ts`,
+  `apps/web/lib/review-diff-view.ts`,
+  `apps/web/lib/review-diff-view.test.ts`,
+  `apps/web/lib/review-checkpoint-server.ts`,
+  `apps/web/lib/review-checkpoint-routes.test.ts`,
+  `apps/web/lib/agent-review.ts`,
+  `apps/web/lib/agent-review-prepare.test.ts`,
+  `apps/web/lib/runtime-resume.ts`,
+  `apps/web/lib/runtime-resume.test.ts`,
+  `apps/web/lib/workspaces.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/reviews/route.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/sandbox/exec/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused review/checkpoint/bridge tests, `pnpm lint` (0 errors, 2
+  existing warnings), `pnpm typecheck`, `pnpm test` (275 passed, 1 skipped),
+  `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
+  and `git diff --check`. `pnpm format:check` remains blocked only by the
+  pre-existing formatting violation in this ledger.
+- Validated source commit: `4ed413bb722306efd818dadc832b76f7c1068353`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  deployment `dpl_7phGjptdzq3ySrmsKrfyZC1jx7Tu` at
+  <https://codev-bggosiz4o-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against that exact
+  Production deployment and opened
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Orca Source Control
+  showed Agent slot 3 as **Checkpoint prepared** with base/proposed
+  revisions and Diff digest `sha256:f2347537…`. Checks opened the frozen
+  review with `2 paths changed · 1 text file · 1 binary file`, text delta
+  `+1 −0 lines`, `oi10-review.txt` as added, `oi10-binary.bin` as
+  `Binary file · content omitted`, and the binary-safe disclaimer.
+- Screenshots: `file:///tmp/codev-oi10-verify/12-source-control.png`
+  (Source Control checkpoint prepared),
+  `file:///tmp/codev-oi10-verify/13-checkpoint.png` (immutable checkpoint
+  metadata), and `file:///tmp/codev-oi10-verify/14-checks-diff.png`
+  (binary-safe affected paths). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/oi-10-source-control.png`,
+  `oi-10-checkpoint.png`, and `oi-10-checks-diff.png`.
+- Next task: OI.11 — put stale-review rejection and exactly-once
+  integration in Orca's native review actions.
 
 ## Blocked tasks
 
