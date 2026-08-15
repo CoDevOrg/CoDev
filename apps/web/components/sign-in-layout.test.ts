@@ -38,6 +38,7 @@ describe("sign-in provider layout", () => {
     expect(credentialsSignInForm).toContain('name="intent"');
     expect(credentialsSignInForm).toContain("Create an account");
     expect(credentialsSignInForm).toContain("Sign in with email");
+    expect(credentialsSignInForm).toContain('href="/forgot-password"');
     expect(credentialsSignInForm).toContain(
       'aria-label="New account password requirements"',
     );

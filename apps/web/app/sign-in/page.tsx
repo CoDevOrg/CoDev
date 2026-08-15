@@ -62,6 +62,7 @@ export default async function SignInPage({
     callbackUrl?: string;
     error?: string;
     mode?: string;
+    reset?: string;
   }>;
 }) {
   const clerkEnabled = clerkAuthConfigured();
@@ -79,7 +80,7 @@ export default async function SignInPage({
   }
   if (session?.user) redirect("/dashboard");
 
-  const { callbackUrl, error, mode } = await searchParams;
+  const { callbackUrl, error, mode, reset } = await searchParams;
   const githubConfigured = isGitHubAuthConfigured();
   const googleConfigured = isGoogleAuthConfigured();
   const safeCallback =
@@ -100,6 +101,12 @@ export default async function SignInPage({
           Continue with Google or GitHub, or sign in with the email you already
           use. New to CoDev? Create an account below.
         </p>
+
+        {reset ? (
+          <div className="inline-alert" role="status">
+            Your password was updated. Sign in with your new password.
+          </div>
+        ) : null}
 
         {sessionCheckUnavailable ? (
           <div className="inline-alert error" role="alert">

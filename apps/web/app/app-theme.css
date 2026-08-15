@@ -299,8 +299,14 @@
   color: var(--muted);
 }
 
-.auth-page .auth-mode-switch button {
+.auth-page .auth-mode-switch button,
+.auth-page .auth-mode-switch a,
+.auth-page .auth-forgot-password a {
   color: var(--codev-orange-400);
+}
+
+.auth-page a.auth-submit {
+  width: 100%;
 }
 
 .auth-page .auth-password-guidance,

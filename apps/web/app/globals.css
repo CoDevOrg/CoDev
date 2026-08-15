@@ -1731,14 +1731,39 @@ button {
   text-underline-offset: 3px;
 }
 
+.auth-mode-switch a {
+  color: var(--landing-orange, #d9642c);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-forgot-password {
+  margin: -8px 0 0;
+  font-size: 13px;
+  text-align: right;
+}
+
+.auth-forgot-password a {
+  color: var(--landing-orange, #d9642c);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .auth-submit {
+  display: inline-flex;
   min-height: 48px;
   margin-top: 3px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
   border: 1px solid var(--navy);
   border-radius: 7px;
   background: var(--navy);
   color: #f8f1e5;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
 }
 

@@ -61,6 +61,9 @@ test("protected workspace routes require GitHub identity", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Password" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Forgot password?" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Name")).toHaveCount(0);
   await page.getByRole("button", { name: "Create an account" }).click();
   await expect(page.getByLabel("Name")).toBeVisible();

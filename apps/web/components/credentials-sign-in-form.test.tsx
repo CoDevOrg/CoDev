@@ -19,6 +19,9 @@ describe("CredentialsSignInForm", () => {
     expect(
       screen.getByRole("button", { name: "Create an account" }),
     ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Forgot password?" }),
+    ).toHaveAttribute("href", "/forgot-password");
   });
 
   it("switches to create-account and shows name plus password requirements", () => {
@@ -27,6 +30,7 @@ describe("CredentialsSignInForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create an account" }));
 
     expect(screen.getByLabelText("Name")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Forgot password?" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "Create account" }),
     ).toBeVisible();

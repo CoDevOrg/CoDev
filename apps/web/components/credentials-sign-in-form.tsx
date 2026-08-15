@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import type { CredentialsIntent } from "@/lib/credentials-auth";
@@ -56,6 +57,11 @@ export function CredentialsSignInForm({
           required
         />
       </label>
+      {creatingAccount ? null : (
+        <p className="auth-forgot-password">
+          <Link href="/forgot-password">Forgot password?</Link>
+        </p>
+      )}
       {creatingAccount ? (
         <div className="auth-password-guidance" aria-live="polite">
           <p>New accounts need:</p>
