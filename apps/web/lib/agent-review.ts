@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { getRun } from "workflow/api";
 
@@ -12,6 +13,7 @@ import {
   checkpointSandboxWorktree,
   createSandboxWorktree,
   deleteSandboxWorktree,
+  executeInSandbox,
   mergeSandboxWorktree,
   OrchestratorError,
   rebaseSandboxWorktree,
@@ -207,6 +209,96 @@ function isMissingWorktreeError(error: unknown) {
   );
 }
 
+function isForbiddenOrchestrator(error: unknown) {
+  return error instanceof OrchestratorError && error.status === 403;
+}
+
+async function gitInWorktree(
+  workspaceId: string,
+  worktreeId: string,
+  args: string[],
+) {
+  return executeInSandbox(workspaceId, {
+    command: ["git", ...args],
+    worktreeId,
+  });
+}
+
+function parseHeadSha(output: string) {
+  const headSha = output.replace(/\r/g, "").trim().split("\n").at(-1) ?? "";
+  if (!COMMIT_SHA.test(headSha)) {
+    throw new ReviewActionError(
+      "Could not resolve the worktree revision.",
+      502,
+    );
+  }
+  return headSha;
+}
+
+async function checkpointWorktreeViaExec(
+  workspaceId: string,
+  worktreeId: string,
+) {
+  await gitInWorktree(workspaceId, worktreeId, ["add", "--all"]);
+  const staged = await gitInWorktree(workspaceId, worktreeId, [
+    "diff",
+    "--cached",
+    "--quiet",
+    "--",
+  ]);
+  if (staged.exitCode !== 0) {
+    const committed = await gitInWorktree(workspaceId, worktreeId, [
+      "-c",
+      "user.name=CoDev",
+      "-c",
+      "user.email=agent@codev.dev",
+      "commit",
+      "--no-gpg-sign",
+      "-m",
+      "CoDev agent checkpoint",
+    ]);
+    if (committed.exitCode !== 0) {
+      throw new ReviewActionError(
+        committed.output.trim() || "Could not freeze the review checkpoint.",
+        502,
+      );
+    }
+  }
+  const head = await gitInWorktree(workspaceId, worktreeId, [
+    "rev-parse",
+    "HEAD",
+  ]);
+  return { headSha: parseHeadSha(head.output) };
+}
+
+async function reviewWorktreeViaExec(
+  workspaceId: string,
+  worktreeId: string,
+  baseSha: string,
+  headSha: string,
+): Promise<SandboxWorktreeReview> {
+  const diffed = await gitInWorktree(workspaceId, worktreeId, [
+    "diff",
+    "--binary",
+    "--no-ext-diff",
+    `${baseSha}...${headSha}`,
+    "--",
+  ]);
+  if (diffed.exitCode !== 0) {
+    throw new ReviewActionError(
+      diffed.output.trim() || "Could not load the review diff.",
+      502,
+    );
+  }
+  const diff = diffed.output.replace(/\r\n/g, "\n");
+  return {
+    baseSha,
+    headSha,
+    diff,
+    diffDigest: createHash("sha256").update(diff).digest("hex"),
+  };
+}
+
 async function checkpointSandboxWorktreeOrCreate(
   workspaceId: string,
   worktreeId: string,
@@ -219,9 +311,41 @@ async function checkpointSandboxWorktreeOrCreate(
       expectedHeadSha,
     );
   } catch (error) {
-    if (!isMissingWorktreeError(error)) throw error;
-    await createSandboxWorktree(workspaceId, worktreeId, expectedHeadSha);
-    return checkpointSandboxWorktree(workspaceId, worktreeId, expectedHeadSha);
+    if (isMissingWorktreeError(error)) {
+      await createSandboxWorktree(workspaceId, worktreeId, expectedHeadSha);
+      try {
+        return await checkpointSandboxWorktree(
+          workspaceId,
+          worktreeId,
+          expectedHeadSha,
+        );
+      } catch (retryError) {
+        if (isForbiddenOrchestrator(retryError)) {
+          return checkpointWorktreeViaExec(workspaceId, worktreeId);
+        }
+        throw retryError;
+      }
+    }
+    if (isForbiddenOrchestrator(error)) {
+      return checkpointWorktreeViaExec(workspaceId, worktreeId);
+    }
+    throw error;
+  }
+}
+
+async function reviewSandboxWorktreeOrExec(
+  workspaceId: string,
+  worktreeId: string,
+  baseSha: string,
+  headSha: string,
+) {
+  try {
+    return await reviewSandboxWorktree(workspaceId, worktreeId, baseSha);
+  } catch (error) {
+    if (isForbiddenOrchestrator(error)) {
+      return reviewWorktreeViaExec(workspaceId, worktreeId, baseSha, headSha);
+    }
+    throw error;
   }
 }
 
@@ -260,10 +384,11 @@ export async function prepareAgentReview(
         .where(eq(schema.worktrees.id, target.worktreeId));
       target.worktreeHeadSha = checkpoint.headSha;
     }
-    const review = await reviewSandboxWorktree(
+    const review = await reviewSandboxWorktreeOrExec(
       workspaceId,
       target.worktreeId,
       target.integrationHeadSha,
+      checkpoint.headSha,
     );
     if (review.headSha !== checkpoint.headSha) {
       throw new ReviewActionError(
