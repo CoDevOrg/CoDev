@@ -201,7 +201,12 @@ export async function POST(
     if (!input.draft) {
       await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
     }
-    await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+    const provisionSandboxWorktree =
+      Boolean(workspace.repository && workspace.githubRepositoryId) ||
+      !input.draft;
+    if (provisionSandboxWorktree) {
+      await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+    }
     const issue =
       input.issueNumber && workspace.repository
         ? await getExactGitHubIssue(
@@ -350,12 +355,14 @@ export async function POST(
     }
 
     try {
-      await createSandboxWorktree(
-        workspaceId,
-        reservation.worktreeId,
-        reservation.headSha,
-        reservation.branchName,
-      );
+      if (provisionSandboxWorktree) {
+        await createSandboxWorktree(
+          workspaceId,
+          reservation.worktreeId,
+          reservation.headSha,
+          reservation.branchName,
+        );
+      }
       if (!input.draft) {
         await kickAgentSession(reservation.sessionId);
       }
