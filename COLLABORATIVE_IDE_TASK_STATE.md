@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F6.1 — Define a provider-connection record with encrypted, server-only credential handling**
+**F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, and OI.12 are complete. **OI.3 is explicitly deferred at the
-owner's direction**, with its required two-member role-change verification
-remaining outstanding. The Current task is **F6.1**, the first provider-
-connection card from `COLLABORATIVE_IDE_EXECUTION.md`.
+F5.6, OI.1, OI.2, OI.12, and F6.1 are complete. **OI.3 is explicitly deferred
+at the owner's direction**, with its required two-member role-change
+verification remaining outstanding. The Current task is **F6.2**, the
+API-key add/replace/revoke card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -25,6 +25,18 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F6.1 — Production verification completed 2026-08-15T21:53:00Z:** Source
+  `b2639911884f0210d3bbe7b32f2344da46b17b93` is on `main`. Vercel Production
+  `dpl_9oWgkx2NuTqZLj4TCFD34e5oJnBt` is Ready at
+  `https://codev-khxcf2ncr-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`, opened native Orca
+  Settings → General, and captured **Provider connections** with OpenAI and
+  Anthropic both **Not connected** and no secret displayed. TestSprite
+  backend test `37a460b6-1fe4-47f2-96a5-e9502925dae9` passed (unauthenticated
+  GET `/api/workspaces/.../connections` returns 401 with no secret fields).
+  See F6.1 completion evidence. Current task is now F6.2.
 
 - **OI.12 — Production verification completed 2026-08-15T21:25:00Z:** The
   unrelated local password-reset work was committed separately as
@@ -720,6 +732,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks | 2026-08-15 | [OI.10 completion evidence](#oi10-completion-evidence) — Production Orca Source Control showed a frozen checkpoint and Checks rendered a binary-safe affected-path list. |
 | OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions | 2026-08-15 | [OI.11 completion evidence](#oi11-completion-evidence) — Production Orca blocked a stale checkpoint, then integrated one current reviewed checkpoint attributed to CoDev Test Jordan. |
 | OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events. |
+| F6.1 — Define a provider-connection record with encrypted, server-only credential handling | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed. |
 
 ### B0.2 completion evidence
 
@@ -2300,6 +2313,52 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   and `artifacts/verification/oi-12/`.
 - Next task: F6.1 — define a provider-connection record with encrypted,
   server-only credential handling.
+
+### F6.1 completion evidence
+
+- Completed: 2026-08-15T21:53:00Z.
+- Changed files (already on `main` from the F6.1 source commit):
+  `apps/web/lib/provider-connection-view.ts`,
+  `apps/web/lib/provider-connection-view.test.ts`,
+  `apps/web/lib/provider-connection-server.ts`,
+  `apps/web/lib/provider-connection-route.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks (from the source commit): focused provider-connection/bridge tests
+  (17 passed), patched-Orca panel test, patched-Orca `typecheck:web`,
+  `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
+  test` (294 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed),
+  `pnpm rust:check`, and `git diff --check`. TestSprite backend test
+  `37a460b6-1fe4-47f2-96a5-e9502925dae9` (run
+  `9f6bef55-7d99-421c-98a0-3668825c3deb`) passed against Production:
+  unauthenticated GET `/api/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830/connections`
+  returned 401 with no secret fields.
+- Validated source commit: `b2639911884f0210d3bbe7b32f2344da46b17b93`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_9oWgkx2NuTqZLj4TCFD34e5oJnBt` at
+  <https://codev-khxcf2ncr-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Settings → General showed **Provider connections** with OpenAI
+  **Not connected** and Anthropic **Not connected**. The section copy
+  states keys stay encrypted on the CoDev server. No API key or other
+  secret was displayed or entered. Native Orca **AI Provider Accounts
+  (OPTIONAL)** remains a separate surface and was not used.
+- Screenshots: `file:///tmp/codev-f61-verify/f6-1-provider-connections.png`
+  (Settings Provider connections),
+  `file:///tmp/codev-f61-verify/f6-1-provider-connections-status.png`
+  (Not connected status with no secret). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f6-1/`.
+- Known limitations: this card is status-only; add/replace/revoke is F6.2.
+  The GitHub `verify` check for the source commit failed `pnpm
+  format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
+  `COLLABORATIVE_IDE_TASK_STATE.md`, not on F6.1 product files.
+- Next task: F6.2 — implement API-key add/replace/revoke for one provider
+  using test-only credentials.
 
 ## Blocked tasks
 
