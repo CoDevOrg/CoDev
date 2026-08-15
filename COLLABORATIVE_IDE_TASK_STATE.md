@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F6.3 — Reauthorize every turn and block the next turn after a connection is revoked**
+**F6.4 — Research and document an official OAuth flow for one provider before implementing it. No consent UI yet.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, and F6.2 are complete. **OI.3 is explicitly
-deferred at the owner's direction**, with its required two-member role-change
-verification remaining outstanding. The Current task is **F6.3**, the
-revoked-connection turn-block card from `COLLABORATIVE_IDE_EXECUTION.md`.
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, and F6.3 are complete. **OI.3 is
+explicitly deferred at the owner's direction**, with its required two-member
+role-change verification remaining outstanding. The Current task is **F6.4**,
+the OAuth research/documentation card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -25,6 +25,23 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F6.3 — Production verification completed 2026-08-15T22:24:00Z:** Source
+  `1294a98812a0a26869d25f8a674965bc393964ab` is on `main`. Vercel Production
+  `dpl_842PusBYr8oGmQifGDAvMg9AvV9Q` is Ready at
+  `https://codev-fowo9gs7o-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`, confirmed OpenAI
+  **Not connected** in Settings → General → **Provider connections**, then
+  opened the Orca Agents shared session (`provider openai`, idle, empty
+  queue) and queued **Inspect README.md**. The panel showed
+  **Provider connection blocked**: `This OpenAI connection was revoked or is
+  not connected. Reconnect a key in Settings before starting another turn.
+  The existing session is unchanged.` Queue stayed **0 queued**; the
+  instruction was not added to the transcript. No secret was displayed.
+  TestSprite backend test `55b4a44c-8962-4ef0-91f5-7b784bad855f` passed
+  (unauthenticated POST `/queue` and `/turns` return 401 without starting a
+  turn). See F6.3 completion evidence. Current task is now F6.4.
 
 - **F6.2 — Production verification completed 2026-08-15T22:05:00Z:** Source
   `5c17d022463e07bcd05d6f8bb4d39775edb2f014` is on `main`. Vercel Production
@@ -748,6 +765,7 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events. |
 | F6.1 — Define a provider-connection record with encrypted, server-only credential handling | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed. |
 | F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed. |
+| F6.3 — Reauthorize every turn and block the next turn after a connection is revoked | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret. |
 
 ### B0.2 completion evidence
 
@@ -2421,6 +2439,58 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   that unauthenticated mutation responses do not echo it.
 - Next task: F6.3 — reauthorize every turn and block the next turn after a
   connection is revoked.
+
+### F6.3 completion evidence
+
+- Completed: 2026-08-15T22:24:00Z.
+- Changed files: `apps/web/lib/provider-turn-auth.ts`,
+  `apps/web/lib/provider-turn-auth.test.ts`,
+  `apps/web/lib/shared-session-server.ts`,
+  `apps/web/lib/shared-session-view.ts`,
+  `apps/web/lib/shared-session-view.test.ts`,
+  `apps/web/lib/shared-session-routes.test.ts`,
+  `apps/web/lib/agent-runtime.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/turns/route.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  assets under `apps/web/public/orca/`.
+- Checks: focused provider-turn-auth / shared-session / credentials tests
+  (13 passed), patched-Orca shared-session panel tests (3 passed),
+  patched-Orca `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings),
+  `pnpm typecheck`, `pnpm test` (302 passed, 1 skipped), `pnpm build`,
+  `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
+  --check`. TestSprite backend test
+  `55b4a44c-8962-4ef0-91f5-7b784bad855f` (run
+  `2f74f779-e4e0-4c6c-8417-58b4e5554d1d`) passed against Production:
+  unauthenticated POST `/api/workspaces/.../agents/.../queue` and `/turns`
+  returned 401 without starting a turn.
+- Validated source commit: `1294a98812a0a26869d25f8a674965bc393964ab`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_842PusBYr8oGmQifGDAvMg9AvV9Q` at
+  <https://codev-fowo9gs7o-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Settings → General → **Provider connections** showed OpenAI
+  **Not connected** (revoked in F6.2) and Anthropic **Not connected**.
+  The Agents shared session remained idle with provider `openai`, empty
+  queue, and restored transcript. Queuing **Inspect README.md** showed
+  **Provider connection blocked**: `This OpenAI connection was revoked or
+  is not connected. Reconnect a key in Settings before starting another
+  turn. The existing session is unchanged.` Queue stayed **0 queued**;
+  the instruction was not added to the transcript. No secret was
+  displayed. Native Orca **AI Provider Accounts (OPTIONAL)** was not used.
+- Screenshots: `file:///tmp/codev-f63-verify/f6-3-openai-not-connected.png`
+  (Settings Not connected),
+  `file:///tmp/codev-f63-verify/f6-3-agents-before-queue.png` (idle shared
+  session, empty queue),
+  `file:///tmp/codev-f63-verify/f6-3-turn-blocked.png` (blocked queue
+  attempt). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f6-3/`.
+- Known limitations: TestSprite covered unauthenticated 401 on queue/turns,
+  not the authenticated 409 path; Computer Use verified the 409 UX. Official
+  OAuth is F6.4.
+- Next task: F6.4 — research and document an official OAuth flow for one
+  provider before implementing it. No consent UI yet.
 
 ## Blocked tasks
 
