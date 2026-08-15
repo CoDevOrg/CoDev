@@ -93,6 +93,8 @@ async function loadReviewDiffs(workspaceId: string, sessions: ReviewSession[]) {
           command: [
             "git",
             "--no-pager",
+            "-c",
+            "color.ui=never",
             "diff",
             "--binary",
             "--no-ext-diff",
