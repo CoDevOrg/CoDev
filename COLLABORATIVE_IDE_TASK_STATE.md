@@ -27,6 +27,28 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.12 — dirty worktree blocker 2026-08-15T21:01:00Z:** The required
+  initial `git status --short` was not clean. `main` is current and matches
+  `origin/main` at `ca921669002ae53442502616e005457d517e8e91` (`docs: record
+  OI.12 Production workspace open blocker`). Unrelated local changes are
+  present and were not overwritten or included: modified
+  `apps/web/app/app-theme.css`, `apps/web/app/globals.css`,
+  `apps/web/app/sign-in/page.tsx`,
+  `apps/web/components/credentials-sign-in-form.test.tsx`,
+  `apps/web/components/credentials-sign-in-form.tsx`,
+  `apps/web/components/sign-in-layout.test.ts`,
+  `apps/web/tests/e2e/smoke.spec.ts`, and `packages/config/src/index.ts`;
+  untracked `apps/web/app/actions/password-reset.ts`,
+  `apps/web/app/forgot-password/`, `apps/web/app/reset-password/`,
+  `apps/web/components/reset-password-form.tsx`,
+  `apps/web/lib/password-reset-mail.ts`, `apps/web/lib/password-reset.test.ts`,
+  and `apps/web/lib/password-reset.ts`. No OI.12 product source was changed
+  in this run, and `git pull --ff-only origin main` was not applied over the
+  dirty tree. Current task remains OI.12; do not begin F6.1. Clear or
+  separately commit those unrelated files, then resume OI.12 Production
+  Computer Use on the already-pushed source commit
+  `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3`.
+
 - **OI.12 — Production workspace provisioning blocker 2026-08-15T20:37:00Z:**
   The required initial `git status --short` was clean. This run used
   `git switch main` was unnecessary because `main` was already current, then
