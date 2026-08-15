@@ -159,25 +159,29 @@ async function loadReviewDiffs(workspaceId: string, sessions: ReviewSession[]) {
         ) {
           return null;
         }
-        const diffed = await executeInSandbox(workspaceId, {
-          command: [
-            "git",
-            "--no-pager",
-            "-c",
-            "color.ui=never",
-            "diff",
-            "--binary",
-            "--no-ext-diff",
-            `${session.reviewBaseSha}...${session.reviewHeadSha}`,
-            "--",
-          ],
-          worktreeId: session.worktreeId,
-        });
-        if (diffed.exitCode !== 0) return null;
-        return [
-          session.worktreeId,
-          diffed.output.replace(/\r\n/g, "\n"),
-        ] as const;
+        try {
+          const diffed = await executeInSandbox(workspaceId, {
+            command: [
+              "git",
+              "--no-pager",
+              "-c",
+              "color.ui=never",
+              "diff",
+              "--binary",
+              "--no-ext-diff",
+              `${session.reviewBaseSha}...${session.reviewHeadSha}`,
+              "--",
+            ],
+            worktreeId: session.worktreeId,
+          });
+          if (diffed.exitCode !== 0) return null;
+          return [
+            session.worktreeId,
+            diffed.output.replace(/\r\n/g, "\n"),
+          ] as const;
+        } catch {
+          return null;
+        }
       }
     }),
   );
