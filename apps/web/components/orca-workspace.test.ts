@@ -87,6 +87,29 @@ describe("createOrcaManagedProposal", () => {
     });
   });
 
+  it("returns the server-side fourth-session rejection", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      Response.json(
+        {
+          error:
+            "All three agent slots are in use. Stop or wait for an active session to finish before starting another.",
+          code: "agent_capacity_exceeded",
+        },
+        { status: 409 },
+      ),
+    );
+
+    await expect(
+      createOrcaManagedProposal("workspace-1", fetcher),
+    ).resolves.toEqual({
+      ok: false,
+      status: 409,
+      code: "agent_capacity_exceeded",
+      error:
+        "All three agent slots are in use. Stop or wait for an active session to finish before starting another.",
+    });
+  });
+
   it("rejects a create response that omits the managed worktree id", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

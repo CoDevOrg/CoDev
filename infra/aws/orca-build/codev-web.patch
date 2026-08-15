@@ -2206,6 +2206,450 @@ index 4405810..3784386 100644
        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
  
        <SearchableSetting
+diff --git a/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx b/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx
+new file mode 100644
+index 0000000..12f42d8
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevWorkboardPanel.tsx
+@@ -0,0 +1,161 @@
++import { useCallback, useEffect, useState, type JSX } from 'react'
++import { toast } from 'sonner'
++import { useAppStore } from '@/store'
++import { useActiveRepo, useActiveWorktree } from '@/store/selectors'
++import { activateAndRevealWorktree } from '@/lib/worktree-activation'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import { openCodevManagedProposalWorktree } from '../../web/codev-proposal-discard'
++import { publishCodevWorkboard, setCodevWorkboardStartSession } from './codev-workboard-store'
++import {
++  CodevWorkboardViewPanel,
++  type CodevWorkboardCapacity,
++  type CodevWorkboardRejection,
++  type CodevWorkboardSlot,
++  type CodevWorkboardSnapshot
++} from './CodevWorkboardView'
++
++export { CodevWorkboardViewPanel, type CodevWorkboardSnapshot, type CodevWorkboardSlot } from './CodevWorkboardView'
++
++function applySnapshot(result: CodevWorkboardSnapshot): {
++  slots: CodevWorkboardSlot[]
++  capacity: CodevWorkboardCapacity | null
++  rejection: CodevWorkboardRejection | null
++  canCoSteer: boolean
++} {
++  publishCodevWorkboard(result)
++  return {
++    slots: result.slots ?? [],
++    capacity: result.capacity ?? null,
++    rejection: result.rejection ?? null,
++    canCoSteer: Boolean(result.viewer?.canCoSteer)
++  }
++}
++
++export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [snapshot, setSnapshot] = useState(() => getCodevBridgeSnapshot())
++  const [slots, setSlots] = useState<CodevWorkboardSlot[]>([])
++  const [capacity, setCapacity] = useState<CodevWorkboardCapacity | null>(null)
++  const [rejection, setRejection] = useState<CodevWorkboardRejection | null>(null)
++  const [canCoSteer, setCanCoSteer] = useState(false)
++  const [busy, setBusy] = useState('')
++  const activeRepo = useActiveRepo()
++  const activeWorktree = useActiveWorktree()
++
++  useEffect(() => {
++    return subscribeCodevBridge(() => {
++      setSnapshot(getCodevBridgeSnapshot())
++    })
++  }, [])
++
++  const refresh = useCallback(async () => {
++    if (!embedded || snapshot.status !== 'connected') return
++    setBusy('refresh')
++    try {
++      const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.list')
++      const next = applySnapshot(result)
++      setSlots(next.slots)
++      setCapacity(next.capacity)
++      setCanCoSteer(next.canCoSteer)
++      if (!next.rejection) {
++        setRejection(null)
++      }
++    } catch (error: unknown) {
++      toast.error('Failed to load workboard', {
++        description: error instanceof Error ? error.message : String(error)
++      })
++    } finally {
++      setBusy('')
++    }
++  }, [embedded, snapshot.status])
++
++  useEffect(() => {
++    if (!open || !embedded || snapshot.status !== 'connected') return
++    void refresh()
++  }, [embedded, open, refresh, snapshot.status])
++
++  const startSession = useCallback(async () => {
++    if (!embedded || snapshot.status !== 'connected') return
++    setBusy('create')
++    try {
++      const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.create')
++      const next = applySnapshot(result)
++      setSlots(next.slots)
++      setCapacity(next.capacity)
++      setCanCoSteer(next.canCoSteer)
++      setRejection(next.rejection)
++      if (next.rejection) {
++        return
++      }
++      const worktreeId = result.created?.worktreeId
++      if (!worktreeId) {
++        throw new Error('CoDev did not return a managed proposal worktree.')
++      }
++      const store = useAppStore.getState()
++      const orcaWorktreeId = await openCodevManagedProposalWorktree(worktreeId, {
++        repoId: activeWorktree?.repoId ?? activeRepo?.id,
++        createWorktree: (
++          repoId,
++          name,
++          baseBranch,
++          setupDecision,
++          sparseCheckout,
++          telemetrySource,
++          displayName
++        ) =>
++          store.createWorktree(
++            repoId,
++            name,
++            baseBranch,
++            setupDecision,
++            sparseCheckout,
++            telemetrySource,
++            displayName
++          ),
++        updateComment: async (id, comment) => {
++          await store.updateWorktreeMeta(id, { comment })
++        }
++      })
++      activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
++      toast.success('Agent session started', {
++        description: 'CoDev reserved one of the three worktree slots.'
++      })
++    } catch (error: unknown) {
++      toast.error('Failed to start agent session', {
++        description: error instanceof Error ? error.message : String(error)
++      })
++    } finally {
++      setBusy('')
++    }
++  }, [activeRepo?.id, activeWorktree?.repoId, embedded, snapshot.status])
++
++  useEffect(() => {
++    setCodevWorkboardStartSession(startSession)
++    return () => setCodevWorkboardStartSession(null)
++  }, [startSession])
++
++  if (!embedded) {
++    return null
++  }
++
++  return (
++    <CodevWorkboardViewPanel
++      connected={snapshot.status === 'connected'}
++      capacity={capacity}
++      slots={slots}
++      rejection={rejection}
++      busy={busy}
++      canCoSteer={canCoSteer}
++      onRefresh={() => {
++        void refresh()
++      }}
++      onStart={() => {
++        void startSession()
++      }}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/sidebar/CodevWorkboardView.test.tsx b/src/renderer/src/components/sidebar/CodevWorkboardView.test.tsx
+new file mode 100644
+index 0000000..e08df5a
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevWorkboardView.test.tsx
+@@ -0,0 +1,75 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevWorkboardViewPanel, type CodevWorkboardSlot } from './CodevWorkboardView'
++
++const slots: CodevWorkboardSlot[] = [
++  {
++    slot: 1,
++    occupied: true,
++    sessionId: 's1',
++    worktreeId: 'w1',
++    assignment: 'Repository map',
++    owner: 'Alex Morgan',
++    provider: 'openai',
++    status: 'Active',
++    worktree: 'agent-managed-proposal-one',
++    currentTask: 'Map the repository layout.',
++    elapsed: '00:18'
++  },
++  {
++    slot: 2,
++    occupied: true,
++    sessionId: 's2',
++    worktreeId: 'w2',
++    assignment: 'Presence replay',
++    owner: 'Jordan Lee',
++    provider: 'anthropic',
++    status: 'Active',
++    worktree: 'agent-managed-proposal-two',
++    currentTask: 'Replay presence.',
++    elapsed: '01:42'
++  },
++  {
++    slot: 3,
++    occupied: true,
++    sessionId: 's3',
++    worktreeId: 'w3',
++    assignment: 'Session recovery',
++    owner: 'Casey Rivera',
++    provider: 'openai',
++    status: 'Active',
++    worktree: 'agent-managed-proposal-three',
++    currentTask: 'Recover the session.',
++    elapsed: '03:07'
++  }
++]
++
++describe('CodevWorkboardViewPanel', () => {
++  it('renders three occupied slots and the fourth-session rejection', () => {
++    const html = renderToStaticMarkup(
++      <CodevWorkboardViewPanel
++        connected
++        capacity={{ maxActiveSessions: 3, activeSessions: 3, availableSlots: 0 }}
++        slots={slots}
++        rejection={{
++          status: 409,
++          title: 'Server rejected the fourth session · HTTP 409',
++          message:
++            'All three agent slots are in use. Stop or wait for an active session to finish before starting another.'
++        }}
++        busy=""
++        canCoSteer
++        onRefresh={() => undefined}
++        onStart={() => undefined}
++      />
++    )
++    expect(html).toContain('Agent slot 1')
++    expect(html).toContain('Repository map')
++    expect(html).toContain('Alex Morgan')
++    expect(html).toContain('openai')
++    expect(html).toContain('00:18')
++    expect(html).toContain('Start fourth session')
++    expect(html).toContain('Server rejected the fourth session · HTTP 409')
++    expect(html).toContain('All three agent slots are in use')
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/CodevWorkboardView.tsx b/src/renderer/src/components/sidebar/CodevWorkboardView.tsx
+new file mode 100644
+index 0000000..db4803e
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/CodevWorkboardView.tsx
+@@ -0,0 +1,190 @@
++import type { JSX } from 'react'
++import { Button } from '@/components/ui/button'
++
++export type CodevWorkboardSlot = {
++  slot: 1 | 2 | 3
++  occupied: boolean
++  sessionId: string | null
++  worktreeId: string | null
++  assignment: string
++  owner: string
++  provider: string
++  status: string
++  worktree: string
++  currentTask: string
++  elapsed: string
++}
++
++export type CodevWorkboardCapacity = {
++  maxActiveSessions: 3
++  activeSessions: number
++  availableSlots: number
++}
++
++export type CodevWorkboardRejection = {
++  status: 409
++  title: string
++  message: string
++}
++
++export type CodevWorkboardSnapshot = {
++  viewer?: { id: string; name: string; canCoSteer: boolean }
++  capacity?: CodevWorkboardCapacity
++  slots?: CodevWorkboardSlot[]
++  created?: { sessionId: string; worktreeId: string } | null
++  rejection?: CodevWorkboardRejection | null
++}
++
++const EMPTY_SLOTS: CodevWorkboardSlot[] = [
++  {
++    slot: 1,
++    occupied: false,
++    sessionId: null,
++    worktreeId: null,
++    assignment: 'Available',
++    owner: 'Unassigned',
++    provider: '—',
++    status: 'Available',
++    worktree: 'No worktree',
++    currentTask: 'Start an agent session to fill this slot.',
++    elapsed: '00:00'
++  },
++  {
++    slot: 2,
++    occupied: false,
++    sessionId: null,
++    worktreeId: null,
++    assignment: 'Available',
++    owner: 'Unassigned',
++    provider: '—',
++    status: 'Available',
++    worktree: 'No worktree',
++    currentTask: 'Start an agent session to fill this slot.',
++    elapsed: '00:00'
++  },
++  {
++    slot: 3,
++    occupied: false,
++    sessionId: null,
++    worktreeId: null,
++    assignment: 'Available',
++    owner: 'Unassigned',
++    provider: '—',
++    status: 'Available',
++    worktree: 'No worktree',
++    currentTask: 'Start an agent session to fill this slot.',
++    elapsed: '00:00'
++  }
++]
++
++export function CodevWorkboardViewPanel({
++  connected,
++  capacity,
++  slots,
++  rejection,
++  busy,
++  canCoSteer,
++  onRefresh,
++  onStart
++}: {
++  connected: boolean
++  capacity: CodevWorkboardCapacity | null
++  slots: CodevWorkboardSlot[]
++  rejection: CodevWorkboardRejection | null
++  busy: string
++  canCoSteer: boolean
++  onRefresh: () => void
++  onStart: () => void
++}): JSX.Element {
++  const available = capacity?.availableSlots ?? 0
++  const filled = capacity?.activeSessions ?? slots.filter((slot) => slot.occupied).length
++  const startLabel =
++    filled >= 3 ? 'Start fourth session' : available === 2 ? 'Start second session' : 'Start agent session'
++
++  return (
++    <section
++      className="border-b border-worktree-sidebar-border px-4 py-3"
++      aria-labelledby="codev-workboard-heading"
++      data-codev-workboard="true"
++    >
++      <div className="mb-2 flex items-start justify-between gap-2">
++        <div>
++          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++            CoDev · three-slot workboard
++          </p>
++          <h2 id="codev-workboard-heading" className="text-sm font-semibold">
++            Agent worktree slots
++          </h2>
++        </div>
++        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
++          {busy === 'refresh' ? 'Refreshing…' : 'Refresh workboard'}
++        </Button>
++      </div>
++      <p className="mb-3 text-xs text-muted-foreground">
++        {connected
++          ? `${filled} of 3 agent slots in use. Native worktree cards show assignment, owner, provider, status, and elapsed time.`
++          : 'Waiting for the workspace-bound CoDev bridge.'}
++      </p>
++      <div className="grid grid-cols-3 gap-2" aria-label="Active agent workboard slots">
++        {(slots.length === 3 ? slots : EMPTY_SLOTS).map((slot) => (
++          <article
++            key={slot.slot}
++            className="rounded-md border border-worktree-sidebar-border bg-background/60 p-2 text-xs"
++            aria-label={`Agent slot ${slot.slot}`}
++          >
++            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
++              Slot 0{slot.slot}
++            </span>
++            <strong className="mt-1 block">{slot.assignment}</strong>
++            <dl className="mt-2 space-y-1">
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Owner</dt>
++                <dd>{slot.owner}</dd>
++              </div>
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Provider</dt>
++                <dd>{slot.provider}</dd>
++              </div>
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Status</dt>
++                <dd>{slot.status}</dd>
++              </div>
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Worktree</dt>
++                <dd className="break-all">{slot.worktree}</dd>
++              </div>
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Current task</dt>
++                <dd>{slot.currentTask}</dd>
++              </div>
++              <div>
++                <dt className="text-[10px] uppercase text-muted-foreground">Elapsed</dt>
++                <dd>{slot.elapsed}</dd>
++              </div>
++            </dl>
++          </article>
++        ))}
++      </div>
++      <div className="mt-3 flex flex-wrap items-center gap-2">
++        <Button type="button" size="sm" disabled={!connected || !canCoSteer || busy === 'create'} onClick={onStart}>
++          {busy === 'create' ? 'Checking capacity…' : startLabel}
++        </Button>
++        {!canCoSteer ? (
++          <span className="text-[11px] text-muted-foreground">Co-steer permission is required to start a session.</span>
++        ) : null}
++      </div>
++      {rejection ? (
++        <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs" role="alert">
++          <strong>{rejection.title}</strong>
++          <p className="mt-1">{rejection.message}</p>
++        </div>
++      ) : (
++        <p className="mt-2 text-[11px] text-muted-foreground" role="status">
++          {filled >= 3
++            ? 'All three slots are filled. Starting another session asks the server to reject it.'
++            : 'No fourth-session request has been made yet.'}
++        </p>
++      )}
++    </section>
++  )
++}
 diff --git a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx b/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
 index 3106ded..3d8e596 100644
 --- a/src/renderer/src/components/sidebar/DeleteWorktreeDialog.test.tsx
@@ -2387,6 +2831,210 @@ index 6bbe058..c5befa7 100644
        worktreeIds.length,
        worktreeId,
        worktrees
+diff --git a/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx b/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx
+index cd7b94d..a8ed72d 100644
+--- a/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx
++++ b/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx
+@@ -3,6 +3,7 @@ import { Pin } from 'lucide-react'
+ import { Badge } from '@/components/ui/badge'
+ import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+ import WorktreeCard from './WorktreeCard'
++import { CodevWorktreeSlotMeta } from './codev-workboard-store'
+ import { translate } from '@/i18n/i18n'
+ 
+ type WorkspaceKanbanCardProps = {
+@@ -70,6 +71,7 @@ function WorkspaceKanbanCard({
+         onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+         onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+       />
++      <CodevWorktreeSlotMeta worktree={worktree} />
+     </div>
+   )
+ }
+diff --git a/src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx b/src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
+index d399803..6c696de 100644
+--- a/src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
++++ b/src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
+@@ -55,6 +55,8 @@ import { STATUS_BAR_RESERVE_HEIGHT, WORKSPACE_TOP_CHROME_HEIGHT } from './worksp
+ import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
+ import { translate } from '@/i18n/i18n'
+ import { registerWorkspaceKanbanSidebarDropGroups } from './workspace-kanban-sidebar-drop'
++import { CodevWorkboardPanel } from './CodevWorkboardPanel'
++import { startCodevWorkboardSession } from './codev-workboard-store'
+ 
+ type WorkspaceKanbanDrawerProps = {
+   leftSidebarStyle?: React.CSSProperties
+@@ -173,6 +175,16 @@ export default function WorkspaceKanbanDrawer({
+   const [pinDragOver, setPinDragOver] = useState(false)
+   const [renderCards, setRenderCards] = useState(false)
+   const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
++  const handleCreateWorktree = useCallback(
++    (workspaceStatus: WorkspaceStatus) => {
++      if (typeof window !== 'undefined' && window.__CODEV_EMBEDDED__) {
++        void startCodevWorkboardSession()
++        return
++      }
++      createWorktreeForStatus(workspaceStatus)
++    },
++    [createWorktreeForStatus]
++  )
+   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
+     allWorktrees,
+     repoMap
+@@ -877,6 +889,7 @@ export default function WorkspaceKanbanDrawer({
+           onFilterMenuOpenChange={onMenuOpenChange}
+           onClose={handleHeaderClose}
+         />
++        <CodevWorkboardPanel open={open} />
+         <div
+           ref={boardRef}
+           className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3"
+@@ -920,7 +933,7 @@ export default function WorkspaceKanbanDrawer({
+               onSelectionGesture={updateSelectionForGesture}
+               onContextMenuSelect={selectRenderedForContextMenu}
+               onAssignWorkspaceStatus={moveWorktreesToStatus}
+-              onCreateWorktree={createWorktreeForStatus}
++              onCreateWorktree={handleCreateWorktree}
+               onColumnResizeStart={onColumnResizeStart}
+               onColumnResizeKeyDown={onColumnResizeKeyDown}
+             />
+diff --git a/src/renderer/src/components/sidebar/codev-workboard-store.test.tsx b/src/renderer/src/components/sidebar/codev-workboard-store.test.tsx
+new file mode 100644
+index 0000000..4d16c39
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/codev-workboard-store.test.tsx
+@@ -0,0 +1,39 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevWorktreeSlotMeta, publishCodevWorkboard } from './codev-workboard-store'
++
++describe('CodevWorktreeSlotMeta', () => {
++  it('renders CoDev slot fields on a managed-proposal worktree card', () => {
++    publishCodevWorkboard({
++      capacity: { maxActiveSessions: 3, activeSessions: 1, availableSlots: 2 },
++      slots: [
++        {
++          slot: 1,
++          occupied: true,
++          sessionId: 'session-1',
++          worktreeId: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++          assignment: 'Repository map',
++          owner: 'Alex Morgan',
++          provider: 'openai',
++          status: 'Active',
++          worktree: 'agent-managed-proposal-one',
++          currentTask: 'Map the repository layout.',
++          elapsed: '00:18'
++        }
++      ]
++    })
++    const html = renderToStaticMarkup(
++      <CodevWorktreeSlotMeta
++        worktree={{
++          path: '/tmp/repo',
++          comment: 'codev-proposal:c1f9fe13-6881-44a6-adbd-96bc5a946afa'
++        }}
++      />
++    )
++    expect(html).toContain('Agent slot 1 details')
++    expect(html).toContain('Repository map')
++    expect(html).toContain('Alex Morgan')
++    expect(html).toContain('00:18')
++    publishCodevWorkboard(null)
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/codev-workboard-store.tsx b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
+new file mode 100644
+index 0000000..2edfa3c
+--- /dev/null
++++ b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
+@@ -0,0 +1,86 @@
++import { useSyncExternalStore, type JSX } from 'react'
++import type { Worktree } from '../../../../shared/types'
++import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
++import type { CodevWorkboardSlot, CodevWorkboardSnapshot } from './CodevWorkboardView'
++
++let snapshot: CodevWorkboardSnapshot | null = null
++let startSession: (() => Promise<void>) | null = null
++const listeners = new Set<() => void>()
++
++export function publishCodevWorkboard(next: CodevWorkboardSnapshot | null): void {
++  snapshot = next
++  for (const listener of listeners) {
++    listener()
++  }
++}
++
++export function setCodevWorkboardStartSession(next: (() => Promise<void>) | null): void {
++  startSession = next
++}
++
++export async function startCodevWorkboardSession(): Promise<void> {
++  await startSession?.()
++}
++
++function subscribe(listener: () => void): () => void {
++  listeners.add(listener)
++  return () => {
++    listeners.delete(listener)
++  }
++}
++
++function getSnapshot(): CodevWorkboardSnapshot | null {
++  return snapshot
++}
++
++export function useCodevWorkboardSlot(worktree: Pick<Worktree, 'path' | 'comment'>): CodevWorkboardSlot | null {
++  const board = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
++  const worktreeId = getCodevProposalWorktreeId(worktree.path, worktree.comment)
++  if (!worktreeId || !board?.slots) {
++    return null
++  }
++  return board.slots.find((slot) => slot.worktreeId === worktreeId) ?? null
++}
++
++export function CodevWorktreeSlotMeta({
++  worktree
++}: {
++  worktree: Pick<Worktree, 'path' | 'comment'>
++}): JSX.Element | null {
++  const slot = useCodevWorkboardSlot(worktree)
++  if (!slot) {
++    return null
++  }
++  return (
++    <div
++      className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 border-t border-worktree-sidebar-border pt-2 text-[11px]"
++      aria-label={`Agent slot ${slot.slot} details`}
++      data-codev-worktree-slot={slot.slot}
++    >
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Assignment</span>
++        <strong>{slot.assignment}</strong>
++      </div>
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Owner</span>
++        <strong>{slot.owner}</strong>
++      </div>
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Provider</span>
++        <strong>{slot.provider}</strong>
++      </div>
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Status</span>
++        <strong>{slot.status}</strong>
++      </div>
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Elapsed</span>
++        <strong>{slot.elapsed}</strong>
++      </div>
++      <div>
++        <span className="block text-[10px] uppercase text-muted-foreground">Current task</span>
++        <strong>{slot.currentTask}</strong>
++      </div>
++    </div>
++  )
++}
 diff --git a/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.test.tsx b/src/renderer/src/components/status-bar/CodevBridgeStatusSegment.test.tsx
 new file mode 100644
 index 0000000..1e7e790
@@ -3013,10 +3661,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..cb37976
+index 0000000..646cf3d
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,338 @@
+@@ -0,0 +1,340 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -3052,6 +3700,8 @@ index 0000000..cb37976
 +  | 'agents.enqueue'
 +  | 'agents.interrupt'
 +  | 'agents.startControlled'
++  | 'workboard.list'
++  | 'workboard.create'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

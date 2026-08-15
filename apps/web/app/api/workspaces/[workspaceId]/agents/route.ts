@@ -4,6 +4,7 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
+import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
 import { apiError, getApiUser } from "@/lib/api";
@@ -400,12 +401,16 @@ export async function POST(
         },
       );
     }
-    return apiError(
-      error,
-      error instanceof DuplicateIssueError ||
-        error instanceof AgentCapacityError
-        ? 409
-        : 400,
-    );
+    if (error instanceof AgentCapacityError) {
+      return Response.json(
+        {
+          error: error.message,
+          code: "agent_capacity_exceeded",
+          maxActiveSessions: MAX_PARALLEL_AGENT_SESSIONS,
+        },
+        { status: 409 },
+      );
+    }
+    return apiError(error, error instanceof DuplicateIssueError ? 409 : 400);
   }
 }

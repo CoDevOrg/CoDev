@@ -64,7 +64,7 @@ type CodevProposalDiscardResult =
 
 type CodevProposalCreateResult =
   | { ok: true; worktreeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: number; code?: string };
 
 const WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -155,14 +155,17 @@ export async function createOrcaManagedProposal(
     const payload = (await response.json().catch(() => null)) as {
       error?: unknown;
       worktreeId?: unknown;
+      code?: unknown;
     } | null;
     if (!response.ok) {
       return {
         ok: false,
+        status: response.status,
         error:
           typeof payload?.error === "string"
             ? payload.error
             : "CoDev could not prepare this proposal.",
+        ...(typeof payload?.code === "string" ? { code: payload.code } : {}),
       };
     }
     const worktreeId =

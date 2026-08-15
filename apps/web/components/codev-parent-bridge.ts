@@ -26,7 +26,9 @@ export type CodevBridgeMethod =
   | "agents.list"
   | "agents.enqueue"
   | "agents.interrupt"
-  | "agents.startControlled";
+  | "agents.startControlled"
+  | "workboard.list"
+  | "workboard.create";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -68,6 +70,8 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "agents.enqueue",
   "agents.interrupt",
   "agents.startControlled",
+  "workboard.list",
+  "workboard.create",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -340,6 +344,98 @@ export async function executeCodevBridgeRequest(
         );
       }
       return succeed(payload);
+    }
+
+    if (request.method === "workboard.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/workboard`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load the agent workboard."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "workboard.create") {
+      const createResponse = await fetcher(
+        `/api/workspaces/${workspaceId}/agents`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "Managed proposal",
+            draft: true,
+            attachments: [],
+          }),
+        },
+      );
+      const createPayload = await readJson(createResponse);
+      const workboardResponse = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/workboard`,
+        { cache: "no-store" },
+      );
+      const workboardPayload = await readJson(workboardResponse);
+      if (!workboardResponse.ok) {
+        if (!createResponse.ok) {
+          return fail(
+            jsonError(
+              createPayload,
+              "CoDev could not start this agent session.",
+            ),
+          );
+        }
+        return fail(
+          jsonError(
+            workboardPayload,
+            "CoDev could not load the agent workboard.",
+          ),
+        );
+      }
+      if (createResponse.status === 409) {
+        return succeed({
+          ...workboardPayload,
+          created: null,
+          rejection: {
+            status: 409,
+            title: "Server rejected the fourth session · HTTP 409",
+            message: jsonError(
+              createPayload,
+              "All three agent slots are in use. Stop or wait for an active session to finish before starting another.",
+            ),
+          },
+        });
+      }
+      if (!createResponse.ok) {
+        return fail(
+          jsonError(
+            createPayload,
+            "CoDev could not start this agent session.",
+          ),
+        );
+      }
+      const sessionId =
+        createPayload &&
+        typeof createPayload === "object" &&
+        "sessionId" in createPayload &&
+        typeof createPayload.sessionId === "string"
+          ? createPayload.sessionId
+          : null;
+      const worktreeId =
+        createPayload &&
+        typeof createPayload === "object" &&
+        "worktreeId" in createPayload &&
+        typeof createPayload.worktreeId === "string"
+          ? createPayload.worktreeId
+          : null;
+      return succeed({
+        ...workboardPayload,
+        created: sessionId && worktreeId ? { sessionId, worktreeId } : null,
+        rejection: null,
+      });
     }
 
     if (request.method === "conflicts.resolve") {

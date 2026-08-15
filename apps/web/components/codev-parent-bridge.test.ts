@@ -533,4 +533,82 @@ describe("codev parent bridge", () => {
       { method: "POST" },
     );
   });
+
+  it("loads the three-slot workboard and surfaces a fourth-session HTTP 409", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const workboard = {
+      capacity: { maxActiveSessions: 3, activeSessions: 3, availableSlots: 0 },
+      slots: [{ slot: 1 }, { slot: 2 }, { slot: 3 }],
+      rejection: null,
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(workboard))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            error:
+              "All three agent slots are in use. Stop or wait for an active session to finish before starting another.",
+            code: "agent_capacity_exceeded",
+          },
+          { status: 409 },
+        ),
+      )
+      .mockResolvedValueOnce(Response.json(workboard));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-workboard-list",
+          method: "workboard.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: workboard });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/agents/workboard",
+      { cache: "no-store" },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-workboard-create",
+          method: "workboard.create",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        created: null,
+        rejection: {
+          status: 409,
+          title: "Server rejected the fourth session · HTTP 409",
+          message:
+            "All three agent slots are in use. Stop or wait for an active session to finish before starting another.",
+        },
+      },
+    });
+    expect(fetcher).toHaveBeenCalledWith("/api/workspaces/workspace-1/agents", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Managed proposal",
+        draft: true,
+        attachments: [],
+      }),
+    });
+  });
 });
