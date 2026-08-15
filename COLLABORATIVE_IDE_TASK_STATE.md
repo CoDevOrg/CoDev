@@ -27,6 +27,35 @@ workspace as its required final Computer Use evidence.
 
 ## Run blockers
 
+- **OI.11 — Production Computer Use authentication blocker 2026-08-15T12:01:12Z:**
+  The required initial `git status --short` was clean. This run then used
+  `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
+  main`; `main` remains current at
+  `8fff4bbd783cb06ccc3a2fc642ef01543b1e3297` (`docs: record OI.11 Production
+  sign-in blocker`). OI.11 source is already on `main` from
+  `dffbcb1a54855a7159b38304e2935d067f49e04b`; no product source was changed
+  in this run. GitHub records Ready Production deployment `5919868222` for
+  that exact HEAD commit at
+  `https://codev-ewu3hym9d-yousef20920s-projects.vercel.app`, which aliases
+  `https://www.trycodev.com` (the unique `*.vercel.app` host is Vercel
+  SSO-protected for unauthenticated requests). The prior feature commit
+  `dffbcb1a` remains Ready as deployment `5919829904` at
+  `https://codev-o22mkezqs-yousef20920s-projects.vercel.app`. Computer Use
+  opened
+  `https://www.trycodev.com/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`
+  and was redirected to the Production sign-in page at
+  `https://trycodev.com/sign-in` (`Welcome to CoDev.` with name/email/password
+  plus Google and GitHub buttons). The mandated local-only test-account file
+  at
+  `/Users/yousefmaher/.codex/automations/codev-one-verified-task-per-run/test-accounts.md`
+  is still absent from this cloud environment, and no `CODEV_TEST_ACCOUNT_*`
+  secrets are present, so the run did not guess passwords or use OAuth. The
+  required authenticated Orca Source Control stale-rejection and exactly-once
+  attributed integration flow therefore cannot start. Current task remains
+  OI.11; do not begin OI.12. Screenshot evidence:
+  `/tmp/codev-oi11-verify/signin-blocker-final.webp` and
+  `/tmp/computer-use/d244b.webp`.
+
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T11:12:00Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
