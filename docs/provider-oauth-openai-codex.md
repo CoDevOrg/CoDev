@@ -1,105 +1,77 @@
-# F6.4 — Official OpenAI Codex OAuth design
+# F6.4 — OpenAI Codex connection design
 
-Status: **F6.5 fixture callback enabled** in the Orca workspace connection UI.
-Connect completes through a CoDev mock/fixture callback. Do not automate a real
-ChatGPT consent screen.
+Status: **research complete — real hosted OAuth is not approved.**
 
-This is the approved provider-specific design for connecting **OpenAI** through
-official Codex/ChatGPT OAuth. Anthropic/Claude OAuth remains out of scope for
-this first Orca connection.
+F6.4 defines the boundary for connecting OpenAI to CoDev. It does **not**
+enable a real ChatGPT consent flow. The only supported CoDev production
+connection today is a personal OpenAI API key. The F6.5 UI callback is a
+clearly-labelled fixture that persists test-only encrypted OAuth-shaped tokens;
+it must never be represented as a real ChatGPT or Codex authorization.
 
-## Why OpenAI Codex
+## What official OpenAI documentation establishes
 
-F6.1–F6.3 already persist a personal OpenAI API key as `provider = openai`.
-Codex/ChatGPT OAuth is OpenAI's official subscription authorization path for
-that same provider id. CoDev already stores `OAUTH_TOKEN` credentials
-server-side; F6.4 does not start that flow from Orca.
+OpenAI documents two sign-in methods for its own Codex clients:
 
-Official references:
+1. **Sign in with ChatGPT** for subscription access.
+2. **Sign in with an API key** for usage-based access.
 
-- [Codex authentication](https://developers.openai.com/codex/auth)
-- Authorize: `https://auth.openai.com/oauth/authorize`
-- Token: `https://auth.openai.com/oauth/token`
-- Device verification: `https://auth.openai.com/codex/device`
-- Public Codex CLI PKCE client id: `app_EMoamEEZ73f0CkXaXp7hrann`
+The documented browser flow returns credentials to the ChatGPT desktop app,
+Codex CLI, or Codex IDE extension. For remote or headless Codex CLI use,
+OpenAI documents device-code authentication as a beta alternative. These are
+first-party Codex client sign-in flows; they are not documentation of a public
+OAuth client-registration or hosted web-app callback contract for CoDev.
 
-## Official flow (Codex CLI)
+Official reference: [OpenAI Codex authentication](https://developers.openai.com/codex/auth).
 
-Codex CLI `codex login` is OAuth 2.0 Authorization Code with PKCE (S256):
+## Decision
 
-1. Generate a random `state` and PKCE `code_verifier` / `code_challenge`.
-2. Open `https://auth.openai.com/oauth/authorize` with `response_type=code`,
-   `client_id`, `redirect_uri`, `scope=openid profile email offline_access`,
-   `code_challenge`, `code_challenge_method=S256`.
-3. Capture the authorization code on a **loopback** callback
-   (`http://localhost:1455/auth/callback`).
-4. POST the code plus `code_verifier` to `https://auth.openai.com/oauth/token`.
-5. Persist `access_token`, `refresh_token`, and `expires_in`. Refresh tokens
-   rotate; concurrent reuse of the same refresh token can invalidate the
-   session.
+Do **not** implement a real CoDev → ChatGPT/Codex OAuth flow based on:
 
-Headless CLI uses device code instead of the loopback callback: show a user
-code, ask the person to approve it at `https://auth.openai.com/codex/device`,
-then poll for an authorization code.
+- the Codex CLI's browser, loopback, or device-code behavior;
+- a public/default Codex client identifier;
+- inferred `auth.openai.com` endpoints, scopes, redirect URIs, or token
+  formats; or
+- copying or importing a Codex authentication cache.
 
-## What CoDev must not copy from the CLI
+Those approaches couple a hosted website to a first-party client flow that the
+official documentation does not establish as an integration surface. They
+would also make the hosted callback, consent, refresh, revocation, and support
+contract speculative.
 
-CoDev is a **hosted website**, not a local CLI. A loopback listener on
-`localhost:1455` is not an acceptable product callback. Real ChatGPT consent
-must never be driven by Computer Use.
+## Current supported CoDev path
 
-F6.5 therefore implements **app-callback or fixture-callback** OAuth against
-CoDev's origin, not the CLI loopback:
+| Use case                    | Supported connection                                    | Notes                                                                                                |
+| --------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| CoDev-hosted provider turns | Personal OpenAI API key                                 | Stored server-side, encrypted, redacted in UI, and reauthorized before every turn.                   |
+| Codex CLI / IDE local work  | User signs in with ChatGPT or provides an API key       | Follow the official Codex client experience; CoDev does not intercept it.                            |
+| Enterprise automation       | Codex access token in a trusted, admin-enabled workflow | This is documented for trusted scripts and private CI runners, not a general hosted user connection. |
+| CoDev OAuth UI verification | F6.5 fixture callback only                              | Test-only encrypted fixture tokens; it never opens ChatGPT or grants account access.                 |
 
-```text
-https://www.trycodev.com/api/auth/oauth/codex/callback
-```
+## Fixture boundary (F6.5)
 
-F6.5 implements that fixture path. Orca **Connect with OpenAI** POSTs
-`{ provider: "openai", oauth: "fixture" }` to the workspace connections API.
-The server persists an encrypted fixture `OAUTH_TOKEN` ending `fx01` and never
-opens `auth.openai.com`.
+The Orca Settings **Official OAuth** row may display a fixture callback as long
+as all of the following remain true:
 
-## Planned CoDev mapping (F6.5)
+- its copy explicitly says it is a CoDev fixture callback;
+- it never opens `auth.openai.com`, ChatGPT, or a device-code page;
+- it only accepts the documented fixture code and stores no real token;
+- the public response returns redacted status only; and
+- API-key and OAuth-shaped fixture records retain separate lifecycles.
 
-| Step | CoDev behavior |
-| --- | --- |
-| Start | Authenticated `POST` creates sealed PKCE state (cookie + server). No secret in the browser. |
-| Consent | Real provider consent is out of band. Tests and Computer Use use a **mock/fixture callback** that never opens ChatGPT. |
-| Exchange | Server-only token POST to `auth.openai.com/oauth/token` (or a fixture token endpoint in tests). |
-| Persist | `saveProviderCredential` with `provider=openai`, `credentialType=OAUTH_TOKEN`, encrypted access/refresh tokens, redacted `lastFour`. |
-| Use | `resolveAgentCredential` / `assertProviderConnectionForTurn` already accept `OAUTH_TOKEN`. |
-| Disconnect | Existing revoke deletes the personal OpenAI credential. |
-| Display | Settings shows `Connected · OAuth · supplied by <name> · ending <lastFour>`. Tokens never return to the client. |
+The fixture is a persistence and redaction test. It is not evidence that
+CoDev's hosted site is authorized to perform ChatGPT/Codex OAuth.
 
-Required controls from F6:
+## Approval gate for a real hosted integration
 
-- PKCE S256
-- `state` validation
-- encrypted refresh tokens at rest
-- narrow documented scopes
-- explicit disconnect
-- provider's documented authorize/token URLs
+Real OAuth may be considered only after OpenAI publishes or directly provides
+all of the following for a third-party hosted application:
 
-## Unavailable product state (this card)
+1. a supported client registration and approved redirect URI model;
+2. documented authorization, token, refresh, and revocation behavior;
+3. allowed scopes and account/workspace entitlement semantics;
+4. production callback, consent, and error-handling requirements; and
+5. security review of server-only token storage, rotation, disconnect, and
+   audit behavior.
 
-Orca Settings → General → **Provider connections** includes an Official OAuth
-row for OpenAI:
-
-- Status: `Planned · unavailable`
-- Control: disabled **Connect with OpenAI**
-- Copy: official Codex OAuth is documented and not enabled in this workspace
-  yet; use an API key for now
-- No authorize redirect, device-code poll, or paste-code consent UI
-
-The dashboard Claude/Codex card in `oauth-connections-card.tsx` is not the
-Orca workspace connection UI and is not F6.4 evidence.
-
-## Approval gate for F6.5
-
-F6.5 may enable Connect only after:
-
-1. This document remains the contract.
-2. A mock/fixture callback can complete the token persist path without a real
-   ChatGPT session.
-3. Computer Use never automates provider consent.
+Until then, CoDev must keep the API-key path as the only real OpenAI provider
+connection and must not automate or proxy ChatGPT consent.
