@@ -9,6 +9,7 @@ import { getWorkspaceAccess } from "./access";
 import { listAgentSessions } from "./agent-runtime";
 import { getDatabase } from "./database";
 import {
+  PROVIDER_BOUNDARY_EVENT_TYPE,
   PROVIDER_SWITCH_DURING_TURN_EXPLANATION,
   isRestrictedFixtureProvider,
   isSelectableSharedProvider,
@@ -163,6 +164,7 @@ async function recordSharedEvent(input: {
   turnId: string;
   type: string;
   payload: Record<string, unknown>;
+  idempotencyKey?: string;
 }) {
   await getDatabase()
     .insert(schema.agentEvents)
@@ -170,7 +172,9 @@ async function recordSharedEvent(input: {
       workspaceId: input.workspaceId,
       sessionId: input.sessionId,
       turnId: input.turnId,
-      idempotencyKey: `shared:${input.sessionId}:${input.type}:${input.turnId}`,
+      idempotencyKey:
+        input.idempotencyKey ??
+        `shared:${input.sessionId}:${input.type}:${input.turnId}`,
       type: input.type,
       payload: input.payload,
     })
@@ -375,11 +379,47 @@ export async function selectSharedSessionProvider(
   if (session.status === "running") {
     throw new SharedSessionError(PROVIDER_SWITCH_DURING_TURN_EXPLANATION, 409);
   }
+  await requireLiveProviderConnection(workspaceId, user.id, provider);
   if (session.provider !== provider) {
+    const finishedTurns = await getDatabase()
+      .select({
+        id: schema.agentTurns.id,
+        status: schema.agentTurns.status,
+        createdAt: schema.agentTurns.createdAt,
+      })
+      .from(schema.agentTurns)
+      .where(eq(schema.agentTurns.sessionId, sessionId));
+    const afterTurn = [...finishedTurns]
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .reverse()
+      .find(
+        (turn) =>
+          turn.status === "completed" ||
+          turn.status === "interrupted" ||
+          turn.status === "failed",
+      );
+    if (!afterTurn) {
+      throw new SharedSessionError(
+        "Switch after a completed fixture turn. The current transcript has no completed turn to bound.",
+        409,
+      );
+    }
     await getDatabase()
       .update(schema.agentSessions)
       .set({ provider, updatedAt: new Date() })
       .where(eq(schema.agentSessions.id, sessionId));
+    await recordSharedEvent({
+      workspaceId,
+      sessionId,
+      turnId: afterTurn.id,
+      type: PROVIDER_BOUNDARY_EVENT_TYPE,
+      idempotencyKey: `shared:${sessionId}:provider.boundary:${session.provider}:${provider}:${afterTurn.id}`,
+      payload: {
+        from: session.provider,
+        to: provider,
+        afterTurnId: afterTurn.id,
+      },
+    });
   }
   return loadSharedSessionSnapshot(workspaceId, user);
 }

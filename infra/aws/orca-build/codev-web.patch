@@ -1371,10 +1371,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
-index 0000000..0ac7b83
+index 0000000..f673b66
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
-@@ -0,0 +1,250 @@
+@@ -0,0 +1,294 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevSharedSessionViewPanel, type CodevSharedSessionView } from './CodevSharedSessionPanel'
@@ -1624,6 +1624,50 @@ index 0000000..0ac7b83
 +    expect(html).toContain('This restricted fixture provider does not support interrupting a turn.')
 +    expect(html).toContain('data-codev-provider-capability="restricted"')
 +  })
++
++  it('renders a provider boundary after a completed fixture turn', () => {
++    const html = renderToStaticMarkup(
++      <CodevSharedSessionViewPanel
++        connected
++        restored={false}
++        viewer={{ id: 'b0200000-0000-4000-8000-000000000012', name: 'Jordan Lee', canCoSteer: true }}
++        view={{
++          ...view,
++          session: { ...view.session, provider: 'openai', state: 'idle', queue: [] },
++          attributedQueue: [],
++          transcript: [
++            {
++              ...view.transcript[0]!,
++              provider: 'restricted',
++              providerLabel: 'Restricted fixture'
++            }
++          ],
++          providerBoundaries: [
++            {
++              id: 'boundary-1',
++              from: 'restricted',
++              to: 'openai',
++              fromLabel: 'Restricted fixture',
++              toLabel: 'OpenAI',
++              afterTurnId: view.transcript[0]!.turnId,
++              label: 'Provider boundary · switched from Restricted fixture to OpenAI'
++            }
++          ]
++        }}
++        draftPrompt=""
++        busy=""
++        message=""
++        onDraftChange={() => undefined}
++        onRefresh={() => undefined}
++        onStartControlled={() => undefined}
++        onQueue={() => undefined}
++        onInterrupt={() => undefined}
++      />
++    )
++    expect(html).toContain('Restricted fixture')
++    expect(html).toContain('Provider boundary · switched from Restricted fixture to OpenAI')
++    expect(html).toContain('data-codev-provider-boundary="restricted-to-openai"')
++  })
 +})
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
 new file mode 100644
@@ -1806,10 +1850,10 @@ index 0000000..89d176c
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
 new file mode 100644
-index 0000000..f1e44f4
+index 0000000..314188a
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
-@@ -0,0 +1,477 @@
+@@ -0,0 +1,505 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -1830,6 +1874,18 @@ index 0000000..f1e44f4
 +  status: 'completed' | 'interrupted' | 'failed'
 +  tool: string | null
 +  output: string | null
++  provider?: string
++  providerLabel?: string
++}
++
++export type CodevSharedProviderBoundary = {
++  id: string
++  from: string
++  to: string
++  fromLabel: string
++  toLabel: string
++  afterTurnId: string | null
++  label: string
 +}
 +
 +export type CodevProviderCapabilityFlags = {
@@ -1873,6 +1929,7 @@ index 0000000..f1e44f4
 +  }>
 +  capabilities?: CodevProviderCapabilityFlags
 +  availableProviders?: CodevProviderCapabilityFlags[]
++  providerBoundaries?: CodevSharedProviderBoundary[]
 +}
 +
 +export type CodevSharedSessionSnapshot = {
@@ -2217,26 +2274,41 @@ index 0000000..f1e44f4
 +                <strong>{view.transcript.length} completed turns</strong>
 +              </div>
 +              {view.transcript.map((turn) => (
-+                <article key={turn.turnId} className="rounded-md border border-sidebar-border p-2 text-xs">
-+                  <div className="flex justify-between gap-2">
-+                    <span>Turn {turn.position}</span>
-+                    <strong>
-+                      {turn.authorName} · {turn.status}
-+                    </strong>
-+                  </div>
-+                  <p className="mt-1">{turn.prompt}</p>
-+                  {turn.tool ? (
-+                    <p className="mt-1 text-muted-foreground">
-+                      Tool activity · <code>{turn.tool}</code>
-+                    </p>
-+                  ) : null}
-+                  {turn.output ? (
-+                    <p className="mt-1">
-+                      <span className="text-[10px] uppercase text-muted-foreground">Output</span>
-+                      {turn.output}
-+                    </p>
-+                  ) : null}
-+                </article>
++                <div key={turn.turnId} className="space-y-2">
++                  <article className="rounded-md border border-sidebar-border p-2 text-xs">
++                    <div className="flex justify-between gap-2">
++                      <span>Turn {turn.position}</span>
++                      <strong>
++                        {turn.authorName} · {turn.status}
++                        {turn.providerLabel ? ` · ${turn.providerLabel}` : ''}
++                      </strong>
++                    </div>
++                    <p className="mt-1">{turn.prompt}</p>
++                    {turn.tool ? (
++                      <p className="mt-1 text-muted-foreground">
++                        Tool activity · <code>{turn.tool}</code>
++                      </p>
++                    ) : null}
++                    {turn.output ? (
++                      <p className="mt-1">
++                        <span className="text-[10px] uppercase text-muted-foreground">Output</span>
++                        {turn.output}
++                      </p>
++                    ) : null}
++                  </article>
++                  {(view.providerBoundaries ?? [])
++                    .filter((boundary) => boundary.afterTurnId === turn.turnId)
++                    .map((boundary) => (
++                      <p
++                        key={boundary.id}
++                        className="rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs"
++                        aria-label="Provider boundary"
++                        data-codev-provider-boundary={`${boundary.from}-to-${boundary.to}`}
++                      >
++                        {boundary.label}
++                      </p>
++                    ))}
++                </div>
 +              ))}
 +            </div>
 +          ) : null}

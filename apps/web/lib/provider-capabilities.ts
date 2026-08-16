@@ -76,6 +76,12 @@ export function listProviderCapabilities(
   }));
 }
 
+export const PROVIDER_BOUNDARY_EVENT_TYPE = "shared_session.provider.boundary";
+
+export function providerSwitchLabel(from: string, to: string) {
+  return `Provider boundary · switched from ${capabilitiesForProvider(from).label} to ${capabilitiesForProvider(to).label}`;
+}
+
 export function unavailableControlExplanation(
   provider: string,
   action: ProviderCapabilityAction,

@@ -5,8 +5,10 @@ import {
 } from "@codev/contracts";
 
 import {
+  PROVIDER_BOUNDARY_EVENT_TYPE,
   capabilitiesForProvider,
   listProviderCapabilities,
+  providerSwitchLabel,
   type ProviderCapabilityFlags,
 } from "./provider-capabilities";
 import {
@@ -36,6 +38,18 @@ export type SharedSessionTranscriptTurn = {
   status: "completed" | "interrupted" | "failed";
   tool: string | null;
   output: string | null;
+  provider: string;
+  providerLabel: string;
+};
+
+export type SharedSessionProviderBoundary = {
+  id: string;
+  from: string;
+  to: string;
+  fromLabel: string;
+  toLabel: string;
+  afterTurnId: string | null;
+  label: string;
 };
 
 export type SharedSessionLastAction = {
@@ -63,6 +77,7 @@ export type SharedSessionView = {
   providerEvents: NormalizedProviderEvent[];
   capabilities: ProviderCapabilityFlags;
   availableProviders: ProviderCapabilityFlags[];
+  providerBoundaries: SharedSessionProviderBoundary[];
 };
 
 export type SharedSessionSnapshot = {
@@ -166,6 +181,43 @@ export function lastCompletedSharedAction(
   return null;
 }
 
+function toProviderBoundaries(
+  events: SharedSessionListEvent[],
+): SharedSessionProviderBoundary[] {
+  return events.flatMap((event) => {
+    if (event.type !== PROVIDER_BOUNDARY_EVENT_TYPE) return [];
+    const from =
+      typeof event.payload?.from === "string" ? event.payload.from : null;
+    const to = typeof event.payload?.to === "string" ? event.payload.to : null;
+    if (!from || !to) return [];
+    const afterTurnId =
+      typeof event.payload?.afterTurnId === "string"
+        ? event.payload.afterTurnId
+        : (event.turnId ?? null);
+    return [
+      {
+        id: event.id,
+        from,
+        to,
+        fromLabel: capabilitiesForProvider(from).label,
+        toLabel: capabilitiesForProvider(to).label,
+        afterTurnId,
+        label: providerSwitchLabel(from, to),
+      },
+    ];
+  });
+}
+
+function providerForTurn(
+  turn: SharedSessionListTurn,
+  boundaries: Array<SharedSessionProviderBoundary & { createdAt: string }>,
+  sessionProvider: string,
+) {
+  const created = iso(turn.createdAt);
+  const later = boundaries.find((boundary) => boundary.createdAt > created);
+  return later?.from ?? sessionProvider;
+}
+
 export function toSharedSessionView(
   session: SharedSessionListItem,
 ): SharedSessionView {
@@ -197,6 +249,14 @@ export function toSharedSessionView(
         : undefined);
     if (action && turnId) eventsByTurn.set(turnId, action);
   }
+  const datedBoundaries = session.events.flatMap((event) => {
+    if (event.type !== PROVIDER_BOUNDARY_EVENT_TYPE) return [];
+    const [boundary] = toProviderBoundaries([event]);
+    return boundary
+      ? [{ ...boundary, createdAt: iso(event.createdAt) }]
+      : [];
+  });
+  const providerBoundaries = toProviderBoundaries(session.events);
 
   return {
     session: sharedSessionSchema.parse({
@@ -226,16 +286,25 @@ export function toSharedSessionView(
         authorName: displayMemberName(turn?.authorName, turn?.authorLogin),
       };
     }),
-    transcript: transcriptTurns.map((turn, index) => ({
-      position: index + 1,
-      turnId: turn.id,
-      authorId: turn.authorId,
-      authorName: displayMemberName(turn.authorName, turn.authorLogin),
-      prompt: turn.prompt,
-      status: turn.status as SharedSessionTranscriptTurn["status"],
-      tool: eventsByTurn.get(turn.id)?.tool ?? null,
-      output: turn.output ?? turn.lastError ?? null,
-    })),
+    transcript: transcriptTurns.map((turn, index) => {
+      const provider = providerForTurn(
+        turn,
+        datedBoundaries,
+        session.provider,
+      );
+      return {
+        position: index + 1,
+        turnId: turn.id,
+        authorId: turn.authorId,
+        authorName: displayMemberName(turn.authorName, turn.authorLogin),
+        prompt: turn.prompt,
+        status: turn.status as SharedSessionTranscriptTurn["status"],
+        tool: eventsByTurn.get(turn.id)?.tool ?? null,
+        output: turn.output ?? turn.lastError ?? null,
+        provider,
+        providerLabel: capabilitiesForProvider(provider).label,
+      };
+    }),
     lastCompletedAction: lastCompletedSharedAction(session),
     connectionBlocked: isProviderConnectionBlockMessage(session.lastError)
       ? (session.lastError ?? null)
@@ -243,5 +312,6 @@ export function toSharedSessionView(
     providerEvents: toNormalizedProviderEvents(session),
     capabilities: capabilitiesForProvider(session.provider),
     availableProviders: listProviderCapabilities(session.provider),
+    providerBoundaries,
   };
 }

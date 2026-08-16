@@ -199,4 +199,36 @@ describe("shared session view", () => {
       "restricted",
     );
   });
+
+  it("inserts a provider boundary after a completed turn instead of mixing transcripts", () => {
+    const view = toSharedSessionView(
+      session({
+        provider: "openai",
+        events: [
+          ...session().events,
+          {
+            id: "f3100000-0000-4000-8000-000000000007",
+            turnId: completedTurnId,
+            type: "shared_session.provider.boundary",
+            payload: {
+              from: "restricted",
+              to: "openai",
+              afterTurnId: completedTurnId,
+            },
+            createdAt: "2026-07-30T12:03:00.000Z",
+          },
+        ],
+      }),
+    );
+    expect(view.providerBoundaries).toEqual([
+      expect.objectContaining({
+        from: "restricted",
+        to: "openai",
+        afterTurnId: completedTurnId,
+        label:
+          "Provider boundary · switched from Restricted fixture to OpenAI",
+      }),
+    ]);
+    expect(view.transcript[0]?.providerLabel).toBe("Restricted fixture");
+  });
 });
