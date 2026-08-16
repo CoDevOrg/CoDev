@@ -476,21 +476,29 @@ export async function deleteProviderCredential(
   scopeType: ScopeType,
   scopeId: string,
   provider: AuthProvider,
+  credentialType?: CredentialType,
 ) {
-  await getDatabase()
-    .delete(schema.providerCredentials)
-    .where(
-      and(
-        eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
-        eq(schema.providerCredentials.scopeId, scopeId),
-        eq(schema.providerCredentials.provider, parseProvider(provider)),
+  const predicates = [
+    eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
+    eq(schema.providerCredentials.scopeId, scopeId),
+    eq(schema.providerCredentials.provider, parseProvider(provider)),
+  ];
+  if (credentialType) {
+    predicates.push(
+      eq(
+        schema.providerCredentials.credentialType,
+        parseCredentialType(credentialType),
       ),
     );
+  }
+  await getDatabase()
+    .delete(schema.providerCredentials)
+    .where(and(...predicates));
 }
 
 export async function getOpenAICredentialStatus(userId: string) {
-  const credential = await findCredential("USER", userId, "openai");
-  return credential?.credentialType === "API_KEY"
+  const credential = await findCredential("USER", userId, "openai", "API_KEY");
+  return credential
     ? {
         lastFour: credential.lastFour ?? undefined,
         updatedAt: credential.updatedAt,
@@ -499,7 +507,7 @@ export async function getOpenAICredentialStatus(userId: string) {
 }
 
 export async function getOpenAIApiKey(userId: string) {
-  const credential = await findCredential("USER", userId, "openai");
+  const credential = await findCredential("USER", userId, "openai", "API_KEY");
   if (!credential || !credential.encryptedApiKey) {
     throw new Error(
       "Add an OpenAI API key in Settings before starting an agent turn.",

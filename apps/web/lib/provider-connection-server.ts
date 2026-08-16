@@ -29,9 +29,10 @@ type ConnectionUser = {
 export async function loadProviderConnectionSnapshot(
   user: ConnectionUser,
 ): Promise<ProviderConnectionSnapshot> {
-  const [openai, anthropic] = await Promise.all([
-    getProviderCredentialStatus("USER", user.id, "openai"),
-    getProviderCredentialStatus("USER", user.id, "anthropic"),
+  const [openai, anthropic, openAiOAuth] = await Promise.all([
+    getProviderCredentialStatus("USER", user.id, "openai", "API_KEY"),
+    getProviderCredentialStatus("USER", user.id, "anthropic", "API_KEY"),
+    getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
   ]);
   return toProviderConnectionSnapshot({
     viewer: {
@@ -42,6 +43,7 @@ export async function loadProviderConnectionSnapshot(
       openai,
       anthropic,
     },
+    openAiOAuthStatus: openAiOAuth,
   });
 }
 
@@ -66,7 +68,9 @@ export async function completeFixtureOpenAiOAuth(
   code = OPENAI_OAUTH_FIXTURE_CODE,
 ): Promise<ProviderConnectionSnapshot> {
   if (!isOpenAiOAuthFixtureCode(code)) {
-    throw new Error("Use the CoDev fixture OAuth callback, not provider consent.");
+    throw new Error(
+      "Use the CoDev fixture OAuth callback, not provider consent.",
+    );
   }
   const tokens = fixtureOpenAiOAuthTokens();
   await saveProviderCredential({
@@ -89,7 +93,9 @@ export async function revokePersonalProviderConnection(
   user: ConnectionUser,
   provider: ProviderConnectionProvider,
 ): Promise<ProviderConnectionSnapshot> {
-  await deleteProviderCredential("USER", user.id, provider);
+  // F6.2 controls only the personal API-key connection. OAuth has its own
+  // explicit lifecycle, so revoking a key must not disconnect it.
+  await deleteProviderCredential("USER", user.id, provider, "API_KEY");
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
   );

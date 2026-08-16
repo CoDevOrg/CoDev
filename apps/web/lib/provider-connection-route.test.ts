@@ -65,10 +65,10 @@ const oauthConnectedSnapshot = {
     {
       provider: "openai",
       label: "OpenAI",
-      status: "connected",
-      credentialType: "OAUTH_TOKEN",
-      lastFour: "fx01",
-      suppliedBy: "CoDev Test Jordan",
+      status: "not_connected",
+      credentialType: null,
+      lastFour: null,
+      suppliedBy: null,
       scope: "personal",
     },
     {

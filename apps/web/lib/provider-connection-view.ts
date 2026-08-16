@@ -39,12 +39,9 @@ export const OPENAI_OAUTH_PLAN: ProviderOAuthPlan = {
 };
 
 export function toOpenAiOAuthPlan(
-  connection: ProviderConnectionRecord | undefined,
+  status: ProviderCredentialStatus | null | undefined,
 ): ProviderOAuthPlan {
-  if (
-    connection?.status === "connected" &&
-    connection.credentialType === "OAUTH_TOKEN"
-  ) {
+  if (publicCredentialType(status?.credentialType) === "OAUTH_TOKEN") {
     return {
       ...OPENAI_OAUTH_PLAN,
       summary: "Connected · fixture callback",
@@ -128,6 +125,7 @@ export function toProviderConnectionSnapshot(input: {
   statuses: Partial<
     Record<ProviderConnectionProvider, ProviderCredentialStatus | null>
   >;
+  openAiOAuthStatus?: ProviderCredentialStatus | null;
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -140,9 +138,7 @@ export function toProviderConnectionSnapshot(input: {
   return {
     viewer: input.viewer,
     connections,
-    oauth: toOpenAiOAuthPlan(
-      connections.find((row) => row.provider === "openai"),
-    ),
+    oauth: toOpenAiOAuthPlan(input.openAiOAuthStatus),
   };
 }
 
