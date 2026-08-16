@@ -1,51 +1,27 @@
-# Subscription OAuth setup
+# Provider subscription OAuth setup
 
-CoDev keeps Claude Code and Codex OAuth tokens encrypted in the provider
-credential store. By default it uses the public Claude Code and Codex CLI
-PKCE clients so hosted deployments can connect subscription accounts without
-registering a separate OAuth app:
+Status: **approval-gated for hosted subscriptions.**
 
-- **Claude Code** uses Anthropic's manual callback page. Connect opens the
-  provider sign-in tab; paste the resulting authorization code back into
-  Settings.
-- **Codex** uses ChatGPT device-code sign-in. Connect shows a one-time code;
-  approve it at `https://auth.openai.com/codex/device`. Device code auth must
-  be enabled in ChatGPT security settings when your plan requires it.
+CoDev must not use a provider's public CLI client ID, device flow, loopback
+callback, authentication cache, or inferred endpoints to connect a user's
+subscription to a hosted workspace. Those are first-party client mechanisms,
+not a general CoDev cloud integration contract.
 
-Optional overrides still support a first-party app-callback client. Register
-these callback URLs with that provider OAuth client, then set the matching
-redirect URI variables:
+The only real OpenAI connection currently supported by CoDev is an API-key
+connection. The OpenAI provider connection in Orca Settings is a clearly
+labelled test fixture and does not open ChatGPT consent or store a real token.
 
-```text
-https://YOUR_CODEV_DOMAIN/api/auth/oauth/claude/callback
-https://YOUR_CODEV_DOMAIN/api/auth/oauth/codex/callback
-```
+If OpenAI approves a hosted Codex subscription connection, use only the
+client registration, redirect URIs, grant type, scopes, credential lifecycle,
+and remote-runtime mechanism OpenAI provides. The implementation is in
+`apps/web/lib/hosted-codex-subscription.ts` and related modules. It is disabled
+until `HOSTED_CODEX_SUBSCRIPTION_LAUNCH_APPROVED` is flipped in source after
+written sign-off. Environment variables cannot enable it. The complete required
+design and approval checklist is in
+[openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md).
 
-Environment variables (all optional when using the public CLI defaults):
-
-```text
-CLAUDE_OAUTH_CLIENT_ID=
-CLAUDE_OAUTH_CLIENT_SECRET=
-CLAUDE_OAUTH_AUTHORIZE_URL=
-CLAUDE_OAUTH_TOKEN_URL=
-CLAUDE_OAUTH_REDIRECT_URI=
-CLAUDE_OAUTH_SCOPE=
-
-CODEX_OAUTH_CLIENT_ID=
-CODEX_OAUTH_CLIENT_SECRET=
-CODEX_OAUTH_AUTHORIZE_URL=
-CODEX_OAUTH_TOKEN_URL=
-CODEX_OAUTH_REDIRECT_URI=
-CODEX_OAUTH_SCOPE=
-```
-
-Setting `CLAUDE_OAUTH_REDIRECT_URI` or `CODEX_OAUTH_REDIRECT_URI` switches that
-provider into app-callback mode (browser returns directly to CoDev). Client
-secrets are optional for public PKCE clients, but must be added when the
-provider requires a confidential client.
-
-The app never exposes provider credentials or token-exchange responses in the
-browser.
+The app must never expose provider credentials or token-exchange responses in
+the browser.
 
 Orca Settings → General → **Provider connections** can complete OpenAI Codex
 OAuth through the CoDev fixture callback documented in

@@ -66,6 +66,14 @@ impl IntoResponse for RuntimeError {
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeGrantRequest {
+    pub audience: String,
+    pub expires_at: DateTime<Utc>,
+    pub token: String,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {

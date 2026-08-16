@@ -1,5 +1,9 @@
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
 import {
+  HostedCodexSubscriptionCard,
+  parseHostedCodexNotice,
+} from "@/components/hosted-codex-subscription-card";
+import {
   OAuthConnectionsCard,
   parseOAuthNotice,
 } from "@/components/oauth-connections-card";
@@ -13,6 +17,7 @@ import {
   getOAuthCredentialStatus,
   getProviderCredentialStatus,
 } from "@/lib/credentials";
+import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
 import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
 import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
@@ -20,12 +25,16 @@ import { requireUser } from "@/lib/session";
 export default async function OrganizationAgentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ oauth?: string; status?: string }>;
+  searchParams: Promise<{
+    oauth?: string;
+    status?: string;
+    hostedCodex?: string;
+  }>;
 }) {
   const user = await requireUser();
   const context = await getActiveOrganizationSettingsContext(user.id);
   const params = await searchParams;
-  const credentials = context
+  const [openai, anthropic, bedrock, cursor, claude, hostedCodex] = context
     ? await Promise.all([
         getProviderCredentialStatus(
           "WORKSPACE",
@@ -47,12 +56,16 @@ export default async function OrganizationAgentsPage({
           context.workspace.id,
           "cursor",
         ),
-        getOAuthCredentialStatus("WORKSPACE", context.workspace.id, "openai"),
         getOAuthCredentialStatus(
           "WORKSPACE",
           context.workspace.id,
           "anthropic",
         ),
+        getHostedCodexPublicStatus({
+          scopeType: "ORGANIZATION",
+          scopeId: context.workspace.id,
+          canManage: context.canWrite,
+        }),
       ])
     : [null, null, null, null, null, null];
 
@@ -72,46 +85,54 @@ export default async function OrganizationAgentsPage({
           />
           <SettingsCard title="OpenAI">
             <WorkspaceCredentialForm
-              currentLastFour={credentials[0]?.lastFour}
+              currentLastFour={openai?.lastFour}
               provider="openai"
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
           <SettingsCard title="Anthropic">
             <WorkspaceCredentialForm
-              currentLastFour={credentials[1]?.lastFour}
+              currentLastFour={anthropic?.lastFour}
               provider="anthropic"
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
           <SettingsCard title="Cursor">
             <WorkspaceCredentialForm
-              currentLastFour={credentials[3]?.lastFour}
+              currentLastFour={cursor?.lastFour}
               provider="cursor"
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
           <OAuthConnectionsCard
             connected={{
-              claude: credentials[5]?.credentialType === "OAUTH_TOKEN",
-              codex: credentials[4]?.credentialType === "OAUTH_TOKEN",
+              claude: claude?.credentialType === "OAUTH_TOKEN",
+              codex: false,
             }}
             configured={{
               claude: getOAuthConfigurationStatus("claude").configured,
-              codex: getOAuthConfigurationStatus("codex").configured,
+              codex: false,
             }}
             flowModes={{
               claude: getOAuthConfigurationStatus("claude").flowMode,
-              codex: getOAuthConfigurationStatus("codex").flowMode,
             }}
             notice={parseOAuthNotice(params)}
+            providers={["claude"]}
             returnTo="/settings/org/agents"
             scopeType="WORKSPACE"
             workspaceId={context.workspace.id}
           />
+          {hostedCodex ? (
+            <HostedCodexSubscriptionCard
+              notice={parseHostedCodexNotice(params)}
+              organizationId={context.workspace.id}
+              returnTo="/settings/org/agents"
+              status={hostedCodex}
+            />
+          ) : null}
           <SettingsCard title="Amazon Bedrock">
             <BedrockRoleForm
-              currentRole={credentials[2]?.awsRoleArn}
+              currentRole={bedrock?.awsRoleArn}
               workspaceId={context.workspace.id}
             />
           </SettingsCard>

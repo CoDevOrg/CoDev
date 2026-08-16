@@ -112,6 +112,7 @@ export function OAuthConnectionsCard({
   configured,
   flowModes,
   notice,
+  providers = ["claude", "codex"],
   returnTo,
   scopeType = "USER",
   workspaceId,
@@ -120,6 +121,7 @@ export function OAuthConnectionsCard({
   configured: Record<OAuthProvider, boolean>;
   flowModes?: Partial<Record<OAuthProvider, OAuthFlowMode>>;
   notice?: OAuthNotice | undefined;
+  providers?: OAuthProvider[];
   returnTo: string;
   scopeType?: "USER" | "WORKSPACE";
   workspaceId?: string | undefined;
@@ -306,7 +308,7 @@ export function OAuthConnectionsCard({
         </div>
       ) : null}
       <div className="oauth-connection-grid">
-        {(["claude", "codex"] as const).map((provider) => {
+        {providers.map((provider) => {
           const label = providerLabel(provider);
           const isConnected = connected[provider];
           const isConfigured = configured[provider];

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getHostState: vi.fn(),
   getSandbox: vi.fn(),
   createSandboxWorktree: vi.fn(),
+  injectHostedCodexRuntimeGrant: vi.fn(),
   getWorkspaceForMember: vi.fn(),
   getWorkspaceSnapshot: vi.fn(),
   getWorkspaceRuntime: vi.fn(),
@@ -46,8 +47,12 @@ vi.mock("./orchestrator", () => ({
   },
   getSandbox: mocks.getSandbox,
   createSandboxWorktree: mocks.createSandboxWorktree,
+  injectHostedCodexRuntimeGrant: mocks.injectHostedCodexRuntimeGrant,
   provisionSandbox: mocks.provisionSandbox,
   waitForOrchestrator: mocks.waitForOrchestrator,
+}));
+vi.mock("./hosted-codex-runtime-delivery", () => ({
+  deliverHostedCodexRuntimeGrant: vi.fn(async () => null),
 }));
 vi.mock("./workspaces", () => ({
   beginWorkspaceProvisioning: mocks.beginWorkspaceProvisioning,

@@ -12,10 +12,12 @@ import { requireWorkspacePermission } from "./access";
 import {
   createSandboxWorktree,
   getSandbox,
+  injectHostedCodexRuntimeGrant,
   OrchestratorError,
   provisionSandbox,
   waitForOrchestrator,
 } from "./orchestrator";
+import { deliverHostedCodexRuntimeGrant } from "./hosted-codex-runtime-delivery";
 import { assertVmMinuteQuota } from "./quotas";
 import {
   beginWorkspaceProvisioning,
@@ -162,6 +164,11 @@ export async function ensureWorkspaceRuntimeReady(
       expiresAt: expiresAt.toISOString(),
       resumeFromSnapshot: Boolean(persistedSnapshot),
       lifecycle: E2B_LIFECYCLE_OPTIONS,
+    });
+    await deliverHostedCodexRuntimeGrant({
+      userId,
+      workspaceId,
+      inject: (grant) => injectHostedCodexRuntimeGrant(workspaceId, grant),
     });
     await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
     if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);

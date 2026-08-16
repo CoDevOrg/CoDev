@@ -21,9 +21,9 @@ use crate::{
     backend::{IdeBackend, SharedBackend},
     model::{
         CreateRequest, ExecRequest, IdeStartRequest, PublicationExportRequest, Result,
-        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        RuntimeError, RuntimeGrantRequest, TerminalInputRequest, TerminalPollRequest,
+        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -108,6 +108,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/terminals/{session_id}",
             delete(close_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/runtime-grant",
+            post(put_runtime_grant).delete(delete_runtime_grant),
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
@@ -204,7 +208,32 @@ async fn destroy_sandbox(
     Path(workspace_id): Path<String>,
 ) -> Result<StatusCode> {
     validate_workspace_id(&workspace_id)?;
+    backend.destroy_runtime_grant(&workspace_id).await.ok();
     backend.destroy(&workspace_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn put_runtime_grant(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<RuntimeGrantRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    if request.audience.is_empty() || request.token.is_empty() {
+        return Err(RuntimeError::BadRequest(
+            "runtime grant requires an audience and token".into(),
+        ));
+    }
+    backend.put_runtime_grant(&workspace_id, request).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_runtime_grant(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    backend.destroy_runtime_grant(&workspace_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -806,7 +835,44 @@ mod tests {
             .expect("response");
         assert_eq!(create.status(), StatusCode::CREATED);
         let body = to_bytes(create.into_body(), 1 << 20).await.expect("body");
-        assert!(String::from_utf8_lossy(&body).contains("sandbox-e010bd2c"));
+        let body_text = String::from_utf8_lossy(&body);
+        assert!(body_text.contains("sandbox-e010bd2c"));
+        assert!(!body_text.to_lowercase().contains("token"));
+        assert!(!body_text.to_lowercase().contains("refresh"));
+
+        let grant = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/runtime-grant")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "audience": "sandbox:e010bd2c-a3c1-438f-acef-166287a3b1cb",
+                            "expiresAt": (Utc::now() + Duration::minutes(15)).to_rfc3339(),
+                            "token": "short-lived-runtime-grant"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(grant.status(), StatusCode::NO_CONTENT);
+
+        let destroy_grant = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/runtime-grant")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(destroy_grant.status(), StatusCode::NO_CONTENT);
 
         let resume = app
             .clone()

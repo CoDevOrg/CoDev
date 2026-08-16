@@ -207,11 +207,39 @@ export async function getSandbox(
 
 export async function destroySandbox(workspaceId: string) {
   try {
+    await destroyHostedCodexRuntimeGrant(workspaceId).catch(() => undefined);
     await orchestratorRequest("DELETE", `/v1/sandboxes/${workspaceId}`);
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 404) {
       return;
     }
+    throw error;
+  }
+}
+
+export async function injectHostedCodexRuntimeGrant(
+  workspaceId: string,
+  grant: { token: string; audience: string; expiresAt: Date },
+) {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/runtime-grant`,
+    {
+      audience: grant.audience,
+      expiresAt: grant.expiresAt.toISOString(),
+      token: grant.token,
+    },
+  );
+}
+
+export async function destroyHostedCodexRuntimeGrant(workspaceId: string) {
+  try {
+    await orchestratorRequest(
+      "DELETE",
+      `/v1/sandboxes/${workspaceId}/runtime-grant`,
+    );
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 404) return;
     throw error;
   }
 }

@@ -1252,6 +1252,22 @@ select,
   text-align: right;
 }
 
+.hosted-codex-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.hosted-codex-confirm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .oauth-connection-flow {
   display: grid;
   margin-top: 16px;

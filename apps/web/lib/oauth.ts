@@ -17,7 +17,11 @@ export type OAuthFlowMode = "app_callback" | "manual_code" | "device_code";
 /** Public Claude Code PKCE client used by the official CLI. */
 export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
   "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-/** Public Codex CLI PKCE client used by the official CLI. */
+/**
+ * Public Codex CLI PKCE client used by the official CLI.
+ * Do not use this identifier for CoDev's hosted Codex subscription
+ * connection. That integration lives in `hosted-codex-subscription.ts`.
+ */
 export const DEFAULT_CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
 export const CLAUDE_MANUAL_REDIRECT_URI =

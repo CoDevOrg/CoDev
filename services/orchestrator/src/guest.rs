@@ -21,10 +21,11 @@ use wait_timeout::ChildExt;
 
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    PublicationFile, RuntimeError, RuntimeGrantRequest, TerminalChunk, TerminalInputRequest,
+    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+    WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -72,6 +73,7 @@ pub struct GuestService {
     workspace_root: PathBuf,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
     mutations: Mutex<()>,
+    runtime_grant_audience: Mutex<Option<String>>,
 }
 
 impl GuestService {
@@ -86,6 +88,7 @@ impl GuestService {
             workspace_root,
             terminals: Mutex::new(HashMap::new()),
             mutations: Mutex::new(()),
+            runtime_grant_audience: Mutex::new(None),
         })
     }
 
@@ -102,6 +105,8 @@ impl GuestService {
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
+            ("PUT", "/v1/runtime-grant") => self.put_runtime_grant(body),
+            ("DELETE", "/v1/runtime-grant") => self.destroy_runtime_grant(),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -268,6 +273,8 @@ impl GuestService {
         command.cwd(working_directory);
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
+        command.env("HISTFILE", "/dev/null");
+        command.env("HISTSIZE", "0");
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
@@ -362,6 +369,8 @@ impl GuestService {
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
+        command.env("HISTFILE", "/dev/null");
+        command.env("HISTSIZE", "0");
         let mut child = pty
             .slave
             .spawn_command(command)
@@ -785,6 +794,38 @@ impl GuestService {
 
     fn snapshot_workspace(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         self.export_workspace(body, false)
+    }
+
+    fn put_runtime_grant(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: RuntimeGrantRequest = decode(body)?;
+        if request.token.is_empty() || request.audience.is_empty() {
+            return Err(RuntimeError::BadRequest(
+                "runtime grant requires an audience and token".into(),
+            ));
+        }
+        *self
+            .runtime_grant_audience
+            .lock()
+            .expect("runtime grant lock") = Some(request.audience);
+        let grant_path = PathBuf::from("/dev/shm/codev-runtime-grant");
+        if let Some(parent) = grant_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if grant_path.parent().is_some_and(|parent| parent.exists()) {
+            fs::write(&grant_path, request.token.as_bytes()).map_err(RuntimeError::internal)?;
+            let _ = fs::set_permissions(&grant_path, fs::Permissions::from_mode(0o600));
+        }
+        Ok(serde_json::json!({ "status": "delivered" }))
+    }
+
+    fn destroy_runtime_grant(&self) -> crate::model::Result<serde_json::Value> {
+        *self
+            .runtime_grant_audience
+            .lock()
+            .expect("runtime grant lock") = None;
+        let grant_path = PathBuf::from("/dev/shm/codev-runtime-grant");
+        let _ = fs::remove_file(grant_path);
+        Ok(serde_json::json!({ "status": "destroyed" }))
     }
 
     fn export_workspace(
@@ -1328,6 +1369,23 @@ mod tests {
             fs::read_to_string(directory.path().join("hello.txt")).expect("read"),
             "updated"
         );
+    }
+
+    #[test]
+    fn runtime_grant_stays_out_of_the_workspace_tree() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let put = service.handle(
+            "PUT",
+            "/v1/runtime-grant",
+            br#"{"audience":"sandbox:test","expiresAt":"2026-08-16T20:00:00Z","token":"short-lived"}"#,
+        );
+        assert_eq!(put.status, 200);
+        assert!(!directory.path().join("short-lived").exists());
+        let entries: Vec<_> = fs::read_dir(directory.path()).expect("read dir").collect();
+        assert!(entries.is_empty());
+        let delete = service.handle("DELETE", "/v1/runtime-grant", b"");
+        assert_eq!(delete.status, 200);
     }
 
     #[test]

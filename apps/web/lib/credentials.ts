@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import {
@@ -14,6 +14,10 @@ import {
 
 import { decryptSecret, encryptSecret } from "./kms";
 import { getDatabase } from "./database";
+import {
+  mintHostedCodexRuntimeGrant,
+  resolveHostedCodexSubscription,
+} from "./hosted-codex-subscription-credentials";
 
 const FIVE_MINUTES_MS = 5 * 60 * 1_000;
 const CREDENTIAL_CONTEXT = {
@@ -21,7 +25,7 @@ const CREDENTIAL_CONTEXT = {
   purpose: "provider-credential",
 };
 
-export type CredentialSource = "USER" | "WORKSPACE";
+export type CredentialSource = "USER" | "WORKSPACE" | "ORGANIZATION";
 
 export interface ResolvedCredential {
   provider: AuthProvider;
@@ -93,6 +97,13 @@ async function findCredential(
       eq(
         schema.providerCredentials.credentialType,
         parseCredentialType(credentialType),
+      ),
+    );
+  } else {
+    predicates.push(
+      ne(
+        schema.providerCredentials.credentialType,
+        "HOSTED_CODEX_SUBSCRIPTION",
       ),
     );
   }
@@ -298,6 +309,25 @@ export async function resolveAgentCredential(
   provider: AuthProvider,
 ): Promise<ResolvedCredential> {
   const normalizedProvider = parseProvider(provider);
+  if (normalizedProvider === "openai") {
+    const hosted = await resolveHostedCodexSubscription({
+      userId,
+      workspaceId,
+    });
+    if (hosted) {
+      const grant = await mintHostedCodexRuntimeGrant({
+        userId,
+        workspaceId,
+      });
+      return {
+        provider: normalizedProvider,
+        source: hosted.source,
+        authType: "HOSTED_CODEX_SUBSCRIPTION",
+        apiKeyOrToken: grant.token,
+        credentialId: hosted.credential.id,
+      };
+    }
+  }
   const userCredential = await findCredential(
     "USER",
     userId,
@@ -333,6 +363,11 @@ export async function saveProviderCredential(input: {
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
 
+  if (credentialType === "HOSTED_CODEX_SUBSCRIPTION") {
+    throw new Error(
+      "Hosted Codex subscription credentials must be saved by the hosted connection service.",
+    );
+  }
   if (credentialType === "API_KEY" && !input.apiKey?.trim()) {
     throw new Error("An API key is required for this credential type.");
   }
@@ -488,6 +523,13 @@ export async function deleteProviderCredential(
       eq(
         schema.providerCredentials.credentialType,
         parseCredentialType(credentialType),
+      ),
+    );
+  } else {
+    predicates.push(
+      ne(
+        schema.providerCredentials.credentialType,
+        "HOSTED_CODEX_SUBSCRIPTION",
       ),
     );
   }

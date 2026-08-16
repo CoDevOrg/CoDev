@@ -75,3 +75,11 @@ all of the following for a third-party hosted application:
 
 Until then, CoDev must keep the API-key path as the only real OpenAI provider
 connection and must not automate or proxy ChatGPT consent.
+
+The approval-gated cloud implementation lives in
+[openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md).
+The control-plane module is implemented behind a source-only launch flag in
+`apps/web/lib/hosted-codex-subscription-flag.ts`. Environment variables cannot
+enable it. Until written OpenAI approval is recorded in
+[security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md),
+the Settings **Connect Codex subscription** control stays unavailable.

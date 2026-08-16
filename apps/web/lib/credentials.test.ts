@@ -27,6 +27,11 @@ vi.mock("./kms", () => ({
   encryptSecret: vi.fn(async (value: string) => `encrypted:${value}`),
 }));
 
+vi.mock("./hosted-codex-subscription-credentials", () => ({
+  resolveHostedCodexSubscription: vi.fn(async () => null),
+  mintHostedCodexRuntimeGrant: vi.fn(),
+}));
+
 import { resolveAgentCredential } from "./credentials";
 
 const baseCredential = (overrides: Record<string, unknown> = {}) => ({

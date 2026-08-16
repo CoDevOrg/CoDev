@@ -13,12 +13,28 @@ export const credentialTypeSchema = z.enum([
   "OAUTH_TOKEN",
   "AWS_BEDROCK_ROLE",
   "AZURE_ENDPOINT",
+  "HOSTED_CODEX_SUBSCRIPTION",
 ]);
-export const credentialScopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
+export const credentialScopeTypeSchema = z.enum([
+  "USER",
+  "WORKSPACE",
+  "ORGANIZATION",
+]);
+export const providerCredentialStatusSchema = z.enum([
+  "active",
+  "reauthorization_required",
+  "revoked",
+  "failed",
+]);
+export const hostedCodexScopeTypeSchema = z.enum(["USER", "ORGANIZATION"]);
 
 export type AuthProvider = z.infer<typeof authProviderSchema>;
 export type CredentialType = z.infer<typeof credentialTypeSchema>;
 export type ScopeType = z.infer<typeof credentialScopeTypeSchema>;
+export type ProviderCredentialStatus = z.infer<
+  typeof providerCredentialStatusSchema
+>;
+export type HostedCodexScopeType = z.infer<typeof hostedCodexScopeTypeSchema>;
 
 export const providerCredentialSchema = z.object({
   id: z.uuid(),
