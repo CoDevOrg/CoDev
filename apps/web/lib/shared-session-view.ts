@@ -5,6 +5,11 @@ import {
 } from "@codev/contracts";
 
 import {
+  capabilitiesForProvider,
+  listProviderCapabilities,
+  type ProviderCapabilityFlags,
+} from "./provider-capabilities";
+import {
   toNormalizedProviderEvents,
   type NormalizedProviderEvent,
 } from "./provider-event-view";
@@ -56,6 +61,8 @@ export type SharedSessionView = {
   lastCompletedAction: SharedSessionLastAction | null;
   connectionBlocked: string | null;
   providerEvents: NormalizedProviderEvent[];
+  capabilities: ProviderCapabilityFlags;
+  availableProviders: ProviderCapabilityFlags[];
 };
 
 export type SharedSessionSnapshot = {
@@ -234,5 +241,7 @@ export function toSharedSessionView(
       ? (session.lastError ?? null)
       : null,
     providerEvents: toNormalizedProviderEvents(session),
+    capabilities: capabilitiesForProvider(session.provider),
+    availableProviders: listProviderCapabilities(session.provider),
   };
 }

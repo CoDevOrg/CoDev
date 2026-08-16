@@ -453,7 +453,22 @@ describe("codev parent bridge", () => {
           ],
         }),
       )
-      .mockResolvedValueOnce(Response.json(snapshot));
+      .mockResolvedValueOnce(Response.json(snapshot))
+      .mockResolvedValueOnce(
+        Response.json({
+          ...snapshot,
+          sharedSessions: [
+            {
+              session: {
+                sessionId,
+                state: "idle",
+                provider: "restricted",
+              },
+              capabilities: { canQueue: false, canInterrupt: false },
+            },
+          ],
+        }),
+      );
 
     await expect(
       executeCodevBridgeRequest(
@@ -531,6 +546,36 @@ describe("codev parent bridge", () => {
     expect(fetcher).toHaveBeenLastCalledWith(
       `/api/workspaces/workspace-1/agents/${sessionId}/controlled`,
       { method: "POST" },
+    );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-select-provider",
+          method: "agents.selectProvider",
+          params: { sessionId, provider: "restricted" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        sharedSessions: [
+          { session: { provider: "restricted" }, capabilities: { canQueue: false } },
+        ],
+      },
+    });
+    expect(fetcher).toHaveBeenLastCalledWith(
+      `/api/workspaces/workspace-1/agents/${sessionId}/provider`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "restricted" }),
+      },
     );
   });
 

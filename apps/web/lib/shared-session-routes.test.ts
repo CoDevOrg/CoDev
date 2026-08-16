@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   enqueueSharedSessionInstruction: vi.fn(),
   startControlledSharedSessionTurn: vi.fn(),
   interruptSharedSession: vi.fn(),
+  selectSharedSessionProvider: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -33,12 +34,14 @@ vi.mock("@/lib/shared-session-server", () => ({
   enqueueSharedSessionInstruction: mocks.enqueueSharedSessionInstruction,
   startControlledSharedSessionTurn: mocks.startControlledSharedSessionTurn,
   interruptSharedSession: mocks.interruptSharedSession,
+  selectSharedSessionProvider: mocks.selectSharedSessionProvider,
 }));
 
 import { GET as getShared } from "@/app/api/workspaces/[workspaceId]/agents/shared/route";
 import { POST as enqueue } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/queue/route";
 import { POST as startControlled } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/controlled/route";
 import { POST as interrupt } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/interrupt/route";
+import { POST as selectProvider } from "@/app/api/workspaces/[workspaceId]/agents/[sessionId]/provider/route";
 import { SharedSessionError } from "@/lib/shared-session-server";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
@@ -82,6 +85,26 @@ describe("shared agent session routes", () => {
           session: {
             ...snapshot.sharedSessions[0]!.session,
             state: "interrupted",
+          },
+        },
+      ],
+    });
+    mocks.selectSharedSessionProvider.mockResolvedValue({
+      ...snapshot,
+      sharedSessions: [
+        {
+          ...snapshot.sharedSessions[0],
+          session: {
+            ...snapshot.sharedSessions[0]!.session,
+            state: "idle",
+            provider: "restricted",
+          },
+          capabilities: {
+            id: "restricted",
+            canQueue: false,
+            canInterrupt: false,
+            queueUnavailable:
+              "This restricted fixture provider does not support queued instructions.",
           },
         },
       ],
@@ -186,6 +209,52 @@ describe("shared agent session routes", () => {
           },
         },
       ],
+    });
+  });
+
+  it("selects the restricted fixture provider and returns disabled-control flags", async () => {
+    const response = await selectProvider(
+      new Request("https://codev.test", {
+        method: "POST",
+        body: JSON.stringify({ provider: "restricted" }),
+      }),
+      { params: Promise.resolve({ workspaceId, sessionId }) },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      sharedSessions: [
+        {
+          session: { provider: "restricted" },
+          capabilities: { canQueue: false, canInterrupt: false },
+        },
+      ],
+    });
+    expect(mocks.selectSharedSessionProvider).toHaveBeenCalledWith(
+      workspaceId,
+      sessionId,
+      expect.objectContaining({ id: userId }),
+      "restricted",
+    );
+  });
+
+  it("rejects queueing when the restricted fixture provider lacks that capability", async () => {
+    mocks.enqueueSharedSessionInstruction.mockRejectedValueOnce(
+      new SharedSessionError(
+        "This restricted fixture provider does not support queued instructions.",
+        409,
+      ),
+    );
+    const response = await enqueue(
+      new Request("https://codev.test", {
+        method: "POST",
+        body: JSON.stringify({ prompt: "Inspect README.md" }),
+      }),
+      { params: Promise.resolve({ workspaceId, sessionId }) },
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "This restricted fixture provider does not support queued instructions.",
     });
   });
 });

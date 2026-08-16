@@ -8,6 +8,13 @@ import { schema } from "@codev/db";
 import { getWorkspaceAccess } from "./access";
 import { listAgentSessions } from "./agent-runtime";
 import { getDatabase } from "./database";
+import {
+  PROVIDER_SWITCH_DURING_TURN_EXPLANATION,
+  isRestrictedFixtureProvider,
+  isSelectableSharedProvider,
+  unavailableControlExplanation,
+  type ProviderCapabilityAction,
+} from "./provider-capabilities";
 import { fixtureProviderUsagePayload } from "./provider-event-view";
 import {
   ProviderConnectionRequiredError,
@@ -129,6 +136,7 @@ async function requireLiveProviderConnection(
   userId: string,
   provider: string,
 ) {
+  if (isRestrictedFixtureProvider(provider)) return;
   try {
     await assertProviderConnectionForTurn(userId, workspaceId, provider);
   } catch (error) {
@@ -136,6 +144,16 @@ async function requireLiveProviderConnection(
       throw new SharedSessionError(error.message, error.status);
     }
     throw error;
+  }
+}
+
+function requireProviderCapability(
+  provider: string,
+  action: ProviderCapabilityAction,
+) {
+  const explanation = unavailableControlExplanation(provider, action);
+  if (explanation) {
+    throw new SharedSessionError(explanation, 409);
   }
 }
 
@@ -171,6 +189,7 @@ export async function startControlledSharedSessionTurn(
     return loadSharedSessionSnapshot(workspaceId, user);
   }
 
+  requireProviderCapability(session.provider, "startControlled");
   await requireLiveProviderConnection(workspaceId, user.id, session.provider);
   await assertTurnQuota(user.id, sessionId);
 
@@ -260,6 +279,7 @@ export async function enqueueSharedSessionInstruction(
     throw new SharedSessionError("An instruction is required.", 400);
   }
   const session = await requireSession(workspaceId, sessionId);
+  requireProviderCapability(session.provider, "queue");
   await requireLiveProviderConnection(workspaceId, user.id, session.provider);
   await assertTurnQuota(user.id, sessionId);
 
@@ -300,6 +320,7 @@ export async function interruptSharedSession(
   user: { id: string; name?: string | null; githubLogin?: string },
 ) {
   const session = await requireSession(workspaceId, sessionId);
+  requireProviderCapability(session.provider, "interrupt");
   if (session.workflowRunId) {
     await getRun(session.workflowRunId).cancel();
   }
@@ -334,6 +355,31 @@ export async function interruptSharedSession(
         reason: `Cancelled by ${displayMemberName(user.name, user.githubLogin)}.`,
       },
     });
+  }
+  return loadSharedSessionSnapshot(workspaceId, user);
+}
+
+export async function selectSharedSessionProvider(
+  workspaceId: string,
+  sessionId: string,
+  user: { id: string; name?: string | null; githubLogin?: string },
+  provider: string,
+) {
+  if (!isSelectableSharedProvider(provider)) {
+    throw new SharedSessionError(
+      "Choose OpenAI or the restricted fixture provider.",
+      400,
+    );
+  }
+  const session = await requireSession(workspaceId, sessionId);
+  if (session.status === "running") {
+    throw new SharedSessionError(PROVIDER_SWITCH_DURING_TURN_EXPLANATION, 409);
+  }
+  if (session.provider !== provider) {
+    await getDatabase()
+      .update(schema.agentSessions)
+      .set({ provider, updatedAt: new Date() })
+      .where(eq(schema.agentSessions.id, sessionId));
   }
   return loadSharedSessionSnapshot(workspaceId, user);
 }

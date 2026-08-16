@@ -117,6 +117,15 @@ describe("shared session view", () => {
       output: CONTROLLED_LAST_ACTION_OUTPUT,
     });
     expect(view.connectionBlocked).toBeNull();
+    expect(view.capabilities).toMatchObject({
+      id: "openai",
+      canQueue: true,
+      canInterrupt: true,
+    });
+    expect(view.availableProviders.map((item) => item.id)).toEqual([
+      "openai",
+      "restricted",
+    ]);
     expect(view.providerEvents.map((event) => event.kind)).toEqual(
       expect.arrayContaining([
         "turn",
@@ -179,5 +188,15 @@ describe("shared session view", () => {
       tool: CONTROLLED_LAST_ACTION_TOOL,
       output: CONTROLLED_LAST_ACTION_OUTPUT,
     });
+  });
+
+  it("exposes disabled queue and interrupt flags for the restricted fixture provider", () => {
+    const view = toSharedSessionView(session({ provider: "restricted" }));
+    expect(view.capabilities.canQueue).toBe(false);
+    expect(view.capabilities.canInterrupt).toBe(false);
+    expect(view.capabilities.queueUnavailable).toMatch(/does not support queued/);
+    expect(view.availableProviders.find((item) => item.selected)?.id).toBe(
+      "restricted",
+    );
   });
 });

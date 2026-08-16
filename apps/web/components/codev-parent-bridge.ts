@@ -27,6 +27,7 @@ export type CodevBridgeMethod =
   | "agents.enqueue"
   | "agents.interrupt"
   | "agents.startControlled"
+  | "agents.selectProvider"
   | "workboard.list"
   | "workboard.create"
   | "claims.list"
@@ -83,6 +84,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "agents.enqueue",
   "agents.interrupt",
   "agents.startControlled",
+  "agents.selectProvider",
   "workboard.list",
   "workboard.create",
   "claims.list",
@@ -323,6 +325,32 @@ export async function executeCodevBridgeRequest(
       if (!response.ok) {
         return fail(
           jsonError(payload, "CoDev could not start this controlled turn."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.selectProvider") {
+      const sessionId = request.params?.sessionId;
+      const provider = request.params?.provider;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      if (provider !== "openai" && provider !== "restricted") {
+        return fail("Choose OpenAI or the restricted fixture provider.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/provider`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not select this provider."),
         );
       }
       return succeed(payload);

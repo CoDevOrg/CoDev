@@ -1371,10 +1371,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
-index 0000000..b3fa5f8
+index 0000000..0ac7b83
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
-@@ -0,0 +1,179 @@
+@@ -0,0 +1,250 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevSharedSessionViewPanel, type CodevSharedSessionView } from './CodevSharedSessionPanel'
@@ -1553,13 +1553,84 @@ index 0000000..b3fa5f8
 +    expect(html).toContain('Queue instruction')
 +    expect(html).not.toContain('1 queued')
 +  })
++
++  it('disables queue and interrupt with explanations for the restricted fixture provider', () => {
++    const html = renderToStaticMarkup(
++      <CodevSharedSessionViewPanel
++        connected
++        restored={false}
++        viewer={{ id: 'b0200000-0000-4000-8000-000000000012', name: 'Jordan Lee', canCoSteer: true }}
++        view={{
++          ...view,
++          session: { ...view.session, provider: 'restricted', state: 'idle', queue: [] },
++          attributedQueue: [],
++          capabilities: {
++            id: 'restricted',
++            label: 'Restricted fixture',
++            selected: true,
++            canQueue: false,
++            canInterrupt: false,
++            canStartControlled: true,
++            queueUnavailable: 'This restricted fixture provider does not support queued instructions.',
++            interruptUnavailable:
++              'This restricted fixture provider does not support interrupting a turn.',
++            startControlledUnavailable: null
++          },
++          availableProviders: [
++            {
++              id: 'openai',
++              label: 'OpenAI',
++              selected: false,
++              canQueue: true,
++              canInterrupt: true,
++              canStartControlled: true,
++              queueUnavailable: null,
++              interruptUnavailable: null,
++              startControlledUnavailable: null
++            },
++            {
++              id: 'restricted',
++              label: 'Restricted fixture',
++              selected: true,
++              canQueue: false,
++              canInterrupt: false,
++              canStartControlled: true,
++              queueUnavailable: 'This restricted fixture provider does not support queued instructions.',
++              interruptUnavailable:
++                'This restricted fixture provider does not support interrupting a turn.',
++              startControlledUnavailable: null
++            }
++          ]
++        }}
++        draftPrompt="Inspect README.md"
++        busy=""
++        message=""
++        onDraftChange={() => undefined}
++        onRefresh={() => undefined}
++        onStartControlled={() => undefined}
++        onQueue={() => undefined}
++        onInterrupt={() => undefined}
++      />
++    )
++    expect(html).toContain('Provider capabilities')
++    expect(html).toContain('Restricted fixture')
++    expect(html).toContain('Current provider')
++    expect(html).toContain('Use OpenAI')
++    expect(html).toContain('Queue · unavailable')
++    expect(html).toContain('Interrupt · unavailable')
++    expect(html).toContain('Queue instruction · unavailable')
++    expect(html).toContain('Interrupt turn · unavailable')
++    expect(html).toContain('This restricted fixture provider does not support queued instructions.')
++    expect(html).toContain('This restricted fixture provider does not support interrupting a turn.')
++    expect(html).toContain('data-codev-provider-capability="restricted"')
++  })
 +})
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
 new file mode 100644
-index 0000000..b887627
+index 0000000..89d176c
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.tsx
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,173 @@
 +import { useEffect, useState, type JSX } from 'react'
 +import {
 +  getCodevBridgeSnapshot,
@@ -1722,15 +1793,23 @@ index 0000000..b887627
 +          requestCodevBridge<CodevSharedSessionSnapshot>('agents.interrupt', { sessionId })
 +        )
 +      }
++      onSelectProvider={(provider) =>
++        void run('provider', () =>
++          requestCodevBridge<CodevSharedSessionSnapshot>('agents.selectProvider', {
++            sessionId,
++            provider
++          })
++        )
++      }
 +    />
 +  )
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
 new file mode 100644
-index 0000000..8ccf543
+index 0000000..f1e44f4
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevSharedSessionView.tsx
-@@ -0,0 +1,383 @@
+@@ -0,0 +1,477 @@
 +import type { JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +
@@ -1751,6 +1830,18 @@ index 0000000..8ccf543
 +  status: 'completed' | 'interrupted' | 'failed'
 +  tool: string | null
 +  output: string | null
++}
++
++export type CodevProviderCapabilityFlags = {
++  id: string
++  label: string
++  selected: boolean
++  canQueue: boolean
++  canInterrupt: boolean
++  canStartControlled: boolean
++  queueUnavailable: string | null
++  interruptUnavailable: string | null
++  startControlledUnavailable: string | null
 +}
 +
 +export type CodevSharedSessionView = {
@@ -1780,11 +1871,27 @@ index 0000000..8ccf543
 +    detail: string
 +    turnId: string | null
 +  }>
++  capabilities?: CodevProviderCapabilityFlags
++  availableProviders?: CodevProviderCapabilityFlags[]
 +}
 +
 +export type CodevSharedSessionSnapshot = {
 +  viewer?: { id: string; name: string; canCoSteer: boolean }
 +  sharedSessions?: CodevSharedSessionView[]
++}
++
++function fallbackCapabilities(view: CodevSharedSessionView): CodevProviderCapabilityFlags {
++  return {
++    id: view.session.provider,
++    label: view.session.provider,
++    selected: true,
++    canQueue: true,
++    canInterrupt: true,
++    canStartControlled: true,
++    queueUnavailable: null,
++    interruptUnavailable: null,
++    startControlledUnavailable: null
++  }
 +}
 +
 +function stateLabel(view: CodevSharedSessionView): string {
@@ -1841,7 +1948,8 @@ index 0000000..8ccf543
 +  onRefresh,
 +  onStartControlled,
 +  onQueue,
-+  onInterrupt
++  onInterrupt,
++  onSelectProvider
 +}: {
 +  connected: boolean
 +  restored: boolean
@@ -1855,12 +1963,18 @@ index 0000000..8ccf543
 +  onStartControlled: () => void
 +  onQueue: () => void
 +  onInterrupt: () => void
++  onSelectProvider?: (provider: string) => void
 +}): JSX.Element {
 +  const canCoSteer = Boolean(viewer?.canCoSteer)
 +  const queue = view?.attributedQueue ?? view?.session.queue ?? []
 +  const queued = queue[0] ?? null
 +  const running = view?.session.state === 'running'
 +  const interrupted = view?.session.state === 'interrupted'
++  const capabilities = view ? (view.capabilities ?? fallbackCapabilities(view)) : null
++  const availableProviders = view?.availableProviders ?? (capabilities ? [capabilities] : [])
++  const canQueue = Boolean(canCoSteer && capabilities?.canQueue)
++  const canInterrupt = Boolean(canCoSteer && capabilities?.canInterrupt)
++  const canStart = Boolean(canCoSteer && capabilities?.canStartControlled)
 +
 +  return (
 +    <section
@@ -1895,7 +2009,7 @@ index 0000000..8ccf543
 +          >
 +            <div>
 +              <span className="block text-[10px] uppercase text-muted-foreground">Provider</span>
-+              <strong>{view.session.provider}</strong>
++              <strong>{capabilities?.label ?? view.session.provider}</strong>
 +            </div>
 +            <div>
 +              <span className="block text-[10px] uppercase text-muted-foreground">Owner</span>
@@ -1919,6 +2033,55 @@ index 0000000..8ccf543
 +              <span className="block text-[10px] uppercase text-muted-foreground">Stream cursor</span>
 +              <strong>{view.session.streamCursor}</strong>
 +            </div>
++          </div>
++
++          <div aria-label="Provider capabilities" className="space-y-2">
++            <div className="flex items-center justify-between text-xs">
++              <span className="text-[10px] uppercase text-muted-foreground">
++                Provider capabilities
++              </span>
++              <strong>{availableProviders.length} providers</strong>
++            </div>
++            {availableProviders.map((provider) => (
++              <div
++                key={provider.id}
++                className="rounded-md border border-sidebar-border p-2 text-xs"
++                data-codev-provider-capability={provider.id}
++              >
++                <div className="flex items-center justify-between gap-2">
++                  <strong>{provider.label}</strong>
++                  {provider.selected ? (
++                    <span>Current provider</span>
++                  ) : (
++                    <Button
++                      type="button"
++                      size="sm"
++                      variant="outline"
++                      disabled={!canCoSteer || running || busy !== ''}
++                      aria-label={`Use ${provider.label}`}
++                      onClick={() => onSelectProvider?.(provider.id)}
++                    >
++                      Use {provider.label}
++                    </Button>
++                  )}
++                </div>
++                <p className="mt-1">
++                  Queue · {provider.canQueue ? 'available' : 'unavailable'}
++                </p>
++                <p>Interrupt · {provider.canInterrupt ? 'available' : 'unavailable'}</p>
++                <p>
++                  Controlled turns · {provider.canStartControlled ? 'available' : 'unavailable'}
++                </p>
++                {provider.selected && provider.queueUnavailable ? (
++                  <p className="mt-1" aria-label="Unavailable control">
++                    {provider.queueUnavailable}
++                  </p>
++                ) : null}
++                {provider.selected && provider.interruptUnavailable ? (
++                  <p aria-label="Unavailable control">{provider.interruptUnavailable}</p>
++                ) : null}
++              </div>
++            ))}
 +          </div>
 +
 +          <div aria-label="Ordered turn queue" className="space-y-1">
@@ -1990,25 +2153,30 @@ index 0000000..8ccf543
 +                type="button"
 +                size="sm"
 +                variant="outline"
-+                disabled={!canCoSteer || running || busy !== ''}
++                disabled={!canStart || running || busy !== ''}
 +                onClick={onStartControlled}
 +              >
-+                {canCoSteer ? 'Start controlled turn' : 'Start controlled turn · unavailable'}
++                {canStart ? 'Start controlled turn' : 'Start controlled turn · unavailable'}
 +              </Button>
 +              <Button
 +                type="button"
 +                size="sm"
 +                variant="outline"
-+                disabled={!canCoSteer || !running || busy !== ''}
++                disabled={!canInterrupt || !running || busy !== ''}
 +                onClick={onInterrupt}
 +              >
-+                {!canCoSteer
++                {!canInterrupt
 +                  ? 'Interrupt turn · unavailable'
 +                  : interrupted
 +                    ? 'Turn interrupted'
 +                    : 'Interrupt running turn'}
 +              </Button>
 +            </div>
++            {capabilities?.interruptUnavailable ? (
++              <p className="text-xs text-muted-foreground" aria-label="Unavailable control">
++                {capabilities.interruptUnavailable}
++              </p>
++            ) : null}
 +          </div>
 +
 +          <div aria-label={`${viewer?.name ?? 'Collaborator'} collaborator controls`} className="space-y-2">
@@ -2021,20 +2189,25 @@ index 0000000..8ccf543
 +              value={draftPrompt}
 +              onChange={(event) => onDraftChange(event.target.value)}
 +              placeholder="Ask the shared agent to inspect a file…"
-+              disabled={!canCoSteer || queue.length > 0 || busy !== ''}
++              disabled={!canQueue || queue.length > 0 || busy !== ''}
 +            />
 +            <Button
 +              type="button"
 +              size="sm"
-+              disabled={!canCoSteer || !draftPrompt.trim() || queue.length > 0 || busy !== ''}
++              disabled={!canQueue || !draftPrompt.trim() || queue.length > 0 || busy !== ''}
 +              onClick={onQueue}
 +            >
-+              {!canCoSteer
++              {!canQueue
 +                ? 'Queue instruction · unavailable'
 +                : queue.length > 0
 +                  ? 'Instruction queued'
 +                  : 'Queue instruction'}
 +            </Button>
++            {capabilities?.queueUnavailable ? (
++              <p className="text-xs text-muted-foreground" aria-label="Unavailable control">
++                {capabilities.queueUnavailable}
++              </p>
++            ) : null}
 +          </div>
 +
 +          {view.transcript.length > 0 ? (
@@ -6200,10 +6373,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..05efbd9
+index 0000000..b96079e
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,353 @@
+@@ -0,0 +1,354 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -6239,6 +6412,7 @@ index 0000000..05efbd9
 +  | 'agents.enqueue'
 +  | 'agents.interrupt'
 +  | 'agents.startControlled'
++  | 'agents.selectProvider'
 +  | 'workboard.list'
 +  | 'workboard.create'
 +  | 'claims.list'
