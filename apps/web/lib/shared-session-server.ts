@@ -379,7 +379,6 @@ export async function selectSharedSessionProvider(
   if (session.status === "running") {
     throw new SharedSessionError(PROVIDER_SWITCH_DURING_TURN_EXPLANATION, 409);
   }
-  await requireLiveProviderConnection(workspaceId, user.id, provider);
   if (session.provider !== provider) {
     const finishedTurns = await getDatabase()
       .select({
@@ -406,7 +405,7 @@ export async function selectSharedSessionProvider(
     }
     await getDatabase()
       .update(schema.agentSessions)
-      .set({ provider, updatedAt: new Date() })
+      .set({ provider, lastError: null, updatedAt: new Date() })
       .where(eq(schema.agentSessions.id, sessionId));
     await recordSharedEvent({
       workspaceId,
