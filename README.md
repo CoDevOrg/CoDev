@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="apps/web/public/brand/codev-mark.png" alt="CoDev" width="96" />
+  <img src="apps/web/public/brand/codev-mark-v3.png" alt="CoDev" width="96" />
 
 # CoDev
 
