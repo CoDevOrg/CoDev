@@ -8,14 +8,14 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F7.2 — Add explicit capability flags and unavailable-control explanations.**
+**F7.3 — Make turn-level provider switching explicit and prevent mixed transcripts.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, F6.5, and F7.1 are
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, F6.5, F7.1, and F7.2 are
 complete. **OI.3 is explicitly deferred at the owner's direction**, with
 its required two-member role-change verification remaining outstanding.
-The Current task is **F7.2**, the capability-flag card from
+The Current task is **F7.3**, the turn-level provider-switch card from
 `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
@@ -26,6 +26,26 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F7.2 — Production verification completed 2026-08-16T07:38:00Z:** Source
+  `8baf0be21d68edc822a47fc0bcc3a1824d0432ad` is on `main`. Vercel Production
+  `dpl_3YqNKq7UF6WwtvRc5zmLrFi8Uw3D` is Ready at
+  `https://codev-1zda4bl64-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan at
+  `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. After a leftover Orca
+  process on port 7000 was stopped (port 7001 left running), Retry opened
+  native Orca Agents. The shared session was running, so **Interrupt
+  running turn** finished the OpenAI turn, then **Use Restricted fixture**
+  selected the restricted fixture provider. **Provider capabilities**
+  showed Restricted fixture as **Current provider** with Queue ·
+  unavailable and Interrupt · unavailable, plus explanations `This
+  restricted fixture provider does not support queued instructions.` and
+  `This restricted fixture provider does not support interrupting a
+  turn.` Queue and Interrupt controls were disabled. No secret was
+  displayed. TestSprite backend test
+  `81e2d6c8-21bb-41cb-bee8-97309de3b4ca` passed (unauthenticated POST
+  `/provider` and `/queue` return 401 without capability flags). See F7.2
+  completion evidence. Current task is now F7.3.
 
 - **F7.1 — Production verification completed 2026-08-15T23:28:00Z:** Source
   `058d70a2df8c3508bcdfcb04705e20caa7440ac7` is on `main`. Vercel Production
@@ -2678,6 +2698,53 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   switching.
 - Next task: F7.2 — add explicit capability flags and unavailable-control
   explanations.
+
+### F7.2 completion evidence
+
+- Completed: 2026-08-16T07:38:00Z.
+- Changed files: `apps/web/lib/provider-capabilities.ts`,
+  `apps/web/lib/provider-capabilities.test.ts`,
+  `apps/web/lib/shared-session-view.ts`,
+  `apps/web/lib/shared-session-view.test.ts`,
+  `apps/web/lib/shared-session-server.ts`,
+  `apps/web/lib/shared-session-routes.test.ts`,
+  `apps/web/components/codev-parent-bridge.ts`,
+  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/provider/route.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused capability, shared-session, and bridge tests (29
+  passed), patched-Orca shared-session panel tests (4 passed), patched-Orca
+  `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
+  typecheck`, `pnpm test` (315 passed, 1 skipped), `pnpm build`, `pnpm
+  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
+  --check`. TestSprite backend test `81e2d6c8-21bb-41cb-bee8-97309de3b4ca`
+  (run `270068a1-dbb0-40a1-afb3-f7468792cf27`) passed against Production:
+  unauthenticated POST `/provider` and `/queue` returned 401 without
+  capability flags.
+- Validated source commit: `8baf0be21d68edc822a47fc0bcc3a1824d0432ad`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_3YqNKq7UF6WwtvRc5zmLrFi8Uw3D` at
+  <https://codev-1zda4bl64-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. After
+  stopping a leftover Orca process on port 7000, Retry opened native
+  Orca. Agents showed OpenAI with Queue/Interrupt available. The session
+  was running, so **Interrupt running turn** completed first, then **Use
+  Restricted fixture** selected the restricted fixture. Queue and
+  Interrupt showed **unavailable** with explanations that the restricted
+  fixture does not support queued instructions or interrupting a turn.
+  No secret was displayed.
+- Screenshots: `file:///tmp/codev-f72-verify/f7-2-restricted-capabilities.png`
+  (Provider capabilities with Restricted fixture current),
+  `file:///tmp/codev-f72-verify/f7-2-disabled-controls.png` (disabled
+  Queue/Interrupt). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f7-2/`.
+- Known limitations: F7.3 still needs an explicit transcript boundary
+  when switching providers after a completed turn.
+- Next task: F7.3 — make turn-level provider switching explicit and
+  prevent mixed transcripts.
 
 ## Blocked tasks
 
