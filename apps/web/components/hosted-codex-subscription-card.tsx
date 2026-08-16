@@ -85,7 +85,10 @@ export function HostedCodexSubscriptionCard({
   }
 
   const canConnect =
-    status.enabled && status.canManage && (!isOrg || confirmed);
+    status.enabled &&
+    status.configured &&
+    status.canManage &&
+    (!isOrg || confirmed);
 
   return (
     <SettingsCard
@@ -138,7 +141,7 @@ export function HostedCodexSubscriptionCard({
           {status.status === "connected" ? "Connected" : "Not connected"}
         </span>
         {status.canManage ? (
-          status.enabled ? (
+          status.enabled && status.configured ? (
             <div className="hosted-codex-actions">
               {isOrg ? (
                 <label className="hosted-codex-confirm">
@@ -181,7 +184,9 @@ export function HostedCodexSubscriptionCard({
             </div>
           ) : (
             <span className="oauth-connection-unavailable">
-              Waiting for OpenAI-hosted approval
+              {status.enabled
+                ? "Approved client configuration required"
+                : "Waiting for OpenAI-hosted approval"}
             </span>
           )
         ) : (

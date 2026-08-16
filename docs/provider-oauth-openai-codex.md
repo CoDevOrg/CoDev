@@ -1,12 +1,12 @@
 # F6.4 — OpenAI Codex connection design
 
-Status: **research complete — real hosted OAuth is not approved.**
+Status: **hosted subscription approved 2026-08-16 — fixture OAuth stays a fixture.**
 
-F6.4 defines the boundary for connecting OpenAI to CoDev. It does **not**
-enable a real ChatGPT consent flow. The only supported CoDev production
-connection today is a personal OpenAI API key. The F6.5 UI callback is a
-clearly-labelled fixture that persists test-only encrypted OAuth-shaped tokens;
-it must never be represented as a real ChatGPT or Codex authorization.
+F6.4 defined the boundary for connecting OpenAI to CoDev. Real ChatGPT consent
+for hosted workspaces is the separate `hosted_codex_subscription` path. The
+F6.5 UI callback remains a clearly-labelled fixture that persists test-only
+encrypted OAuth-shaped tokens; it must never be represented as a real ChatGPT
+or Codex authorization.
 
 ## What official OpenAI documentation establishes
 
@@ -43,6 +43,7 @@ contract speculative.
 | Use case                    | Supported connection                                    | Notes                                                                                                |
 | --------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | CoDev-hosted provider turns | Personal OpenAI API key                                 | Stored server-side, encrypted, redacted in UI, and reauthorized before every turn.                   |
+| CoDev-hosted Codex workspaces | Hosted Codex subscription connection                  | OpenAI-approved OAuth; server-only tokens; launch flag on; requires `HOSTED_CODEX_APPROVED_*`.       |
 | Codex CLI / IDE local work  | User signs in with ChatGPT or provides an API key       | Follow the official Codex client experience; CoDev does not intercept it.                            |
 | Enterprise automation       | Codex access token in a trusted, admin-enabled workflow | This is documented for trusted scripts and private CI runners, not a general hosted user connection. |
 | CoDev OAuth UI verification | F6.5 fixture callback only                              | Test-only encrypted fixture tokens; it never opens ChatGPT or grants account access.                 |
@@ -73,13 +74,12 @@ all of the following for a third-party hosted application:
 5. security review of server-only token storage, rotation, disconnect, and
    audit behavior.
 
-Until then, CoDev must keep the API-key path as the only real OpenAI provider
-connection and must not automate or proxy ChatGPT consent.
+Until OpenAI provided a hosted contract, CoDev kept the API-key path as the
+only real OpenAI provider connection and did not automate or proxy ChatGPT
+consent.
 
-The approval-gated cloud implementation lives in
-[openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md).
-The control-plane module is implemented behind a source-only launch flag in
-`apps/web/lib/hosted-codex-subscription-flag.ts`. Environment variables cannot
-enable it. Until written OpenAI approval is recorded in
-[security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md),
-the Settings **Connect Codex subscription** control stays unavailable.
+Hosted subscription connection is now approved. Record the issued client
+values in
+[security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md)
+and `HOSTED_CODEX_APPROVED_*` environment variables. The F6.5 fixture callback
+must stay labelled as a fixture.

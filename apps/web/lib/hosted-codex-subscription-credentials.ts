@@ -579,6 +579,7 @@ export async function getHostedCodexPublicStatus(input: {
   canManage: boolean;
 }): Promise<HostedCodexPublicStatus> {
   const enabled = isHostedCodexSubscriptionEnabled();
+  const configured = enabled && Boolean(getHostedCodexApprovedConfig());
   const [credential] = await getDatabase()
     .select()
     .from(schema.providerCredentials)
@@ -606,6 +607,7 @@ export async function getHostedCodexPublicStatus(input: {
       sharingEnabled: false,
       canManage: input.canManage,
       enabled,
+      configured,
     };
   }
   if (credential.status === "reauthorization_required") {
@@ -618,6 +620,7 @@ export async function getHostedCodexPublicStatus(input: {
       sharingEnabled: credential.sharingEnabled,
       canManage: input.canManage,
       enabled,
+      configured,
     };
   }
   return {
@@ -632,6 +635,7 @@ export async function getHostedCodexPublicStatus(input: {
     sharingEnabled: credential.sharingEnabled,
     canManage: input.canManage,
     enabled,
+    configured,
   };
 }
 

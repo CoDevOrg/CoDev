@@ -15,4 +15,5 @@ export type HostedCodexPublicStatus = {
   sharingEnabled: boolean;
   canManage: boolean;
   enabled: boolean;
+  configured: boolean;
 };

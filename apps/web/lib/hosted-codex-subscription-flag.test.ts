@@ -7,10 +7,9 @@ describe("hosted Codex subscription launch flag", () => {
     vi.unstubAllEnvs();
   });
 
-  it("stays disabled even when environment variables try to enable it", () => {
-    vi.stubEnv("HOSTED_CODEX_SUBSCRIPTION_ENABLED", "true");
-    vi.stubEnv("CODEV_ENABLE_HOSTED_CODEX", "true");
-    vi.stubEnv("HOSTED_CODEX_APPROVED_CLIENT_ID", "approved-client");
-    expect(isHostedCodexSubscriptionEnabled()).toBe(false);
+  it("is enabled by the source flag, not by environment variables", () => {
+    vi.stubEnv("HOSTED_CODEX_SUBSCRIPTION_ENABLED", "false");
+    vi.stubEnv("CODEV_ENABLE_HOSTED_CODEX", "false");
+    expect(isHostedCodexSubscriptionEnabled()).toBe(true);
   });
 });
