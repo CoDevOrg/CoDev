@@ -8,15 +8,15 @@ ledger has been advanced. If either task is blocked, the run stops immediately.
 
 ## Current task
 
-**F7.3 — Make turn-level provider switching explicit and prevent mixed transcripts.**
+**F8.1 — Persist and render one chronological workspace activity event.**
 
 ## Mandatory Orca workspace completion gate
 
-F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, F6.5, F7.1, and F7.2 are
-complete. **OI.3 is explicitly deferred at the owner's direction**, with
-its required two-member role-change verification remaining outstanding.
-The Current task is **F7.3**, the turn-level provider-switch card from
-`COLLABORATIVE_IDE_EXECUTION.md`.
+F5.6, OI.1, OI.2, OI.12, F6.1, F6.2, F6.3, F6.4, F6.5, F7.1, F7.2, and
+F7.3 are complete. **OI.3 is explicitly deferred at the owner's
+direction**, with its required two-member role-change verification
+remaining outstanding. The Current task is **F8.1**, the first recovery
+card from `COLLABORATIVE_IDE_EXECUTION.md`.
 
 Earlier F1–F5 rows record validated backend contracts and fixture behavior,
 but fixture-only evidence is not proof of a usable product feature. Those
@@ -26,6 +26,24 @@ card verified inside the authenticated Orca workspace. No future task may use
 workspace as its required final Computer Use evidence.
 
 ## Run blockers
+
+- **F7.3 — Production verification completed 2026-08-16T07:52:00Z:** Source
+  `246beef0eb9c2e3cfe85ecfa82a8d019e7ac761a` is on `main` (boundary
+  labels landed in `69c70c07b64b310e6288a2089a394898cd5099d8`). Vercel
+  Production `dpl_7NkzFpXLEHUMnDVHRdJJPhTyawfL` is Ready at
+  `https://codev-4aa8bpuxk-yousef20920s-projects.vercel.app` and aliases
+  `https://www.trycodev.com`. Computer Use authenticated CoDev Test Jordan
+  at `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830` and opened native
+  Orca Agents. The shared session was still Restricted fixture after
+  F7.2. **Use OpenAI** switched the provider after the completed and
+  interrupted Restricted fixture turns. The ordered transcript kept
+  those turns labeled **Restricted fixture** and inserted
+  `Provider boundary · switched from Restricted fixture to OpenAI`
+  (`data-codev-provider-boundary="restricted-to-openai"`). Provider
+  became **OpenAI**. No secret was displayed. TestSprite backend test
+  `a6fbc854-0d05-403e-bdb0-628ca4c6b7f0` passed (unauthenticated POST
+  `/provider` returns 401 without a transcript boundary). See F7.3
+  completion evidence. Current task is now F8.1.
 
 - **F7.2 — Production verification completed 2026-08-16T07:38:00Z:** Source
   `8baf0be21d68edc822a47fc0bcc3a1824d0432ad` is on `main`. Vercel Production
@@ -837,6 +855,9 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 | F6.3 — Reauthorize every turn and block the next turn after a connection is revoked | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret. |
 | F6.4 — Research and document an official OAuth flow for one provider before implementing it | 2026-08-15 | [F6.4 completion evidence](#f64-completion-evidence) — Production Orca Settings showed OpenAI Codex OAuth as Planned · unavailable with a disabled Connect control and no consent UI. |
 | F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials | 2026-08-15 | [F6.5 completion evidence](#f65-completion-evidence) — Production Orca Settings completed OpenAI OAuth through a fixture callback and showed Connected · OAuth ending fx01 without opening ChatGPT. |
+| F7.1 — Normalize one provider's durable turn/status/output/tool events | 2026-08-15 | [F7.1 completion evidence](#f71-completion-evidence) — Production Orca Agents showed standardized turn, status, output, tool, and usage events for the fixture OpenAI session. |
+| F7.2 — Add explicit capability flags and unavailable-control explanations | 2026-08-16 | [F7.2 completion evidence](#f72-completion-evidence) — Production Orca Agents showed Restricted fixture with Queue and Interrupt unavailable plus explanations. |
+| F7.3 — Make turn-level provider switching explicit and prevent mixed transcripts | 2026-08-16 | [F7.3 completion evidence](#f73-completion-evidence) — Production Orca Agents switched from Restricted fixture to OpenAI after completed turns and showed the provider-boundary label. |
 
 ### B0.2 completion evidence
 
@@ -2745,6 +2766,45 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   when switching providers after a completed turn.
 - Next task: F7.3 — make turn-level provider switching explicit and
   prevent mixed transcripts.
+
+### F7.3 completion evidence
+
+- Completed: 2026-08-16T07:52:00Z.
+- Changed files: `apps/web/lib/provider-capabilities.ts`,
+  `apps/web/lib/shared-session-view.ts`,
+  `apps/web/lib/shared-session-view.test.ts`,
+  `apps/web/lib/shared-session-server.ts`,
+  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  web assets under `apps/web/public/orca/`.
+- Checks: focused shared-session and capability tests (14 passed),
+  `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
+  test` (316 passed, 1 skipped), and `git diff --check`. The boundary
+  source commit also rebuilt patched Orca web assets. TestSprite backend
+  test `a6fbc854-0d05-403e-bdb0-628ca4c6b7f0` (run
+  `f5df40dc-99f0-4a58-92c3-e1731f815d4f`) passed against Production:
+  unauthenticated POST `/provider` returned 401 without a provider
+  boundary or transcript.
+- Validated source commit: `246beef0eb9c2e3cfe85ecfa82a8d019e7ac761a`.
+- Production URL: <https://www.trycodev.com> (Ready alias for Vercel
+  Production `dpl_7NkzFpXLEHUMnDVHRdJJPhTyawfL` at
+  <https://codev-4aa8bpuxk-yousef20920s-projects.vercel.app>).
+- Computer Use flow: authenticated CoDev Test Jordan against Production
+  and opened `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. Native
+  Orca Agents showed Restricted fixture with two finished turns labeled
+  Restricted fixture. **Use OpenAI** switched the current provider to
+  OpenAI. The ordered transcript kept the historical Restricted fixture
+  labels and inserted `Provider boundary · switched from Restricted
+  fixture to OpenAI`. No secret was displayed.
+- Screenshots: `file:///tmp/codev-f73-verify/f7-3-provider-openai.png`
+  (transcript with Restricted fixture turns and the OpenAI boundary),
+  `file:///tmp/codev-f73-verify/f7-3-openai-current.png` (boundary in
+  the Agents panel). Copies also at
+  `/var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/cursor/screenshots/`
+  and `artifacts/verification/f7-3/`.
+- Known limitations: F8.1 still needs one chronological workspace
+  activity event persisted and rendered in the timeline.
+- Next task: F8.1 — persist and render one chronological workspace
+  activity event.
 
 ## Blocked tasks
 
