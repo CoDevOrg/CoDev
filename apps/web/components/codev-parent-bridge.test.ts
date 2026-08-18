@@ -1065,63 +1065,6 @@ describe("codev parent bridge", () => {
     ).toBe(true);
   });
 
-  it("completes OpenAI OAuth through the fixture callback without opening consent", async () => {
-    const connected = replyToCodevBridgeMessage(
-      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
-      { type: "codev:bridge-hello", generation: 1 },
-    ).session;
-    const saved = {
-      viewer: { id: "user-1", name: "CoDev Test Jordan" },
-      connections: [
-        {
-          provider: "openai",
-          status: "connected",
-          credentialType: "OAUTH_TOKEN",
-          lastFour: "fx01",
-        },
-      ],
-    };
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(Response.json(saved));
-
-    await expect(
-      executeCodevBridgeRequest(
-        "workspace-1",
-        {
-          type: "codev:bridge-request",
-          generation: 1,
-          requestId: "req-connections-oauth",
-          method: "connections.oauth",
-          params: { provider: "openai" },
-        },
-        connected,
-        fetcher,
-      ),
-    ).resolves.toMatchObject({ ok: true, result: saved });
-    expect(fetcher).toHaveBeenCalledWith(
-      "/api/workspaces/workspace-1/connections",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
-        cache: "no-store",
-      },
-    );
-    expect(JSON.stringify(saved)).not.toMatch(
-      /oa-test-codev|auth\.openai\.com/i,
-    );
-    expect(
-      isCodevBridgeRequestMessage({
-        type: "codev:bridge-request",
-        generation: 1,
-        requestId: "req-connections-oauth",
-        method: "connections.oauth",
-        params: { provider: "openai" },
-      }),
-    ).toBe(true);
-  });
-
   it.each(["profile.get"] as const)(
     "recognizes %s as a well-formed bridge request (not just personal-executor allowed)",
     (method) => {

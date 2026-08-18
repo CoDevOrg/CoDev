@@ -2724,10 +2724,10 @@ index 0000000..579c2c5
 +}
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
 new file mode 100644
-index 0000000..4de30bb
+index 0000000..3c72d22
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,123 @@
 +import { renderToStaticMarkup } from 'react-dom/server'
 +import { describe, expect, it } from 'vitest'
 +import { CodevProviderConnectionsView } from './CodevProviderConnectionsSection'
@@ -2752,6 +2752,20 @@ index 0000000..4de30bb
 +      lastFour: null,
 +      suppliedBy: null,
 +      scope: 'personal' as const
++    }
++  ],
++  cliSubscriptions: [
++    {
++      provider: 'codex' as const,
++      label: 'Codex',
++      status: 'connected' as const,
++      command: 'codev codex-auth'
++    },
++    {
++      provider: 'claude' as const,
++      label: 'Claude Code',
++      status: 'not_connected' as const,
++      command: 'codev claude-auth'
 +    }
 +  ]
 +}
@@ -2797,6 +2811,7 @@ index 0000000..4de30bb
 +    expect(html).not.toContain('sk-')
 +    expect(html).not.toContain('ciphertext')
 +    expect(html).not.toContain('9kQ2secret')
++    expect(html).not.toContain('Official OAuth')
 +  })
 +
 +  it('shows a save control for a disconnected provider and an error without echoing the key', () => {
@@ -2813,67 +2828,35 @@ index 0000000..4de30bb
 +    expect(html).not.toContain('sk-test-codev-f62-fixture-key0001')
 +  })
 +
-+  it('enables the OpenAI fixture OAuth callback without opening consent', () => {
++  it('shows CLI subscription status inline on each provider card, with an API key alternative', () => {
 +    const html = renderToStaticMarkup(
 +      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
 +    )
-+    expect(html).toContain('Official OAuth')
-+    expect(html).toContain('OpenAI Codex · Fixture callback · ready')
-+    expect(html).toContain('Connect with OpenAI')
-+    expect(html).toContain('aria-label="OpenAI OAuth fixture callback"')
-+    expect(html).toContain('data-codev-oauth-status="available"')
-+    expect(html).toContain('Connect uses a CoDev fixture callback. ChatGPT consent is not opened.')
-+    expect(html).not.toContain('authorize')
-+    expect(html).not.toContain('deviceauth')
-+    expect(html).not.toContain('auth.openai.com')
-+    expect(html).not.toContain('sk-')
++    expect(html).toContain('Codex CLI:')
++    expect(html).toContain('Connected')
++    expect(html).toContain('Claude Code CLI:')
++    expect(html).toContain('Not connected · run')
++    expect(html).toContain('codev claude-auth')
++    expect(html).toContain('or paste an API key below instead')
++    expect(html).not.toContain('Official OAuth')
++    expect(html).not.toContain('fixture')
 +  })
 +
-+  it('shows Connected OAuth status after the fixture callback without exposing a token', () => {
++  it('never renders the fixture OAuth flow', () => {
 +    const html = renderToStaticMarkup(
-+      <CodevProviderConnectionsView
-+        connected
-+        snapshot={{
-+          viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
-+          connections: [
-+            {
-+              provider: 'openai',
-+              label: 'OpenAI',
-+              status: 'connected',
-+              credentialType: 'OAUTH_TOKEN',
-+              lastFour: 'fx01',
-+              suppliedBy: 'CoDev Test Jordan',
-+              scope: 'personal'
-+            },
-+            disconnectedSnapshot.connections[1]
-+          ],
-+          oauth: {
-+            provider: 'openai',
-+            status: 'available',
-+            label: 'Connect with OpenAI',
-+            summary: 'Connected · fixture callback',
-+            reason:
-+              'OpenAI is connected through the CoDev fixture OAuth callback. ChatGPT consent was not used.'
-+          }
-+        }}
-+        message="OpenAI connected with a fixture OAuth callback."
-+      />
++      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
 +    )
-+    expect(html).toContain('Connected · OAuth · supplied by CoDev Test Jordan · ending fx01')
-+    expect(html).toContain('OpenAI Codex · Connected · fixture callback')
-+    expect(html).toContain('aria-label="OpenAI OAuth fixture connected"')
-+    expect(html).toContain('OpenAI connected with a fixture OAuth callback.')
-+    expect(html).toContain('Revoke')
-+    expect(html).not.toContain('oa-test-codev')
++    expect(html).not.toContain('Connect with OpenAI')
 +    expect(html).not.toContain('auth.openai.com')
++    expect(html).not.toContain('sk-')
 +  })
 +})
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
 new file mode 100644
-index 0000000..ec187b9
+index 0000000..0c80c40
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
-@@ -0,0 +1,336 @@
+@@ -0,0 +1,254 @@
 +import { useEffect, useState, type JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -2894,22 +2877,6 @@ index 0000000..ec187b9
 +  scope: 'personal'
 +}
 +
-+export type CodevProviderOAuthPlan = {
-+  provider: 'openai'
-+  status: 'unavailable' | 'available'
-+  label: string
-+  summary: string
-+  reason: string
-+}
-+
-+export const OPENAI_OAUTH_PLAN: CodevProviderOAuthPlan = {
-+  provider: 'openai',
-+  status: 'available',
-+  label: 'Connect with OpenAI',
-+  summary: 'Fixture callback · ready',
-+  reason: 'Connect uses a CoDev fixture callback. ChatGPT consent is not opened.'
-+}
-+
 +export type CodevCliSubscriptionProvider = 'codex' | 'claude'
 +
 +export type CodevCliSubscription = {
@@ -2922,13 +2889,20 @@ index 0000000..ec187b9
 +export type CodevProviderConnectionSnapshot = {
 +  viewer: { id: string; name: string }
 +  connections: CodevProviderConnection[]
-+  oauth?: CodevProviderOAuthPlan
 +  cliSubscriptions?: CodevCliSubscription[]
 +}
 +
 +export type CodevProviderConnectionDrafts = Partial<
 +  Record<CodevProviderConnection['provider'], string>
 +>
++
++const CLI_PROVIDER_BY_CONNECTION: Record<
++  CodevProviderConnection['provider'],
++  CodevCliSubscriptionProvider
++> = {
++  openai: 'codex',
++  anthropic: 'claude'
++}
 +
 +function statusLabel(connection: CodevProviderConnection): string {
 +  if (connection.status !== 'connected') return 'Not connected'
@@ -2946,7 +2920,6 @@ index 0000000..ec187b9
 +  message = '',
 +  onDraftChange,
 +  onSave,
-+  onOAuth,
 +  onRevoke
 +}: {
 +  connected: boolean
@@ -2956,17 +2929,9 @@ index 0000000..ec187b9
 +  message?: string
 +  onDraftChange?: (provider: CodevProviderConnection['provider'], value: string) => void
 +  onSave?: (provider: CodevProviderConnection['provider']) => void
-+  onOAuth?: () => void
 +  onRevoke?: (provider: CodevProviderConnection['provider']) => void
 +}): JSX.Element {
-+  const oauth = snapshot?.oauth ?? OPENAI_OAUTH_PLAN
-+  const oauthBusy = busy === 'oauth:openai'
-+  const oauthConnected = snapshot?.connections.some(
-+    (connection) =>
-+      connection.provider === 'openai' &&
-+      connection.status === 'connected' &&
-+      connection.credentialType === 'OAUTH_TOKEN'
-+  )
++  const cliSubscriptions = snapshot?.cliSubscriptions ?? []
 +  return (
 +    <div
 +      id="codev-provider-connections"
@@ -2975,7 +2940,7 @@ index 0000000..ec187b9
 +    >
 +      <SettingsSubsectionHeader
 +        title="Provider connections"
-+        description="Add, replace, or revoke a personal OpenAI or Anthropic API key. Keys stay encrypted on the CoDev server and are never shown after you save them."
++        description="Sign in with the official CoDev CLI, or paste a personal OpenAI or Anthropic API key instead. Keys stay encrypted on the CoDev server and are never shown after you save them."
 +      />
 +      {!connected ? (
 +        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to manage provider connections.</p>
@@ -2985,6 +2950,9 @@ index 0000000..ec187b9
 +            const saving = busy === `save:${connection.provider}`
 +            const revoking = busy === `revoke:${connection.provider}`
 +            const disabled = !connected || busy !== ''
++            const cli = cliSubscriptions.find(
++              (subscription) => subscription.provider === CLI_PROVIDER_BY_CONNECTION[connection.provider]
++            )
 +            return (
 +              <li
 +                key={connection.provider}
@@ -2994,6 +2962,18 @@ index 0000000..ec187b9
 +              >
 +                <p className="text-sm font-medium">{connection.label}</p>
 +                <p className="text-xs text-muted-foreground">{statusLabel(connection)}</p>
++                {cli ? (
++                  <p className="text-xs text-muted-foreground" data-codev-cli-status={cli.status}>
++                    {cli.label} CLI:{' '}
++                    {cli.status === 'connected' ? (
++                      'Connected'
++                    ) : (
++                      <>
++                        Not connected · run <code>{cli.command}</code> · or paste an API key below instead
++                      </>
++                    )}
++                  </p>
++                ) : null}
 +                <div className="flex flex-wrap items-center gap-2">
 +                  <label className="sr-only" htmlFor={`codev-connection-key-${connection.provider}`}>
 +                    {connection.label} API key
@@ -3039,65 +3019,6 @@ index 0000000..ec187b9
 +          })}
 +        </ul>
 +      )}
-+      {connected ? (
-+        <div
-+          id="codev-provider-oauth"
-+          className="space-y-2 rounded-md border border-dashed border-border p-3"
-+          data-codev-oauth-status={oauth.status}
-+          aria-label={
-+            oauthConnected ? 'OpenAI OAuth fixture connected' : 'OpenAI OAuth fixture callback'
-+          }
-+        >
-+          <p className="text-sm font-medium">Official OAuth</p>
-+          <p className="text-xs text-muted-foreground">OpenAI Codex · {oauth.summary}</p>
-+          <Button
-+            type="button"
-+            size="sm"
-+            variant="outline"
-+            disabled={!connected || busy !== '' || oauthConnected || oauth.status !== 'available'}
-+            aria-label={oauth.label}
-+            onClick={() => onOAuth?.()}
-+          >
-+            {oauthBusy ? 'Connecting…' : oauth.label}
-+          </Button>
-+          <p className="text-xs text-muted-foreground" role="status">
-+            {oauth.reason}
-+          </p>
-+        </div>
-+      ) : null}
-+      {connected && (snapshot?.cliSubscriptions?.length ?? 0) > 0 ? (
-+        <div
-+          id="codev-cli-subscriptions"
-+          className="space-y-2 rounded-md border border-dashed border-border p-3"
-+          data-codev-cli-subscriptions="true"
-+        >
-+          <p className="text-sm font-medium">CLI subscriptions</p>
-+          <p className="text-xs text-muted-foreground">
-+            Connect Codex or Claude Code from a terminal with the official CoDev CLI. Run{' '}
-+            <code>npm install -g @trycodev/cli</code> and <code>codev login</code> first.
-+          </p>
-+          <ul className="space-y-1" aria-label="CLI subscription status">
-+            {snapshot?.cliSubscriptions?.map((subscription) => (
-+              <li
-+                key={subscription.provider}
-+                className="flex flex-wrap items-center justify-between gap-2 text-xs"
-+                data-codev-cli-status={subscription.status}
-+              >
-+                <span className="font-medium">{subscription.label}</span>
-+                <span className="text-muted-foreground">
-+                  {subscription.status === 'connected' ? (
-+                    'Connected'
-+                  ) : (
-+                    <>
-+                      Not connected · run <code>{subscription.command}</code>
-+                    </>
-+                  )}
-+                </span>
-+              </li>
-+            ))}
-+          </ul>
-+        </div>
-+      ) : null}
 +      {message ? (
 +        <p className="text-xs text-muted-foreground" role="status">
 +          {message}
@@ -3151,23 +3072,6 @@ index 0000000..ec187b9
 +    }
 +  }
 +
-+  async function connectOAuth(): Promise<void> {
-+    setBusy('oauth:openai')
-+    setMessage('')
-+    try {
-+      const result = await requestCodevBridge<CodevProviderConnectionSnapshot>(
-+        'connections.oauth',
-+        { provider: 'openai' }
-+      )
-+      setSnapshot(result)
-+      setMessage('OpenAI connected with a fixture OAuth callback.')
-+    } catch (error) {
-+      setMessage(error instanceof Error ? error.message : 'The fixture OAuth callback could not complete.')
-+    } finally {
-+      setBusy('')
-+    }
-+  }
-+
 +  async function revoke(provider: CodevProviderConnection['provider']): Promise<void> {
 +    setBusy(`revoke:${provider}`)
 +    setMessage('')
@@ -3200,9 +3104,6 @@ index 0000000..ec187b9
 +      }
 +      onSave={(provider) => {
 +        void save(provider)
-+      }}
-+      onOAuth={() => {
-+        void connectOAuth()
 +      }}
 +      onRevoke={(provider) => {
 +        void revoke(provider)
@@ -7024,10 +6925,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..3bd4adc
+index 0000000..7e003a6
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,355 @@
+@@ -0,0 +1,354 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -7077,7 +6978,6 @@ index 0000000..3bd4adc
 +  | 'activity.list'
 +  | 'connections.list'
 +  | 'connections.put'
-+  | 'connections.oauth'
 +  | 'connections.revoke'
 +  | 'profile.get'
 +

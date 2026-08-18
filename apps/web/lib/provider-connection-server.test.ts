@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   getProviderCredentialStatus: vi.fn(),
   saveAnthropicCredential: vi.fn(),
   saveOpenAICredential: vi.fn(),
-  saveProviderCredential: vi.fn(),
 }));
 
 vi.mock("./credentials", () => mocks);
@@ -29,14 +28,10 @@ describe("provider connection server", () => {
     vi.clearAllMocks();
   });
 
-  it("loads API-key rows separately from the OpenAI OAuth record", async () => {
+  it("loads API-key connection status for OpenAI and Anthropic", async () => {
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce({ credentialType: "API_KEY", lastFour: "0001" })
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        credentialType: "OAUTH_TOKEN",
-        lastFour: "fx01",
-      });
+      .mockResolvedValueOnce(null);
 
     await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
       connections: expect.arrayContaining([
@@ -47,9 +42,6 @@ describe("provider connection server", () => {
           lastFour: "0001",
         }),
       ]),
-      oauth: expect.objectContaining({
-        summary: "Connected · fixture callback",
-      }),
     });
     expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
       1,
@@ -59,11 +51,11 @@ describe("provider connection server", () => {
       "API_KEY",
     );
     expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
-      3,
+      2,
       "USER",
       user.id,
-      "openai",
-      "OAUTH_TOKEN",
+      "anthropic",
+      "API_KEY",
     );
   });
 
@@ -71,7 +63,6 @@ describe("provider connection server", () => {
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce(null) // openai API_KEY
       .mockResolvedValueOnce(null) // anthropic API_KEY
-      .mockResolvedValueOnce(null) // openai OAUTH_TOKEN (fixture)
       .mockResolvedValueOnce({
         credentialType: "HOSTED_CODEX_SUBSCRIPTION",
         lastFour: "Codex CLI",
@@ -90,14 +81,14 @@ describe("provider connection server", () => {
       },
     );
     expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
-      4,
+      3,
       "USER",
       user.id,
       "openai",
       "HOSTED_CODEX_SUBSCRIPTION",
     );
     expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
-      5,
+      4,
       "USER",
       user.id,
       "anthropic",
@@ -105,7 +96,7 @@ describe("provider connection server", () => {
     );
   });
 
-  it("revokes only the API key, leaving OAuth to its own lifecycle", async () => {
+  it("revokes only the API key connection", async () => {
     await revokePersonalProviderConnection(user, "openai");
 
     expect(mocks.deleteProviderCredential).toHaveBeenCalledWith(

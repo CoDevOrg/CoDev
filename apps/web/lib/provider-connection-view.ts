@@ -19,39 +19,6 @@ export type ProviderConnectionViewer = {
   name: string;
 };
 
-export type ProviderOAuthPlanStatus = "unavailable" | "available";
-
-export type ProviderOAuthPlan = {
-  provider: "openai";
-  status: ProviderOAuthPlanStatus;
-  label: string;
-  summary: string;
-  reason: string;
-};
-
-export const OPENAI_OAUTH_PLAN: ProviderOAuthPlan = {
-  provider: "openai",
-  status: "available",
-  label: "Connect with OpenAI",
-  summary: "Fixture callback · ready",
-  reason:
-    "Connect uses a CoDev fixture callback. ChatGPT consent is not opened.",
-};
-
-export function toOpenAiOAuthPlan(
-  status: ProviderCredentialStatus | null | undefined,
-): ProviderOAuthPlan {
-  if (publicCredentialType(status?.credentialType) === "OAUTH_TOKEN") {
-    return {
-      ...OPENAI_OAUTH_PLAN,
-      summary: "Connected · fixture callback",
-      reason:
-        "OpenAI is connected through the CoDev fixture OAuth callback. ChatGPT consent was not used.",
-    };
-  }
-  return OPENAI_OAUTH_PLAN;
-}
-
 export type CliSubscriptionProvider = "codex" | "claude";
 
 export type CliSubscriptionRecord = {
@@ -86,7 +53,6 @@ export function toCliSubscriptionRecords(
 export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
   connections: ProviderConnectionRecord[];
-  oauth: ProviderOAuthPlan;
   cliSubscriptions: CliSubscriptionRecord[];
 };
 
@@ -157,7 +123,6 @@ export function toProviderConnectionSnapshot(input: {
   statuses: Partial<
     Record<ProviderConnectionProvider, ProviderCredentialStatus | null>
   >;
-  openAiOAuthStatus?: ProviderCredentialStatus | null;
   cliSubscriptionStatuses?: Partial<
     Record<CliSubscriptionProvider, ProviderCredentialStatus | null>
   >;
@@ -173,7 +138,6 @@ export function toProviderConnectionSnapshot(input: {
   return {
     viewer: input.viewer,
     connections,
-    oauth: toOpenAiOAuthPlan(input.openAiOAuthStatus),
     cliSubscriptions: toCliSubscriptionRecords(
       input.cliSubscriptionStatuses ?? {},
     ),

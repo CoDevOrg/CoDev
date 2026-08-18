@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  OPENAI_OAUTH_PLAN,
   publicProviderConnectionPayload,
   secretKeysInValue,
   toProviderConnectionRecord,
@@ -52,9 +51,6 @@ describe("provider connection view", () => {
     expect(snapshot.connections.every((row) => row.lastFour === null)).toBe(
       true,
     );
-    expect(snapshot.oauth).toEqual(OPENAI_OAUTH_PLAN);
-    expect(snapshot.oauth.status).toBe("available");
-    expect(snapshot.oauth.summary).toBe("Fixture callback · ready");
     expect(
       snapshot.cliSubscriptions.map((row) => [row.provider, row.status]),
     ).toEqual([
@@ -88,39 +84,6 @@ describe("provider connection view", () => {
         ?.command,
     ).toBe("codev codex-auth");
     expect(secretKeysInValue(snapshot)).toEqual([]);
-  });
-
-  it("keeps API-key and OAuth connection state separate without exposing tokens", () => {
-    const snapshot = toProviderConnectionSnapshot({
-      viewer: { id: "user-1", name: "CoDev Test Jordan" },
-      statuses: {
-        openai: {
-          credentialType: "API_KEY",
-          lastFour: "0001",
-          encryptedApiKey: "kms-v1.api-key-ciphertext",
-          apiKey: "sk-test-codev-f62-fixture-key0001",
-        },
-      },
-      openAiOAuthStatus: {
-        credentialType: "OAUTH_TOKEN",
-        lastFour: "fx01",
-        encryptedAccessToken: "kms-v1.oauth-ciphertext",
-        accessToken: "oa-test-codev-f65-fixture-token-fx01",
-      },
-    });
-    const openai = snapshot.connections.find(
-      (row) => row.provider === "openai",
-    );
-    expect(openai).toMatchObject({
-      status: "connected",
-      credentialType: "API_KEY",
-      lastFour: "0001",
-      suppliedBy: "CoDev Test Jordan",
-    });
-    expect(snapshot.oauth.summary).toBe("Connected · fixture callback");
-    expect(JSON.stringify(snapshot)).not.toMatch(
-      /oa-test-codev|ciphertext|auth\.openai\.com/i,
-    );
   });
 
   it("rejects a payload that still contains the submitted API key", () => {

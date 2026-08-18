@@ -41,7 +41,6 @@ export type CodevBridgeMethod =
   | "activity.list"
   | "connections.list"
   | "connections.put"
-  | "connections.oauth"
   | "connections.revoke"
   | "profile.get";
 
@@ -99,7 +98,6 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "activity.list",
   "connections.list",
   "connections.put",
-  "connections.oauth",
   "connections.revoke",
   "profile.get",
 ]);
@@ -532,31 +530,6 @@ export async function executeCodevBridgeRequest(
       return succeed(payload);
     }
 
-    if (request.method === "connections.oauth") {
-      if (request.params?.provider !== "openai") {
-        return fail("OpenAI Codex is the only fixture OAuth connection.");
-      }
-      const response = await fetcher(
-        `/api/workspaces/${workspaceId}/connections`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
-          cache: "no-store",
-        },
-      );
-      const payload = await readJson(response);
-      if (!response.ok) {
-        return fail(
-          jsonError(
-            payload,
-            "CoDev could not complete the fixture OAuth callback.",
-          ),
-        );
-      }
-      return succeed(payload);
-    }
-
     if (request.method === "connections.revoke") {
       const provider = request.params?.provider;
       if (provider !== "openai" && provider !== "anthropic") {
@@ -924,7 +897,6 @@ export async function executeCodevBridgeRequest(
 const PERSONAL_BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.list",
   "connections.put",
-  "connections.oauth",
   "connections.revoke",
   "profile.get",
 ]);
@@ -994,28 +966,6 @@ export async function executePersonalCodevBridgeRequest(
       if (!response.ok) {
         return fail(
           jsonError(payload, "CoDev could not save this provider connection."),
-        );
-      }
-      return succeed(payload);
-    }
-
-    if (request.method === "connections.oauth") {
-      if (request.params?.provider !== "openai") {
-        return fail("OpenAI Codex is the only fixture OAuth connection.");
-      }
-      const response = await fetcher("/api/personal/connections", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
-        cache: "no-store",
-      });
-      const payload = await readJson(response);
-      if (!response.ok) {
-        return fail(
-          jsonError(
-            payload,
-            "CoDev could not complete the fixture OAuth callback.",
-          ),
         );
       }
       return succeed(payload);
