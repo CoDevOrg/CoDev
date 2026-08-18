@@ -6925,10 +6925,10 @@ index 9b639b0..8fc68ec 100644
        } else {
 diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
 new file mode 100644
-index 0000000..a7d6342
+index 0000000..47df499
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.test.ts
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,40 @@
 +import { describe, expect, it } from 'vitest'
 +import { readCodevBootstrap } from './codev-bootstrap'
 +
@@ -6945,23 +6945,21 @@ index 0000000..a7d6342
 +    })
 +  })
 +
-+  it('accepts a personal settings-only path', () => {
++  it('accepts a personal settings-only path under the shared workspace root', () => {
 +    expect(
 +      readCodevBootstrap({
-+        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder&codevSettingsOnly=1'
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder&codevSettingsOnly=1'
 +      } as Location)
 +    ).toEqual({
-+      projectPath: '/srv/codev/personal/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
 +      projectKind: 'folder',
 +      settingsOnly: true
 +    })
 +  })
 +
 +  it.each([
-+    // A personal path is only valid for the settings surface, and vice versa.
-+    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder',
-+    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevSettingsOnly=1',
-+    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2F..%2Fsecret&codevProjectKind=folder&codevSettingsOnly=1',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder&codevSettingsOnly=1',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2F..%2Fsecret&codevProjectKind=folder&codevSettingsOnly=1',
 +    '#codev=1&codevProject=%2Fetc&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2F..%2Fsecret&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=other',
@@ -6973,10 +6971,10 @@ index 0000000..a7d6342
 +})
 diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
 new file mode 100644
-index 0000000..5a315a7
+index 0000000..7fe10a9
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.ts
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,48 @@
 +export type CodevBootstrap = {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
@@ -6989,10 +6987,13 @@ index 0000000..5a315a7
 +  settingsOnly?: boolean
 +}
 +
++// codev-orchestrator validates every session's project root against one
++// configured workspaces root joined with the session id (see
++// services/orchestrator/src/backend/orca.rs) — it has no separate notion of
++// a personal-runtime root, so a settings-only (personal) pairing lives under
++// this same path, keyed by the member's own id instead of a workspace id.
 +const CODEV_WORKSPACE_PATH =
 +  /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-+const CODEV_PERSONAL_PATH =
-+  /^\/srv\/codev\/personal\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 +const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
 +
 +export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
@@ -7008,12 +7009,7 @@ index 0000000..5a315a7
 +  if (!projectPath || (projectKind !== 'git' && projectKind !== 'folder')) {
 +    return null
 +  }
-+  // Personal runtimes live off the workspace root and are only ever opened as
-+  // the settings surface, so the two path shapes are not interchangeable.
-+  const pathMatches = settingsOnly
-+    ? CODEV_PERSONAL_PATH.test(projectPath)
-+    : CODEV_WORKSPACE_PATH.test(projectPath)
-+  if (!pathMatches) {
++  if (!CODEV_WORKSPACE_PATH.test(projectPath)) {
 +    return null
 +  }
 +  if (projectName && !CODEV_GITHUB_REPOSITORY.test(projectName)) {
