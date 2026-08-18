@@ -2238,6 +2238,68 @@ select,
   height: 14px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.provider-connections-panel {
+  display: grid;
+  margin-top: 8px;
+  gap: 16px;
+}
+
+.provider-connections-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: 12px;
+}
+
+.provider-connection-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.provider-connection-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.provider-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.provider-connection-actions input {
+  flex: 1;
+  min-width: 12rem;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13px;
+}
+
 @media (max-width: 640px) {
   .feedback-grid {
     grid-template-columns: 1fr;

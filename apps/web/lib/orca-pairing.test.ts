@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractPairingCode,
-  orcaPersonalPath,
   orcaWorkspacePath,
   parseOrcaReady,
 } from "./orca-pairing";
@@ -99,17 +98,5 @@ describe("orcaWorkspacePath", () => {
 
   it("rejects non-uuid workspace ids", () => {
     expect(() => orcaWorkspacePath("../etc")).toThrow(/Invalid workspace id/);
-  });
-});
-
-describe("orcaPersonalPath", () => {
-  it("shares the workspace root, since the orchestrator only validates one", () => {
-    expect(orcaPersonalPath(WORKSPACE_ID)).toBe(
-      `/srv/codev/workspaces/${WORKSPACE_ID}`,
-    );
-  });
-
-  it("rejects non-uuid user ids", () => {
-    expect(() => orcaPersonalPath("../etc")).toThrow(/Invalid workspace id/);
   });
 });

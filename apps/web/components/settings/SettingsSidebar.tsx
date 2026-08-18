@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, Bot, KeyRound, User } from "lucide-react";
+import { ArrowLeft, KeyRound, Plug, User } from "lucide-react";
 
 type SettingsNavItem = {
   name: string;
@@ -13,7 +13,11 @@ type SettingsNavItem = {
 
 const personalNav: SettingsNavItem[] = [
   { name: "Profile", href: "/settings/personal/profile", icon: User },
-  { name: "Coding Agents", href: "/settings", icon: Bot },
+  {
+    name: "AI Provider Accounts",
+    href: "/settings/personal/providers",
+    icon: Plug,
+  },
   {
     name: "Environment Variables",
     href: "/settings/personal/environment",

@@ -33,9 +33,16 @@ vi.mock("./orchestrator", () => ({
   waitForOrchestrator: mocks.waitForOrchestrator,
 }));
 
-import { ensurePersonalOrcaSession, OrcaHostError } from "./orca-host";
+import { ensureOrcaSession, OrcaHostError } from "./orca-host";
 
-const userId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
+const workspaceId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
+const userId = "5a946afa-6881-44a6-adbd-c1f9fe136881";
+const workspace = {
+  id: workspaceId,
+  repository: null,
+  repositoryVisibility: null,
+  defaultBranch: null,
+};
 const readyPayload = {
   type: "orca_server_ready",
   schemaVersion: 1,
@@ -45,21 +52,21 @@ const readyPayload = {
   pairing: {
     available: true,
     url: "orca://pair?code=abc123",
-    endpoint: `https://runtime.example/w/${userId}/pair`,
+    endpoint: `https://runtime.example/w/${workspaceId}/pair`,
     deviceId: "device-1",
     webClientUrl: null,
     scope: "runtime" as const,
   },
 };
 const session = {
-  workspaceId: userId,
+  workspaceId,
   port: 5173,
   createdAt: new Date().toISOString(),
   lastActivityAt: new Date().toISOString(),
   ready: readyPayload,
 };
 
-describe("ensurePersonalOrcaSession", () => {
+describe("ensureOrcaSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getHostState.mockResolvedValue("running");
@@ -77,10 +84,10 @@ describe("ensurePersonalOrcaSession", () => {
       )
       .mockResolvedValueOnce(session);
 
-    await expect(ensurePersonalOrcaSession(userId)).resolves.toMatchObject({
+    await expect(ensureOrcaSession(workspace, userId)).resolves.toMatchObject({
       state: "ready",
     });
-    expect(mocks.stopIde).toHaveBeenCalledWith(userId);
+    expect(mocks.stopIde).toHaveBeenCalledWith(workspaceId);
     expect(mocks.startIde).toHaveBeenCalledTimes(2);
   });
 
@@ -89,7 +96,7 @@ describe("ensurePersonalOrcaSession", () => {
       new mocks.OrchestratorError("Sandbox service returned HTTP 503.", 503),
     );
 
-    await expect(ensurePersonalOrcaSession(userId)).rejects.toMatchObject({
+    await expect(ensureOrcaSession(workspace, userId)).rejects.toMatchObject({
       message: "Sandbox service returned HTTP 503.",
     });
     expect(mocks.stopIde).not.toHaveBeenCalled();
@@ -105,7 +112,7 @@ describe("ensurePersonalOrcaSession", () => {
       .mockRejectedValueOnce(staleError)
       .mockRejectedValueOnce(staleError);
 
-    const result = ensurePersonalOrcaSession(userId);
+    const result = ensureOrcaSession(workspace, userId);
     await expect(result).rejects.toBeInstanceOf(OrcaHostError);
     await expect(result).rejects.toMatchObject({
       message: "Orca IDE process exited before reporting readiness",

@@ -118,17 +118,3 @@ export function orcaWorkspacePath(workspaceId: string): string {
   }
   return `${ORCA_WORKSPACES_ROOT}/${workspaceId}`;
 }
-
-/**
- * Path for a member's personal (no-repository) Orca runtime, used by the
- * settings surface. `codev-orchestrator` validates every `start` request's
- * project root against a single configured `workspaces_root` joined with
- * the session id (see `services/orchestrator/src/backend/orca.rs`), with no
- * notion of a separate personal-runtime root — so a personal session must
- * live under {@link ORCA_WORKSPACES_ROOT} too, keyed by the member's own id
- * instead of a workspace id. A real workspace can never collide with it:
- * both are random UUIDs drawn from disjoint database tables.
- */
-export function orcaPersonalPath(userId: string): string {
-  return orcaWorkspacePath(userId);
-}

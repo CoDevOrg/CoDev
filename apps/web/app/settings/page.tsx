@@ -1,19 +1,15 @@
-import { AppChrome } from "@/components/app-chrome";
-import { PersonalSettingsSurface } from "@/components/personal-settings-surface";
-import { requireUser } from "@/lib/session";
+import { redirect } from "next/navigation";
 
 /**
- * Personal settings, rendered by the same Orca client the workspace uses so
- * a member sees one settings experience whether or not a workspace is open.
+ * `/settings` has no content of its own; it always meant "my personal
+ * settings," so send visitors straight to the profile page. This route used
+ * to render personal settings inside a live Orca IDE session so members saw
+ * the same settings UI whether or not a workspace was open, but that made
+ * "can I open Settings" depend on the AWS host, the orchestrator, and a per-
+ * user sandbox process — infrastructure with nothing to do with reading a
+ * profile or pasting an API key, and a reliability class no settings page
+ * should inherit.
  */
-export default async function SettingsPage() {
-  const user = await requireUser();
-
-  return (
-    <AppChrome user={user}>
-      <div className="workspace-page">
-        <PersonalSettingsSurface />
-      </div>
-    </AppChrome>
-  );
+export default function SettingsPage() {
+  redirect("/settings/personal/profile");
 }
