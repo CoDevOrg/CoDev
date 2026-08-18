@@ -38,6 +38,7 @@
     "@vercel/functions": "3.7.6",
     "@vercel/oidc-aws-credentials-provider": "3.3.1",
     "ai": "7.0.44",
+    "clsx": "^2.1.1",
     "drizzle-orm": "0.45.2",
     "ioredis": "5.11.1",
     "lucide-react": "^1.28.0",
@@ -50,6 +51,7 @@
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
     "sharp": "0.35.3",
+    "tailwind-merge": "^3.6.0",
     "workflow": "4.7.0",
     "ws": "8.21.1",
     "y-protocols": "1.0.7",
@@ -58,6 +60,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "7.0.0",
     "@testing-library/react": "16.3.2",
     "@types/react": "19.2.14",
@@ -67,6 +70,7 @@
     "@workflow/vitest": "4.0.14",
     "eslint-config-next": "16.2.12",
     "jsdom": "30.0.0",
+    "tailwindcss": "^4.3.3",
     "vitest": "4.1.10"
   }
 }

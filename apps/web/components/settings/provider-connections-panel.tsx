@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import type {
   ProviderConnectionProvider,
   ProviderConnectionSnapshot,
@@ -30,15 +31,12 @@ export function ProviderConnectionsPanel({
     Partial<Record<ProviderConnectionProvider, string>>
   >({});
   const [busy, setBusy] = useState("");
-  const [message, setMessage] = useState<{
-    tone: "success" | "warning";
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState("");
 
   async function save(provider: ProviderConnectionProvider) {
     const apiKey = drafts[provider]?.trim() ?? "";
     setBusy(`save:${provider}`);
-    setMessage(null);
+    setMessage("");
     try {
       const response = await fetch("/api/personal/connections", {
         method: "PUT",
@@ -47,18 +45,14 @@ export function ProviderConnectionsPanel({
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage({
-          tone: "warning",
-          text: payload?.error ?? "The key could not be saved.",
-        });
+        setMessage(payload?.error ?? "The key could not be saved.");
         return;
       }
       setSnapshot(payload);
       setDrafts((current) => ({ ...current, [provider]: "" }));
-      setMessage({
-        tone: "success",
-        text: `${provider === "openai" ? "OpenAI" : "Anthropic"} key saved.`,
-      });
+      setMessage(
+        `${provider === "openai" ? "OpenAI" : "Anthropic"} key saved.`,
+      );
     } finally {
       setBusy("");
     }
@@ -66,7 +60,7 @@ export function ProviderConnectionsPanel({
 
   async function revoke(provider: ProviderConnectionProvider) {
     setBusy(`revoke:${provider}`);
-    setMessage(null);
+    setMessage("");
     try {
       const response = await fetch(
         `/api/personal/connections?provider=${provider}`,
@@ -74,29 +68,22 @@ export function ProviderConnectionsPanel({
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage({
-          tone: "warning",
-          text: payload?.error ?? "The connection could not be revoked.",
-        });
+        setMessage(payload?.error ?? "The connection could not be revoked.");
         return;
       }
       setSnapshot(payload);
       setDrafts((current) => ({ ...current, [provider]: "" }));
-      setMessage({
-        tone: "success",
-        text: `${provider === "openai" ? "OpenAI" : "Anthropic"} connection revoked.`,
-      });
+      setMessage(
+        `${provider === "openai" ? "OpenAI" : "Anthropic"} connection revoked.`,
+      );
     } finally {
       setBusy("");
     }
   }
 
   return (
-    <div className="provider-connections-panel">
-      <ul
-        className="provider-connections-list"
-        aria-label="Provider connection status"
-      >
+    <div className="space-y-3">
+      <ul aria-label="Provider connection status" className="space-y-2">
         {snapshot.connections.map((connection) => {
           const saving = busy === `save:${connection.provider}`;
           const revoking = busy === `revoke:${connection.provider}`;
@@ -107,11 +94,16 @@ export function ProviderConnectionsPanel({
               (connection.provider === "openai" ? "codex" : "claude"),
           );
           return (
-            <li className="provider-connection-card" key={connection.provider}>
-              <p className="provider-connection-title">{connection.label}</p>
-              <p className="settings-muted-copy">{statusLabel(connection)}</p>
+            <li
+              className="space-y-2 rounded-md border border-border p-3"
+              key={connection.provider}
+            >
+              <p className="text-sm font-medium">{connection.label}</p>
+              <p className="text-xs text-muted-foreground">
+                {statusLabel(connection)}
+              </p>
               {cli ? (
-                <p className="settings-muted-copy">
+                <p className="text-xs text-muted-foreground">
                   {cli.label} CLI:{" "}
                   {cli.status === "connected" ? (
                     "Connected"
@@ -123,7 +115,7 @@ export function ProviderConnectionsPanel({
                   )}
                 </p>
               ) : null}
-              <div className="provider-connection-actions">
+              <div className="flex flex-wrap items-center gap-2">
                 <label
                   className="sr-only"
                   htmlFor={`provider-key-${connection.provider}`}
@@ -132,6 +124,7 @@ export function ProviderConnectionsPanel({
                 </label>
                 <input
                   autoComplete="off"
+                  className="h-8 min-w-[12rem] flex-1 rounded-md border border-border bg-background px-2 text-xs"
                   disabled={disabled}
                   id={`provider-key-${connection.provider}`}
                   onChange={(event) =>
@@ -145,10 +138,10 @@ export function ProviderConnectionsPanel({
                   type="password"
                   value={drafts[connection.provider] ?? ""}
                 />
-                <button
-                  className="primary-button"
+                <Button
                   disabled={disabled}
                   onClick={() => void save(connection.provider)}
+                  size="sm"
                   type="button"
                 >
                   {saving
@@ -156,16 +149,17 @@ export function ProviderConnectionsPanel({
                     : connection.status === "connected"
                       ? "Replace key"
                       : "Save key"}
-                </button>
+                </Button>
                 {connection.status === "connected" ? (
-                  <button
-                    className="secondary-button"
+                  <Button
                     disabled={disabled}
                     onClick={() => void revoke(connection.provider)}
+                    size="sm"
                     type="button"
+                    variant="outline"
                   >
                     {revoking ? "Revoking…" : "Revoke"}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </li>
@@ -173,11 +167,8 @@ export function ProviderConnectionsPanel({
         })}
       </ul>
       {message ? (
-        <p
-          className={`form-message ${message.tone === "warning" ? "is-warning" : ""}`}
-          role={message.tone === "success" ? "status" : "alert"}
-        >
-          {message.text}
+        <p className="text-xs text-muted-foreground" role="status">
+          {message}
         </p>
       ) : null}
     </div>
