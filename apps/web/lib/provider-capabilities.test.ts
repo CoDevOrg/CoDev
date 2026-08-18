@@ -29,9 +29,9 @@ describe("provider capabilities", () => {
     expect(capabilities.canQueue).toBe(false);
     expect(capabilities.canInterrupt).toBe(false);
     expect(capabilities.canStartControlled).toBe(true);
-    expect(unavailableControlExplanation(RESTRICTED_FIXTURE_PROVIDER, "queue")).toBe(
-      QUEUE_UNAVAILABLE_EXPLANATION,
-    );
+    expect(
+      unavailableControlExplanation(RESTRICTED_FIXTURE_PROVIDER, "queue"),
+    ).toBe(QUEUE_UNAVAILABLE_EXPLANATION);
     expect(
       unavailableControlExplanation(RESTRICTED_FIXTURE_PROVIDER, "interrupt"),
     ).toBe(INTERRUPT_UNAVAILABLE_EXPLANATION);

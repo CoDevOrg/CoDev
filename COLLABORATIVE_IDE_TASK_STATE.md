@@ -57,9 +57,9 @@ workspace as its required final Computer Use evidence.
   selected the restricted fixture provider. **Provider capabilities**
   showed Restricted fixture as **Current provider** with Queue ·
   unavailable and Interrupt · unavailable, plus explanations `This
-  restricted fixture provider does not support queued instructions.` and
+restricted fixture provider does not support queued instructions.` and
   `This restricted fixture provider does not support interrupting a
-  turn.` Queue and Interrupt controls were disabled. No secret was
+turn.` Queue and Interrupt controls were disabled. No secret was
   displayed. TestSprite backend test
   `81e2d6c8-21bb-41cb-bee8-97309de3b4ca` passed (unauthenticated POST
   `/provider` and `/queue` return 401 without capability flags). See F7.2
@@ -107,7 +107,7 @@ workspace as its required final Computer Use evidence.
   Settings → General → **Provider connections**. Official OAuth showed
   **OpenAI Codex · Planned · unavailable**, a disabled **Connect with OpenAI**
   control, and `Official OpenAI Codex OAuth is documented and not enabled in
-  this workspace yet. Use an API key for now.` No consent UI opened and no
+this workspace yet. Use an API key for now.` No consent UI opened and no
   secret was displayed. TestSprite backend test
   `61c6f795-fb43-429b-ba31-0690ac3fecd1` passed (unauthenticated GET
   `/connections` returns 401 without OAuth tokens). See F6.4 completion
@@ -123,8 +123,8 @@ workspace as its required final Computer Use evidence.
   opened the Orca Agents shared session (`provider openai`, idle, empty
   queue) and queued **Inspect README.md**. The panel showed
   **Provider connection blocked**: `This OpenAI connection was revoked or is
-  not connected. Reconnect a key in Settings before starting another turn.
-  The existing session is unchanged.` Queue stayed **0 queued**; the
+not connected. Reconnect a key in Settings before starting another turn.
+The existing session is unchanged.` Queue stayed **0 queued**; the
   instruction was not added to the transcript. No secret was displayed.
   TestSprite backend test `55b4a44c-8962-4ef0-91f5-7b784bad855f` passed
   (unauthenticated POST `/queue` and `/turns` return 401 without starting a
@@ -165,18 +165,18 @@ workspace as its required final Computer Use evidence.
   `/workspaces/bed7a975-eccf-4742-85c6-cab41ce02830`. The first open still
   showed **Orca IDE process exited before reporting readiness** because a
   leftover `orca-ide --serve` for this workspace (pid 879, port 7000, ppid
-  1) outlived the orchestrator child; a second spawn then died on the
-  Electron singleton lock. After that leftover process was stopped on the
-  Firecracker host, Retry opened native Orca. The right-sidebar **Activity**
-  panel listed durable events; filtering Diffs + `review_merged` isolated
-  `agent.review_merged`; **Open Checks · diff** jumped to Checks. A
-  Sessions query with no match showed **No matching activity events.** See
-  OI.12 completion evidence. Current task is now F6.1.
+  1. outlived the orchestrator child; a second spawn then died on the
+     Electron singleton lock. After that leftover process was stopped on the
+     Firecracker host, Retry opened native Orca. The right-sidebar **Activity**
+     panel listed durable events; filtering Diffs + `review_merged` isolated
+     `agent.review_merged`; **Open Checks · diff** jumped to Checks. A
+     Sessions query with no match showed **No matching activity events.** See
+     OI.12 completion evidence. Current task is now F6.1.
 
 - **OI.12 — dirty worktree blocker 2026-08-15T21:12:00Z:** The required
   initial `git status --short` was still not clean. `main` is current at
   `7861168e58227a77fddf5189da34e6b45eb17f1e` (`docs: record OI.12 dirty
-  worktree blocker`). The same unrelated local files remain and were not
+worktree blocker`). The same unrelated local files remain and were not
   overwritten or included: modified `apps/web/app/app-theme.css`,
   `apps/web/app/globals.css`, `apps/web/app/sign-in/page.tsx`,
   `apps/web/components/credentials-sign-in-form.test.tsx`,
@@ -193,7 +193,7 @@ workspace as its required final Computer Use evidence.
 - **OI.12 — dirty worktree blocker 2026-08-15T21:01:00Z:** The required
   initial `git status --short` was not clean. `main` is current and matches
   `origin/main` at `ca921669002ae53442502616e005457d517e8e91` (`docs: record
-  OI.12 Production workspace open blocker`). Unrelated local changes are
+OI.12 Production workspace open blocker`). Unrelated local changes are
   present and were not overwritten or included: modified
   `apps/web/app/app-theme.css`, `apps/web/app/globals.css`,
   `apps/web/app/sign-in/page.tsx`,
@@ -218,12 +218,12 @@ workspace as its required final Computer Use evidence.
   `git fetch origin main` and `git pull --ff-only origin main`. OI.12 source
   was implemented and pushed to `main` as
   `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3` (`feat: add durable Orca activity
-  audit panel`). Focused activity/bridge tests (16 passed), patched-Orca
+audit panel`). Focused activity/bridge tests (16 passed), patched-Orca
   Vitest (`CodevActivityAuditView.test.tsx`,
   `persistence-right-sidebar-tab.test.ts`, 14 passed), patched-Orca
   `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
-  typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
-  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
+typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
+test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   passed. GitHub records Ready Production deployment `5924437667` for that
   exact commit. Vercel Production `dpl_C8SJzJWwyWtYxGEBBkFBz6sbcH1j` is Ready
   at `https://codev-f577m9h4l-yousef20920s-projects.vercel.app` and aliases
@@ -256,9 +256,9 @@ workspace as its required final Computer Use evidence.
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T14:57:36Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at
+main`; `main` remains current at
   `07db8b86b9e50ca6d6639ca09e8af2fd9a7dbe79` (`docs: record OI.11 Production
-  sign-in blocker`). OI.11 source is already on `main` from
+sign-in blocker`). OI.11 source is already on `main` from
   `dffbcb1a54855a7159b38304e2935d067f49e04b`; no product source was changed
   in this run. GitHub records Ready Production deployment `5921134580` for
   that exact HEAD commit at
@@ -285,9 +285,9 @@ workspace as its required final Computer Use evidence.
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T13:57:51Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at
+main`; `main` remains current at
   `8ac5704ad1814cbecd96a9e58ec6cd321e5e0ba6` (`docs: record OI.11 Production
-  sign-in blocker`). OI.11 source is already on `main` from
+sign-in blocker`). OI.11 source is already on `main` from
   `dffbcb1a54855a7159b38304e2935d067f49e04b`; no product source was changed
   in this run. GitHub records Ready Production deployment `5920696302` for
   that exact HEAD commit at
@@ -314,9 +314,9 @@ workspace as its required final Computer Use evidence.
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T13:01:49Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at
+main`; `main` remains current at
   `70ff8eee83c910f1b7edd6cbec379a1e50323239` (`docs: record OI.11 Production
-  sign-in blocker`). OI.11 source is already on `main` from
+sign-in blocker`). OI.11 source is already on `main` from
   `dffbcb1a54855a7159b38304e2935d067f49e04b`; no product source was changed
   in this run. GitHub records Ready Production deployment `5920223258` for
   that exact HEAD commit at
@@ -343,9 +343,9 @@ workspace as its required final Computer Use evidence.
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T12:01:12Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at
+main`; `main` remains current at
   `8fff4bbd783cb06ccc3a2fc642ef01543b1e3297` (`docs: record OI.11 Production
-  sign-in blocker`). OI.11 source is already on `main` from
+sign-in blocker`). OI.11 source is already on `main` from
   `dffbcb1a54855a7159b38304e2935d067f49e04b`; no product source was changed
   in this run. GitHub records Ready Production deployment `5919868222` for
   that exact HEAD commit at
@@ -372,9 +372,9 @@ workspace as its required final Computer Use evidence.
 - **OI.11 — Production Computer Use authentication blocker 2026-08-15T11:12:00Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`. OI.11 source was implemented and pushed to `main` as
+main`. OI.11 source was implemented and pushed to `main` as
   `dffbcb1a54855a7159b38304e2935d067f49e04b` (`feat: put stale-review
-  rejection and exactly-once integration in Orca`). Focused review/bridge
+rejection and exactly-once integration in Orca`). Focused review/bridge
   tests, `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`,
   `pnpm test` (273 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32
   passed, 1 skipped), `pnpm rust:check`, and `git diff --check` passed.
@@ -413,9 +413,9 @@ workspace as its required final Computer Use evidence.
 - **OI.10 — Production Computer Use authentication blocker 2026-08-15T10:04:00Z:**
   The required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at
+main`; `main` remains current at
   `5c5da5e1dcd2fd08bdb02250e2a26c5726ef6a7e` (`fix: provision a folder sandbox
-  so review checkpoints can freeze`). OI.10 source is already on `main` from
+so review checkpoints can freeze`). OI.10 source is already on `main` from
   `49c945b3` and follow-up sandbox/visibility fixes; no product source was
   changed in this run. GitHub records Ready Production deployment `5919321656`
   for that exact commit at
@@ -481,7 +481,7 @@ workspace as its required final Computer Use evidence.
 - **OI.6 — Two-attempt cap remains in force 2026-08-15T04:38:00Z:** The
   required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at `36b1b1c67593d403ca6761d6bebbf81e1050890c`.
+main`; `main` remains current at `36b1b1c67593d403ca6761d6bebbf81e1050890c`.
   The committed ledger already records two unsuccessful OI.6
   implementation/Production-verification attempts, and the execution contract
   stops after two unsuccessful approaches. No third implementation attempt,
@@ -491,7 +491,7 @@ workspace as its required final Computer Use evidence.
 - **OI.6 — Two-attempt cap remains in force 2026-08-15T03:01:39Z:** The
   required initial `git status --short` was clean. This run then used
   `git switch main`, `git fetch origin main`, and `git pull --ff-only origin
-  main`; `main` remains current at `d6b6d328dd916806de85c0ce5dae10ec0425b3c6`.
+main`; `main` remains current at `d6b6d328dd916806de85c0ce5dae10ec0425b3c6`.
   The immediately preceding ledger entry records the second unsuccessful
   OI.6 implementation/Production-verification attempt, whose native Orca
   external-change flow bypasses the shipped conflict dialog. Per the task
@@ -501,7 +501,7 @@ workspace as its required final Computer Use evidence.
 - **OI.6 — Production native-surface mismatch blocker 2026-08-15T02:06:41Z:**
   The required initial `git status --short` was clean and `main` was advanced
   using `git switch main`, `git fetch origin main`, and `git pull --ff-only
-  origin main` at `06d7a5cf6dd4e7503ce1dd0d5dc6008b3352d08e`. No source was
+origin main` at `06d7a5cf6dd4e7503ce1dd0d5dc6008b3352d08e`. No source was
   changed. Vercel Production deployment
   `https://codev-bog8vo3lx-yousef20920s-projects.vercel.app`
   (`dpl_6YuR3eedh9esZoRdkYH34qMzibqv`) is Ready and aliases
@@ -527,9 +527,9 @@ workspace as its required final Computer Use evidence.
 - **OI.6 — Production native-resolution blocker 2026-08-15T01:56:02Z:**
   The required initial `git status --short` was clean and `main` was advanced
   with `git switch main`, `git fetch origin main`, and `git pull --ff-only
-  origin main` at `957c39c60e70f1b0874a42a6916803f9b3071efb`. Commit
+origin main` at `957c39c60e70f1b0874a42a6916803f9b3071efb`. Commit
   `d040f64bcefa2f4115f0e9106a5906b415ff70c3` (`feat: surface Orca file
-  conflicts`) passed targeted bridge/API tests, `pnpm lint` (0 errors, 2
+conflicts`) passed targeted bridge/API tests, `pnpm lint` (0 errors, 2
   existing warnings), `pnpm typecheck`, `pnpm test` (230 passed, 1 skipped),
   `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`,
   and `git diff --check`. `pnpm format:check` remains blocked only by the
@@ -542,7 +542,7 @@ workspace as its required final Computer Use evidence.
   collaborative revision, then appended an external revision from Orca's
   terminal. Orca displayed its existing disk-change warning with only
   `Compare`, `Reload from Disk`, and `Keep My Edits`; the shipped `External
-  file conflict` dialog and its preserve-both resolution choices did not
+file conflict` dialog and its preserve-both resolution choices did not
   appear. Screenshot evidence:
   `file:///var/folders/6t/3vy04jrn6z77_46vvkvhffkc0000gn/T/com.openai.sky.CUAService/Chrome%20Screenshot%202026-08-14%20at%209.55.51%20PM.jpeg`.
   Current task remains OI.6; do not begin OI.7 until the native dialog is
@@ -552,7 +552,7 @@ workspace as its required final Computer Use evidence.
 - **OI.5 — Production two-identity verification blocker 2026-08-15T00:42:11Z:**
   The required initial `git status --short` was clean and `main` was current
   after `git switch main`, `git fetch origin main`, and `git pull --ff-only
-  origin main` at `1fd8234`. OI.5 source remains deployed by commit
+origin main` at `1fd8234`. OI.5 source remains deployed by commit
   `fce33b67ed5002d1f5d8ba97c99f321dea46a889`; its recorded Production URL
   `https://codev-95q2cigns-yousef20920s-projects.vercel.app` remains reachable
   but is Vercel SSO-protected for an unauthenticated request. Computer Use
@@ -813,51 +813,51 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 
 ## Completed tasks
 
-| Task                                                                                                  | Completed  | Evidence                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0.1 — Baseline audit                                                                                 | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                                                                       |
-| B0.2 — Stable local verification fixture and fixture identities                                       | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                                                          |
-| B0.3 — Reusable screenshot/evidence convention                                                        | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below.                                           |
-| F1.2 — Implement one invite lifecycle slice                                                           | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                                                                   |
-| F1.4 — Add member-role management and immediate realtime membership refresh                           | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                                  |
-| F2.1 — Define durable presence events for joined/left, active file, and cursor state                  | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview.                 |
-| F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                                            |
-| F2.3 — Add cursor/selection rendering for one collaborator                                            | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.                             |
-| F2.4 — Add reconnect/resubscribe replay for presence and document state                               | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.                  |
-| F2.5 — Surface one external-file-change conflict without overwriting either version                   | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                                        |
-| F3.2 — Render the provider, owner, worktree, state, and ordered transcript                            | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order.                                |
-| F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                    | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview.                                                               |
-| F3.4 — Add authorized interrupt/cancellation state with a visible last completed action               | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action.                                |
-| F3.5 — Restore transcript, queue, and stream cursor after browser refresh                             | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction. |
-| F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot    | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots.                                                                  |
-| F4.3 — Reject a fourth active session server-side with an actionable UI error                         | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance.                                                   |
-| F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite    | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment.                                          |
-| F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                  | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`.                                       |
-| F5.1 — Create an immutable review checkpoint with revision and diff metadata                          | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest.                                        |
-| F5.2 — Render a binary-safe diff summary and affected-path list                                       | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted.                                          |
-| F5.3 — Reject stale checkpoint approval before any merge action                                       | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started.                                              |
-| F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                       | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                          |
-| F5.5 — Discard a proposal idempotently and remove its worktree/claims                                 | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                |
-| F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle          | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.        |
-| OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect      | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                       |
-| OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                  | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                         |
-| OI.4 — Render named presence and active-file state in Orca's editor chrome                            | 2026-08-14 | [OI.4 completion evidence](#oi4-completion-evidence) — Two authenticated Production identities opened the shared Orca workspace; Jordan saw both names and Alex's remote `README.md` state in the editor chrome.            |
-| OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor               | 2026-08-15 | [OI.5 completion evidence](#oi5-completion-evidence) — Two authenticated Production identities showed native remote selection decorations and reconnect replay in the Source editor.                                        |
-| OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version            | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                   |
-| OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel | 2026-08-15 | [OI.7 completion evidence](#oi7-completion-evidence) — Production Orca Agents panel showed one durable ordered conversation, Alex's attributed queue, interrupt plus last completed tool, and refresh restore without a duplicate provider call. |
-| OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards | 2026-08-15 | [OI.8 completion evidence](#oi8-completion-evidence) — Production Orca Workspace Board showed three occupied native slots and worktree cards, then rejected a fourth session with HTTP 409. |
-| OI.9 — Put active and contested path claims in Orca's Explorer and worktree cards with reassign/cancel | 2026-08-15 | [OI.9 completion evidence](#oi9-completion-evidence) — Production Orca Explorer and worktree cards showed contested `README.md` claims, then reassigned the path. |
-| OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks | 2026-08-15 | [OI.10 completion evidence](#oi10-completion-evidence) — Production Orca Source Control showed a frozen checkpoint and Checks rendered a binary-safe affected-path list. |
-| OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions | 2026-08-15 | [OI.11 completion evidence](#oi11-completion-evidence) — Production Orca blocked a stale checkpoint, then integrated one current reviewed checkpoint attributed to CoDev Test Jordan. |
-| OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events. |
-| F6.1 — Define a provider-connection record with encrypted, server-only credential handling | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed. |
-| F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed. |
-| F6.3 — Reauthorize every turn and block the next turn after a connection is revoked | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret. |
-| F6.4 — Research and document an official OAuth flow for one provider before implementing it | 2026-08-15 | [F6.4 completion evidence](#f64-completion-evidence) — Production Orca Settings showed OpenAI Codex OAuth as Planned · unavailable with a disabled Connect control and no consent UI. |
-| F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials | 2026-08-15 | [F6.5 completion evidence](#f65-completion-evidence) — Production Orca Settings completed OpenAI OAuth through a fixture callback and showed Connected · OAuth ending fx01 without opening ChatGPT. |
-| F7.1 — Normalize one provider's durable turn/status/output/tool events | 2026-08-15 | [F7.1 completion evidence](#f71-completion-evidence) — Production Orca Agents showed standardized turn, status, output, tool, and usage events for the fixture OpenAI session. |
-| F7.2 — Add explicit capability flags and unavailable-control explanations | 2026-08-16 | [F7.2 completion evidence](#f72-completion-evidence) — Production Orca Agents showed Restricted fixture with Queue and Interrupt unavailable plus explanations. |
-| F7.3 — Make turn-level provider switching explicit and prevent mixed transcripts | 2026-08-16 | [F7.3 completion evidence](#f73-completion-evidence) — Production Orca Agents switched from Restricted fixture to OpenAI after completed turns and showed the provider-boundary label. |
+| Task                                                                                                                        | Completed  | Evidence                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B0.1 — Baseline audit                                                                                                       | 2026-08-11 | [Baseline audit](./COLLABORATIVE_IDE_BASELINE_AUDIT.md) — 22 focused tests passed; Computer Use production check captured the workspace-open failure.                                                                                            |
+| B0.2 — Stable local verification fixture and fixture identities                                                             | 2026-08-11 | [B0.2 fixture documentation](./COLLABORATIVE_IDE_FIXTURES.md) — focused checks, pushed source commit, Vercel preview, and Computer Use screenshots recorded below.                                                                               |
+| B0.3 — Reusable screenshot/evidence convention                                                                              | 2026-08-11 | [Screenshot evidence convention](./COLLABORATIVE_IDE_EVIDENCE.md) — focused Playwright capture, pushed source commit, Vercel preview, and Computer Use screenshot recorded below.                                                                |
+| F1.2 — Implement one invite lifecycle slice                                                                                 | 2026-08-11 | [F1.2 completion evidence](#f12-completion-evidence) — owner-created time-limited invite accepted once by the Jordan fixture in the Ready Vercel preview.                                                                                        |
+| F1.4 — Add member-role management and immediate realtime membership refresh                                                 | 2026-08-11 | [F1.4 completion evidence](#f14-completion-evidence) — Alex changed Jordan from Collaborator to Viewer and the preview refreshed restricted controls live.                                                                                       |
+| F2.1 — Define durable presence events for joined/left, active file, and cursor state                                        | 2026-08-11 | [F2.1 completion evidence](#f21-completion-evidence) — Alex and Jordan joined `src/hello.ts`, rendered both presence indicators, and recorded the ordered durable event stream in the Ready Vercel preview.                                      |
+| F2.2 — Render named presence and active-file state in the IDE without changing editor synchronization                       | 2026-08-11 | [F2.2 completion evidence](#f22-completion-evidence) — Alex switched files and Jordan’s named remote active-file state updated live in the Ready Vercel preview.                                                                                 |
+| F2.3 — Add cursor/selection rendering for one collaborator                                                                  | 2026-08-11 | [F2.3 completion evidence](#f23-completion-evidence) — Alex selected the hello function and Jordan’s shared IDE rendered the named selection and highlighted lines in the Ready Vercel preview.                                                  |
+| F2.4 — Add reconnect/resubscribe replay for presence and document state                                                     | 2026-08-11 | [F2.4 completion evidence](#f24-completion-evidence) — Jordan reconnected after Alex changed files and the shared IDE replayed presence plus the current `README.md` document in the Ready Vercel preview.                                       |
+| F2.5 — Surface one external-file-change conflict without overwriting either version                                         | 2026-08-11 | [F2.5 completion evidence](#f25-completion-evidence) — the Ready Vercel preview preserved the collaborative and terminal versions side by side and showed manual resolution choices.                                                             |
+| F3.2 — Render the provider, owner, worktree, state, and ordered transcript                                                  | 2026-08-11 | [F3.2 completion evidence](#f32-completion-evidence) — the Ready Vercel preview rendered session metadata, model configuration, tool activity, and two attributed transcript turns in order.                                                     |
+| F3.3 — Allow one eligible collaborator to enqueue one instruction with attribution                                          | 2026-08-12 | [F3.3 completion evidence](#f33-completion-evidence) — Jordan queued one attributed instruction and Alex observed the live queue in the Ready Vercel preview.                                                                                    |
+| F3.4 — Add authorized interrupt/cancellation state with a visible last completed action                                     | 2026-08-12 | [F3.4 completion evidence](#f34-completion-evidence) — Jordan interrupted the controlled preview turn and every visible session member retained the cancellation plus last completed action.                                                     |
+| F3.5 — Restore transcript, queue, and stream cursor after browser refresh                                                   | 2026-08-12 | [F3.5 completion evidence](#f35-completion-evidence) — the Ready Vercel preview restored the transcript, one attributed queue entry, and stream cursor `3` after Chrome refresh without duplicating the queued instruction.                      |
+| F4.2 — Make the workboard show assignment, owner, provider, status, and elapsed time for each slot                          | 2026-08-12 | [F4.2 completion evidence](#f42-completion-evidence) — the Ready Vercel preview showed all five workboard fields for each of the three active agent slots.                                                                                       |
+| F4.3 — Reject a fourth active session server-side with an actionable UI error                                               | 2026-08-12 | [F4.3 completion evidence](#f43-completion-evidence) — the Ready Vercel preview returned HTTP 409 for the fourth-session request and showed actionable capacity guidance.                                                                        |
+| F4.5 — Surface an overlapping claim as contested; provide reassign or cancel, not silent overwrite                          | 2026-08-12 | [F4.5 completion evidence](#f45-completion-evidence) — the Ready Vercel preview showed two `README.md` claims as contested, blocked writes, and required an explicit reassignment.                                                               |
+| F4.6 — Release claims and preserve a checkpoint on stop/fail/timeout                                                        | 2026-08-12 | [F4.6 completion evidence](#f46-completion-evidence) — the Ready Vercel preview released slot 1's claim after stop and preserved a reviewable `README.md` checkpoint at `fixture-r1`.                                                            |
+| F5.1 — Create an immutable review checkpoint with revision and diff metadata                                                | 2026-08-12 | [F5.1 completion evidence](#f51-completion-evidence) — the Ready Vercel preview froze the fixture worktree and showed its base revision, proposed revision, and SHA-256 diff digest.                                                             |
+| F5.2 — Render a binary-safe diff summary and affected-path list                                                             | 2026-08-12 | [F5.2 completion evidence](#f52-completion-evidence) — the Ready Vercel preview opened the review panel with text deltas, three affected paths, and binary content safely omitted.                                                               |
+| F5.3 — Reject stale checkpoint approval before any merge action                                                             | 2026-08-12 | [F5.3 completion evidence](#f53-completion-evidence) — the Ready Vercel preview rejected approval after the integration head advanced and showed that no merge action started.                                                                   |
+| F5.4 — Integrate exactly one current reviewed checkpoint with audit attribution                                             | 2026-08-12 | [F5.4 completion evidence](#f54-completion-evidence) — the Ready Vercel preview integrated the current checkpoint once and showed Alex Morgan's revision-linked audit attribution.                                                               |
+| F5.5 — Discard a proposal idempotently and remove its worktree/claims                                                       | 2026-08-12 | [F5.5 completion evidence](#f55-completion-evidence) — the Ready Vercel preview removed the fixture worktree and claims, recorded the discard audit, and kept a repeated discard as a no-op.                                                     |
+| F5.6 — Wire Orca's native Delete Worktree flow to CoDev's audited proposal-discard lifecycle                                | 2026-08-13 | [F5.6 completion evidence](#f56-completion-evidence) — Production Orca Delete Workspace discarded a Managed proposal card, showed the attributed toast, and recorded discarded worktree status with released claims.                             |
+| OI.1 — Add a typed, workspace-bound CoDev request/event bridge with visible connection/reconnect                            | 2026-08-13 | [OI.1 completion evidence](#oi1-completion-evidence) — Production Orca status bar showed CoDev · Connected, Disconnect interrupted the bridge, and Reconnect recovered without leaving the workspace.                                            |
+| OI.2 — Put invite create/revoke/expiry in Orca Workspace Options using existing APIs                                        | 2026-08-13 | [OI.2 completion evidence](#oi2-completion-evidence) — Production Settings → General → Invites created a pending Collaborator invite, revoked it, and showed the invitee is not a workspace member.                                              |
+| OI.4 — Render named presence and active-file state in Orca's editor chrome                                                  | 2026-08-14 | [OI.4 completion evidence](#oi4-completion-evidence) — Two authenticated Production identities opened the shared Orca workspace; Jordan saw both names and Alex's remote `README.md` state in the editor chrome.                                 |
+| OI.5 — Render collaborator cursor/selection state and reconnect replay in Orca's editor                                     | 2026-08-15 | [OI.5 completion evidence](#oi5-completion-evidence) — Two authenticated Production identities showed native remote selection decorations and reconnect replay in the Source editor.                                                             |
+| OI.6 — Surface external-file conflicts in Orca's editor without overwriting either version                                  | 2026-08-15 | [OI.6 completion evidence](#oi6-completion-evidence) — Production Orca preserved both versions on the native disk-change banner and Compare dialog after a terminal write.                                                                       |
+| OI.7 — Put shared agent metadata, transcript, queue, interrupt, and refresh recovery in Orca's Agents panel                 | 2026-08-15 | [OI.7 completion evidence](#oi7-completion-evidence) — Production Orca Agents panel showed one durable ordered conversation, Alex's attributed queue, interrupt plus last completed tool, and refresh restore without a duplicate provider call. |
+| OI.8 — Put the three-slot workboard and fourth-session rejection in Orca's Workspace Board and worktree cards               | 2026-08-15 | [OI.8 completion evidence](#oi8-completion-evidence) — Production Orca Workspace Board showed three occupied native slots and worktree cards, then rejected a fourth session with HTTP 409.                                                      |
+| OI.9 — Put active and contested path claims in Orca's Explorer and worktree cards with reassign/cancel                      | 2026-08-15 | [OI.9 completion evidence](#oi9-completion-evidence) — Production Orca Explorer and worktree cards showed contested `README.md` claims, then reassigned the path.                                                                                |
+| OI.10 — Put review checkpoint metadata and binary-safe diffs in Orca Source Control and Checks                              | 2026-08-15 | [OI.10 completion evidence](#oi10-completion-evidence) — Production Orca Source Control showed a frozen checkpoint and Checks rendered a binary-safe affected-path list.                                                                         |
+| OI.11 — Put stale-review rejection and exactly-once integration in Orca's native review actions                             | 2026-08-15 | [OI.11 completion evidence](#oi11-completion-evidence) — Production Orca blocked a stale checkpoint, then integrated one current reviewed checkpoint attributed to CoDev Test Jordan.                                                            |
+| OI.12 — Add the durable activity/audit view as an Orca right-sidebar panel linked to files, sessions, and diffs             | 2026-08-15 | [OI.12 completion evidence](#oi12-completion-evidence) — Production Orca Activity panel filtered `agent.review_merged` and jumped to Checks; an unmatched Sessions query showed no matching events.                                              |
+| F6.1 — Define a provider-connection record with encrypted, server-only credential handling                                  | 2026-08-15 | [F6.1 completion evidence](#f61-completion-evidence) — Production Orca Settings showed OpenAI and Anthropic as Not connected with no secrets displayed.                                                                                          |
+| F6.2 — Implement API-key add/replace/revoke for one provider using test-only credentials                                    | 2026-08-15 | [F6.2 completion evidence](#f62-completion-evidence) — Production Orca Settings saved a test-only OpenAI key ending 0001, then revoked it to Not connected with no secret displayed.                                                             |
+| F6.3 — Reauthorize every turn and block the next turn after a connection is revoked                                         | 2026-08-15 | [F6.3 completion evidence](#f63-completion-evidence) — Production Orca Agents blocked a queued OpenAI turn after revoke, kept the empty queue and existing session, and showed no secret.                                                        |
+| F6.4 — Research and document an official OAuth flow for one provider before implementing it                                 | 2026-08-15 | [F6.4 completion evidence](#f64-completion-evidence) — Production Orca Settings showed OpenAI Codex OAuth as Planned · unavailable with a disabled Connect control and no consent UI.                                                            |
+| F6.5 — Implement OAuth only after the documented provider-specific design is approved and testable without real credentials | 2026-08-15 | [F6.5 completion evidence](#f65-completion-evidence) — Production Orca Settings completed OpenAI OAuth through a fixture callback and showed Connected · OAuth ending fx01 without opening ChatGPT.                                              |
+| F7.1 — Normalize one provider's durable turn/status/output/tool events                                                      | 2026-08-15 | [F7.1 completion evidence](#f71-completion-evidence) — Production Orca Agents showed standardized turn, status, output, tool, and usage events for the fixture OpenAI session.                                                                   |
+| F7.2 — Add explicit capability flags and unavailable-control explanations                                                   | 2026-08-16 | [F7.2 completion evidence](#f72-completion-evidence) — Production Orca Agents showed Restricted fixture with Queue and Interrupt unavailable plus explanations.                                                                                  |
+| F7.3 — Make turn-level provider switching explicit and prevent mixed transcripts                                            | 2026-08-16 | [F7.3 completion evidence](#f73-completion-evidence) — Production Orca Agents switched from Restricted fixture to OpenAI after completed turns and showed the provider-boundary label.                                                           |
 
 ### B0.2 completion evidence
 
@@ -2099,7 +2099,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   test, pinned `typecheck:web` and `build:web`, `pnpm format:check`, `pnpm lint`
   (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (229 passed,
   1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm
-  rust:check`, and `git diff --check` passed for the validated implementation.
+rust:check`, and `git diff --check` passed for the validated implementation.
 - Validated source commit: `fce33b67ed5002d1f5d8ba97c99f321dea46a889`.
   The Git-triggered Production deployment for the current `main` commit
   `ca4f4e04b04680379ab54bd0af664c52f42c262b` is Ready at
@@ -2201,7 +2201,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `agent-managed-proposal-795287ab`, model `gpt-5.6-luna · standard`, last
   completed `read_file · README.md`, and Jordan's inspect transcript. Alex
   queued one attributed instruction (`authorId
-  dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
+dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
   controlled turn; both identities then saw `Interrupted · controlled turn`,
   "Cancellation recorded. No further tool calls will run.", the last completed
   tool result, and the queued instruction still present. Refresh recovered
@@ -2411,9 +2411,9 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   passed), patched-Orca Vitest (`CodevActivityAuditView.test.tsx`,
   `persistence-right-sidebar-tab.test.ts`, 14 passed), patched-Orca
   `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
-  typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
-  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
-  --check`.
+typecheck`, `pnpm test` (285 passed, 1 skipped), `pnpm build`, `pnpm
+test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
+--check`.
 - Validated source commit: `85fde69d6cbc5ccd249b06e3cb1444b24d6ec2e3`.
 - Production URL: <https://www.trycodev.com> (Ready alias including that
   commit; later Production `553b4c28` at
@@ -2455,7 +2455,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 - Checks (from the source commit): focused provider-connection/bridge tests
   (17 passed), patched-Orca panel test, patched-Orca `typecheck:web`,
   `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
-  test` (294 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed),
+test` (294 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed),
   `pnpm rust:check`, and `git diff --check`. TestSprite backend test
   `37a460b6-1fe4-47f2-96a5-e9502925dae9` (run
   `9f6bef55-7d99-421c-98a0-3668825c3deb`) passed against Production:
@@ -2480,7 +2480,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   and `artifacts/verification/f6-1/`.
 - Known limitations: this card is status-only; add/replace/revoke is F6.2.
   The GitHub `verify` check for the source commit failed `pnpm
-  format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
+format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
   `COLLABORATIVE_IDE_TASK_STATE.md`, not on F6.1 product files.
 - Next task: F6.2 — implement API-key add/replace/revoke for one provider
   using test-only credentials.
@@ -2501,7 +2501,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   panel tests (2 passed), patched-Orca `typecheck:web`, `pnpm lint` (0
   errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (298 passed,
   1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm
-  rust:check`, and `git diff --check`. TestSprite backend test
+rust:check`, and `git diff --check`. TestSprite backend test
   `50636536-15ee-4544-9bee-973ba9161c58` (run
   `b1d86df8-79b0-410c-8b45-c8dcdd9774c4`) passed against Production:
   unauthenticated PUT/DELETE `/api/workspaces/.../connections` returned 401
@@ -2550,7 +2550,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   patched-Orca `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings),
   `pnpm typecheck`, `pnpm test` (302 passed, 1 skipped), `pnpm build`,
   `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
-  --check`. TestSprite backend test
+--check`. TestSprite backend test
   `55b4a44c-8962-4ef0-91f5-7b784bad855f` (run
   `2f74f779-e4e0-4c6c-8417-58b4e5554d1d`) passed against Production:
   unauthenticated POST `/api/workspaces/.../agents/.../queue` and `/turns`
@@ -2566,8 +2566,8 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   The Agents shared session remained idle with provider `openai`, empty
   queue, and restored transcript. Queuing **Inspect README.md** showed
   **Provider connection blocked**: `This OpenAI connection was revoked or
-  is not connected. Reconnect a key in Settings before starting another
-  turn. The existing session is unchanged.` Queue stayed **0 queued**;
+is not connected. Reconnect a key in Settings before starting another
+turn. The existing session is unchanged.` Queue stayed **0 queued**;
   the instruction was not added to the transcript. No secret was
   displayed. Native Orca **AI Provider Accounts (OPTIONAL)** was not used.
 - Screenshots: `file:///tmp/codev-f63-verify/f6-3-openai-not-connected.png`
@@ -2644,7 +2644,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 - Checks: focused connection/OAuth/bridge tests (26 passed), patched-Orca
   provider-connections tests (4 passed), patched-Orca `typecheck:web`,
   `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
-  test` (307 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed,
+test` (307 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed,
   1 skipped), `pnpm rust:check`, and `git diff --check`. TestSprite
   backend test `17919dc0-3347-4b0e-9131-4f9dabd84d89` (run
   `dfbb76c4-a897-4250-9e6d-04ec852640aa`) passed against Production:
@@ -2689,7 +2689,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (309
   passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed, 1
   skipped), `pnpm rust:check`, and `git diff --check`. `pnpm
-  format:check` still fails on pre-existing files
+format:check` still fails on pre-existing files
   (`workboard-view.test.ts`, `COLLABORATIVE_IDE_TASK_STATE.md`, and
   others) that this task did not change. TestSprite backend test
   `5222f2b8-3262-483f-b67f-8087038647a3` (run
@@ -2737,9 +2737,9 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 - Checks: focused capability, shared-session, and bridge tests (29
   passed), patched-Orca shared-session panel tests (4 passed), patched-Orca
   `typecheck:web`, `pnpm lint` (0 errors, 2 existing warnings), `pnpm
-  typecheck`, `pnpm test` (315 passed, 1 skipped), `pnpm build`, `pnpm
-  test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
-  --check`. TestSprite backend test `81e2d6c8-21bb-41cb-bee8-97309de3b4ca`
+typecheck`, `pnpm test` (315 passed, 1 skipped), `pnpm build`, `pnpm
+test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
+--check`. TestSprite backend test `81e2d6c8-21bb-41cb-bee8-97309de3b4ca`
   (run `270068a1-dbb0-40a1-afb3-f7468792cf27`) passed against Production:
   unauthenticated POST `/provider` and `/queue` returned 401 without
   capability flags.
@@ -2778,7 +2778,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   web assets under `apps/web/public/orca/`.
 - Checks: focused shared-session and capability tests (14 passed),
   `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm
-  test` (316 passed, 1 skipped), and `git diff --check`. The boundary
+test` (316 passed, 1 skipped), and `git diff --check`. The boundary
   source commit also rebuilt patched Orca web assets. TestSprite backend
   test `a6fbc854-0d05-403e-bdb0-628ca4c6b7f0` (run
   `f5df40dc-99f0-4a58-92c3-e1731f815d4f`) passed against Production:
@@ -2794,7 +2794,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   Restricted fixture. **Use OpenAI** switched the current provider to
   OpenAI. The ordered transcript kept the historical Restricted fixture
   labels and inserted `Provider boundary · switched from Restricted
-  fixture to OpenAI`. No secret was displayed.
+fixture to OpenAI`. No secret was displayed.
 - Screenshots: `file:///tmp/codev-f73-verify/f7-3-provider-openai.png`
   (transcript with Restricted fixture turns and the OpenAI boundary),
   `file:///tmp/codev-f73-verify/f7-3-openai-current.png` (boundary in
@@ -2816,8 +2816,8 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   Orca patch and regenerated static web client passed pinned `typecheck:web`
   and `build:web`; `pnpm format:check`, `pnpm lint` (0 errors, 2 existing
   warnings), `pnpm typecheck`, `pnpm test` (229 passed, 1 skipped), `pnpm
-  build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git
-  diff --check` also passed. Vercel Git-triggered Production deployment
+build`, `pnpm test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git
+diff --check` also passed. Vercel Git-triggered Production deployment
   `dpl_C5NRmN8cjQxoDUJeHFrZTVV4JDEJ` is Ready at
   <https://codev-95q2cigns-yousef20920s-projects.vercel.app>. Computer Use
   authenticated the CoDev Test Jordan identity against that exact deployment

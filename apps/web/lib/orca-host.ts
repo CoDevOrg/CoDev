@@ -11,8 +11,42 @@ import {
 import {
   OrchestratorError,
   startIde,
+  stopIde,
   waitForOrchestrator,
+  type IdeSession,
+  type StartIdeInput,
 } from "./orchestrator";
+
+const STALE_IDE_PROCESS_MESSAGE =
+  "Orca IDE process exited before reporting readiness";
+
+/**
+ * `startIde` is meant to idempotently return an already-running session, but
+ * if a previous `orca serve` launch for this session id crashed on startup,
+ * the orchestrator's record is left wedged: every later call fails with the
+ * same error forever. Nothing else reclaims it — the lifecycle cron only
+ * reconciles real workspace rows, and this session id may not be one (e.g.
+ * the personal settings surface keys sessions by user id). Stop the stale
+ * record once and retry so a single crashed launch doesn't lock a session
+ * out permanently.
+ */
+async function startIdeRecoveringStaleProcess(
+  sessionId: string,
+  input: StartIdeInput,
+): Promise<IdeSession> {
+  try {
+    return await startIde(sessionId, input);
+  } catch (error) {
+    if (
+      !(error instanceof OrchestratorError) ||
+      error.message !== STALE_IDE_PROCESS_MESSAGE
+    ) {
+      throw error;
+    }
+    await stopIde(sessionId).catch(() => {});
+    return startIde(sessionId, input);
+  }
+}
 
 /**
  * Control-plane client for the per-workspace Orca IDE backend. All host
@@ -76,7 +110,7 @@ export async function ensureOrcaSession(
       : undefined;
 
   try {
-    const session = await startIde(workspace.id, {
+    const session = await startIdeRecoveringStaleProcess(workspace.id, {
       projectRoot: workspacePath,
       ...(clone ? { clone } : {}),
     });
@@ -110,7 +144,9 @@ export async function ensurePersonalOrcaSession(
 
   const workspacePath = orcaPersonalPath(userId);
   try {
-    const session = await startIde(userId, { projectRoot: workspacePath });
+    const session = await startIdeRecoveringStaleProcess(userId, {
+      projectRoot: workspacePath,
+    });
     const pairing = parseOrcaReady(session.ready, userId);
     return { state: "ready", pairing, workspacePath };
   } catch (error) {

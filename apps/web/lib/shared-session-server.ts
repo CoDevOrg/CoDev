@@ -389,7 +389,9 @@ export async function selectSharedSessionProvider(
       .from(schema.agentTurns)
       .where(eq(schema.agentTurns.sessionId, sessionId));
     const afterTurn = [...finishedTurns]
-      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      )
       .reverse()
       .find(
         (turn) =>

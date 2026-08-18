@@ -40,7 +40,9 @@ describe("workboard view", () => {
           ownerName: "Alex Morgan",
           provider: "openai",
           createdAt: "2026-08-15T07:59:42.000Z",
-          turns: [{ prompt: "Map the repository layout.", status: "completed" }],
+          turns: [
+            { prompt: "Map the repository layout.", status: "completed" },
+          ],
         }),
         session({
           id: "session-2",

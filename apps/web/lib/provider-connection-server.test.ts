@@ -72,14 +72,12 @@ describe("provider connection server", () => {
         lastFour: "Claude CLI",
       });
 
-    await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject(
-      {
-        cliSubscriptions: [
-          { provider: "codex", status: "connected" },
-          { provider: "claude", status: "connected" },
-        ],
-      },
-    );
+    await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
+      cliSubscriptions: [
+        { provider: "codex", status: "connected" },
+        { provider: "claude", status: "connected" },
+      ],
+    });
     expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
       3,
       "USER",

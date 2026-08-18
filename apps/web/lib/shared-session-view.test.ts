@@ -194,7 +194,9 @@ describe("shared session view", () => {
     const view = toSharedSessionView(session({ provider: "restricted" }));
     expect(view.capabilities.canQueue).toBe(false);
     expect(view.capabilities.canInterrupt).toBe(false);
-    expect(view.capabilities.queueUnavailable).toMatch(/does not support queued/);
+    expect(view.capabilities.queueUnavailable).toMatch(
+      /does not support queued/,
+    );
     expect(view.availableProviders.find((item) => item.selected)?.id).toBe(
       "restricted",
     );
@@ -225,8 +227,7 @@ describe("shared session view", () => {
         from: "restricted",
         to: "openai",
         afterTurnId: completedTurnId,
-        label:
-          "Provider boundary · switched from Restricted fixture to OpenAI",
+        label: "Provider boundary · switched from Restricted fixture to OpenAI",
       }),
     ]);
     expect(view.transcript[0]?.providerLabel).toBe("Restricted fixture");

@@ -252,9 +252,7 @@ export function toSharedSessionView(
   const datedBoundaries = session.events.flatMap((event) => {
     if (event.type !== PROVIDER_BOUNDARY_EVENT_TYPE) return [];
     const [boundary] = toProviderBoundaries([event]);
-    return boundary
-      ? [{ ...boundary, createdAt: iso(event.createdAt) }]
-      : [];
+    return boundary ? [{ ...boundary, createdAt: iso(event.createdAt) }] : [];
   });
   const providerBoundaries = toProviderBoundaries(session.events);
 
@@ -287,11 +285,7 @@ export function toSharedSessionView(
       };
     }),
     transcript: transcriptTurns.map((turn, index) => {
-      const provider = providerForTurn(
-        turn,
-        datedBoundaries,
-        session.provider,
-      );
+      const provider = providerForTurn(turn, datedBoundaries, session.provider);
       return {
         position: index + 1,
         turnId: turn.id,
