@@ -13,11 +13,7 @@ type SettingsNavItem = {
 
 const personalNav: SettingsNavItem[] = [
   { name: "Profile", href: "/settings/personal/profile", icon: User },
-  {
-    name: "Coding Agents",
-    href: "/settings/personal/agents",
-    icon: Bot,
-  },
+  { name: "Coding Agents", href: "/settings", icon: Bot },
   {
     name: "Environment Variables",
     href: "/settings/personal/environment",

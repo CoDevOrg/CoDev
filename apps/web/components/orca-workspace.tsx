@@ -194,12 +194,15 @@ export function buildOrcaIframeSource({
   workspacePath,
   projectKind,
   projectName,
+  settingsOnly,
 }: {
   webClientPath: string;
   pairingCode: string;
   workspacePath: string;
   projectKind: "git" | "folder";
   projectName?: string;
+  /** Render the personal settings surface instead of the workspace IDE. */
+  settingsOnly?: boolean;
 }) {
   const fragment = new URLSearchParams({
     pairing: pairingCode,
@@ -209,6 +212,9 @@ export function buildOrcaIframeSource({
   });
   if (projectName) {
     fragment.set("codevProjectName", projectName);
+  }
+  if (settingsOnly) {
+    fragment.set("codevSettingsOnly", "1");
   }
   return `${webClientPath}#${fragment.toString()}`;
 }

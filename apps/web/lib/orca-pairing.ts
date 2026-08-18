@@ -118,3 +118,18 @@ export function orcaWorkspacePath(workspaceId: string): string {
   }
   return `${ORCA_WORKSPACES_ROOT}/${workspaceId}`;
 }
+
+/**
+ * Root for per-user personal Orca runtimes. These back the signed-in
+ * member's own settings surface, so they never clone a repository and are
+ * kept off {@link ORCA_WORKSPACES_ROOT} to keep personal runtimes from
+ * colliding with a workspace directory.
+ */
+export const ORCA_PERSONAL_ROOT = "/srv/codev/personal";
+
+export function orcaPersonalPath(userId: string): string {
+  if (!WORKSPACE_ID_PATTERN.test(userId)) {
+    throw new Error("Invalid user id.");
+  }
+  return `${ORCA_PERSONAL_ROOT}/${userId}`;
+}

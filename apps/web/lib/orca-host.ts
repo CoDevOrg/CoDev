@@ -3,6 +3,7 @@ import "server-only";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import {
+  orcaPersonalPath,
   orcaWorkspacePath,
   parseOrcaReady,
   type OrcaPairing,
@@ -80,6 +81,37 @@ export async function ensureOrcaSession(
       ...(clone ? { clone } : {}),
     });
     const pairing = parseOrcaReady(session.ready, workspace.id);
+    return { state: "ready", pairing, workspacePath };
+  } catch (error) {
+    if (error instanceof OrchestratorError) {
+      throw new OrcaHostError(error.message, error.status);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Ensure this member has their own Orca runtime for the personal settings
+ * surface. It is keyed by the member's own id rather than a workspace and
+ * never clones a repository, so the same Orca client can render personal
+ * settings without opening (or inventing) a workspace.
+ */
+export async function ensurePersonalOrcaSession(
+  userId: string,
+): Promise<OrcaRuntimeState> {
+  const hostState = await getHostState();
+  if (hostState !== "running") {
+    const wake = await requestHostWake();
+    if (wake !== "running") {
+      return { state: "host-starting" };
+    }
+  }
+  await waitForOrchestrator();
+
+  const workspacePath = orcaPersonalPath(userId);
+  try {
+    const session = await startIde(userId, { projectRoot: workspacePath });
+    const pairing = parseOrcaReady(session.ready, userId);
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {

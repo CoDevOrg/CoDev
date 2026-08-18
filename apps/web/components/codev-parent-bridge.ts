@@ -917,3 +917,127 @@ export async function executeCodevBridgeRequest(
     );
   }
 }
+
+/** Bridge methods reachable from the personal settings surface. */
+const PERSONAL_BRIDGE_METHODS = new Set<CodevBridgeMethod>([
+  "connections.list",
+  "connections.put",
+  "connections.oauth",
+  "connections.revoke",
+]);
+
+/**
+ * Bridge executor for the personal settings surface. There is no workspace in
+ * context, so this deliberately denies every workspace-scoped method and
+ * serves only the member's own provider connections from `/api/personal/*`.
+ */
+export async function executePersonalCodevBridgeRequest(
+  request: CodevBridgeRequestMessage,
+  session: CodevParentBridgeSession,
+  fetcher: typeof fetch = fetch,
+): Promise<CodevBridgeResponseMessage> {
+  const fail = (error: string): CodevBridgeResponseMessage => ({
+    type: "codev:bridge-response",
+    generation: request.generation,
+    requestId: request.requestId,
+    ok: false,
+    error,
+  });
+  const succeed = (result: unknown): CodevBridgeResponseMessage => ({
+    type: "codev:bridge-response",
+    generation: request.generation,
+    requestId: request.requestId,
+    ok: true,
+    result,
+  });
+
+  if (!session.open || session.generation !== request.generation) {
+    return fail("CoDev bridge is not connected.");
+  }
+  if (!PERSONAL_BRIDGE_METHODS.has(request.method)) {
+    return fail("This setting is only available inside a workspace.");
+  }
+
+  try {
+    if (request.method === "connections.list") {
+      const response = await fetcher("/api/personal/connections", {
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load provider connections."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "connections.put") {
+      const provider = request.params?.provider;
+      const apiKey = request.params?.apiKey;
+      if (provider !== "openai" && provider !== "anthropic") {
+        return fail("Choose OpenAI or Anthropic.");
+      }
+      if (typeof apiKey !== "string" || apiKey.trim().length < 20) {
+        return fail("Enter a valid API key.");
+      }
+      const response = await fetcher("/api/personal/connections", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider, apiKey: apiKey.trim() }),
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not save this provider connection."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "connections.oauth") {
+      if (request.params?.provider !== "openai") {
+        return fail("OpenAI Codex is the only fixture OAuth connection.");
+      }
+      const response = await fetcher("/api/personal/connections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "openai", oauth: "fixture" }),
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            "CoDev could not complete the fixture OAuth callback.",
+          ),
+        );
+      }
+      return succeed(payload);
+    }
+
+    const provider = request.params?.provider;
+    if (provider !== "openai" && provider !== "anthropic") {
+      return fail("Choose OpenAI or Anthropic.");
+    }
+    const response = await fetcher(
+      `/api/personal/connections?provider=${provider}`,
+      { method: "DELETE", cache: "no-store" },
+    );
+    const payload = await readJson(response);
+    if (!response.ok) {
+      return fail(
+        jsonError(payload, "CoDev could not revoke this provider connection."),
+      );
+    }
+    return succeed(payload);
+  } catch (error) {
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "CoDev could not complete this request.",
+    );
+  }
+}

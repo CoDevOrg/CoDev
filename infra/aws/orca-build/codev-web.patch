@@ -35,7 +35,7 @@ index c5b3e6d..c740715 100644
      return tab
    }
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
-index 294fc4a..16cde63 100644
+index 294fc4a..a8a38f9 100644
 --- a/src/renderer/src/App.tsx
 +++ b/src/renderer/src/App.tsx
 @@ -42,6 +42,12 @@ import {
@@ -51,7 +51,29 @@ index 294fc4a..16cde63 100644
  import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
  import { useShallow } from 'zustand/react/shallow'
  import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
-@@ -521,6 +527,56 @@ function App(): React.JSX.Element {
+@@ -334,6 +340,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
+ const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
+ const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
+ const Settings = lazy(() => import('./components/settings/Settings'))
++import { isCodevSettingsOnly } from './components/settings/codev-personal-settings'
+ const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
+ const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
+ const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
+@@ -497,7 +504,12 @@ function App(): React.JSX.Element {
+     }))
+   )
+ 
+-  const activeView = useAppStore((s) => s.activeView)
++  const storeActiveView = useAppStore((s) => s.activeView)
++  // CoDev personal settings surface: this client was opened outside any
++  // workspace to render the member's own settings, so Settings is the only
++  // reachable view.
++  const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
++  const activeView = codevSettingsOnly ? 'settings' : storeActiveView
+   const activeModal = useAppStore((s) => s.activeModal)
+   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
+   const featureInteractions = useAppStore((s) => s.featureInteractions)
+@@ -521,6 +533,56 @@ function App(): React.JSX.Element {
    const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
    const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
    const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -3578,20 +3600,42 @@ index 0000000..02180a7
 +  )
 +}
 diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-index 4405810..4e85d95 100644
+index 4405810..762a051 100644
 --- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 +++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-@@ -4,6 +4,9 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
+@@ -4,6 +4,10 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
  import { SearchableSetting } from './SearchableSetting'
  import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
  import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 +import { CodevWorkspaceInvitesSection } from './CodevWorkspaceInvitesSection'
 +import { CodevWorkspaceMemberRolesSection } from './CodevWorkspaceMemberRolesSection'
 +import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
++import { isCodevSettingsOnly } from './codev-personal-settings'
  import { translate } from '@/i18n/i18n'
  
  type GeneralWorkspaceSettingsSectionProps = {
-@@ -28,6 +31,10 @@ export function GeneralWorkspaceSettingsSection({
+@@ -15,6 +19,20 @@ export function GeneralWorkspaceSettingsSection({
+   settings,
+   updateSettings
+ }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
++  // CoDev personal surface: there is no workspace in context, so only the
++  // member's own provider connections belong in this pane.
++  if (isCodevSettingsOnly()) {
++    return (
++      <section key="workspace" className="space-y-4">
++        <SettingsSubsectionHeader
++          title="Account"
++          description="Settings that belong to you and follow you into every CoDev workspace."
++        />
++        <CodevProviderConnectionsSection />
++      </section>
++    )
++  }
++
+   return (
+     <section key="workspace" className="space-y-4">
+       <SettingsSubsectionHeader
+@@ -28,6 +46,10 @@ export function GeneralWorkspaceSettingsSection({
          )}
        />
  
@@ -3602,6 +3646,191 @@ index 4405810..4e85d95 100644
        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
  
        <SearchableSetting
+diff --git a/src/renderer/src/components/settings/Settings.tsx b/src/renderer/src/components/settings/Settings.tsx
+index fe894fa..39d1dc0 100644
+--- a/src/renderer/src/components/settings/Settings.tsx
++++ b/src/renderer/src/components/settings/Settings.tsx
+@@ -89,6 +89,10 @@ import {
+   isWebClientLocation,
+   useSettingsNavigationMetadata
+ } from '@/hooks/useSettingsNavigationMetadata'
++import {
++  filterPersonalSettingsSections,
++  isCodevSettingsOnly
++} from './codev-personal-settings'
+ import type {
+   SettingsNavGroup,
+   SettingsNavInstallStatus,
+@@ -805,13 +809,14 @@ function Settings(): React.JSX.Element {
+     skillFreshnessInventory,
+     voiceModelStatesLoading
+   ])
++  const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
+   const navSections = useMemo(
+     () =>
+-      baseNavSections.map((section) => {
++      filterPersonalSettingsSections(baseNavSections, codevSettingsOnly).map((section) => {
+         const installStatus = capabilityInstallStatusBySectionId.get(section.id)
+         return installStatus ? { ...section, installStatus } : section
+       }),
+-    [baseNavSections, capabilityInstallStatusBySectionId]
++    [baseNavSections, capabilityInstallStatusBySectionId, codevSettingsOnly]
+   )
+   const navSectionById = useMemo(
+     () => new Map(navSections.map((section) => [section.id, section] as const)),
+diff --git a/src/renderer/src/components/settings/SettingsSidebar.tsx b/src/renderer/src/components/settings/SettingsSidebar.tsx
+index 5c912b0..60042b1 100644
+--- a/src/renderer/src/components/settings/SettingsSidebar.tsx
++++ b/src/renderer/src/components/settings/SettingsSidebar.tsx
+@@ -14,6 +14,7 @@ import { Input } from '../ui/input'
+ import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
+ import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
+ import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
++import { isCodevSettingsOnly } from './codev-personal-settings'
+ import { translate } from '@/i18n/i18n'
+ import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+ import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+@@ -179,17 +180,20 @@ export function SettingsSidebar({
+       className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
+       style={leftSidebarStyle}
+     >
+-      <div className="border-b border-worktree-sidebar-border px-3 py-3">
+-        <Button
+-          variant="ghost"
+-          size="sm"
+-          onClick={onBack}
+-          className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
+-        >
+-          <ArrowLeft className="size-4" />
+-          {translate('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
+-        </Button>
+-      </div>
++      {/* CoDev personal surface has no workspace behind it to go back to. */}
++      {isCodevSettingsOnly() ? null : (
++        <div className="border-b border-worktree-sidebar-border px-3 py-3">
++          <Button
++            variant="ghost"
++            size="sm"
++            onClick={onBack}
++            className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
++          >
++            <ArrowLeft className="size-4" />
++            {translate('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
++          </Button>
++        </div>
++      )}
+ 
+       <div className="border-b border-worktree-sidebar-border px-3 py-3">
+         <div className="relative">
+diff --git a/src/renderer/src/components/settings/codev-personal-settings.test.ts b/src/renderer/src/components/settings/codev-personal-settings.test.ts
+new file mode 100644
+index 0000000..90013a6
+--- /dev/null
++++ b/src/renderer/src/components/settings/codev-personal-settings.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, it } from 'vitest'
++import {
++  filterPersonalSettingsSections,
++  isCodevSettingsOnly,
++  isPersonalSettingsSection
++} from './codev-personal-settings'
++
++describe('codev personal settings', () => {
++  it('keeps personal sections and drops workspace-scoped ones', () => {
++    const sections = [
++      { id: 'agents' },
++      { id: 'accounts' },
++      { id: 'git' },
++      { id: 'tasks' },
++      { id: 'repo-abc' },
++      { id: 'appearance' }
++    ]
++
++    expect(filterPersonalSettingsSections(sections, true).map((s) => s.id)).toEqual([
++      'agents',
++      'accounts',
++      'appearance'
++    ])
++  })
++
++  it('leaves every section in place inside a workspace', () => {
++    const sections = [{ id: 'agents' }, { id: 'git' }, { id: 'repo-abc' }]
++    expect(filterPersonalSettingsSections(sections, false).map((s) => s.id)).toEqual([
++      'agents',
++      'git',
++      'repo-abc'
++    ])
++  })
++
++  it('treats per-repo panes as workspace-scoped', () => {
++    expect(isPersonalSettingsSection('repo-abc')).toBe(false)
++    expect(isPersonalSettingsSection('agents')).toBe(true)
++  })
++
++  it('reads the settings-only flag from the host window', () => {
++    expect(isCodevSettingsOnly({ __CODEV_SETTINGS_ONLY__: true } as Window)).toBe(true)
++    expect(isCodevSettingsOnly({} as Window)).toBe(false)
++  })
++})
+diff --git a/src/renderer/src/components/settings/codev-personal-settings.ts b/src/renderer/src/components/settings/codev-personal-settings.ts
+new file mode 100644
+index 0000000..791c8f4
+--- /dev/null
++++ b/src/renderer/src/components/settings/codev-personal-settings.ts
+@@ -0,0 +1,53 @@
++/**
++ * CoDev personal settings surface.
++ *
++ * CoDev embeds this same Orca client twice: once inside a workspace, and once
++ * as the signed-in member's own settings page (opened outside any workspace,
++ * paired to a personal no-repo runtime). In the personal surface only settings
++ * that belong to the person are meaningful — anything scoped to a specific
++ * workspace, repository, or host is hidden because there is no workspace in
++ * context to apply it to.
++ */
++
++/** Section ids that belong to the person rather than a workspace. */
++const PERSONAL_SECTION_IDS = new Set([
++  'agents',
++  'accounts',
++  'orchestration',
++  'linear',
++  'computer-use',
++  'voice',
++  'general',
++  'integrations',
++  'mobile',
++  'appearance',
++  'input',
++  'notifications',
++  'shortcuts',
++  'privacy',
++  'advanced',
++  'experimental',
++  'plugins'
++])
++
++export function isCodevSettingsOnly(
++  target: Pick<Window, 'self'> & { __CODEV_SETTINGS_ONLY__?: boolean } = window
++): boolean {
++  return target.__CODEV_SETTINGS_ONLY__ === true
++}
++
++export function isPersonalSettingsSection(sectionId: string): boolean {
++  return PERSONAL_SECTION_IDS.has(sectionId)
++}
++
++/**
++ * Drop workspace-scoped sections when rendering the personal surface. Per-repo
++ * panes (`repo-*`) are always workspace-scoped, so they never survive here.
++ */
++export function filterPersonalSettingsSections<T extends { id: string }>(
++  sections: readonly T[],
++  settingsOnly: boolean
++): T[] {
++  if (!settingsOnly) return [...sections]
++  return sections.filter((section) => isPersonalSettingsSection(section.id))
++}
 diff --git a/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx b/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx
 new file mode 100644
 index 0000000..b5210dc
@@ -6200,10 +6429,10 @@ index 2ebecc5..32289ea 100644
          <Tooltip>
            <TooltipTrigger asChild>
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
-index 5ecc70a..31b7c0e 100644
+index 5ecc70a..d9b63d5 100644
 --- a/src/renderer/src/env.d.ts
 +++ b/src/renderer/src/env.d.ts
-@@ -67,6 +67,10 @@ declare global {
+@@ -67,6 +67,11 @@ declare global {
      | undefined
    // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
    interface Window {
@@ -6211,6 +6440,7 @@ index 5ecc70a..31b7c0e 100644
 +    __CODEV_PROJECT_PATH__?: string
 +    __CODEV_PROJECT_KIND__?: 'git' | 'folder'
 +    __CODEV_PROJECT_NAME__?: string
++    __CODEV_SETTINGS_ONLY__?: boolean
      __paneManagers?: Map<string, PaneManager>
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
      __terminalParkingDebug?: {
@@ -6259,10 +6489,10 @@ index 9b639b0..8fc68ec 100644
        } else {
 diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
 new file mode 100644
-index 0000000..d27fbca
+index 0000000..a7d6342
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.test.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,42 @@
 +import { describe, expect, it } from 'vitest'
 +import { readCodevBootstrap } from './codev-bootstrap'
 +
@@ -6279,7 +6509,23 @@ index 0000000..d27fbca
 +    })
 +  })
 +
++  it('accepts a personal settings-only path', () => {
++    expect(
++      readCodevBootstrap({
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder&codevSettingsOnly=1'
++      } as Location)
++    ).toEqual({
++      projectPath: '/srv/codev/personal/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++      projectKind: 'folder',
++      settingsOnly: true
++    })
++  })
++
 +  it.each([
++    // A personal path is only valid for the settings surface, and vice versa.
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=folder',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevSettingsOnly=1',
++    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fpersonal%2F..%2Fsecret&codevProjectKind=folder&codevSettingsOnly=1',
 +    '#codev=1&codevProject=%2Fetc&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2F..%2Fsecret&codevProjectKind=git',
 +    '#codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=other',
@@ -6291,18 +6537,26 @@ index 0000000..d27fbca
 +})
 diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
 new file mode 100644
-index 0000000..d3cbea7
+index 0000000..5a315a7
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.ts
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,50 @@
 +export type CodevBootstrap = {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
 +  projectName?: string
++  /**
++   * Personal settings surface: CoDev opened this client outside any workspace
++   * to render the signed-in member's own settings, so workspace-scoped
++   * settings and the workspace chrome are hidden.
++   */
++  settingsOnly?: boolean
 +}
 +
 +const CODEV_WORKSPACE_PATH =
 +  /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
++const CODEV_PERSONAL_PATH =
++  /^\/srv\/codev\/personal\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 +const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
 +
 +export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
@@ -6314,18 +6568,28 @@ index 0000000..d3cbea7
 +  const projectPath = params.get('codevProject')
 +  const projectKind = params.get('codevProjectKind')
 +  const projectName = params.get('codevProjectName')
-+  if (
-+    !projectPath ||
-+    !CODEV_WORKSPACE_PATH.test(projectPath) ||
-+    (projectKind !== 'git' && projectKind !== 'folder')
-+  ) {
++  const settingsOnly = params.get('codevSettingsOnly') === '1'
++  if (!projectPath || (projectKind !== 'git' && projectKind !== 'folder')) {
++    return null
++  }
++  // Personal runtimes live off the workspace root and are only ever opened as
++  // the settings surface, so the two path shapes are not interchangeable.
++  const pathMatches = settingsOnly
++    ? CODEV_PERSONAL_PATH.test(projectPath)
++    : CODEV_WORKSPACE_PATH.test(projectPath)
++  if (!pathMatches) {
 +    return null
 +  }
 +  if (projectName && !CODEV_GITHUB_REPOSITORY.test(projectName)) {
 +    return null
 +  }
 +
-+  return { projectPath, projectKind, ...(projectName ? { projectName } : {}) }
++  return {
++    projectPath,
++    projectKind,
++    ...(projectName ? { projectName } : {}),
++    ...(settingsOnly ? { settingsOnly: true } : {})
++  }
 +}
 diff --git a/src/renderer/src/web/codev-bridge.test.ts b/src/renderer/src/web/codev-bridge.test.ts
 new file mode 100644
@@ -7623,10 +7887,10 @@ index 0000000..05d7117
 +  })
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..6ebcb27 100644
+index eae3a54..eeedb6c 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,16 @@ import {
+@@ -19,10 +19,17 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
@@ -7640,6 +7904,7 @@ index eae3a54..6ebcb27 100644
 +  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
 +  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
++  window.__CODEV_SETTINGS_ONLY__ = codevBootstrap?.settingsOnly === true
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
