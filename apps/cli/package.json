@@ -1,0 +1,20 @@
+{
+  "name": "@trycodev/cli",
+  "version": "0.1.0",
+  "description": "Secure CoDev cloud coding-agent authentication CLI",
+  "type": "module",
+  "bin": {
+    "codev": "./bin/codev.mjs"
+  },
+  "files": [
+    "bin",
+    "src/client.mjs"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "node --check bin/codev.mjs && node --check src/client.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

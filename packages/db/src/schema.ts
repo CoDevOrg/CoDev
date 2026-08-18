@@ -115,11 +115,10 @@ export const providerCredentialStatus = pgEnum("provider_credential_status", [
   "revoked",
   "failed",
 ]);
-export const hostedCodexRuntimeGrantStatus = pgEnum(
-  "hosted_codex_runtime_grant_status",
-  ["minted", "delivered", "consumed", "expired", "revoked"],
+export const cliDeviceAuthorizationStatus = pgEnum(
+  "cli_device_authorization_status",
+  ["pending", "approved", "denied"],
 );
-
 export const users = pgTable(
   "users",
   {
@@ -215,30 +214,47 @@ export const providerCredentials = pgTable(
   ],
 );
 
-export const hostedCodexConnectionAttempts = pgTable(
-  "hosted_codex_connection_attempts",
+export const cliDeviceAuthorizations = pgTable(
+  "cli_device_authorizations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
-    scopeType: credentialScopeType("scope_type").notNull(),
-    scopeId: uuid("scope_id").notNull(),
-    returnTo: text("return_to").notNull(),
-    state: text("state").notNull(),
-    codeVerifier: text("code_verifier").notNull(),
-    nonce: text("nonce").notNull(),
-    redirectUri: text("redirect_uri").notNull(),
+    deviceCodeHash: text("device_code_hash").notNull(),
+    userCode: text("user_code").notNull(),
+    status: cliDeviceAuthorizationStatus("status").default("pending").notNull(),
+    approvedBy: uuid("approved_by").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("hosted_codex_connection_attempts_state_idx").on(table.state),
-    index("hosted_codex_connection_attempts_user_expiry_idx").on(
-      table.userId,
-      table.expiresAt,
+    uniqueIndex("cli_device_authorizations_device_code_idx").on(
+      table.deviceCodeHash,
     ),
+    uniqueIndex("cli_device_authorizations_user_code_idx").on(table.userCode),
+    index("cli_device_authorizations_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const cliAccessTokens = pgTable(
+  "cli_access_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    tokenHash: text("token_hash").notNull(),
+    name: text("name").default("CoDev CLI").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("cli_access_tokens_token_hash_idx").on(table.tokenHash),
+    index("cli_access_tokens_user_idx").on(table.userId),
+    index("cli_access_tokens_expiry_idx").on(table.expiresAt),
   ],
 );
 
@@ -272,39 +288,6 @@ export const providerCredentialEvents = pgTable(
       table.actorId,
       table.createdAt,
     ),
-  ],
-);
-
-export const hostedCodexRuntimeGrants = pgTable(
-  "hosted_codex_runtime_grants",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    credentialId: uuid("credential_id")
-      .references(() => providerCredentials.id, { onDelete: "cascade" })
-      .notNull(),
-    workspaceId: uuid("workspace_id")
-      .references(() => workspaces.id, { onDelete: "cascade" })
-      .notNull(),
-    userId: uuid("user_id")
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
-    audience: text("audience").notNull(),
-    encryptedGrant: text("encrypted_grant").notNull(),
-    status: hostedCodexRuntimeGrantStatus("status").default("minted").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index("hosted_codex_runtime_grants_workspace_status_idx").on(
-      table.workspaceId,
-      table.status,
-    ),
-    index("hosted_codex_runtime_grants_credential_idx").on(table.credentialId),
   ],
 );
 

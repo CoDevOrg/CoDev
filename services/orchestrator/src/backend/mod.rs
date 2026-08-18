@@ -7,7 +7,7 @@ use chrono::{Duration, Utc};
 
 use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance,
-    PublicationExportRequest, PublicationExportResponse, Result, RuntimeError, RuntimeGrantRequest,
+    PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
     TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
     WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
@@ -127,26 +127,6 @@ impl Backend {
             Self::Fake(backend) => backend.destroy(workspace_id),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => backend.destroy(workspace_id).await,
-        }
-    }
-
-    pub async fn put_runtime_grant(
-        &self,
-        workspace_id: &str,
-        request: RuntimeGrantRequest,
-    ) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.put_runtime_grant(workspace_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.put_runtime_grant(workspace_id, request).await,
-        }
-    }
-
-    pub async fn destroy_runtime_grant(&self, workspace_id: &str) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.destroy_runtime_grant(workspace_id),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.destroy_runtime_grant(workspace_id).await,
         }
     }
 
@@ -413,7 +393,6 @@ pub type SharedBackend = Arc<Backend>;
 
 pub struct FakeBackend {
     instances: RwLock<HashMap<String, Instance>>,
-    runtime_grants: RwLock<HashMap<String, String>>,
     max: usize,
 }
 
@@ -427,7 +406,6 @@ impl FakeBackend {
     pub fn new() -> Self {
         Self {
             instances: RwLock::new(HashMap::new()),
-            runtime_grants: RwLock::new(HashMap::new()),
             max: MAX_ACTIVE_SESSIONS,
         }
     }
@@ -483,38 +461,12 @@ impl FakeBackend {
     }
 
     fn destroy(&self, workspace_id: &str) -> Result<()> {
-        self.runtime_grants
-            .write()
-            .expect("fake backend lock")
-            .remove(workspace_id);
         self.instances
             .write()
             .expect("fake backend lock")
             .remove(workspace_id)
             .map(|_| ())
             .ok_or(RuntimeError::SandboxNotFound)
-    }
-
-    fn put_runtime_grant(&self, workspace_id: &str, request: RuntimeGrantRequest) -> Result<()> {
-        self.get(workspace_id)?;
-        if request.token.is_empty() {
-            return Err(RuntimeError::BadRequest(
-                "runtime grant token is empty".into(),
-            ));
-        }
-        self.runtime_grants
-            .write()
-            .expect("fake backend lock")
-            .insert(workspace_id.to_string(), request.audience);
-        Ok(())
-    }
-
-    fn destroy_runtime_grant(&self, workspace_id: &str) -> Result<()> {
-        self.runtime_grants
-            .write()
-            .expect("fake backend lock")
-            .remove(workspace_id);
-        Ok(())
     }
 
     fn resume(&self, workspace_id: &str) -> Result<()> {
@@ -549,6 +501,7 @@ impl FakeBackend {
         Ok(ExecResponse {
             output: String::new(),
             exit_code: 0,
+            codex_auth_cache_json: None,
         })
     }
 

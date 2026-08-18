@@ -10,10 +10,10 @@ import {
   githubIssueAssignments,
   pathClaims,
   publishedBranches,
-  hostedCodexConnectionAttempts,
-  hostedCodexRuntimeGrants,
   providerCredentialEvents,
   providerCredentials,
+  cliAccessTokens,
+  cliDeviceAuthorizations,
   sandboxRuntimeIntervals,
   userComputeUsage,
   userEnvironmentVariables,
@@ -56,18 +56,16 @@ describe("database schema", () => {
     expect(worktrees.mergedAt.name).toBe("merged_at");
     expect(getTableName(publishedBranches)).toBe("published_branches");
     expect(getTableName(providerCredentials)).toBe("provider_credentials");
+    expect(getTableName(cliDeviceAuthorizations)).toBe(
+      "cli_device_authorizations",
+    );
+    expect(getTableName(cliAccessTokens)).toBe("cli_access_tokens");
     expect(providerCredentials.status.name).toBe("status");
     expect(providerCredentials.encryptedMaterial.name).toBe(
       "encrypted_material",
     );
-    expect(getTableName(hostedCodexConnectionAttempts)).toBe(
-      "hosted_codex_connection_attempts",
-    );
     expect(getTableName(providerCredentialEvents)).toBe(
       "provider_credential_events",
-    );
-    expect(getTableName(hostedCodexRuntimeGrants)).toBe(
-      "hosted_codex_runtime_grants",
     );
     expect(getTableName(userEnvironmentVariables)).toBe(
       "user_environment_variables",

@@ -112,6 +112,7 @@ curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
 corepack enable
 corepack prepare pnpm@11.5.0 --activate
+npm install -g @openai/codex@0.144.6
 
 curl -fsSL \
   "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
@@ -275,6 +276,9 @@ install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/co
 install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
 install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
 install -m 0755 /usr/bin/node "${work_dir}/rootfs/usr/local/bin/node"
+install -d -m 0755 "${work_dir}/rootfs/usr/local/lib/node_modules"
+cp -a "$(npm root -g)/@openai" "${work_dir}/rootfs/usr/local/lib/node_modules/"
+ln -s ../lib/node_modules/@openai/codex/bin/codex.js "${work_dir}/rootfs/usr/local/bin/codex"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"

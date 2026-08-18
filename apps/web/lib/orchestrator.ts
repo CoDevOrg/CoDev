@@ -207,39 +207,11 @@ export async function getSandbox(
 
 export async function destroySandbox(workspaceId: string) {
   try {
-    await destroyHostedCodexRuntimeGrant(workspaceId).catch(() => undefined);
     await orchestratorRequest("DELETE", `/v1/sandboxes/${workspaceId}`);
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 404) {
       return;
     }
-    throw error;
-  }
-}
-
-export async function injectHostedCodexRuntimeGrant(
-  workspaceId: string,
-  grant: { token: string; audience: string; expiresAt: Date },
-) {
-  await orchestratorRequest(
-    "POST",
-    `/v1/sandboxes/${workspaceId}/runtime-grant`,
-    {
-      audience: grant.audience,
-      expiresAt: grant.expiresAt.toISOString(),
-      token: grant.token,
-    },
-  );
-}
-
-export async function destroyHostedCodexRuntimeGrant(workspaceId: string) {
-  try {
-    await orchestratorRequest(
-      "DELETE",
-      `/v1/sandboxes/${workspaceId}/runtime-grant`,
-    );
-  } catch (error) {
-    if (error instanceof OrchestratorError && error.status === 404) return;
     throw error;
   }
 }
@@ -512,6 +484,27 @@ export async function executeInSandbox(
       result: z.object({
         output: z.string(),
         exitCode: z.number().int(),
+      }),
+    })
+    .parse(await response.json()).result;
+}
+
+export async function executeCodexInSandbox(
+  workspaceId: string,
+  input: SandboxExecInput & { codexAuthCacheJson: string },
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/pty/exec`,
+    { rows: 1_000, columns: 4_096, ...input },
+    910_000,
+  );
+  return z
+    .object({
+      result: z.object({
+        output: z.string(),
+        exitCode: z.number().int(),
+        codexAuthCacheJson: z.string().optional(),
       }),
     })
     .parse(await response.json()).result;

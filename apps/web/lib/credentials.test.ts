@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockRows = vi.hoisted(() => [] as Array<Record<string, unknown>[]>);
+const mockHostedSubscription = vi.hoisted(() =>
+  vi.fn<
+    (input: { userId: string; workspaceId: string }) => Promise<{
+      source: "USER" | "ORGANIZATION";
+      credential: { id: string; encryptedMaterial: string };
+    } | null>
+  >(async () => null),
+);
 const mockDatabase = vi.hoisted(() => ({
   select: vi.fn(() => ({
     from: vi.fn(() => ({
@@ -28,8 +36,10 @@ vi.mock("./kms", () => ({
 }));
 
 vi.mock("./hosted-codex-subscription-credentials", () => ({
-  resolveHostedCodexSubscription: vi.fn(async () => null),
-  mintHostedCodexRuntimeGrant: vi.fn(),
+  resolveHostedCodexSubscription: mockHostedSubscription,
+  decryptHostedMaterial: vi.fn(async () => ({
+    authCacheJson: '{"tokens":{"access_token":"a","refresh_token":"r"}}',
+  })),
 }));
 
 import { resolveAgentCredential } from "./credentials";
@@ -57,11 +67,40 @@ const baseCredential = (overrides: Record<string, unknown> = {}) => ({
 
 afterEach(() => {
   mockRows.length = 0;
+  mockHostedSubscription.mockReset();
+  mockHostedSubscription.mockResolvedValue(null);
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
 describe("resolveAgentCredential", () => {
+  it("resolves the encrypted official Codex auth cache", async () => {
+    mockHostedSubscription.mockResolvedValueOnce({
+      source: "USER",
+      credential: {
+        id: "hosted-credential",
+        encryptedMaterial: "encrypted-cache",
+      },
+    });
+
+    const resolved = await resolveAgentCredential(
+      "user-1",
+      "workspace-1",
+      "openai",
+    );
+
+    expect(mockHostedSubscription).toHaveBeenCalledWith({
+      userId: "user-1",
+      workspaceId: "workspace-1",
+    });
+    expect(resolved).toMatchObject({
+      authType: "HOSTED_CODEX_SUBSCRIPTION",
+      codexAuthCacheJson: '{"tokens":{"access_token":"a","refresh_token":"r"}}',
+      credentialId: "hosted-credential",
+    });
+    expect(mockDatabase.select).not.toHaveBeenCalled();
+  });
+
   it("prefers a personal credential over workspace credentials", async () => {
     mockRows.push([baseCredential()]);
 

@@ -33,11 +33,17 @@ import {
   updateCoordinationMessageStatus,
 } from "./agent-coordination";
 import {
+  executeCodexInSandbox,
   executeInSandbox,
   getSandboxGitOutput,
   readSandboxFile,
   writeSandboxFile,
 } from "./orchestrator";
+import {
+  claimHostedCodexExecution,
+  releaseHostedCodexExecution,
+  updateHostedCodexAuthCache,
+} from "./hosted-codex-subscription-credentials";
 import {
   publishAgentWorktreeToGitHub,
   syncAgentWorktreeWithGitHub,
@@ -45,6 +51,29 @@ import {
 import { appendWorkspaceStateEvent } from "./workspace-state";
 
 const MAX_TOOL_ROUNDS = 12;
+
+function codexFinalMessage(output: string) {
+  let final = "";
+  for (const line of output.split(/\r?\n/)) {
+    try {
+      const event = JSON.parse(line) as {
+        type?: string;
+        item?: { type?: string; text?: string };
+      };
+      if (
+        event.type === "item.completed" &&
+        event.item?.type === "agent_message" &&
+        typeof event.item.text === "string"
+      ) {
+        final = event.item.text;
+      }
+    } catch {
+      // The official CLI may include a non-JSON diagnostic line. Never echo it
+      // because provider diagnostics can contain sensitive metadata.
+    }
+  }
+  return final.trim();
+}
 
 const tools: OpenAI.Responses.Tool[] = [
   {
@@ -1013,6 +1042,76 @@ export async function runAgentTurn(turnId: string) {
     await addEvent(context, `${turnId}:completed`, "turn.completed", {
       output: result.output,
       ...(cursorUsage ? { usage: cursorUsage } : {}),
+    });
+    return;
+  }
+
+  if (credential.authType === "HOSTED_CODEX_SUBSCRIPTION") {
+    if (!credential.codexAuthCacheJson || !credential.credentialId) {
+      throw new Error(
+        "Reconnect Codex with `codev codex-auth` before starting a turn.",
+      );
+    }
+    const prompt = `You are a coding agent inside an isolated Git worktree. Complete the latest request, verify focused changes, and finish with a concise summary. Do not inspect CODEX_HOME or authentication files.\n\nRepository session transcript:\n${transcript}\n\nComplete the latest request.`;
+    await claimHostedCodexExecution(credential.credentialId);
+    let result: Awaited<ReturnType<typeof executeCodexInSandbox>>;
+    try {
+      result = await executeCodexInSandbox(context.workspaceId, {
+        command: [
+          "codex",
+          "exec",
+          "--json",
+          "--ephemeral",
+          "--ignore-user-config",
+          "--sandbox",
+          "workspace-write",
+          "-c",
+          'approval_policy="never"',
+          "--model",
+          context.model || getAgentModel("openai"),
+          "--cd",
+          ".",
+          prompt,
+        ],
+        worktreeId: context.worktreeId,
+        timeoutSeconds: 900,
+        codexAuthCacheJson: credential.codexAuthCacheJson,
+      });
+      if (result.codexAuthCacheJson) {
+        await updateHostedCodexAuthCache(
+          credential.credentialId,
+          result.codexAuthCacheJson,
+        );
+      }
+    } finally {
+      await releaseHostedCodexExecution(credential.credentialId);
+    }
+    if (result.exitCode !== 0) {
+      throw new Error(
+        "The official Codex CLI could not complete this turn. Reconnect with `codev codex-auth` if the subscription login expired.",
+      );
+    }
+    const finalOutput = codexFinalMessage(result.output);
+    if (!finalOutput) {
+      throw new Error(
+        "The official Codex CLI completed without a final response.",
+      );
+    }
+    if (await turnWasInterrupted(turnId)) return;
+    await getDatabase()
+      .update(schema.agentTurns)
+      .set({
+        status: "completed",
+        output: finalOutput,
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.agentTurns.id, turnId));
+    await addEvent(context, `${turnId}:output:final`, "agent.output", {
+      text: finalOutput,
+    });
+    await addEvent(context, `${turnId}:completed`, "turn.completed", {
+      output: finalOutput,
     });
     return;
   }

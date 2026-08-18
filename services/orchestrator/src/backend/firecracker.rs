@@ -27,11 +27,11 @@ use crate::{
     guest_client::GuestClient,
     model::{
         CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
-        PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, RuntimeGrantRequest,
-        TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-        WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+        PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
+        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
@@ -389,24 +389,9 @@ impl FirecrackerBackend {
             .get(workspace_id)
             .cloned()
             .ok_or(RuntimeError::SandboxNotFound)?;
-        machine.guest.destroy_runtime_grant().await.ok();
         self.stop_machine(machine).await?;
         self.machines.write().await.remove(workspace_id);
         Ok(())
-    }
-
-    pub async fn put_runtime_grant(
-        &self,
-        workspace_id: &str,
-        request: RuntimeGrantRequest,
-    ) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.put_runtime_grant(&request).await
-    }
-
-    pub async fn destroy_runtime_grant(&self, workspace_id: &str) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.destroy_runtime_grant().await
     }
 
     pub async fn resume(&self, workspace_id: &str) -> Result<()> {

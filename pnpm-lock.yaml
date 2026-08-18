@@ -32,6 +32,8 @@ importers:
         specifier: 8.65.0
         version: 8.65.0(eslint@9.39.2(jiti@2.7.0))(typescript@5.9.3)
 
+  apps/cli: {}
+
   apps/hocuspocus-server:
     dependencies:
       '@ai-sdk/openai':

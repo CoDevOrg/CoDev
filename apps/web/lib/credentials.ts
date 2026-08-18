@@ -15,7 +15,7 @@ import {
 import { decryptSecret, encryptSecret } from "./kms";
 import { getDatabase } from "./database";
 import {
-  mintHostedCodexRuntimeGrant,
+  decryptHostedMaterial,
   resolveHostedCodexSubscription,
 } from "./hosted-codex-subscription-credentials";
 
@@ -35,6 +35,7 @@ export interface ResolvedCredential {
   endpointUrl?: string | undefined;
   awsRoleArn?: string | undefined;
   credentialId?: string | undefined;
+  codexAuthCacheJson?: string | undefined;
 }
 
 type OAuthTokens = {
@@ -315,15 +316,24 @@ export async function resolveAgentCredential(
       workspaceId,
     });
     if (hosted) {
-      const grant = await mintHostedCodexRuntimeGrant({
-        userId,
-        workspaceId,
-      });
+      if (!hosted.credential.encryptedMaterial) {
+        throw new Error(
+          "The Codex CLI connection has no encrypted auth cache.",
+        );
+      }
+      const material = await decryptHostedMaterial(
+        hosted.credential.encryptedMaterial,
+      );
+      if (!material.authCacheJson) {
+        throw new Error(
+          "Reconnect Codex with `codev codex-auth`; the stored connection uses an obsolete format.",
+        );
+      }
       return {
         provider: normalizedProvider,
         source: hosted.source,
         authType: "HOSTED_CODEX_SUBSCRIPTION",
-        apiKeyOrToken: grant.token,
+        codexAuthCacheJson: material.authCacheJson,
         credentialId: hosted.credential.id,
       };
     }

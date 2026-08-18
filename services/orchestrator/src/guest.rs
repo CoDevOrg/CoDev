@@ -21,11 +21,10 @@ use wait_timeout::ChildExt;
 
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    PublicationFile, RuntimeError, RuntimeGrantRequest, TerminalChunk, TerminalInputRequest,
-    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -37,6 +36,15 @@ const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
 const MAX_LIVE_TERMINALS: usize = 4;
 const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static CODEX_AUTH_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+struct TemporaryCodexHome(PathBuf);
+
+impl Drop for TemporaryCodexHome {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
 
 pub struct GuestResponse {
     pub status: u16,
@@ -73,7 +81,6 @@ pub struct GuestService {
     workspace_root: PathBuf,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
     mutations: Mutex<()>,
-    runtime_grant_audience: Mutex<Option<String>>,
 }
 
 impl GuestService {
@@ -88,7 +95,6 @@ impl GuestService {
             workspace_root,
             terminals: Mutex::new(HashMap::new()),
             mutations: Mutex::new(()),
-            runtime_grant_audience: Mutex::new(None),
         })
     }
 
@@ -105,8 +111,6 @@ impl GuestService {
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
-            ("PUT", "/v1/runtime-grant") => self.put_runtime_grant(body),
-            ("DELETE", "/v1/runtime-grant") => self.destroy_runtime_grant(),
             _ => {
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -241,10 +245,27 @@ impl GuestService {
         } else {
             request.timeout_seconds
         };
-        if timeout > 60 {
+        let is_codex_exec = request.codex_auth_cache_json.is_some();
+        if timeout > if is_codex_exec { 900 } else { 60 } {
             return Err(RuntimeError::BadRequest(
-                "command timeout exceeds 60 seconds".into(),
+                "command timeout exceeds the allowed limit".into(),
             ));
+        }
+        if is_codex_exec {
+            // Interactive terminals run in the same microVM. Close every PTY
+            // before materializing provider auth, and keep the mutation lock
+            // for the entire Codex process so no new terminal can start until
+            // the temporary auth directory has been removed.
+            let sessions = {
+                let mut terminals = self.terminals.lock().expect("terminal map lock");
+                terminals
+                    .drain()
+                    .map(|(_, session)| session)
+                    .collect::<Vec<_>>()
+            };
+            for session in sessions {
+                Self::force_close_session(session);
+            }
         }
         let root = self.target_root(request.worktree_id.as_deref())?;
         let working_directory = if request.working_dir.is_empty() {
@@ -257,6 +278,32 @@ impl GuestService {
                 "working directory is not a directory".into(),
             ));
         }
+
+        let codex_home = if let Some(auth_cache) = request.codex_auth_cache_json.as_deref() {
+            if auth_cache.len() > (128 << 10)
+                || !serde_json::from_str::<serde_json::Value>(auth_cache)
+                    .is_ok_and(|value| value.is_object())
+            {
+                return Err(RuntimeError::BadRequest(
+                    "Codex auth cache is invalid or too large".into(),
+                ));
+            }
+            let path = std::env::temp_dir().join(format!(
+                "codev-codex-{}-{}",
+                std::process::id(),
+                CODEX_AUTH_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).map_err(RuntimeError::internal)?;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
+                .map_err(RuntimeError::internal)?;
+            let auth_path = path.join("auth.json");
+            fs::write(&auth_path, auth_cache).map_err(RuntimeError::internal)?;
+            fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
+                .map_err(RuntimeError::internal)?;
+            Some(TemporaryCodexHome(path))
+        } else {
+            None
+        };
 
         let pty = native_pty_system()
             .openpty(PtySize {
@@ -275,12 +322,16 @@ impl GuestService {
         command.env("TERM", "xterm-256color");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
+        if let Some(home) = codex_home.as_ref() {
+            command.env("CODEX_HOME", &home.0);
+        }
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
                 return serde_json::to_value(ExecResponse {
                     output: format!("Unable to spawn {}: {}\n", request.command[0], error),
                     exit_code: 127,
+                    codex_auth_cache_json: None,
                 })
                 .map_err(RuntimeError::internal);
             }
@@ -320,9 +371,18 @@ impl GuestService {
                 "command output exceeds the two MiB limit".into(),
             ));
         }
+        let updated_auth_cache = codex_home
+            .as_ref()
+            .and_then(|home| fs::read_to_string(home.0.join("auth.json")).ok())
+            .filter(|value| {
+                value.len() <= (128 << 10)
+                    && serde_json::from_str::<serde_json::Value>(value)
+                        .is_ok_and(|parsed| parsed.is_object())
+            });
         let response = ExecResponse {
             output: String::from_utf8_lossy(&output).into_owned(),
             exit_code: status.exit_code() as i32,
+            codex_auth_cache_json: updated_auth_cache,
         };
         serde_json::to_value(response).map_err(RuntimeError::internal)
     }
@@ -794,38 +854,6 @@ impl GuestService {
 
     fn snapshot_workspace(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         self.export_workspace(body, false)
-    }
-
-    fn put_runtime_grant(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
-        let request: RuntimeGrantRequest = decode(body)?;
-        if request.token.is_empty() || request.audience.is_empty() {
-            return Err(RuntimeError::BadRequest(
-                "runtime grant requires an audience and token".into(),
-            ));
-        }
-        *self
-            .runtime_grant_audience
-            .lock()
-            .expect("runtime grant lock") = Some(request.audience);
-        let grant_path = PathBuf::from("/dev/shm/codev-runtime-grant");
-        if let Some(parent) = grant_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        if grant_path.parent().is_some_and(|parent| parent.exists()) {
-            fs::write(&grant_path, request.token.as_bytes()).map_err(RuntimeError::internal)?;
-            let _ = fs::set_permissions(&grant_path, fs::Permissions::from_mode(0o600));
-        }
-        Ok(serde_json::json!({ "status": "delivered" }))
-    }
-
-    fn destroy_runtime_grant(&self) -> crate::model::Result<serde_json::Value> {
-        *self
-            .runtime_grant_audience
-            .lock()
-            .expect("runtime grant lock") = None;
-        let grant_path = PathBuf::from("/dev/shm/codev-runtime-grant");
-        let _ = fs::remove_file(grant_path);
-        Ok(serde_json::json!({ "status": "destroyed" }))
     }
 
     fn export_workspace(
@@ -1372,23 +1400,6 @@ mod tests {
     }
 
     #[test]
-    fn runtime_grant_stays_out_of_the_workspace_tree() {
-        let directory = tempdir().expect("tempdir");
-        let service = GuestService::new(directory.path()).expect("service");
-        let put = service.handle(
-            "PUT",
-            "/v1/runtime-grant",
-            br#"{"audience":"sandbox:test","expiresAt":"2026-08-16T20:00:00Z","token":"short-lived"}"#,
-        );
-        assert_eq!(put.status, 200);
-        assert!(!directory.path().join("short-lived").exists());
-        let entries: Vec<_> = fs::read_dir(directory.path()).expect("read dir").collect();
-        assert!(entries.is_empty());
-        let delete = service.handle("DELETE", "/v1/runtime-grant", b"");
-        assert_eq!(delete.status, 200);
-    }
-
-    #[test]
     fn rejects_workspace_escape() {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
@@ -1409,6 +1420,37 @@ mod tests {
         let result: ExecResponse = serde_json::from_slice(&response.body).expect("exec");
         assert_eq!(result.exit_code, 127);
         assert!(result.output.contains("Unable to spawn"));
+    }
+
+    #[test]
+    fn codex_auth_cache_is_private_refreshed_and_deleted() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let terminal = service.handle("POST", "/v1/terminals", br#"{}"#);
+        assert_eq!(terminal.status, 200);
+        assert_eq!(service.terminals.lock().expect("terminals").len(), 1);
+        let request = serde_json::json!({
+            "command": [
+                "/bin/sh",
+                "-c",
+                "p=$CODEX_HOME; test -f \"$p/auth.json\"; printf '{\"tokens\":{}}' > \"$p/auth.json\"; printf '%s' \"$p\""
+            ],
+            "codexAuthCacheJson": "{\"tokens\":{\"access_token\":\"a\",\"refresh_token\":\"r\"}}"
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/pty/exec",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 200);
+        let result: ExecResponse = serde_json::from_slice(&response.body).expect("exec");
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            result.codex_auth_cache_json.as_deref(),
+            Some("{\"tokens\":{}}")
+        );
+        assert!(service.terminals.lock().expect("terminals").is_empty());
+        assert!(!Path::new(result.output.trim()).exists());
     }
 
     #[test]

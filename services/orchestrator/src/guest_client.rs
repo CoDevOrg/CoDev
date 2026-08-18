@@ -9,8 +9,8 @@ use tokio::{
 
 use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    Result, RuntimeError, RuntimeGrantRequest, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
     WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
@@ -203,18 +203,6 @@ impl GuestClient {
     ) -> Result<PublicationExportResponse> {
         self.request("POST", "/v1/workspace/snapshot", Some(request))
             .await
-    }
-
-    pub async fn put_runtime_grant(&self, request: &RuntimeGrantRequest) -> Result<()> {
-        self.request::<_, serde_json::Value>("PUT", "/v1/runtime-grant", Some(request))
-            .await
-            .map(|_| ())
-    }
-
-    pub async fn destroy_runtime_grant(&self) -> Result<()> {
-        self.request::<(), serde_json::Value>("DELETE", "/v1/runtime-grant", None)
-            .await
-            .map(|_| ())
     }
 
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {

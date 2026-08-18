@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -39,7 +38,6 @@ export function parseHostedCodexNotice(params: {
 export function HostedCodexSubscriptionCard({
   status,
   organizationId,
-  returnTo,
   notice,
 }: {
   status: HostedCodexPublicStatus;
@@ -49,20 +47,8 @@ export function HostedCodexSubscriptionCard({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const isOrg = status.scopeType === "ORGANIZATION";
-  const connectHref = (() => {
-    const query = new URLSearchParams({
-      returnTo,
-      scopeType: status.scopeType,
-    });
-    if (isOrg && organizationId) {
-      query.set("organizationId", organizationId);
-      query.set("confirmOrganizationScope", "true");
-    }
-    return `/api/auth/hosted-codex?${query.toString()}`;
-  })();
 
   async function disconnect() {
     setBusy(true);
@@ -84,18 +70,12 @@ export function HostedCodexSubscriptionCard({
     router.refresh();
   }
 
-  const canConnect =
-    status.enabled &&
-    status.configured &&
-    status.canManage &&
-    (!isOrg || confirmed);
-
   return (
     <SettingsCard
       description={
         isOrg
-          ? "An organization Codex subscription is a shared default for this workspace. Personal connections still take priority."
-          : "Connect your eligible Codex subscription for cloud workspaces you start. CoDev never pastes an API key and never shows tokens in the browser."
+          ? "Authenticate Codex from a terminal and make it the shared default for this organization."
+          : "Authenticate Codex through the official CLI, then securely attach that login to your CoDev account."
       }
       title={
         isOrg
@@ -116,18 +96,6 @@ export function HostedCodexSubscriptionCard({
           {message}
         </div>
       ) : null}
-      <p>
-        This connection powers isolated cloud workspaces. Review CoDev&apos;s{" "}
-        <Link href="/legal/privacy">privacy notice</Link> and{" "}
-        <Link href="/legal/retention">data retention policy</Link> before
-        connecting. You can disconnect at any time from this page.
-      </p>
-      {isOrg ? (
-        <p>
-          Organization scope is selected. Only a workspace maintainer can
-          connect or disconnect this shared subscription.
-        </p>
-      ) : null}
       <div className="oauth-connection-card">
         <div className="oauth-connection-card-copy">
           <strong>
@@ -140,59 +108,39 @@ export function HostedCodexSubscriptionCard({
         >
           {status.status === "connected" ? "Connected" : "Not connected"}
         </span>
-        {status.canManage ? (
-          status.enabled && status.configured ? (
-            <div className="hosted-codex-actions">
-              {isOrg ? (
-                <label className="hosted-codex-confirm">
-                  <input
-                    checked={confirmed}
-                    onChange={(event) => setConfirmed(event.target.checked)}
-                    type="checkbox"
-                  />
-                  Confirm organization-wide use before connecting
-                </label>
-              ) : null}
-              {status.status === "connected" ||
-              status.status === "reauthorization_required" ? (
-                <>
-                  <Link
-                    className="secondary-button"
-                    href={canConnect ? connectHref : "#"}
-                    aria-disabled={!canConnect}
-                  >
-                    Reconnect
-                  </Link>
-                  <button
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => void disconnect()}
-                    type="button"
-                  >
-                    {busy ? "Disconnecting…" : "Disconnect"}
-                  </button>
-                </>
-              ) : (
-                <Link
-                  className="secondary-button"
-                  href={canConnect ? connectHref : "#"}
-                  aria-disabled={!canConnect}
-                >
-                  Connect Codex subscription
-                </Link>
-              )}
-            </div>
-          ) : (
-            <span className="oauth-connection-unavailable">
-              {status.enabled
-                ? "Approved client configuration required"
-                : "Waiting for OpenAI-hosted approval"}
-            </span>
-          )
-        ) : (
+        {!status.canManage ? (
           <span className="oauth-connection-unavailable">Status only</span>
-        )}
+        ) : null}
       </div>
+      {status.canManage ? (
+        <div className="oauth-connection-flow">
+          <p>1. Install the CoDev CLI</p>
+          <code className="oauth-device-code">
+            npm install -g @trycodev/cli
+          </code>
+          <p>2. Log in to CoDev</p>
+          <code className="oauth-device-code">codev login</code>
+          <p>3. Authenticate Codex</p>
+          <code className="oauth-device-code">
+            {isOrg ? "codev codex-auth --org" : "codev codex-auth"}
+          </code>
+          <p>
+            The last command runs the official Codex device login. CoDev never
+            asks for an OpenAI API key.
+          </p>
+          {status.status === "connected" ||
+          status.status === "reauthorization_required" ? (
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => void disconnect()}
+              type="button"
+            >
+              {busy ? "Disconnecting…" : "Disconnect"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </SettingsCard>
   );
 }

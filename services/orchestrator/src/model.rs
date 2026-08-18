@@ -66,14 +66,6 @@ impl IntoResponse for RuntimeError {
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeGrantRequest {
-    pub audience: String,
-    pub expires_at: DateTime<Utc>,
-    pub token: String,
-}
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
@@ -159,6 +151,8 @@ pub struct ExecRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_auth_cache_json: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -247,6 +241,8 @@ pub struct PublicationExportResponse {
 pub struct ExecResponse {
     pub output: String,
     pub exit_code: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_auth_cache_json: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -22,11 +22,9 @@ export type HostedCodexAuditEventType =
   | "connection_created"
   | "connection_failed"
   | "scope_changed"
-  | "runtime_grant_minted"
-  | "runtime_grant_delivered"
-  | "runtime_grant_destroyed"
   | "refresh"
   | "refresh_failed"
+  | "revocation_pending"
   | "fallback"
   | "disconnect"
   | "authorization_failed";
