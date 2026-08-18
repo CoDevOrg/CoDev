@@ -12,6 +12,7 @@ const VARIANT_CLASSES = {
 const SIZE_CLASSES = {
   default: "h-9 px-4 py-2",
   sm: "h-8 gap-1.5 px-3 text-sm",
+  "icon-sm": "size-8",
 } as const;
 
 export const Button = React.forwardRef<

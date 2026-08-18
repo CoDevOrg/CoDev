@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { EnvironmentVariable } from "@codev/contracts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 function maskedValue(lastFour: string | null) {
   if (!lastFour) return "••••••••";
@@ -121,42 +123,50 @@ export function EnvironmentVariablesPanel({
   }
 
   return (
-    <div className="env-vars-panel">
-      <div className="env-vars-toolbar">
-        <p className="settings-muted-copy">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-[46ch] text-xs text-muted-foreground">
           Values are encrypted at rest and never shown again after you save. Use
           them like a personal <code>.env</code> for CoDev workflows.
         </p>
-        <button
-          className="secondary-button"
+        <Button
+          className="shrink-0"
           disabled={busy}
           onClick={() => {
             setShowAdd((current) => !current);
             setMessage(null);
           }}
+          size="sm"
           type="button"
+          variant="outline"
         >
-          <Plus aria-hidden="true" className="env-vars-button-icon" />
+          <Plus aria-hidden="true" className="size-3.5" />
           {showAdd ? "Cancel" : "Add"}
-        </button>
+        </Button>
       </div>
 
       {showAdd ? (
-        <div className="env-vars-editor">
-          <label>
-            <span>Key</span>
-            <input
+        <div className="space-y-3 rounded-md border border-border bg-background/40 p-3.5">
+          <label className="grid gap-1.5">
+            <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
+              Key
+            </span>
+            <Input
               autoComplete="off"
+              className="font-mono"
               onChange={(event) => setName(event.target.value.toUpperCase())}
               placeholder="DATABASE_URL"
               spellCheck={false}
               value={name}
             />
           </label>
-          <label>
-            <span>Value</span>
-            <input
+          <label className="grid gap-1.5">
+            <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
+              Value
+            </span>
+            <Input
               autoComplete="off"
+              className="font-mono"
               onChange={(event) => setValue(event.target.value)}
               placeholder="Sensitive value"
               spellCheck={false}
@@ -164,37 +174,40 @@ export function EnvironmentVariablesPanel({
               value={value}
             />
           </label>
-          <div className="form-actions">
-            <button
-              className="primary-button"
-              disabled={busy || !name.trim() || !value}
-              onClick={() => void addVariable()}
-              type="button"
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-          </div>
+          <Button
+            disabled={busy || !name.trim() || !value}
+            onClick={() => void addVariable()}
+            size="sm"
+            type="button"
+          >
+            {busy ? "Saving…" : "Save"}
+          </Button>
         </div>
       ) : null}
 
       {variables.length === 0 && !showAdd ? (
-        <div className="env-vars-empty">
-          <strong>No environment variables yet</strong>
-          <p>Add keys your agents and sandboxes should be able to use later.</p>
+        <div className="grid gap-1.5 rounded-md border border-dashed border-border p-7 text-center">
+          <strong className="text-sm">No environment variables yet</strong>
+          <p className="text-xs text-muted-foreground">
+            Add keys your agents and sandboxes should be able to use later.
+          </p>
         </div>
       ) : (
-        <ul className="env-vars-list">
+        <ul aria-label="Environment variables" className="space-y-2">
           {variables.map((variable) => {
             const isEditing = editingId === variable.id;
             return (
-              <li className="env-vars-row" key={variable.id}>
-                <div className="env-vars-row-copy">
-                  <code>{variable.name}</code>
+              <li
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
+                key={variable.id}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <code className="text-sm font-medium">{variable.name}</code>
                   {isEditing ? (
-                    <input
+                    <Input
                       aria-label={`New value for ${variable.name}`}
                       autoComplete="off"
-                      className="env-vars-edit-input"
+                      className="h-8 w-48 font-mono text-xs"
                       onChange={(event) => setEditValue(event.target.value)}
                       placeholder="Enter a new value"
                       spellCheck={false}
@@ -202,58 +215,61 @@ export function EnvironmentVariablesPanel({
                       value={editValue}
                     />
                   ) : (
-                    <span className="env-vars-masked">
+                    <span className="font-mono text-xs tracking-wide text-muted-foreground">
                       {maskedValue(variable.lastFour)}
                     </span>
                   )}
                 </div>
-                <div className="env-vars-row-actions">
+                <div className="flex shrink-0 items-center gap-1.5">
                   {isEditing ? (
                     <>
-                      <button
-                        className="secondary-button"
+                      <Button
                         disabled={busy || !editValue}
                         onClick={() => void saveEdit(variable.id)}
+                        size="sm"
                         type="button"
                       >
                         Save
-                      </button>
-                      <button
-                        className="text-button"
+                      </Button>
+                      <Button
                         disabled={busy}
                         onClick={() => {
                           setEditingId(null);
                           setEditValue("");
                         }}
+                        size="sm"
                         type="button"
+                        variant="secondary"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <button
+                      <Button
                         aria-label={`Edit ${variable.name}`}
-                        className="icon-button"
                         disabled={busy}
                         onClick={() => {
                           setEditingId(variable.id);
                           setEditValue("");
                           setMessage(null);
                         }}
+                        size="icon-sm"
                         type="button"
+                        variant="secondary"
                       >
-                        <Pencil aria-hidden="true" />
-                      </button>
-                      <button
+                        <Pencil aria-hidden="true" className="size-3.5" />
+                      </Button>
+                      <Button
                         aria-label={`Delete ${variable.name}`}
-                        className="icon-button"
                         disabled={busy}
                         onClick={() => void removeVariable(variable)}
+                        size="icon-sm"
                         type="button"
+                        variant="secondary"
                       >
-                        <Trash2 aria-hidden="true" />
-                      </button>
+                        <Trash2 aria-hidden="true" className="size-3.5" />
+                      </Button>
                     </>
                   )}
                 </div>
@@ -265,7 +281,7 @@ export function EnvironmentVariablesPanel({
 
       {message ? (
         <p
-          className={`form-message ${message.tone === "warning" ? "is-warning" : ""}`}
+          className={`text-xs ${message.tone === "warning" ? "text-destructive" : "text-muted-foreground"}`}
           role={message.tone === "success" ? "status" : "alert"}
         >
           {message.text}

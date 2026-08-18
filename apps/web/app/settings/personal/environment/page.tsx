@@ -1,8 +1,10 @@
 import { EnvironmentVariablesPanel } from "@/components/environment-variables-panel";
 import {
-  SettingsCard,
-  SettingsPageHeader,
-} from "@/components/settings/settings-content";
+  OrcaCard,
+  OrcaPageHeader,
+  OrcaPageShell,
+  OrcaSubsectionHeader,
+} from "@/components/settings/orca-style";
 import { listUserEnvironmentVariables } from "@/lib/user-environment";
 import { requireUser } from "@/lib/session";
 
@@ -11,18 +13,18 @@ export default async function PersonalEnvironmentPage() {
   const variables = await listUserEnvironmentVariables(user.id);
 
   return (
-    <div className="settings-page">
-      <SettingsPageHeader
+    <OrcaPageShell>
+      <OrcaPageHeader
         description="Store encrypted key/value pairs for your personal CoDev workflows."
-        eyebrow="Personal settings"
         title="Environment Variables"
       />
-      <SettingsCard
-        description="Encrypted at rest. Values are write-only after you save them."
-        title="Personal .env"
-      >
+      <OrcaCard className="space-y-3">
+        <OrcaSubsectionHeader
+          description="Encrypted at rest. Values are write-only after you save them."
+          title="Personal .env"
+        />
         <EnvironmentVariablesPanel initialVariables={variables} />
-      </SettingsCard>
-    </div>
+      </OrcaCard>
+    </OrcaPageShell>
   );
 }
