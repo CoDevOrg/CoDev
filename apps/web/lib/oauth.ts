@@ -25,7 +25,7 @@ export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
 export const DEFAULT_CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
 export const CLAUDE_MANUAL_REDIRECT_URI =
-  "https://console.anthropic.com/oauth/code/callback";
+  "https://platform.claude.com/oauth/code/callback";
 export const CODEX_DEVICE_REDIRECT_URI =
   "https://auth.openai.com/deviceauth/callback";
 export const CODEX_DEVICE_VERIFICATION_URL =
@@ -206,11 +206,11 @@ export function getOAuthConfiguration(
       clientSecret: envOptional("CLAUDE_OAUTH_CLIENT_SECRET"),
       authorizeUrl: envUrl(
         "CLAUDE_OAUTH_AUTHORIZE_URL",
-        "https://claude.ai/oauth/authorize",
+        "https://platform.claude.com/oauth/authorize",
       ),
       tokenUrl: envUrl(
         "CLAUDE_OAUTH_TOKEN_URL",
-        "https://console.anthropic.com/v1/oauth/token",
+        "https://platform.claude.com/v1/oauth/token",
       ),
       scope: envUrl(
         "CLAUDE_OAUTH_SCOPE",

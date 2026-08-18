@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { codexAuth, login } from "../src/client.mjs";
+import { claudeAuth, codexAuth, login } from "../src/client.mjs";
 
 function help() {
   process.stdout.write(`CoDev CLI
@@ -8,9 +8,10 @@ function help() {
 Usage:
   codev login [--no-browser]
   codev codex-auth [--org[=<workspace-id>]] [--browser]
+  codev claude-auth [--org[=<workspace-id>]]
 
-The codex-auth command delegates authentication to the official Codex CLI.
-No OpenAI API key is required.
+The codex-auth and claude-auth commands delegate authentication to the
+official Codex and Claude Code CLIs. No provider API key is required.
 `);
 }
 
@@ -40,6 +41,10 @@ async function main() {
       ...orgArgument(args),
       browser: args.includes("--browser"),
     });
+    return;
+  }
+  if (command === "claude-auth") {
+    await claudeAuth(orgArgument(args));
     return;
   }
   throw new Error(`Unknown command: ${command}`);

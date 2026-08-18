@@ -148,7 +148,7 @@ async function refreshOAuthToken(
       ? {
           tokenUrl:
             process.env.CLAUDE_OAUTH_TOKEN_URL ??
-            "https://console.anthropic.com/v1/oauth/token",
+            "https://platform.claude.com/v1/oauth/token",
           clientId:
             process.env.CLAUDE_OAUTH_CLIENT_ID?.trim() ||
             "9d1c250a-e61b-44d9-88ed-5944d1962f5e",

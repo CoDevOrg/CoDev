@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { apiUrl, configPath } from "./client.mjs";
+import { apiUrl, configPath, extractClaudeOAuthToken } from "./client.mjs";
 
 test("uses an explicit CoDev API URL without a trailing slash", () => {
   assert.equal(
@@ -15,4 +15,14 @@ test("keeps CLI credentials inside the configured private directory", () => {
     configPath({ CODEV_CONFIG_DIR: "/tmp/codev-test" }),
     "/tmp/codev-test/config.json",
   );
+});
+
+test("extracts a Claude OAuth token from setup-token output", () => {
+  assert.equal(
+    extractClaudeOAuthToken(
+      "Login successful.\nToken: sk-ant-oat01-abc123XYZ_-4567890\nDone.",
+    ),
+    "sk-ant-oat01-abc123XYZ_-4567890",
+  );
+  assert.equal(extractClaudeOAuthToken("no token here"), undefined);
 });

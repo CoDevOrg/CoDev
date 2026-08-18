@@ -1,6 +1,6 @@
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
+import { ClaudeCliSubscriptionCard } from "@/components/claude-cli-subscription-card";
 import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
-import { OAuthConnectionsCard } from "@/components/oauth-connections-card";
 import {
   OrganizationSettingsCard,
   OrganizationSettingsPage,
@@ -13,19 +13,13 @@ import {
 } from "@/lib/credentials";
 import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
 import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
-import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
-import {
-  parseHostedCodexNotice,
-  parseOAuthNotice,
-} from "@/lib/settings-notices";
+import { parseHostedCodexNotice } from "@/lib/settings-notices";
 
 export default async function OrganizationAgentsPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    oauth?: string;
-    status?: string;
     hostedCodex?: string;
   }>;
 }) {
@@ -102,23 +96,9 @@ export default async function OrganizationAgentsPage({
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
-          <OAuthConnectionsCard
-            connected={{
-              claude: claude?.credentialType === "OAUTH_TOKEN",
-              codex: false,
-            }}
-            configured={{
-              claude: getOAuthConfigurationStatus("claude").configured,
-              codex: false,
-            }}
-            flowModes={{
-              claude: getOAuthConfigurationStatus("claude").flowMode,
-            }}
-            notice={parseOAuthNotice(params)}
-            providers={["claude"]}
-            returnTo="/settings/org/agents"
-            scopeType="WORKSPACE"
-            workspaceId={context.workspace.id}
+          <ClaudeCliSubscriptionCard
+            connected={claude?.credentialType === "OAUTH_TOKEN"}
+            isOrg
           />
           {hostedCodex ? (
             <HostedCodexSubscriptionCard

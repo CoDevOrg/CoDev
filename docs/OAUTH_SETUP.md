@@ -45,6 +45,31 @@ OpenAI documents both device-code login for headless systems and copying
 `~/.codex/auth.json` to a remote/headless machine. Treat that file like a
 password. See the [official Codex authentication documentation](https://developers.openai.com/codex/auth).
 
+## Claude Code
+
+CoDev uses the same terminal-enrollment pattern for Claude Code. CoDev does
+not implement Anthropic OAuth directly and does not need an Anthropic API key
+or OAuth client secret.
+
+```sh
+npm install -g @trycodev/cli
+codev login
+codev claude-auth             # personal connection
+codev claude-auth --org       # organization connection
+```
+
+`codev claude-auth` runs the official `claude setup-token` command, which
+performs Claude Code's own browser login and prints a long-lived OAuth
+token scoped to the signed-in Claude subscription. The CoDev CLI reads that
+token from the command's output and uploads it over its authenticated TLS
+session; it is never logged or printed by the CoDev CLI itself.
+
+The server validates the token shape, encrypts it with the
+provider-credential KMS context, and stores it as an `OAUTH_TOKEN`
+credential for the `anthropic` provider — the same credential row a
+successful Claude Code OAuth connection has always produced. Only a
+workspace maintainer may create an organization-scoped connection.
+
 ## CoDev CLI login
 
 `codev login` uses a separate ten-minute, single-use device authorization:

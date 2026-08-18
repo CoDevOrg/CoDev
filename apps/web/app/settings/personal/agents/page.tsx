@@ -1,7 +1,7 @@
 import { CredentialForm } from "@/components/credential-form";
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
+import { ClaudeCliSubscriptionCard } from "@/components/claude-cli-subscription-card";
 import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
-import { OAuthConnectionsCard } from "@/components/oauth-connections-card";
 import {
   SettingsCard,
   SettingsPageHeader,
@@ -12,19 +12,13 @@ import {
   getProviderCredentialStatus,
 } from "@/lib/credentials";
 import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
-import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
-import {
-  parseHostedCodexNotice,
-  parseOAuthNotice,
-} from "@/lib/settings-notices";
+import { parseHostedCodexNotice } from "@/lib/settings-notices";
 
 export default async function PersonalAgentsPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    oauth?: string;
-    status?: string;
     hostedCodex?: string;
   }>;
 }) {
@@ -90,21 +84,8 @@ export default async function PersonalAgentsPage({
           provider="cursor"
         />
       </SettingsCard>
-      <OAuthConnectionsCard
-        connected={{
-          claude: claudeCredential?.credentialType === "OAUTH_TOKEN",
-          codex: false,
-        }}
-        configured={{
-          claude: getOAuthConfigurationStatus("claude").configured,
-          codex: false,
-        }}
-        flowModes={{
-          claude: getOAuthConfigurationStatus("claude").flowMode,
-        }}
-        notice={parseOAuthNotice(params)}
-        providers={["claude"]}
-        returnTo="/settings/personal/agents"
+      <ClaudeCliSubscriptionCard
+        connected={claudeCredential?.credentialType === "OAUTH_TOKEN"}
       />
       <HostedCodexSubscriptionCard
         notice={parseHostedCodexNotice(params)}

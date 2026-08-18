@@ -112,6 +112,34 @@ function run(command, args, options) {
   });
 }
 
+/** Runs a command, streaming its stdout to the terminal while also capturing it. */
+function runCapture(command, args, options) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ["inherit", "pipe", "inherit"],
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+      process.stdout.write(chunk);
+    });
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (signal) reject(new Error(`${command} was stopped by ${signal}.`));
+      else if (code === 0) resolve(output);
+      else reject(new Error(`${command} exited with status ${code ?? 1}.`));
+    });
+  });
+}
+
+const CLAUDE_TOKEN_PATTERN = /sk-ant-[A-Za-z0-9_-]{20,}/;
+
+export function extractClaudeOAuthToken(output) {
+  const match = CLAUDE_TOKEN_PATTERN.exec(output);
+  return match ? match[0] : undefined;
+}
+
 async function authenticatedRequest(path, options = {}) {
   const config = await loadConfig();
   return request(
@@ -190,4 +218,38 @@ export async function codexAuth({
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }
+}
+
+export async function claudeAuth({
+  organization = false,
+  organizationId,
+} = {}) {
+  await loadConfig();
+  process.stdout.write("Starting the official Claude Code login flow…\n");
+  const output = await runCapture("claude", ["setup-token"]);
+  const oauthToken = extractClaudeOAuthToken(output);
+  if (!oauthToken) {
+    throw new Error(
+      "Could not read the token from `claude setup-token`. Run it manually and try again.",
+    );
+  }
+  const resolvedOrganizationId = organization
+    ? await resolveOrganization(organizationId)
+    : undefined;
+  await authenticatedRequest("/api/cli/claude-auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scopeType: organization ? "ORGANIZATION" : "USER",
+      ...(resolvedOrganizationId
+        ? { organizationId: resolvedOrganizationId }
+        : {}),
+      oauthToken,
+    }),
+  });
+  process.stdout.write(
+    organization
+      ? "Claude Code is connected to the CoDev organization.\n"
+      : "Claude Code is connected to your CoDev account.\n",
+  );
 }
