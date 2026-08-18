@@ -1122,13 +1122,13 @@ describe("codev parent bridge", () => {
     ).toBe(true);
   });
 
-  it.each(["profile.get", "env.list", "env.create", "env.delete"] as const)(
+  it.each(["profile.get"] as const)(
     "recognizes %s as a well-formed bridge request (not just personal-executor allowed)",
     (method) => {
       // A method can be silently dropped before it ever reaches an executor
       // if it's missing from this shape/method check, even when the
       // personal executor's own allowlist already includes it — exactly
-      // what happened here: profile.get/env.* only got added below and
+      // what happened here: profile.get only got added below and
       // the request never left the browser.
       expect(
         isCodevBridgeRequestMessage({
@@ -1197,65 +1197,5 @@ describe("codev parent bridge", () => {
     expect(fetcher).toHaveBeenCalledWith("/api/personal/profile", {
       cache: "no-store",
     });
-  });
-
-  it("creates and deletes personal environment variables through the bridge", async () => {
-    const connected = replyToCodevBridgeMessage(
-      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
-      { type: "codev:bridge-hello", generation: 1 },
-    ).session;
-    const variable = {
-      id: "c1f9fe13-6881-44a6-adbd-96bc5a946afa",
-      name: "API_URL",
-      lastFour: "test",
-    };
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ variable }, { status: 201 }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
-
-    const created = await executePersonalCodevBridgeRequest(
-      {
-        type: "codev:bridge-request",
-        generation: 1,
-        requestId: "req-env-create",
-        method: "env.create",
-        params: { name: "API_URL", value: "https://example.test" },
-      },
-      connected,
-      fetcher,
-    );
-    expect(created).toMatchObject({ ok: true, result: { variable } });
-    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/settings/environment", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "API_URL", value: "https://example.test" }),
-      cache: "no-store",
-    });
-    expect(JSON.stringify(created)).not.toMatch(/example\.test/);
-
-    const deleted = await executePersonalCodevBridgeRequest(
-      {
-        type: "codev:bridge-request",
-        generation: 1,
-        requestId: "req-env-delete",
-        method: "env.delete",
-        params: { variableId: variable.id },
-      },
-      connected,
-      fetcher,
-    );
-    expect(deleted).toEqual({
-      type: "codev:bridge-response",
-      generation: 1,
-      requestId: "req-env-delete",
-      ok: true,
-      result: { ok: true },
-    });
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      `/api/settings/environment/${variable.id}`,
-      { method: "DELETE", cache: "no-store" },
-    );
   });
 });

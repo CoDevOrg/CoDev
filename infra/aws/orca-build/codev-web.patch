@@ -2550,266 +2550,6 @@ index 8da2783..41186fe 100644
          {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
          {effectiveTab === 'pr-checks' && (
            <FolderWorkspacePrChecksPanel
-diff --git a/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx
-new file mode 100644
-index 0000000..93d5e35
---- /dev/null
-+++ b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx
-@@ -0,0 +1,29 @@
-+import { renderToStaticMarkup } from 'react-dom/server'
-+import { describe, expect, it } from 'vitest'
-+import { CodevEnvironmentVariablesView } from './CodevEnvironmentVariablesSection'
-+
-+describe('CodevEnvironmentVariablesView', () => {
-+  it('lists saved variables by name and last-four, never the value', () => {
-+    const html = renderToStaticMarkup(
-+      <CodevEnvironmentVariablesView
-+        connected
-+        variables={[{ id: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa', name: 'API_URL', lastFour: 'test' }]}
-+      />
-+    )
-+    expect(html).toContain('API_URL')
-+    expect(html).toContain('Ends test')
-+    expect(html).toContain('Remove')
-+  })
-+
-+  it('shows an empty state with no variables', () => {
-+    const html = renderToStaticMarkup(<CodevEnvironmentVariablesView connected variables={[]} />)
-+    expect(html).toContain('No environment variables saved yet.')
-+  })
-+
-+  it('prompts to connect the bridge before managing variables', () => {
-+    const html = renderToStaticMarkup(
-+      <CodevEnvironmentVariablesView connected={false} variables={null} />
-+    )
-+    expect(html).toContain('Connect the CoDev bridge')
-+  })
-+})
-diff --git a/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx
-new file mode 100644
-index 0000000..fc40fee
---- /dev/null
-+++ b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx
-@@ -0,0 +1,219 @@
-+import { useEffect, useState, type JSX } from 'react'
-+import { Button } from '@/components/ui/button'
-+import { SettingsSubsectionHeader } from './SettingsFormControls'
-+import {
-+  getCodevBridgeSnapshot,
-+  requestCodevBridge,
-+  subscribeCodevBridge,
-+  type CodevBridgeSnapshot
-+} from '@/web/codev-bridge'
-+
-+export type CodevEnvironmentVariable = {
-+  id: string
-+  name: string
-+  lastFour: string | null
-+}
-+
-+export function CodevEnvironmentVariablesView({
-+  connected,
-+  variables,
-+  draftName = '',
-+  draftValue = '',
-+  busy = '',
-+  message = '',
-+  onDraftNameChange,
-+  onDraftValueChange,
-+  onCreate,
-+  onDelete
-+}: {
-+  connected: boolean
-+  variables: CodevEnvironmentVariable[] | null
-+  draftName?: string
-+  draftValue?: string
-+  busy?: string
-+  message?: string
-+  onDraftNameChange?: (value: string) => void
-+  onDraftValueChange?: (value: string) => void
-+  onCreate?: () => void
-+  onDelete?: (variableId: string) => void
-+}): JSX.Element {
-+  const creating = busy === 'create'
-+  const disabled = !connected || busy !== ''
-+  return (
-+    <div
-+      id="codev-environment-variables"
-+      className="scroll-mt-6 space-y-3"
-+      data-codev-environment-variables="true"
-+    >
-+      <SettingsSubsectionHeader
-+        title="Environment variables"
-+        description="Encrypted key/value pairs for your personal CoDev workflows. Values are write-only after you save them."
-+      />
-+      {!connected ? (
-+        <p className="text-xs text-muted-foreground">
-+          Connect the CoDev bridge to manage environment variables.
-+        </p>
-+      ) : (
-+        <>
-+          <ul className="space-y-2" aria-label="Environment variables">
-+            {(variables ?? []).map((variable) => {
-+              const deleting = busy === `delete:${variable.id}`
-+              return (
-+                <li
-+                  key={variable.id}
-+                  className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-xs"
-+                  data-codev-env-name={variable.name}
-+                >
-+                  <div>
-+                    <p className="font-medium">{variable.name}</p>
-+                    <p className="text-muted-foreground">
-+                      {variable.lastFour ? `Ends ${variable.lastFour}` : 'Encrypted'}
-+                    </p>
-+                  </div>
-+                  <Button
-+                    type="button"
-+                    size="sm"
-+                    variant="outline"
-+                    disabled={!connected || (busy !== '' && !deleting)}
-+                    onClick={() => onDelete?.(variable.id)}
-+                  >
-+                    {deleting ? 'Removing…' : 'Remove'}
-+                  </Button>
-+                </li>
-+              )
-+            })}
-+            {variables?.length === 0 ? (
-+              <p className="text-xs text-muted-foreground">No environment variables saved yet.</p>
-+            ) : null}
-+          </ul>
-+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border p-3">
-+            <label className="sr-only" htmlFor="codev-env-name">
-+              Variable name
-+            </label>
-+            <input
-+              id="codev-env-name"
-+              autoComplete="off"
-+              spellCheck={false}
-+              aria-label="Variable name"
-+              placeholder="NAME"
-+              className="h-8 w-40 rounded-md border border-border bg-background px-2 text-xs"
-+              value={draftName}
-+              disabled={disabled}
-+              onChange={(event) => onDraftNameChange?.(event.target.value)}
-+            />
-+            <label className="sr-only" htmlFor="codev-env-value">
-+              Variable value
-+            </label>
-+            <input
-+              id="codev-env-value"
-+              type="password"
-+              autoComplete="off"
-+              spellCheck={false}
-+              aria-label="Variable value"
-+              placeholder="value"
-+              className="h-8 min-w-[10rem] flex-1 rounded-md border border-border bg-background px-2 text-xs"
-+              value={draftValue}
-+              disabled={disabled}
-+              onChange={(event) => onDraftValueChange?.(event.target.value)}
-+            />
-+            <Button type="button" size="sm" disabled={disabled} onClick={() => onCreate?.()}>
-+              {creating ? 'Saving…' : 'Add variable'}
-+            </Button>
-+          </div>
-+        </>
-+      )}
-+      {message ? (
-+        <p className="text-xs text-muted-foreground" role="status">
-+          {message}
-+        </p>
-+      ) : null}
-+    </div>
-+  )
-+}
-+
-+export function CodevEnvironmentVariablesSection(): JSX.Element | null {
-+  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
-+  const [bridge, setBridge] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
-+  const [variables, setVariables] = useState<CodevEnvironmentVariable[] | null>(null)
-+  const [draftName, setDraftName] = useState('')
-+  const [draftValue, setDraftValue] = useState('')
-+  const [busy, setBusy] = useState('')
-+  const [message, setMessage] = useState('')
-+
-+  useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
-+
-+  useEffect(() => {
-+    if (!embedded || bridge.status !== 'connected') return
-+    let cancelled = false
-+    void requestCodevBridge<{ variables: CodevEnvironmentVariable[] }>('env.list')
-+      .then((result) => {
-+        if (!cancelled) setVariables(result.variables)
-+      })
-+      .catch(() => {
-+        if (!cancelled) setVariables(null)
-+      })
-+    return () => {
-+      cancelled = true
-+    }
-+  }, [embedded, bridge.status])
-+
-+  async function create(): Promise<void> {
-+    const name = draftName.trim()
-+    const value = draftValue.trim()
-+    if (!name || !value) {
-+      setMessage('Enter both a name and a value.')
-+      return
-+    }
-+    setBusy('create')
-+    setMessage('')
-+    try {
-+      const result = await requestCodevBridge<{ variable: CodevEnvironmentVariable }>(
-+        'env.create',
-+        { name, value }
-+      )
-+      setVariables((current) => [...(current ?? []), result.variable])
-+      setDraftName('')
-+      setDraftValue('')
-+      setMessage(`${result.variable.name} saved.`)
-+    } catch (error) {
-+      setMessage(error instanceof Error ? error.message : 'The variable could not be saved.')
-+    } finally {
-+      setBusy('')
-+    }
-+  }
-+
-+  async function remove(variableId: string): Promise<void> {
-+    setBusy(`delete:${variableId}`)
-+    setMessage('')
-+    try {
-+      await requestCodevBridge('env.delete', { variableId })
-+      setVariables((current) => (current ?? []).filter((variable) => variable.id !== variableId))
-+      setMessage('Variable removed.')
-+    } catch (error) {
-+      setMessage(error instanceof Error ? error.message : 'The variable could not be removed.')
-+    } finally {
-+      setBusy('')
-+    }
-+  }
-+
-+  if (!embedded) return null
-+
-+  return (
-+    <CodevEnvironmentVariablesView
-+      connected={bridge.status === 'connected'}
-+      variables={variables}
-+      draftName={draftName}
-+      draftValue={draftValue}
-+      busy={busy}
-+      message={message}
-+      onDraftNameChange={setDraftName}
-+      onDraftValueChange={setDraftValue}
-+      onCreate={() => {
-+        void create()
-+      }}
-+      onDelete={(variableId) => {
-+        void remove(variableId)
-+      }}
-+    />
-+  )
-+}
 diff --git a/src/renderer/src/components/settings/CodevProfileSection.test.tsx b/src/renderer/src/components/settings/CodevProfileSection.test.tsx
 new file mode 100644
 index 0000000..1dff286
@@ -4032,61 +3772,68 @@ index 0000000..02180a7
 +  )
 +}
 diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-index 4405810..34f3bf6 100644
+index 4405810..2dc093f 100644
 --- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 +++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-@@ -4,6 +4,12 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
+@@ -4,6 +4,9 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
  import { SearchableSetting } from './SearchableSetting'
  import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
  import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 +import { CodevWorkspaceInvitesSection } from './CodevWorkspaceInvitesSection'
 +import { CodevWorkspaceMemberRolesSection } from './CodevWorkspaceMemberRolesSection'
-+import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
-+import { CodevProfileSection } from './CodevProfileSection'
-+import { CodevEnvironmentVariablesSection } from './CodevEnvironmentVariablesSection'
 +import { isCodevSettingsOnly } from './codev-personal-settings'
  import { translate } from '@/i18n/i18n'
  
  type GeneralWorkspaceSettingsSectionProps = {
-@@ -15,6 +21,22 @@ export function GeneralWorkspaceSettingsSection({
+@@ -14,7 +17,15 @@ type GeneralWorkspaceSettingsSectionProps = {
+ export function GeneralWorkspaceSettingsSection({
    settings,
    updateSettings
- }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
-+  // CoDev personal surface: there is no workspace in context, so only the
-+  // member's own provider connections belong in this pane.
+-}: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
++}: GeneralWorkspaceSettingsSectionProps): React.JSX.Element | null {
++  // CoDev personal surface: there is no workspace in context, so nothing in
++  // this pane (invites, member roles, directory, delete confirmations) has
++  // anywhere to apply. The personal settings that do belong here (profile,
++  // provider connections) live in their own dedicated tabs instead.
 +  if (isCodevSettingsOnly()) {
-+    return (
-+      <section key="workspace" className="space-y-4">
-+        <SettingsSubsectionHeader
-+          title="Account"
-+          description="Settings that belong to you and follow you into every CoDev workspace."
-+        />
-+        <CodevProfileSection />
-+        <CodevProviderConnectionsSection />
-+        <CodevEnvironmentVariablesSection />
-+      </section>
-+    )
++    return null
 +  }
 +
    return (
      <section key="workspace" className="space-y-4">
        <SettingsSubsectionHeader
-@@ -28,6 +50,10 @@ export function GeneralWorkspaceSettingsSection({
+@@ -28,6 +39,9 @@ export function GeneralWorkspaceSettingsSection({
          )}
        />
  
 +      <CodevWorkspaceInvitesSection />
 +      <CodevWorkspaceMemberRolesSection />
-+      <CodevProviderConnectionsSection />
 +
        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
  
        <SearchableSetting
 diff --git a/src/renderer/src/components/settings/Settings.tsx b/src/renderer/src/components/settings/Settings.tsx
-index fe894fa..39d1dc0 100644
+index fe894fa..58f7da6 100644
 --- a/src/renderer/src/components/settings/Settings.tsx
 +++ b/src/renderer/src/components/settings/Settings.tsx
-@@ -89,6 +89,10 @@ import {
+@@ -10,6 +10,7 @@ import {
+   type MutableRefObject
+ } from 'react'
+ import { toast } from 'sonner'
++import { User } from 'lucide-react'
+ import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+ import type { SpeechModelState } from '../../../../shared/speech-types'
+ import type {
+@@ -56,6 +57,8 @@ import { AgentsPane } from './AgentsPane'
+ import { OrchestrationPane } from './OrchestrationPane'
+ import { LinearAgentSkillPane } from './LinearAgentSkillPane'
+ import { AccountsPane } from './AccountsPane'
++import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
++import { CodevProfileSection } from './CodevProfileSection'
+ import { StatsPane } from '../stats/StatsPane'
+ import { IntegrationsPane } from './IntegrationsPane'
+ import { TasksPane } from './TasksPane'
+@@ -89,6 +92,10 @@ import {
    isWebClientLocation,
    useSettingsNavigationMetadata
  } from '@/hooks/useSettingsNavigationMetadata'
@@ -4097,23 +3844,95 @@ index fe894fa..39d1dc0 100644
  import type {
    SettingsNavGroup,
    SettingsNavInstallStatus,
-@@ -805,13 +809,14 @@ function Settings(): React.JSX.Element {
+@@ -805,13 +812,40 @@ function Settings(): React.JSX.Element {
      skillFreshnessInventory,
      voiceModelStatesLoading
    ])
 +  const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
++  // Why: Profile has no upstream nav entry at all — it's a CoDev-only concept
++  // that only exists in the personal settings surface, so it's injected here
++  // rather than added to useSettingsNavigationMetadata's native registry.
++  const codevExtraPersonalSections: SettingsNavSection[] = useMemo(
++    () => [
++      {
++        id: 'codev-profile',
++        title: 'Profile',
++        description: 'The identity and contact details connected to your CoDev account.',
++        icon: User,
++        group: 'setup',
++        searchEntries: [
++          {
++            title: 'Profile',
++            description: 'Your CoDev display name, email, and connected accounts.',
++            keywords: ['profile', 'identity', 'name', 'email', 'account', 'google', 'github']
++          }
++        ]
++      }
++    ],
++    []
++  )
    const navSections = useMemo(
      () =>
 -      baseNavSections.map((section) => {
-+      filterPersonalSettingsSections(baseNavSections, codevSettingsOnly).map((section) => {
++      filterPersonalSettingsSections(
++        baseNavSections,
++        codevSettingsOnly,
++        codevExtraPersonalSections
++      ).map((section) => {
          const installStatus = capabilityInstallStatusBySectionId.get(section.id)
          return installStatus ? { ...section, installStatus } : section
        }),
 -    [baseNavSections, capabilityInstallStatusBySectionId]
-+    [baseNavSections, capabilityInstallStatusBySectionId, codevSettingsOnly]
++    [baseNavSections, capabilityInstallStatusBySectionId, codevSettingsOnly, codevExtraPersonalSections]
    )
    const navSectionById = useMemo(
      () => new Map(navSections.map((section) => [section.id, section] as const)),
+@@ -1270,15 +1304,18 @@ function Settings(): React.JSX.Element {
+                   searchEntries={getSectionSearchEntries('accounts')}
+                 >
+                   {isSectionMounted('accounts') ? (
+-                    <AccountsPane
+-                      settings={settings}
+-                      updateSettings={updateSettings}
+-                      wslSupportedPlatform={runtimeWslSupportedPlatform}
+-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
+-                      wslDistros={windowsTerminalCapabilities.wslDistros}
+-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+-                      accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
+-                    />
++                    <div className="space-y-4">
++                      <CodevProviderConnectionsSection />
++                      <AccountsPane
++                        settings={settings}
++                        updateSettings={updateSettings}
++                        wslSupportedPlatform={runtimeWslSupportedPlatform}
++                        wslAvailable={windowsTerminalCapabilities.wslAvailable}
++                        wslDistros={windowsTerminalCapabilities.wslDistros}
++                        wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
++                        accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
++                      />
++                    </div>
+                   ) : null}
+                 </SettingsSection>
+ 
+@@ -1357,6 +1394,17 @@ function Settings(): React.JSX.Element {
+                   {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
+                 </SettingsSection>
+ 
++                {isSectionMounted('codev-profile') ? (
++                  <SettingsSection
++                    id="codev-profile"
++                    title="Profile"
++                    description="The identity and contact details connected to your CoDev account."
++                    searchEntries={getSectionSearchEntries('codev-profile')}
++                  >
++                    <CodevProfileSection />
++                  </SettingsSection>
++                ) : null}
++
+                 <SettingsSection
+                   id="general"
+                   title={translate('auto.components.settings.Settings.7807c11c4d', 'General')}
 diff --git a/src/renderer/src/components/settings/SettingsSidebar.tsx b/src/renderer/src/components/settings/SettingsSidebar.tsx
 index 5c912b0..60042b1 100644
 --- a/src/renderer/src/components/settings/SettingsSidebar.tsx
@@ -4160,10 +3979,10 @@ index 5c912b0..60042b1 100644
          <div className="relative">
 diff --git a/src/renderer/src/components/settings/codev-personal-settings.test.ts b/src/renderer/src/components/settings/codev-personal-settings.test.ts
 new file mode 100644
-index 0000000..90013a6
+index 0000000..46ada06
 --- /dev/null
 +++ b/src/renderer/src/components/settings/codev-personal-settings.test.ts
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,59 @@
 +import { describe, expect, it } from 'vitest'
 +import {
 +  filterPersonalSettingsSections,
@@ -4189,6 +4008,21 @@ index 0000000..90013a6
 +    ])
 +  })
 +
++  it('prepends CoDev-only personal sections that have no upstream nav entry', () => {
++    const sections = [{ id: 'agents' }, { id: 'git' }]
++    const extra = [{ id: 'codev-profile' }]
++
++    expect(
++      filterPersonalSettingsSections(sections, true, extra).map((s) => s.id)
++    ).toEqual(['codev-profile', 'agents'])
++    // Only relevant in the personal surface — a real workspace has its own
++    // page for this, so the extra section must not leak in there too.
++    expect(filterPersonalSettingsSections(sections, false, extra).map((s) => s.id)).toEqual([
++      'agents',
++      'git'
++    ])
++  })
++
 +  it('leaves every section in place inside a workspace', () => {
 +    const sections = [{ id: 'agents' }, { id: 'git' }, { id: 'repo-abc' }]
 +    expect(filterPersonalSettingsSections(sections, false).map((s) => s.id)).toEqual([
@@ -4210,10 +4044,10 @@ index 0000000..90013a6
 +})
 diff --git a/src/renderer/src/components/settings/codev-personal-settings.ts b/src/renderer/src/components/settings/codev-personal-settings.ts
 new file mode 100644
-index 0000000..791c8f4
+index 0000000..5add4a3
 --- /dev/null
 +++ b/src/renderer/src/components/settings/codev-personal-settings.ts
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,59 @@
 +/**
 + * CoDev personal settings surface.
 + *
@@ -4257,15 +4091,21 @@ index 0000000..791c8f4
 +}
 +
 +/**
-+ * Drop workspace-scoped sections when rendering the personal surface. Per-repo
-+ * panes (`repo-*`) are always workspace-scoped, so they never survive here.
++ * Drop workspace-scoped sections when rendering the personal surface, and add
++ * back any CoDev-only personal sections (e.g. Profile) that have no upstream
++ * nav entry at all. Per-repo panes (`repo-*`) are always workspace-scoped, so
++ * they never survive here.
 + */
 +export function filterPersonalSettingsSections<T extends { id: string }>(
 +  sections: readonly T[],
-+  settingsOnly: boolean
++  settingsOnly: boolean,
++  extraPersonalSections: readonly T[] = []
 +): T[] {
 +  if (!settingsOnly) return [...sections]
-+  return sections.filter((section) => isPersonalSettingsSection(section.id))
++  return [
++    ...extraPersonalSections,
++    ...sections.filter((section) => isPersonalSettingsSection(section.id))
++  ]
 +}
 diff --git a/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx b/src/renderer/src/components/sidebar/CodevPathClaimsPanel.tsx
 new file mode 100644
@@ -7184,10 +7024,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..06b2048
+index 0000000..3bd4adc
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,358 @@
+@@ -0,0 +1,355 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -7240,9 +7080,6 @@ index 0000000..06b2048
 +  | 'connections.oauth'
 +  | 'connections.revoke'
 +  | 'profile.get'
-+  | 'env.list'
-+  | 'env.create'
-+  | 'env.delete'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

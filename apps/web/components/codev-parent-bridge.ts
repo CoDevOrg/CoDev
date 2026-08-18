@@ -43,10 +43,7 @@ export type CodevBridgeMethod =
   | "connections.put"
   | "connections.oauth"
   | "connections.revoke"
-  | "profile.get"
-  | "env.list"
-  | "env.create"
-  | "env.delete";
+  | "profile.get";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -105,9 +102,6 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.oauth",
   "connections.revoke",
   "profile.get",
-  "env.list",
-  "env.create",
-  "env.delete",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -933,9 +927,6 @@ const PERSONAL_BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.oauth",
   "connections.revoke",
   "profile.get",
-  "env.list",
-  "env.create",
-  "env.delete",
 ]);
 
 /**
@@ -1062,59 +1053,7 @@ export async function executePersonalCodevBridgeRequest(
       return succeed(payload);
     }
 
-    if (request.method === "env.list") {
-      const response = await fetcher("/api/settings/environment", {
-        cache: "no-store",
-      });
-      const payload = await readJson(response);
-      if (!response.ok) {
-        return fail(
-          jsonError(payload, "CoDev could not load environment variables."),
-        );
-      }
-      return succeed(payload);
-    }
-
-    if (request.method === "env.create") {
-      const name = request.params?.name;
-      const value = request.params?.value;
-      if (typeof name !== "string" || !name.trim()) {
-        return fail("Enter a variable name.");
-      }
-      if (typeof value !== "string" || !value.trim()) {
-        return fail("Enter a variable value.");
-      }
-      const response = await fetcher("/api/settings/environment", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), value: value.trim() }),
-        cache: "no-store",
-      });
-      const payload = await readJson(response);
-      if (!response.ok) {
-        return fail(
-          jsonError(payload, "CoDev could not save this environment variable."),
-        );
-      }
-      return succeed(payload);
-    }
-
-    // env.delete
-    const variableId = request.params?.variableId;
-    if (typeof variableId !== "string" || !variableId) {
-      return fail("Choose a variable to remove.");
-    }
-    const response = await fetcher(
-      `/api/settings/environment/${encodeURIComponent(variableId)}`,
-      { method: "DELETE", cache: "no-store" },
-    );
-    if (!response.ok) {
-      const payload = await readJson(response);
-      return fail(
-        jsonError(payload, "CoDev could not remove this environment variable."),
-      );
-    }
-    return succeed({ ok: true });
+    return fail("This setting is only available inside a workspace.");
   } catch (error) {
     return fail(
       error instanceof Error

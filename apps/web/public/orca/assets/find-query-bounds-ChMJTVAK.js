@@ -1,0 +1,1 @@
+import{Yp as e}from"./web-index-CS0x8w2J.js";function t(t,n=2048){return e(t,n)}function n(e){return t(e)?null:e}export{t as n,n as t};
