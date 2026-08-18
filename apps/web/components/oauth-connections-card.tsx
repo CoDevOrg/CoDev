@@ -5,15 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { SettingsCard } from "@/components/settings/settings-content";
+import type { OAuthNotice, OAuthProvider } from "@/lib/settings-notices";
 
-type OAuthProvider = "claude" | "codex";
-type OAuthStatus = "connected" | "denied" | "error" | "not_configured";
 type OAuthFlowMode = "app_callback" | "manual_code" | "device_code";
-
-export type OAuthNotice = {
-  provider: OAuthProvider;
-  status: OAuthStatus;
-};
 
 type ProviderSession =
   | {
@@ -34,25 +28,6 @@ type ProviderSession =
       mode: "app_callback";
       authorizeUrl: string;
     };
-
-export function parseOAuthNotice(params: {
-  oauth?: string;
-  status?: string;
-}): OAuthNotice | undefined {
-  if (
-    (params.oauth !== "claude" && params.oauth !== "codex") ||
-    !["connected", "denied", "error", "not_configured"].includes(
-      params.status ?? "",
-    )
-  ) {
-    return undefined;
-  }
-
-  return {
-    provider: params.oauth,
-    status: params.status as OAuthStatus,
-  };
-}
 
 function providerLabel(provider: OAuthProvider) {
   return provider === "claude" ? "Claude Code" : "Codex";

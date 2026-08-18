@@ -1,13 +1,7 @@
 import { CredentialForm } from "@/components/credential-form";
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
-import {
-  HostedCodexSubscriptionCard,
-  parseHostedCodexNotice,
-} from "@/components/hosted-codex-subscription-card";
-import {
-  OAuthConnectionsCard,
-  parseOAuthNotice,
-} from "@/components/oauth-connections-card";
+import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
+import { OAuthConnectionsCard } from "@/components/oauth-connections-card";
 import {
   SettingsCard,
   SettingsPageHeader,
@@ -20,6 +14,10 @@ import {
 import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
 import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
+import {
+  parseHostedCodexNotice,
+  parseOAuthNotice,
+} from "@/lib/settings-notices";
 
 export default async function PersonalAgentsPage({
   searchParams,

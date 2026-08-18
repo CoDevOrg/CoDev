@@ -5,35 +5,7 @@ import { useState } from "react";
 
 import { SettingsCard } from "@/components/settings/settings-content";
 import type { HostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-view";
-
-export function parseHostedCodexNotice(params: {
-  hostedCodex?: string;
-}): { status: string; text: string } | undefined {
-  switch (params.hostedCodex) {
-    case "connected":
-      return {
-        status: "connected",
-        text: "Codex subscription is connected. CoDev stores only encrypted server-side material.",
-      };
-    case "denied":
-      return {
-        status: "denied",
-        text: "Codex connection was cancelled. You can try again whenever you are ready.",
-      };
-    case "unavailable":
-      return {
-        status: "unavailable",
-        text: "Hosted Codex subscription connection is not enabled yet.",
-      };
-    case "error":
-      return {
-        status: "error",
-        text: "Codex sign-in did not complete. Start Connect again from this page.",
-      };
-    default:
-      return undefined;
-  }
-}
+import type { HostedCodexNotice } from "@/lib/settings-notices";
 
 export function HostedCodexSubscriptionCard({
   status,
@@ -43,7 +15,7 @@ export function HostedCodexSubscriptionCard({
   status: HostedCodexPublicStatus;
   organizationId?: string;
   returnTo: string;
-  notice?: { status: string; text: string } | undefined;
+  notice?: HostedCodexNotice | undefined;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

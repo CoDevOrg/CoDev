@@ -1,12 +1,6 @@
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
-import {
-  HostedCodexSubscriptionCard,
-  parseHostedCodexNotice,
-} from "@/components/hosted-codex-subscription-card";
-import {
-  OAuthConnectionsCard,
-  parseOAuthNotice,
-} from "@/components/oauth-connections-card";
+import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
+import { OAuthConnectionsCard } from "@/components/oauth-connections-card";
 import {
   OrganizationSettingsCard,
   OrganizationSettingsPage,
@@ -21,6 +15,10 @@ import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-cred
 import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
 import { getOAuthConfigurationStatus } from "@/lib/oauth";
 import { requireUser } from "@/lib/session";
+import {
+  parseHostedCodexNotice,
+  parseOAuthNotice,
+} from "@/lib/settings-notices";
 
 export default async function OrganizationAgentsPage({
   searchParams,
