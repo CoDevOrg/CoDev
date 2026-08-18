@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
   executeCodevBridgeRequest,
+  executePersonalCodevBridgeRequest,
   isCodevBridgeClientMessage,
   isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
@@ -565,7 +566,10 @@ describe("codev parent bridge", () => {
       ok: true,
       result: {
         sharedSessions: [
-          { session: { provider: "restricted" }, capabilities: { canQueue: false } },
+          {
+            session: { provider: "restricted" },
+            capabilities: { canQueue: false },
+          },
         ],
       },
     });
@@ -1077,7 +1081,9 @@ describe("codev parent bridge", () => {
         },
       ],
     };
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(saved));
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json(saved));
 
     await expect(
       executeCodevBridgeRequest(
@@ -1102,7 +1108,9 @@ describe("codev parent bridge", () => {
         cache: "no-store",
       },
     );
-    expect(JSON.stringify(saved)).not.toMatch(/oa-test-codev|auth\.openai\.com/i);
+    expect(JSON.stringify(saved)).not.toMatch(
+      /oa-test-codev|auth\.openai\.com/i,
+    );
     expect(
       isCodevBridgeRequestMessage({
         type: "codev:bridge-request",
@@ -1112,5 +1120,123 @@ describe("codev parent bridge", () => {
         params: { provider: "openai" },
       }),
     ).toBe(true);
+  });
+
+  it("denies workspace-scoped methods from the personal settings surface", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(
+      executePersonalCodevBridgeRequest(
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-denied",
+          method: "invites.list",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: "This setting is only available inside a workspace.",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("loads the member's own profile through the personal settings bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const profile = {
+      name: "Jordan Lee",
+      email: "jordan@example.com",
+      google: { connected: true },
+      github: { connected: false, login: null },
+      githubConnectUrl: "/api/personal/profile/connect-github",
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(profile));
+
+    await expect(
+      executePersonalCodevBridgeRequest(
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-profile",
+          method: "profile.get",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: profile });
+    expect(fetcher).toHaveBeenCalledWith("/api/personal/profile", {
+      cache: "no-store",
+    });
+  });
+
+  it("creates and deletes personal environment variables through the bridge", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const variable = {
+      id: "c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+      name: "API_URL",
+      lastFour: "test",
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ variable }, { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const created = await executePersonalCodevBridgeRequest(
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-env-create",
+        method: "env.create",
+        params: { name: "API_URL", value: "https://example.test" },
+      },
+      connected,
+      fetcher,
+    );
+    expect(created).toMatchObject({ ok: true, result: { variable } });
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/api/settings/environment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "API_URL", value: "https://example.test" }),
+      cache: "no-store",
+    });
+    expect(JSON.stringify(created)).not.toMatch(/example\.test/);
+
+    const deleted = await executePersonalCodevBridgeRequest(
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-env-delete",
+        method: "env.delete",
+        params: { variableId: variable.id },
+      },
+      connected,
+      fetcher,
+    );
+    expect(deleted).toEqual({
+      type: "codev:bridge-response",
+      generation: 1,
+      requestId: "req-env-delete",
+      ok: true,
+      result: { ok: true },
+    });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      `/api/settings/environment/${variable.id}`,
+      { method: "DELETE", cache: "no-store" },
+    );
   });
 });

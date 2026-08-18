@@ -2550,6 +2550,438 @@ index 8da2783..41186fe 100644
          {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
          {effectiveTab === 'pr-checks' && (
            <FolderWorkspacePrChecksPanel
+diff --git a/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx
+new file mode 100644
+index 0000000..93d5e35
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.test.tsx
+@@ -0,0 +1,29 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevEnvironmentVariablesView } from './CodevEnvironmentVariablesSection'
++
++describe('CodevEnvironmentVariablesView', () => {
++  it('lists saved variables by name and last-four, never the value', () => {
++    const html = renderToStaticMarkup(
++      <CodevEnvironmentVariablesView
++        connected
++        variables={[{ id: 'c1f9fe13-6881-44a6-adbd-96bc5a946afa', name: 'API_URL', lastFour: 'test' }]}
++      />
++    )
++    expect(html).toContain('API_URL')
++    expect(html).toContain('Ends test')
++    expect(html).toContain('Remove')
++  })
++
++  it('shows an empty state with no variables', () => {
++    const html = renderToStaticMarkup(<CodevEnvironmentVariablesView connected variables={[]} />)
++    expect(html).toContain('No environment variables saved yet.')
++  })
++
++  it('prompts to connect the bridge before managing variables', () => {
++    const html = renderToStaticMarkup(
++      <CodevEnvironmentVariablesView connected={false} variables={null} />
++    )
++    expect(html).toContain('Connect the CoDev bridge')
++  })
++})
+diff --git a/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx
+new file mode 100644
+index 0000000..fc40fee
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevEnvironmentVariablesSection.tsx
+@@ -0,0 +1,219 @@
++import { useEffect, useState, type JSX } from 'react'
++import { Button } from '@/components/ui/button'
++import { SettingsSubsectionHeader } from './SettingsFormControls'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge,
++  type CodevBridgeSnapshot
++} from '@/web/codev-bridge'
++
++export type CodevEnvironmentVariable = {
++  id: string
++  name: string
++  lastFour: string | null
++}
++
++export function CodevEnvironmentVariablesView({
++  connected,
++  variables,
++  draftName = '',
++  draftValue = '',
++  busy = '',
++  message = '',
++  onDraftNameChange,
++  onDraftValueChange,
++  onCreate,
++  onDelete
++}: {
++  connected: boolean
++  variables: CodevEnvironmentVariable[] | null
++  draftName?: string
++  draftValue?: string
++  busy?: string
++  message?: string
++  onDraftNameChange?: (value: string) => void
++  onDraftValueChange?: (value: string) => void
++  onCreate?: () => void
++  onDelete?: (variableId: string) => void
++}): JSX.Element {
++  const creating = busy === 'create'
++  const disabled = !connected || busy !== ''
++  return (
++    <div
++      id="codev-environment-variables"
++      className="scroll-mt-6 space-y-3"
++      data-codev-environment-variables="true"
++    >
++      <SettingsSubsectionHeader
++        title="Environment variables"
++        description="Encrypted key/value pairs for your personal CoDev workflows. Values are write-only after you save them."
++      />
++      {!connected ? (
++        <p className="text-xs text-muted-foreground">
++          Connect the CoDev bridge to manage environment variables.
++        </p>
++      ) : (
++        <>
++          <ul className="space-y-2" aria-label="Environment variables">
++            {(variables ?? []).map((variable) => {
++              const deleting = busy === `delete:${variable.id}`
++              return (
++                <li
++                  key={variable.id}
++                  className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-xs"
++                  data-codev-env-name={variable.name}
++                >
++                  <div>
++                    <p className="font-medium">{variable.name}</p>
++                    <p className="text-muted-foreground">
++                      {variable.lastFour ? `Ends ${variable.lastFour}` : 'Encrypted'}
++                    </p>
++                  </div>
++                  <Button
++                    type="button"
++                    size="sm"
++                    variant="outline"
++                    disabled={!connected || (busy !== '' && !deleting)}
++                    onClick={() => onDelete?.(variable.id)}
++                  >
++                    {deleting ? 'Removing…' : 'Remove'}
++                  </Button>
++                </li>
++              )
++            })}
++            {variables?.length === 0 ? (
++              <p className="text-xs text-muted-foreground">No environment variables saved yet.</p>
++            ) : null}
++          </ul>
++          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border p-3">
++            <label className="sr-only" htmlFor="codev-env-name">
++              Variable name
++            </label>
++            <input
++              id="codev-env-name"
++              autoComplete="off"
++              spellCheck={false}
++              aria-label="Variable name"
++              placeholder="NAME"
++              className="h-8 w-40 rounded-md border border-border bg-background px-2 text-xs"
++              value={draftName}
++              disabled={disabled}
++              onChange={(event) => onDraftNameChange?.(event.target.value)}
++            />
++            <label className="sr-only" htmlFor="codev-env-value">
++              Variable value
++            </label>
++            <input
++              id="codev-env-value"
++              type="password"
++              autoComplete="off"
++              spellCheck={false}
++              aria-label="Variable value"
++              placeholder="value"
++              className="h-8 min-w-[10rem] flex-1 rounded-md border border-border bg-background px-2 text-xs"
++              value={draftValue}
++              disabled={disabled}
++              onChange={(event) => onDraftValueChange?.(event.target.value)}
++            />
++            <Button type="button" size="sm" disabled={disabled} onClick={() => onCreate?.()}>
++              {creating ? 'Saving…' : 'Add variable'}
++            </Button>
++          </div>
++        </>
++      )}
++      {message ? (
++        <p className="text-xs text-muted-foreground" role="status">
++          {message}
++        </p>
++      ) : null}
++    </div>
++  )
++}
++
++export function CodevEnvironmentVariablesSection(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [bridge, setBridge] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
++  const [variables, setVariables] = useState<CodevEnvironmentVariable[] | null>(null)
++  const [draftName, setDraftName] = useState('')
++  const [draftValue, setDraftValue] = useState('')
++  const [busy, setBusy] = useState('')
++  const [message, setMessage] = useState('')
++
++  useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
++
++  useEffect(() => {
++    if (!embedded || bridge.status !== 'connected') return
++    let cancelled = false
++    void requestCodevBridge<{ variables: CodevEnvironmentVariable[] }>('env.list')
++      .then((result) => {
++        if (!cancelled) setVariables(result.variables)
++      })
++      .catch(() => {
++        if (!cancelled) setVariables(null)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [embedded, bridge.status])
++
++  async function create(): Promise<void> {
++    const name = draftName.trim()
++    const value = draftValue.trim()
++    if (!name || !value) {
++      setMessage('Enter both a name and a value.')
++      return
++    }
++    setBusy('create')
++    setMessage('')
++    try {
++      const result = await requestCodevBridge<{ variable: CodevEnvironmentVariable }>(
++        'env.create',
++        { name, value }
++      )
++      setVariables((current) => [...(current ?? []), result.variable])
++      setDraftName('')
++      setDraftValue('')
++      setMessage(`${result.variable.name} saved.`)
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'The variable could not be saved.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  async function remove(variableId: string): Promise<void> {
++    setBusy(`delete:${variableId}`)
++    setMessage('')
++    try {
++      await requestCodevBridge('env.delete', { variableId })
++      setVariables((current) => (current ?? []).filter((variable) => variable.id !== variableId))
++      setMessage('Variable removed.')
++    } catch (error) {
++      setMessage(error instanceof Error ? error.message : 'The variable could not be removed.')
++    } finally {
++      setBusy('')
++    }
++  }
++
++  if (!embedded) return null
++
++  return (
++    <CodevEnvironmentVariablesView
++      connected={bridge.status === 'connected'}
++      variables={variables}
++      draftName={draftName}
++      draftValue={draftValue}
++      busy={busy}
++      message={message}
++      onDraftNameChange={setDraftName}
++      onDraftValueChange={setDraftValue}
++      onCreate={() => {
++        void create()
++      }}
++      onDelete={(variableId) => {
++        void remove(variableId)
++      }}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/settings/CodevProfileSection.test.tsx b/src/renderer/src/components/settings/CodevProfileSection.test.tsx
+new file mode 100644
+index 0000000..1dff286
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevProfileSection.test.tsx
+@@ -0,0 +1,47 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevProfileView } from './CodevProfileSection'
++
++describe('CodevProfileView', () => {
++  it('shows identity and connected-account status', () => {
++    const html = renderToStaticMarkup(
++      <CodevProfileView
++        connected
++        profile={{
++          name: 'Jordan Lee',
++          email: 'jordan@example.com',
++          google: { connected: true },
++          github: { connected: true, login: 'jordanlee' },
++          githubConnectUrl: null
++        }}
++      />
++    )
++    expect(html).toContain('Jordan Lee')
++    expect(html).toContain('jordan@example.com')
++    expect(html).toContain('Google')
++    expect(html).toContain('@jordanlee')
++  })
++
++  it('offers a top-level GitHub connect link when not linked', () => {
++    const html = renderToStaticMarkup(
++      <CodevProfileView
++        connected
++        profile={{
++          name: 'Jordan Lee',
++          email: 'jordan@example.com',
++          google: { connected: true },
++          github: { connected: false, login: null },
++          githubConnectUrl: '/api/personal/profile/connect-github'
++        }}
++      />
++    )
++    expect(html).toContain('/api/personal/profile/connect-github')
++    expect(html).toContain('target="_top"')
++  })
++
++  it('prompts to connect the bridge before loading anything', () => {
++    const html = renderToStaticMarkup(<CodevProfileView connected={false} profile={null} />)
++    expect(html).toContain('Connect the CoDev bridge')
++    expect(html).not.toContain('jordan@example.com')
++  })
++})
+diff --git a/src/renderer/src/components/settings/CodevProfileSection.tsx b/src/renderer/src/components/settings/CodevProfileSection.tsx
+new file mode 100644
+index 0000000..579c2c5
+--- /dev/null
++++ b/src/renderer/src/components/settings/CodevProfileSection.tsx
+@@ -0,0 +1,113 @@
++import { useEffect, useState, type JSX } from 'react'
++import { SettingsSubsectionHeader } from './SettingsFormControls'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge,
++  type CodevBridgeSnapshot
++} from '@/web/codev-bridge'
++
++export type CodevProfileSnapshot = {
++  name: string | null
++  email: string | null
++  google: { connected: boolean }
++  github: { connected: boolean; login: string | null }
++  githubConnectUrl: string | null
++}
++
++export function CodevProfileView({
++  connected,
++  profile
++}: {
++  connected: boolean
++  profile: CodevProfileSnapshot | null
++}): JSX.Element {
++  return (
++    <div id="codev-profile" className="scroll-mt-6 space-y-3" data-codev-profile="true">
++      <SettingsSubsectionHeader
++        title="Profile"
++        description="The identity and contact details connected to your CoDev account."
++      />
++      {!connected ? (
++        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to load your profile.</p>
++      ) : (
++        <>
++          <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-xs">
++            <div>
++              <p className="text-muted-foreground">Display name</p>
++              <p className="font-medium">{profile?.name || 'Not set'}</p>
++            </div>
++            <div>
++              <p className="text-muted-foreground">Email</p>
++              <p className="font-medium">{profile?.email || 'Not set'}</p>
++            </div>
++            <div>
++              <p className="text-muted-foreground">Security</p>
++              <p className="font-medium">Managed by your sign-in provider</p>
++            </div>
++          </div>
++          <ul className="space-y-2" aria-label="Connected accounts">
++            <li
++              className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-xs"
++              data-codev-account-status={profile?.google.connected ? 'connected' : 'not_connected'}
++            >
++              <span className="font-medium">Google</span>
++              <span className="text-muted-foreground">
++                {profile?.google.connected ? 'Connected' : 'Not connected'}
++              </span>
++            </li>
++            <li
++              className="flex items-center justify-between gap-2 rounded-md border border-border p-3 text-xs"
++              data-codev-account-status={profile?.github.connected ? 'connected' : 'not_connected'}
++            >
++              <span className="font-medium">GitHub</span>
++              {profile?.github.connected ? (
++                <span className="text-muted-foreground">
++                  {profile.github.login ? `@${profile.github.login}` : 'Connected'}
++                </span>
++              ) : profile?.githubConnectUrl ? (
++                <a
++                  className="text-xs font-medium underline underline-offset-2"
++                  href={profile.githubConnectUrl}
++                  target="_top"
++                  rel="noreferrer"
++                >
++                  Connect GitHub account
++                </a>
++              ) : (
++                <span className="text-muted-foreground">Not connected</span>
++              )}
++            </li>
++          </ul>
++        </>
++      )}
++    </div>
++  )
++}
++
++export function CodevProfileSection(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [bridge, setBridge] = useState<CodevBridgeSnapshot>(() => getCodevBridgeSnapshot())
++  const [profile, setProfile] = useState<CodevProfileSnapshot | null>(null)
++
++  useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
++
++  useEffect(() => {
++    if (!embedded || bridge.status !== 'connected') return
++    let cancelled = false
++    void requestCodevBridge<CodevProfileSnapshot>('profile.get')
++      .then((result) => {
++        if (!cancelled) setProfile(result)
++      })
++      .catch(() => {
++        if (!cancelled) setProfile(null)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [embedded, bridge.status])
++
++  if (!embedded) return null
++
++  return <CodevProfileView connected={bridge.status === 'connected'} profile={profile} />
++}
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.test.tsx
 new file mode 100644
 index 0000000..4de30bb
@@ -3600,21 +4032,23 @@ index 0000000..02180a7
 +  )
 +}
 diff --git a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-index 4405810..762a051 100644
+index 4405810..34f3bf6 100644
 --- a/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
 +++ b/src/renderer/src/components/settings/GeneralWorkspaceSettingsSection.tsx
-@@ -4,6 +4,10 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
+@@ -4,6 +4,12 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
  import { SearchableSetting } from './SearchableSetting'
  import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
  import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 +import { CodevWorkspaceInvitesSection } from './CodevWorkspaceInvitesSection'
 +import { CodevWorkspaceMemberRolesSection } from './CodevWorkspaceMemberRolesSection'
 +import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
++import { CodevProfileSection } from './CodevProfileSection'
++import { CodevEnvironmentVariablesSection } from './CodevEnvironmentVariablesSection'
 +import { isCodevSettingsOnly } from './codev-personal-settings'
  import { translate } from '@/i18n/i18n'
  
  type GeneralWorkspaceSettingsSectionProps = {
-@@ -15,6 +19,20 @@ export function GeneralWorkspaceSettingsSection({
+@@ -15,6 +21,22 @@ export function GeneralWorkspaceSettingsSection({
    settings,
    updateSettings
  }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
@@ -3627,7 +4061,9 @@ index 4405810..762a051 100644
 +          title="Account"
 +          description="Settings that belong to you and follow you into every CoDev workspace."
 +        />
++        <CodevProfileSection />
 +        <CodevProviderConnectionsSection />
++        <CodevEnvironmentVariablesSection />
 +      </section>
 +    )
 +  }
@@ -3635,7 +4071,7 @@ index 4405810..762a051 100644
    return (
      <section key="workspace" className="space-y-4">
        <SettingsSubsectionHeader
-@@ -28,6 +46,10 @@ export function GeneralWorkspaceSettingsSection({
+@@ -28,6 +50,10 @@ export function GeneralWorkspaceSettingsSection({
          )}
        />
  
@@ -6752,10 +7188,10 @@ index 0000000..4234955
 +})
 diff --git a/src/renderer/src/web/codev-bridge.ts b/src/renderer/src/web/codev-bridge.ts
 new file mode 100644
-index 0000000..b96079e
+index 0000000..06b2048
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bridge.ts
-@@ -0,0 +1,354 @@
+@@ -0,0 +1,358 @@
 +export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 +
 +export type CodevBridgeSnapshot = {
@@ -6807,6 +7243,10 @@ index 0000000..b96079e
 +  | 'connections.put'
 +  | 'connections.oauth'
 +  | 'connections.revoke'
++  | 'profile.get'
++  | 'env.list'
++  | 'env.create'
++  | 'env.delete'
 +
 +type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
 +  __CODEV_EMBEDDED__?: boolean

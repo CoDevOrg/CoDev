@@ -42,7 +42,11 @@ export type CodevBridgeMethod =
   | "connections.list"
   | "connections.put"
   | "connections.oauth"
-  | "connections.revoke";
+  | "connections.revoke"
+  | "profile.get"
+  | "env.list"
+  | "env.create"
+  | "env.delete";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -924,6 +928,10 @@ const PERSONAL_BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.put",
   "connections.oauth",
   "connections.revoke",
+  "profile.get",
+  "env.list",
+  "env.create",
+  "env.delete",
 ]);
 
 /**
@@ -1018,21 +1026,91 @@ export async function executePersonalCodevBridgeRequest(
       return succeed(payload);
     }
 
-    const provider = request.params?.provider;
-    if (provider !== "openai" && provider !== "anthropic") {
-      return fail("Choose OpenAI or Anthropic.");
+    if (request.method === "connections.revoke") {
+      const provider = request.params?.provider;
+      if (provider !== "openai" && provider !== "anthropic") {
+        return fail("Choose OpenAI or Anthropic.");
+      }
+      const response = await fetcher(
+        `/api/personal/connections?provider=${provider}`,
+        { method: "DELETE", cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(
+            payload,
+            "CoDev could not revoke this provider connection.",
+          ),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "profile.get") {
+      const response = await fetcher("/api/personal/profile", {
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load your profile."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "env.list") {
+      const response = await fetcher("/api/settings/environment", {
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load environment variables."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "env.create") {
+      const name = request.params?.name;
+      const value = request.params?.value;
+      if (typeof name !== "string" || !name.trim()) {
+        return fail("Enter a variable name.");
+      }
+      if (typeof value !== "string" || !value.trim()) {
+        return fail("Enter a variable value.");
+      }
+      const response = await fetcher("/api/settings/environment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), value: value.trim() }),
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not save this environment variable."),
+        );
+      }
+      return succeed(payload);
+    }
+
+    // env.delete
+    const variableId = request.params?.variableId;
+    if (typeof variableId !== "string" || !variableId) {
+      return fail("Choose a variable to remove.");
     }
     const response = await fetcher(
-      `/api/personal/connections?provider=${provider}`,
+      `/api/settings/environment/${encodeURIComponent(variableId)}`,
       { method: "DELETE", cache: "no-store" },
     );
-    const payload = await readJson(response);
     if (!response.ok) {
+      const payload = await readJson(response);
       return fail(
-        jsonError(payload, "CoDev could not revoke this provider connection."),
+        jsonError(payload, "CoDev could not remove this environment variable."),
       );
     }
-    return succeed(payload);
+    return succeed({ ok: true });
   } catch (error) {
     return fail(
       error instanceof Error
