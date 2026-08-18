@@ -52,10 +52,42 @@ export function toOpenAiOAuthPlan(
   return OPENAI_OAUTH_PLAN;
 }
 
+export type CliSubscriptionProvider = "codex" | "claude";
+
+export type CliSubscriptionRecord = {
+  provider: CliSubscriptionProvider;
+  label: string;
+  status: ProviderConnectionStatus;
+  command: string;
+};
+
+const CLI_SUBSCRIPTIONS: Array<{
+  provider: CliSubscriptionProvider;
+  label: string;
+  command: string;
+}> = [
+  { provider: "codex", label: "Codex", command: "codev codex-auth" },
+  { provider: "claude", label: "Claude Code", command: "codev claude-auth" },
+];
+
+export function toCliSubscriptionRecords(
+  statuses: Partial<
+    Record<CliSubscriptionProvider, ProviderCredentialStatus | null>
+  >,
+): CliSubscriptionRecord[] {
+  return CLI_SUBSCRIPTIONS.map(({ provider, label, command }) => ({
+    provider,
+    label,
+    status: statuses[provider] ? "connected" : "not_connected",
+    command,
+  }));
+}
+
 export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
   connections: ProviderConnectionRecord[];
   oauth: ProviderOAuthPlan;
+  cliSubscriptions: CliSubscriptionRecord[];
 };
 
 export type ProviderCredentialStatus = {
@@ -126,6 +158,9 @@ export function toProviderConnectionSnapshot(input: {
     Record<ProviderConnectionProvider, ProviderCredentialStatus | null>
   >;
   openAiOAuthStatus?: ProviderCredentialStatus | null;
+  cliSubscriptionStatuses?: Partial<
+    Record<CliSubscriptionProvider, ProviderCredentialStatus | null>
+  >;
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -139,6 +174,9 @@ export function toProviderConnectionSnapshot(input: {
     viewer: input.viewer,
     connections,
     oauth: toOpenAiOAuthPlan(input.openAiOAuthStatus),
+    cliSubscriptions: toCliSubscriptionRecords(
+      input.cliSubscriptionStatuses ?? {},
+    ),
   };
 }
 

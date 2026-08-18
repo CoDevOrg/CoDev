@@ -67,6 +67,44 @@ describe("provider connection server", () => {
     );
   });
 
+  it("loads Codex and Claude CLI subscription status alongside API keys", async () => {
+    mocks.getProviderCredentialStatus
+      .mockResolvedValueOnce(null) // openai API_KEY
+      .mockResolvedValueOnce(null) // anthropic API_KEY
+      .mockResolvedValueOnce(null) // openai OAUTH_TOKEN (fixture)
+      .mockResolvedValueOnce({
+        credentialType: "HOSTED_CODEX_SUBSCRIPTION",
+        lastFour: "Codex CLI",
+      })
+      .mockResolvedValueOnce({
+        credentialType: "OAUTH_TOKEN",
+        lastFour: "Claude CLI",
+      });
+
+    await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject(
+      {
+        cliSubscriptions: [
+          { provider: "codex", status: "connected" },
+          { provider: "claude", status: "connected" },
+        ],
+      },
+    );
+    expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
+      4,
+      "USER",
+      user.id,
+      "openai",
+      "HOSTED_CODEX_SUBSCRIPTION",
+    );
+    expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
+      5,
+      "USER",
+      user.id,
+      "anthropic",
+      "OAUTH_TOKEN",
+    );
+  });
+
   it("revokes only the API key, leaving OAuth to its own lifecycle", async () => {
     await revokePersonalProviderConnection(user, "openai");
 

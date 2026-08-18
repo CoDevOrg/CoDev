@@ -1,1 +1,0 @@
-import{Ov as e}from"./web-index-BPle9HXd.js";var t=e(`minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};

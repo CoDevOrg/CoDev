@@ -2676,10 +2676,10 @@ index 0000000..4de30bb
 +})
 diff --git a/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
 new file mode 100644
-index 0000000..a5d3f48
+index 0000000..ec187b9
 --- /dev/null
 +++ b/src/renderer/src/components/settings/CodevProviderConnectionsSection.tsx
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,336 @@
 +import { useEffect, useState, type JSX } from 'react'
 +import { Button } from '@/components/ui/button'
 +import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -2716,10 +2716,20 @@ index 0000000..a5d3f48
 +  reason: 'Connect uses a CoDev fixture callback. ChatGPT consent is not opened.'
 +}
 +
++export type CodevCliSubscriptionProvider = 'codex' | 'claude'
++
++export type CodevCliSubscription = {
++  provider: CodevCliSubscriptionProvider
++  label: string
++  status: 'connected' | 'not_connected'
++  command: string
++}
++
 +export type CodevProviderConnectionSnapshot = {
 +  viewer: { id: string; name: string }
 +  connections: CodevProviderConnection[]
 +  oauth?: CodevProviderOAuthPlan
++  cliSubscriptions?: CodevCliSubscription[]
 +}
 +
 +export type CodevProviderConnectionDrafts = Partial<
@@ -2859,6 +2869,39 @@ index 0000000..a5d3f48
 +          <p className="text-xs text-muted-foreground" role="status">
 +            {oauth.reason}
 +          </p>
++        </div>
++      ) : null}
++      {connected && (snapshot?.cliSubscriptions?.length ?? 0) > 0 ? (
++        <div
++          id="codev-cli-subscriptions"
++          className="space-y-2 rounded-md border border-dashed border-border p-3"
++          data-codev-cli-subscriptions="true"
++        >
++          <p className="text-sm font-medium">CLI subscriptions</p>
++          <p className="text-xs text-muted-foreground">
++            Connect Codex or Claude Code from a terminal with the official CoDev CLI. Run{' '}
++            <code>npm install -g @trycodev/cli</code> and <code>codev login</code> first.
++          </p>
++          <ul className="space-y-1" aria-label="CLI subscription status">
++            {snapshot?.cliSubscriptions?.map((subscription) => (
++              <li
++                key={subscription.provider}
++                className="flex flex-wrap items-center justify-between gap-2 text-xs"
++                data-codev-cli-status={subscription.status}
++              >
++                <span className="font-medium">{subscription.label}</span>
++                <span className="text-muted-foreground">
++                  {subscription.status === 'connected' ? (
++                    'Connected'
++                  ) : (
++                    <>
++                      Not connected · run <code>{subscription.command}</code>
++                    </>
++                  )}
++                </span>
++              </li>
++            ))}
++          </ul>
 +        </div>
 +      ) : null}
 +      {message ? (

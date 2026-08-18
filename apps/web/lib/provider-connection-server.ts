@@ -29,11 +29,19 @@ type ConnectionUser = {
 export async function loadProviderConnectionSnapshot(
   user: ConnectionUser,
 ): Promise<ProviderConnectionSnapshot> {
-  const [openai, anthropic, openAiOAuth] = await Promise.all([
-    getProviderCredentialStatus("USER", user.id, "openai", "API_KEY"),
-    getProviderCredentialStatus("USER", user.id, "anthropic", "API_KEY"),
-    getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
-  ]);
+  const [openai, anthropic, openAiOAuth, codexCli, claudeCli] =
+    await Promise.all([
+      getProviderCredentialStatus("USER", user.id, "openai", "API_KEY"),
+      getProviderCredentialStatus("USER", user.id, "anthropic", "API_KEY"),
+      getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
+      getProviderCredentialStatus(
+        "USER",
+        user.id,
+        "openai",
+        "HOSTED_CODEX_SUBSCRIPTION",
+      ),
+      getProviderCredentialStatus("USER", user.id, "anthropic", "OAUTH_TOKEN"),
+    ]);
   return toProviderConnectionSnapshot({
     viewer: {
       id: user.id,
@@ -44,6 +52,10 @@ export async function loadProviderConnectionSnapshot(
       anthropic,
     },
     openAiOAuthStatus: openAiOAuth,
+    cliSubscriptionStatuses: {
+      codex: codexCli,
+      claude: claudeCli,
+    },
   });
 }
 

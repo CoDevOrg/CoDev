@@ -55,6 +55,38 @@ describe("provider connection view", () => {
     expect(snapshot.oauth).toEqual(OPENAI_OAUTH_PLAN);
     expect(snapshot.oauth.status).toBe("available");
     expect(snapshot.oauth.summary).toBe("Fixture callback · ready");
+    expect(
+      snapshot.cliSubscriptions.map((row) => [row.provider, row.status]),
+    ).toEqual([
+      ["codex", "not_connected"],
+      ["claude", "not_connected"],
+    ]);
+    expect(secretKeysInValue(snapshot)).toEqual([]);
+  });
+
+  it("reflects CLI subscription connections without exposing credential material", () => {
+    const snapshot = toProviderConnectionSnapshot({
+      viewer: { id: "user-1", name: "CoDev Test Jordan" },
+      statuses: {},
+      cliSubscriptionStatuses: {
+        codex: {
+          credentialType: "HOSTED_CODEX_SUBSCRIPTION",
+          lastFour: "Codex CLI",
+        },
+        claude: null,
+      },
+    });
+
+    expect(
+      snapshot.cliSubscriptions.map((row) => [row.provider, row.status]),
+    ).toEqual([
+      ["codex", "connected"],
+      ["claude", "not_connected"],
+    ]);
+    expect(
+      snapshot.cliSubscriptions.find((row) => row.provider === "codex")
+        ?.command,
+    ).toBe("codev codex-auth");
     expect(secretKeysInValue(snapshot)).toEqual([]);
   });
 
