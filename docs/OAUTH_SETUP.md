@@ -1,5 +1,23 @@
 # Provider subscription authentication
 
+## Running inside a CoDev workspace terminal
+
+The workspace sandbox runs commands as a non-root user, so `npm install -g`
+fails with `EACCES` against npm's default global prefix. Fix this once per
+workspace before installing any global CLI, including `@trycodev/cli`,
+`@openai/codex`, or `@anthropic-ai/claude-code`:
+
+```sh
+npm config set prefix "$HOME/.npm-global"
+export PATH="$HOME/.npm-global/bin:$PATH"
+```
+
+Add the `export` line to your shell profile (or a workspace setup script) so
+it persists across terminal sessions. `codev codex-auth` and `codev
+claude-auth` need the official `codex`/`claude` binaries themselves resolvable
+on `PATH` — installing them via `npx` alone is not enough, since the CoDev CLI
+spawns them by name.
+
 ## Codex
 
 CoDev uses the same terminal-enrollment pattern exposed by hosted coding-agent

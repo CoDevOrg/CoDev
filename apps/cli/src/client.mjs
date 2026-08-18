@@ -100,10 +100,25 @@ export async function login({ launchBrowser = true } = {}) {
   );
 }
 
+const INSTALL_HINT = {
+  codex: "npm install -g @openai/codex",
+  claude: "npm install -g @anthropic-ai/claude-code",
+};
+
+export function describeSpawnError(command, error) {
+  if (error?.code === "ENOENT") {
+    const hint = INSTALL_HINT[command];
+    return new Error(
+      `${command} is not installed or not on PATH.${hint ? ` Install it with \`${hint}\`.` : ""} If a global npm install fails with EACCES, first run \`npm config set prefix "$HOME/.npm-global"\` and add \`$HOME/.npm-global/bin\` to PATH.`,
+    );
+  }
+  return error;
+}
+
 function run(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options, stdio: "inherit" });
-    child.on("error", reject);
+    child.on("error", (error) => reject(describeSpawnError(command, error)));
     child.on("exit", (code, signal) => {
       if (signal) reject(new Error(`${command} was stopped by ${signal}.`));
       else if (code === 0) resolve();
@@ -124,7 +139,7 @@ function runCapture(command, args, options) {
       output += chunk.toString();
       process.stdout.write(chunk);
     });
-    child.on("error", reject);
+    child.on("error", (error) => reject(describeSpawnError(command, error)));
     child.on("exit", (code, signal) => {
       if (signal) reject(new Error(`${command} was stopped by ${signal}.`));
       else if (code === 0) resolve(output);

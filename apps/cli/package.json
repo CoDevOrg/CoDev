@@ -1,6 +1,6 @@
 {
   "name": "@trycodev/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Secure CoDev cloud coding-agent authentication CLI",
   "type": "module",
   "repository": {
