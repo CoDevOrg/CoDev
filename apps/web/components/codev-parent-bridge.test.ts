@@ -1122,6 +1122,25 @@ describe("codev parent bridge", () => {
     ).toBe(true);
   });
 
+  it.each(["profile.get", "env.list", "env.create", "env.delete"] as const)(
+    "recognizes %s as a well-formed bridge request (not just personal-executor allowed)",
+    (method) => {
+      // A method can be silently dropped before it ever reaches an executor
+      // if it's missing from this shape/method check, even when the
+      // personal executor's own allowlist already includes it — exactly
+      // what happened here: profile.get/env.* only got added below and
+      // the request never left the browser.
+      expect(
+        isCodevBridgeRequestMessage({
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-shape-check",
+          method,
+        }),
+      ).toBe(true);
+    },
+  );
+
   it("denies workspace-scoped methods from the personal settings surface", async () => {
     const connected = replyToCodevBridgeMessage(
       EMPTY_CODEV_PARENT_BRIDGE_SESSION,

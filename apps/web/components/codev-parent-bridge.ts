@@ -104,6 +104,10 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.put",
   "connections.oauth",
   "connections.revoke",
+  "profile.get",
+  "env.list",
+  "env.create",
+  "env.delete",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
