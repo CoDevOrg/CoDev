@@ -954,13 +954,53 @@ select,
 }
 
 .settings-sidebar-back {
-  margin: 0 8px 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 0 8px;
 }
 
 .settings-sidebar-icon {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
+}
+
+.settings-sidebar-search {
+  position: relative;
+  margin: 0 0 20px;
+}
+
+.settings-sidebar-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: #68717b;
+  pointer-events: none;
+}
+
+.settings-sidebar-search input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f0fdf4;
+  font-size: 13px;
+}
+
+.settings-sidebar-search input::placeholder {
+  color: #68717b;
+}
+
+.settings-sidebar-empty {
+  margin: 0 8px;
+  color: #68717b;
+  font-size: 12px;
 }
 
 .settings-sidebar-group + .settings-sidebar-group {
@@ -983,9 +1023,15 @@ select,
 }
 
 .settings-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-height: 38px;
+  padding: 0 10px;
   border-left: 2px solid transparent;
+  border-radius: 8px;
   color: #8b949e;
+  text-decoration: none;
 }
 
 .settings-sidebar-link:hover {
@@ -1000,6 +1046,19 @@ select,
 
 .settings-sidebar-link-active:hover {
   color: #a7f3d0;
+}
+
+.settings-sidebar-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8b949e;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .settings-layout-content {

@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, KeyRound, Plug, User } from "lucide-react";
+import { ArrowLeft, KeyRound, Plug, Search, User } from "lucide-react";
 
 type SettingsNavItem = {
   name: string;
   href: string;
   icon: LucideIcon;
+  badge?: string;
+  keywords?: string[];
 };
 
 const personalNav: SettingsNavItem[] = [
@@ -17,13 +20,24 @@ const personalNav: SettingsNavItem[] = [
     name: "AI Provider Accounts",
     href: "/settings/personal/providers",
     icon: Plug,
+    badge: "Optional",
+    keywords: ["openai", "anthropic", "api key", "codex", "claude"],
   },
   {
     name: "Environment Variables",
     href: "/settings/personal/environment",
     icon: KeyRound,
+    keywords: ["env", ".env"],
   },
 ];
+
+function matchesQuery(item: SettingsNavItem, query: string): boolean {
+  if (!query) return true;
+  const haystack = [item.name, ...(item.keywords ?? [])]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query.toLowerCase());
+}
 
 function SettingsNavGroup({
   label,
@@ -34,6 +48,8 @@ function SettingsNavGroup({
   items: SettingsNavItem[];
   pathname: string | null;
 }) {
+  if (items.length === 0) return null;
+
   return (
     <div className="settings-sidebar-group">
       <h2 className="settings-sidebar-label">{label}</h2>
@@ -53,6 +69,9 @@ function SettingsNavGroup({
             >
               <Icon aria-hidden="true" className="settings-sidebar-icon" />
               <span>{item.name}</span>
+              {item.badge ? (
+                <span className="settings-sidebar-badge">{item.badge}</span>
+              ) : null}
             </Link>
           );
         })}
@@ -63,6 +82,8 @@ function SettingsNavGroup({
 
 export function SettingsSidebar() {
   const pathname = usePathname();
+  const [query, setQuery] = useState("");
+  const visibleNav = personalNav.filter((item) => matchesQuery(item, query));
 
   return (
     <aside aria-label="Settings navigation" className="settings-sidebar">
@@ -71,11 +92,26 @@ export function SettingsSidebar() {
         <span>Back to Dashboard</span>
       </Link>
 
-      <SettingsNavGroup
-        items={personalNav}
-        label="Personal"
-        pathname={pathname}
-      />
+      <div className="settings-sidebar-search">
+        <Search aria-hidden="true" className="settings-sidebar-search-icon" />
+        <input
+          aria-label="Search settings"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search settings"
+          type="search"
+          value={query}
+        />
+      </div>
+
+      {visibleNav.length > 0 ? (
+        <SettingsNavGroup
+          items={visibleNav}
+          label="Personal"
+          pathname={pathname}
+        />
+      ) : (
+        <p className="settings-sidebar-empty">No matching settings.</p>
+      )}
     </aside>
   );
 }
