@@ -103,13 +103,13 @@ describe("orcaWorkspacePath", () => {
 });
 
 describe("orcaPersonalPath", () => {
-  it("keeps a member's personal runtime off the workspace root", () => {
+  it("shares the workspace root, since the orchestrator only validates one", () => {
     expect(orcaPersonalPath(WORKSPACE_ID)).toBe(
-      `/srv/codev/personal/${WORKSPACE_ID}`,
+      `/srv/codev/workspaces/${WORKSPACE_ID}`,
     );
   });
 
   it("rejects non-uuid user ids", () => {
-    expect(() => orcaPersonalPath("../etc")).toThrow(/Invalid user id/);
+    expect(() => orcaPersonalPath("../etc")).toThrow(/Invalid workspace id/);
   });
 });
