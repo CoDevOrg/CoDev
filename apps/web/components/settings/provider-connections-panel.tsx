@@ -88,11 +88,6 @@ export function ProviderConnectionsPanel({
           const saving = busy === `save:${connection.provider}`;
           const revoking = busy === `revoke:${connection.provider}`;
           const disabled = busy !== "";
-          const cli = snapshot.cliSubscriptions.find(
-            (subscription) =>
-              subscription.provider ===
-              (connection.provider === "openai" ? "codex" : "claude"),
-          );
           return (
             <li
               className="space-y-2 rounded-md border border-border p-3"
@@ -102,19 +97,6 @@ export function ProviderConnectionsPanel({
               <p className="text-xs text-muted-foreground">
                 {statusLabel(connection)}
               </p>
-              {cli ? (
-                <p className="text-xs text-muted-foreground">
-                  {cli.label} CLI:{" "}
-                  {cli.status === "connected" ? (
-                    "Connected"
-                  ) : (
-                    <>
-                      Not connected · run <code>{cli.command}</code> · or paste
-                      an API key below instead
-                    </>
-                  )}
-                </p>
-              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <label
                   className="sr-only"
