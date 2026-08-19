@@ -27,7 +27,7 @@ export function ProfileMenu({
   showConnectGitHub?: boolean;
   useClerkAuth?: boolean;
 }) {
-  const displayName = user.githubLogin ?? user.name ?? "Your account";
+  const displayName = user.name ?? user.githubLogin ?? "Your account";
   const initial = displayName.slice(0, 1).toUpperCase();
 
   return (

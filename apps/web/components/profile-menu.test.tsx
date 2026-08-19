@@ -61,4 +61,31 @@ describe("ProfileMenu", () => {
       screen.getByRole("button", { name: "Sign out" }),
     ).toBeInTheDocument();
   });
+
+  it("shows the member's real name over their GitHub login when both are known", () => {
+    const { container } = render(
+      <ProfileMenu
+        useClerkAuth={false}
+        user={{ name: "Ada Lovelace", githubLogin: "ada", image: null }}
+      />,
+    );
+
+    expect(container.querySelector(".profile-menu-name")).toHaveTextContent(
+      "Ada Lovelace",
+    );
+    expect(screen.queryByText("ada")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the GitHub login when no name is set", () => {
+    const { container } = render(
+      <ProfileMenu
+        useClerkAuth={false}
+        user={{ githubLogin: "ada", image: null }}
+      />,
+    );
+
+    expect(container.querySelector(".profile-menu-name")).toHaveTextContent(
+      "ada",
+    );
+  });
 });
