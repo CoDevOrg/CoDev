@@ -1,3 +1,5 @@
+import { readServerEnvironment } from "@codev/config";
+
 import { apiError, getApiUser } from "@/lib/api";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getWorkspaceForMember } from "@/lib/workspaces";
@@ -13,6 +15,15 @@ export async function GET(request: Request) {
   const workspace = await getWorkspaceForMember(workspaceId, user.id);
   if (!workspace) return apiError(new Error("Workspace not found."), 404);
 
+  const environment = readServerEnvironment();
+  const envDiag = {
+    hasDirectUrl: Boolean(environment.ORCHESTRATOR_DIRECT_URL),
+    directUrlLength: environment.ORCHESTRATOR_DIRECT_URL?.length ?? 0,
+    hasDirectSecret: Boolean(environment.ORCHESTRATOR_DIRECT_SECRET),
+    directSecretLength: environment.ORCHESTRATOR_DIRECT_SECRET?.length ?? 0,
+    hostInstanceId: environment.AWS_HOST_INSTANCE_ID ?? null,
+  };
+
   try {
     const credential = await resolveAgentCredential(
       user.id,
@@ -23,7 +34,7 @@ export async function GET(request: Request) {
       credential.authType !== "HOSTED_CODEX_SUBSCRIPTION" ||
       !credential.codexAuthCacheJson
     ) {
-      return Response.json({ authType: credential.authType });
+      return Response.json({ ...envDiag, authType: credential.authType });
     }
     const authCacheJson = credential.codexAuthCacheJson;
     const byteLength = Buffer.byteLength(authCacheJson, "utf8");
@@ -42,6 +53,7 @@ export async function GET(request: Request) {
       parseOk = false;
     }
     return Response.json({
+      ...envDiag,
       authType: credential.authType,
       byteLength,
       under128kb: byteLength <= 128 * 1024,
