@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { OrcaWorkspace } from "@/components/orca-workspace";
+import { WorkspaceHome } from "@/components/workspace-home";
+import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
@@ -14,15 +15,37 @@ export default async function WorkspacePage({
 }) {
   const user = await requireUser();
   const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
+  const [workspace, providerSnapshot] = await Promise.all([
+    getWorkspaceForMember(workspaceId, user.id),
+    loadProviderConnectionSnapshot(user),
+  ]);
   if (!workspace) {
     notFound();
   }
 
+  const availableProviders = (["openai", "anthropic"] as const).filter(
+    (provider) => {
+      const cli = provider === "openai" ? "codex" : "claude";
+      const cliConnected = providerSnapshot.cliSubscriptions.some(
+        (subscription) =>
+          subscription.provider === cli && subscription.status === "connected",
+      );
+      const keyConnected = providerSnapshot.connections.some(
+        (connection) =>
+          connection.provider === provider && connection.status === "connected",
+      );
+      return cliConnected || keyConnected;
+    },
+  );
+
   return (
-    <OrcaWorkspace
-      workspaceId={workspace.id}
+    <WorkspaceHome
+      availableProviders={availableProviders}
+      hasRepository={Boolean(
+        workspace.repository && workspace.githubRepositoryId,
+      )}
       repository={workspace.repository}
+      workspaceId={workspace.id}
     />
   );
 }
