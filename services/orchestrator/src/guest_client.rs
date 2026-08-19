@@ -16,6 +16,7 @@ use crate::model::{
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(65);
 
 pub struct GuestClient {
     socket_path: PathBuf,
@@ -57,7 +58,16 @@ impl GuestClient {
     }
 
     pub async fn exec(&self, request: &ExecRequest) -> Result<ExecResponse> {
-        self.request("POST", "/v1/pty/exec", Some(request)).await
+        // An authenticated Codex CLI turn can legitimately run for several
+        // minutes; the default RPC timeout below is sized for interactive
+        // commands and would kill it long before it finishes.
+        let rpc_timeout = if request.codex_auth_cache_json.is_some() {
+            Duration::from_secs(910)
+        } else {
+            DEFAULT_REQUEST_TIMEOUT
+        };
+        self.request_with_timeout("POST", "/v1/pty/exec", Some(request), rpc_timeout)
+            .await
     }
 
     pub async fn start_terminal(&self, request: &TerminalStartRequest) -> Result<String> {
@@ -228,7 +238,18 @@ impl GuestClient {
         path: &str,
         body: Option<&B>,
     ) -> Result<T> {
-        timeout(Duration::from_secs(65), async {
+        self.request_with_timeout(method, path, body, DEFAULT_REQUEST_TIMEOUT)
+            .await
+    }
+
+    async fn request_with_timeout<B: Serialize + ?Sized, T: DeserializeOwned>(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&B>,
+        request_timeout: Duration,
+    ) -> Result<T> {
+        timeout(request_timeout, async {
             let mut stream = UnixStream::connect(&self.socket_path)
                 .await
                 .map_err(|error| RuntimeError::GuestUnavailable(error.to_string()))?;
