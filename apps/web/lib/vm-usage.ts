@@ -6,7 +6,7 @@ import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
 
-export const VM_MINUTE_LIFETIME_QUOTA = 2_000;
+export const VM_MINUTE_LIFETIME_QUOTA = 20_000;
 
 function minutesBetween(startedAt: Date, endedAt: Date) {
   const ms = Math.max(0, endedAt.getTime() - startedAt.getTime());
