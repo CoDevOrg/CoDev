@@ -106,6 +106,38 @@ async function refreshGitHubToken(
   return payload.access_token;
 }
 
+/**
+ * A member's GitHub connection is "connected" only when both the primary
+ * sign-in link (`users.githubUserId`) and the linked-account token row
+ * (`github_connections`) exist — matching how a GitHub identity is either
+ * the account's original sign-in method or a secondary account linked
+ * later via "Connect GitHub". Any caller that needs to know whether GitHub
+ * is connected (not just fetch a usable token) should use this rather than
+ * inlining its own check, since the two tables can disagree.
+ */
+export async function resolveGithubConnection(
+  userId: string,
+): Promise<{ connected: boolean; login: string | null }> {
+  const [record] = await getDatabase()
+    .select({
+      githubUserId: schema.users.githubUserId,
+      login: schema.users.login,
+      connectionUserId: schema.githubConnections.userId,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.githubConnections,
+      eq(schema.githubConnections.userId, schema.users.id),
+    )
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  const connected = Boolean(
+    record?.githubUserId !== null && record?.connectionUserId,
+  );
+  return { connected, login: connected ? (record?.login ?? null) : null };
+}
+
 export async function getGitHubUserToken(userId: string) {
   const [connection] = await getDatabase()
     .select()

@@ -16,6 +16,7 @@ import {
 import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
+import { resolveGithubConnection } from "@/lib/github";
 import { mergeUserIntoCanonical } from "@/lib/user-merge";
 
 interface GitHubProfile {
@@ -378,10 +379,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, account, profile, user }) {
       if (account?.provider === "credentials" && user?.id) {
         token.localUserId = user.id;
-        return token;
-      }
-
-      if (account?.provider === "google" && !token.localUserId && token.email) {
+      } else if (
+        account?.provider === "google" &&
+        !token.localUserId &&
+        token.email
+      ) {
         const [localUser] = await getDatabase()
           .select({ id: schema.users.id })
           .from(schema.users)
@@ -389,22 +391,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .limit(1);
 
         if (localUser) token.localUserId = localUser.id;
-        return token;
+      } else {
+        const profileId = profile && "id" in profile ? profile.id : null;
+        const githubUserId = profileId ? BigInt(profileId) : null;
+
+        if (githubUserId) {
+          const [localUser] = await getDatabase()
+            .select({ id: schema.users.id })
+            .from(schema.users)
+            .where(eq(schema.users.githubUserId, githubUserId))
+            .limit(1);
+
+          if (localUser) token.localUserId = localUser.id;
+        }
       }
 
-      const profileId = profile && "id" in profile ? profile.id : null;
-      const githubUserId = profileId ? BigInt(profileId) : null;
-
-      if (githubUserId) {
-        const [localUser] = await getDatabase()
-          .select({ id: schema.users.id, login: schema.users.login })
-          .from(schema.users)
-          .where(eq(schema.users.githubUserId, githubUserId))
-          .limit(1);
-
-        if (localUser) {
-          token.localUserId = localUser.id;
-          token.githubLogin = localUser.login;
+      // Why: a GitHub account linked later via "Connect GitHub" (rather
+      // than the original sign-in provider) never flows through the
+      // branches above on this pass, and even a fresh GitHub sign-in
+      // only sets githubLogin here once — a session's JWT otherwise
+      // never revisits it. Backfilling from the same connected-accounts
+      // check Settings uses keeps the header in sync on the very next
+      // request, without requiring the member to sign in again.
+      if (token.localUserId && !token.githubLogin) {
+        const github = await resolveGithubConnection(token.localUserId);
+        if (github.connected && github.login) {
+          token.githubLogin = github.login;
         }
       }
 

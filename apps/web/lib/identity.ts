@@ -8,6 +8,7 @@ import { schema } from "@codev/db";
 import { auth as nextAuth } from "@/auth";
 
 import { getDatabase } from "./database";
+import { resolveGithubConnection } from "./github";
 import { deriveClerkLogin } from "./identity-profile";
 
 export type AppUser = {
@@ -32,33 +33,21 @@ export type ConnectedAccounts = {
 export async function getConnectedAccounts(
   userId: string,
 ): Promise<ConnectedAccounts> {
-  const [record] = await getDatabase()
-    .select({
-      googleUserId: schema.users.googleUserId,
-      githubUserId: schema.users.githubUserId,
-      githubLogin: schema.users.login,
-      githubConnectionUserId: schema.githubConnections.userId,
-    })
-    .from(schema.users)
-    .leftJoin(
-      schema.githubConnections,
-      eq(schema.githubConnections.userId, schema.users.id),
-    )
-    .where(eq(schema.users.id, userId))
-    .limit(1);
+  const [[record], github] = await Promise.all([
+    getDatabase()
+      .select({ googleUserId: schema.users.googleUserId })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+    resolveGithubConnection(userId),
+  ]);
 
   const googleConnected = Boolean(record?.googleUserId);
-  const githubConnected = Boolean(
-    record?.githubUserId !== null && record?.githubConnectionUserId,
-  );
 
   return {
     google: { connected: googleConnected },
-    github: {
-      connected: githubConnected,
-      login: githubConnected ? (record?.githubLogin ?? null) : null,
-    },
-    sameCoDevUser: googleConnected && githubConnected,
+    github,
+    sameCoDevUser: googleConnected && github.connected,
   };
 }
 
