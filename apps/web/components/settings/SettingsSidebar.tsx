@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, KeyRound, Plug, Search, User } from "lucide-react";
+import { ArrowLeft, Blocks, Plug, Search, User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -26,10 +26,10 @@ const personalNav: SettingsNavItem[] = [
     keywords: ["openai", "anthropic", "api key", "codex", "claude"],
   },
   {
-    name: "Environment Variables",
-    href: "/settings/personal/environment",
-    icon: KeyRound,
-    keywords: ["env", ".env"],
+    name: "Integrations",
+    href: "/settings/personal/integrations",
+    icon: Blocks,
+    keywords: ["github", "gitlab", "linear", "jira"],
   },
 ];
 
