@@ -146,6 +146,59 @@ async function orchestratorRequest(
   return response;
 }
 
+/**
+ * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL), used
+ * only for calls that can legitimately run longer than the API Gateway
+ * Lambda proxy's hard 29-second integration timeout — currently just the
+ * authenticated Codex exec. Everything else keeps using orchestratorRequest.
+ */
+async function orchestratorDirectRequest(
+  method: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+) {
+  const environment = readServerEnvironment();
+  const endpoint = environment.ORCHESTRATOR_DIRECT_URL;
+  const secret = environment.ORCHESTRATOR_DIRECT_SECRET;
+  if (!endpoint || !secret) {
+    throw new Error(
+      "ORCHESTRATOR_DIRECT_URL/ORCHESTRATOR_DIRECT_SECRET are not configured.",
+    );
+  }
+  // `new URL(path, base)` treats a leading-slash path as origin-relative,
+  // which would silently drop the direct endpoint's own path prefix — join
+  // as plain strings instead.
+  const url = `${endpoint.replace(/\/+$/, "")}${path}`;
+  const encodedBody = body === undefined ? undefined : JSON.stringify(body);
+  const response = await fetch(url, {
+    method,
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${secret}`,
+      ...(encodedBody === undefined
+        ? {}
+        : { "content-type": "application/json" }),
+    },
+    ...(encodedBody === undefined ? {} : { body: encodedBody }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) {
+    const payload = errorSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    throw new OrchestratorError(
+      payload.success
+        ? payload.data.error
+        : `Sandbox service returned HTTP ${response.status}.`,
+      response.status,
+      payload.success ? (payload.data.conflictPaths ?? []) : [],
+    );
+  }
+  return response;
+}
+
 export async function checkOrchestratorConnection(timeoutMs = 4_000) {
   const response = await orchestratorRequest(
     "GET",
@@ -493,12 +546,18 @@ export async function executeCodexInSandbox(
   workspaceId: string,
   input: SandboxExecInput & { codexAuthCacheJson: string },
 ) {
-  const response = await orchestratorRequest(
-    "POST",
-    `/v1/sandboxes/${workspaceId}/pty/exec`,
-    { rows: 1_000, columns: 4_096, ...input },
-    910_000,
-  );
+  const environment = readServerEnvironment();
+  const path = `/v1/sandboxes/${workspaceId}/pty/exec`;
+  const body = { rows: 1_000, columns: 4_096, ...input };
+  // A Codex turn can legitimately run for several minutes, which the
+  // ORCHESTRATOR_URL path (API Gateway + Lambda proxy) cannot carry — Lambda
+  // proxy integrations have a hard 29-second timeout with no way to raise
+  // it. Route this one call directly to the host instead.
+  const response =
+    environment.ORCHESTRATOR_DIRECT_URL &&
+    environment.ORCHESTRATOR_DIRECT_SECRET
+      ? await orchestratorDirectRequest("POST", path, body, 910_000)
+      : await orchestratorRequest("POST", path, body, 910_000);
   return z
     .object({
       result: z.object({

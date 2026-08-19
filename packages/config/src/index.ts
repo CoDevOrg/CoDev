@@ -78,6 +78,19 @@ export const serverEnvironmentSchema = z.object({
     .regex(/^i-[0-9a-f]+$/)
     .optional(),
   ORCHESTRATOR_URL: optionalUrl,
+  /**
+   * Direct HTTPS path to the Firecracker host's orchestrator, bypassing the
+   * API Gateway + Lambda proxy fronted by ORCHESTRATOR_URL. That proxy has a
+   * hard, non-configurable 29-second timeout (an AWS platform limit on
+   * Lambda proxy integrations), which is incompatible with long-running
+   * calls like an authenticated Codex CLI turn (up to 900s). This path goes
+   * straight to a Caddy route on the host instead, gated by
+   * ORCHESTRATOR_DIRECT_SECRET since the orchestrator itself performs no
+   * request authentication of its own (it normally relies on the Lambda's
+   * security-group-restricted network path).
+   */
+  ORCHESTRATOR_DIRECT_URL: optionalUrl,
+  ORCHESTRATOR_DIRECT_SECRET: z.string().min(32).optional(),
   HOCUSPOCUS_TOKEN_SECRET: z.string().min(32).optional(),
   CRON_SECRET: z.string().min(32).optional(),
 });
