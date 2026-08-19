@@ -26,7 +26,8 @@ use tracing::{info, warn};
 use crate::{
     guest_client::GuestClient,
     model::{
-        CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
+        CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest,
+        ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
         PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
         TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
@@ -486,6 +487,36 @@ impl FirecrackerBackend {
     pub async fn close_terminal(&self, workspace_id: &str, session_id: &str) -> Result<()> {
         let machine = self.machine(workspace_id).await?;
         machine.guest.close_terminal(session_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn start_codex_exec(
+        &self,
+        workspace_id: &str,
+        request: CodexExecStartRequest,
+    ) -> Result<String> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.start_codex_exec(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn poll_codex_exec(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: CodexExecPollRequest,
+    ) -> Result<CodexExecPollResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.poll_codex_exec(session_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn close_codex_exec(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.close_codex_exec(session_id).await?;
         self.mark_activity(&machine);
         Ok(())
     }

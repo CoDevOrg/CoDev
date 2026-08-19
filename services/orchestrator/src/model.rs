@@ -292,6 +292,56 @@ pub struct TerminalPollResponse {
     pub exit_code: Option<i32>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexExecStartRequest {
+    pub command: Vec<String>,
+    #[serde(default)]
+    pub worktree_id: Option<String>,
+    #[serde(default)]
+    pub working_dir: String,
+    #[serde(default)]
+    pub rows: u16,
+    #[serde(default)]
+    pub columns: u16,
+    pub codex_auth_cache_json: String,
+    /// The caller's Vercel Workflow DevKit step id. A retried "start" step
+    /// reuses the same id, letting the guest reattach to the still-running
+    /// session instead of spawning a second Codex process.
+    pub idempotency_key: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexExecPollRequest {
+    #[serde(default)]
+    pub after: u64,
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexExecChunk {
+    pub sequence: u64,
+    /// Raw PTY output bytes, base64-encoded. Never decode a single chunk on
+    /// its own — a multi-byte UTF-8 character can straddle a chunk boundary.
+    /// Concatenate every chunk's decoded bytes in sequence order first, then
+    /// decode the full buffer to UTF-8 exactly once.
+    pub data_base64: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexExecPollResponse {
+    pub chunks: Vec<CodexExecChunk>,
+    pub next_sequence: u64,
+    pub exited: bool,
+    pub exit_code: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_auth_cache_json: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeStartRequest {

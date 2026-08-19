@@ -20,10 +20,10 @@ use tracing::info;
 use crate::{
     backend::{IdeBackend, SharedBackend},
     model::{
-        CreateRequest, ExecRequest, IdeStartRequest, PublicationExportRequest, Result,
-        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest, IdeStartRequest,
+        PublicationExportRequest, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
+        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -108,6 +108,18 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/terminals/{session_id}",
             delete(close_terminal),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/codex-execs",
+            post(start_codex_exec),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/codex-execs/{session_id}/poll",
+            post(poll_codex_exec),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/codex-execs/{session_id}",
+            delete(close_codex_exec),
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
@@ -468,6 +480,50 @@ async fn close_terminal(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn start_codex_exec(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<CodexExecStartRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(request.worktree_id.as_deref())?;
+    if request.command.is_empty() || request.command.len() > 32 {
+        return Err(RuntimeError::BadRequest(
+            "command must contain between 1 and 32 arguments".into(),
+        ));
+    }
+    let session_id = backend.start_codex_exec(&workspace_id, request).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "sessionId": session_id })),
+    ))
+}
+
+async fn poll_codex_exec(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<CodexExecPollRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_codex_exec_id(&session_id)?;
+    let result = backend
+        .poll_codex_exec(&workspace_id, &session_id, request)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
+}
+
+async fn close_codex_exec(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_codex_exec_id(&session_id)?;
+    backend
+        .close_codex_exec(&workspace_id, &session_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn git_status(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -643,6 +699,16 @@ fn validate_terminal_id(session_id: &str) -> Result<()> {
     }
 }
 
+fn validate_codex_exec_id(session_id: &str) -> Result<()> {
+    if codex_exec_id_pattern().is_match(session_id) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest(
+            "invalid codex exec session ID".into(),
+        ))
+    }
+}
+
 fn validate_optional_worktree_id(worktree_id: Option<&str>) -> Result<()> {
     worktree_id.map_or(Ok(()), validate_worktree_id)
 }
@@ -679,6 +745,11 @@ fn commit_sha_pattern() -> &'static Regex {
 fn terminal_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"^term-[0-9]+-[0-9]+$").expect("terminal regex"))
+}
+
+fn codex_exec_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"^codex-[0-9]+-[0-9]+$").expect("codex exec regex"))
 }
 
 fn worktree_id_pattern() -> &'static Regex {

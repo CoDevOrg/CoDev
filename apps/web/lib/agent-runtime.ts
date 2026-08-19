@@ -32,11 +32,15 @@ import {
   requireActivePathClaim,
   updateCoordinationMessageStatus,
 } from "./agent-coordination";
+import { getStepMetadata } from "workflow";
+
 import {
-  executeCodexInSandbox,
+  closeCodexExecInSandbox,
   executeInSandbox,
   getSandboxGitOutput,
+  pollCodexExecInSandbox,
   readSandboxFile,
+  startCodexExecInSandbox,
   writeSandboxFile,
 } from "./orchestrator";
 import {
@@ -280,6 +284,16 @@ const tools: OpenAI.Responses.Tool[] = [
     strict: true,
   },
 ];
+
+type PrepareAgentTurnResult =
+  | { kind: "done" }
+  | {
+      kind: "codexPending";
+      workspaceId: string;
+      codexSessionId: string;
+      turnId: string;
+      credentialId: string;
+    };
 
 type AgentContext = {
   turnId: string;
@@ -535,7 +549,7 @@ async function loadAgentContext(turnId: string): Promise<AgentContext> {
   return { ...row, attachments: normalizeAttachments(row.attachments) };
 }
 
-async function turnWasInterrupted(turnId: string) {
+export async function turnWasInterrupted(turnId: string) {
   const [turn] = await getDatabase()
     .select({ status: schema.agentTurns.status })
     .from(schema.agentTurns)
@@ -923,7 +937,18 @@ function createAgentTools(context: AgentContext): ToolSet {
   ) as ToolSet;
 }
 
-export async function runAgentTurn(turnId: string) {
+/**
+ * Runs a turn up through the point where it either finishes synchronously
+ * (Cursor, the plain AI SDK path) or, for a hosted Codex subscription turn,
+ * starts the exec and hands back a session to poll — the poll loop itself
+ * lives at the "use workflow" level (see workflows/agent-session.ts) so a
+ * crash mid-turn resumes by reattaching to the still-running guest-side
+ * session instead of this whole step re-running from the top and restarting
+ * Codex from scratch.
+ */
+export async function prepareAgentTurn(
+  turnId: string,
+): Promise<PrepareAgentTurnResult> {
   "use step";
 
   const context = await loadAgentContext(turnId);
@@ -942,7 +967,7 @@ export async function runAgentTurn(turnId: string) {
         context.sessionId,
         error.message,
       );
-      return;
+      return { kind: "done" };
     }
     throw error;
   }
@@ -973,7 +998,7 @@ export async function runAgentTurn(turnId: string) {
     provider,
   });
 
-  if (await turnWasInterrupted(turnId)) return;
+  if (await turnWasInterrupted(turnId)) return { kind: "done" };
 
   if (provider === "cursor") {
     if (!context.repository) {
@@ -1023,7 +1048,7 @@ export async function runAgentTurn(turnId: string) {
         }
       },
     });
-    if (await turnWasInterrupted(turnId)) return;
+    if (await turnWasInterrupted(turnId)) return { kind: "done" };
     cursorUsage = normalizeTokenUsage(result.usage) ?? cursorUsage;
     await getDatabase()
       .update(schema.agentTurns)
@@ -1043,7 +1068,7 @@ export async function runAgentTurn(turnId: string) {
       output: result.output,
       ...(cursorUsage ? { usage: cursorUsage } : {}),
     });
-    return;
+    return { kind: "done" };
   }
 
   if (credential.authType === "HOSTED_CODEX_SUBSCRIPTION") {
@@ -1054,9 +1079,10 @@ export async function runAgentTurn(turnId: string) {
     }
     const prompt = `You are a coding agent inside an isolated Git worktree. Complete the latest request, verify focused changes, and finish with a concise summary. Do not inspect CODEX_HOME or authentication files.\n\nRepository session transcript:\n${transcript}\n\nComplete the latest request.`;
     await claimHostedCodexExecution(credential.credentialId);
-    let result: Awaited<ReturnType<typeof executeCodexInSandbox>>;
+    const { stepId } = getStepMetadata();
+    let codexSessionId: string;
     try {
-      result = await executeCodexInSandbox(context.workspaceId, {
+      codexSessionId = await startCodexExecInSandbox(context.workspaceId, {
         command: [
           "codex",
           "exec",
@@ -1074,46 +1100,24 @@ export async function runAgentTurn(turnId: string) {
           prompt,
         ],
         worktreeId: context.worktreeId,
-        timeoutSeconds: 900,
         codexAuthCacheJson: credential.codexAuthCacheJson,
+        // A retried "use step" call re-runs this whole function from the
+        // top with the same stepId — passing it through lets the guest
+        // reattach to the still-running session instead of double-spawning
+        // Codex.
+        idempotencyKey: stepId,
       });
-      if (result.codexAuthCacheJson) {
-        await updateHostedCodexAuthCache(
-          credential.credentialId,
-          result.codexAuthCacheJson,
-        );
-      }
-    } finally {
+    } catch (error) {
       await releaseHostedCodexExecution(credential.credentialId);
+      throw error;
     }
-    if (result.exitCode !== 0) {
-      throw new Error(
-        "The official Codex CLI could not complete this turn. Reconnect with `codev codex-auth` if the subscription login expired.",
-      );
-    }
-    const finalOutput = codexFinalMessage(result.output);
-    if (!finalOutput) {
-      throw new Error(
-        "The official Codex CLI completed without a final response.",
-      );
-    }
-    if (await turnWasInterrupted(turnId)) return;
-    await getDatabase()
-      .update(schema.agentTurns)
-      .set({
-        status: "completed",
-        output: finalOutput,
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.agentTurns.id, turnId));
-    await addEvent(context, `${turnId}:output:final`, "agent.output", {
-      text: finalOutput,
-    });
-    await addEvent(context, `${turnId}:completed`, "turn.completed", {
-      output: finalOutput,
-    });
-    return;
+    return {
+      kind: "codexPending",
+      workspaceId: context.workspaceId,
+      codexSessionId,
+      turnId,
+      credentialId: credential.credentialId,
+    };
   }
 
   const model = createAgentModel(
@@ -1155,7 +1159,7 @@ export async function runAgentTurn(turnId: string) {
   }
   const totalUsage = normalizeTokenUsage(response.totalUsage ?? response.usage);
 
-  if (await turnWasInterrupted(turnId)) return;
+  if (await turnWasInterrupted(turnId)) return { kind: "done" };
   await getDatabase()
     .update(schema.agentTurns)
     .set({
@@ -1169,6 +1173,88 @@ export async function runAgentTurn(turnId: string) {
   await addEvent(context, `${turnId}:completed`, "turn.completed", {
     output: finalOutput,
     ...(totalUsage ? { usage: totalUsage } : {}),
+  });
+  return { kind: "done" };
+}
+
+/**
+ * A "use step" entry point for the workflow-level polling loop's
+ * interruption check. Deliberately separate from turnWasInterrupted, which
+ * is also called directly (nested, not as a fresh step boundary) from
+ * inside prepareAgentTurn/finishCodexTurn — only ever giving THIS function
+ * its own step keeps that nested usage unaffected.
+ */
+export async function checkTurnInterrupted(turnId: string) {
+  "use step";
+  return turnWasInterrupted(turnId);
+}
+
+export async function pollCodexTurn(
+  workspaceId: string,
+  codexSessionId: string,
+  after: number,
+) {
+  "use step";
+  return pollCodexExecInSandbox(workspaceId, codexSessionId, after);
+}
+
+/**
+ * Ends a hosted Codex turn early — either the normal poll loop discovering
+ * the turn was interrupted, or (defensively) any other early-exit path.
+ * Kills the guest-side process and releases the execution lease that
+ * prepareAgentTurn claimed; finishCodexTurn handles both of those itself
+ * for the normal-completion path, so this is only for cancellation.
+ */
+export async function cancelCodexTurn(
+  workspaceId: string,
+  codexSessionId: string,
+  credentialId: string,
+) {
+  "use step";
+  await closeCodexExecInSandbox(workspaceId, codexSessionId);
+  await releaseHostedCodexExecution(credentialId);
+}
+
+export async function finishCodexTurn(
+  turnId: string,
+  credentialId: string,
+  poll: { output: string; exitCode: number; codexAuthCacheJson?: string },
+) {
+  "use step";
+  const context = await loadAgentContext(turnId);
+  try {
+    if (poll.codexAuthCacheJson) {
+      await updateHostedCodexAuthCache(credentialId, poll.codexAuthCacheJson);
+    }
+  } finally {
+    await releaseHostedCodexExecution(credentialId);
+  }
+  if (poll.exitCode !== 0) {
+    throw new Error(
+      "The official Codex CLI could not complete this turn. Reconnect with `codev codex-auth` if the subscription login expired.",
+    );
+  }
+  const finalOutput = codexFinalMessage(poll.output);
+  if (!finalOutput) {
+    throw new Error(
+      "The official Codex CLI completed without a final response.",
+    );
+  }
+  if (await turnWasInterrupted(turnId)) return;
+  await getDatabase()
+    .update(schema.agentTurns)
+    .set({
+      status: "completed",
+      output: finalOutput,
+      finishedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.agentTurns.id, turnId));
+  await addEvent(context, `${turnId}:output:final`, "agent.output", {
+    text: finalOutput,
+  });
+  await addEvent(context, `${turnId}:completed`, "turn.completed", {
+    output: finalOutput,
   });
 }
 

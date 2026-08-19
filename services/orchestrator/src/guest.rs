@@ -20,6 +20,7 @@ use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
 use crate::model::{
+    CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
     TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
@@ -34,9 +35,13 @@ const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
 /// Soft cap on concurrent PTYs per guest. New starts always reclaim older
 /// sessions instead of failing with capacity exceeded.
 const MAX_LIVE_TERMINALS: usize = 4;
+/// A Codex exec's allowed wall-clock runtime, enforced by its own watchdog
+/// thread rather than blocking the RPC that started it.
+const CODEX_EXEC_TIMEOUT: Duration = Duration::from_secs(900);
 const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CODEX_AUTH_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static CODEX_EXEC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 struct TemporaryCodexHome(PathBuf);
 
@@ -81,6 +86,21 @@ pub struct GuestService {
     workspace_root: PathBuf,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
     mutations: Mutex<()>,
+    codex_execs: Mutex<HashMap<String, Arc<CodexExecSession>>>,
+    /// True for the whole duration of a `start_codex_exec`-spawned run —
+    /// unlike `mutations`, this is held across many RPCs (start, N polls,
+    /// close), not one call's stack frame. It's cleared by a background
+    /// thread once the Codex process actually exits, independent of
+    /// whether any client ever polls — `Arc`-wrapped so that thread (which
+    /// outlives the RPC call that spawned it) can hold its own clone;
+    /// a `MutexGuard` is `!Send` and couldn't be handed to it directly.
+    codex_busy: Arc<Mutex<bool>>,
+    codex_busy_changed: Arc<Condvar>,
+    /// Idempotency-key -> session ID, so a retried "start" step (the
+    /// Workflow DevKit re-runs a crashed step's whole body from the top)
+    /// reattaches to the still-running session instead of spawning a second
+    /// Codex process.
+    codex_idempotency: Mutex<HashMap<String, String>>,
 }
 
 impl GuestService {
@@ -95,7 +115,23 @@ impl GuestService {
             workspace_root,
             terminals: Mutex::new(HashMap::new()),
             mutations: Mutex::new(()),
+            codex_execs: Mutex::new(HashMap::new()),
+            codex_busy: Arc::new(Mutex::new(false)),
+            codex_busy_changed: Arc::new(Condvar::new()),
+            codex_idempotency: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Blocks until no Codex exec started via `start_codex_exec` is running.
+    /// Called by every other function that acquires `mutations`, reproducing
+    /// (across what's now multiple RPCs instead of one call's stack frame)
+    /// today's guarantee that nothing else touches the workspace while an
+    /// authenticated Codex CLI turn is materializing/using provider auth.
+    fn wait_for_codex_idle(&self) {
+        let mut busy = self.codex_busy.lock().expect("codex busy lock");
+        while *busy {
+            busy = self.codex_busy_changed.wait(busy).expect("codex busy lock");
+        }
     }
 
     pub fn handle(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
@@ -108,6 +144,7 @@ impl GuestService {
             ("POST", "/v1/files/write") => self.write_file(body),
             ("POST", "/v1/pty/exec") => self.exec(body),
             ("POST", "/v1/terminals") => self.start_terminal(body),
+            ("POST", "/v1/codex-execs") => self.start_codex_exec(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
@@ -140,6 +177,12 @@ impl GuestService {
                         ("POST", "poll") => self.poll_terminal(session_id, body),
                         ("DELETE", "") => self.close_terminal(session_id),
                         _ => Err(RuntimeError::BadRequest("invalid terminal action".into())),
+                    }
+                } else if let Some((session_id, action)) = codex_exec_route(path) {
+                    match (method, action) {
+                        ("POST", "poll") => self.poll_codex_exec(session_id, body),
+                        ("DELETE", "") => self.close_codex_exec(session_id),
+                        _ => Err(RuntimeError::BadRequest("invalid codex exec action".into())),
                     }
                 } else {
                     return GuestResponse::error(404, "route not found");
@@ -211,6 +254,7 @@ impl GuestService {
     fn write_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: WriteFileRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         if request.contents.len() > MAX_BODY_BYTES {
             return Err(RuntimeError::BadRequest(
                 "file exceeds the two MiB limit".into(),
@@ -235,6 +279,7 @@ impl GuestService {
     fn exec(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: ExecRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         if request.command.is_empty() || request.command.len() > 32 {
             return Err(RuntimeError::BadRequest(
                 "command must contain between 1 and 32 arguments".into(),
@@ -390,6 +435,7 @@ impl GuestService {
     fn start_terminal(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: TerminalStartRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         {
             let mut terminals = self.terminals.lock().expect("terminal map lock");
             // Drop fully exited sessions first.
@@ -617,6 +663,7 @@ impl GuestService {
     fn create_worktree(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: WorktreeCreateRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         validate_worktree_id(&request.worktree_id)?;
         validate_commit_sha(&request.head_sha)?;
         if let Some(branch_name) = request.branch_name.as_deref() {
@@ -664,6 +711,7 @@ impl GuestService {
     fn delete_worktree(&self, worktree_id: &str) -> crate::model::Result<serde_json::Value> {
         validate_worktree_id(worktree_id)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         let target = self.worktrees_root()?.join(worktree_id);
         if !target.is_dir() {
             self.git(&self.workspace_root, &["worktree", "prune"])?;
@@ -700,6 +748,7 @@ impl GuestService {
         let request: WorktreeCheckpointRequest = decode(body)?;
         validate_commit_sha(&request.expected_head_sha)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         let root = self.target_root(Some(worktree_id))?;
         // Use the actual current HEAD rather than enforcing expected_head_sha —
         // the agent may have committed since the last poll, which is fine.
@@ -739,6 +788,7 @@ impl GuestService {
         let request = parse_review_query(query)?;
         validate_commit_sha(&request.base_sha)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         let root = self.target_root(Some(worktree_id))?;
         self.require_clean(&root, "checkpoint the worktree before review")?;
         self.require_commit(&request.base_sha)?;
@@ -764,6 +814,7 @@ impl GuestService {
         validate_commit_sha(&request.expected_head_sha)?;
         validate_commit_sha(&request.onto_sha)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         let root = self.target_root(Some(worktree_id))?;
         self.require_clean(&root, "checkpoint the worktree before rebasing")?;
         self.require_head(&root, &request.expected_head_sha, "worktree")?;
@@ -799,6 +850,7 @@ impl GuestService {
         validate_commit_sha(&request.expected_worktree_head_sha)?;
         validate_digest(&request.expected_diff_digest)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         if !self.terminals.lock().expect("terminal map lock").is_empty() {
             return Err(RuntimeError::Conflict(
                 "close active terminals before merging".into(),
@@ -871,6 +923,7 @@ impl GuestService {
             validate_worktree_id(worktree_id)?;
         }
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
         let root = self.target_root(request.worktree_id.as_deref())?;
         let actual_head_sha = self.head_sha(&root)?;
         if require_clean {
@@ -1006,6 +1059,296 @@ impl GuestService {
             total_bytes,
         })
         .map_err(RuntimeError::internal)
+    }
+
+    fn start_codex_exec(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: CodexExecStartRequest = decode(body)?;
+        if request.command.is_empty() || request.command.len() > 32 {
+            return Err(RuntimeError::BadRequest(
+                "command must contain between 1 and 32 arguments".into(),
+            ));
+        }
+        if request.codex_auth_cache_json.len() > (128 << 10)
+            || !serde_json::from_str::<serde_json::Value>(&request.codex_auth_cache_json)
+                .is_ok_and(|value| value.is_object())
+        {
+            return Err(RuntimeError::BadRequest(
+                "Codex auth cache is invalid or too large".into(),
+            ));
+        }
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        // Fast path: reattach to an existing session for this idempotency
+        // key, without waiting on codex_busy first — the run this key
+        // started may itself be the reason codex_busy is currently true, so
+        // waiting here would deadlock a retried start against its own
+        // in-flight run. The surrounding `mutations` lock makes this
+        // check-then-insert atomic against a second, racing retry of the
+        // same step.
+        {
+            let idempotency = self
+                .codex_idempotency
+                .lock()
+                .expect("codex idempotency lock");
+            if let Some(session_id) = idempotency.get(&request.idempotency_key) {
+                return Ok(serde_json::json!({ "sessionId": session_id }));
+            }
+        }
+        self.wait_for_codex_idle();
+
+        // Drop fully exited sessions from prior runs before starting a new
+        // one — mirrors start_terminal's reclaim-on-next-start.
+        self.codex_execs
+            .lock()
+            .expect("codex exec map lock")
+            .retain(|_, session| {
+                !session
+                    .output
+                    .lock()
+                    .expect("codex exec output lock")
+                    .exited()
+            });
+
+        // Interactive terminals run in the same microVM. Close every PTY
+        // before materializing provider auth, exactly like exec()'s
+        // existing Codex path.
+        let sessions = {
+            let mut terminals = self.terminals.lock().expect("terminal map lock");
+            terminals
+                .drain()
+                .map(|(_, session)| session)
+                .collect::<Vec<_>>()
+        };
+        for session in sessions {
+            Self::force_close_session(session);
+        }
+
+        let root = self.target_root(request.worktree_id.as_deref())?;
+        let working_directory = if request.working_dir.is_empty() {
+            root.clone()
+        } else {
+            self.resolve_existing(&root, &request.working_dir)?
+        };
+        if !working_directory.is_dir() {
+            return Err(RuntimeError::BadRequest(
+                "working directory is not a directory".into(),
+            ));
+        }
+
+        let codex_home_path = std::env::temp_dir().join(format!(
+            "codev-codex-{}-{}",
+            std::process::id(),
+            CODEX_AUTH_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&codex_home_path).map_err(RuntimeError::internal)?;
+        fs::set_permissions(&codex_home_path, fs::Permissions::from_mode(0o700))
+            .map_err(RuntimeError::internal)?;
+        let auth_path = codex_home_path.join("auth.json");
+        fs::write(&auth_path, &request.codex_auth_cache_json).map_err(RuntimeError::internal)?;
+        fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
+            .map_err(RuntimeError::internal)?;
+        let codex_home = TemporaryCodexHome(codex_home_path);
+
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows: request.rows.max(24),
+                cols: request.columns.max(80),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(RuntimeError::internal)?;
+        let mut command = CommandBuilder::new(&request.command[0]);
+        for argument in &request.command[1..] {
+            command.arg(argument);
+        }
+        command.cwd(working_directory);
+        command.env("PATH", GUEST_PATH);
+        command.env("TERM", "xterm-256color");
+        command.env("HISTFILE", "/dev/null");
+        command.env("HISTSIZE", "0");
+        command.env("CODEX_HOME", &codex_home.0);
+        let mut child = match pty.slave.spawn_command(command) {
+            Ok(child) => child,
+            Err(error) => {
+                return Err(RuntimeError::BadRequest(format!(
+                    "unable to spawn {}: {error}",
+                    request.command[0]
+                )));
+            }
+        };
+        drop(pty.slave);
+        let mut reader = pty
+            .master
+            .try_clone_reader()
+            .map_err(RuntimeError::internal)?;
+
+        let session_id = format!(
+            "codex-{}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(RuntimeError::internal)?
+                .as_millis(),
+            CODEX_EXEC_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        let session = Arc::new(CodexExecSession {
+            output: Mutex::new(CodexExecOutput::default()),
+            output_changed: Condvar::new(),
+            cancel_requested: std::sync::atomic::AtomicBool::new(false),
+        });
+        self.codex_execs
+            .lock()
+            .expect("codex exec map lock")
+            .insert(session_id.clone(), session.clone());
+        self.codex_idempotency
+            .lock()
+            .expect("codex idempotency lock")
+            .insert(request.idempotency_key, session_id.clone());
+        *self.codex_busy.lock().expect("codex busy lock") = true;
+
+        let reader_session = session.clone();
+        thread::spawn(move || {
+            let mut buffer = [0_u8; 8 << 10];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) | Err(_) => {
+                        let mut output =
+                            reader_session.output.lock().expect("codex exec output lock");
+                        output.reader_closed = true;
+                        reader_session.output_changed.notify_all();
+                        break;
+                    }
+                    Ok(length) => {
+                        let mut output =
+                            reader_session.output.lock().expect("codex exec output lock");
+                        while output.buffered_bytes >= MAX_OUTPUT_BYTES {
+                            output = reader_session
+                                .output_changed
+                                .wait(output)
+                                .expect("codex exec output lock");
+                        }
+                        let sequence = output.next_sequence;
+                        output.next_sequence += 1;
+                        output.buffered_bytes += length;
+                        output.chunks.push_back(CodexExecRawChunk {
+                            sequence,
+                            data: buffer[..length].to_vec(),
+                        });
+                        reader_session.output_changed.notify_all();
+                    }
+                }
+            }
+        });
+
+        let waiter_session = session;
+        let busy_flag = self.codex_busy.clone();
+        let busy_changed = self.codex_busy_changed.clone();
+        thread::spawn(move || {
+            let deadline = Instant::now() + CODEX_EXEC_TIMEOUT;
+            let exit_code = loop {
+                if let Ok(Some(status)) = child.try_wait() {
+                    break status.exit_code() as i32;
+                }
+                if Instant::now() >= deadline
+                    || waiter_session.cancel_requested.load(Ordering::Relaxed)
+                {
+                    let _ = child.kill();
+                    break child
+                        .wait()
+                        .map(|status| status.exit_code() as i32)
+                        .unwrap_or(1);
+                }
+                thread::sleep(Duration::from_millis(25));
+            };
+            drop(pty.master);
+            let updated_auth_cache = fs::read_to_string(codex_home.0.join("auth.json"))
+                .ok()
+                .filter(|value| {
+                    value.len() <= (128 << 10)
+                        && serde_json::from_str::<serde_json::Value>(value)
+                            .is_ok_and(|parsed| parsed.is_object())
+                });
+            drop(codex_home);
+            {
+                let mut output = waiter_session
+                    .output
+                    .lock()
+                    .expect("codex exec output lock");
+                output.exit_code = Some(exit_code);
+                output.codex_auth_cache_json = updated_auth_cache;
+            }
+            waiter_session.output_changed.notify_all();
+            *busy_flag.lock().expect("codex busy lock") = false;
+            busy_changed.notify_all();
+        });
+
+        Ok(serde_json::json!({ "sessionId": session_id }))
+    }
+
+    fn poll_codex_exec(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: CodexExecPollRequest = decode(body)?;
+        let session = self.codex_exec(session_id)?;
+        let mut output = session.output.lock().expect("codex exec output lock");
+        while output
+            .chunks
+            .front()
+            .is_some_and(|chunk| chunk.sequence <= request.after)
+        {
+            if let Some(chunk) = output.chunks.pop_front() {
+                output.buffered_bytes = output.buffered_bytes.saturating_sub(chunk.data.len());
+            }
+        }
+        session.output_changed.notify_all();
+        if output.chunks.is_empty() && !output.exited() && request.wait_milliseconds > 0 {
+            let wait = Duration::from_millis(request.wait_milliseconds.min(25_000));
+            let (next_output, _) = session
+                .output_changed
+                .wait_timeout(output, wait)
+                .expect("codex exec output lock");
+            output = next_output;
+        }
+        let response = CodexExecPollResponse {
+            chunks: output
+                .chunks
+                .iter()
+                .take(128)
+                .map(|chunk| CodexExecChunk {
+                    sequence: chunk.sequence,
+                    data_base64: BASE64.encode(&chunk.data),
+                })
+                .collect(),
+            next_sequence: output.next_sequence,
+            exited: output.exited(),
+            exit_code: output.exit_code,
+            codex_auth_cache_json: output.codex_auth_cache_json.clone(),
+        };
+        serde_json::to_value(response).map_err(RuntimeError::internal)
+    }
+
+    fn close_codex_exec(&self, session_id: &str) -> crate::model::Result<serde_json::Value> {
+        let session = self
+            .codex_execs
+            .lock()
+            .expect("codex exec map lock")
+            .remove(session_id)
+            .ok_or_else(|| RuntimeError::BadRequest("codex exec session not found".into()))?;
+        // A one-shot `codex exec` process isn't a shell reading line input —
+        // unlike force_close_session's terminal Ctrl-C trick, request
+        // cancellation via the flag the waiter thread's watchdog loop
+        // already checks, which kills the process directly.
+        session.cancel_requested.store(true, Ordering::Relaxed);
+        Ok(serde_json::json!({ "closed": true }))
+    }
+
+    fn codex_exec(&self, session_id: &str) -> crate::model::Result<Arc<CodexExecSession>> {
+        self.codex_execs
+            .lock()
+            .expect("codex exec map lock")
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::BadRequest("codex exec session not found".into()))
     }
 
     fn require_head(&self, root: &Path, expected: &str, label: &str) -> crate::model::Result<()> {
@@ -1210,6 +1553,56 @@ impl Default for TerminalOutput {
 
 fn terminal_route(path: &str) -> Option<(&str, &str)> {
     let suffix = path.strip_prefix("/v1/terminals/")?;
+    let (session_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!session_id.is_empty()).then_some((session_id, action))
+}
+
+struct CodexExecSession {
+    output: Mutex<CodexExecOutput>,
+    output_changed: Condvar,
+    cancel_requested: std::sync::atomic::AtomicBool,
+}
+
+struct CodexExecRawChunk {
+    sequence: u64,
+    data: Vec<u8>,
+}
+
+struct CodexExecOutput {
+    chunks: VecDeque<CodexExecRawChunk>,
+    buffered_bytes: usize,
+    next_sequence: u64,
+    /// Set by the reader thread once the PTY reports EOF. Like
+    /// `TerminalOutput`, "exited" for callers means BOTH this and
+    /// `exit_code` are set — the child process exiting (observed by the
+    /// separate waiter thread) doesn't guarantee the reader has finished
+    /// draining the last buffered output yet.
+    reader_closed: bool,
+    exit_code: Option<i32>,
+    codex_auth_cache_json: Option<String>,
+}
+
+impl CodexExecOutput {
+    fn exited(&self) -> bool {
+        self.reader_closed && self.exit_code.is_some()
+    }
+}
+
+impl Default for CodexExecOutput {
+    fn default() -> Self {
+        Self {
+            chunks: VecDeque::new(),
+            buffered_bytes: 0,
+            next_sequence: 1,
+            reader_closed: false,
+            exit_code: None,
+            codex_auth_cache_json: None,
+        }
+    }
+}
+
+fn codex_exec_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/codex-execs/")?;
     let (session_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
     (!session_id.is_empty()).then_some((session_id, action))
 }
@@ -1898,6 +2291,147 @@ mod tests {
 
         let close = service.handle("DELETE", &format!("/v1/terminals/{new_id}"), b"");
         assert_eq!(close.status, 200);
+    }
+
+    fn start_codex_exec(
+        service: &GuestService,
+        command: serde_json::Value,
+        idempotency_key: &str,
+    ) -> String {
+        let request = serde_json::json!({
+            "command": command,
+            "codexAuthCacheJson": "{\"tokens\":{\"access_token\":\"a\",\"refresh_token\":\"r\"}}",
+            "idempotencyKey": idempotency_key,
+        });
+        let start = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(start.status, 200, "{}", String::from_utf8_lossy(&start.body));
+        let body: serde_json::Value = serde_json::from_slice(&start.body).expect("start");
+        body["sessionId"].as_str().expect("session id").to_owned()
+    }
+
+    struct CodexExecResult {
+        output: String,
+        exit_code: Option<i32>,
+        codex_auth_cache_json: Option<String>,
+    }
+
+    /// Polls to completion, accumulating every chunk from every poll — a
+    /// single poll response only carries chunks new since the caller's last
+    /// `after` cursor, so output produced before `exited` finally flips true
+    /// would otherwise be silently dropped rather than concatenated.
+    fn poll_codex_exec_until_exited(
+        service: &GuestService,
+        session_id: &str,
+        deadline: Instant,
+    ) -> CodexExecResult {
+        let mut after = 0;
+        let mut bytes = Vec::new();
+        loop {
+            let poll = service.handle(
+                "POST",
+                &format!("/v1/codex-execs/{session_id}/poll"),
+                serde_json::to_vec(&serde_json::json!({ "after": after, "waitMilliseconds": 200 }))
+                    .expect("poll request")
+                    .as_slice(),
+            );
+            assert_eq!(poll.status, 200, "{}", String::from_utf8_lossy(&poll.body));
+            let result: CodexExecPollResponse =
+                serde_json::from_slice(&poll.body).expect("codex exec poll");
+            after = result.next_sequence;
+            for chunk in &result.chunks {
+                bytes.extend(BASE64.decode(&chunk.data_base64).expect("chunk base64"));
+            }
+            if result.exited {
+                return CodexExecResult {
+                    output: String::from_utf8_lossy(&bytes).into_owned(),
+                    exit_code: result.exit_code,
+                    codex_auth_cache_json: result.codex_auth_cache_json,
+                };
+            }
+            assert!(Instant::now() < deadline, "codex exec never exited");
+        }
+    }
+
+    #[test]
+    fn codex_exec_streams_and_reports_updated_auth_cache() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let session_id = start_codex_exec(
+            &service,
+            serde_json::json!([
+                "/bin/sh",
+                "-c",
+                "p=$CODEX_HOME; test -f \"$p/auth.json\"; printf '{\"tokens\":{}}' > \"$p/auth.json\"; printf 'codex-async-ok'"
+            ]),
+            "key-1",
+        );
+        let result =
+            poll_codex_exec_until_exited(&service, &session_id, Instant::now() + Duration::from_secs(5));
+        assert_eq!(result.exit_code, Some(0));
+        assert!(result.output.contains("codex-async-ok"));
+        assert_eq!(
+            result.codex_auth_cache_json.as_deref(),
+            Some("{\"tokens\":{}}")
+        );
+        assert!(service.terminals.lock().expect("terminals").is_empty());
+    }
+
+    #[test]
+    fn codex_exec_start_is_idempotent() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let first = start_codex_exec(&service, serde_json::json!(["sleep", "0.2"]), "same-key");
+        let second = start_codex_exec(&service, serde_json::json!(["sleep", "0.2"]), "same-key");
+        assert_eq!(first, second, "a retried start must reattach, not double-spawn");
+        poll_codex_exec_until_exited(&service, &first, Instant::now() + Duration::from_secs(5));
+    }
+
+    #[test]
+    fn codex_exec_blocks_other_mutations_until_it_exits() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let session_id = start_codex_exec(&service, serde_json::json!(["sleep", "0.3"]), "busy-key");
+
+        let started_at = Instant::now();
+        let plain = service.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
+        assert_eq!(plain.status, 200, "{}", String::from_utf8_lossy(&plain.body));
+        assert!(
+            started_at.elapsed() >= Duration::from_millis(250),
+            "a plain exec must wait for the in-flight Codex exec to finish"
+        );
+
+        poll_codex_exec_until_exited(&service, &session_id, Instant::now() + Duration::from_secs(5));
+    }
+
+    #[test]
+    fn codex_exec_close_kills_the_process_promptly() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let session_id = start_codex_exec(&service, serde_json::json!(["sleep", "5"]), "cancel-key");
+
+        let close = service.handle("DELETE", &format!("/v1/codex-execs/{session_id}"), b"");
+        assert_eq!(close.status, 200);
+
+        // close_codex_exec removes the session from the poll-able map, so the
+        // real signal that the process was actually killed (rather than left
+        // running for its full 5s sleep) is that the busy gate clears
+        // promptly, unblocking a new start — not a poll of the closed session.
+        let started_at = Instant::now();
+        let next_session_id =
+            start_codex_exec(&service, serde_json::json!(["true"]), "after-cancel-key");
+        assert!(
+            started_at.elapsed() < Duration::from_secs(2),
+            "a new start should not wait for the killed process's full 5s sleep"
+        );
+        poll_codex_exec_until_exited(
+            &service,
+            &next_session_id,
+            Instant::now() + Duration::from_secs(5),
+        );
     }
 
     #[test]

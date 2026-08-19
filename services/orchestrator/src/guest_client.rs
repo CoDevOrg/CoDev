@@ -8,11 +8,12 @@ use tokio::{
 };
 
 use crate::model::{
-    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, ExecRequest, ExecResponse,
+    FileResponse, PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
+    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;
@@ -125,6 +126,43 @@ impl GuestClient {
         self.request::<(), serde_json::Value>(
             "DELETE",
             &format!("/v1/terminals/{session_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn start_codex_exec(&self, request: &CodexExecStartRequest) -> Result<String> {
+        let response: serde_json::Value = self
+            .request("POST", "/v1/codex-execs", Some(request))
+            .await?;
+        response
+            .get("sessionId")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+            .ok_or_else(|| RuntimeError::GuestUnavailable("missing codex exec session ID".into()))
+    }
+
+    pub async fn poll_codex_exec(
+        &self,
+        session_id: &str,
+        request: &CodexExecPollRequest,
+    ) -> Result<CodexExecPollResponse> {
+        // The guest long-polls up to `wait_milliseconds` (capped at 25s)
+        // before responding; give this call enough headroom above that.
+        self.request_with_timeout(
+            "POST",
+            &format!("/v1/codex-execs/{session_id}/poll"),
+            Some(request),
+            Duration::from_secs(40),
+        )
+        .await
+    }
+
+    pub async fn close_codex_exec(&self, session_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/codex-execs/{session_id}"),
             None,
         )
         .await

@@ -6,7 +6,8 @@ use std::{
 use chrono::{Duration, Utc};
 
 use crate::model::{
-    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance,
+    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest,
+    ExecRequest, ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance,
     PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
     TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
@@ -253,6 +254,47 @@ impl Backend {
             Self::Fake(backend) => backend.input_terminal(workspace_id, session_id),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => backend.close_terminal(workspace_id, session_id).await,
+        }
+    }
+
+    pub async fn start_codex_exec(
+        &self,
+        workspace_id: &str,
+        request: CodexExecStartRequest,
+    ) -> Result<String> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.start_codex_exec(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.start_codex_exec(workspace_id, request).await,
+        }
+    }
+
+    pub async fn poll_codex_exec(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: CodexExecPollRequest,
+    ) -> Result<CodexExecPollResponse> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.poll_codex_exec(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .poll_codex_exec(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn close_codex_exec(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.close_codex_exec(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.close_codex_exec(workspace_id, session_id).await,
         }
     }
 
@@ -528,6 +570,31 @@ impl FakeBackend {
             exited: false,
             exit_code: None,
         })
+    }
+
+    fn start_codex_exec(&self, workspace_id: &str) -> Result<String> {
+        self.get(workspace_id)?;
+        Ok("codex-1-1".into())
+    }
+
+    fn poll_codex_exec(
+        &self,
+        workspace_id: &str,
+        _session_id: &str,
+    ) -> Result<CodexExecPollResponse> {
+        self.get(workspace_id)?;
+        Ok(CodexExecPollResponse {
+            chunks: Vec::new(),
+            next_sequence: 1,
+            exited: true,
+            exit_code: Some(0),
+            codex_auth_cache_json: None,
+        })
+    }
+
+    fn close_codex_exec(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
     }
 
     fn git_status(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {

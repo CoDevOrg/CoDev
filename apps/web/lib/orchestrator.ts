@@ -60,6 +60,19 @@ const terminalPollSchema = z.object({
   exitCode: z.number().int().nullable(),
 });
 
+const codexExecPollSchema = z.object({
+  chunks: z.array(
+    z.object({
+      sequence: z.number().int().nonnegative(),
+      dataBase64: z.string(),
+    }),
+  ),
+  nextSequence: z.number().int().nonnegative(),
+  exited: z.boolean(),
+  exitCode: z.number().int().nullable(),
+  codexAuthCacheJson: z.string().optional(),
+});
+
 const publicationExportSchema = z.object({
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   files: z
@@ -197,6 +210,23 @@ async function orchestratorDirectRequest(
     );
   }
   return response;
+}
+
+/**
+ * Routes to the direct-bypass endpoint (see orchestratorDirectRequest) when
+ * configured, else falls back to the standard signed path — used only for
+ * Codex exec calls, the sole reason ORCHESTRATOR_DIRECT_* exists.
+ */
+async function codexExecRequest(
+  method: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+) {
+  const environment = readServerEnvironment();
+  return environment.ORCHESTRATOR_DIRECT_URL && environment.ORCHESTRATOR_DIRECT_SECRET
+    ? orchestratorDirectRequest(method, path, body, timeoutMs)
+    : orchestratorRequest(method, path, body, timeoutMs);
 }
 
 export async function checkOrchestratorConnection(timeoutMs = 4_000) {
@@ -542,22 +572,22 @@ export async function executeInSandbox(
     .parse(await response.json()).result;
 }
 
+/**
+ * The original single-call Codex exec path: one HTTP request that blocks
+ * for up to 910s while the whole turn runs. Superseded by
+ * startCodexExecInSandbox/pollCodexExecInSandbox/closeCodexExecInSandbox
+ * below, which stream a long-running turn as a series of short calls
+ * instead. Left in place, unused by the default agent-runtime flow, as a
+ * rollback path — see the "Async Codex exec + polling" plan's rollout
+ * notes for why the guest side can't be swapped over uniformly in one step.
+ */
 export async function executeCodexInSandbox(
   workspaceId: string,
   input: SandboxExecInput & { codexAuthCacheJson: string },
 ) {
-  const environment = readServerEnvironment();
   const path = `/v1/sandboxes/${workspaceId}/pty/exec`;
   const body = { rows: 1_000, columns: 4_096, ...input };
-  // A Codex turn can legitimately run for several minutes, which the
-  // ORCHESTRATOR_URL path (API Gateway + Lambda proxy) cannot carry — Lambda
-  // proxy integrations have a hard 29-second timeout with no way to raise
-  // it. Route this one call directly to the host instead.
-  const response =
-    environment.ORCHESTRATOR_DIRECT_URL &&
-    environment.ORCHESTRATOR_DIRECT_SECRET
-      ? await orchestratorDirectRequest("POST", path, body, 910_000)
-      : await orchestratorRequest("POST", path, body, 910_000);
+  const response = await codexExecRequest("POST", path, body, 910_000);
   return z
     .object({
       result: z.object({
@@ -567,6 +597,52 @@ export async function executeCodexInSandbox(
       }),
     })
     .parse(await response.json()).result;
+}
+
+export async function startCodexExecInSandbox(
+  workspaceId: string,
+  input: SandboxExecInput & {
+    codexAuthCacheJson: string;
+    idempotencyKey: string;
+  },
+) {
+  const body = { rows: 1_000, columns: 4_096, ...input };
+  const response = await codexExecRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/codex-execs`,
+    body,
+    20_000,
+  );
+  return z.object({ sessionId: z.string() }).parse(await response.json())
+    .sessionId;
+}
+
+export async function pollCodexExecInSandbox(
+  workspaceId: string,
+  sessionId: string,
+  after: number,
+) {
+  const response = await codexExecRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/codex-execs/${sessionId}/poll`,
+    { after, waitMilliseconds: 25_000 },
+    35_000,
+  );
+  return z
+    .object({ result: codexExecPollSchema })
+    .parse(await response.json()).result;
+}
+
+export async function closeCodexExecInSandbox(
+  workspaceId: string,
+  sessionId: string,
+) {
+  await codexExecRequest(
+    "DELETE",
+    `/v1/sandboxes/${workspaceId}/codex-execs/${sessionId}`,
+    undefined,
+    20_000,
+  );
 }
 
 export async function getSandboxGitOutput(
