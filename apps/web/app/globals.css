@@ -1822,14 +1822,14 @@ select,
 }
 
 html {
-  background: var(--surface);
+  background: #0d1f17;
   scroll-behavior: smooth;
 }
 
 body {
   min-width: 320px;
   margin: 0;
-  background: var(--surface);
+  background: #0d1f17;
   color: var(--ink);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
