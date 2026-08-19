@@ -12,8 +12,8 @@ export default async function PersonalSettingsLayout({
   const user = await requireUser();
 
   return (
-    <AppChrome user={user}>
-      <div className="orca-settings-scope flex min-h-[calc(100vh-68px)]">
+    <AppChrome user={user} sidebar>
+      <div className="orca-settings-scope flex min-h-dvh">
         <SettingsSidebar />
         <main className="min-w-0 flex-1">{children}</main>
       </div>

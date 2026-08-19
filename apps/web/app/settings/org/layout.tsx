@@ -10,7 +10,7 @@ export default async function OrganizationSettingsLayout({
   const user = await requireUser();
 
   return (
-    <AppChrome user={user}>
+    <AppChrome user={user} sidebar>
       <div className="settings-layout">
         <SettingsSidebar />
         <main className="settings-layout-content">{children}</main>

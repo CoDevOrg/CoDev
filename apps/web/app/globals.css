@@ -1199,13 +1199,13 @@ select,
 
 .settings-layout {
   display: grid;
-  min-height: calc(100vh - 68px);
+  min-height: 100dvh;
   grid-template-columns: 248px minmax(0, 1fr);
   background: #080b0d;
 }
 
 .settings-sidebar {
-  min-height: calc(100vh - 68px);
+  min-height: 100dvh;
   padding: 28px 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.09);
   background: #090b0d;
