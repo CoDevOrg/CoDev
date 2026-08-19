@@ -67,7 +67,26 @@ export function CliAuthorizationForm({
           className={`oauth-connection-notice ${state === "approved" ? "is-success" : "is-warning"}`}
           role={state === "approved" ? "status" : "alert"}
         >
-          {message}
+          {state === "approved" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <svg
+                aria-hidden="true"
+                fill="none"
+                height={16}
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                viewBox="0 0 16 16"
+                width={16}
+              >
+                <path d="M2.5 8.5 6.5 12.5 13.5 4" />
+              </svg>
+              {message}
+            </span>
+          ) : (
+            message
+          )}
         </div>
       ) : null}
       <p>

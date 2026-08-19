@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <AppChrome user={user}>
+    <AppChrome user={user} sidebar>
       <main className="dashboard-shell">
         <WorkspaceGrid
           appSlug={process.env.GITHUB_APP_SLUG}

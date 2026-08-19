@@ -1506,8 +1506,9 @@ select,
 }
 
 .oauth-connection-notice.is-success {
-  background: var(--teal-soft);
-  color: var(--teal);
+  border-color: rgba(45, 107, 80, 0.3);
+  background: rgba(45, 107, 80, 0.09);
+  color: #2d6b50;
 }
 
 .oauth-connection-notice.is-warning {
@@ -2196,10 +2197,9 @@ button {
 
 .dashboard-shell {
   width: 100%;
-  min-height: calc(100vh - 68px);
-  min-height: calc(100dvh - 68px);
+  min-height: 100dvh;
   margin: 0;
-  padding: 76px clamp(24px, 4vw, 64px) 100px;
+  padding: clamp(32px, 5vw, 64px) clamp(20px, 5vw, 64px) 100px;
 }
 
 .dot-ready,
