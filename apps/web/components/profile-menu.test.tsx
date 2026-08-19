@@ -38,7 +38,7 @@ vi.mock("@/components/clerk-sign-out", () => ({
 import { ProfileMenu } from "./profile-menu";
 
 describe("ProfileMenu", () => {
-  it("exposes settings, profile, and sign out for the account avatar", () => {
+  it("exposes settings and sign out for the account avatar", () => {
     const { container } = render(
       <ProfileMenu
         compact
@@ -54,10 +54,9 @@ describe("ProfileMenu", () => {
       "href",
       "/settings",
     );
-    expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute(
-      "href",
-      "/settings/personal/profile",
-    );
+    expect(
+      screen.queryByRole("link", { name: "Profile" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Sign out" }),
     ).toBeInTheDocument();

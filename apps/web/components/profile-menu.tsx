@@ -66,9 +66,6 @@ export function ProfileMenu({
         <Link className="profile-menu-link" href="/settings">
           Settings
         </Link>
-        <Link className="profile-menu-link" href="/settings/personal/profile">
-          Profile
-        </Link>
         {showConnectGitHub ? (
           <form action={connectGitHubAccount.bind(null, returnTo)}>
             <button className="profile-menu-action" type="submit">

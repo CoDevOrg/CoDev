@@ -92,11 +92,7 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
         .limit(1)
     : [];
   const existingId = existingByClerk?.id ?? existingByEmail?.id;
-  const returning = {
-    id: schema.users.id,
-    githubUserId: schema.users.githubUserId,
-    login: schema.users.login,
-  };
+  const returning = { id: schema.users.id };
   const [localUser] = existingId
     ? await database
         .update(schema.users)
@@ -123,13 +119,14 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
         .returning(returning);
 
   if (!localUser) return null;
+  const connectedAccounts = await getConnectedAccounts(localUser.id);
   return {
     id: localUser.id,
     name,
     email,
     image: profile.imageUrl,
-    ...(localUser.githubUserId !== null
-      ? { githubLogin: localUser.login }
+    ...(connectedAccounts.github.connected && connectedAccounts.github.login
+      ? { githubLogin: connectedAccounts.github.login }
       : {}),
   };
 }
