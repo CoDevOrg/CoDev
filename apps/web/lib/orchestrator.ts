@@ -338,6 +338,8 @@ export interface StartIdeInput {
     defaultBranch: string;
     token?: string;
   };
+  /** See IdeStartRequest's doc comment in services/orchestrator/src/model.rs. */
+  codexAuthCacheJson?: string;
 }
 
 /**

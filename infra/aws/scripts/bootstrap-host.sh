@@ -124,6 +124,14 @@ npm install -g @anthropic-ai/claude-code@2.1.236
 # (no env var to redirect it), so relocate the result into a world-readable
 # location every workspace user can execute from, mirroring how ${orca_dir}
 # below is made world-readable for the same reason.
+#
+# UserData scripts run without a login shell, so $HOME is unset here — the
+# installer's own symlink step resolves the invoking user's home some other
+# way (correctly landing at /root/.local/bin), but its download/extract step
+# concatenates "$HOME/.local/share/...", which with $HOME empty put the real
+# payload at /.local/share/... (filesystem root) instead, leaving the /root
+# symlinks dangling. Export HOME explicitly so both steps agree.
+export HOME=/root
 curl -fsS https://cursor.com/install | bash
 cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
 install -d -m 0755 /opt/cursor-agent

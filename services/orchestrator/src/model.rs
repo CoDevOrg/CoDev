@@ -352,6 +352,15 @@ pub struct IdeStartRequest {
     /// Orca at all; the orchestrator idempotently no-ops if the directory is
     /// already a git repository.
     pub clone: Option<IdeCloneRequest>,
+    /// Present when the requesting user has a linked hosted Codex
+    /// subscription. Written to the per-workspace Linux user's
+    /// `~/.codex/auth.json` before Orca is spawned, so the Codex CLI it
+    /// launches interactively is already authenticated instead of prompting
+    /// a separate sign-in — mirrors the same materialization
+    /// `start_codex_exec` (guest.rs) does inside the Firecracker guest for
+    /// the backend-driven exec path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_auth_cache_json: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

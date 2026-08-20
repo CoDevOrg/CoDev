@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolveAgentCredential } from "./credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import {
@@ -71,6 +72,35 @@ export type OrcaRuntimeState =
   | { state: "ready"; pairing: OrcaPairing; workspacePath: string };
 
 /**
+ * A linked hosted Codex subscription is otherwise only ever materialized
+ * inside the Firecracker guest for CoDev's own backend-driven exec turns
+ * (see start_codex_exec in services/orchestrator/src/guest.rs) — the Codex
+ * CLI Orca launches interactively on the host has never had any credential
+ * written for it, so it always prompted a separate sign-in even for a user
+ * with an account already linked. Best-effort: a resolution failure (no
+ * link, obsolete format, subscription disabled) just means the IDE's Codex
+ * CLI falls back to prompting sign-in itself, same as before this existed —
+ * it must never block the IDE from starting.
+ */
+async function resolveCodexAuthCacheForIde(
+  userId: string,
+  workspaceId: string,
+): Promise<string | undefined> {
+  try {
+    const credential = await resolveAgentCredential(
+      userId,
+      workspaceId,
+      "openai",
+    );
+    return credential.authType === "HOSTED_CODEX_SUBSCRIPTION"
+      ? credential.codexAuthCacheJson
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Ensure the EC2 host is running, the orchestrator is reachable, and this
  * workspace has its own dedicated Orca IDE process (cloning its repository
  * first if needed). Returns `host-starting` while the instance boots so the
@@ -107,11 +137,16 @@ export async function ensureOrcaSession(
           ...(token ? { token } : {}),
         }
       : undefined;
+  const codexAuthCacheJson = await resolveCodexAuthCacheForIde(
+    userId,
+    workspace.id,
+  );
 
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
       projectRoot: workspacePath,
       ...(clone ? { clone } : {}),
+      ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
     });
     const pairing = parseOrcaReady(session.ready, workspace.id);
     return { state: "ready", pairing, workspacePath };

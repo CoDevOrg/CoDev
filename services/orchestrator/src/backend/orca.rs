@@ -19,6 +19,7 @@
 //! pairing-payload rewriting on our side.
 use std::{
     collections::HashMap,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Stdio,
     sync::{Arc, OnceLock},
@@ -29,6 +30,7 @@ use chrono::Utc;
 use regex::Regex;
 use serde_json::Value;
 use tokio::{
+    fs,
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
     process::{Child, Command},
@@ -194,6 +196,9 @@ impl OrcaBackend {
         let linux_user = linux_user_for(workspace_id);
         ensure_linux_user(&linux_user).await?;
         chown_recursive(&expected_root, &linux_user).await?;
+        if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
+            write_codex_credential(&linux_user, codex_auth_cache_json).await?;
+        }
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -464,6 +469,28 @@ async fn chown_recursive(path: &Path, user: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+/// Writes a linked hosted-Codex-subscription credential to the Codex CLI's
+/// standard config location for a per-workspace Linux user, so the CLI Orca
+/// launches interactively is already signed in. Re-written on every start
+/// (not just first-run) since the underlying OAuth material can rotate.
+async fn write_codex_credential(user: &str, codex_auth_cache_json: &str) -> Result<()> {
+    let codex_home = PathBuf::from(format!("/home/{user}/.codex"));
+    fs::create_dir_all(&codex_home)
+        .await
+        .map_err(RuntimeError::internal)?;
+    let auth_path = codex_home.join("auth.json");
+    fs::write(&auth_path, codex_auth_cache_json)
+        .await
+        .map_err(RuntimeError::internal)?;
+    fs::set_permissions(&codex_home, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(&codex_home, user).await
 }
 
 fn spawn_orca_serve(

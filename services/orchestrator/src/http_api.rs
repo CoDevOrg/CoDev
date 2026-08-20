@@ -570,6 +570,15 @@ async fn start_ide(
             return Err(RuntimeError::BadRequest("invalid token".into()));
         }
     }
+    if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json
+        && (codex_auth_cache_json.len() > (128 << 10)
+            || !serde_json::from_str::<serde_json::Value>(codex_auth_cache_json)
+                .is_ok_and(|value| value.is_object()))
+    {
+        return Err(RuntimeError::BadRequest(
+            "Codex auth cache is invalid or too large".into(),
+        ));
+    }
     let session = ide.start(&workspace_id, request).await?;
     Ok((
         StatusCode::CREATED,

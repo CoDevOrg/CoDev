@@ -26,6 +26,7 @@
     var key = "orca.web.settings.v1";
     var mobileMarker = "codevMobileDefaultApplied";
     var chatMarker = "codevNativeChatDefaultApplied";
+    var chatRevertMarker = "codevNativeChatDefaultReverted";
     var raw = window.localStorage.getItem(key);
     var settings = raw ? JSON.parse(raw) : {};
     var changed = false;
@@ -35,14 +36,16 @@
         settings[mobileMarker] = true;
         changed = true;
       }
-      if (!settings[chatMarker]) {
-        // Codex/Claude turns run through the IDE's own agent terminal
-        // sessions, not a separate chat page — surface Orca's built-in Chat
-        // UI (still upstream-flagged experimental) on those panes by
-        // default instead.
-        settings.experimentalNativeChat = true;
-        settings.openAgentTabsInChatByDefault = true;
-        settings[chatMarker] = true;
+      // Previously defaulted Orca's experimental Chat UI on for agent
+      // panes, but its transcript rendering doesn't reliably work for
+      // Codex (upstream only guards this for the grok agent) — a message
+      // sends fine but the response never appears, even though the
+      // underlying terminal session is working correctly. Revert once for
+      // anyone who already got the broken default; never re-seed it.
+      if (settings[chatMarker] && !settings[chatRevertMarker]) {
+        delete settings.experimentalNativeChat;
+        delete settings.openAgentTabsInChatByDefault;
+        settings[chatRevertMarker] = true;
         changed = true;
       }
       if (changed) {
