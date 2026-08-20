@@ -4,6 +4,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import { getWorkspaceCreditStatus } from "./compute-credits";
 import { getDatabase } from "./database";
 import { consumeRateLimit } from "./rate-limit";
 import { getVmMinutesUsed, VM_MINUTE_LIFETIME_QUOTA } from "./vm-usage";
@@ -77,6 +78,24 @@ export async function assertVmMinuteQuota(ownerId: string) {
       `Lifetime VM minute allotment exhausted (${VM_MINUTE_LIFETIME_QUOTA} minutes).`,
       "vm_minute_quota",
       86_400,
+    );
+  }
+}
+
+/**
+ * The beta's actual cost ceiling: $5/member/month pooled across a
+ * workspace, replacing assertVmMinuteQuota as the primary gate everywhere
+ * compute starts (see compute-credits.ts for the accounting). Hard-blocks
+ * once exhausted — the workspace's files and agent-session history stay
+ * fully readable regardless, since this only guards starting new compute.
+ */
+export async function assertWorkspaceCreditQuota(workspaceId: string) {
+  const { remainingMinutes } = await getWorkspaceCreditStatus(workspaceId);
+  if (remainingMinutes <= 0) {
+    throw new QuotaError(
+      "This workspace's monthly compute credit is used up. It resets next month, or another member can free up credit.",
+      "workspace_credit_quota",
+      3_600,
     );
   }
 }

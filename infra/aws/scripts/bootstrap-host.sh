@@ -439,7 +439,7 @@ Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
 Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
 Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
 Environment=CODEV_MAX_IDE_SESSIONS=4
-Environment=CODEV_IDE_IDLE_TIMEOUT=30m
+Environment=CODEV_IDE_IDLE_TIMEOUT=5m
 Restart=always
 RestartSec=2
 KillMode=control-group

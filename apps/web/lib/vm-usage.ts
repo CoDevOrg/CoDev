@@ -50,12 +50,16 @@ export async function openSandboxInterval(
   ownerId: string,
   workspaceId: string,
   source = "provision",
+  sourceFilter?: string,
 ) {
   const db = getDatabase();
   const now = new Date();
 
-  // Close any stale open interval for this workspace before opening a new one.
-  await closeSandboxInterval(workspaceId, "reconcile");
+  // Close any stale open interval for this workspace before opening a new
+  // one. Scoped to sourceFilter when given, so opening (say) an Orca
+  // interval doesn't clobber an unrelated Firecracker sandbox interval
+  // that's still legitimately open for the same workspace.
+  await closeSandboxInterval(workspaceId, "reconcile", sourceFilter);
 
   await db.insert(schema.sandboxRuntimeIntervals).values({
     userId: ownerId,
@@ -71,6 +75,7 @@ export async function openSandboxInterval(
 export async function closeSandboxInterval(
   workspaceId: string,
   source: "hibernate" | "stop" | "reconcile" | "failed",
+  sourceFilter?: string,
 ) {
   const db = getDatabase();
   const now = new Date();
@@ -87,6 +92,9 @@ export async function closeSandboxInterval(
         and(
           eq(schema.sandboxRuntimeIntervals.workspaceId, workspaceId),
           isNull(schema.sandboxRuntimeIntervals.endedAt),
+          sourceFilter === undefined
+            ? undefined
+            : eq(schema.sandboxRuntimeIntervals.source, sourceFilter),
         ),
       )
       .for("update");

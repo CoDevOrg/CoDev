@@ -44,6 +44,9 @@ vi.mock("./orchestrator", () => ({
 vi.mock("./vm-usage", () => ({
   closeOrphanSandboxIntervals: vi.fn().mockResolvedValue(0),
 }));
+vi.mock("./compute-credits", () => ({
+  closeOrphanOrcaIntervals: vi.fn().mockResolvedValue(0),
+}));
 vi.mock("./workspaces", () => ({ markWorkspaceStopped: vi.fn() }));
 
 import { destroySandboxForCleanup, reconcileLifecycle } from "./lifecycle";

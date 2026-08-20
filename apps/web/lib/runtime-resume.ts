@@ -16,7 +16,7 @@ import {
   provisionSandbox,
   waitForOrchestrator,
 } from "./orchestrator";
-import { assertVmMinuteQuota } from "./quotas";
+import { assertWorkspaceCreditQuota } from "./quotas";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
@@ -123,7 +123,7 @@ export async function ensureWorkspaceRuntimeReady(
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
   }
   const githubConnected = Boolean(workspace.repository && workspace.baseSha);
-  await assertVmMinuteQuota(workspace.ownerId);
+  await assertWorkspaceCreditQuota(workspaceId);
   const expiresAt = await beginWorkspaceProvisioning(
     workspaceId,
     userId,

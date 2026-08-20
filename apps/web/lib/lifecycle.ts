@@ -6,6 +6,7 @@ import { getRun } from "workflow/api";
 import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
+import { closeOrphanOrcaIntervals } from "./compute-credits";
 import { getDatabase } from "./database";
 import { getHostState } from "./host";
 import { logEvent } from "./observability";
@@ -184,6 +185,9 @@ export async function reconcileLifecycle() {
     );
 
   const orphanIntervalsClosed = await closeOrphanSandboxIntervals();
+  const orphanOrcaIntervalsClosed = hostRunning
+    ? await closeOrphanOrcaIntervals()
+    : 0;
 
   const result = {
     hostState,
@@ -192,6 +196,7 @@ export async function reconcileLifecycle() {
     hibernationFailures: 0,
     cancellationFailures,
     orphanIntervalsClosed,
+    orphanOrcaIntervalsClosed,
     durationMs: Date.now() - startedAt,
   };
   logEvent("info", "lifecycle.reconciled", result);

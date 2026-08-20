@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => {
     waitForOrchestrator: vi.fn().mockResolvedValue(undefined),
     startIde: vi.fn(),
     stopIde: vi.fn().mockResolvedValue(undefined),
+    assertWorkspaceCreditQuota: vi.fn().mockResolvedValue(undefined),
+    openOrcaInterval: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -31,6 +33,13 @@ vi.mock("./orchestrator", () => ({
   startIde: mocks.startIde,
   stopIde: mocks.stopIde,
   waitForOrchestrator: mocks.waitForOrchestrator,
+}));
+vi.mock("./quotas", () => ({
+  QuotaError: class QuotaError extends Error {},
+  assertWorkspaceCreditQuota: mocks.assertWorkspaceCreditQuota,
+}));
+vi.mock("./compute-credits", () => ({
+  openOrcaInterval: mocks.openOrcaInterval,
 }));
 
 import { ensureOrcaSession, OrcaHostError } from "./orca-host";

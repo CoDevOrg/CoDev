@@ -1,5 +1,6 @@
 import "server-only";
 
+import { openOrcaInterval } from "./compute-credits";
 import { resolveAgentCredential } from "./credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
@@ -16,6 +17,7 @@ import {
   type IdeSession,
   type StartIdeInput,
 } from "./orchestrator";
+import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
@@ -148,6 +150,15 @@ export async function ensureOrcaSession(
   },
   userId: string,
 ): Promise<OrcaRuntimeState> {
+  try {
+    await assertWorkspaceCreditQuota(workspace.id);
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      throw new OrcaHostError(error.message, 429);
+    }
+    throw error;
+  }
+
   const hostState = await getHostState();
   if (hostState !== "running") {
     const wake = await requestHostWake();
@@ -184,6 +195,8 @@ export async function ensureOrcaSession(
       ...claudeEnv,
     });
     const pairing = parseOrcaReady(session.ready, workspace.id);
+    // Best-effort: a metering hiccup must never block the IDE from opening.
+    await openOrcaInterval(userId, workspace.id).catch(() => {});
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {
