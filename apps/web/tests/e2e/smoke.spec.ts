@@ -13,13 +13,20 @@ test("landing page explains CoDev and offers a clear start", async ({
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: /Build software together/ }),
+    page.getByRole("heading", {
+      name: /Build software.*together/,
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText(/CoDev brings your team and AI agents/),
+    page.getByText(/Create a shared workspace for every feature/),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Start building/ }),
+    page.getByRole("heading", {
+      name: /Local changes should not be local knowledge/,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Start building together/ }),
   ).toHaveAttribute("href", "/sign-in");
   expect(consoleErrors).toEqual([]);
 });

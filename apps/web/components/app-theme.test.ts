@@ -50,16 +50,17 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain("color: var(--codev-orange-400);");
   });
 
-  it("gives public landing pages the same palette and full-width layout", () => {
-    expect(appTheme).toContain(".landing-page {");
-    expect(appTheme).toContain("--landing-paper: var(--codev-forest-950);");
-    expect(appTheme).toContain(".landing-nav,\n.landing-hero,");
-    expect(appTheme).toContain("width: 100%;");
+  it("gives the public landing page a distinct high-contrast marketing surface", () => {
+    expect(globals).toContain(".landing-page {");
+    expect(globals).toContain("--landing-paper: #f4ecde;");
+    expect(globals).toContain(".landing-product {");
+    expect(globals).toContain("width: min(1240px, calc(100% - 64px));");
+    expect(globals).toContain("padding-inline: clamp(24px, 4vw, 72px);");
   });
 
   it("carries ambient motion through each CoDev page shell", () => {
     expect(appTheme).toContain("@keyframes codev-page-ambient {");
-    expect(appTheme).toContain("animation: codev-page-ambient 26s");
+    expect(globals).toContain("animation: codev-page-ambient 26s");
     expect(appTheme).toContain("@media (prefers-reduced-motion: reduce) {");
   });
 
