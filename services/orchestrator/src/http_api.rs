@@ -579,6 +579,19 @@ async fn start_ide(
             "Codex auth cache is invalid or too large".into(),
         ));
     }
+    if request
+        .anthropic_api_key
+        .as_ref()
+        .is_some_and(|value| value.is_empty() || value.len() > 512)
+        || request
+            .claude_code_oauth_token
+            .as_ref()
+            .is_some_and(|value| value.is_empty() || value.len() > 512)
+    {
+        return Err(RuntimeError::BadRequest(
+            "invalid Anthropic credential".into(),
+        ));
+    }
     let session = ide.start(&workspace_id, request).await?;
     Ok((
         StatusCode::CREATED,

@@ -101,6 +101,39 @@ async function resolveCodexAuthCacheForIde(
 }
 
 /**
+ * Same idea as resolveCodexAuthCacheForIde, for a linked Anthropic
+ * credential. Both the BYOK API key and the OAuth token from `claude
+ * setup-token`/browser login resolve through the same generic lookup,
+ * distinguished only by authType — the Claude Code CLI expects a different
+ * env var for each (ANTHROPIC_API_KEY vs CLAUDE_CODE_OAUTH_TOKEN), so the
+ * orchestrator needs to know which one it's setting.
+ */
+async function resolveClaudeEnvForIde(
+  userId: string,
+  workspaceId: string,
+): Promise<
+  { anthropicApiKey: string } | { claudeCodeOauthToken: string } | undefined
+> {
+  try {
+    const credential = await resolveAgentCredential(
+      userId,
+      workspaceId,
+      "anthropic",
+    );
+    if (!credential.apiKeyOrToken) return undefined;
+    if (credential.authType === "API_KEY") {
+      return { anthropicApiKey: credential.apiKeyOrToken };
+    }
+    if (credential.authType === "OAUTH_TOKEN") {
+      return { claudeCodeOauthToken: credential.apiKeyOrToken };
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Ensure the EC2 host is running, the orchestrator is reachable, and this
  * workspace has its own dedicated Orca IDE process (cloning its repository
  * first if needed). Returns `host-starting` while the instance boots so the
@@ -141,12 +174,14 @@ export async function ensureOrcaSession(
     userId,
     workspace.id,
   );
+  const claudeEnv = await resolveClaudeEnvForIde(userId, workspace.id);
 
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
       projectRoot: workspacePath,
       ...(clone ? { clone } : {}),
       ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+      ...claudeEnv,
     });
     const pairing = parseOrcaReady(session.ready, workspace.id);
     return { state: "ready", pairing, workspacePath };

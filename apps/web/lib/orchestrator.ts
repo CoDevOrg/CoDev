@@ -340,6 +340,8 @@ export interface StartIdeInput {
   };
   /** See IdeStartRequest's doc comment in services/orchestrator/src/model.rs. */
   codexAuthCacheJson?: string;
+  anthropicApiKey?: string;
+  claudeCodeOauthToken?: string;
 }
 
 /**

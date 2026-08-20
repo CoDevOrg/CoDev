@@ -199,6 +199,14 @@ impl OrcaBackend {
         if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
             write_codex_credential(&linux_user, codex_auth_cache_json).await?;
         }
+        let claude_env = if let Some(api_key) = &request.anthropic_api_key {
+            Some(("ANTHROPIC_API_KEY", api_key.as_str()))
+        } else {
+            request
+                .claude_code_oauth_token
+                .as_deref()
+                .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
+        };
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -209,6 +217,7 @@ impl OrcaBackend {
             port,
             &pairing_address,
             &expected_root,
+            claude_env,
         )?;
         let ready = match wait_for_ready_line(&mut child).await {
             Ok(ready) => ready,
@@ -500,6 +509,7 @@ fn spawn_orca_serve(
     port: u16,
     pairing_address: &str,
     project_root: &Path,
+    claude_env: Option<(&str, &str)>,
 ) -> Result<Child> {
     // A shell wrapper (matching production's own `run-serve.sh`) is the only
     // way to merge stderr into the single piped stream we scan for the ready
@@ -507,9 +517,14 @@ fn spawn_orca_serve(
     // interpolated value here is either produced by us (paths, port) or
     // already regex-validated by the HTTP layer (workspace id), and is
     // additionally single-quoted, so this does not accept caller-controlled
-    // shell metacharacters.
+    // shell metacharacters. `claude_env`'s variable NAME is always one of
+    // our own two literals (never caller-controlled); its value gets the
+    // same quoting treatment.
+    let claude_env_assignment = claude_env
+        .map(|(name, value)| format!("{name}={} ", shell_quote(value)))
+        .unwrap_or_default();
     let command_line = format!(
-        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 {} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
+        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 {claude_env_assignment}{} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
         shell_quote(display),
         shell_quote(&app_run_bin.to_string_lossy()),
         shell_quote(pairing_address),

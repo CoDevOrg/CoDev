@@ -361,6 +361,15 @@ pub struct IdeStartRequest {
     /// the backend-driven exec path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_auth_cache_json: Option<String>,
+    /// Same idea, for a linked Anthropic credential — set as an env var
+    /// (rather than a config file, matching how the Claude Code CLI itself
+    /// expects it) before Orca is spawned. At most one of these two is ever
+    /// present, mirroring the mutually exclusive API_KEY / OAUTH_TOKEN
+    /// credential types on the Next.js side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anthropic_api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_code_oauth_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
