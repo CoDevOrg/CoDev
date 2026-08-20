@@ -155,6 +155,42 @@ credential_key_arn="$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='CredentialEncryptionKeyArn'].OutputValue" \
   --output text)"
 
+# FirecrackerHost's spot request is `persistent` (required: AWS rejects
+# `one-time` combined with the `stop` interruption behavior this host's
+# pause/resume lifecycle needs). A persistent request survives its
+# instance's termination and keeps trying to fulfill itself, so
+# CloudFormation replacing this instance - which happens on any
+# UserData-affecting change, i.e. most deploys - leaks an untracked,
+# untagged replacement instance unless the old request is explicitly
+# canceled. Clean up any such orphans left behind by this or past deploys,
+# keeping only the request behind the stack's current host.
+echo "Checking for orphaned persistent spot requests..."
+current_spot_request="$(aws ec2 describe-instances \
+  --region "${region}" \
+  --instance-ids "${instance_id}" \
+  --query 'Reservations[0].Instances[0].SpotInstanceRequestId' \
+  --output text 2>/dev/null || true)"
+orphan_requests="$(aws ec2 describe-spot-instance-requests \
+  --region "${region}" \
+  --filters "Name=state,Values=active,open" \
+  --query "SpotInstanceRequests[?SpotInstanceRequestId!='${current_spot_request}'].[SpotInstanceRequestId,InstanceId]" \
+  --output text)"
+if [[ -n "${orphan_requests}" ]]; then
+  echo "Found orphaned spot request(s) from past deploys, cleaning up:"
+  echo "${orphan_requests}"
+  while IFS=$'\t' read -r orphan_request_id orphan_instance_id; do
+    [[ -z "${orphan_request_id}" ]] && continue
+    aws ec2 cancel-spot-instance-requests \
+      --region "${region}" \
+      --spot-instance-request-ids "${orphan_request_id}" >/dev/null
+    if [[ -n "${orphan_instance_id}" && "${orphan_instance_id}" != "None" ]]; then
+      aws ec2 terminate-instances \
+        --region "${region}" \
+        --instance-ids "${orphan_instance_id}" >/dev/null
+    fi
+  done <<<"${orphan_requests}"
+fi
+
 oidc_provider_arn="arn:aws:iam::${account_id}:oidc-provider/${oidc_host}"
 if ! aws iam get-open-id-connect-provider \
   --open-id-connect-provider-arn "${oidc_provider_arn}" >/dev/null 2>&1; then

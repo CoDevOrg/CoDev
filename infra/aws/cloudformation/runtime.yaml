@@ -272,19 +272,20 @@ Resources:
           - UseSpot
           - MarketType: spot
             SpotOptions:
+              # AWS rejects SpotInstanceType: one-time combined with
+              # InstanceInterruptionBehavior: stop outright ("not
+              # supported") - persistent is required for a spot instance to
+              # be stoppable/resumable at all, which the stop-when-idle /
+              # StartInstances-to-wake pattern this host relies on needs.
+              # The tradeoff: a persistent request survives its instance's
+              # termination and keeps trying to fulfill itself, so
+              # CloudFormation terminating and replacing this instance
+              # (routine on any UserData-affecting deploy) leaks an
+              # untracked, untagged replacement instance unless the old
+              # request is explicitly canceled first - see deploy.sh, which
+              # does that as part of every deploy.
               InstanceInterruptionBehavior: stop
-              # One-time, not persistent: a persistent spot request survives
-              # its instance's termination and keeps trying to fulfill
-              # itself indefinitely. CloudFormation terminates and replaces
-              # this instance on any UserData-affecting deploy (routine
-              # during active development) without ever canceling the old
-              # request, so "persistent" silently launched an untracked,
-              # untagged replacement instance on every single redeploy -
-              # confirmed against two live orphans this cost audit found.
-              # One-time still supports the intended stop-when-idle /
-              # StartInstances-to-wake pattern; it just doesn't auto-relaunch
-              # a new instance once this one is gone for good.
-              SpotInstanceType: one-time
+              SpotInstanceType: persistent
           - !Ref AWS::NoValue
         UserData:
           Fn::Base64: !Sub |
