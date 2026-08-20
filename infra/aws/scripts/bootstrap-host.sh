@@ -112,7 +112,25 @@ curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
 corepack enable
 corepack prepare pnpm@11.5.0 --activate
-npm install -g @openai/codex@0.144.6
+npm install -g @openai/codex@0.148.0
+npm install -g @anthropic-ai/claude-code@2.1.236
+
+# Orca's own agent launcher (the IDE's "Launch agent" quick-open menu) probes
+# PATH for each agent's detectCmd at runtime and only lists the ones it
+# finds — it already recognizes claude/cursor as full agent types, it just
+# needs their CLIs present on the host every orca-ws-<workspaceId> user
+# shares. Codex/Claude land on PATH via npm above; Cursor's official
+# installer only supports installing into the invoking user's own $HOME
+# (no env var to redirect it), so relocate the result into a world-readable
+# location every workspace user can execute from, mirroring how ${orca_dir}
+# below is made world-readable for the same reason.
+curl -fsS https://cursor.com/install | bash
+cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
+install -d -m 0755 /opt/cursor-agent
+cp -a "$(dirname "${cursor_agent_target}")/." /opt/cursor-agent/
+chmod -R go+rX /opt/cursor-agent
+ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
+ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
 
 curl -fsSL \
   "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
