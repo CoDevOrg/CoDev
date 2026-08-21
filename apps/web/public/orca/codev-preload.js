@@ -35,10 +35,9 @@
         settings[mobileMarker] = true;
         changed = true;
       }
-      // CoDev keeps the IDE as the primary surface, but agent tabs opened from
-      // its + menu should use Orca's native Codex/Claude chat presentation.
-      // Version the marker so browsers that received the earlier rollback are
-      // migrated once as well.
+      // Keep CoDev in the IDE and render agent tabs launched from + with the
+      // native Codex/Claude chat surface. The versioned marker migrates users
+      // who received the earlier rollback without overriding later choices.
       if (!settings[chatMarker]) {
         settings.experimentalNativeChat = true;
         settings.openAgentTabsInChatByDefault = true;
