@@ -8164,7 +8164,7 @@ index 2b83d68..b71acc1 100644
 -  if (descriptor.action?.type === 'agent-picker') {
 +  // Some agent pickers can be driven safely behind the native surface. Those
 +  // expose their real choices here so the user never has to leave chat.
-+  if (descriptor.action?.type === 'agent-picker' && descriptor.category !== 'thought_level') {
++  if (descriptor.action?.type === 'agent-picker' && descriptor.id !== 'effort') {
      return (
        <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
          {translate(
