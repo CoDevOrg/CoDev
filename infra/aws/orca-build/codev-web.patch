@@ -8120,3 +8120,248 @@ index cfa041d..84fe0a6 100644
    // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
    // static union stays closed while plugin tabs remain type-representable.
    | `plugin:${string}`
+diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
+index e7d3eda..1e5c164 100644
+--- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
+@@ -304,6 +304,27 @@ describe('NativeChatSessionOptionPickers', () => {
+     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
+   })
+ 
++  it('keeps reasoning effort choices in native chat when the picker is driven behind it', async () => {
++    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
++    render(
++      <NativeChatSessionOptionPickers
++        surface={{ ...surface, setOption }}
++        snapshot={[
++          model(),
++          {
++            ...effort,
++            action: { type: 'agent-picker' }
++          }
++        ]}
++        isWorking={false}
++      />
++    )
++
++    expect(screen.queryByText('Choose in agent picker…')).toBeNull()
++    screen.getByRole('radio', { name: 'High' }).click()
++    await waitFor(() => expect(setOption).toHaveBeenCalledWith('effort', 'high'))
++  })
++
+   it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
+     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
+     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
+index 2b83d68..b71acc1 100644
+--- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
+@@ -126,8 +126,9 @@ function DescriptorMenuRows(props: {
+       </DropdownMenuItem>
+     )
+   }
+-  // Why: agent-picker opens the TUI; it is not a set of radio choices.
+-  if (descriptor.action?.type === 'agent-picker') {
++  // Some agent pickers can be driven safely behind the native surface. Those
++  // expose their real choices here so the user never has to leave chat.
++  if (descriptor.action?.type === 'agent-picker' && descriptor.category !== 'thought_level') {
+     return (
+       <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
+         {translate(
+diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
+index 4a90af7..64a6889 100644
+--- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
++++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
+@@ -121,6 +121,44 @@ describe('native chat PTY session options', () => {
+     })
+   })
+ 
++  it('applies a Codex effort choice without opening the terminal picker surface', async () => {
++    seedNativeChatAppliedSessionOptions('pty-codex', 'codex', {
++      model: 'gpt-5.6-terra',
++      effort: 'medium'
++    })
++    const applyAgentPickerChoice = vi.fn().mockResolvedValue(undefined)
++    const persist = vi.fn()
++    const surface = createNativeChatPtySessionOptions({
++      agent: 'codex',
++      scopeKey: 'pty-codex',
++      mode: 'live',
++      dispatchCommand: vi.fn(),
++      applyAgentPickerChoice,
++      persistSelection: persist
++    })!
++
++    await surface.setOption('effort', 'high')
++
++    expect(applyAgentPickerChoice).toHaveBeenCalledWith({
++      optionId: 'effort',
++      value: 'high',
++      modelId: 'gpt-5.6-terra'
++    })
++    expect(persist).toHaveBeenCalledWith({
++      optionId: 'effort',
++      value: 'high',
++      modelId: 'gpt-5.6-terra'
++    })
++    expect(surface.getSnapshot()).toEqual(
++      expect.arrayContaining([
++        expect.objectContaining({
++          id: 'effort',
++          kind: expect.objectContaining({ currentValue: 'high' })
++        })
++      ])
++    )
++  })
++
+   it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
+     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+       model: 'sonnet',
+diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
+index e1a1480..81a8a01 100644
+--- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
++++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
+@@ -48,6 +48,11 @@ export type CreateNativeChatPtySessionOptionsArgs = {
+   reportedValues?: Record<string, SessionOptionValue> | null
+   dispatchCommand: NativeChatSessionOptionDispatchCommand
+   onAgentPicker?: () => void
++  applyAgentPickerChoice?: (args: {
++    optionId: string
++    value: SessionOptionValue
++    modelId: string | null
++  }) => Promise<void>
+   persistSelection?: PersistSelection
+   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
+ }
+@@ -116,6 +121,7 @@ export function createNativeChatPtySessionOptions(
+     getRecord: () => record,
+     dispatchCommand: args.dispatchCommand,
+     onAgentPicker: args.onAgentPicker,
++    applyAgentPickerChoice: args.applyAgentPickerChoice,
+     persistSelection: args.persistSelection,
+     onDraftValuesChanged: args.onDraftValuesChanged,
+     publish,
+diff --git a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
+index df96ea2..721f48b 100644
+--- a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
++++ b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
+@@ -33,6 +33,11 @@ type SessionOptionApplyContext = {
+   getRecord: () => NativeChatSessionOptionRecord
+   dispatchCommand: NativeChatSessionOptionDispatchCommand
+   onAgentPicker?: () => void
++  applyAgentPickerChoice?: (args: {
++    optionId: string
++    value: SessionOptionValue
++    modelId: string | null
++  }) => Promise<void>
+   persistSelection?: (args: {
+     modelId: string
+     optionId: string
+@@ -193,7 +198,12 @@ async function applySetOption(
+   }
+   const { apply, modelId: previousModelId } = resolved
+   if (ctx.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
+-    throw new Error('This option must be changed in the agent picker.')
++    if (!ctx.applyAgentPickerChoice) {
++      throw new Error('This option must be changed in the agent picker.')
++    }
++    await ctx.applyAgentPickerChoice({ optionId: id, value, modelId: previousModelId })
++    ctx.setTrackedValue(id, value, 'applied')
++    return finish(ctx, { modelId: previousModelId, optionId: id, value })
+   }
+ 
+   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
+index a722a1f..0280172 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
+@@ -1,7 +1,12 @@
+ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
++import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
++import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+ import type { AgentType } from '../../../../shared/agent-status-types'
+ import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
++import type {
++  SessionOptionDescriptor,
++  SessionOptionValue
++} from '../../../../shared/native-chat-session-options'
+ import { useAppStore } from '../../store'
+ import {
+   createNativeChatPtySessionOptions,
+@@ -23,6 +28,34 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
+ const subscribeEmpty = (): (() => void) => () => {}
+ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
+ 
++const CODEX_EFFORT_INDEX: Record<string, number> = {
++  low: 0,
++  medium: 1,
++  high: 2,
++  xhigh: 3
++}
++
++async function waitForTerminalText(
++  readTerminalScreen: (() => string | null) | undefined,
++  expected: string,
++  timeoutMs = 3000
++): Promise<void> {
++  const deadline = Date.now() + timeoutMs
++  while (Date.now() < deadline) {
++    if (readTerminalScreen?.()?.includes(expected)) return
++    await new Promise((resolve) => setTimeout(resolve, 50))
++  }
++  throw new Error(`Codex did not open ${expected}.`)
++}
++
++export function codexEffortPickerInput(value: SessionOptionValue): string {
++  const index = CODEX_EFFORT_INDEX[String(value)]
++  if (index === undefined) {
++    throw new Error(`Codex does not support reasoning effort ${String(value)} here.`)
++  }
++  return `\u001b[H${'\u001b[B'.repeat(index)}\r`
++}
++
+ export function useNativeChatSessionOptions(args: {
+   agent: AgentType
+   terminalTabId: string
+@@ -61,6 +94,20 @@ export function useNativeChatSessionOptions(args: {
+           )
+         : null
+     let settingsWrite = Promise.resolve()
++    const applyAgentPickerChoice =
++      agent === 'codex'
++        ? async ({ optionId, value }: { optionId: string; value: SessionOptionValue }) => {
++            if (optionId !== 'effort') {
++              throw new Error('This Codex option is not available in chat.')
++            }
++            await dispatchCommand('/model')
++            await waitForTerminalText(readTerminalScreen, 'Select Model and Effort')
++            const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
++            sendRuntimePtyInput(settings, targetPtyId, '\r')
++            await waitForTerminalText(readTerminalScreen, 'Select Reasoning Level')
++            sendRuntimePtyInput(settings, targetPtyId, codexEffortPickerInput(value))
++          }
++        : undefined
+     return createNativeChatPtySessionOptions({
+       agent,
+       scopeKey,
+@@ -73,6 +120,7 @@ export function useNativeChatSessionOptions(args: {
+       reportedValues,
+       dispatchCommand,
+       onAgentPicker,
++      applyAgentPickerChoice,
+       persistSelection: async ({ modelId, optionId, value }) => {
+         // Why: read the live persisted defaults at write time (after any prior
+         // write in this chain settles) and merge only this selection onto them,
+diff --git a/src/shared/agent-session-option-catalog-claude-codex.ts b/src/shared/agent-session-option-catalog-claude-codex.ts
+index 0464fd1..9e28cd2 100644
+--- a/src/shared/agent-session-option-catalog-claude-codex.ts
++++ b/src/shared/agent-session-option-catalog-claude-codex.ts
+@@ -191,7 +191,6 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+ }
+ 
+ const CODEX_EFFORT_CHOICES = [
+-  { value: 'minimal', label: 'Minimal' },
+   { value: 'low', label: 'Low' },
+   { value: 'medium', label: 'Medium' },
+   { value: 'high', label: 'High' },
