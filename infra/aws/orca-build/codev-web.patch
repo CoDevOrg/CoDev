@@ -34,6 +34,33 @@ index c5b3e6d..c740715 100644
    ) {
      return tab
    }
+diff --git a/src/main/runtime/rpc/methods/client-ui-schemas.ts b/src/main/runtime/rpc/methods/client-ui-schemas.ts
+index 4cb6e43..490d7f8 100644
+--- a/src/main/runtime/rpc/methods/client-ui-schemas.ts
++++ b/src/main/runtime/rpc/methods/client-ui-schemas.ts
+@@ -45,7 +45,8 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
+   'pr-checks',
+   'source-control',
+   'checks',
+-  'ports'
++  'ports',
++  'activity'
+ ] as const
+ // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
+ // schema validates their shape rather than enumerating them.
+diff --git a/src/main/runtime/rpc/methods/client-ui.test.ts b/src/main/runtime/rpc/methods/client-ui.test.ts
+index 718513c..f845b4b 100644
+--- a/src/main/runtime/rpc/methods/client-ui.test.ts
++++ b/src/main/runtime/rpc/methods/client-ui.test.ts
+@@ -706,7 +706,7 @@ describe('client ui.set RPC', () => {
+     })
+   })
+ 
+-  it.each(['workspaces', 'pr-checks', 'plugin:acme.tools/inspector'])(
++  it.each(['workspaces', 'pr-checks', 'activity', 'plugin:acme.tools/inspector'])(
+     'accepts the %s right sidebar tab a paired client can be sitting on',
+     async (rightSidebarTab) => {
+       const runtime = {
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
 index 294fc4a..a8a38f9 100644
 --- a/src/renderer/src/App.tsx
