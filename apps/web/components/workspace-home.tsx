@@ -18,9 +18,8 @@ export function WorkspaceHome({
   hasRepository: boolean;
   availableProviders: ChatProvider[];
 }) {
-  // Codex/Claude chat lives inside the IDE itself (Orca's own agent
-  // terminal panes, see public/orca/codev-preload.js), so land here by
-  // default rather than on the separate chat page.
+  // Codex/Claude chat lives inside the IDE itself (Orca's native agent panes),
+  // so the IDE remains the workspace's primary surface.
   const [view, setView] = useState<"chat" | "ide">("ide");
 
   if (view === "ide") {
