@@ -195,6 +195,11 @@ impl OrcaBackend {
 
         let linux_user = linux_user_for(workspace_id);
         ensure_linux_user(&linux_user).await?;
+        // The AppImage launches Electron children that can outlive the sudo
+        // wrapper tracked in `RunningSession`. A previous orchestrator crash or
+        // stop must not leave Electron's per-user single-instance lock held,
+        // otherwise the replacement serve process exits before readiness.
+        terminate_linux_user_processes(&linux_user).await?;
         chown_recursive(&expected_root, &linux_user).await?;
         if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
             write_codex_credential(&linux_user, codex_auth_cache_json).await?;
@@ -275,6 +280,14 @@ impl OrcaBackend {
 
     async fn destroy_session(&self, workspace_id: &str, session: &RunningSession) {
         let _ = session.child.lock().await.kill().await;
+        if let Err(error) = terminate_linux_user_processes(&session.linux_user).await {
+            warn!(
+                workspace_id,
+                user = %session.linux_user,
+                %error,
+                "failed to terminate per-workspace Orca process tree"
+            );
+        }
         // The dedicated user only ever owns this workspace's IDE state, so
         // removing it reclaims the account and its home directory instead of
         // accumulating one Linux user per workspace forever. Re-opening the
@@ -461,6 +474,51 @@ async fn ensure_linux_user(user: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+fn linux_user_process_command(program: &str, user: &str) -> Command {
+    let mut command = Command::new(program);
+    command.args(["-u", user]);
+    command
+}
+
+/// Stops every process owned by a workspace's dedicated OS user. Electron
+/// daemon, renderer, terminal, and agent children are not guaranteed to stay
+/// beneath the short-lived `sudo` wrapper in the process tree, so killing only
+/// the tracked child can leave the profile lock occupied indefinitely.
+async fn terminate_linux_user_processes(user: &str) -> Result<()> {
+    let mut kill = linux_user_process_command("pkill", user);
+    kill.arg("-KILL");
+    let output = kill.output().await.map_err(RuntimeError::internal)?;
+    if !output.status.success() && output.status.code() != Some(1) {
+        return Err(RuntimeError::internal(format!(
+            "pkill workspace user {user} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let output = linux_user_process_command("pgrep", user)
+            .output()
+            .await
+            .map_err(RuntimeError::internal)?;
+        if output.status.code() == Some(1) {
+            return Ok(());
+        }
+        if !output.status.success() {
+            return Err(RuntimeError::internal(format!(
+                "pgrep workspace user {user} failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )));
+        }
+        if Instant::now() >= deadline {
+            return Err(RuntimeError::Timeout(format!(
+                "workspace user {user} still owns processes after termination"
+            )));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 async fn chown_recursive(path: &Path, user: &str) -> Result<()> {
@@ -706,8 +764,8 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::{
-        USER_SUFFIX_LEN, branch_pattern, linux_user_for, orca_serve_command_line,
-        repository_pattern, shell_quote, token_pattern,
+        USER_SUFFIX_LEN, branch_pattern, linux_user_for, linux_user_process_command,
+        orca_serve_command_line, repository_pattern, shell_quote, token_pattern,
     };
     use std::path::Path;
 
@@ -747,6 +805,16 @@ mod tests {
             "PATH='/home/orca-ws-e010bd2ca3c1438facef/.npm-global/bin:/usr/local/bin:/usr/bin:/bin'"
         ));
         assert!(command.contains("'/opt/orca/AppRun' --serve"));
+    }
+
+    #[test]
+    fn scopes_process_cleanup_to_the_workspace_linux_user() {
+        let command = linux_user_process_command("pkill", "orca-ws-e010bd2ca3c1438facef");
+        assert_eq!(command.as_std().get_program(), "pkill");
+        assert_eq!(
+            command.as_std().get_args().collect::<Vec<_>>(),
+            ["-u", "orca-ws-e010bd2ca3c1438facef"]
+        );
     }
 
     #[test]
