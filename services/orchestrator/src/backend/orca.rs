@@ -520,15 +520,14 @@ fn spawn_orca_serve(
     // shell metacharacters. `claude_env`'s variable NAME is always one of
     // our own two literals (never caller-controlled); its value gets the
     // same quoting treatment.
-    let claude_env_assignment = claude_env
-        .map(|(name, value)| format!("{name}={} ", shell_quote(value)))
-        .unwrap_or_default();
-    let command_line = format!(
-        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 {claude_env_assignment}{} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
-        shell_quote(display),
-        shell_quote(&app_run_bin.to_string_lossy()),
-        shell_quote(pairing_address),
-        shell_quote(&project_root.to_string_lossy()),
+    let command_line = orca_serve_command_line(
+        app_run_bin,
+        user,
+        display,
+        port,
+        pairing_address,
+        project_root,
+        claude_env,
     );
     Command::new("sudo")
         .args(["-u", user, "-H", "sh", "-c", &command_line])
@@ -538,6 +537,31 @@ fn spawn_orca_serve(
         .kill_on_drop(true)
         .spawn()
         .map_err(RuntimeError::internal)
+}
+
+fn orca_serve_command_line(
+    app_run_bin: &Path,
+    user: &str,
+    display: &str,
+    port: u16,
+    pairing_address: &str,
+    project_root: &Path,
+    claude_env: Option<(&str, &str)>,
+) -> String {
+    let claude_env_assignment = claude_env
+        .map(|(name, value)| format!("{name}={} ", shell_quote(value)))
+        .unwrap_or_default();
+    let npm_prefix = format!("/home/{user}/.npm-global");
+    let path = format!("{npm_prefix}/bin:/usr/local/bin:/usr/bin:/bin");
+    format!(
+        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 NPM_CONFIG_PREFIX={} PATH={} {claude_env_assignment}{} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
+        shell_quote(display),
+        shell_quote(&npm_prefix),
+        shell_quote(&path),
+        shell_quote(&app_run_bin.to_string_lossy()),
+        shell_quote(pairing_address),
+        shell_quote(&project_root.to_string_lossy()),
+    )
 }
 
 fn shell_quote(value: &str) -> String {
@@ -682,9 +706,10 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::{
-        USER_SUFFIX_LEN, branch_pattern, linux_user_for, repository_pattern, shell_quote,
-        token_pattern,
+        USER_SUFFIX_LEN, branch_pattern, linux_user_for, orca_serve_command_line,
+        repository_pattern, shell_quote, token_pattern,
     };
+    use std::path::Path;
 
     #[test]
     fn derives_a_stable_short_linux_username() {
@@ -701,6 +726,27 @@ mod tests {
             "'/srv/codev/workspaces/x'"
         );
         assert_eq!(shell_quote("it's"), "'it'\\''s'");
+    }
+
+    #[test]
+    fn gives_workspace_agents_a_writable_global_npm_prefix() {
+        let command = orca_serve_command_line(
+            Path::new("/opt/orca/AppRun"),
+            "orca-ws-e010bd2ca3c1438facef",
+            ":99",
+            17_000,
+            "https://host.example/w/workspace-id",
+            Path::new("/srv/codev/workspaces/workspace-id"),
+            None,
+        );
+
+        assert!(
+            command.contains("NPM_CONFIG_PREFIX='/home/orca-ws-e010bd2ca3c1438facef/.npm-global'")
+        );
+        assert!(command.contains(
+            "PATH='/home/orca-ws-e010bd2ca3c1438facef/.npm-global/bin:/usr/local/bin:/usr/bin:/bin'"
+        ));
+        assert!(command.contains("'/opt/orca/AppRun' --serve"));
     }
 
     #[test]
