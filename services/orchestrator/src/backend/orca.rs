@@ -569,16 +569,7 @@ fn spawn_orca_serve(
     project_root: &Path,
     claude_env: Option<(&str, &str)>,
 ) -> Result<Child> {
-    // A shell wrapper (matching production's own `run-serve.sh`) is the only
-    // way to merge stderr into the single piped stream we scan for the ready
-    // line, exactly like the existing shared instance already does. Every
-    // interpolated value here is either produced by us (paths, port) or
-    // already regex-validated by the HTTP layer (workspace id), and is
-    // additionally single-quoted, so this does not accept caller-controlled
-    // shell metacharacters. `claude_env`'s variable NAME is always one of
-    // our own two literals (never caller-controlled); its value gets the
-    // same quoting treatment.
-    let command_line = orca_serve_command_line(
+    orca_serve_sudo_command(
         app_run_bin,
         user,
         display,
@@ -586,15 +577,63 @@ fn spawn_orca_serve(
         pairing_address,
         project_root,
         claude_env,
+    )
+    .spawn()
+    .map_err(RuntimeError::internal)
+}
+
+fn orca_serve_sudo_command(
+    app_run_bin: &Path,
+    user: &str,
+    display: &str,
+    port: u16,
+    pairing_address: &str,
+    project_root: &Path,
+    claude_env: Option<(&str, &str)>,
+) -> Command {
+    // A shell wrapper (matching production's own `run-serve.sh`) is the only
+    // way to merge stderr into the single piped stream we scan for the ready
+    // line, exactly like the existing shared instance already does. Every
+    // interpolated value here is either produced by us (paths, port) or
+    // already regex-validated by the HTTP layer (workspace id), and is
+    // additionally single-quoted, so this does not accept caller-controlled
+    // shell metacharacters.
+    let command_line = orca_serve_command_line(
+        app_run_bin,
+        user,
+        display,
+        port,
+        pairing_address,
+        project_root,
     );
-    Command::new("sudo")
-        .args(["-u", user, "-H", "sh", "-c", &command_line])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(RuntimeError::internal)
+    let mut command = Command::new("sudo");
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    command.kill_on_drop(true);
+    // `sudo` logs its own full invocation (argv) to the system journal, so a
+    // linked provider credential must never appear as literal text in the
+    // command it runs — confirmed a Claude OAuth token doing exactly that
+    // when this was embedded as `env NAME='value'` in the shell string
+    // below. Set it directly on this Command instead: sudo inherits it from
+    // its own environment and `--preserve-env=NAME` (which logs only the
+    // variable's *name*, never its value) forwards it to the target user,
+    // so the secret only ever travels through envp, never argv.
+    if let Some((name, value)) = claude_env {
+        command.env(name, value);
+        command.args([
+            "-u",
+            user,
+            "-H",
+            &format!("--preserve-env={name}"),
+            "sh",
+            "-c",
+            &command_line,
+        ]);
+    } else {
+        command.args(["-u", user, "-H", "sh", "-c", &command_line]);
+    }
+    command
 }
 
 fn orca_serve_command_line(
@@ -604,15 +643,11 @@ fn orca_serve_command_line(
     port: u16,
     pairing_address: &str,
     project_root: &Path,
-    claude_env: Option<(&str, &str)>,
 ) -> String {
-    let claude_env_assignment = claude_env
-        .map(|(name, value)| format!("{name}={} ", shell_quote(value)))
-        .unwrap_or_default();
     let npm_prefix = format!("/home/{user}/.npm-global");
     let path = format!("{npm_prefix}/bin:/usr/local/bin:/usr/bin:/bin");
     format!(
-        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 NPM_CONFIG_PREFIX={} PATH={} {claude_env_assignment}{} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
+        "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 NPM_CONFIG_PREFIX={} PATH={} {} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
         shell_quote(display),
         shell_quote(&npm_prefix),
         shell_quote(&path),
@@ -765,7 +800,8 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, linux_user_for, linux_user_process_command,
-        orca_serve_command_line, repository_pattern, shell_quote, token_pattern,
+        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, shell_quote,
+        token_pattern,
     };
     use std::path::Path;
 
@@ -795,7 +831,6 @@ mod tests {
             17_000,
             "https://host.example/w/workspace-id",
             Path::new("/srv/codev/workspaces/workspace-id"),
-            None,
         );
 
         assert!(
@@ -805,6 +840,49 @@ mod tests {
             "PATH='/home/orca-ws-e010bd2ca3c1438facef/.npm-global/bin:/usr/local/bin:/usr/bin:/bin'"
         ));
         assert!(command.contains("'/opt/orca/AppRun' --serve"));
+    }
+
+    #[test]
+    fn never_puts_a_linked_credential_in_the_logged_sudo_command() {
+        // sudo logs its own full argv to the system journal (confirmed: a
+        // real Claude OAuth token leaked this way when it was embedded as
+        // `env NAME='value'` in the shell string). The secret must only
+        // ever travel through the child process's environment, passed via
+        // --preserve-env=NAME (which logs only the variable's name) and
+        // Command::env (never argv), never as literal text anywhere in the
+        // command that gets run or logged.
+        let secret = "sk-ant-oat01-super-secret-value";
+        let command = orca_serve_sudo_command(
+            Path::new("/opt/orca/AppRun"),
+            "orca-ws-e010bd2ca3c1438facef",
+            ":99",
+            17_000,
+            "https://host.example/w/workspace-id",
+            Path::new("/srv/codev/workspaces/workspace-id"),
+            Some(("CLAUDE_CODE_OAUTH_TOKEN", secret)),
+        );
+        let std_command = command.as_std();
+
+        for arg in std_command.get_args() {
+            assert!(
+                !arg.to_string_lossy().contains(secret),
+                "credential leaked into a logged sudo argument: {arg:?}"
+            );
+        }
+        assert!(
+            std_command
+                .get_args()
+                .any(|arg| arg == "--preserve-env=CLAUDE_CODE_OAUTH_TOKEN"),
+            "expected --preserve-env to forward the credential by name"
+        );
+        assert_eq!(
+            std_command
+                .get_envs()
+                .find(|(name, _)| *name == "CLAUDE_CODE_OAUTH_TOKEN")
+                .and_then(|(_, value)| value),
+            Some(secret.as_ref()),
+            "expected the credential to be set via the environment, not argv"
+        );
     }
 
     #[test]
