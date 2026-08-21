@@ -1,1 +1,0 @@
-import{Ov as e}from"./web-index-EgMYz-_D.js";var t=e(`chevron-up`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};

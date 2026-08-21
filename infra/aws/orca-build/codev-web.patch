@@ -8289,7 +8289,7 @@ index a722a1f..0280172 100644
  import { useAppStore } from '../../store'
  import {
    createNativeChatPtySessionOptions,
-@@ -23,6 +28,34 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
+@@ -23,6 +28,36 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
  const subscribeEmpty = (): (() => void) => () => {}
  const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
  
@@ -8297,7 +8297,9 @@ index a722a1f..0280172 100644
 +  low: 0,
 +  medium: 1,
 +  high: 2,
-+  xhigh: 3
++  xhigh: 3,
++  max: 4,
++  ultra: 5
 +}
 +
 +async function waitForTerminalText(
@@ -8324,7 +8326,7 @@ index a722a1f..0280172 100644
  export function useNativeChatSessionOptions(args: {
    agent: AgentType
    terminalTabId: string
-@@ -61,6 +94,20 @@ export function useNativeChatSessionOptions(args: {
+@@ -61,6 +96,20 @@ export function useNativeChatSessionOptions(args: {
            )
          : null
      let settingsWrite = Promise.resolve()
@@ -8345,7 +8347,7 @@ index a722a1f..0280172 100644
      return createNativeChatPtySessionOptions({
        agent,
        scopeKey,
-@@ -73,6 +120,7 @@ export function useNativeChatSessionOptions(args: {
+@@ -73,6 +122,7 @@ export function useNativeChatSessionOptions(args: {
        reportedValues,
        dispatchCommand,
        onAgentPicker,
@@ -8354,10 +8356,10 @@ index a722a1f..0280172 100644
          // Why: read the live persisted defaults at write time (after any prior
          // write in this chain settles) and merge only this selection onto them,
 diff --git a/src/shared/agent-session-option-catalog-claude-codex.ts b/src/shared/agent-session-option-catalog-claude-codex.ts
-index 0464fd1..9e28cd2 100644
+index 0464fd1..693c796 100644
 --- a/src/shared/agent-session-option-catalog-claude-codex.ts
 +++ b/src/shared/agent-session-option-catalog-claude-codex.ts
-@@ -191,7 +191,6 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+@@ -191,23 +191,23 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
  }
  
  const CODEX_EFFORT_CHOICES = [
@@ -8365,3 +8367,293 @@ index 0464fd1..9e28cd2 100644
    { value: 'low', label: 'Low' },
    { value: 'medium', label: 'Medium' },
    { value: 'high', label: 'High' },
+-  { value: 'xhigh', label: 'Extra high' }
++  { value: 'xhigh', label: 'Extra high' },
++  { value: 'max', label: 'Max' },
++  { value: 'ultra', label: 'Ultra' }
+ ]
+ 
+-function codexEffort(includeExtraHigh: boolean): CatalogOption {
++function codexEffort(maximum: 'high' | 'xhigh' | 'max' | 'ultra'): CatalogOption {
++  const maximumIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === maximum)
+   return {
+     id: 'effort',
+     label: 'Reasoning effort',
+     category: 'thought_level',
+     kind: {
+       type: 'select',
+-      choices: includeExtraHigh
+-        ? CODEX_EFFORT_CHOICES
+-        : CODEX_EFFORT_CHOICES.filter((choice) => choice.value !== 'xhigh'),
++      choices: CODEX_EFFORT_CHOICES.slice(0, maximumIndex + 1),
+       defaultValue: 'medium'
+     },
+     apply: {
+@@ -224,14 +224,14 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+   // Why: Codex model access depends on auth. Keep this seed short and allow
+   // unknown persisted ids to pass through instead of claiming a complete list.
+   models: [
+-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort(true)] },
+-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort(true)] },
+-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort(false)] },
+-    { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort(true)] },
++    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
++    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
++    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
++    { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },
+     {
+       id: 'gpt-5.2-codex',
+       label: 'GPT-5.2 Codex',
+-      options: [codexEffort(true)]
++      options: [codexEffort('xhigh')]
+     }
+   ],
+   modelApply: {
+@@ -245,5 +245,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+       pickerCommand: '/model'
+     }
+   },
+-  unknownModelOptions: [codexEffort(true)]
++  unknownModelOptions: [codexEffort('xhigh')]
+ }
+diff --git a/src/renderer/src/components/native-chat/NativeChatView.tsx b/src/renderer/src/components/native-chat/NativeChatView.tsx
+index 2fb4581..4a0cb26 100644
+--- a/src/renderer/src/components/native-chat/NativeChatView.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatView.tsx
+@@ -53,6 +53,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
+ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
+ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+ import type { NativeChatViewProps } from './native-chat-view-types'
++import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
++import { assembleNativeChatSession } from './native-chat-session-assembler'
+ 
+ export type { NativeChatViewProps } from './native-chat-view-types'
+ 
+@@ -138,6 +140,35 @@ function NativeChatResolvedView({
+     transcriptPath,
+     runtimeEnvironmentId
+   })
++  const [terminalFallbackMessages, setTerminalFallbackMessages] = useState(() =>
++    agent === 'codex' ? codexTerminalScreenToMessages(readTerminalScreen?.() ?? null) : []
++  )
++  useEffect(() => {
++    if (agent !== 'codex' || !readTerminalScreen) {
++      setTerminalFallbackMessages([])
++      return
++    }
++    const refresh = (): void => {
++      setTerminalFallbackMessages(codexTerminalScreenToMessages(readTerminalScreen()))
++    }
++    refresh()
++    const timer = window.setInterval(refresh, 500)
++    return () => window.clearInterval(timer)
++  }, [agent, readTerminalScreen])
++  const sessionWithTerminalFallback = useMemo<typeof session>(() => {
++    if (terminalFallbackMessages.length === 0) return session
++    const assembled = assembleNativeChatSession({
++      sources: { transcript: session.messages, scrape: terminalFallbackMessages },
++      sessionId: session.sessionId,
++      agent: session.agent,
++      status: session.status,
++      ...(session.error ? { error: session.error } : {})
++    })
++    return {
++      ...session,
++      ...assembled
++    }
++  }, [session, terminalFallbackMessages])
+   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
+   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
+   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
+@@ -147,12 +178,12 @@ function NativeChatResolvedView({
+   const launchDraftSignal = useNativeChatLaunchDraftSignal({
+     terminalTabId,
+     agent,
+-    messages: session.messages,
+-    transcriptLoading: session.readPhase === 'loading'
++    messages: sessionWithTerminalFallback.messages,
++    transcriptLoading: sessionWithTerminalFallback.readPhase === 'loading'
+   })
+   // The live-session merge reconciles hooks with replayable transcript turn
+   // boundaries; all working consumers must use that one lifecycle decision.
+-  const liveWorking = session.status === 'working'
++  const liveWorking = sessionWithTerminalFallback.status === 'working'
+   // The agent's in-progress reply preview (hook), shown as a live streaming
+   // bubble while it works — before the completed turn flushes to the transcript.
+   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+@@ -224,20 +255,31 @@ function NativeChatResolvedView({
+   // Prune echoes whose real user turn is now in the transcript.
+   useEffect(() => {
+     setPending((prev) =>
+-      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
++      writePendingSendCache(
++        pendingScope,
++        prunePendingSends(prev, sessionWithTerminalFallback.messages)
++      )
+     )
+-  }, [session.messages, pendingScope])
++  }, [sessionWithTerminalFallback.messages, pendingScope])
+   useEffect(() => {
+-    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
++    if (
++      !paneLaunchPrompt ||
++      !shouldPruneLaunchPrompt(paneLaunchPrompt, sessionWithTerminalFallback.messages)
++    ) {
+       return
+     }
+     clearNativeChatLaunchPrompt(terminalTabId)
+-  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
++  }, [
++    clearNativeChatLaunchPrompt,
++    paneLaunchPrompt,
++    sessionWithTerminalFallback.messages,
++    terminalTabId
++  ])
+   const onOptimisticSend = useCallback(
+     (text: string, imagePaths?: string[]) => {
+       setWorkingInterrupted(false)
+       const sentAt = Date.now()
+-      const boundary = session.messages.at(-1)
++      const boundary = sessionWithTerminalFallback.messages.at(-1)
+       const entry: NativeChatPendingSend = {
+         id: nextNativeChatPendingSendId(sentAt),
+         text,
+@@ -249,7 +291,7 @@ function NativeChatResolvedView({
+       setPending(appendPendingSendCache(pendingScope, entry))
+       return entry.id
+     },
+-    [pendingScope, session.messages]
++    [pendingScope, sessionWithTerminalFallback.messages]
+   )
+   const onOptimisticSendCanceled = useCallback(
+     (pendingId: string) => {
+@@ -268,15 +310,18 @@ function NativeChatResolvedView({
+   )
+ 
+   const launchPromptMessage = useMemo(
+-    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
+-    [paneLaunchPrompt, session.messages]
++    () => launchPromptAsMessage(paneLaunchPrompt, sessionWithTerminalFallback.messages),
++    [paneLaunchPrompt, sessionWithTerminalFallback.messages]
+   )
+   const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
+     if (!launchPromptMessage) {
+-      return session
++      return sessionWithTerminalFallback
++    }
++    return {
++      ...sessionWithTerminalFallback,
++      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
+     }
+-    return { ...session, messages: [...session.messages, launchPromptMessage] }
+-  }, [launchPromptMessage, session])
++  }, [launchPromptMessage, sessionWithTerminalFallback])
+ 
+   const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
+     const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
+diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
+new file mode 100644
+index 0000000..45c52d8
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
+@@ -0,0 +1,68 @@
++import type { NativeChatMessage } from '../../../../shared/native-chat-types'
++import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
++
++const CODEX_PROMPT = /^\s*›\s+(.*)$/
++const CODEX_REPLY = /^\s*•\s+(.*)$/
++
++function isComposerPlaceholder(value: string): boolean {
++  return /^(?:Ask Codex to|Type a message|Describe a task)/i.test(value)
++}
++
++/**
++ * Best-effort fallback for Codex's alternate-screen TUI when the structured
++ * transcript hook is unavailable. Only explicit Codex prompt/reply markers are
++ * accepted; status lines, model notices, and the composer placeholder are
++ * intentionally ignored.
++ */
++export function codexTerminalScreenToMessages(screen: string | null): NativeChatMessage[] {
++  if (!screen) return []
++
++  const messages: NativeChatMessage[] = []
++  let activeRole: 'user' | 'assistant' | null = null
++  let activeLines: string[] = []
++
++  const flush = (): void => {
++    const text = activeLines.join('\n').trim()
++    if (activeRole && text) {
++      messages.push({
++        id: `codex-screen-${messages.length}-${activeRole}-${text}`,
++        role: activeRole,
++        blocks: [{ type: 'text', text }],
++        timestamp: null,
++        source: 'scrape'
++      })
++    }
++    activeRole = null
++    activeLines = []
++  }
++
++  for (const line of stripScrollbackAnsi(screen).split('\n')) {
++    const prompt = line.match(CODEX_PROMPT)?.[1]?.trim()
++    if (prompt !== undefined) {
++      flush()
++      if (prompt && !prompt.startsWith('/') && !isComposerPlaceholder(prompt)) {
++        activeRole = 'user'
++        activeLines = [prompt]
++      }
++      continue
++    }
++
++    const reply = line.match(CODEX_REPLY)?.[1]?.trim()
++    if (reply !== undefined) {
++      flush()
++      // Codex uses bullets for both assistant prose and local model/status
++      // notices. A reply is only conversational when it follows a user prompt.
++      if (messages.at(-1)?.role === 'user') {
++        activeRole = 'assistant'
++        activeLines = [reply]
++      }
++      continue
++    }
++
++    if (activeRole && line.trim()) {
++      activeLines.push(line.trim())
++    }
++  }
++  flush()
++  return messages
++}
+diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
+new file mode 100644
+index 0000000..7f84a6a
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from 'vitest'
++import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
++
++describe('codexTerminalScreenToMessages', () => {
++  it('extracts user prompts and completed Codex replies', () => {
++    const messages = codexTerminalScreenToMessages(`
++› /model gpt-5.6-luna
++• Model changed to gpt-5.6-luna high
++› hi
++• Hi! What would you like to work on?
++› Ask Codex to do anything
++gpt-5.6-luna high
++`)
++
++    expect(messages.map((message) => [message.role, message.blocks[0]])).toEqual([
++      ['user', { type: 'text', text: 'hi' }],
++      ['assistant', { type: 'text', text: 'Hi! What would you like to work on?' }]
++    ])
++  })
++
++  it('does not turn model notices into assistant chat', () => {
++    expect(
++      codexTerminalScreenToMessages('› /model gpt-5.6-luna\n• Model changed to gpt-5.6-luna high')
++    ).toEqual([])
++  })
++})
