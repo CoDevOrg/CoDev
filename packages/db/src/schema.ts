@@ -119,6 +119,8 @@ export const cliDeviceAuthorizationStatus = pgEnum(
   "cli_device_authorization_status",
   ["pending", "approved", "denied"],
 );
+export const cliClientType = pgEnum("cli_client_type", ["cli", "mobile"]);
+export const mobilePlatform = pgEnum("mobile_platform", ["ios", "android"]);
 export const users = pgTable(
   "users",
   {
@@ -221,6 +223,7 @@ export const cliDeviceAuthorizations = pgTable(
     deviceCodeHash: text("device_code_hash").notNull(),
     userCode: text("user_code").notNull(),
     status: cliDeviceAuthorizationStatus("status").default("pending").notNull(),
+    clientType: cliClientType("client_type").default("cli").notNull(),
     approvedBy: uuid("approved_by").references(() => users.id, {
       onDelete: "cascade",
     }),
@@ -246,6 +249,7 @@ export const cliAccessTokens = pgTable(
       .notNull(),
     tokenHash: text("token_hash").notNull(),
     name: text("name").default("CoDev CLI").notNull(),
+    clientType: cliClientType("client_type").default("cli").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -255,6 +259,27 @@ export const cliAccessTokens = pgTable(
     uniqueIndex("cli_access_tokens_token_hash_idx").on(table.tokenHash),
     index("cli_access_tokens_user_idx").on(table.userId),
     index("cli_access_tokens_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const mobilePushTokens = pgTable(
+  "mobile_push_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    expoPushToken: text("expo_push_token").notNull(),
+    platform: mobilePlatform("platform").notNull(),
+    deviceId: text("device_id"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("mobile_push_tokens_token_idx").on(table.expoPushToken),
+    index("mobile_push_tokens_user_idx").on(table.userId),
   ],
 );
 

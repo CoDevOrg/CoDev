@@ -1,3 +1,11 @@
+import { randomBytes } from "node:crypto";
+
+import { eq } from "drizzle-orm";
+
+import { schema } from "@codev/db";
+
+import { hashPassword, verifyPassword } from "./crypto";
+import { getDatabase } from "./database";
 import { getNewAccountPasswordError } from "./password-policy";
 
 export type CredentialsIntent = "sign-in" | "sign-up";
@@ -46,4 +54,88 @@ export function resolveCredentialsAuthorizeStep(input: {
     return "create-account";
   }
   return "reject";
+}
+
+export type CredentialsUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+};
+
+/**
+ * Shared by NextAuth's Credentials `authorize()` (web) and the mobile
+ * email sign-in route — the only two entry points for password-based
+ * login, so identity/lookup/creation logic lives here once.
+ */
+export async function resolveCredentialsSignIn(credentials: {
+  intent?: unknown;
+  name?: unknown;
+  email?: unknown;
+  password?: unknown;
+}): Promise<CredentialsUser | null> {
+  const { intent, name, email, password } = parseCredentialsFields(credentials);
+  if (!email || !password) return null;
+
+  const database = getDatabase();
+  const [existingUser] = await database
+    .select({
+      id: schema.users.id,
+      name: schema.users.name,
+      email: schema.users.email,
+      avatarUrl: schema.users.avatarUrl,
+      passwordHash: schema.users.passwordHash,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.email, email))
+    .limit(1);
+
+  const step = resolveCredentialsAuthorizeStep({
+    intent,
+    name,
+    email,
+    password,
+    existingUser: Boolean(existingUser),
+  });
+
+  if (step === "reject") return null;
+
+  if (step === "verify-existing") {
+    if (
+      !existingUser?.passwordHash ||
+      !(await verifyPassword(password, existingUser.passwordHash))
+    ) {
+      return null;
+    }
+    return {
+      id: existingUser.id,
+      name: existingUser.name,
+      email: existingUser.email,
+      avatarUrl: existingUser.avatarUrl,
+    };
+  }
+
+  const [localUser] = await database
+    .insert(schema.users)
+    .values({
+      login: `local-${randomBytes(8).toString("hex")}`,
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+    })
+    .returning({
+      id: schema.users.id,
+      name: schema.users.name,
+      email: schema.users.email,
+      avatarUrl: schema.users.avatarUrl,
+    });
+
+  return localUser
+    ? {
+        id: localUser.id,
+        name: localUser.name,
+        email: localUser.email,
+        avatarUrl: localUser.avatarUrl,
+      }
+    : null;
 }

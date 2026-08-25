@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -9,11 +8,8 @@ import Google from "next-auth/providers/google";
 import { schema } from "@codev/db";
 
 import { resolveSignInProviderGate } from "@/lib/auth-sign-in-gate";
-import {
-  parseCredentialsFields,
-  resolveCredentialsAuthorizeStep,
-} from "@/lib/credentials-auth";
-import { encryptSecret, hashPassword, verifyPassword } from "@/lib/crypto";
+import { resolveCredentialsSignIn } from "@/lib/credentials-auth";
+import { encryptSecret } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
 import { resolveGithubConnection } from "@/lib/github";
@@ -79,75 +75,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const { intent, name, email, password } = parseCredentialsFields({
+        const user = await resolveCredentialsSignIn({
           intent: credentials?.intent,
           name: credentials?.name,
           email: credentials?.email,
           password: credentials?.password,
         });
-
-        if (!email || !password) return null;
-
-        const database = getDatabase();
-        const [existingUser] = await database
-          .select({
-            id: schema.users.id,
-            name: schema.users.name,
-            email: schema.users.email,
-            avatarUrl: schema.users.avatarUrl,
-            passwordHash: schema.users.passwordHash,
-          })
-          .from(schema.users)
-          .where(eq(schema.users.email, email))
-          .limit(1);
-
-        const step = resolveCredentialsAuthorizeStep({
-          intent,
-          name,
-          email,
-          password,
-          existingUser: Boolean(existingUser),
-        });
-
-        if (step === "reject") return null;
-
-        if (step === "verify-existing") {
-          if (
-            !existingUser?.passwordHash ||
-            !(await verifyPassword(password, existingUser.passwordHash))
-          ) {
-            return null;
-          }
-
-          return {
-            id: existingUser.id,
-            name: existingUser.name,
-            email: existingUser.email,
-            image: existingUser.avatarUrl,
-          };
-        }
-
-        const [localUser] = await database
-          .insert(schema.users)
-          .values({
-            login: `local-${randomBytes(8).toString("hex")}`,
-            name,
-            email,
-            passwordHash: await hashPassword(password),
-          })
-          .returning({
-            id: schema.users.id,
-            name: schema.users.name,
-            email: schema.users.email,
-            avatarUrl: schema.users.avatarUrl,
-          });
-
-        return localUser
+        return user
           ? {
-              id: localUser.id,
-              name: localUser.name,
-              email: localUser.email,
-              image: localUser.avatarUrl,
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              image: user.avatarUrl,
             }
           : null;
       },
@@ -184,12 +123,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const database = getDatabase();
         const now = new Date();
-        const [existingByEmail] = await database
+        const [existingByGoogle] = await database
           .select({ id: schema.users.id })
           .from(schema.users)
-          .where(eq(schema.users.email, googleProfile.email))
+          .where(eq(schema.users.googleUserId, googleUserId))
           .limit(1);
-        const [localUser] = existingByEmail
+        const [existingByEmail] = existingByGoogle
+          ? []
+          : await database
+              .select({ id: schema.users.id })
+              .from(schema.users)
+              .where(eq(schema.users.email, googleProfile.email))
+              .limit(1);
+        const existingId = existingByGoogle?.id ?? existingByEmail?.id;
+        const [localUser] = existingId
           ? await database
               .update(schema.users)
               .set({
@@ -199,7 +146,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 avatarUrl: googleProfile.picture ?? null,
                 updatedAt: now,
               })
-              .where(eq(schema.users.id, existingByEmail.id))
+              .where(eq(schema.users.id, existingId))
               .returning({ id: schema.users.id })
           : await database
               .insert(schema.users)

@@ -34,7 +34,9 @@ function createUserCode() {
   return `${value.slice(0, 4)}-${value.slice(4)}`;
 }
 
-export async function createCliDeviceAuthorization() {
+export async function createCliDeviceAuthorization(
+  input: { clientType?: "cli" | "mobile" } = {},
+) {
   const deviceCode = randomBytes(32).toString("base64url");
   const userCode = createUserCode();
   const expiresAt = new Date(Date.now() + DEVICE_TTL_MS);
@@ -46,6 +48,7 @@ export async function createCliDeviceAuthorization() {
     .values({
       deviceCodeHash: hash(deviceCode),
       userCode,
+      clientType: input.clientType ?? "cli",
       expiresAt,
     });
   return { deviceCode, userCode, expiresAt };
@@ -79,6 +82,23 @@ export async function approveCliDeviceAuthorization(input: {
   }
 }
 
+export async function mintCliAccessToken(
+  userId: string,
+  clientType: "cli" | "mobile",
+  database: Pick<ReturnType<typeof getDatabase>, "insert"> = getDatabase(),
+) {
+  const rawToken = `codev_cli_${randomBytes(32).toString("base64url")}`;
+  const expiresAt = new Date(Date.now() + CLI_TOKEN_TTL_MS);
+  await database.insert(schema.cliAccessTokens).values({
+    userId,
+    tokenHash: hash(rawToken),
+    clientType,
+    name: clientType === "mobile" ? "CoDev Mobile" : "CoDev CLI",
+    expiresAt,
+  });
+  return { token: rawToken, expiresAt };
+}
+
 export async function exchangeCliDeviceAuthorization(deviceCode: string) {
   if (!deviceCode) throw new CliAuthError("Device code is required.");
   return getDatabase().transaction(async (transaction) => {
@@ -93,17 +113,13 @@ export async function exchangeCliDeviceAuthorization(deviceCode: string) {
           isNull(schema.cliDeviceAuthorizations.consumedAt),
         ),
       )
-      .returning({ userId: schema.cliDeviceAuthorizations.approvedBy });
+      .returning({
+        userId: schema.cliDeviceAuthorizations.approvedBy,
+        clientType: schema.cliDeviceAuthorizations.clientType,
+      });
     if (!authorization?.userId) return null;
 
-    const rawToken = `codev_cli_${randomBytes(32).toString("base64url")}`;
-    const expiresAt = new Date(Date.now() + CLI_TOKEN_TTL_MS);
-    await transaction.insert(schema.cliAccessTokens).values({
-      userId: authorization.userId,
-      tokenHash: hash(rawToken),
-      expiresAt,
-    });
-    return { token: rawToken, expiresAt };
+    return mintCliAccessToken(authorization.userId, authorization.clientType, transaction);
   });
 }
 

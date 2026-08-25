@@ -197,6 +197,20 @@
       "when": 1786970000000,
       "tag": "0027_codex_cli_bridge",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1787554583237,
+      "tag": "0028_nostalgic_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1787554613123,
+      "tag": "0029_mixed_calypso",
+      "breakpoints": true
     }
   ]
 }
