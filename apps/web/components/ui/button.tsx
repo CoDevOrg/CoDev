@@ -9,6 +9,18 @@ const VARIANT_CLASSES = {
   secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
 } as const;
 
+// Some pages (the settings area) load Tailwind utilities inside a CSS
+// `@layer`, but the app's own global reset sets `button { color: inherit }`
+// as plain, unlayered CSS — which always wins over layered utility classes
+// regardless of specificity, silently breaking `text-*-foreground` above.
+// An inline style has the highest priority of all short of `!important`, so
+// it wins unconditionally instead of depending on cascade-layer plumbing.
+const VARIANT_TEXT_COLOR = {
+  default: "var(--color-primary-foreground)",
+  outline: "var(--color-foreground)",
+  secondary: "var(--color-secondary-foreground)",
+} as const;
+
 const SIZE_CLASSES = {
   default: "h-9 px-4 py-2",
   sm: "h-8 gap-1.5 px-3 text-sm",
@@ -22,13 +34,14 @@ export const Button = React.forwardRef<
     size?: keyof typeof SIZE_CLASSES;
   }
 >(function Button(
-  { className, variant = "default", size = "default", ...props },
+  { className, variant = "default", size = "default", style, ...props },
   ref,
 ) {
   return (
     <button
       ref={ref}
       data-slot="button"
+      style={{ color: VARIANT_TEXT_COLOR[variant], ...style }}
       className={cn(
         "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
         VARIANT_CLASSES[variant],

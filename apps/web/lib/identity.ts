@@ -28,6 +28,7 @@ export type ConnectedAccounts = {
     login: string | null;
   };
   sameCoDevUser: boolean;
+  hasPassword: boolean;
 };
 
 export async function getConnectedAccounts(
@@ -35,7 +36,10 @@ export async function getConnectedAccounts(
 ): Promise<ConnectedAccounts> {
   const [[record], github] = await Promise.all([
     getDatabase()
-      .select({ googleUserId: schema.users.googleUserId })
+      .select({
+        googleUserId: schema.users.googleUserId,
+        passwordHash: schema.users.passwordHash,
+      })
       .from(schema.users)
       .where(eq(schema.users.id, userId))
       .limit(1),
@@ -48,6 +52,7 @@ export async function getConnectedAccounts(
     google: { connected: googleConnected },
     github,
     sameCoDevUser: googleConnected && github.connected,
+    hasPassword: Boolean(record?.passwordHash),
   };
 }
 

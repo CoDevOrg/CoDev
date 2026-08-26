@@ -7,6 +7,13 @@
  * matches what the personal settings page looked like when it was
  * rendered inside a live Orca client.
  */
+/* Declares layer order up front: reset < theme < utilities. Without this,
+   the plain (unlayered) reset rules below would beat every Tailwind utility
+   class regardless of specificity — unlayered CSS always wins over layered
+   CSS per the Cascade Layers spec, which is exactly what broke Button's
+   `text-primary-foreground` earlier. */
+@layer reset, theme, utilities;
+
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 
@@ -45,25 +52,30 @@
 }
 
 /* Scope root: the settings layout wraps its content in this class instead
-   of relying on Tailwind's preflight, which we deliberately don't load. */
-.orca-settings-scope {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
-}
+   of relying on Tailwind's preflight, which we deliberately don't load.
+   Kept in the `reset` layer (declared above, ordered before `utilities`) so
+   these plain-element defaults always lose to actual Tailwind utility
+   classes like Button's `text-primary-foreground`. */
+@layer reset {
+  .orca-settings-scope {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
 
-.orca-settings-scope ul,
-.orca-settings-scope ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
+  .orca-settings-scope ul,
+  .orca-settings-scope ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
 
-.orca-settings-scope button {
-  font: inherit;
-  color: inherit;
-}
+  .orca-settings-scope button {
+    font: inherit;
+    color: inherit;
+  }
 
-.orca-settings-scope input {
-  font: inherit;
+  .orca-settings-scope input {
+    font: inherit;
+  }
 }

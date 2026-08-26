@@ -16,6 +16,7 @@ describe("ProfileSettings", () => {
           google: { connected: true },
           github: { connected: true, login: "yousef20920" },
           sameCoDevUser: true,
+          hasPassword: true,
         }}
         user={{
           id: "user-1",
@@ -48,6 +49,7 @@ describe("ProfileSettings", () => {
           google: { connected: true },
           github: { connected: false, login: null },
           sameCoDevUser: false,
+          hasPassword: false,
         }}
         user={{ id: "user-1", name: "Yousef" }}
       />,
