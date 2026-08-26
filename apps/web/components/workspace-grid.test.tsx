@@ -12,6 +12,7 @@ describe("WorkspaceGrid", () => {
     render(
       <WorkspaceGrid
         appSlug={undefined}
+        githubAuthConfigured={true}
         workspaces={[
           {
             id: "workspace-1",
@@ -37,6 +38,7 @@ describe("WorkspaceGrid", () => {
     const { container } = render(
       <WorkspaceGrid
         appSlug={undefined}
+        githubAuthConfigured={true}
         workspaces={[
           {
             id: "workspace-1",
@@ -59,6 +61,7 @@ describe("WorkspaceGrid", () => {
     const { container } = render(
       <WorkspaceGrid
         appSlug={undefined}
+        githubAuthConfigured={true}
         workspaces={[
           {
             id: "workspace-1",
@@ -93,6 +96,7 @@ describe("WorkspaceGrid", () => {
     render(
       <WorkspaceGrid
         appSlug={undefined}
+        githubAuthConfigured={true}
         workspaces={[
           {
             id: "workspace-1",

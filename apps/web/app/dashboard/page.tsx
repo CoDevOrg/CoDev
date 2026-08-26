@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { isGitHubAuthConfigured } from "@codev/config";
+
 import { AppChrome } from "@/components/app-chrome";
 import { WorkspaceGrid } from "@/components/workspace-grid";
 import { listWorkspacePresence } from "@/lib/collaboration-server";
@@ -23,6 +25,7 @@ export default async function DashboardPage() {
       <main className="dashboard-shell">
         <WorkspaceGrid
           appSlug={process.env.GITHUB_APP_SLUG}
+          githubAuthConfigured={isGitHubAuthConfigured()}
           user={user}
           workspaces={workspaceCards.map((workspace) => ({
             ...workspace,

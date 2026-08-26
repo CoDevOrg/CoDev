@@ -69,10 +69,12 @@ function collaboratorName(
 
 export function WorkspaceGrid({
   appSlug,
+  githubAuthConfigured,
   user,
   workspaces,
 }: {
   appSlug: string | undefined;
+  githubAuthConfigured: boolean;
   user?: AppUser;
   workspaces: WorkspaceItem[];
 }) {
@@ -263,7 +265,11 @@ export function WorkspaceGrid({
         <div
           className={`workspace-cards ${view === "list" ? "workspace-cards-list" : ""}`}
         >
-          <RepositoryPicker appSlug={appSlug} />
+          <RepositoryPicker
+            appSlug={appSlug}
+            githubAuthConfigured={githubAuthConfigured}
+            githubConnected={Boolean(user?.githubLogin)}
+          />
           {filteredWorkspaces.map((workspace) => (
             <div
               className="workspace-card-wrapper"

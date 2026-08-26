@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
+import { connectGitHubAccount } from "@/app/actions/github";
 import type { GitHubInstallation, GitHubRepository } from "@/lib/github";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
@@ -16,7 +17,15 @@ async function readJson<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
+export function RepositoryPicker({
+  appSlug,
+  githubAuthConfigured,
+  githubConnected,
+}: {
+  appSlug: string | undefined;
+  githubAuthConfigured: boolean;
+  githubConnected: boolean;
+}) {
   const router = useRouter();
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
@@ -28,7 +37,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !githubConnected) return;
     let active = true;
     fetch("/api/github/installations")
       .then((response) =>
@@ -47,7 +56,7 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, githubConnected]);
 
   async function loadRepositories(value: string) {
     setInstallationId(value);
@@ -173,91 +182,120 @@ export function RepositoryPicker({ appSlug }: { appSlug: string | undefined }) {
             <div className="workspace-create-divider">
               <span>or connect GitHub</span>
             </div>
-            <div className="picker-grid">
-              <label>
-                <span>Installation</span>
-                <select
-                  value={installationId}
-                  onChange={(event) =>
-                    void loadRepositories(event.target.value)
-                  }
-                  disabled={state === "loading" && installations.length === 0}
-                >
-                  <option value="">Select an account</option>
-                  {installations.map((installation) => (
-                    <option key={installation.id} value={installation.id}>
-                      {installation.account.login} · {installation.account.type}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Repository</span>
-                <select
-                  value={repositoryId}
-                  onChange={(event) => setRepositoryId(event.target.value)}
-                  disabled={!installationId || state === "loading"}
-                >
-                  <option value="">Select a repository</option>
-                  {repositories.map((repository) => (
-                    <option key={repository.id} value={repository.id}>
-                      {repository.private ? "Private · " : ""}
-                      {repository.full_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="primary-button picker-submit"
-                type="button"
-                disabled={!repositoryId || creating}
-                onClick={() =>
-                  void createWorkspace({
-                    installationId: Number(installationId),
-                    repositoryId: Number(repositoryId),
-                  })
-                }
-              >
-                {creating ? "Creating…" : "Create workspace"}
-              </button>
-            </div>
-            {state === "loading" ? (
-              <p className="panel-status">Loading GitHub access…</p>
-            ) : null}
-            {state === "empty" && !message ? (
-              <p className="panel-status">
-                Install CoDev on a GitHub account to make repositories
-                available.
-              </p>
-            ) : null}
-            {message ? (
-              <p
-                className={`panel-status ${state === "error" ? "error-copy" : ""}`}
-              >
-                {message}
-              </p>
-            ) : null}
-            <div className="workspace-create-footer">
-              <div className="workspace-create-github-help">
-                <strong>Need to change repository access?</strong>
-                <span>
-                  This opens your existing CoDev installation settings on
-                  GitHub.
-                </span>
+            {!githubConnected ? (
+              <div className="workspace-create-connect">
+                <p>
+                  Connect your GitHub account to open one of your
+                  repositories in a new workspace.
+                </p>
+                {githubAuthConfigured ? (
+                  <form action={connectGitHubAccount.bind(null, "/dashboard")}>
+                    <button
+                      className="primary-button picker-submit"
+                      type="submit"
+                    >
+                      Connect GitHub
+                    </button>
+                  </form>
+                ) : (
+                  <p className="panel-status">
+                    GitHub account linking is not configured.
+                  </p>
+                )}
               </div>
-              <a
-                className="secondary-button"
-                href={installUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Manage repository access ↗
-              </a>
-              <p className="security-note">
-                Private source is transferred as a bounded, credential-free
-                snapshot. GitHub tokens never enter the sandbox.
-              </p>
-            </div>
+            ) : (
+              <>
+                <div className="picker-grid">
+                  <label>
+                    <span>Installation</span>
+                    <select
+                      value={installationId}
+                      onChange={(event) =>
+                        void loadRepositories(event.target.value)
+                      }
+                      disabled={
+                        state === "loading" && installations.length === 0
+                      }
+                    >
+                      <option value="">Select an account</option>
+                      {installations.map((installation) => (
+                        <option key={installation.id} value={installation.id}>
+                          {installation.account.login} ·{" "}
+                          {installation.account.type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Repository</span>
+                    <select
+                      value={repositoryId}
+                      onChange={(event) => setRepositoryId(event.target.value)}
+                      disabled={!installationId || state === "loading"}
+                    >
+                      <option value="">Select a repository</option>
+                      {repositories.map((repository) => (
+                        <option key={repository.id} value={repository.id}>
+                          {repository.private ? "Private · " : ""}
+                          {repository.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="primary-button picker-submit"
+                    type="button"
+                    disabled={!repositoryId || creating}
+                    onClick={() =>
+                      void createWorkspace({
+                        installationId: Number(installationId),
+                        repositoryId: Number(repositoryId),
+                      })
+                    }
+                  >
+                    {creating ? "Creating…" : "Create workspace"}
+                  </button>
+                </div>
+                {state === "loading" ? (
+                  <p className="panel-status">Loading GitHub access…</p>
+                ) : null}
+                {state === "empty" && !message ? (
+                  <p className="panel-status">
+                    Install CoDev on a GitHub account to make repositories
+                    available.
+                  </p>
+                ) : null}
+                {message ? (
+                  <p
+                    className={`panel-status ${state === "error" ? "error-copy" : ""}`}
+                  >
+                    {message}
+                  </p>
+                ) : null}
+                <div className="workspace-create-footer">
+                  <div className="workspace-create-github-help">
+                    <strong>Need to change repository access?</strong>
+                    <span>
+                      This opens your existing CoDev installation settings on
+                      GitHub.
+                    </span>
+                  </div>
+                  <a
+                    className="secondary-button"
+                    href={installUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Manage repository access ↗
+                  </a>
+                  <p className="security-note">
+                    Private source is transferred as a bounded,
+                    credential-free snapshot. GitHub tokens never enter the
+                    sandbox.
+                  </p>
+                </div>
+              </>
+            )}
           </section>
         </div>
       ) : null}
