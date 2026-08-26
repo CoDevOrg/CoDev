@@ -12,18 +12,26 @@ export function WorkspaceHome({
   repository,
   hasRepository,
   availableProviders,
+  canInvite,
 }: {
   workspaceId: string;
   repository: string | null;
   hasRepository: boolean;
   availableProviders: ChatProvider[];
+  canInvite: boolean;
 }) {
   // Codex/Claude chat lives inside the IDE itself (Orca's native agent panes),
   // so the IDE remains the workspace's primary surface.
   const [view, setView] = useState<"chat" | "ide">("ide");
 
   if (view === "ide") {
-    return <OrcaWorkspace repository={repository} workspaceId={workspaceId} />;
+    return (
+      <OrcaWorkspace
+        canInvite={canInvite}
+        repository={repository}
+        workspaceId={workspaceId}
+      />
+    );
   }
 
   return (

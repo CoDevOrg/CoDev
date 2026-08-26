@@ -128,7 +128,13 @@ describe("createOrcaManagedProposal", () => {
 
 describe("WorkspaceTopBar", () => {
   it("shows the reconciled three-agent worktree capacity", () => {
-    render(createElement(WorkspaceTopBar, { repository: "yousef20920/CoDev" }));
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+      }),
+    );
 
     expect(
       screen.getByLabelText("Agent worktree capacity: 3 slots"),

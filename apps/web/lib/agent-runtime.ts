@@ -17,6 +17,7 @@ import {
   runCursorCloudAgent,
 } from "./cursor-agent-runtime";
 import { getDatabase } from "./database";
+import { notifyWorkspaceMembers } from "./mobile-push";
 import {
   ProviderConnectionRequiredError,
   assertProviderConnectionForTurn,
@@ -499,7 +500,17 @@ export async function claimNextAgentTurn(sessionId: string) {
       )
       .orderBy(asc(schema.agentTurns.createdAt))
       .limit(1);
-    if (!turn) return null;
+    if (!turn) {
+      const [session] = await getDatabase()
+        .select({ workspaceId: schema.agentSessions.workspaceId })
+        .from(schema.agentSessions)
+        .where(eq(schema.agentSessions.id, sessionId))
+        .limit(1);
+      if (session) {
+        await notifyWorkspaceMembers(session.workspaceId, sessionId, "idle");
+      }
+      return null;
+    }
     await getDatabase()
       .update(schema.agentSessions)
       .set({ status: "running", updatedAt: new Date() })
@@ -1288,7 +1299,7 @@ export async function failCurrentTurnKeepSession(
 export async function failAgentSession(sessionId: string, message: string) {
   "use step";
 
-  await getDatabase()
+  const [session] = await getDatabase()
     .update(schema.agentSessions)
     .set({
       status: "failed",
@@ -1296,7 +1307,13 @@ export async function failAgentSession(sessionId: string, message: string) {
       workflowRunId: null,
       updatedAt: new Date(),
     })
-    .where(eq(schema.agentSessions.id, sessionId));
+    .where(eq(schema.agentSessions.id, sessionId))
+    .returning({ workspaceId: schema.agentSessions.workspaceId });
+  if (session) {
+    await notifyWorkspaceMembers(session.workspaceId, sessionId, "failed", {
+      lastError: message,
+    });
+  }
   await getDatabase()
     .update(schema.agentTurns)
     .set({

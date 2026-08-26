@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import { requireWorkspacePermission } from "@/lib/access";
 import { loadActivityAuditSnapshot } from "@/lib/activity-audit-server";
 import type { ActivityFilterKind } from "@/lib/activity-audit-view";
@@ -14,7 +14,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId } = await params;
   const url = new URL(request.url);

@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import { WorkspaceAccessError, requireWorkspacePermission } from "@/lib/access";
 import { OrcaHostError, ensureOrcaSession } from "@/lib/orca-host";
 import { getWorkspaceForMember } from "@/lib/workspaces";
@@ -13,10 +13,10 @@ export const maxDuration = 300;
  * web client boots from.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) {
     return apiError(new Error("Sign in to open this workspace."), 401);
   }

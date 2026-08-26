@@ -137,6 +137,33 @@
   white-space: nowrap;
 }
 
+.workspace-topbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-topbar-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(242, 237, 224, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workspace-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.workspace-topbar-share:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
 .workspace-status {
   display: flex;
   flex: 1;
@@ -4796,6 +4823,19 @@ button:disabled {
 
 .member-identity small {
   color: #6b7488;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.share-row:last-child {
+  border-bottom: none;
 }
 
 .capability-toggle {

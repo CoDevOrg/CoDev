@@ -3,7 +3,7 @@ import { Settings } from "lucide-react";
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { connectGitHubAccount } from "@/app/actions/github";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { GithubMark } from "@/components/settings/github-mark";
 import {
   IntegrationsList,
@@ -25,6 +25,9 @@ export default async function PersonalIntegrationsPage() {
     null,
     "/settings/personal/integrations",
   );
+  const installUrl = process.env.GITHUB_APP_SLUG
+    ? `https://github.com/apps/${process.env.GITHUB_APP_SLUG}/installations/new`
+    : "https://github.com/settings/installations";
 
   const rows: IntegrationRow[] = [
     {
@@ -38,22 +41,24 @@ export default async function PersonalIntegrationsPage() {
           : "Connected"
         : "Not connected",
       action: isGitHubAuthConfigured() ? (
-        <form action={connectAction}>
-          <Button
+        github.connected ? (
+          <LinkButton
+            href={installUrl}
+            rel="noreferrer"
             size="sm"
-            type="submit"
-            variant={github.connected ? "outline" : "default"}
+            target="_blank"
+            variant="outline"
           >
-            {github.connected ? (
-              <>
-                <Settings aria-hidden className="size-3.5" />
-                Configure
-              </>
-            ) : (
-              "Connect"
-            )}
-          </Button>
-        </form>
+            <Settings aria-hidden className="size-3.5" />
+            Configure
+          </LinkButton>
+        ) : (
+          <form action={connectAction}>
+            <Button size="sm" type="submit">
+              Connect
+            </Button>
+          </form>
+        )
       ) : null,
     },
   ];

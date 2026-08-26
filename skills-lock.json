@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "apple-design": {
+      "source": "smithery.ai",
+      "sourceUrl": "https://smithery.ai/skills/aphlo/apple-design",
+      "sourceType": "well-known",
+      "computedHash": "3402c4706174c402d7013cc21eb16b9b11a071c3b7524946e6d766fef4fcb9e4",
+      "wellKnownDigest": "sha256:85a81ef7f214921c7876ec494e7c4938dca6b0aabdbf28ec6e386a0c86607197"
+    }
+  }
+}

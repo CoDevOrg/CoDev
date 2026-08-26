@@ -9,6 +9,7 @@ import { schema } from "@codev/db";
 import { getDatabase } from "./database";
 import { appendWorkspaceEvent } from "./audit";
 import { requireWorkspacePermission, type WorkspacePermission } from "./access";
+import { notifyWorkspaceMembers } from "./mobile-push";
 import {
   checkpointSandboxWorktree,
   createSandboxWorktree,
@@ -362,6 +363,7 @@ export async function prepareAgentReview(
   );
   await assertReviewable(target);
   await stopAgentForReview(target);
+  await notifyWorkspaceMembers(workspaceId, sessionId, "waiting_review");
   try {
     const expectedHeadSha = COMMIT_SHA.test(target.worktreeHeadSha)
       ? target.worktreeHeadSha

@@ -27,6 +27,23 @@ const SIZE_CLASSES = {
   "icon-sm": "size-8",
 } as const;
 
+export function buttonClassName({
+  variant = "default",
+  size = "default",
+  className,
+}: {
+  variant?: keyof typeof VARIANT_CLASSES | undefined;
+  size?: keyof typeof SIZE_CLASSES | undefined;
+  className?: string | undefined;
+} = {}) {
+  return cn(
+    "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+    VARIANT_CLASSES[variant],
+    SIZE_CLASSES[size],
+    className,
+  );
+}
+
 export const Button = React.forwardRef<
   HTMLButtonElement,
   React.ComponentProps<"button"> & {
@@ -42,12 +59,28 @@ export const Button = React.forwardRef<
       ref={ref}
       data-slot="button"
       style={{ color: VARIANT_TEXT_COLOR[variant], ...style }}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
-        VARIANT_CLASSES[variant],
-        SIZE_CLASSES[size],
-        className,
-      )}
+      className={buttonClassName({ variant, size, className })}
+      {...props}
+    />
+  );
+});
+
+export const LinkButton = React.forwardRef<
+  HTMLAnchorElement,
+  React.ComponentProps<"a"> & {
+    variant?: keyof typeof VARIANT_CLASSES;
+    size?: keyof typeof SIZE_CLASSES;
+  }
+>(function LinkButton(
+  { className, variant = "default", size = "default", style, ...props },
+  ref,
+) {
+  return (
+    <a
+      ref={ref}
+      data-slot="button"
+      style={{ color: VARIANT_TEXT_COLOR[variant], ...style }}
+      className={buttonClassName({ variant, size, className })}
       {...props}
     />
   );

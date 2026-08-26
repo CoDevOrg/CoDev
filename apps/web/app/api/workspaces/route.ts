@@ -1,10 +1,17 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { createWorkspace } from "@/lib/workspaces";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
+import { createWorkspace, listWorkspacesForUser } from "@/lib/workspaces";
 import { QuotaError, quotaResponse } from "@/lib/quotas";
 import { workspaceCreateRequestSchema } from "@/lib/workspace-creation";
 
+export async function GET(request: Request) {
+  const user = await getApiUserAnyAuth(request);
+  if (!user) return apiError(new Error("Authentication required."), 401);
+  const workspaces = await listWorkspacesForUser(user.id);
+  return Response.json({ workspaces });
+}
+
 export async function POST(request: Request) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
 
   try {

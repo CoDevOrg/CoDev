@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { WorkspaceHome } from "@/components/workspace-home";
+import { permissionsForRole } from "@/lib/access";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember } from "@/lib/workspaces";
@@ -41,6 +42,7 @@ export default async function WorkspacePage({
   return (
     <WorkspaceHome
       availableProviders={availableProviders}
+      canInvite={permissionsForRole(workspace.accessRole).invite}
       hasRepository={Boolean(
         workspace.repository && workspace.githubRepositoryId,
       )}

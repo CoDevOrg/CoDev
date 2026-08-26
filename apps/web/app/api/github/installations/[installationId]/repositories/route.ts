@@ -1,11 +1,11 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import { listRepositories } from "@/lib/github";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ installationId: string }> },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
 
   try {

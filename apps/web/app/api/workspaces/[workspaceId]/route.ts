@@ -1,5 +1,17 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { deleteWorkspace } from "@/lib/workspaces";
+import { apiError, getApiUser, getApiUserAnyAuth } from "@/lib/api";
+import { deleteWorkspace, getWorkspaceForMember } from "@/lib/workspaces";
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ workspaceId: string }> },
+) {
+  const user = await getApiUserAnyAuth(request);
+  if (!user) return apiError(new Error("Authentication required."), 401);
+  const { workspaceId } = await params;
+  const workspace = await getWorkspaceForMember(workspaceId, user.id);
+  if (!workspace) return apiError(new Error("Workspace not found."), 404);
+  return Response.json({ workspace });
+}
 
 export async function DELETE(
   _request: Request,

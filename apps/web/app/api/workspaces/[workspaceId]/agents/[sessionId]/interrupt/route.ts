@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import { requireWorkspacePermission } from "@/lib/access";
 import {
   SharedSessionError,
@@ -6,14 +6,14 @@ import {
 } from "@/lib/shared-session-server";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   {
     params,
   }: {
     params: Promise<{ workspaceId: string; sessionId: string }>;
   },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId, sessionId } = await params;
   try {

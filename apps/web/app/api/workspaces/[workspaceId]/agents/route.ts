@@ -7,7 +7,7 @@ import { schema } from "@codev/db";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import {
   getAgentProvider,
   getSelectableAgentModels,
@@ -119,7 +119,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId } = await params;
   try {
@@ -164,7 +164,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId } = await params;
   let workspace;

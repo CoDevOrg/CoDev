@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Share2 } from "lucide-react";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
@@ -12,6 +13,7 @@ import {
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
+import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -538,7 +540,17 @@ export async function autoAddOrcaProject(
   }
 }
 
-export function WorkspaceTopBar({ repository }: { repository: string | null }) {
+export function WorkspaceTopBar({
+  repository,
+  workspaceId,
+  canInvite,
+}: {
+  repository: string | null;
+  workspaceId: string;
+  canInvite: boolean;
+}) {
+  const [shareOpen, setShareOpen] = useState(false);
+
   return (
     <header className="workspace-topbar">
       <Link href="/dashboard" className="workspace-topbar-home">
@@ -562,12 +574,28 @@ export function WorkspaceTopBar({ repository }: { repository: string | null }) {
       {repository ? (
         <span className="workspace-topbar-repo">{repository}</span>
       ) : null}
-      <span
-        className="workspace-topbar-capacity"
-        aria-label={`Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`}
-      >
-        {MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots
-      </span>
+      <div className="workspace-topbar-actions">
+        <span
+          className="workspace-topbar-capacity"
+          aria-label={`Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`}
+        >
+          {MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots
+        </span>
+        <button
+          className="workspace-topbar-share"
+          type="button"
+          onClick={() => setShareOpen(true)}
+        >
+          <Share2 aria-hidden size={13} />
+          Share
+        </button>
+      </div>
+      <WorkspaceShareDialog
+        canInvite={canInvite}
+        onClose={() => setShareOpen(false)}
+        open={shareOpen}
+        workspaceId={workspaceId}
+      />
     </header>
   );
 }
@@ -580,9 +608,11 @@ export function WorkspaceTopBar({ repository }: { repository: string | null }) {
 export function OrcaWorkspace({
   workspaceId,
   repository,
+  canInvite,
 }: {
   workspaceId: string;
   repository: string | null;
+  canInvite: boolean;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
     phase: "connecting",
@@ -767,7 +797,11 @@ export function OrcaWorkspace({
   if (connection.phase === "ready") {
     return (
       <div className="workspace-page">
-        <WorkspaceTopBar repository={repository} />
+        <WorkspaceTopBar
+          canInvite={canInvite}
+          repository={repository}
+          workspaceId={workspaceId}
+        />
         <div className="workspace-iframe-wrap">
           <iframe
             ref={iframeRef}
@@ -800,7 +834,11 @@ export function OrcaWorkspace({
 
   return (
     <div className="workspace-page">
-      <WorkspaceTopBar repository={repository} />
+      <WorkspaceTopBar
+        canInvite={canInvite}
+        repository={repository}
+        workspaceId={workspaceId}
+      />
       <main className="workspace-status">
         {connection.phase === "error" ? (
           <>

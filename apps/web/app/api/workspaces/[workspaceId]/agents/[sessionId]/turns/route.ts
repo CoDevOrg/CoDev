@@ -4,7 +4,7 @@ import { z } from "zod";
 import { schema } from "@codev/db";
 
 import { kickAgentSession } from "@/lib/agent-service";
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/api";
 import {
   parseAgentProvider,
   resolveSelectableAgentModel,
@@ -40,7 +40,7 @@ export async function POST(
     params: Promise<{ workspaceId: string; sessionId: string }>;
   },
 ) {
-  const user = await getApiUser();
+  const user = await getApiUserAnyAuth(request);
   if (!user) return apiError(new Error("Authentication required."), 401);
   const { workspaceId, sessionId } = await params;
   try {
