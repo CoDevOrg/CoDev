@@ -6136,21 +6136,32 @@ footer > span {
 
 /* Multiplayer landing page */
 .mp-page {
-  --mp-ink: #132d23;
-  --mp-muted: #607269;
-  --mp-line: rgba(19, 45, 35, 0.14);
-  --mp-green: #177a51;
-  --mp-mint: #c9f36b;
+  --mp-ink: #102b21;
+  --mp-deep: #09251b;
+  --mp-paper: #f4ecde;
+  --mp-paper-light: #fffaf0;
+  --mp-muted: rgba(16, 43, 33, 0.68);
+  --mp-line: rgba(16, 43, 33, 0.17);
+  --mp-orange: #e0612b;
+  --mp-lime: #b6e36f;
   min-height: 100vh;
   overflow: hidden;
   color: var(--mp-ink);
   background:
     radial-gradient(
       circle at 82% 6%,
-      rgba(201, 243, 107, 0.18),
+      rgba(224, 97, 43, 0.12),
       transparent 22rem
     ),
-    #f5f5ef;
+    linear-gradient(120deg, rgba(255, 255, 255, 0.3), transparent 36%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(16, 43, 33, 0.025) 0,
+      rgba(16, 43, 33, 0.025) 1px,
+      transparent 1px,
+      transparent 14px
+    ),
+    var(--mp-paper);
   font-family: var(--font-geist-sans), Arial, sans-serif;
 }
 
@@ -6198,7 +6209,7 @@ footer > span {
 .mp-nav-cta {
   padding: 11px 16px;
   color: #fff !important;
-  background: var(--mp-ink);
+  background: var(--mp-deep);
   border-radius: 7px;
 }
 .mp-nav-cta span,
@@ -6223,7 +6234,7 @@ footer > span {
 .mp-model-layer > div:first-child > p,
 .mp-final-cta p {
   margin: 0;
-  color: var(--mp-green);
+  color: var(--mp-orange);
   font-size: 11px;
   font-weight: 780;
   letter-spacing: 0.12em;
@@ -6239,8 +6250,8 @@ footer > span {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--mp-green);
-  box-shadow: 0 0 0 4px rgba(23, 122, 81, 0.11);
+  background: var(--mp-orange);
+  box-shadow: 0 0 0 4px rgba(224, 97, 43, 0.11);
 }
 .mp-hero h1 {
   max-width: 660px;
@@ -6255,7 +6266,7 @@ footer > span {
 .mp-audience-top h2 em,
 .mp-model-layer h2 em,
 .mp-final-cta h2 em {
-  color: var(--mp-green);
+  color: var(--mp-orange);
   font-family: Georgia, serif;
   font-weight: 400;
 }
@@ -6279,18 +6290,18 @@ footer > span {
   min-height: 50px;
   padding: 0 20px;
   color: #fff !important;
-  background: var(--mp-green);
+  background: var(--mp-orange);
   border-radius: 7px;
   font-size: 14px;
   font-weight: 720;
-  box-shadow: 0 9px 24px rgba(23, 122, 81, 0.18);
+  box-shadow: 0 9px 24px rgba(224, 97, 43, 0.2);
   transition:
     transform 160ms ease,
     background 160ms ease;
 }
 .mp-primary-action:hover {
   transform: translateY(-2px);
-  background: #0f6843;
+  background: #c84f1f;
 }
 .mp-hero-actions > a:last-child {
   font-size: 13px;
@@ -6301,17 +6312,17 @@ footer > span {
 }
 .mp-hero-note {
   margin: 22px 0 0;
-  color: #839087;
+  color: rgba(16, 43, 33, 0.52);
   font-size: 11px;
 }
 
 .mp-workspace {
   min-width: 0;
-  border: 1px solid rgba(19, 45, 35, 0.18);
+  border: 1px solid rgba(16, 43, 33, 0.25);
   border-radius: 13px;
   overflow: hidden;
-  background: #fff;
-  box-shadow: 0 32px 70px rgba(30, 54, 44, 0.14);
+  background: var(--mp-paper-light);
+  box-shadow: 0 32px 70px rgba(16, 43, 33, 0.18);
   transform: perspective(1400px) rotateY(-1.2deg) rotateX(0.8deg);
 }
 .mp-workspace-bar {
@@ -6320,8 +6331,8 @@ footer > span {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0 14px;
-  background: #18382d;
-  color: #d9e5df;
+  background: var(--mp-deep);
+  color: rgba(255, 250, 240, 0.78);
 }
 .mp-window-dots {
   display: flex;
@@ -6331,13 +6342,13 @@ footer > span {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #779086;
+  background: rgba(255, 250, 240, 0.35);
 }
 .mp-window-dots i:nth-child(2) {
-  background: #9cab6e;
+  background: var(--mp-orange);
 }
 .mp-window-dots i:nth-child(3) {
-  background: var(--mp-mint);
+  background: var(--mp-lime);
 }
 .mp-room-name {
   font-family: var(--font-geist-mono);
@@ -6355,7 +6366,7 @@ footer > span {
   display: grid;
   place-items: center;
   margin-left: -5px;
-  border: 2px solid #18382d;
+  border: 2px solid var(--mp-deep);
   border-radius: 50%;
   color: #fff;
   font-size: 8px;
@@ -6382,7 +6393,7 @@ footer > span {
 .mp-room-sidebar,
 .mp-context-panel {
   padding: 21px 14px;
-  background: #f7f8f4;
+  background: #f8f1e5;
 }
 .mp-room-sidebar {
   border-right: 1px solid #e3e8e3;
@@ -6419,8 +6430,8 @@ footer > span {
   font-weight: 620;
 }
 .mp-sidebar-section b.is-active {
-  color: #1a4937;
-  background: #e5ecdf;
+  color: var(--mp-deep);
+  background: rgba(224, 97, 43, 0.1);
 }
 .mp-sidebar-section b i {
   width: 6px;
@@ -6447,8 +6458,8 @@ footer > span {
   background: #39b373;
 }
 .mp-room-members p i.agent {
-  background: #b2d54e;
-  box-shadow: 0 0 0 2px #e8f1cf;
+  background: var(--mp-lime);
+  box-shadow: 0 0 0 2px rgba(182, 227, 111, 0.2);
 }
 .mp-room-members p small {
   margin-left: auto;
@@ -6729,7 +6740,7 @@ footer > span {
   justify-content: space-between;
   padding: 0 14px;
   border-top: 1px solid #e1e6e1;
-  background: #fbfcfa;
+  background: var(--mp-paper-light);
   color: #718078;
   font-size: 7px;
 }
@@ -6830,7 +6841,7 @@ footer > span {
 }
 .mp-flow-arrow {
   text-align: center;
-  color: var(--mp-green);
+  color: var(--mp-orange);
 }
 .mp-flow-arrow span {
   font-size: 26px;
@@ -6847,10 +6858,10 @@ footer > span {
   align-items: center;
   gap: 15px;
   padding: 24px;
-  border: 1px solid #9fc584;
+  border: 1px solid rgba(224, 97, 43, 0.36);
   border-radius: 10px;
-  background: #eaf3db;
-  box-shadow: 0 15px 35px rgba(70, 108, 48, 0.1);
+  background: rgba(255, 250, 240, 0.7);
+  box-shadow: 0 15px 35px rgba(16, 43, 33, 0.08);
 }
 .mp-shared-icon {
   width: 52px;
@@ -6859,7 +6870,7 @@ footer > span {
   place-items: center;
   border-radius: 10px;
   color: #fff;
-  background: var(--mp-green);
+  background: var(--mp-orange);
   font-size: 18px;
   font-weight: 780;
 }
@@ -6876,8 +6887,8 @@ footer > span {
 .mp-shared-state > span {
   padding: 4px 7px;
   border-radius: 10px;
-  color: #537629;
-  background: #f7fbea;
+  color: var(--mp-deep);
+  background: rgba(182, 227, 111, 0.38);
   font-size: 8px;
   font-weight: 750;
 }
@@ -6895,14 +6906,14 @@ footer > span {
   padding: 4px;
   border: 1px solid var(--mp-line);
   border-radius: 9px;
-  background: #e9ebe4;
+  background: rgba(255, 250, 240, 0.48);
 }
 .mp-audience-switch button {
   min-height: 52px;
   padding: 0 21px;
   border: 0;
   border-radius: 6px;
-  color: #67766d;
+  color: rgba(16, 43, 33, 0.62);
   background: transparent;
   cursor: pointer;
   font-size: 12px;
@@ -6915,12 +6926,12 @@ footer > span {
   font-weight: 500;
 }
 .mp-audience-switch button[aria-pressed="true"] {
-  color: #193d2f;
-  background: #fff;
-  box-shadow: 0 2px 9px rgba(35, 54, 45, 0.1);
+  color: var(--mp-paper-light);
+  background: var(--mp-deep);
+  box-shadow: 0 5px 14px rgba(16, 43, 33, 0.14);
 }
 .mp-audience-switch button:focus-visible {
-  outline: 2px solid var(--mp-green);
+  outline: 2px solid var(--mp-orange);
   outline-offset: 2px;
 }
 .mp-audience-panel {
@@ -6930,15 +6941,27 @@ footer > span {
   margin-top: 40px;
   padding: 48px;
   border-radius: 13px;
-  color: #eaf1ed;
-  background: #18382d;
-  box-shadow: 0 26px 55px rgba(24, 56, 45, 0.16);
+  color: var(--mp-paper-light);
+  background:
+    radial-gradient(
+      circle at 96% 0,
+      rgba(224, 97, 43, 0.16),
+      transparent 24rem
+    ),
+    var(--mp-deep);
+  box-shadow: 0 26px 55px rgba(16, 43, 33, 0.17);
 }
 .mp-audience-panel[data-audience="companies"] {
-  background: #243b36;
+  background:
+    radial-gradient(
+      circle at 96% 0,
+      rgba(224, 97, 43, 0.22),
+      transparent 26rem
+    ),
+    #102b21;
 }
 .mp-audience-copy > p {
-  color: var(--mp-mint);
+  color: var(--mp-lime);
 }
 .mp-audience-copy h3 {
   margin: 15px 0 17px;
@@ -6973,7 +6996,7 @@ footer > span {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 .mp-audience-points article > span {
-  color: var(--mp-mint);
+  color: var(--mp-lime);
   font-family: var(--font-geist-mono);
   font-size: 8px;
 }
@@ -7009,7 +7032,7 @@ footer > span {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--mp-mint);
+  background: var(--mp-lime);
 }
 .mp-audience-mini-room h4 {
   margin: 13px 0;
@@ -7048,7 +7071,7 @@ footer > span {
   place-items: center;
   border-radius: 4px;
   color: #223f34;
-  background: var(--mp-mint);
+  background: var(--mp-lime);
   font-weight: 800;
 }
 .mp-audience-mini-room > small {
@@ -7079,7 +7102,7 @@ footer > span {
   border-left: 1px solid var(--mp-line);
 }
 .mp-case-grid article > span {
-  color: var(--mp-green);
+  color: var(--mp-orange);
   font-family: var(--font-geist-mono);
   font-size: 9px;
 }
@@ -7121,7 +7144,7 @@ footer > span {
   padding: 35px;
   border: 1px solid var(--mp-line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 250, 240, 0.52);
 }
 .mp-model-workspace {
   width: 290px;
@@ -7130,9 +7153,9 @@ footer > span {
   gap: 13px;
   margin: 0 auto;
   padding: 15px;
-  border: 1px solid #98bf7b;
+  border: 1px solid rgba(224, 97, 43, 0.38);
   border-radius: 8px;
-  background: #e9f2dc;
+  background: rgba(255, 250, 240, 0.76);
 }
 .mp-model-workspace > i {
   width: 36px;
@@ -7141,7 +7164,7 @@ footer > span {
   place-items: center;
   border-radius: 8px;
   color: #fff;
-  background: var(--mp-green);
+  background: var(--mp-orange);
   font-style: normal;
   font-weight: 780;
 }
@@ -7190,7 +7213,7 @@ footer > span {
   border: 1px solid var(--mp-line);
   border-radius: 6px;
   color: #52665b;
-  background: #fff;
+  background: var(--mp-paper-light);
   font-size: 9px;
   font-weight: 660;
   text-align: center;
@@ -7203,25 +7226,31 @@ footer > span {
   padding: 72px;
   border-radius: 14px;
   color: white;
-  background: #18382d;
+  background:
+    radial-gradient(
+      circle at 85% 0,
+      rgba(224, 97, 43, 0.16),
+      transparent 24rem
+    ),
+    var(--mp-deep);
 }
 .mp-final-cta p {
-  color: var(--mp-mint);
+  color: var(--mp-lime);
 }
 .mp-final-cta h2 {
   font-size: clamp(36px, 4vw, 54px);
 }
 .mp-final-cta h2 em {
-  color: #d6ef9c;
+  color: var(--mp-orange);
 }
 .mp-primary-light {
   flex: 0 0 auto;
-  color: #18382d !important;
-  background: var(--mp-mint);
+  color: #fffaf0 !important;
+  background: var(--mp-orange);
   box-shadow: none;
 }
 .mp-primary-light:hover {
-  background: #ddff91;
+  background: #c84f1f;
 }
 .mp-footer {
   min-height: 115px;
