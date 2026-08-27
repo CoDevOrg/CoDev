@@ -140,6 +140,21 @@ describe("WorkspaceTopBar", () => {
       screen.getByLabelText("Agent worktree capacity: 3 slots"),
     ).toHaveTextContent("3 agent worktree slots");
   });
+
+  it("shows how many agents are live without opening a panel", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        liveAgentCount: 2,
+      }),
+    );
+
+    expect(
+      screen.getByLabelText("Active agents: 2 of 3 live"),
+    ).toHaveTextContent("2 of 3 agents live");
+  });
 });
 
 describe("buildOrcaIframeSource", () => {

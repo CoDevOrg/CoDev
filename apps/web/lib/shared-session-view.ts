@@ -61,6 +61,7 @@ export type SharedSessionView = {
   session: SharedSession;
   name: string;
   ownerName: string;
+  activeTurnAuthorName: string | null;
   worktreeName: string;
   model: string;
   attributedQueue: Array<{
@@ -275,6 +276,9 @@ export function toSharedSessionView(
       session.ownerLogin,
       "Owner",
     ),
+    activeTurnAuthorName: running
+      ? displayMemberName(running.authorName, running.authorLogin)
+      : null,
     worktreeName: session.worktreeName,
     model: session.model,
     attributedQueue: queue.map((entry) => {

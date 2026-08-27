@@ -94,6 +94,7 @@ describe("shared session view", () => {
       streamCursor: 1,
     });
     expect(view.ownerName).toBe("Alex Morgan");
+    expect(view.activeTurnAuthorName).toBe("Alex Morgan");
     expect(view.worktreeName).toBe("agent-alex");
     expect(view.attributedQueue).toEqual([
       expect.objectContaining({

@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Share2 } from "lucide-react";
 
 import {
@@ -12,8 +18,13 @@ import {
   replyToCodevBridgeMessage,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
+import {
+  useLiveAgentActivity,
+  WorkspaceAgentActivityRail,
+} from "@/components/workspace-agent-activity";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
+import { emptyLiveAgentCards } from "@/lib/live-agent-activity-view";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -544,12 +555,18 @@ export function WorkspaceTopBar({
   repository,
   workspaceId,
   canInvite,
+  liveAgentCount = null,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  liveAgentCount?: number | null;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
+  const liveLabel =
+    liveAgentCount == null
+      ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
+      : `${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} agents live`;
 
   return (
     <header className="workspace-topbar">
@@ -576,10 +593,14 @@ export function WorkspaceTopBar({
       ) : null}
       <div className="workspace-topbar-actions">
         <span
-          className="workspace-topbar-capacity"
-          aria-label={`Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`}
+          className={`workspace-topbar-capacity${liveAgentCount ? " is-live" : ""}`}
+          aria-label={
+            liveAgentCount == null
+              ? `Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`
+              : `Active agents: ${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} live`
+          }
         >
-          {MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots
+          {liveLabel}
         </span>
         <button
           className="workspace-topbar-share"
@@ -597,6 +618,39 @@ export function WorkspaceTopBar({
         workspaceId={workspaceId}
       />
     </header>
+  );
+}
+
+function WorkspaceChrome({
+  repository,
+  workspaceId,
+  canInvite,
+  children,
+}: {
+  repository: string | null;
+  workspaceId: string;
+  canInvite: boolean;
+  children: ReactNode;
+}) {
+  const activity = useLiveAgentActivity(workspaceId);
+
+  return (
+    <div className="workspace-page">
+      <WorkspaceTopBar
+        canInvite={canInvite}
+        liveAgentCount={activity?.occupied ?? null}
+        repository={repository}
+        workspaceId={workspaceId}
+      />
+      <div className="workspace-body">
+        {children}
+        <WorkspaceAgentActivityRail
+          cards={activity?.cards ?? emptyLiveAgentCards()}
+          occupied={activity?.occupied ?? 0}
+          max={activity?.max ?? MAX_PARALLEL_AGENT_SESSIONS}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -796,12 +850,11 @@ export function OrcaWorkspace({
 
   if (connection.phase === "ready") {
     return (
-      <div className="workspace-page">
-        <WorkspaceTopBar
-          canInvite={canInvite}
-          repository={repository}
-          workspaceId={workspaceId}
-        />
+      <WorkspaceChrome
+        canInvite={canInvite}
+        repository={repository}
+        workspaceId={workspaceId}
+      >
         <div className="workspace-iframe-wrap">
           <iframe
             ref={iframeRef}
@@ -828,17 +881,16 @@ export function OrcaWorkspace({
           open={repositoryDialogOpen}
           onClose={() => setRepositoryDialogOpen(false)}
         />
-      </div>
+      </WorkspaceChrome>
     );
   }
 
   return (
-    <div className="workspace-page">
-      <WorkspaceTopBar
-        canInvite={canInvite}
-        repository={repository}
-        workspaceId={workspaceId}
-      />
+    <WorkspaceChrome
+      canInvite={canInvite}
+      repository={repository}
+      workspaceId={workspaceId}
+    >
       <main className="workspace-status">
         {connection.phase === "error" ? (
           <>
@@ -869,6 +921,6 @@ export function OrcaWorkspace({
           </>
         )}
       </main>
-    </div>
+    </WorkspaceChrome>
   );
 }
