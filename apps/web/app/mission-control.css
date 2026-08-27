@@ -1,0 +1,924 @@
+/*
+ * Mission Control — the live multi-agent surface.
+ *
+ * Uses the CoDev product palette (deep forest + burnt orange) from
+ * app-theme.css so it reads as the same product as the dashboard, not a
+ * bolted-on dashboard of its own.
+ */
+
+.mc-root {
+  --mc-line: rgba(242, 237, 224, 0.09);
+  --mc-line-lit: rgba(217, 101, 45, 0.34);
+  --mc-panel: rgba(20, 44, 34, 0.72);
+  --mc-panel-lit: rgba(27, 58, 44, 0.9);
+  --mc-ink: var(--codev-beige-100, #f2ede0);
+  --mc-muted: var(--codev-sage-300, #9db3a5);
+  --mc-orange: var(--codev-orange-500, #d9642c);
+  --mc-green: #4ea87a;
+  --mc-amber: #d9a62c;
+
+  min-height: 100vh;
+  padding: 32px clamp(20px, 4vw, 56px) 72px;
+  color: var(--mc-ink);
+  background:
+    radial-gradient(
+      1100px 620px at 12% -8%,
+      rgba(217, 101, 45, 0.16),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 560px at 92% 4%,
+      rgba(82, 126, 104, 0.2),
+      transparent 60%
+    ),
+    var(--codev-forest-950, #0d1f17);
+  font-feature-settings: "tnum" 1;
+}
+
+/* ---------- header ---------- */
+
+.mc-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--mc-line);
+}
+
+.mc-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mc-orange);
+}
+
+.mc-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mc-orange);
+  box-shadow: 0 0 0 0 rgba(217, 101, 45, 0.6);
+  animation: mc-pulse 2s infinite;
+}
+
+@keyframes mc-pulse {
+  70% {
+    box-shadow: 0 0 0 9px rgba(217, 101, 45, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 101, 45, 0);
+  }
+}
+
+.mc-head h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.6vw, 40px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.mc-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--mc-muted);
+}
+
+.mc-head-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  align-items: center;
+}
+
+.mc-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mc-metric strong {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.mc-metric strong span {
+  font-size: 15px;
+  color: var(--mc-muted);
+  font-weight: 500;
+}
+
+.mc-metric.is-warn strong {
+  color: var(--mc-amber);
+}
+
+.mc-metric-label {
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--mc-muted);
+}
+
+.mc-presence {
+  display: flex;
+}
+
+.mc-presence .mc-avatar + .mc-avatar {
+  margin-left: -9px;
+}
+
+.mc-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border: 1.5px solid rgba(13, 31, 23, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- grid ---------- */
+
+.mc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-top: 26px;
+  /* Three columns at most: five agents then read as 3 + 2 instead of
+     stranding a single card on its own row. */
+  max-width: 1180px;
+}
+
+.mc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--mc-line);
+  border-radius: 16px;
+  background: var(--mc-panel);
+  height: 100%;
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.mc-card:hover,
+.mc-card.is-active {
+  border-color: var(--mc-line-lit);
+  background: var(--mc-panel-lit);
+  transform: translateY(-2px);
+}
+
+.mc-card-blocked {
+  border-color: rgba(217, 166, 44, 0.34);
+}
+
+.mc-card-done {
+  border-color: rgba(78, 168, 122, 0.32);
+}
+
+.mc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mc-card-who {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.mc-card-owner {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mc-card-branch {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--mc-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.mc-card-title {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.32;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* ---------- phase pill ---------- */
+
+.mc-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.mc-phase-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mc-phase-editing,
+.mc-phase-planning {
+  color: var(--mc-orange);
+  background: rgba(217, 101, 45, 0.13);
+  border-color: rgba(217, 101, 45, 0.3);
+}
+
+.mc-phase-editing .mc-phase-dot,
+.mc-phase-planning .mc-phase-dot,
+.mc-phase-testing .mc-phase-dot {
+  animation: mc-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes mc-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.mc-phase-testing,
+.mc-phase-reviewing {
+  color: #7fc4a3;
+  background: rgba(78, 168, 122, 0.13);
+  border-color: rgba(78, 168, 122, 0.3);
+}
+
+.mc-phase-blocked {
+  color: var(--mc-amber);
+  background: rgba(217, 166, 44, 0.13);
+  border-color: rgba(217, 166, 44, 0.32);
+}
+
+.mc-phase-done {
+  color: var(--mc-green);
+  background: rgba(78, 168, 122, 0.16);
+  border-color: rgba(78, 168, 122, 0.36);
+}
+
+.mc-phase-waiting {
+  color: var(--mc-muted);
+  background: rgba(157, 179, 165, 0.1);
+  border-color: rgba(157, 179, 165, 0.24);
+}
+
+/* ---------- live activity ---------- */
+
+.mc-activity {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: rgba(13, 31, 23, 0.62);
+  border: 1px solid var(--mc-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #cfe0d5;
+  /* Exactly two lines, always: the text changes every tick and a reflowing
+     card is far more distracting than a little reserved space. */
+  height: 51px;
+  overflow: hidden;
+}
+
+.mc-activity-caret {
+  flex: none;
+  width: 6px;
+  height: 11px;
+  background: var(--mc-orange);
+  animation: mc-caret 1s steps(2) infinite;
+  transform: translateY(1px);
+}
+
+.mc-activity.is-blocked .mc-activity-caret {
+  background: var(--mc-amber);
+  animation: none;
+}
+
+@keyframes mc-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.mc-activity-text {
+  animation: mc-fade-in 340ms ease;
+}
+
+@keyframes mc-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+.mc-blocked-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #e3c98a;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(217, 166, 44, 0.09);
+  border: 1px solid rgba(217, 166, 44, 0.22);
+}
+
+.mc-blocked-note code {
+  font-size: 11px;
+  color: #f0dcae;
+}
+
+/* ---------- plan progress ---------- */
+
+.mc-progress {
+  display: flex;
+  gap: 4px;
+}
+
+.mc-progress-seg {
+  height: 3px;
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(242, 237, 224, 0.12);
+}
+
+.mc-progress-seg.is-done {
+  background: var(--mc-green);
+}
+
+.mc-progress-seg.is-active {
+  background: var(--mc-orange);
+  animation: mc-blink 1.4s ease-in-out infinite;
+}
+
+.mc-progress-label {
+  margin: -4px 0 0;
+  font-size: 11px;
+  color: var(--mc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- stats ---------- */
+
+.mc-stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 14px;
+  margin: 0;
+  justify-content: start;
+}
+
+.mc-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mc-stats dt {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mc-muted);
+}
+
+.mc-stats dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-diff {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mc-add {
+  color: var(--mc-green);
+}
+
+.mc-rem {
+  color: #d97a6c;
+}
+
+.mc-provider {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.mc-provider-claude {
+  color: #e8a882;
+  background: rgba(217, 101, 45, 0.16);
+}
+
+.mc-provider-codex {
+  color: #9fd0b6;
+  background: rgba(82, 126, 104, 0.24);
+}
+
+/* ---------- card footer ---------- */
+
+/* globals.css styles the site footer with a bare `footer` selector
+   (display:flex, a fixed width, min-height:105px), which leaks onto every
+   <footer> on the page — including the ones inside these cards and the
+   drawer. Neutralise it locally rather than touching that global rule, which
+   the landing page depends on. */
+.mc-root footer,
+.mc-drawer footer {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.mc-card-foot {
+  display: flex;
+  width: auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  /* Pins the footer down so every card's actions sit on one line. */
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--mc-line);
+}
+
+.mc-watchers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mc-watchers .mc-avatar + .mc-avatar {
+  margin-left: -7px;
+}
+
+.mc-watchers-label {
+  font-size: 11px;
+  color: var(--mc-muted);
+}
+
+.mc-step-in {
+  flex: none;
+  padding: 7px 15px;
+  border-radius: 8px;
+  border: 1px solid var(--mc-line-lit);
+  background: rgba(217, 101, 45, 0.14);
+  color: #f0c3a4;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.mc-step-in:hover {
+  background: var(--mc-orange);
+  color: #fff;
+}
+
+/* ---------- drawer ---------- */
+
+.mc-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 16, 12, 0.62);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+  animation: mc-fade 180ms ease;
+}
+
+@keyframes mc-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.mc-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(560px, 100vw);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 24px 0;
+  overflow-y: auto;
+  background: linear-gradient(
+    180deg,
+    var(--codev-forest-900, #142c22),
+    var(--codev-forest-950, #0d1f17)
+  );
+  border-left: 1px solid var(--mc-line-lit);
+  box-shadow: -30px 0 70px rgba(0, 0, 0, 0.45);
+  animation: mc-slide 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes mc-slide {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+}
+
+.mc-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.mc-drawer-kicker {
+  margin: 0 0 5px;
+  font-size: 11.5px;
+  color: var(--mc-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.mc-drawer-head h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+
+.mc-drawer-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--mc-line);
+  background: transparent;
+  color: var(--mc-muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.mc-drawer-close:hover {
+  color: var(--mc-ink);
+  border-color: var(--mc-line-lit);
+}
+
+.mc-drawer-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 16px 0 4px;
+}
+
+.mc-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--mc-line);
+  font-size: 11px;
+  color: var(--mc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-drawer-section {
+  margin-top: 22px;
+}
+
+.mc-drawer-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mc-muted);
+  font-weight: 650;
+}
+
+.mc-plan {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mc-plan li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--mc-muted);
+}
+
+.mc-plan-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(242, 237, 224, 0.24);
+  flex: none;
+}
+
+.mc-plan li.is-done {
+  color: var(--mc-ink);
+}
+
+.mc-plan li.is-done .mc-plan-mark {
+  background: var(--mc-green);
+  border-color: var(--mc-green);
+}
+
+.mc-plan li.is-active {
+  color: var(--mc-ink);
+  font-weight: 600;
+}
+
+.mc-plan li.is-active .mc-plan-mark {
+  background: var(--mc-orange);
+  border-color: var(--mc-orange);
+  animation: mc-blink 1.4s ease-in-out infinite;
+}
+
+.mc-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mc-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: rgba(13, 31, 23, 0.55);
+  border: 1px solid var(--mc-line);
+  font-size: 12px;
+}
+
+.mc-files code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-file-right {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-claim {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e3c98a;
+  background: rgba(217, 166, 44, 0.16);
+}
+
+/* ---------- live log ---------- */
+
+.mc-drawer-log-section {
+  /* Take the slack in the drawer so the live stream fills the space rather
+     than leaving a void above the steer box. */
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 12px 14px;
+  border-radius: 11px;
+  background: rgba(6, 16, 12, 0.62);
+  scroll-behavior: smooth;
+  border: 1px solid var(--mc-line);
+  scrollbar-width: thin;
+}
+
+.mc-log-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #c6d8cd;
+  animation: mc-fade-in 260ms ease;
+}
+
+.mc-log-time {
+  flex: none;
+  font-size: 10px;
+  color: var(--mc-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 46px;
+}
+
+.mc-log-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mc-ink);
+}
+
+.mc-log-line.is-steer {
+  color: #f0c3a4;
+}
+
+.mc-log-line.is-steer .mc-log-text {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(217, 101, 45, 0.15);
+}
+
+.mc-log-line.is-warn {
+  color: #e3c98a;
+}
+
+/* ---------- steer ---------- */
+
+.mc-steer {
+  display: block;
+  position: sticky;
+  bottom: 0;
+  margin-top: 20px;
+  padding: 14px 0 18px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--codev-forest-950, #0d1f17) 22%
+  );
+}
+
+.mc-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mc-quick-chip {
+  flex: none;
+  white-space: nowrap;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--mc-line);
+  background: transparent;
+  color: var(--mc-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.mc-quick-chip:hover {
+  color: var(--mc-ink);
+  border-color: var(--mc-line-lit);
+}
+
+.mc-steer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mc-steer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--mc-line-lit);
+  background: rgba(13, 31, 23, 0.8);
+  color: var(--mc-ink);
+  font-size: 13.5px;
+  outline: none;
+}
+
+.mc-steer-input::placeholder {
+  color: var(--mc-muted);
+}
+
+.mc-steer-input:focus {
+  border-color: var(--mc-orange);
+  box-shadow: 0 0 0 3px rgba(217, 101, 45, 0.16);
+}
+
+.mc-steer-send,
+.mc-steer-stop {
+  flex: none;
+  padding: 11px 17px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.mc-steer-send {
+  background: var(--mc-orange);
+  color: #fff;
+}
+
+.mc-steer-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mc-steer-stop {
+  background: transparent;
+  border-color: var(--mc-line);
+  color: var(--mc-muted);
+}
+
+.mc-steer-stop:hover {
+  color: #e3c98a;
+  border-color: rgba(217, 166, 44, 0.4);
+}
+
+.mc-steer-note {
+  margin: 9px 0 0;
+  font-size: 11px;
+  color: var(--mc-muted);
+}
+
+@media (max-width: 640px) {
+  .mc-stats {
+    grid-template-columns: repeat(2, auto);
+    gap: 10px 18px;
+  }
+
+  .mc-head-right {
+    gap: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-root *,
+  .mc-root *::before,
+  .mc-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
