@@ -145,13 +145,29 @@ async function resolveClaudeEnvForIde(
 }
 
 /**
- * Mark this workspace's IDE session as still in use. Best-effort by design:
- * the host may be mid-restart or the session may have already been reaped,
- * and neither is worth interrupting somebody's session over - the next
- * keepalive, or the reconnect that follows, covers it.
+ * Mark this workspace's IDE session as still in use, and report whether the
+ * session is still there at all.
+ *
+ * `gone` specifically means the orchestrator has no session under this
+ * workspace id — it was reaped for idleness, or the host was stopped or
+ * replaced underneath an open tab. The iframe still pointing at it is dead,
+ * so the client uses this to re-provision rather than sitting on a blank IDE.
+ * Every other failure is transient (a host mid-restart, a dropped request)
+ * and reports `unknown`: retrying the keepalive a minute later is the right
+ * response, not tearing down a working session.
  */
-export async function recordOrcaActivity(workspaceId: string): Promise<void> {
-  await touchIde(workspaceId).catch(() => undefined);
+export async function recordOrcaActivity(
+  workspaceId: string,
+): Promise<"alive" | "gone" | "unknown"> {
+  try {
+    await touchIde(workspaceId);
+    return "alive";
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 404) {
+      return "gone";
+    }
+    return "unknown";
+  }
 }
 
 /**

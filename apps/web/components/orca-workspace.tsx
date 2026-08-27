@@ -833,22 +833,40 @@ export function OrcaWorkspace({
       return;
     }
     let cancelled = false;
-    function sendKeepalive() {
+    async function sendKeepalive() {
       if (cancelled || document.visibilityState !== "visible") {
         return;
       }
-      void fetch(`/api/workspaces/${workspaceId}/orca/activity`, {
-        method: "POST",
-        keepalive: true,
-      }).catch(() => undefined);
+      try {
+        const response = await fetch(
+          `/api/workspaces/${workspaceId}/orca/activity`,
+          { method: "POST", keepalive: true },
+        );
+        const payload = (await response.json().catch(() => null)) as {
+          session?: string;
+        } | null;
+        // The session this iframe is bound to no longer exists - the host was
+        // stopped or replaced under an open tab, or the session was reaped.
+        // The embedded IDE is dead and will not recover on its own, so go
+        // back through the connect path and get a fresh one rather than
+        // leaving somebody staring at a blank pane.
+        if (!cancelled && payload?.session === "gone") {
+          setIsOpeningProject(false);
+          setConnection({ phase: "connecting" });
+          setAttempt((current) => current + 1);
+        }
+      } catch {
+        // Transient: the next keepalive covers it.
+      }
     }
-    sendKeepalive();
-    const timer = setInterval(sendKeepalive, IDE_KEEPALIVE_MS);
-    document.addEventListener("visibilitychange", sendKeepalive);
+    void sendKeepalive();
+    const onTick = () => void sendKeepalive();
+    const timer = setInterval(onTick, IDE_KEEPALIVE_MS);
+    document.addEventListener("visibilitychange", onTick);
     return () => {
       cancelled = true;
       clearInterval(timer);
-      document.removeEventListener("visibilitychange", sendKeepalive);
+      document.removeEventListener("visibilitychange", onTick);
     };
   }, [connection.phase, workspaceId]);
 

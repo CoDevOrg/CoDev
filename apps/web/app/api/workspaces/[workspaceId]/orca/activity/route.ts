@@ -10,8 +10,11 @@ import { recordOrcaActivity } from "@/lib/orca-host";
  * stays alive while one that is genuinely abandoned stops paying for compute
  * within the idle window.
  *
- * Always responds 204: a missed keepalive must never surface as an error over
- * a workspace somebody is working in.
+ * Always responds 200 rather than propagating a failure: a missed keepalive
+ * must never surface as an error over a workspace somebody is working in. The
+ * body reports whether the session survived, so a client whose iframe is
+ * pointing at a session that no longer exists can re-provision instead of
+ * sitting on a dead IDE.
  */
 export async function POST(
   request: Request,
@@ -27,6 +30,5 @@ export async function POST(
   } catch (error) {
     return apiError(error, 403);
   }
-  await recordOrcaActivity(workspaceId);
-  return new Response(null, { status: 204 });
+  return Response.json({ session: await recordOrcaActivity(workspaceId) });
 }
