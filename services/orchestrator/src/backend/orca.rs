@@ -204,6 +204,7 @@ impl OrcaBackend {
         if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
             write_codex_credential(&linux_user, codex_auth_cache_json).await?;
         }
+        seed_claude_config(&linux_user, &expected_root).await?;
         let claude_env = if let Some(api_key) = &request.anthropic_api_key {
             Some(("ANTHROPIC_API_KEY", api_key.as_str()))
         } else {
@@ -595,6 +596,114 @@ async fn write_codex_credential(user: &str, codex_auth_cache_json: &str) -> Resu
     chown_recursive(&codex_home, user).await
 }
 
+/// Seeds the Claude Code CLI's own config so the interactive session Orca
+/// launches into the workspace's default chat tab starts *ready*, instead of
+/// blocking on the first-run wizard (theme picker, then the per-directory
+/// "trust the files in this folder?" prompt) that the native chat surface
+/// cannot drive.
+///
+/// Two files, because the CLI splits them (verified against Claude Code
+/// v2.1.236's own on-disk state):
+/// - `~/.claude.json` — `hasCompletedOnboarding` and the per-project
+///   `hasTrustDialogAccepted` under `projects`.
+/// - `~/.claude/settings.json` — `theme`.
+///
+/// Both are merged non-destructively, so a member who later runs `claude` in a
+/// terminal and changes their own settings keeps them. The auth step of
+/// onboarding is already skipped by the `ANTHROPIC_API_KEY` /
+/// `CLAUDE_CODE_OAUTH_TOKEN` env var set at spawn.
+///
+/// Deliberately *not* seeded: `bypassPermissionsModeAccepted`. Pre-accepting a
+/// permissions bypass on the member's behalf is a security decision, not a
+/// first-run annoyance, and the wizard does not ask for it.
+async fn seed_claude_config(user: &str, project_root: &Path) -> Result<()> {
+    let home = PathBuf::from(format!("/home/{user}"));
+
+    let config_path = home.join(".claude.json");
+    let config = claude_config_with_onboarding_skipped(
+        read_optional_json_object(&config_path).await?,
+        project_root,
+    );
+    write_private_json(&config_path, &config, user).await?;
+
+    let settings_dir = home.join(".claude");
+    fs::create_dir_all(&settings_dir)
+        .await
+        .map_err(RuntimeError::internal)?;
+    let settings_path = settings_dir.join("settings.json");
+    let settings = claude_settings_with_theme(read_optional_json_object(&settings_path).await?);
+    write_private_json(&settings_path, &settings, user).await?;
+    chown_recursive(&settings_dir, user).await
+}
+
+/// Reads a JSON object from `path`, treating both "absent" and "not valid JSON
+/// object" as "nothing to merge onto" rather than an error — a corrupt config
+/// must not stop the workspace from starting.
+async fn read_optional_json_object(path: &Path) -> Result<Option<Value>> {
+    match fs::read(path).await {
+        Ok(bytes) => Ok(serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .filter(Value::is_object)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(RuntimeError::internal(error)),
+    }
+}
+
+async fn write_private_json(path: &Path, value: &Value, user: &str) -> Result<()> {
+    let serialized = serde_json::to_vec(value).map_err(RuntimeError::internal)?;
+    fs::write(path, serialized)
+        .await
+        .map_err(RuntimeError::internal)?;
+    fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(path, user).await
+}
+
+/// Merges the first-run-skipping keys onto an existing `~/.claude.json` (or a
+/// fresh object when there is none). `hasCompletedOnboarding` uses
+/// `entry().or_insert` so a member's own value survives, but the per-project
+/// `hasTrustDialogAccepted` is forced: it gates an interactive prompt CoDev's
+/// chat surface can never answer, and the workspace clone is CoDev's own
+/// directory, not arbitrary third-party content.
+fn claude_config_with_onboarding_skipped(existing: Option<Value>, project_root: &Path) -> Value {
+    let mut config = existing.unwrap_or_else(|| serde_json::json!({}));
+    let root = config
+        .as_object_mut()
+        .expect("existing is filtered to objects; default is an object");
+
+    root.entry("hasCompletedOnboarding")
+        .or_insert(Value::Bool(true));
+
+    let projects = root
+        .entry("projects")
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(projects) = projects.as_object_mut() {
+        let entry = projects
+            .entry(project_root.to_string_lossy().into_owned())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(entry) = entry.as_object_mut() {
+            entry.insert("hasTrustDialogAccepted".to_string(), Value::Bool(true));
+        }
+    }
+
+    config
+}
+
+/// Merges CoDev's default theme onto an existing `~/.claude/settings.json`.
+/// Only applied when the member has no theme of their own — unlike the trust
+/// flag this is purely a preference, and the workspace chrome around it is
+/// dark.
+fn claude_settings_with_theme(existing: Option<Value>) -> Value {
+    let mut settings = existing.unwrap_or_else(|| serde_json::json!({}));
+    settings
+        .as_object_mut()
+        .expect("existing is filtered to objects; default is an object")
+        .entry("theme")
+        .or_insert_with(|| Value::String("dark".to_string()));
+    settings
+}
+
 fn spawn_orca_serve(
     app_run_bin: &Path,
     user: &str,
@@ -834,10 +943,12 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::{
-        USER_SUFFIX_LEN, branch_pattern, linux_user_for, linux_user_process_command,
+        USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
+        claude_settings_with_theme, linux_user_for, linux_user_process_command,
         orca_serve_command_line, orca_serve_sudo_command, repository_pattern, shell_quote,
         token_pattern,
     };
+    use serde_json::json;
     use std::path::Path;
 
     #[test]
@@ -942,5 +1053,55 @@ mod tests {
 
         assert!(token_pattern().is_match("ghp_abcDEF0123456789"));
         assert!(!token_pattern().is_match("token with spaces"));
+    }
+
+    #[test]
+    fn seeds_a_ready_claude_config_when_none_exists() {
+        let root = Path::new("/srv/codev/workspaces/w");
+        let config = claude_config_with_onboarding_skipped(None, root);
+
+        assert_eq!(config["hasCompletedOnboarding"], json!(true));
+        assert_eq!(
+            config["projects"]["/srv/codev/workspaces/w"]["hasTrustDialogAccepted"],
+            json!(true)
+        );
+        // The theme lives in ~/.claude/settings.json, not here, and a
+        // permissions bypass is never pre-accepted on the member's behalf.
+        assert!(config.get("theme").is_none());
+        assert!(config.get("bypassPermissionsModeAccepted").is_none());
+    }
+
+    #[test]
+    fn keeps_a_members_own_claude_config_but_forces_project_trust() {
+        let root = Path::new("/srv/codev/workspaces/w");
+        let existing = json!({
+            "hasCompletedOnboarding": true,
+            "customThing": 7,
+            "projects": {
+                "/srv/codev/workspaces/w": { "hasTrustDialogAccepted": false, "note": "keep" },
+                "/some/other/project": { "hasTrustDialogAccepted": false }
+            }
+        });
+
+        let config = claude_config_with_onboarding_skipped(Some(existing), root);
+
+        assert_eq!(config["customThing"], json!(7));
+        let project = &config["projects"]["/srv/codev/workspaces/w"];
+        assert_eq!(project["hasTrustDialogAccepted"], json!(true));
+        assert_eq!(project["note"], json!("keep"));
+        // Only this workspace's clone is trusted on the member's behalf.
+        assert_eq!(
+            config["projects"]["/some/other/project"]["hasTrustDialogAccepted"],
+            json!(false)
+        );
+    }
+
+    #[test]
+    fn seeds_the_dark_theme_only_when_the_member_has_none() {
+        assert_eq!(claude_settings_with_theme(None)["theme"], json!("dark"));
+
+        let chosen = claude_settings_with_theme(Some(json!({ "theme": "light", "model": "opus" })));
+        assert_eq!(chosen["theme"], json!("light"));
+        assert_eq!(chosen["model"], json!("opus"));
     }
 }

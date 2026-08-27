@@ -1,0 +1,1 @@
+import{kv as e}from"./web-index-n3efA3IP.js";var t=e(`chevron-right`,[[`path`,{d:`m9 18 6-6-6-6`,key:`mthhwq`}]]);export{t};

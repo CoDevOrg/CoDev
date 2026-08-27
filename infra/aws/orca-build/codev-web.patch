@@ -8204,14 +8204,15 @@ index 0000000..021b984
 +})
 diff --git a/src/renderer/src/web/codev-chat-provider-switch.ts b/src/renderer/src/web/codev-chat-provider-switch.ts
 new file mode 100644
-index 0000000..c0b9315
+index 0000000..ff1e3a8
 --- /dev/null
 +++ b/src/renderer/src/web/codev-chat-provider-switch.ts
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,76 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { useAppStore } from '@/store'
 +import type { AgentType } from '../../../shared/agent-status-types'
 +import type { CodevDefaultChatAgent } from './codev-bootstrap'
++import { isCodevEmbedded } from './codev-embedded'
 +
 +function worktreeIdForTerminalTab(tabId: string): string | null {
 +  const { tabsByWorktree } = useAppStore.getState()
@@ -8233,8 +8234,8 @@ index 0000000..c0b9315
 +}
 +
 +/** True in CoDev-embedded mode, where the in-chat provider switcher is offered. */
-+export function codevChatProviderSwitchEnabled(win: Window = window): boolean {
-+  return Boolean(win.__CODEV_EMBEDDED__)
++export function codevChatProviderSwitchEnabled(): boolean {
++  return isCodevEmbedded()
 +}
 +
 +/** The provider the tab is not on, for a one-tap toggle affordance. */
@@ -8285,11 +8286,11 @@ index 0000000..c0b9315
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
-index 0000000..729bfcd
+index 0000000..087071d
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.test.ts
-@@ -0,0 +1,107 @@
-+import { afterEach, describe, expect, it, vi } from 'vitest'
+@@ -0,0 +1,158 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
 +const getState = vi.fn()
@@ -8308,29 +8309,40 @@ index 0000000..729bfcd
 +  worktreeHasAgentTab
 +} from './codev-default-chat-tab'
 +
-+function fakeWindow(overrides: Partial<Window>): Window {
-+  return overrides as Window
++function setWindow(overrides: Record<string, unknown>): void {
++  vi.stubGlobal('window', { location: { hash: '' }, ...overrides })
 +}
 +
++beforeEach(() => {
++  vi.useFakeTimers()
++})
++
 +afterEach(() => {
++  vi.runOnlyPendingTimers()
++  vi.useRealTimers()
++  vi.unstubAllGlobals()
 +  vi.clearAllMocks()
 +})
 +
 +describe('codevDefaultChatAgent', () => {
 +  it('is null outside CoDev-embedded mode', () => {
-+    expect(codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: false }))).toBeNull()
++    setWindow({ __CODEV_EMBEDDED__: false })
++    expect(codevDefaultChatAgent()).toBeNull()
 +  })
 +
 +  it('falls back to Claude when the fragment pins nothing', () => {
-+    expect(codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: true }))).toBe(
-+      CODEV_DEFAULT_CHAT_AGENT
-+    )
++    setWindow({ __CODEV_EMBEDDED__: true })
++    expect(codevDefaultChatAgent()).toBe(CODEV_DEFAULT_CHAT_AGENT)
 +  })
 +
 +  it('honors a pinned Codex default', () => {
-+    expect(
-+      codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: true, __CODEV_DEFAULT_AGENT__: 'codex' }))
-+    ).toBe('codex')
++    setWindow({ __CODEV_EMBEDDED__: true, __CODEV_DEFAULT_AGENT__: 'codex' })
++    expect(codevDefaultChatAgent()).toBe('codex')
++  })
++
++  it('recognizes embedding from the codev=1 fragment before the flag is set', () => {
++    setWindow({ location: { hash: '#pairing=x&codev=1&codevProject=/srv/codev/workspaces/w' } })
++    expect(codevDefaultChatAgent()).toBe(CODEV_DEFAULT_CHAT_AGENT)
 +  })
 +})
 +
@@ -8362,8 +8374,8 @@ index 0000000..729bfcd
 +
 +describe('launchCodevDefaultChatTab', () => {
 +  it('launches the default agent as an editable draft in the worktree', () => {
-+    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: true }))
-+    getState.mockReturnValue({ tabsByWorktree: {}, unifiedTabsByWorktree: {} })
++    setWindow({ __CODEV_EMBEDDED__: true })
++    getState.mockReturnValue({ tabsByWorktree: {}, unifiedTabsByWorktree: {}, closeTab: vi.fn() })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
 +
@@ -8373,40 +8385,81 @@ index 0000000..729bfcd
 +      promptDelivery: 'draft',
 +      launchSource: 'new_workspace_composer'
 +    })
-+    vi.unstubAllGlobals()
++  })
++
++  it('retires the stock terminal tabs that existed before the launch', () => {
++    setWindow({ __CODEV_EMBEDDED__: true })
++    const closeTab = vi.fn()
++    // Pre-launch: one idle shell. Post-launch (after the mirror lands): shell + chat tab.
++    getState
++      .mockReturnValueOnce({
++        tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
++        unifiedTabsByWorktree: {},
++        closeTab
++      })
++      .mockReturnValueOnce({
++        tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
++        unifiedTabsByWorktree: {},
++        closeTab
++      })
++      .mockReturnValue({
++        tabsByWorktree: { 'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }] },
++        unifiedTabsByWorktree: {},
++        closeTab
++      })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++    vi.runAllTimers()
++
++    expect(closeTab).toHaveBeenCalledWith('shell', { reason: 'cleanup' })
++  })
++
++  it('keeps the stock terminal when the chat tab has not mirrored yet', () => {
++    setWindow({ __CODEV_EMBEDDED__: true })
++    const closeTab = vi.fn()
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
++      unifiedTabsByWorktree: {},
++      closeTab
++    })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++    vi.runAllTimers()
++
++    expect(closeTab).not.toHaveBeenCalled()
 +  })
 +
 +  it('does nothing when the worktree already has an agent tab', () => {
-+    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: true }))
++    setWindow({ __CODEV_EMBEDDED__: true })
 +    getState.mockReturnValue({
 +      tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
-+      unifiedTabsByWorktree: {}
++      unifiedTabsByWorktree: {},
++      closeTab: vi.fn()
 +    })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
 +
 +    expect(launchAgentInNewTab).not.toHaveBeenCalled()
-+    vi.unstubAllGlobals()
 +  })
 +
 +  it('does nothing outside CoDev-embedded mode', () => {
-+    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: false }))
++    setWindow({ __CODEV_EMBEDDED__: false })
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
 +    expect(launchAgentInNewTab).not.toHaveBeenCalled()
-+    vi.unstubAllGlobals()
 +  })
 +})
 diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
 new file mode 100644
-index 0000000..1c8044b
+index 0000000..5f26d62
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.ts
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,100 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 +import { useAppStore } from '@/store'
 +import type { TuiAgent } from '../../../shared/types'
 +import type { CodevDefaultChatAgent } from './codev-bootstrap'
++import { isCodevEmbedded } from './codev-embedded'
 +
 +/**
 + * The agent CoDev opens a workspace's default chat tab with when the pairing
@@ -8416,15 +8469,19 @@ index 0000000..1c8044b
 + */
 +export const CODEV_DEFAULT_CHAT_AGENT: CodevDefaultChatAgent = 'claude'
 +
++/** How long to wait for the new chat tab to appear before retiring the stock
++ *  terminal tabs it replaces (a paired host mirrors its tab list async). */
++const RETIRE_STOCK_TABS_DELAY_MS = 2_500
++
 +/**
 + * Resolve the agent for the workspace's default chat tab. Returns `null`
 + * outside CoDev-embedded mode so the caller stays a no-op for stock Orca.
 + */
-+export function codevDefaultChatAgent(win: Window = window): TuiAgent | null {
-+  if (!win.__CODEV_EMBEDDED__) {
++export function codevDefaultChatAgent(): TuiAgent | null {
++  if (!isCodevEmbedded()) {
 +    return null
 +  }
-+  const pinned = win.__CODEV_DEFAULT_AGENT__
++  const pinned = window.__CODEV_DEFAULT_AGENT__
 +  const agent: TuiAgent = pinned === 'claude' || pinned === 'codex' ? pinned : CODEV_DEFAULT_CHAT_AGENT
 +  return isNativeChatSupportedAgent(agent) ? agent : null
 +}
@@ -8446,16 +8503,47 @@ index 0000000..1c8044b
 +}
 +
 +/**
-+ * Open the workspace's default native chat tab in the just-activated worktree.
-+ * No-op outside CoDev-embedded mode or when the worktree already has an agent
-+ * tab. Reuses the same launch path as the tab-bar quick-launch so paired
-+ * (web-runtime) sessions spawn the agent on the host correctly.
++ * Close the stock terminal tabs the default chat tab replaces.
++ *
++ * CoDev workspaces are agent-first, so the worktree should open on the chat
++ * tab alone — not the chat tab plus the idle shell Orca (or the paired host)
++ * created first. Only tabs that existed *before* the chat launch and still
++ * carry no agent are retired, and never the worktree's last remaining tab, so
++ * a slow host mirror leaves the shell in place rather than an empty worktree.
++ */
++function retireStockTerminalTabs(worktreeId: string, stockTabIds: readonly string[]): void {
++  if (stockTabIds.length === 0) {
++    return
++  }
++  setTimeout(() => {
++    const state = useAppStore.getState()
++    const tabs = state.tabsByWorktree[worktreeId] ?? []
++    let remaining = tabs.length
++    for (const tab of tabs) {
++      if (remaining <= 1) {
++        break
++      }
++      if (stockTabIds.includes(tab.id) && !tab.launchAgent) {
++        state.closeTab(tab.id, { reason: 'cleanup' })
++        remaining -= 1
++      }
++    }
++  }, RETIRE_STOCK_TABS_DELAY_MS)
++}
++
++/**
++ * Open the workspace's default native chat tab in the just-activated worktree
++ * and retire the stock terminal tab(s) it replaces. No-op outside
++ * CoDev-embedded mode or when the worktree already has an agent tab. Reuses
++ * the same launch path as the tab-bar quick-launch so paired (web-runtime)
++ * sessions spawn the agent on the host correctly.
 + */
 +export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }): void {
 +  const agent = codevDefaultChatAgent()
 +  if (!agent || worktreeHasAgentTab(worktreeId)) {
 +    return
 +  }
++  const stockTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
 +  launchAgentInNewTab({
 +    agent,
 +    worktreeId,
@@ -8464,21 +8552,76 @@ index 0000000..1c8044b
 +    promptDelivery: 'draft',
 +    launchSource: 'new_workspace_composer'
 +  })
++  retireStockTerminalTabs(worktreeId, stockTabIds)
 +}
+diff --git a/src/renderer/src/web/codev-embedded.test.ts b/src/renderer/src/web/codev-embedded.test.ts
+new file mode 100644
+index 0000000..2706170
+--- /dev/null
++++ b/src/renderer/src/web/codev-embedded.test.ts
+@@ -0,0 +1,27 @@
++import { describe, expect, it } from 'vitest'
++import { isCodevEmbedded } from './codev-embedded'
++
++describe('isCodevEmbedded', () => {
++  it('is true when the runtime flag is set', () => {
++    expect(isCodevEmbedded({ __CODEV_EMBEDDED__: true })).toBe(true)
++  })
++
++  it('is true from the codev=1 fragment before the flag is assigned', () => {
++    expect(
++      isCodevEmbedded({
++        location: {
++          hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fw&codevProjectKind=git'
++        }
++      })
++    ).toBe(true)
++  })
++
++  it('is false for a stock Orca web client (no flag, no fragment)', () => {
++    expect(isCodevEmbedded({ location: { hash: '#pairing=secret' } })).toBe(false)
++    expect(isCodevEmbedded({})).toBe(false)
++  })
++
++  it('requires codev to equal exactly 1', () => {
++    expect(isCodevEmbedded({ location: { hash: '#note=mentions-codev&codev=0' } })).toBe(false)
++  })
++})
 diff --git a/src/renderer/src/web/codev-embedded.ts b/src/renderer/src/web/codev-embedded.ts
 new file mode 100644
-index 0000000..66c4a2d
+index 0000000..85565c9
 --- /dev/null
 +++ b/src/renderer/src/web/codev-embedded.ts
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,30 @@
 +/**
 + * True when the Orca web client is running inside a CoDev workspace shell
-+ * (the parent set the `codev=1` pairing-fragment contract; see
++ * (the parent opened it with the `codev=1` pairing-fragment contract; see
 + * `codev-bootstrap.ts` / `web/main.tsx`). CoDev-only UI branches gate on this
 + * so stock Orca behavior is untouched.
++ *
++ * Checks the `window.__CODEV_EMBEDDED__` flag `web/main.tsx` sets, and falls
++ * back to reading the `codev=1` fragment directly so callers that run before
++ * that assignment (e.g. `getStoredSettings()` during preload-API install)
++ * still resolve correctly.
 + */
-+export function isCodevEmbedded(win: Pick<Window, never> & { __CODEV_EMBEDDED__?: boolean } = window): boolean {
-+  return Boolean(win.__CODEV_EMBEDDED__)
++export function isCodevEmbedded(
++  win: {
++    __CODEV_EMBEDDED__?: boolean
++    location?: { hash?: string }
++  } = window
++): boolean {
++  if (win.__CODEV_EMBEDDED__) {
++    return true
++  }
++  const hash = win.location?.hash
++  if (!hash) {
++    return false
++  }
++  try {
++    return new URLSearchParams(hash.replace(/^#/, '')).get('codev') === '1'
++  } catch {
++    return false
++  }
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
@@ -9366,6 +9509,46 @@ index eae3a54..e16bbed 100644
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
+diff --git a/src/renderer/src/web/web-preload-api.ts b/src/renderer/src/web/web-preload-api.ts
+index 0067f12..f08a2e7 100644
+--- a/src/renderer/src/web/web-preload-api.ts
++++ b/src/renderer/src/web/web-preload-api.ts
+@@ -50,6 +50,7 @@ import {
+   normalizeWorktreeCardProperties,
+   ONBOARDING_FLOW_VERSION
+ } from '../../../shared/constants'
++import { isCodevEmbedded } from './codev-embedded'
+ import {
+   createDefaultLocalOrcaProfile,
+   DEFAULT_LOCAL_ORCA_PROFILE_ID
+@@ -3667,7 +3668,7 @@ function getStoredSettings(): GlobalSettings {
+       // Keep readJson's invalid-JSON fallback non-destructive.
+     }
+   }
+-  return mergeSettings(
++  const merged = mergeSettings(
+     {
+       ...defaults,
+       floatingTerminalEnabled: false,
+@@ -3676,6 +3677,18 @@ function getStoredSettings(): GlobalSettings {
+     },
+     migratedStored
+   )
++  if (isCodevEmbedded()) {
++    // The workspace's default tab is a native chat (see
++    // `web/codev-default-chat-tab.ts`), and the in-chat provider/model/effort
++    // pickers all assume the native surface. Force it on regardless of any
++    // stored value — a browser that ran an earlier CoDev build, or any
++    // `settings.set()` that re-persisted the upstream `false` default, must
++    // not leave the workspace showing a raw agent TUI. This also makes the
++    // one-shot `codev-preload.js` localStorage seed unnecessary.
++    merged.experimentalNativeChat = true
++    merged.openAgentTabsInChatByDefault = true
++  }
++  return merged
+ }
+ 
+ function writeStoredSettings(
 diff --git a/src/shared/agent-session-option-catalog-claude-codex.ts b/src/shared/agent-session-option-catalog-claude-codex.ts
 index 0464fd1..693c796 100644
 --- a/src/shared/agent-session-option-catalog-claude-codex.ts

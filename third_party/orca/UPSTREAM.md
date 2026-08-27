@@ -77,12 +77,37 @@ web-runtime sessions spawn the agent on the host correctly) with
 `promptDelivery: 'draft'` — the composer opens empty and editable, nothing is
 auto-submitted. It runs once per project handoff and is a no-op when the
 worktree already has an agent tab (a reload that mirrored a running session).
+It also retires the stock terminal tab(s) that existed before the launch
+(deferred, and never the worktree's last tab) so the workspace opens on the
+chat tab alone.
 The agent is `claude` by default; the parent can pin `claude` or `codex`
 through a new `codevDefaultAgent` pairing-fragment param
 (`buildOrcaIframeSource` → `readCodevBootstrap` → `window.__CODEV_DEFAULT_AGENT__`),
-which `WorkspaceHome` sets from the member's linked provider. The pre-existing
-`codev-preload.js` seeding of `experimentalNativeChat` /
-`openAgentTabsInChatByDefault` is what makes that launched tab render as chat.
+which `WorkspaceHome` sets from the member's linked provider.
+
+What makes that launched tab render as chat is `experimentalNativeChat` /
+`openAgentTabsInChatByDefault`. The patch forces both **on** in
+`getStoredSettings()` (`web-preload-api.ts`) whenever `isCodevEmbedded()` —
+so a browser that ran an earlier CoDev build, or any unrelated `settings.set()`
+that re-persisted the upstream `false` default, cannot leave the workspace
+showing a raw agent TUI. `isCodevEmbedded()` reads `window.__CODEV_EMBEDDED__`
+and falls back to the `codev=1` fragment for callers that run before
+`web/main.tsx` sets the flag. This replaced the earlier, defeatable
+one-shot `codev-preload.js` localStorage seed.
+
+The launched agent CLI also has to come up *past its own first-run wizard*,
+which the chat surface cannot drive. `seed_claude_config` in
+[`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs)
+writes the workspace Linux user's Claude Code config before `orca serve`
+starts — two files, because the CLI splits them (verified against the CLI's
+own on-disk state at v2.1.236): `~/.claude.json` carries
+`hasCompletedOnboarding` and the per-project `hasTrustDialogAccepted`, and
+`~/.claude/settings.json` carries `theme`. Both are merged non-destructively,
+so a member who later runs `claude` in a terminal keeps their own choices;
+only `hasTrustDialogAccepted` for this workspace's own clone directory is
+forced, since it gates a prompt the chat surface can never answer.
+`bypassPermissionsModeAccepted` is deliberately **not** seeded — pre-accepting
+a permissions bypass is a security decision, not a first-run annoyance.
 
 A CoDev-only **provider picker** (`CodevChatProviderPicker`, rendered by
 `NativeChatComposerActions` beside the model/reasoning-effort pickers) lets the

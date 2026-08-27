@@ -58,28 +58,18 @@
   try {
     var key = "orca.web.settings.v1";
     var mobileMarker = "codevMobileDefaultApplied";
-    var chatMarker = "codevNativeChatDefaultV2Applied";
     var raw = window.localStorage.getItem(key);
     var settings = raw ? JSON.parse(raw) : {};
-    var changed = false;
-    if (settings && typeof settings === "object") {
-      if (!settings[mobileMarker]) {
-        settings.showMobileButton = false;
-        settings[mobileMarker] = true;
-        changed = true;
-      }
-      // Keep CoDev in the IDE and render agent tabs launched from + with the
-      // native Codex/Claude chat surface. The versioned marker migrates users
-      // who received the earlier rollback without overriding later choices.
-      if (!settings[chatMarker]) {
-        settings.experimentalNativeChat = true;
-        settings.openAgentTabsInChatByDefault = true;
-        settings[chatMarker] = true;
-        changed = true;
-      }
-      if (changed) {
-        window.localStorage.setItem(key, JSON.stringify(settings));
-      }
+    // Native chat (experimentalNativeChat / openAgentTabsInChatByDefault) is no
+    // longer seeded here: the CoDev patch forces both on in getStoredSettings()
+    // whenever the client is embedded, which cannot be defeated by a stale
+    // localStorage blob or an unrelated settings write re-persisting the
+    // upstream `false` default. This block only keeps the one-shot mobile
+    // default.
+    if (settings && typeof settings === "object" && !settings[mobileMarker]) {
+      settings.showMobileButton = false;
+      settings[mobileMarker] = true;
+      window.localStorage.setItem(key, JSON.stringify(settings));
     }
   } catch (_error) {
     // Browser-local preference seeding is best-effort.
