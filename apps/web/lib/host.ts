@@ -46,6 +46,38 @@ const RETRYABLE_AWS_ERROR_NAMES = new Set([
   "ServiceUnavailable",
 ]);
 
+/**
+ * Failures of `StartInstances` that mean "not right now" rather than
+ * "never": the capacity pool is momentarily full, or the instance is still
+ * transitioning between states and EC2 will accept the same call shortly.
+ * None of these are the user's problem, and none of them should reach the
+ * UI - the caller polls, so reporting the host as still starting lets the
+ * next attempt succeed silently.
+ *
+ * `InsufficientInstanceCapacity` is rare on the on-demand host this runs on
+ * today, but it was routine while the host was a Spot instance ("there is no
+ * available Spot capacity"), which is exactly the kind of raw AWS text that
+ * must never be shown to somebody opening a workspace.
+ */
+const TRANSIENT_START_ERROR_NAMES = new Set([
+  "InsufficientInstanceCapacity",
+  "InsufficientHostCapacity",
+  "InsufficientCapacity",
+  "IncorrectInstanceState",
+  "IncorrectSpotRequestState",
+  "InstanceLimitExceeded",
+  "SpotMaxPriceTooLow",
+  "Unsupported",
+  ...RETRYABLE_AWS_ERROR_NAMES,
+]);
+
+function isTransientStartFailure(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  if (TRANSIENT_START_ERROR_NAMES.has(error.name)) return true;
+  // Capacity refusals do not always arrive under a distinct error name.
+  return /capacity|try again|temporarily/i.test(error.message);
+}
+
 async function withAwsRetry<T>(operation: () => Promise<T>): Promise<T> {
   const attempts = 3;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -144,10 +176,13 @@ export async function requestHostWake(): Promise<"running" | "starting"> {
           client.send(new StartInstancesCommand({ InstanceIds: [instanceId] })),
         );
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        throw new Error(
-          `The Firecracker host could not be started (${instanceId}): ${reason}`,
-        );
+        // A host that cannot be started *this second* is still a host that
+        // is starting as far as the caller is concerned: it polls, and the
+        // next attempt usually succeeds. Surfacing the AWS text here would
+        // turn a self-healing hiccup into an error screen.
+        if (!isTransientStartFailure(error)) {
+          throw error;
+        }
       }
       return "starting";
     }
@@ -155,7 +190,9 @@ export async function requestHostWake(): Promise<"running" | "starting"> {
       return "starting";
     }
     if (state === "stopping") {
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      // The instance is on its way down; it becomes startable once it lands
+      // in `stopped`, so wait for that rather than reporting a failure.
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
       continue;
     }
     if (
@@ -163,9 +200,10 @@ export async function requestHostWake(): Promise<"running" | "starting"> {
       state === "terminated" ||
       state === undefined
     ) {
-      throw new Error(
-        `The Firecracker host cannot be started from state ${state ?? "unknown"}.`,
-      );
+      // `resolveHost` re-resolves through the stack's tags on the next call,
+      // so a replaced host recovers on its own. Report "starting" and let the
+      // caller poll into the replacement.
+      return "starting";
     }
   }
   return "starting";

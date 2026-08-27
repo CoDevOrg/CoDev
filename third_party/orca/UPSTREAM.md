@@ -91,9 +91,18 @@ one agent CLI in its PTY, a switch (`src/renderer/src/web/codev-chat-provider-sw
 starts a fresh chat on the new provider in the same worktree via
 `launchAgentInNewTab` and, after a short delay so the paired-host tab mirror
 can land, retires the previous tab — skipping that retirement if it would
-leave the worktree with no tab. Model and reasoning effort for `codex`/`claude`
-are already handled by the existing `NativeChatSessionOptionPickers` patch and
-appear once the tab's PTY is live.
+leave the worktree with no tab.
+
+Model and reasoning-effort pickers for `codex`/`claude` come from the existing
+`NativeChatSessionOptionPickers` patch. Stock Orca only builds that picker
+surface once a tab has a live PTY (`use-native-chat-session-options.ts`
+returned `null` while `targetPtyId` was absent, since a pre-PTY pick could not
+reach the already-queued startup command). CoDev opens the default chat tab
+with an empty composer *before* the paired host's PTY mirrors, so the patch
+lifts that guard when `isCodevEmbedded()`: the surface is built in `'draft'`
+mode from the catalog defaults so the model/effort pills are visible from
+first paint, then re-created in `'live'` mode once the PTY arrives, which
+reconciles any pre-PTY selection through the agent's own picker.
 
 ## Branding patches (modify the vendored bundle directly)
 

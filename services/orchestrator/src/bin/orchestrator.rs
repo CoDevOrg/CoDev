@@ -1,8 +1,4 @@
-use std::{
-    env,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{env, sync::Arc, time::Duration};
 
 use codev_runtime::{
     backend::{Backend, IdeBackend, SharedBackend},
@@ -28,11 +24,15 @@ async fn main() -> Result<()> {
     let backend = Arc::new(backend);
     let host_idle_timeout = environment_duration("CODEV_HOST_IDLE_TIMEOUT", Duration::ZERO)?;
 
-    if !host_idle_timeout.is_zero() {
-        tokio::spawn(stop_idle_host(backend.clone(), host_idle_timeout));
-    }
-
     let ide = configure_ide_backend();
+
+    if !host_idle_timeout.is_zero() {
+        tokio::spawn(stop_idle_host(
+            backend.clone(),
+            ide.clone(),
+            host_idle_timeout,
+        ));
+    }
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".into());
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
@@ -97,18 +97,38 @@ async fn configure_backend() -> Result<Backend> {
     }
 }
 
-async fn stop_idle_host(backend: SharedBackend, idle_timeout: Duration) {
+/// Power the EC2 host off once nothing has been used on it for `idle_timeout`.
+///
+/// Two things have to be true for this to behave the way somebody using CoDev
+/// expects. A live sandbox blocks shutdown outright — it holds VM state, and
+/// its own reaper is what eventually hibernates it. IDE sessions, by
+/// contrast, are measured by *when they were last used*, not by whether they
+/// still exist: a workspace opened straight into its Orca IDE never
+/// provisions a sandbox, so ignoring IDE sessions would power the host off
+/// mid-session, while merely counting them would restart this clock from zero
+/// the moment the IDE reaper removed an abandoned one — billing a second full
+/// idle window for a host nobody had touched in twice that long.
+async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: Duration) {
     let mut interval = time::interval(Duration::from_secs(30));
     interval.tick().await;
-    let mut idle_since: Option<Instant> = None;
+    let mut quiet_since: Option<chrono::DateTime<chrono::Utc>> = None;
     loop {
         interval.tick().await;
         if backend.active_count().await > 0 {
-            idle_since = None;
+            quiet_since = None;
             continue;
         }
-        let since = idle_since.get_or_insert_with(Instant::now);
-        if since.elapsed() < idle_timeout {
+        let since = *quiet_since.get_or_insert_with(chrono::Utc::now);
+        // Whichever is later: when this loop first saw the host quiet, or
+        // when an IDE session was last actually used.
+        let idle_from = ide
+            .last_activity_at()
+            .await
+            .map_or(since, |last| last.max(since));
+        if (chrono::Utc::now() - idle_from)
+            .to_std()
+            .is_ok_and(|idle| idle < idle_timeout)
+        {
             continue;
         }
         info!(?idle_timeout, "stopping idle Firecracker host");
@@ -127,7 +147,9 @@ async fn stop_idle_host(backend: SharedBackend, idle_timeout: Duration) {
             Ok(Err(error)) => error!(%error, "failed to execute host shutdown"),
             Err(_) => error!("host shutdown command timed out"),
         }
-        idle_since = Some(Instant::now());
+        // The poweroff failed. Back off a full window before trying again
+        // rather than retrying every 30 seconds.
+        quiet_since = Some(chrono::Utc::now());
     }
 }
 

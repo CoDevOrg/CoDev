@@ -1527,11 +1527,59 @@ index df96ea2..721f48b 100644
    }
  
    const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
+index a24d1b8..3687b6e 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
+@@ -176,3 +176,43 @@ describe('useNativeChatSessionOptions model reporting', () => {
+     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
+   })
+ })
++
++describe('useNativeChatSessionOptions pre-PTY draft surface', () => {
++  beforeEach(() => {
++    discoverModels.mockReset()
++    discoverModels.mockResolvedValue(null)
++    Reflect.deleteProperty(window, '__CODEV_EMBEDDED__')
++  })
++
++  it('has no surface before the PTY exists in stock Orca', () => {
++    const { result } = renderHook(() =>
++      useNativeChatSessionOptions({
++        agent: 'claude',
++        terminalTabId: 'tab-draft',
++        targetPtyId: null,
++        dispatchCommand: vi.fn(),
++        readTerminalScreen: () => null
++      })
++    )
++
++    expect(result.current.surface).toBeNull()
++    expect(result.current.snapshot).toEqual([])
++  })
++
++  it('exposes the draft model picker before the PTY mirrors when CoDev-embedded', () => {
++    ;(window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__ = true
++
++    const { result } = renderHook(() =>
++      useNativeChatSessionOptions({
++        agent: 'claude',
++        terminalTabId: 'tab-draft',
++        targetPtyId: null,
++        dispatchCommand: vi.fn(),
++        readTerminalScreen: () => null
++      })
++    )
++
++    expect(result.current.surface).not.toBeNull()
++    expect(modelDescriptor(result.current.snapshot).choices.length).toBeGreaterThan(0)
++  })
++})
 diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
-index a722a1f..2207991 100644
+index a722a1f..84e8d28 100644
 --- a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
 +++ b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
-@@ -1,7 +1,12 @@
+@@ -1,8 +1,14 @@
  import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 +import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 +import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
@@ -1543,9 +1591,11 @@ index a722a1f..2207991 100644
 +  SessionOptionValue
 +} from '../../../../shared/native-chat-session-options'
  import { useAppStore } from '../../store'
++import { isCodevEmbedded } from '@/web/codev-embedded'
  import {
    createNativeChatPtySessionOptions,
-@@ -23,6 +28,36 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
+   type NativeChatPtySessionOptionsSurface
+@@ -23,6 +29,36 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
  const subscribeEmpty = (): (() => void) => () => {}
  const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
  
@@ -1582,12 +1632,30 @@ index a722a1f..2207991 100644
  export function useNativeChatSessionOptions(args: {
    agent: AgentType
    terminalTabId: string
-@@ -61,6 +96,20 @@ export function useNativeChatSessionOptions(args: {
+@@ -44,9 +80,14 @@ export function useNativeChatSessionOptions(args: {
+     [terminalTabId]
+   )
+   const surface = useMemo(() => {
+-    // Why: native chat currently attaches only after startup is already queued;
+-    // exposing a draft picker here would claim it can still mutate that command.
+-    if (!targetPtyId) {
++    // Why: native chat normally attaches only after startup is already queued,
++    // so a pre-PTY draft picker would claim it can still mutate that command.
++    // CoDev opens the workspace's default chat tab with an empty composer
++    // before the paired host's PTY mirrors, so there it shows the draft-mode
++    // model/effort pickers at their catalog defaults from first paint; the
++    // surface re-creates in 'live' mode once the PTY arrives and reconciles
++    // any pre-PTY selection through the agent's own picker.
++    if (!targetPtyId && !isCodevEmbedded()) {
+       return null
+     }
+     const scopeKey = targetPtyId ?? terminalTabId
+@@ -61,6 +102,20 @@ export function useNativeChatSessionOptions(args: {
            )
          : null
      let settingsWrite = Promise.resolve()
 +    const applyAgentPickerChoice =
-+      agent === 'codex'
++      agent === 'codex' && targetPtyId
 +        ? async ({ optionId, value }: { optionId: string; value: SessionOptionValue }) => {
 +            if (optionId !== 'effort') {
 +              throw new Error('This Codex option is not available in chat.')
@@ -1603,7 +1671,7 @@ index a722a1f..2207991 100644
      return createNativeChatPtySessionOptions({
        agent,
        scopeKey,
-@@ -73,6 +122,7 @@ export function useNativeChatSessionOptions(args: {
+@@ -73,6 +128,7 @@ export function useNativeChatSessionOptions(args: {
        reportedValues,
        dispatchCommand,
        onAgentPicker,
@@ -8396,6 +8464,21 @@ index 0000000..1c8044b
 +    promptDelivery: 'draft',
 +    launchSource: 'new_workspace_composer'
 +  })
++}
+diff --git a/src/renderer/src/web/codev-embedded.ts b/src/renderer/src/web/codev-embedded.ts
+new file mode 100644
+index 0000000..66c4a2d
+--- /dev/null
++++ b/src/renderer/src/web/codev-embedded.ts
+@@ -0,0 +1,9 @@
++/**
++ * True when the Orca web client is running inside a CoDev workspace shell
++ * (the parent set the `codev=1` pairing-fragment contract; see
++ * `codev-bootstrap.ts` / `web/main.tsx`). CoDev-only UI branches gate on this
++ * so stock Orca behavior is untouched.
++ */
++export function isCodevEmbedded(win: Pick<Window, never> & { __CODEV_EMBEDDED__?: boolean } = window): boolean {
++  return Boolean(win.__CODEV_EMBEDDED__)
 +}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644

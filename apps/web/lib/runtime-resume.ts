@@ -73,15 +73,18 @@ const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 async function waitForHostAndOrchestrator() {
   const deadline = Date.now() + HOST_START_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const state = await requestHostWake();
+    // `requestHostWake` absorbs transient EC2 failures itself and reports the
+    // host as starting, so a capacity refusal or a mid-restart instance just
+    // costs another turn of this loop instead of failing the action.
+    const state = await requestHostWake().catch(() => "starting" as const);
     if (state === "running") {
       await waitForOrchestrator();
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
   throw new WorkspaceLifecycleError(
-    "The Firecracker host is still starting. Try the action again shortly.",
+    "Your workspace is still waking up. Try the action again shortly.",
     503,
   );
 }

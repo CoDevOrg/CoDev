@@ -1210,15 +1210,19 @@ impl GuestService {
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) | Err(_) => {
-                        let mut output =
-                            reader_session.output.lock().expect("codex exec output lock");
+                        let mut output = reader_session
+                            .output
+                            .lock()
+                            .expect("codex exec output lock");
                         output.reader_closed = true;
                         reader_session.output_changed.notify_all();
                         break;
                     }
                     Ok(length) => {
-                        let mut output =
-                            reader_session.output.lock().expect("codex exec output lock");
+                        let mut output = reader_session
+                            .output
+                            .lock()
+                            .expect("codex exec output lock");
                         while output.buffered_bytes >= MAX_OUTPUT_BYTES {
                             output = reader_session
                                 .output_changed
@@ -2308,7 +2312,12 @@ mod tests {
             "/v1/codex-execs",
             serde_json::to_vec(&request).expect("request").as_slice(),
         );
-        assert_eq!(start.status, 200, "{}", String::from_utf8_lossy(&start.body));
+        assert_eq!(
+            start.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&start.body)
+        );
         let body: serde_json::Value = serde_json::from_slice(&start.body).expect("start");
         body["sessionId"].as_str().expect("session id").to_owned()
     }
@@ -2369,8 +2378,11 @@ mod tests {
             ]),
             "key-1",
         );
-        let result =
-            poll_codex_exec_until_exited(&service, &session_id, Instant::now() + Duration::from_secs(5));
+        let result = poll_codex_exec_until_exited(
+            &service,
+            &session_id,
+            Instant::now() + Duration::from_secs(5),
+        );
         assert_eq!(result.exit_code, Some(0));
         assert!(result.output.contains("codex-async-ok"));
         assert_eq!(
@@ -2386,7 +2398,10 @@ mod tests {
         let service = GuestService::new(directory.path()).expect("service");
         let first = start_codex_exec(&service, serde_json::json!(["sleep", "0.2"]), "same-key");
         let second = start_codex_exec(&service, serde_json::json!(["sleep", "0.2"]), "same-key");
-        assert_eq!(first, second, "a retried start must reattach, not double-spawn");
+        assert_eq!(
+            first, second,
+            "a retried start must reattach, not double-spawn"
+        );
         poll_codex_exec_until_exited(&service, &first, Instant::now() + Duration::from_secs(5));
     }
 
@@ -2394,24 +2409,35 @@ mod tests {
     fn codex_exec_blocks_other_mutations_until_it_exits() {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
-        let session_id = start_codex_exec(&service, serde_json::json!(["sleep", "0.3"]), "busy-key");
+        let session_id =
+            start_codex_exec(&service, serde_json::json!(["sleep", "0.3"]), "busy-key");
 
         let started_at = Instant::now();
         let plain = service.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
-        assert_eq!(plain.status, 200, "{}", String::from_utf8_lossy(&plain.body));
+        assert_eq!(
+            plain.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&plain.body)
+        );
         assert!(
             started_at.elapsed() >= Duration::from_millis(250),
             "a plain exec must wait for the in-flight Codex exec to finish"
         );
 
-        poll_codex_exec_until_exited(&service, &session_id, Instant::now() + Duration::from_secs(5));
+        poll_codex_exec_until_exited(
+            &service,
+            &session_id,
+            Instant::now() + Duration::from_secs(5),
+        );
     }
 
     #[test]
     fn codex_exec_close_kills_the_process_promptly() {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
-        let session_id = start_codex_exec(&service, serde_json::json!(["sleep", "5"]), "cancel-key");
+        let session_id =
+            start_codex_exec(&service, serde_json::json!(["sleep", "5"]), "cancel-key");
 
         let close = service.handle("DELETE", &format!("/v1/codex-execs/{session_id}"), b"");
         assert_eq!(close.status, 200);

@@ -266,6 +266,41 @@ impl OrcaBackend {
         Ok(session.to_model(workspace_id))
     }
 
+    /// When any IDE session on this host was last used, if there are any.
+    ///
+    /// The host-level idle shutdown needs this rather than a session count.
+    /// An Orca-only workspace never provisions a Firecracker sandbox, so
+    /// counting sandboxes alone would power the host off mid-session — but
+    /// counting *sessions* would be just as wrong in the other direction,
+    /// because an abandoned session keeps existing until the reaper below
+    /// removes it, and the host would then start a second full idle window
+    /// from scratch. Reporting the timestamp lets both clocks run against the
+    /// same moment: the last time somebody actually did something.
+    pub async fn last_activity_at(&self) -> Option<chrono::DateTime<Utc>> {
+        self.sessions
+            .read()
+            .await
+            .values()
+            .map(|session| *session.last_activity_at.read().expect("session lock"))
+            .max()
+    }
+
+    /// Record browser-side activity against this workspace's IDE session. The
+    /// browser connects straight to `orca serve` through Caddy and never
+    /// touches the orchestrator, so without an explicit keepalive a session
+    /// somebody is actively typing in looks idle and gets reaped.
+    pub async fn touch(&self, workspace_id: &str) -> Result<IdeSession> {
+        let session = self
+            .sessions
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        session.touch();
+        Ok(session.to_model(workspace_id))
+    }
+
     pub async fn stop(&self, workspace_id: &str) -> Result<()> {
         let _guard = self.provision.lock().await;
         let session = self

@@ -62,6 +62,7 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/ide",
             post(start_ide).get(get_ide).delete(stop_ide),
         )
+        .route("/v1/sandboxes/{workspace_id}/ide/activity", post(touch_ide))
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
@@ -518,9 +519,7 @@ async fn close_codex_exec(
 ) -> Result<StatusCode> {
     validate_workspace_id(&workspace_id)?;
     validate_codex_exec_id(&session_id)?;
-    backend
-        .close_codex_exec(&workspace_id, &session_id)
-        .await?;
+    backend.close_codex_exec(&workspace_id, &session_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -605,6 +604,19 @@ async fn get_ide(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     let session = ide.status(&workspace_id).await?;
+    Ok(Json(serde_json::json!({ "ide": session })))
+}
+
+/// Browser-driven keepalive. The Orca web client connects directly to the
+/// per-workspace `orca serve` port through Caddy, so this is the only signal
+/// the orchestrator gets that a session is genuinely in use — both the IDE
+/// session reaper and the host idle shutdown depend on it.
+async fn touch_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    let session = ide.touch(&workspace_id).await?;
     Ok(Json(serde_json::json!({ "ide": session })))
 }
 

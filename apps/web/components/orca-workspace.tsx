@@ -33,7 +33,33 @@ type ConnectionPhase =
   | { phase: "ready"; iframeSrc: string; workspacePath: string | null }
   | { phase: "error"; message: string };
 
-const HOST_STARTING_RETRY_MS = 8_000;
+/**
+ * Poll fast while the host comes up. The wake path is idempotent and cheap
+ * (a DescribeInstances plus, at most, one StartInstances), so a tight poll
+ * buys a noticeably quicker hand-off the moment the instance is ready
+ * without meaningfully more work on the server.
+ */
+const HOST_STARTING_RETRY_MS = 2_500;
+/**
+ * How long to keep waiting before admitting the wait is unusual. Anything
+ * that resolves on its own - a cold boot, a capacity retry, an orchestrator
+ * still starting its services - lands well inside this, so crossing it just
+ * softens the copy rather than turning into an error.
+ */
+const SLOW_START_NOTICE_MS = 90_000;
+/**
+ * Keepalive cadence for an open IDE. Comfortably under the host's idle
+ * window, and paused while the tab is hidden so a forgotten background tab
+ * does not hold the instance open indefinitely.
+ */
+const IDE_KEEPALIVE_MS = 60_000;
+/**
+ * The only connect failures worth showing: signing in, being granted access,
+ * a workspace that is gone, and running out of credit are all things the
+ * person can do something about. Every other status is infrastructure and is
+ * retried silently.
+ */
+const ACTIONABLE_CONNECT_STATUSES = new Set([401, 403, 404, 429]);
 const ORCA_THEME_OVERRIDE_HREF = "/orca-theme-overrides.css";
 const CODEV_EMPTY_STATE_LOGO_SRC = "/brand/codev-mark-v3.png";
 
@@ -684,6 +710,10 @@ export function OrcaWorkspace({
   });
   const [attempt, setAttempt] = useState(0);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [isSlowStart, setIsSlowStart] = useState(false);
+  // Seeded on the first effect run rather than during render: `Date.now()` is
+  // impure, and the value only ever feeds the "this is taking a while" copy.
+  const waitingSinceRef = useRef<number | null>(null);
   const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
@@ -786,13 +816,73 @@ export function OrcaWorkspace({
   }, [workspaceId]);
 
   const retry = useCallback(() => {
+    waitingSinceRef.current = null;
+    setIsSlowStart(false);
     setConnection({ phase: "connecting" });
     setAttempt((current) => current + 1);
   }, []);
 
+  /**
+   * Hold the IDE session open while this tab is actually being looked at.
+   * The Orca client connects straight to the host, so without this the
+   * orchestrator sees a session in constant use as completely idle and reaps
+   * it - and then powers the host down - mid-session.
+   */
+  useEffect(() => {
+    if (connection.phase !== "ready") {
+      return;
+    }
+    let cancelled = false;
+    function sendKeepalive() {
+      if (cancelled || document.visibilityState !== "visible") {
+        return;
+      }
+      void fetch(`/api/workspaces/${workspaceId}/orca/activity`, {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => undefined);
+    }
+    sendKeepalive();
+    const timer = setInterval(sendKeepalive, IDE_KEEPALIVE_MS);
+    document.addEventListener("visibilitychange", sendKeepalive);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", sendKeepalive);
+    };
+  }, [connection.phase, workspaceId]);
+
+  useEffect(() => {
+    if (connection.phase === "ready" || connection.phase === "error") {
+      return;
+    }
+    waitingSinceRef.current ??= Date.now();
+    const timer = setInterval(() => {
+      const since = waitingSinceRef.current;
+      setIsSlowStart(
+        since !== null && Date.now() - since >= SLOW_START_NOTICE_MS,
+      );
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [connection.phase]);
+
   useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Everything that is not the person's own problem - a stopped host, a
+     * capacity refusal, an orchestrator still booting, a dropped request -
+     * keeps polling behind the ordinary starting state. Only the statuses
+     * they can actually act on (sign in, ask for access, missing workspace,
+     * quota) become an error screen.
+     */
+    function waitAndRetry() {
+      setConnection({ phase: "host-starting" });
+      retryTimer = setTimeout(() => {
+        setAttempt((current) => current + 1);
+      }, HOST_STARTING_RETRY_MS);
+    }
 
     async function connect() {
       try {
@@ -806,13 +896,10 @@ export function OrcaWorkspace({
           return;
         }
         if (response.status === 202) {
-          setConnection({ phase: "host-starting" });
-          retryTimer = setTimeout(() => {
-            setAttempt((current) => current + 1);
-          }, HOST_STARTING_RETRY_MS);
+          waitAndRetry();
           return;
         }
-        if (!response.ok || !payload?.pairingCode || !payload.webClientPath) {
+        if (ACTIONABLE_CONNECT_STATUSES.has(response.status)) {
           setConnection({
             phase: "error",
             message:
@@ -820,12 +907,13 @@ export function OrcaWorkspace({
           });
           return;
         }
+        if (!response.ok || !payload?.pairingCode || !payload.webClientPath) {
+          waitAndRetry();
+          return;
+        }
         const workspacePath = payload.workspacePath;
         if (!workspacePath) {
-          setConnection({
-            phase: "error",
-            message: "The workspace runtime did not return a project path.",
-          });
+          waitAndRetry();
           return;
         }
         setIsOpeningProject(true);
@@ -843,10 +931,7 @@ export function OrcaWorkspace({
         });
       } catch {
         if (!cancelled) {
-          setConnection({
-            phase: "error",
-            message: "The workspace runtime could not be reached.",
-          });
+          waitAndRetry();
         }
       }
     }
@@ -920,12 +1005,12 @@ export function OrcaWorkspace({
           <>
             <h1>
               {connection.phase === "host-starting"
-                ? "Starting the cloud host…"
+                ? "Waking your workspace…"
                 : "Connecting to your workspace…"}
             </h1>
             <p>
-              {connection.phase === "host-starting"
-                ? "The AWS instance is booting. This can take a minute."
+              {isSlowStart
+                ? "Still waking up — this one is taking a little longer than usual. It will open on its own."
                 : repository
                   ? `Preparing ${repository} in your CoDev workspace.`
                   : "Preparing your CoDev workspace."}

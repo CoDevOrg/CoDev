@@ -105,14 +105,17 @@ describe("ensureOrcaSession", () => {
       new mocks.OrchestratorError("Sandbox service returned HTTP 503.", 503),
     );
 
-    await expect(ensureOrcaSession(workspace, userId)).rejects.toMatchObject({
-      message: "Sandbox service returned HTTP 503.",
+    // A host that is momentarily unavailable is reported as still starting so
+    // the client polls into it, rather than as an error over a workspace that
+    // is about to work perfectly well.
+    await expect(ensureOrcaSession(workspace, userId)).resolves.toMatchObject({
+      state: "host-starting",
     });
     expect(mocks.stopIde).not.toHaveBeenCalled();
     expect(mocks.startIde).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces the crash as an OrcaHostError when the retry also fails", async () => {
+  it("keeps a repeatedly crashing launch on the starting path", async () => {
     const staleError = new mocks.OrchestratorError(
       "Orca IDE process exited before reporting readiness",
       500,
@@ -121,13 +124,23 @@ describe("ensureOrcaSession", () => {
       .mockRejectedValueOnce(staleError)
       .mockRejectedValueOnce(staleError);
 
-    const result = ensureOrcaSession(workspace, userId);
-    await expect(result).rejects.toBeInstanceOf(OrcaHostError);
-    await expect(result).rejects.toMatchObject({
-      message: "Orca IDE process exited before reporting readiness",
-      status: 500,
+    await expect(ensureOrcaSession(workspace, userId)).resolves.toMatchObject({
+      state: "host-starting",
     });
+    // The stale-record recovery still runs exactly once: the retry is what
+    // reclaims a wedged session, and the polling client re-enters this path
+    // rather than being shown the crash.
     expect(mocks.stopIde).toHaveBeenCalledTimes(1);
     expect(mocks.startIde).toHaveBeenCalledTimes(2);
+  });
+
+  it("still surfaces a quota refusal, which the person can act on", async () => {
+    mocks.startIde.mockRejectedValueOnce(
+      new mocks.OrchestratorError("Workspace credit exhausted.", 402),
+    );
+
+    const result = ensureOrcaSession(workspace, userId);
+    await expect(result).rejects.toBeInstanceOf(OrcaHostError);
+    await expect(result).rejects.toMatchObject({ status: 402 });
   });
 });

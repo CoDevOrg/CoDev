@@ -224,7 +224,8 @@ async function codexExecRequest(
   timeoutMs: number,
 ) {
   const environment = readServerEnvironment();
-  return environment.ORCHESTRATOR_DIRECT_URL && environment.ORCHESTRATOR_DIRECT_SECRET
+  return environment.ORCHESTRATOR_DIRECT_URL &&
+    environment.ORCHESTRATOR_DIRECT_SECRET
     ? orchestratorDirectRequest(method, path, body, timeoutMs)
     : orchestratorRequest(method, path, body, timeoutMs);
 }
@@ -367,6 +368,21 @@ export async function getIde(workspaceId: string): Promise<IdeSession> {
   const response = await orchestratorRequest(
     "GET",
     `/v1/sandboxes/${workspaceId}/ide`,
+  );
+  return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
+}
+
+/**
+ * Keep this workspace's IDE session marked as in use. The Orca web client
+ * talks straight to `orca serve` through the host's Caddy, so the
+ * orchestrator sees no traffic at all while somebody works - without this the
+ * session reaper and the host's idle shutdown would both count an active
+ * session as idle.
+ */
+export async function touchIde(workspaceId: string): Promise<IdeSession> {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/activity`,
   );
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
@@ -632,9 +648,8 @@ export async function pollCodexExecInSandbox(
     { after, waitMilliseconds: 25_000 },
     35_000,
   );
-  return z
-    .object({ result: codexExecPollSchema })
-    .parse(await response.json()).result;
+  return z.object({ result: codexExecPollSchema }).parse(await response.json())
+    .result;
 }
 
 export async function closeCodexExecInSandbox(

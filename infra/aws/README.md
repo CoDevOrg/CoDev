@@ -1,6 +1,6 @@
 # CoDev AWS Firecracker Runtime
 
-Phase 3 deploys one x86_64 `m7i-flex.large` Spot host with nested KVM in
+Phase 3 deploys one x86_64 `m7i-flex.large` on-demand host with nested KVM in
 `us-east-2`. Vercel
 reaches it through an IAM-authorized API Gateway HTTP API and a usage-based
 Lambda proxy attached to the runtime VPC. The sandbox control API has no
@@ -53,7 +53,8 @@ Defaults:
 - AWS account: current CLI identity
 - Region: `us-east-2`
 - Availability Zone: `us-east-2a`
-- Host: `m7i-flex.large` Spot (persistent request, stop on interruption)
+- Host: `m7i-flex.large` on-demand (always startable; see the note below on
+  why this is not Spot)
 - Host architecture: x86_64 with EC2 nested virtualization enabled
 - Host image: the current Canonical Ubuntu 24.04 amd64 gp3 AMI resolved from
   its public SSM parameter during deployment
@@ -66,7 +67,10 @@ Defaults:
   Firecracker writable disks are cloned with metadata-only copy-on-write so
   restore does not copy multi-GiB images
 - Workspace idle timeout: 4 hours before automatic Firecracker hibernation
-- Host shutdown: 15 minutes after the final microVM stops
+- Host shutdown: 10 minutes after the last microVM *and* the last Orca IDE
+  session go idle. The IDE half matters: a workspace opened straight into its
+  IDE never provisions a microVM, so a sandbox-only idle check would power the
+  host off while somebody was still working in it.
 - Monthly cost budget: $75 by default (`CODEV_MONTHLY_BUDGET_USD`)
 
 The script cross-compiles both statically linked Rust binaries for the selected host architecture, uploads an immutable release
@@ -76,7 +80,7 @@ Each release creates a new launch-template version, which makes CloudFormation
 replace the host instead of merely updating EC2 user data that would not rerun.
 
 Set `CODEV_HOST_AMI_ID` to override the current Canonical Ubuntu AMI resolved
-from SSM. Set `CODEV_PURCHASE_OPTION=on-demand` to disable Spot, or set
+from SSM. Set `CODEV_PURCHASE_OPTION=spot` to trade availability for price, or set
 `CODEV_INSTANCE_TYPE`, `CODEV_HOST_ARCH`, and the AMI override together to use
 a different compatible KVM host.
 Set `CODEV_JAILER_VOLUME_SIZE_GIB` to change the dedicated reflink-enabled
@@ -170,12 +174,27 @@ The encrypted 40 GiB host volume and all workspace disks are deleted with the
 instance when the runtime stack is deleted. The artifact bucket is retained so
 that stack deletion cannot silently remove release evidence.
 
-The default `m7i-flex.large` Spot price varies by Availability Zone and was
-approximately `$0.040/hour` in `us-east-2` when this configuration was added.
-CoDev wakes it before provisioning a sandbox, and the orchestrator initiates
-an EC2 stop after 15 idle minutes. AWS can interrupt an active Spot session;
-the persistent request is configured to stop rather than terminate the host,
-preserving its encrypted EBS volumes, but callers must still retry after
-capacity returns. The retained 40 GiB gp3 volume costs approximately
+The default `m7i-flex.large` on-demand rate was approximately `$0.090/hour` in
+`us-east-2` when this configuration was added. CoDev wakes the host before
+provisioning a sandbox or starting an IDE session, and the orchestrator
+initiates an EC2 stop after 10 idle minutes, so the host bills for very little
+wall-clock time. The retained 40 GiB gp3 volume costs approximately
 `$3.20/month`; snapshot, Lambda, API Gateway, Elastic IPv4, and artifact
 storage are additional charges.
+
+### Why not Spot
+
+Spot was roughly half the hourly rate, but it is the wrong trade for a host
+whose entire lifecycle is stop-when-idle and start-on-demand. A *stopped* Spot
+instance only restarts when its pool has spare capacity, so reopening a
+workspace could fail outright with `there is no available Spot capacity` —
+turning a routine wake into a dead end that no amount of retrying inside a
+single request could fix. Because the host now stops after 10 idle minutes,
+the absolute saving was small and the reliability cost was not worth it.
+
+Spot remains selectable via `CODEV_PURCHASE_OPTION=spot`, and the
+`InstanceInterruptionBehavior: stop` / `SpotInstanceType: persistent` pair
+(plus the orphaned-request cleanup in `deploy.sh`) is kept so that path still
+works. Note that switching an existing stack to on-demand replaces the host;
+`deploy.sh` cancels the leftover persistent Spot request as part of the
+deploy.

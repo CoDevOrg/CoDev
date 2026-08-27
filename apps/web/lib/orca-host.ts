@@ -13,6 +13,7 @@ import {
   OrchestratorError,
   startIde,
   stopIde,
+  touchIde,
   waitForOrchestrator,
   type IdeSession,
   type StartIdeInput,
@@ -21,6 +22,14 @@ import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
+
+/**
+ * Orchestrator responses that mean "ask again shortly" rather than "this
+ * failed": the host is mid-restart (502/503/504), a call timed out while it
+ * booted (408), it hit an internal blip (500), or every IDE slot is taken
+ * (409) until the idle reaper frees one.
+ */
+const TRANSIENT_ORCHESTRATOR_STATUSES = new Set([408, 409, 500, 502, 503, 504]);
 
 /**
  * `startIde` is meant to idempotently return an already-running session, but
@@ -136,6 +145,16 @@ async function resolveClaudeEnvForIde(
 }
 
 /**
+ * Mark this workspace's IDE session as still in use. Best-effort by design:
+ * the host may be mid-restart or the session may have already been reaped,
+ * and neither is worth interrupting somebody's session over - the next
+ * keepalive, or the reconnect that follows, covers it.
+ */
+export async function recordOrcaActivity(workspaceId: string): Promise<void> {
+  await touchIde(workspaceId).catch(() => undefined);
+}
+
+/**
  * Ensure the EC2 host is running, the orchestrator is reachable, and this
  * workspace has its own dedicated Orca IDE process (cloning its repository
  * first if needed). Returns `host-starting` while the instance boots so the
@@ -159,14 +178,23 @@ export async function ensureOrcaSession(
     throw error;
   }
 
-  const hostState = await getHostState();
-  if (hostState !== "running") {
-    const wake = await requestHostWake();
-    if (wake !== "running") {
-      return { state: "host-starting" };
+  // Everything between here and a healthy orchestrator is infrastructure the
+  // person opening the workspace can do nothing about: a stopped instance, a
+  // capacity refusal, a host still booting its services. None of it is an
+  // error from their point of view - it just means "not ready yet" - so any
+  // failure reports `host-starting` and the client keeps polling.
+  try {
+    const hostState = await getHostState();
+    if (hostState !== "running") {
+      const wake = await requestHostWake();
+      if (wake !== "running") {
+        return { state: "host-starting" };
+      }
     }
+    await waitForOrchestrator();
+  } catch {
+    return { state: "host-starting" };
   }
-  await waitForOrchestrator();
 
   const workspacePath = orcaWorkspacePath(workspace.id);
   const token =
@@ -200,6 +228,13 @@ export async function ensureOrcaSession(
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {
+      // The host can stop, be replaced, or still be bringing its services up
+      // between the health check above and this call, and a full IDE slot
+      // frees itself once the idle reaper runs. All of those resolve on their
+      // own, so poll rather than telling somebody their workspace is broken.
+      if (TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)) {
+        return { state: "host-starting" };
+      }
       throw new OrcaHostError(error.message, error.status);
     }
     throw error;

@@ -432,14 +432,14 @@ Environment=CODEV_MAX_SANDBOXES=2
 Environment=CODEV_VM_VCPU=2
 Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
-Environment=CODEV_IDLE_TIMEOUT=15m
-Environment=CODEV_HOST_IDLE_TIMEOUT=15m
+Environment=CODEV_IDLE_TIMEOUT=10m
+Environment=CODEV_HOST_IDLE_TIMEOUT=10m
 Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
 Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
 Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
 Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
 Environment=CODEV_MAX_IDE_SESSIONS=4
-Environment=CODEV_IDE_IDLE_TIMEOUT=30m
+Environment=CODEV_IDE_IDLE_TIMEOUT=10m
 Restart=always
 RestartSec=2
 KillMode=control-group

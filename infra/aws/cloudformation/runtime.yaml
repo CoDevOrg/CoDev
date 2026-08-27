@@ -18,7 +18,14 @@ Parameters:
       - aarch64
   PurchaseOption:
     Type: String
-    Default: spot
+    # On-demand by default. Spot is cheaper per hour, but a stopped Spot
+    # instance only restarts when its pool has spare capacity - so reopening
+    # a workspace could fail outright with "there is no available Spot
+    # capacity", which is precisely the failure the stop-when-idle lifecycle
+    # makes routine. With a ~10 minute idle shutdown the host bills for very
+    # little wall-clock time anyway, so the price difference does not justify
+    # a workspace that sometimes refuses to open.
+    Default: on-demand
     AllowedValues:
       - on-demand
       - spot

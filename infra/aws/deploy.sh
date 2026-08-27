@@ -8,7 +8,7 @@ readonly team_slug="${VERCEL_TEAM_SLUG:-yousef20920s-projects}"
 readonly project_name="${VERCEL_PROJECT_NAME:-codev}"
 readonly instance_type="${CODEV_INSTANCE_TYPE:-m7i-flex.large}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
-readonly purchase_option="${CODEV_PURCHASE_OPTION:-spot}"
+readonly purchase_option="${CODEV_PURCHASE_OPTION:-on-demand}"
 readonly availability_zone="${CODEV_AVAILABILITY_ZONE:-us-east-2a}"
 case "${host_arch}" in
   x86_64)

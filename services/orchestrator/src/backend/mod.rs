@@ -6,13 +6,12 @@ use std::{
 use chrono::{Duration, Utc};
 
 use crate::model::{
-    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest,
-    ExecRequest, ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance,
-    PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
-    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest, ExecRequest,
+    ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance, PublicationExportRequest,
+    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -47,6 +46,26 @@ impl IdeBackend {
             Self::Disabled => Err(RuntimeError::Unavailable(
                 "the Orca IDE backend is not configured on this host".into(),
             )),
+        }
+    }
+
+    /// When any IDE session was last used. `Disabled` reports `None` so a host
+    /// without the Orca backend configured still idles down normally.
+    pub async fn last_activity_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.last_activity_at().await,
+            Self::Disabled => None,
+        }
+    }
+
+    pub async fn touch(&self, workspace_id: &str) -> Result<IdeSession> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &workspace_id;
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.touch(workspace_id).await,
+            Self::Disabled => Err(RuntimeError::SandboxNotFound),
         }
     }
 
