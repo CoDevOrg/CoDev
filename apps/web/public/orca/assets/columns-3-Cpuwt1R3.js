@@ -1,1 +1,0 @@
-import{kv as e}from"./web-index-n3efA3IP.js";var t=e(`columns-3`,[[`rect`,{width:`18`,height:`18`,x:`3`,y:`3`,rx:`2`,key:`afitv7`}],[`path`,{d:`M9 3v18`,key:`fh3hqa`}],[`path`,{d:`M15 3v18`,key:`14nvp0`}]]);export{t};

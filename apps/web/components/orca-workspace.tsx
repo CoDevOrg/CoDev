@@ -68,6 +68,7 @@ type OrcaConnectResponse = {
   pairingCode?: string;
   webClientPath?: string;
   workspacePath?: string | null;
+  memberId?: string;
   error?: string;
 };
 
@@ -237,6 +238,7 @@ export function buildOrcaIframeSource({
   projectKind,
   projectName,
   defaultAgent,
+  memberId,
   settingsOnly,
 }: {
   webClientPath: string;
@@ -246,6 +248,12 @@ export function buildOrcaIframeSource({
   projectName?: string;
   /** Pins which agent the workspace's default chat tab launches with. */
   defaultAgent?: OrcaDefaultAgent;
+  /**
+   * The signed-in member, so agents launched in this iframe run on their own
+   * linked subscription rather than the one belonging to whichever member
+   * started the shared session. An id, never a credential.
+   */
+  memberId?: string;
   /** Render the personal settings surface instead of the workspace IDE. */
   settingsOnly?: boolean;
 }) {
@@ -260,6 +268,9 @@ export function buildOrcaIframeSource({
   }
   if (defaultAgent) {
     fragment.set("codevDefaultAgent", defaultAgent);
+  }
+  if (memberId) {
+    fragment.set("codevMemberId", memberId);
   }
   if (settingsOnly) {
     fragment.set("codevSettingsOnly", "1");
@@ -944,6 +955,7 @@ export function OrcaWorkspace({
             projectKind: repository ? "git" : "folder",
             ...(repository ? { projectName: repository } : {}),
             ...(defaultAgent ? { defaultAgent } : {}),
+            ...(payload.memberId ? { memberId: payload.memberId } : {}),
           }),
           workspacePath,
         });

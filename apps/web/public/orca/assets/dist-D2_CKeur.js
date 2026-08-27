@@ -1,1 +1,0 @@
-import{Uv as e,gv as t,qv as n}from"./web-index-n3efA3IP.js";var r=n(e(),1);t();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

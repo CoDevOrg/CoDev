@@ -36,6 +36,11 @@ export async function POST(
 
     return Response.json({
       state: "ready",
+      // The signed-in member, so the embedded IDE can tag each agent launch
+      // with whose subscription it should run on. An id, never a credential —
+      // the host resolves the secret itself (write_member_agent_credentials in
+      // services/orchestrator/src/backend/orca.rs).
+      memberId: user.id,
       pairingCode: runtime.pairing.pairingCode,
       endpoint: runtime.pairing.endpoint,
       runtimeId: runtime.pairing.runtimeId,

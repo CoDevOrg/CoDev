@@ -234,6 +234,7 @@ export async function ensureOrcaSession(
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
       projectRoot: workspacePath,
+      memberId: userId,
       ...(clone ? { clone } : {}),
       ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
       ...claudeEnv,

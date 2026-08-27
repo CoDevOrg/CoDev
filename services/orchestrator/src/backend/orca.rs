@@ -171,6 +171,21 @@ impl OrcaBackend {
         if let Some(session) = self.sessions.read().await.get(workspace_id).cloned()
             && session.is_running().await
         {
+            // A shared workspace runs one session, but each member's coding
+            // subscription is their own. Re-file this member's credentials on
+            // every open — including this join-an-existing-session path, which
+            // is the *only* path a second member ever takes — so an agent they
+            // launch runs on their subscription instead of whichever member
+            // started the session. Best-effort: a member with nothing linked
+            // (or a rotated credential) must never fail the open.
+            if let Err(error) =
+                write_member_agent_credentials(&linux_user_for(workspace_id), &request).await
+            {
+                warn!(
+                    workspace_id,
+                    %error, "could not file this member's agent credentials"
+                );
+            }
             session.touch();
             return Ok(session.to_model(workspace_id));
         }
@@ -205,6 +220,11 @@ impl OrcaBackend {
             write_codex_credential(&linux_user, codex_auth_cache_json).await?;
         }
         seed_claude_config(&linux_user, &expected_root).await?;
+        // Also file them per-member, so the member who starts the session gets
+        // the same per-subscription treatment as everyone who joins later.
+        if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
+            warn!(workspace_id, %error, "could not file this member's agent credentials");
+        }
         let claude_env = if let Some(api_key) = &request.anthropic_api_key {
             Some(("ANTHROPIC_API_KEY", api_key.as_str()))
         } else {
@@ -596,6 +616,113 @@ async fn write_codex_credential(user: &str, codex_auth_cache_json: &str) -> Resu
     chown_recursive(&codex_home, user).await
 }
 
+/// Directory holding one CoDev member's own agent credentials inside the
+/// shared per-workspace Linux home.
+fn member_agent_dir(linux_user: &str, member_id: &str) -> PathBuf {
+    PathBuf::from(format!("/home/{linux_user}/.codev/agents/{member_id}"))
+}
+
+/// A CoDev member id as minted by the control plane (a UUID). Validated
+/// before it reaches the filesystem so it can only ever name a direct child of
+/// the agents directory — never `..`, an absolute path, or a separator.
+fn member_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+            .expect("member id regex")
+    })
+}
+
+/// Files one member's linked coding-subscription credentials under their own
+/// id, so an agent they launch in a shared workspace runs on *their*
+/// subscription.
+///
+/// A workspace runs a single `orca serve` as a single Linux user, so the
+/// credential cannot be an environment variable on that shared process (it
+/// would be whichever member started the session, for everybody). Instead each
+/// member gets a directory here, and the patched Orca main process merges the
+/// launching member's `env.json` into that agent's PTY spawn — see
+/// `third_party/orca/UPSTREAM.md`. The control plane sends only a member id
+/// through the browser; the secret itself never leaves the host.
+///
+/// This is per-member *attribution*, not a security boundary: members share
+/// one Linux user, so this stops a member from unknowingly spending someone
+/// else's subscription, but does not stop a determined one from reading the
+/// files. Isolating that needs a Linux user per member.
+async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequest) -> Result<()> {
+    let Some(member_id) = request.member_id.as_deref() else {
+        return Ok(());
+    };
+    if !member_id_pattern().is_match(member_id) {
+        return Err(RuntimeError::BadRequest("member id is malformed".into()));
+    }
+
+    let member_dir = member_agent_dir(linux_user, member_id);
+    fs::create_dir_all(&member_dir)
+        .await
+        .map_err(RuntimeError::internal)?;
+
+    // Codex reads its whole config directory from CODEX_HOME, so give this
+    // member their own and point the agent launch at it.
+    let mut env = serde_json::Map::new();
+    if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
+        let codex_home = member_dir.join("codex");
+        fs::create_dir_all(&codex_home)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let auth_path = codex_home.join("auth.json");
+        fs::write(&auth_path, codex_auth_cache_json)
+            .await
+            .map_err(RuntimeError::internal)?;
+        fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
+            .await
+            .map_err(RuntimeError::internal)?;
+        env.insert(
+            "CODEX_HOME".to_string(),
+            Value::String(codex_home.to_string_lossy().into_owned()),
+        );
+    }
+
+    // Claude Code takes its credential from the environment, so it rides in
+    // env.json rather than a config file of its own.
+    if let Some(api_key) = &request.anthropic_api_key {
+        env.insert(
+            "ANTHROPIC_API_KEY".to_string(),
+            Value::String(api_key.clone()),
+        );
+    } else if let Some(token) = &request.claude_code_oauth_token {
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(token.clone()),
+        );
+    }
+
+    let env_path = member_dir.join("env.json");
+    if env.is_empty() {
+        // This member has nothing linked. Remove any bundle from a previous
+        // link so a revoked credential stops being handed to their agents,
+        // rather than leaving the last one that worked in place.
+        match fs::remove_file(&env_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(RuntimeError::internal(error)),
+        }
+    } else {
+        let serialized = serde_json::to_vec(&Value::Object(env)).map_err(RuntimeError::internal)?;
+        fs::write(&env_path, serialized)
+            .await
+            .map_err(RuntimeError::internal)?;
+        fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
+            .await
+            .map_err(RuntimeError::internal)?;
+    }
+
+    fs::set_permissions(&member_dir, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(&member_dir, linux_user).await
+}
+
 /// Seeds the Claude Code CLI's own config so the interactive session Orca
 /// launches into the workspace's default chat tab starts *ready*, instead of
 /// blocking on the first-run wizard (theme picker, then the per-directory
@@ -944,9 +1071,9 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
-        claude_settings_with_theme, linux_user_for, linux_user_process_command,
-        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, shell_quote,
-        token_pattern,
+        claude_settings_with_theme, linux_user_for, linux_user_process_command, member_agent_dir,
+        member_id_pattern, orca_serve_command_line, orca_serve_sudo_command, repository_pattern,
+        shell_quote, token_pattern,
     };
     use serde_json::json;
     use std::path::Path;
@@ -1094,6 +1221,38 @@ mod tests {
             config["projects"]["/some/other/project"]["hasTrustDialogAccepted"],
             json!(false)
         );
+    }
+
+    #[test]
+    fn files_each_member_agent_bundle_under_its_own_id() {
+        let alice = "11111111-1111-4111-8111-111111111111";
+        let bob = "22222222-2222-4222-8222-222222222222";
+        assert_eq!(
+            member_agent_dir("orca-ws-abc", alice),
+            Path::new("/home/orca-ws-abc/.codev/agents/11111111-1111-4111-8111-111111111111")
+        );
+        // Two members of one shared workspace never share a bundle directory.
+        assert_ne!(
+            member_agent_dir("orca-ws-abc", alice),
+            member_agent_dir("orca-ws-abc", bob)
+        );
+    }
+
+    #[test]
+    fn refuses_a_member_id_that_could_escape_the_agents_directory() {
+        assert!(member_id_pattern().is_match("11111111-1111-4111-8111-111111111111"));
+        for hostile in [
+            "../../etc",
+            "/etc/passwd",
+            "11111111-1111-4111-8111-111111111111/../../root",
+            "",
+            "not-a-uuid",
+        ] {
+            assert!(
+                !member_id_pattern().is_match(hostile),
+                "should reject {hostile}"
+            );
+        }
     }
 
     #[test]

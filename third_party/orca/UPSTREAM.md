@@ -109,6 +109,36 @@ forced, since it gates a prompt the chat surface can never answer.
 `bypassPermissionsModeAccepted` is deliberately **not** seeded — pre-accepting
 a permissions bypass is a security decision, not a first-run annoyance.
 
+### Per-member agent subscriptions
+
+A workspace is shared, but a linked coding subscription is personal. One
+`orca serve` runs per workspace as one Linux user, so a credential in *that
+process's* environment is necessarily whichever member started the session —
+which is what every other member's agents would then spend. Instead:
+
+1. `write_member_agent_credentials`
+   ([`orca.rs`](../../services/orchestrator/src/backend/orca.rs)) files each
+   member's credentials at `~/.codev/agents/<memberId>/` (0600) when they open
+   the workspace — including the join-an-existing-session path, which is the
+   only path a second member ever takes. Codex gets its own `CODEX_HOME`;
+   Claude's token goes in `env.json`. A member with nothing linked has any
+   stale bundle removed, so a revoked credential stops being handed out.
+2. The control plane returns `memberId` from the Orca route and puts it in the
+   pairing fragment as `codevMemberId` — **an id, never a credential**.
+3. The renderer tags each agent launch with `CODEV_AGENT_MEMBER=<memberId>`
+   (`launch-agent-in-new-tab.ts`).
+4. The main process swaps that marker for the member's real environment at PTY
+   spawn (`src/main/codev-member-agent-env.ts`, wired into `terminal.create`
+   and `terminal.split`). The marker is always stripped; explicit launch values
+   always win; a missing or corrupt bundle just means the agent prompts sign-in
+   rather than failing to launch.
+
+The secret therefore never travels through the browser. Note this is per-member
+**attribution, not isolation**: members share one Linux user, so this stops a
+member from unknowingly spending someone else's subscription, but does not stop
+a determined one from reading the files. A real boundary needs a Linux user per
+member.
+
 A CoDev-only **provider picker** (`CodevChatProviderPicker`, rendered by
 `NativeChatComposerActions` beside the model/reasoning-effort pickers) lets the
 member switch the chat tab between Claude and Codex. Because each chat tab runs

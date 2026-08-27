@@ -1,3 +1,171 @@
+diff --git a/src/main/codev-member-agent-env.test.ts b/src/main/codev-member-agent-env.test.ts
+new file mode 100644
+index 0000000..2738992
+--- /dev/null
++++ b/src/main/codev-member-agent-env.test.ts
+@@ -0,0 +1,92 @@
++import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { beforeEach, describe, expect, it } from 'vitest'
++import {
++  CODEV_AGENT_MEMBER_ENV,
++  resolveCodevMemberAgentEnv
++} from './codev-member-agent-env'
++
++const ALICE = '11111111-1111-4111-8111-111111111111'
++const BOB = '22222222-2222-4222-8222-222222222222'
++
++let home: string
++
++async function fileMemberEnv(memberId: string, env: Record<string, string>): Promise<void> {
++  const dir = join(home, '.codev', 'agents', memberId)
++  await mkdir(dir, { recursive: true })
++  await writeFile(join(dir, 'env.json'), JSON.stringify(env))
++}
++
++beforeEach(async () => {
++  home = await mkdtemp(join(tmpdir(), 'codev-member-env-'))
++})
++
++describe('resolveCodevMemberAgentEnv', () => {
++  it('passes a launch without the marker through untouched', async () => {
++    const env = { TERM: 'xterm' }
++    expect(await resolveCodevMemberAgentEnv(env, home)).toEqual(env)
++    expect(await resolveCodevMemberAgentEnv(undefined, home)).toBeUndefined()
++  })
++
++  it('gives each member their own credentials from one shared home', async () => {
++    await fileMemberEnv(ALICE, { CLAUDE_CODE_OAUTH_TOKEN: 'alice-token' })
++    await fileMemberEnv(BOB, { CLAUDE_CODE_OAUTH_TOKEN: 'bob-token' })
++
++    const alice = await resolveCodevMemberAgentEnv(
++      { [CODEV_AGENT_MEMBER_ENV]: ALICE, TERM: 'xterm' },
++      home
++    )
++    const bob = await resolveCodevMemberAgentEnv({ [CODEV_AGENT_MEMBER_ENV]: BOB }, home)
++
++    expect(alice).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: 'alice-token', TERM: 'xterm' })
++    expect(bob).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: 'bob-token' })
++  })
++
++  it('always strips the marker so it never reaches the agent process', async () => {
++    await fileMemberEnv(ALICE, { CODEX_HOME: '/home/ws/.codev/agents/a/codex' })
++    for (const env of [
++      { [CODEV_AGENT_MEMBER_ENV]: ALICE },
++      { [CODEV_AGENT_MEMBER_ENV]: 'not-a-uuid' },
++      { [CODEV_AGENT_MEMBER_ENV]: BOB } // linked nothing: no bundle on disk
++    ]) {
++      const resolved = await resolveCodevMemberAgentEnv(env, home)
++      expect(resolved).not.toHaveProperty(CODEV_AGENT_MEMBER_ENV)
++    }
++  })
++
++  it('refuses a member id that could escape the agents directory', async () => {
++    await fileMemberEnv(ALICE, { CLAUDE_CODE_OAUTH_TOKEN: 'alice-token' })
++    expect(
++      await resolveCodevMemberAgentEnv(
++        { [CODEV_AGENT_MEMBER_ENV]: `../../${ALICE}` },
++        home
++      )
++    ).toEqual({})
++  })
++
++  it('launches unauthenticated rather than failing when a member has no bundle', async () => {
++    expect(
++      await resolveCodevMemberAgentEnv({ [CODEV_AGENT_MEMBER_ENV]: ALICE, TERM: 'xterm' }, home)
++    ).toEqual({ TERM: 'xterm' })
++  })
++
++  it('never lets a filed credential override an explicit launch value', async () => {
++    await fileMemberEnv(ALICE, { ANTHROPIC_API_KEY: 'filed', CODEX_HOME: '/filed' })
++    expect(
++      await resolveCodevMemberAgentEnv(
++        { [CODEV_AGENT_MEMBER_ENV]: ALICE, ANTHROPIC_API_KEY: 'explicit' },
++        home
++      )
++    ).toEqual({ ANTHROPIC_API_KEY: 'explicit', CODEX_HOME: '/filed' })
++  })
++
++  it('ignores a corrupt bundle instead of throwing', async () => {
++    const dir = join(home, '.codev', 'agents', ALICE)
++    await mkdir(dir, { recursive: true })
++    await writeFile(join(dir, 'env.json'), 'not json')
++    expect(
++      await resolveCodevMemberAgentEnv({ [CODEV_AGENT_MEMBER_ENV]: ALICE, TERM: 'x' }, home)
++    ).toEqual({ TERM: 'x' })
++  })
++})
+diff --git a/src/main/codev-member-agent-env.ts b/src/main/codev-member-agent-env.ts
+new file mode 100644
+index 0000000..6e17476
+--- /dev/null
++++ b/src/main/codev-member-agent-env.ts
+@@ -0,0 +1,64 @@
++import { readFile } from 'node:fs/promises'
++import { homedir } from 'node:os'
++import { join } from 'node:path'
++
++/**
++ * Marker the CoDev renderer puts on an agent launch to say which member is
++ * launching it. Carries an id, never a credential: the secret is resolved here
++ * in the main process, on the host, and never travels through the browser.
++ */
++export const CODEV_AGENT_MEMBER_ENV = 'CODEV_AGENT_MEMBER'
++
++/** Control-plane member ids are UUIDs. Validated before it reaches a path so it
++ *  can only ever name a direct child of the agents directory. */
++const MEMBER_ID =
++  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
++
++/**
++ * Swap a CoDev member marker for that member's own coding-subscription
++ * credentials.
++ *
++ * A CoDev workspace is shared but a linked subscription is personal, and one
++ * `orca serve` runs for the whole workspace — so the credential cannot live in
++ * that process's own environment (it would be whichever member started the
++ * session, for everybody). The orchestrator instead files each member's
++ * credentials at `~/.codev/agents/<memberId>/env.json` when they open the
++ * workspace (`write_member_agent_credentials`, services/orchestrator/src/backend/orca.rs);
++ * this merges the launching member's set into that one PTY's environment.
++ *
++ * Values already on the launch win, so an explicitly configured env var is
++ * never silently replaced. The marker itself is always stripped, and a missing
++ * or unreadable bundle just means the agent launches unauthenticated and
++ * prompts sign-in itself — never a failed launch.
++ */
++export async function resolveCodevMemberAgentEnv(
++  env: Record<string, string> | undefined,
++  home: string = homedir()
++): Promise<Record<string, string> | undefined> {
++  const memberId = env?.[CODEV_AGENT_MEMBER_ENV]
++  if (!env || !memberId) {
++    return env
++  }
++
++  const { [CODEV_AGENT_MEMBER_ENV]: _marker, ...rest } = env
++  if (!MEMBER_ID.test(memberId)) {
++    return rest
++  }
++
++  try {
++    const raw = await readFile(join(home, '.codev', 'agents', memberId, 'env.json'), 'utf8')
++    const parsed: unknown = JSON.parse(raw)
++    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
++      return rest
++    }
++    const resolved: Record<string, string> = {}
++    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
++      if (typeof value === 'string') {
++        resolved[key] = value
++      }
++    }
++    return { ...resolved, ...rest }
++  } catch {
++    return rest
++  }
++}
 diff --git a/src/main/persistence-right-sidebar-tab.test.ts b/src/main/persistence-right-sidebar-tab.test.ts
 index fcaf48a..52dd600 100644
 --- a/src/main/persistence-right-sidebar-tab.test.ts
@@ -61,6 +229,64 @@ index 2a4b17b..ac9d14b 100644
      'accepts the %s right sidebar tab a paired client can be sitting on',
      async (rightSidebarTab) => {
        const runtime = {
+diff --git a/src/main/runtime/rpc/methods/orchestration-worker-launch-preferences.test.ts b/src/main/runtime/rpc/methods/orchestration-worker-launch-preferences.test.ts
+index dd17945..0bfcee2 100644
+--- a/src/main/runtime/rpc/methods/orchestration-worker-launch-preferences.test.ts
++++ b/src/main/runtime/rpc/methods/orchestration-worker-launch-preferences.test.ts
+@@ -33,13 +33,16 @@ describe('orchestration worker launch preferences', () => {
+   })
+ 
+   it('rejects model-specific effort combinations the catalog disproves', () => {
++    // CoDev's catalog raises gpt-5.6-luna's ceiling to `max` (upstream stopped
++    // at `high`), so `xhigh` is legitimate here and `ultra` is the first level
++    // this model disproves. See agent-session-option-catalog-claude-codex.ts.
+     expect(() =>
+       resolveWorkerLaunchPreferences({
+         agent: 'codex',
+         model: 'gpt-5.6-luna',
+-        effort: 'xhigh'
++        effort: 'ultra'
+       })
+-    ).toThrow('does not support effort xhigh')
++    ).toThrow('does not support effort ultra')
+   })
+ 
+   it('rejects effort without a model', () => {
+diff --git a/src/main/runtime/rpc/methods/terminal.ts b/src/main/runtime/rpc/methods/terminal.ts
+index 05f94f2..e52ed38 100644
+--- a/src/main/runtime/rpc/methods/terminal.ts
++++ b/src/main/runtime/rpc/methods/terminal.ts
+@@ -9,6 +9,7 @@ import {
+ } from '../core'
+ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+ import type { DriverState, OrcaRuntimeService } from '../../orca-runtime'
++import { resolveCodevMemberAgentEnv } from '../../../codev-member-agent-env'
+ import {
+   TerminalStreamOpcode,
+   decodeTerminalStreamJson,
+@@ -1425,11 +1426,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
+         params.worktree,
+         params.clientMutationId,
+         params.reconcileExisting === true,
+-        (canonicalWorktreeSelector, preAllocatedHandle) =>
++        async (canonicalWorktreeSelector, preAllocatedHandle) =>
+           runtime.createTerminal(canonicalWorktreeSelector, {
+             command: params.command,
+             startupCommandDelivery: params.startupCommandDelivery,
+-            env: params.env,
++            env: await resolveCodevMemberAgentEnv(params.env),
+             envToDelete: params.envToDelete,
+             ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+             ...(params.resumeProviderSession
+@@ -1459,7 +1460,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
+       split: await runtime.splitTerminal(params.terminal, {
+         direction: params.direction,
+         command: params.command,
+-        env: params.env,
++        env: await resolveCodevMemberAgentEnv(params.env),
+         telemetrySource: params.telemetrySource
+       })
+     })
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
 index 294fc4a..d541012 100644
 --- a/src/renderer/src/App.tsx
@@ -7395,10 +7621,10 @@ index 2ebecc5..32289ea 100644
          <Tooltip>
            <TooltipTrigger asChild>
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
-index 5ecc70a..a92e4f7 100644
+index 5ecc70a..feabb92 100644
 --- a/src/renderer/src/env.d.ts
 +++ b/src/renderer/src/env.d.ts
-@@ -67,6 +67,12 @@ declare global {
+@@ -67,6 +67,13 @@ declare global {
      | undefined
    // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
    interface Window {
@@ -7407,10 +7633,35 @@ index 5ecc70a..a92e4f7 100644
 +    __CODEV_PROJECT_KIND__?: 'git' | 'folder'
 +    __CODEV_PROJECT_NAME__?: string
 +    __CODEV_DEFAULT_AGENT__?: 'claude' | 'codex'
++    __CODEV_MEMBER_ID__?: string
 +    __CODEV_SETTINGS_ONLY__?: boolean
      __paneManagers?: Map<string, PaneManager>
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
      __terminalParkingDebug?: {
+diff --git a/src/renderer/src/lib/launch-agent-in-new-tab.ts b/src/renderer/src/lib/launch-agent-in-new-tab.ts
+index d3e3718..8baf85f 100644
+--- a/src/renderer/src/lib/launch-agent-in-new-tab.ts
++++ b/src/renderer/src/lib/launch-agent-in-new-tab.ts
+@@ -106,7 +106,18 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
+     agentArgs !== undefined
+       ? agentArgs
+       : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
++  // Tag the launch with the signed-in CoDev member so the host runs this
++  // agent on *their* linked subscription. A shared workspace runs one
++  // `orca serve`, so its own environment can only ever hold one member's
++  // credential; the main process swaps this marker for the launching member's
++  // real env at spawn (src/main/codev-member-agent-env.ts). An id, never a
++  // credential — nothing secret passes through the browser.
++  const agentEnv = {
++    ...resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
++    ...(typeof window !== 'undefined' && window.__CODEV_MEMBER_ID__
++      ? { CODEV_AGENT_MEMBER: window.__CODEV_MEMBER_ID__ }
++      : {})
++  }
+   const startupPlanBase = {
+     agent,
+     cmdOverrides,
 diff --git a/src/renderer/src/store/right-sidebar-route.ts b/src/renderer/src/store/right-sidebar-route.ts
 index 38bddf6..ba44d11 100644
 --- a/src/renderer/src/store/right-sidebar-route.ts
@@ -7525,10 +7776,10 @@ index 0000000..4834882
 +})
 diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
 new file mode 100644
-index 0000000..fd8209a
+index 0000000..4300eca
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.ts
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,78 @@
 +/**
 + * Agents CoDev is allowed to open the workspace's default chat tab with. Kept
 + * narrow on purpose: only the native-chat-rendered CLIs whose credentials the
@@ -7546,6 +7797,12 @@ index 0000000..fd8209a
 +   * pairing fragment does not pin one; consumers fall back to their own default.
 +   */
 +  defaultAgent?: CodevDefaultChatAgent
++  /**
++   * The signed-in CoDev member. Agents launched here run on this member's own
++   * linked subscription. An id, never a credential — the host resolves the
++   * secret itself.
++   */
++  memberId?: string
 +  /**
 +   * Personal settings surface: CoDev opened this client outside any workspace
 +   * to render the signed-in member's own settings, so workspace-scoped
@@ -7566,6 +7823,8 @@ index 0000000..fd8209a
 +const CODEV_WORKSPACE_PATH =
 +  /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 +const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
++const CODEV_MEMBER_ID =
++  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 +
 +export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
 +  const params = new URLSearchParams(location.hash.replace(/^#/, ''))
@@ -7577,6 +7836,8 @@ index 0000000..fd8209a
 +  const projectKind = params.get('codevProjectKind')
 +  const projectName = params.get('codevProjectName')
 +  const defaultAgent = readDefaultAgent(params.get('codevDefaultAgent'))
++  const memberIdParam = params.get('codevMemberId')
++  const memberId = memberIdParam && CODEV_MEMBER_ID.test(memberIdParam) ? memberIdParam : null
 +  const settingsOnly = params.get('codevSettingsOnly') === '1'
 +  if (!projectPath || (projectKind !== 'git' && projectKind !== 'folder')) {
 +    return null
@@ -7593,6 +7854,7 @@ index 0000000..fd8209a
 +    projectKind,
 +    ...(projectName ? { projectName } : {}),
 +    ...(defaultAgent ? { defaultAgent } : {}),
++    ...(memberId ? { memberId } : {}),
 +    ...(settingsOnly ? { settingsOnly: true } : {})
 +  }
 +}
@@ -9487,10 +9749,10 @@ index 0000000..05d7117
 +  })
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..e16bbed 100644
+index eae3a54..f3f06e4 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,18 @@ import {
+@@ -19,10 +19,19 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
@@ -9505,6 +9767,7 @@ index eae3a54..e16bbed 100644
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
 +  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
 +  window.__CODEV_DEFAULT_AGENT__ = codevBootstrap?.defaultAgent
++  window.__CODEV_MEMBER_ID__ = codevBootstrap?.memberId
 +  window.__CODEV_SETTINGS_ONLY__ = codevBootstrap?.settingsOnly === true
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep

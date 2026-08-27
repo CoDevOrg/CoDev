@@ -343,6 +343,12 @@ export interface StartIdeInput {
   codexAuthCacheJson?: string;
   anthropicApiKey?: string;
   claudeCodeOauthToken?: string;
+  /**
+   * The member the credentials above belong to. A workspace is shared but a
+   * linked subscription is personal, so the host files them under this id and
+   * hands them only to agents this member launches.
+   */
+  memberId?: string;
 }
 
 /**

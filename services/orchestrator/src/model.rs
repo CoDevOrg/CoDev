@@ -370,6 +370,14 @@ pub struct IdeStartRequest {
     pub anthropic_api_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code_oauth_token: Option<String>,
+    /// The CoDev member this request is on behalf of. A workspace is shared,
+    /// but a linked coding subscription is personal: the credentials above are
+    /// this member's, and are filed under their id so an agent they launch
+    /// runs on their own subscription rather than whichever member's session
+    /// happened to start first. Absent only for callers predating this field,
+    /// which fall back to the legacy workspace-wide materialization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
