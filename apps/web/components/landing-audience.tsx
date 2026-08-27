@@ -3,355 +3,144 @@
 import Link from "next/link";
 import { useState } from "react";
 
-type AudienceKey = "builders" | "companies";
+type AudienceKey = "individuals" | "companies";
 
-const audienceContent = {
-  builders: {
-    label: "For builders",
-    title: "Build the idea together.",
-    accent: "See every move.",
-    copy: "A shared place for friends, students, open source contributors, and small teams to build with AI without losing each other in separate tools.",
-    groups: ["Friends", "Students", "Open source", "Small teams"],
-    action: "Start building together",
-    benefits: [
-      {
-        number: "01",
-        title: "Share the whole workspace",
-        copy: "Open the same repository, files, terminal, and agent sessions from any browser.",
-      },
-      {
-        number: "02",
-        title: "See changes as they happen",
-        copy: "Follow local edits and active work before anyone commits, pushes, or publishes.",
-      },
-      {
-        number: "03",
-        title: "Create without stepping on each other",
-        copy: "Know what teammates and agents are handling so everyone can focus on a useful part.",
-      },
+const views = {
+  individuals: {
+    kicker: "FOR INDIVIDUALS & SMALL TEAMS",
+    title: "Share the work, not just the output.",
+    copy: "Open a room for a project or investigation. Invite the people you trust, give agents clear tasks, and keep every branch visible.",
+    action: "Start a workspace",
+    points: [
+      [
+        "01",
+        "Work side by side",
+        "See what people and agents are doing as it happens.",
+      ],
+      [
+        "02",
+        "Branch without chaos",
+        "Explore different approaches without losing the main thread.",
+      ],
+      [
+        "03",
+        "Pick up instantly",
+        "Return to the full state—not a pasted summary.",
+      ],
     ],
-    useCases: [
-      "Ship a side project with friends",
-      "Build and learn with classmates",
-      "Coordinate an open source contribution",
-    ],
+    signal: "2 people · 3 agents",
+    room: "Launch investigation",
   },
   companies: {
-    label: "For companies",
-    title: "Make AI work visible.",
-    accent: "Keep engineering in control.",
-    copy: "A shared execution layer for startups and engineering organizations that need people and agents to work with clear ownership, continuous review, and complete context.",
-    groups: ["Startups", "Engineering", "Platform", "Security"],
+    kicker: "FOR COMPANIES",
+    title: "Make consequential AI work accountable.",
+    copy: "Give teams one controlled place to coordinate agents, review evidence, approve actions, and preserve the decisions behind the outcome.",
     action: "Start a company pilot",
-    benefits: [
-      {
-        number: "01",
-        title: "Prevent duplicate work",
-        copy: "See active ownership, overlapping changes, and related investigations before time is wasted.",
-      },
-      {
-        number: "02",
-        title: "Review before work compounds",
-        copy: "Let senior engineers inspect assumptions, agent activity, tests, and changes while direction is still easy to adjust.",
-      },
-      {
-        number: "03",
-        title: "Preserve the complete handoff",
-        copy: "Continue with the same code, runtime, sessions, decisions, and unfinished work across teams and time zones.",
-      },
+    points: [
+      [
+        "01",
+        "Clear ownership",
+        "Assign collaborators, agent controllers, and approvers.",
+      ],
+      [
+        "02",
+        "Review in context",
+        "Inspect evidence and agent activity before decisions compound.",
+      ],
+      [
+        "03",
+        "A complete record",
+        "Keep handoffs, permissions, approvals, and history together.",
+      ],
     ],
-    useCases: [
-      "Coordinate teams adopting coding agents",
-      "Guide incidents and complex investigations",
-      "Govern agent access, activity, and review",
-    ],
+    signal: "8 people · 6 agents",
+    room: "Customer escalation",
   },
 } as const;
 
-const companyUseCases = [
-  {
-    number: "01",
-    category: "Product delivery",
-    title: "A room for every engineering task",
-    copy: "Keep the repository, runtime, people, agents, decisions, tests, and review together from the first prompt to the final merge.",
-  },
-  {
-    number: "02",
-    category: "Team coordination",
-    title: "Prevent duplicate work",
-    copy: "Make ownership and active changes visible before two engineers or agents spend time solving the same problem.",
-  },
-  {
-    number: "03",
-    category: "Agent operations",
-    title: "Coordinate parallel agents",
-    copy: "Give investigation, implementation, testing, and review agents clear responsibilities without silent collisions.",
-  },
-  {
-    number: "04",
-    category: "Incident response",
-    title: "Investigate in one shared room",
-    copy: "Bring responders, relevant code, agent findings, hypotheses, and decisions into the same controlled environment.",
-  },
-  {
-    number: "05",
-    category: "Engineering quality",
-    title: "Review continuously",
-    copy: "Let senior engineers challenge assumptions and redirect work while changes are still easy to improve.",
-  },
-  {
-    number: "06",
-    category: "Distributed teams",
-    title: "Hand work across time zones",
-    copy: "Continue with the same code, runtime, agent history, decisions, test state, and unresolved questions.",
-  },
-  {
-    number: "07",
-    category: "Company programs",
-    title: "Coordinate large migrations",
-    copy: "Keep related repository work visible so teams can reuse successful patterns and spot shared blockers.",
-  },
-  {
-    number: "08",
-    category: "Security",
-    title: "Control sensitive remediation",
-    copy: "Give authorized participants a restricted environment with visible agent activity, review, and evidence.",
-  },
-  {
-    number: "09",
-    category: "Customer trust",
-    title: "Resolve escalations together",
-    copy: "Connect support and engineering around one reproducible issue, clear ownership, and a complete resolution history.",
-  },
-] as const;
-
-const companyRoles = [
-  {
-    role: "Developers",
-    value:
-      "See ownership, active changes, and agent findings without another status meeting.",
-  },
-  {
-    role: "Senior engineers",
-    value: "Guide more work early without taking over every task.",
-  },
-  {
-    role: "Engineering managers",
-    value: "Understand progress, blockers, overlapping work, and handoff risk.",
-  },
-  {
-    role: "Platform and security",
-    value:
-      "Give agent adoption a visible, controlled, and reviewable workspace.",
-  },
-] as const;
-
 export function LandingAudience() {
-  const [audience, setAudience] = useState<AudienceKey>("builders");
-  const content = audienceContent[audience];
+  const [audience, setAudience] = useState<AudienceKey>("individuals");
+  const view = views[audience];
 
   return (
-    <section className="landing-audience" id="for-you">
-      <div className="landing-audience-intro">
+    <section className="mp-audience" id="for-you">
+      <div className="mp-audience-top">
         <div>
-          <p className="landing-audience-overline">Choose your view</p>
-          <h2>One product. Built around the way your team works.</h2>
+          <p>CHOOSE YOUR VIEW</p>
+          <h2>
+            One shared workspace.
+            <br />
+            <em>Built for how you work.</em>
+          </h2>
         </div>
         <div
-          className="landing-audience-switch"
+          className="mp-audience-switch"
           role="group"
           aria-label="Choose who CoDev is for"
         >
           <button
             type="button"
-            aria-pressed={audience === "builders"}
-            className={audience === "builders" ? "is-active" : undefined}
-            onClick={() => setAudience("builders")}
+            aria-pressed={audience === "individuals"}
+            onClick={() => setAudience("individuals")}
           >
-            Builders
-            <small>People and small teams</small>
+            Individuals <small>& small teams</small>
           </button>
           <button
             type="button"
             aria-pressed={audience === "companies"}
-            className={audience === "companies" ? "is-active" : undefined}
             onClick={() => setAudience("companies")}
           >
-            Companies
-            <small>Startups and organizations</small>
+            Companies <small>& organizations</small>
           </button>
         </div>
       </div>
 
       <div
-        className="landing-audience-panel"
-        id="audience-panel"
-        aria-live="polite"
+        className="mp-audience-panel"
         data-audience={audience}
+        aria-live="polite"
       >
-        <div className="landing-audience-heading">
-          <div>
-            <p className="landing-audience-kicker">{content.label}</p>
-            <h3>
-              {content.title}
-              <br />
-              <em>{content.accent}</em>
-            </h3>
-          </div>
-          <div className="landing-audience-summary">
-            <p>{content.copy}</p>
-            <div className="landing-audience-groups">
-              {content.groups.map((group) => (
-                <span key={group}>{group}</span>
-              ))}
-            </div>
-          </div>
+        <div className="mp-audience-copy">
+          <p>{view.kicker}</p>
+          <h3>{view.title}</h3>
+          <span>{view.copy}</span>
+          <Link href="/sign-in">
+            {view.action} <b>↗</b>
+          </Link>
         </div>
-
-        <div className="landing-audience-benefits">
-          {content.benefits.map((benefit) => (
-            <article key={benefit.number}>
-              <span>{benefit.number}</span>
-              <h4>{benefit.title}</h4>
-              <p>{benefit.copy}</p>
+        <div className="mp-audience-points">
+          {view.points.map(([number, title, copy]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <div>
+                <h4>{title}</h4>
+                <p>{copy}</p>
+              </div>
             </article>
           ))}
         </div>
-
-        <div className="landing-audience-footer">
+        <div className="mp-audience-mini-room">
           <div>
-            <span>Built for real work</span>
-            <ul>
-              {content.useCases.map((useCase) => (
-                <li key={useCase}>
-                  <i aria-hidden="true">✓</i>
-                  {useCase}
-                </li>
-              ))}
-            </ul>
+            <span>
+              <i /> LIVE ROOM
+            </span>
+            <b>{view.signal}</b>
           </div>
-          <Link className="landing-audience-action" href="/sign-in">
-            {content.action} <span aria-hidden="true">↗</span>
-          </Link>
+          <h4>{view.room}</h4>
+          <div className="mp-mini-timeline">
+            <i />
+            <i />
+            <i />
+          </div>
+          <p>
+            <span>AI</span> Agent work is visible to everyone
+          </p>
+          <p>
+            <span>✓</span> Decision recorded with an owner
+          </p>
+          <small>Full context ready for handoff</small>
         </div>
       </div>
-
-      {audience === "companies" ? (
-        <div className="landing-company-story">
-          <section className="landing-company-use-cases">
-            <div className="landing-company-section-heading">
-              <div>
-                <p>Use CoDev across engineering</p>
-                <h3>
-                  One shared way to work.
-                  <br />
-                  <em>Many company use cases.</em>
-                </h3>
-              </div>
-              <p>
-                CoDev starts with the engineering task and expands naturally
-                wherever people and agents need shared context, clear ownership,
-                and continuous review.
-              </p>
-            </div>
-
-            <div className="landing-company-case-grid">
-              {companyUseCases.map((useCase) => (
-                <article key={useCase.number}>
-                  <div>
-                    <span>{useCase.number}</span>
-                    <small>{useCase.category}</small>
-                  </div>
-                  <h4>{useCase.title}</h4>
-                  <p>{useCase.copy}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="landing-company-seats">
-            <div className="landing-company-seats-copy">
-              <p>Why every seat matters</p>
-              <h3>
-                The value grows when the
-                <br />
-                <em>whole team shares the room.</em>
-              </h3>
-              <p>
-                CoDev is not another private assistant. Each person who joins
-                makes active work easier to discover, review, continue, and
-                coordinate across the company.
-              </p>
-            </div>
-            <div className="landing-company-role-list">
-              {companyRoles.map((item, index) => (
-                <article key={item.role}>
-                  <span>0{index + 1}</span>
-                  <div>
-                    <h4>{item.role}</h4>
-                    <p>{item.value}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="landing-company-outcomes">
-            <div className="landing-company-section-heading">
-              <div>
-                <p>The business case</p>
-                <h3>
-                  Buy less invisible work.
-                  <br />
-                  <em>Get more shared progress.</em>
-                </h3>
-              </div>
-              <p>
-                Company wide adoption creates one source of truth for work that
-                is otherwise scattered across laptops, chats, branches, and
-                private agent sessions.
-              </p>
-            </div>
-            <div className="landing-company-outcome-grid">
-              <article>
-                <span>Less</span>
-                <h4>Duplicate investigation</h4>
-                <p>Discover related work before people repeat it.</p>
-              </article>
-              <article>
-                <span>Earlier</span>
-                <h4>Engineering review</h4>
-                <p>Correct direction before a large rewrite is needed.</p>
-              </article>
-              <article>
-                <span>Faster</span>
-                <h4>Team handoffs</h4>
-                <p>Continue from the real state instead of a summary.</p>
-              </article>
-              <article>
-                <span>Clearer</span>
-                <h4>Agent oversight</h4>
-                <p>
-                  Understand who started work, what changed, and what shipped.
-                </p>
-              </article>
-            </div>
-          </section>
-
-          <section className="landing-company-cta">
-            <div>
-              <p>Bring everyone into the same room</p>
-              <h3>
-                Give your engineering organization a shared way to build with
-                AI.
-              </h3>
-            </div>
-            <Link href="/sign-in">
-              Start a company pilot <span aria-hidden="true">↗</span>
-            </Link>
-          </section>
-        </div>
-      ) : null}
     </section>
   );
 }

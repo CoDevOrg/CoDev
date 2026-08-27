@@ -7,436 +7,400 @@ import { LandingAudience } from "@/components/landing-audience";
 import { getCurrentAppUser } from "@/lib/identity";
 
 export const metadata: Metadata = {
-  title: "Multiplayer AI for software teams",
+  title: "The shared workspace for humans and AI agents",
   description:
-    "CoDev is the shared workspace where software teams watch, steer, and ship with AI agents together.",
+    "Bring your team and AI agents into one live workspace to investigate, build, review, decide, and hand off work without losing context.",
 };
 
-const capabilities = [
+const useCases = [
   {
-    number: "01",
-    title: "Watch the work, live",
-    copy: "Follow every agent turn, terminal command, and code change as it happens. See the work before the pull request lands.",
-    signal: "LIVE",
+    index: "01",
+    title: "Incident response",
+    copy: "Engineers and agents investigate logs, code, and deployments in parallel—without duplicating work.",
+    meta: "Engineering · Security",
   },
   {
-    number: "02",
-    title: "Steer as a team",
-    copy: "Add context, redirect the approach, or step in for a decision without starting another private thread.",
-    signal: "CO STEER",
+    index: "02",
+    title: "Customer escalations",
+    copy: "Support and engineering work from the same facts, owners, decisions, and resolution history.",
+    meta: "Support · Product",
   },
   {
-    number: "03",
-    title: "Hand off everything",
-    copy: "Pass along the code, runtime, conversation, and decisions. The next person continues with nothing to reconstruct.",
-    signal: "PERSISTENT",
+    index: "03",
+    title: "Complex deals",
+    copy: "Keep sales, legal, security, and AI aligned around one living customer context.",
+    meta: "Sales · Legal · Security",
   },
-];
-
-const workflow = [
-  ["Connect", "Open the GitHub repository your team already uses."],
-  ["Collaborate", "People and agents work in one live cloud workspace."],
-  ["Ship", "Review the full story, then merge with confidence."],
+  {
+    index: "04",
+    title: "Professional services",
+    copy: "Agents do the work while the right people review, approve, and remain accountable.",
+    meta: "Accounting · Advisory",
+  },
 ] as const;
 
+function WorkspacePreview() {
+  return (
+    <div className="mp-workspace" aria-label="A live CoDev incident workspace">
+      <div className="mp-workspace-bar">
+        <div className="mp-window-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <span className="mp-room-name">payments-incident</span>
+        <div
+          className="mp-presence"
+          aria-label="Three people and three agents online"
+        >
+          <span className="mp-avatar mp-avatar-sarah">S</span>
+          <span className="mp-avatar mp-avatar-david">D</span>
+          <span className="mp-avatar mp-avatar-agent">AI</span>
+          <b>+3</b>
+        </div>
+      </div>
+
+      <div className="mp-workspace-grid">
+        <aside className="mp-room-sidebar">
+          <div className="mp-sidebar-section">
+            <span className="mp-sidebar-label">Workspace</span>
+            <b className="is-active">
+              <i /> Activity
+            </b>
+            <b>
+              <i /> Investigations <small>3</small>
+            </b>
+            <b>
+              <i /> Decisions <small>2</small>
+            </b>
+            <b>
+              <i /> Artifacts <small>6</small>
+            </b>
+          </div>
+          <div className="mp-sidebar-section mp-room-members">
+            <span className="mp-sidebar-label">In this room</span>
+            <p>
+              <i className="human" /> Sarah <small>Lead</small>
+            </p>
+            <p>
+              <i className="human" /> David <small>DB</small>
+            </p>
+            <p>
+              <i className="agent" /> Claude <small>Running</small>
+            </p>
+            <p>
+              <i className="agent" /> Codex <small>Reviewing</small>
+            </p>
+          </div>
+        </aside>
+
+        <div className="mp-room-main">
+          <div className="mp-incident-head">
+            <div>
+              <span>
+                <i /> SEV-1 · Active
+              </span>
+              <h2>Payment failures after deploy</h2>
+            </div>
+            <button type="button" tabIndex={-1}>
+              Share room
+            </button>
+          </div>
+
+          <div className="mp-status-strip">
+            <div>
+              <span>Current hypothesis</span>
+              <strong>Connection pool exhaustion</strong>
+            </div>
+            <div>
+              <span>Owner</span>
+              <strong>Sarah Kim</strong>
+            </div>
+            <div>
+              <span>Elapsed</span>
+              <strong>28 min</strong>
+            </div>
+          </div>
+
+          <div className="mp-activity">
+            <div className="mp-event">
+              <span className="mp-event-avatar claude">C</span>
+              <div>
+                <p>
+                  <strong>Claude</strong>
+                  <time>2 min ago</time>
+                  <em>Analyzing</em>
+                </p>
+                <span>
+                  Found a 4× increase in checkout DB connections after deploy{" "}
+                  <code>7f3a2c</code>.
+                </span>
+                <div className="mp-tool-call">
+                  <i /> Queried production logs · 1,284 events
+                </div>
+              </div>
+            </div>
+
+            <div className="mp-branches">
+              <div className="mp-branch">
+                <i />
+                <span>Database</span>
+                <strong>David + Gemini</strong>
+                <em>Running</em>
+              </div>
+              <div className="mp-branch">
+                <i />
+                <span>Recent deploys</span>
+                <strong>Sarah + Codex</strong>
+                <em>Reviewing</em>
+              </div>
+              <div className="mp-branch">
+                <i />
+                <span>Payment provider</span>
+                <strong>GPT</strong>
+                <em>Waiting</em>
+              </div>
+            </div>
+
+            <div className="mp-event mp-human-event">
+              <span className="mp-event-avatar sarah">S</span>
+              <div>
+                <p>
+                  <strong>Sarah</strong>
+                  <time>just now</time>
+                </p>
+                <span>
+                  Codex, review the rollback for data safety. David, keep
+                  tracing the pool.
+                </span>
+              </div>
+            </div>
+
+            <div className="mp-decision">
+              <i>✓</i>
+              <span>
+                <strong>Decision recorded</strong>Prepare rollback; wait for
+                database confirmation.
+              </span>
+              <b>Approved by Sarah</b>
+            </div>
+          </div>
+        </div>
+
+        <aside className="mp-context-panel">
+          <span className="mp-sidebar-label">Room context</span>
+          <div className="mp-context-block">
+            <b>Known facts</b>
+            <p>
+              <i /> Failures began at 14:32
+            </p>
+            <p>
+              <i /> Only checkout is affected
+            </p>
+          </div>
+          <div className="mp-context-block">
+            <b>Ruled out</b>
+            <p>
+              <i className="is-muted" /> Payment provider outage
+            </p>
+          </div>
+          <div className="mp-handoff">
+            <span>DL</span>
+            <p>
+              <strong>David joined</strong>Room context synced
+            </p>
+            <i>✓</i>
+          </div>
+        </aside>
+      </div>
+
+      <div className="mp-workspace-foot">
+        <span>
+          <i /> Live shared context
+        </span>
+        <p>3 people · 3 agents · 1 source of truth</p>
+      </div>
+    </div>
+  );
+}
+
 export default async function HomePage() {
-  if (await getCurrentAppUser()) {
-    redirect("/dashboard");
-  }
+  if (await getCurrentAppUser()) redirect("/dashboard");
 
   return (
-    <main className="landing-page">
-      <div className="landing-grain" aria-hidden="true" />
-
-      <header className="landing-nav">
+    <main className="mp-page">
+      <header className="mp-nav">
         <Brand />
         <nav aria-label="Primary navigation">
-          <a href="#why-codev">Why CoDev</a>
           <a href="#how-it-works">How it works</a>
-          <Link className="landing-sign-in" href="/sign-in">
-            Sign in <span aria-hidden="true">↗</span>
+          <a href="#use-cases">Use cases</a>
+          <Link className="mp-sign-in" href="/sign-in">
+            Sign in
+          </Link>
+          <Link className="mp-nav-cta" href="/sign-in">
+            Start a workspace <span>↗</span>
           </Link>
         </nav>
       </header>
 
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <p className="landing-eyebrow">
-            <span className="landing-eyebrow-dot" /> A shared workspace for
-            software teams
+      <section className="mp-hero">
+        <div className="mp-hero-copy">
+          <p className="mp-eyebrow">
+            <i /> Multiplayer work, with AI in the room
           </p>
           <h1>
-            Build software
-            <br />
-            <em>together.</em>
+            The shared workspace for <em>humans and AI agents.</em>
           </h1>
-          <p className="landing-hero-lede">
-            Create a shared workspace for every feature, bug, and investigation.
-            Teammates and agents work inside it together, watching, steering,
-            reviewing, and shipping with the complete context.
+          <p className="mp-lede">
+            Investigate, build, review, and decide together. Everyone—and every
+            agent—works from the same live context.
           </p>
-          <div className="landing-hero-actions">
-            <Link className="landing-primary-action" href="/sign-in">
-              Start building together <span aria-hidden="true">↗</span>
+          <div className="mp-hero-actions">
+            <Link className="mp-primary-action" href="/sign-in">
+              Start a shared workspace <span>↗</span>
             </Link>
-            <a className="landing-text-action" href="#product">
-              See the workspace <span aria-hidden="true">↓</span>
+            <a href="#how-it-works">
+              See how it works <span>↓</span>
             </a>
           </div>
-          <ul className="landing-hero-proof" aria-label="Product highlights">
-            <li>
-              <span aria-hidden="true">●</span> Watch live
-            </li>
-            <li>
-              <span aria-hidden="true">↳</span> Redirect instantly
-            </li>
-            <li>
-              <span aria-hidden="true">✓</span> Review before merge
-            </li>
-          </ul>
+          <p className="mp-hero-note">
+            No private AI threads. No context reconstruction.
+          </p>
         </div>
+        <WorkspacePreview />
+      </section>
 
+      <section className="mp-problem" id="how-it-works">
+        <div className="mp-section-heading">
+          <p>THE PROBLEM</p>
+          <h2>
+            Your team works together.
+            <br />
+            <em>Your AI doesn&apos;t.</em>
+          </h2>
+        </div>
         <div
-          className="landing-product"
-          id="product"
-          aria-label="A preview of a live CoDev workspace"
+          className="mp-problem-flow"
+          aria-label="From fragmented AI work to one shared workspace"
         >
-          <div className="landing-product-topbar">
-            <div className="landing-window-controls" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="landing-repo-name">
-              <span aria-hidden="true">⌘</span> acme / web
-            </div>
-            <div
-              className="landing-presence"
-              aria-label="Four collaborators online"
-            >
-              <span className="landing-avatar landing-avatar-a">YM</span>
-              <span className="landing-avatar landing-avatar-b">AK</span>
-              <span className="landing-avatar landing-avatar-c">AI</span>
-              <strong>+1</strong>
-            </div>
+          <div className="mp-private-sessions">
+            <article>
+              <span>C</span>
+              <div>
+                <b>Claude</b>
+                <p>Sarah&apos;s private investigation</p>
+              </div>
+              <em>Hidden</em>
+            </article>
+            <article>
+              <span>G</span>
+              <div>
+                <b>GPT</b>
+                <p>David&apos;s separate analysis</p>
+              </div>
+              <em>Hidden</em>
+            </article>
+            <article>
+              <span>⌁</span>
+              <div>
+                <b>Slack</b>
+                <p>Partial outputs pasted later</p>
+              </div>
+              <em>Fragmented</em>
+            </article>
           </div>
-
-          <div className="landing-product-body">
-            <aside className="landing-product-sidebar">
-              <p>Workspace</p>
-              <ul>
-                <li className="is-active">
-                  <span>◉</span> Agent sessions <b>3</b>
-                </li>
-                <li>
-                  <span>⌁</span> Changes <b>12</b>
-                </li>
-                <li>
-                  <span>✓</span> Review
-                </li>
-              </ul>
-              <div className="landing-sidebar-team">
-                <p>In this room</p>
-                <span>
-                  <i className="landing-status-dot" /> Yousef
-                </span>
-                <span>
-                  <i className="landing-status-dot" /> Alex
-                </span>
-                <span>
-                  <i className="landing-status-dot landing-status-agent" />{" "}
-                  Codex agent
-                </span>
-              </div>
-            </aside>
-
-            <div className="landing-session">
-              <div className="landing-session-header">
-                <div>
-                  <p>Agent session</p>
-                  <strong>Fix checkout race condition</strong>
-                </div>
-                <span className="landing-live-pill">
-                  <i /> Running
-                </span>
-              </div>
-
-              <div className="landing-session-feed">
-                <div className="landing-feed-item">
-                  <span className="landing-feed-avatar landing-feed-agent">
-                    AI
-                  </span>
-                  <div>
-                    <strong>
-                      Codex <small>2m ago</small>
-                    </strong>
-                    <p>
-                      I found the race between inventory reservation and payment
-                      confirmation. I’m tracing both paths now.
-                    </p>
-                    <div className="landing-code-line">
-                      <span>✓</span> Read 8 files &nbsp;·&nbsp; Running tests
-                    </div>
-                  </div>
-                </div>
-                <div className="landing-feed-item landing-feed-human">
-                  <span className="landing-feed-avatar">AK</span>
-                  <div>
-                    <strong>
-                      Alex <small>just now</small>
-                    </strong>
-                    <p>
-                      Keep the reservation idempotent. We need retries to be
-                      safe.
-                    </p>
-                  </div>
-                </div>
-                <div className="landing-agent-response">
-                  <span className="landing-response-pulse" aria-hidden="true" />
-                  Agent adjusted its plan with Alex&apos;s context
-                </div>
-              </div>
-
-              <div className="landing-composer">
-                <span>Add context or redirect the agent…</span>
-                <button type="button" tabIndex={-1} aria-hidden="true">
-                  Send ↗
-                </button>
-              </div>
-            </div>
+          <div className="mp-flow-arrow">
+            <span>→</span>
+            <p>One shared context</p>
           </div>
-
-          <div className="landing-product-caption">
-            <span>
-              <i /> Live workspace
-            </span>
-            <p>Everyone sees the same work. Anyone can move it forward.</p>
+          <div className="mp-shared-state">
+            <div className="mp-shared-icon">C</div>
+            <div>
+              <b>CoDev workspace</b>
+              <p>
+                People, agents, tasks, decisions, and history stay connected.
+              </p>
+            </div>
+            <span>Live</span>
           </div>
         </div>
       </section>
 
       <LandingAudience />
 
-      <section className="landing-problem" id="why-codev">
-        <div className="landing-section-label">
-          <span>Why now</span>
-          <span>01 / 04</span>
-        </div>
-        <div className="landing-problem-grid">
+      <section className="mp-use-cases" id="use-cases">
+        <div className="mp-section-heading">
+          <p>BUILT FOR CONSEQUENCES</p>
           <h2>
-            AI made coding faster. <em>It left teamwork behind.</em>
-          </h2>
-          <div className="landing-problem-copy">
-            <p>
-              The most powerful new member of your engineering team still works
-              inside a private chat. Teammates see the result too late, context
-              disappears, and handoffs start from scratch.
-            </p>
-            <strong>
-              CoDev makes the workspace, not the chat, the center of the work.
-            </strong>
-          </div>
-        </div>
-        <div
-          className="landing-contrast"
-          aria-label="A comparison of private AI chats and CoDev"
-        >
-          <div className="landing-contrast-card landing-contrast-before">
-            <span>Single player AI</span>
-            <h3>
-              Private prompts.
-              <br />
-              Late reviews.
-              <br />
-              Lost context.
-            </h3>
-            <p>Share a transcript and explain it all again.</p>
-          </div>
-          <div className="landing-contrast-arrow" aria-hidden="true">
-            →
-          </div>
-          <div className="landing-contrast-card landing-contrast-after">
-            <span>With CoDev</span>
-            <h3>
-              Shared sessions.
-              <br />
-              Live direction.
-              <br />
-              Continuous review.
-            </h3>
-            <p>Join the room and continue from the exact same state.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-environment">
-        <div className="landing-section-label">
-          <span>One shared environment</span>
-          <span>02 / 04</span>
-        </div>
-        <div className="landing-environment-panel">
-          <div className="landing-environment-copy">
-            <p className="landing-environment-kicker">Shared before you ship</p>
-            <h2>
-              Local changes should not be <em>local knowledge.</em>
-            </h2>
-            <p>
-              Everyone in a CoDev workspace sees the same environment, active
-              work, and code changes before anything is committed, pushed, or
-              published.
-            </p>
-          </div>
-
-          <div
-            className="landing-workboard"
-            aria-label="Shared work in progress"
-          >
-            <div className="landing-workboard-header">
-              <div>
-                <span className="landing-workboard-dot" />
-                <strong>Live work</strong>
-              </div>
-              <small>3 people and 2 agents</small>
-            </div>
-            <div className="landing-workboard-item">
-              <span className="landing-workboard-icon">B</span>
-              <div>
-                <strong>Checkout timeout</strong>
-                <p>Yousef and Codex are editing</p>
-              </div>
-              <b>IN PROGRESS</b>
-            </div>
-            <div className="landing-workboard-item">
-              <span className="landing-workboard-icon landing-workboard-icon-green">
-                W
-              </span>
-              <div>
-                <strong>Webhook retries</strong>
-                <p>Alex is running tests</p>
-              </div>
-              <b>TESTING</b>
-            </div>
-            <div className="landing-workboard-change">
-              <div>
-                <span>12</span>
-                <p>local changes visible to the room</p>
-              </div>
-              <small>Nothing published yet</small>
-            </div>
-            <div className="landing-workboard-alert">
-              <span>✓</span>
-              <p>
-                Everyone can see this bug is already being handled before
-                starting duplicate work.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="landing-environment-benefits">
-          <article>
-            <span>01</span>
-            <h3>The same workspace</h3>
-            <p>
-              Open the same repository, runtime, files, and agent context from
-              any browser.
-            </p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>Work in progress is visible</h3>
-            <p>
-              See edits, terminal activity, and local changes while the work is
-              still happening.
-            </p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>Duplicate work stops early</h3>
-            <p>
-              Know who is handling a bug before two people spend time fixing the
-              same problem twice.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section className="landing-capabilities" id="how-it-works">
-        <div className="landing-section-label">
-          <span>Multiplayer by default</span>
-          <span>03 / 04</span>
-        </div>
-        <div className="landing-capabilities-heading">
-          <h2>
-            Agents do the work.
+            When the work is expensive,
             <br />
-            <em>Your team stays in control.</em>
+            <em>context matters.</em>
           </h2>
-          <p>
-            Long running agent work becomes a shared, living process your whole
-            team can understand and shape.
-          </p>
         </div>
-        <div className="landing-capability-grid">
-          {capabilities.map((capability) => (
-            <article key={capability.number}>
-              <div className="landing-capability-meta">
-                <span>{capability.number}</span>
-                <b>
-                  <i /> {capability.signal}
-                </b>
-              </div>
-              <h3>{capability.title}</h3>
-              <p>{capability.copy}</p>
+        <div className="mp-case-grid">
+          {useCases.map((item) => (
+            <article key={item.index}>
+              <span>{item.index}</span>
+              <h3>{item.title}</h3>
+              <p>{item.copy}</p>
+              <small>{item.meta}</small>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="landing-workflow">
-        <div className="landing-section-label">
-          <span>From repo to merge</span>
-          <span>04 / 04</span>
+      <section className="mp-model-layer">
+        <div>
+          <p>ONE COLLABORATION LAYER</p>
+          <h2>
+            The workspace stays.
+            <br />
+            <em>The model can change.</em>
+          </h2>
+          <span>
+            Use the right agent for each job without fragmenting the team&apos;s
+            work.
+          </span>
         </div>
-        <div className="landing-workflow-heading">
-          <h2>One room for the whole story.</h2>
-          <p>
-            No new workflow to reconstruct. Start with your repository and keep
-            every person, agent, decision, and change connected.
-          </p>
-        </div>
-        <div className="landing-workflow-steps">
-          {workflow.map(([title, copy], index) => (
-            <div className="landing-workflow-step" key={title}>
-              <span>0{index + 1}</span>
-              <strong>{title}</strong>
-              <p>{copy}</p>
-              {index < workflow.length - 1 ? <i aria-hidden="true">→</i> : null}
-            </div>
-          ))}
+        <div
+          className="mp-model-diagram"
+          aria-label="AI providers connected to one CoDev workspace"
+        >
+          <div className="mp-model-workspace">
+            <i>C</i>
+            <span>
+              <b>Shared workspace</b>
+              <small>Context · Control · History</small>
+            </span>
+          </div>
+          <div className="mp-model-line" />
+          <div className="mp-models">
+            <span>Claude</span>
+            <span>GPT</span>
+            <span>Gemini</span>
+            <span>Codex</span>
+            <span>Your agents</span>
+          </div>
         </div>
       </section>
 
-      <section className="landing-cta">
+      <section className="mp-final-cta">
         <div>
-          <p className="landing-eyebrow">Bring everyone into the room</p>
+          <p>BRING EVERYONE INTO THE ROOM</p>
           <h2>
-            AI coding is powerful.
+            One problem. One workspace.
             <br />
-            <em>Together, it&apos;s transformative.</em>
+            <em>Your whole team—human and AI.</em>
           </h2>
         </div>
-        <Link
-          className="landing-primary-action landing-primary-action-light"
-          href="/sign-in"
-        >
-          Build with CoDev <span aria-hidden="true">↗</span>
+        <Link className="mp-primary-action mp-primary-light" href="/sign-in">
+          Start a shared workspace <span>↗</span>
         </Link>
       </section>
 
-      <footer className="landing-footer">
+      <footer className="mp-footer">
         <Brand />
-        <p>People and AI agents, building in the same room.</p>
+        <p>The shared workspace for humans and AI agents.</p>
         <span>Hosted on the web</span>
       </footer>
     </main>
