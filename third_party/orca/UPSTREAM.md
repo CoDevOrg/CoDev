@@ -84,6 +84,17 @@ which `WorkspaceHome` sets from the member's linked provider. The pre-existing
 `codev-preload.js` seeding of `experimentalNativeChat` /
 `openAgentTabsInChatByDefault` is what makes that launched tab render as chat.
 
+A CoDev-only **provider picker** (`CodevChatProviderPicker`, rendered by
+`NativeChatComposerActions` beside the model/reasoning-effort pickers) lets the
+member switch the chat tab between Claude and Codex. Because each chat tab runs
+one agent CLI in its PTY, a switch (`src/renderer/src/web/codev-chat-provider-switch.ts`)
+starts a fresh chat on the new provider in the same worktree via
+`launchAgentInNewTab` and, after a short delay so the paired-host tab mirror
+can land, retires the previous tab — skipping that retirement if it would
+leave the worktree with no tab. Model and reasoning effort for `codex`/`claude`
+are already handled by the existing `NativeChatSessionOptionPickers` patch and
+appear once the tab's PTY is live.
+
 ## Branding patches (modify the vendored bundle directly)
 
 Unlike the theme bridge above, these edits touch files inside

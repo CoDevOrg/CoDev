@@ -919,6 +919,209 @@ index 0000000..0d6cb67
 +    ...(input.strategy === 'merged' ? { mergedContents: input.mergedContents ?? '' } : {})
 +  })
 +}
+diff --git a/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
+new file mode 100644
+index 0000000..5702f58
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
+@@ -0,0 +1,85 @@
++import { memo } from 'react'
++import { ChevronDown } from 'lucide-react'
++import { Button } from '@/components/ui/button'
++import {
++  DropdownMenu,
++  DropdownMenuContent,
++  DropdownMenuRadioGroup,
++  DropdownMenuRadioItem,
++  DropdownMenuTrigger
++} from '@/components/ui/dropdown-menu'
++import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
++import { formatAgentTypeLabel } from '@/lib/agent-status'
++import {
++  CODEV_CHAT_PROVIDERS,
++  codevChatProviderSwitchEnabled,
++  isCodevChatProvider,
++  switchCodevChatProvider
++} from '@/web/codev-chat-provider-switch'
++import type { AgentType } from '../../../../shared/agent-status-types'
++
++export type CodevChatProviderPickerProps = {
++  agent: AgentType
++  terminalTabId: string
++  /** Chat is mid-turn; switching now would abandon a running reply. */
++  isWorking: boolean
++}
++
++/**
++ * In CoDev-embedded mode, lets a member pick which linked coding subscription
++ * the chat tab runs on — Claude or Codex — from the same row as the model and
++ * reasoning-effort pickers. Choosing a different provider starts a fresh chat
++ * on it in this worktree and retires the current tab (see
++ * `switchCodevChatProvider`); the model and effort for the new provider are
++ * then chosen from the pickers beside this one.
++ */
++function CodevChatProviderPickerInner({
++  agent,
++  terminalTabId,
++  isWorking
++}: CodevChatProviderPickerProps): React.JSX.Element | null {
++  if (!codevChatProviderSwitchEnabled() || !isCodevChatProvider(agent)) {
++    return null
++  }
++  return (
++    <DropdownMenu>
++      <Tooltip>
++        <TooltipTrigger asChild>
++          <DropdownMenuTrigger asChild disabled={isWorking}>
++            <Button
++              type="button"
++              variant="ghost"
++              size="xs"
++              aria-label={`Provider ${formatAgentTypeLabel(agent)}`}
++              className="max-w-48 text-muted-foreground"
++            >
++              <span className="truncate">{formatAgentTypeLabel(agent)}</span>
++              <ChevronDown className="size-3" />
++            </Button>
++          </DropdownMenuTrigger>
++        </TooltipTrigger>
++        <TooltipContent side="top" sideOffset={4}>
++          {isWorking ? 'Wait for the reply to finish to switch provider' : 'Provider'}
++        </TooltipContent>
++      </Tooltip>
++      <DropdownMenuContent align="start" className="w-52">
++        <DropdownMenuRadioGroup
++          value={agent}
++          onValueChange={(next) => {
++            if (next !== agent && isCodevChatProvider(next)) {
++              switchCodevChatProvider({ terminalTabId, nextAgent: next })
++            }
++          }}
++        >
++          {CODEV_CHAT_PROVIDERS.map((provider) => (
++            <DropdownMenuRadioItem key={provider} value={provider} disabled={isWorking}>
++              {formatAgentTypeLabel(provider)}
++            </DropdownMenuRadioItem>
++          ))}
++        </DropdownMenuRadioGroup>
++      </DropdownMenuContent>
++    </DropdownMenu>
++  )
++}
++
++export const CodevChatProviderPicker = memo(CodevChatProviderPickerInner)
+diff --git a/src/renderer/src/components/native-chat/NativeChatComposer.tsx b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
+index 3cad0b3..619134f 100644
+--- a/src/renderer/src/components/native-chat/NativeChatComposer.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
+@@ -388,6 +388,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+ 
+     return (
+       <NativeChatComposerField
++        agent={agent}
++        terminalTabId={terminalTabId}
+         textareaRef={textareaRef}
+         draft={draft}
+         disabled={disabled}
+diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
+index 2e1b02a..d33e385 100644
+--- a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
+@@ -31,6 +31,10 @@ vi.mock('./NativeChatSessionOptionPickers', () => ({
+   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
+ }))
+ 
++vi.mock('./CodevChatProviderPicker', () => ({
++  CodevChatProviderPicker: () => <div data-testid="codev-provider-picker" />
++}))
++
+ import { NativeChatComposerActions } from './NativeChatComposerActions'
+ 
+ afterEach(() => cleanup())
+@@ -39,6 +43,8 @@ describe('NativeChatComposerActions', () => {
+   it('places session option pickers immediately beside dictation', () => {
+     render(
+       <NativeChatComposerActions
++        agent="claude"
++        terminalTabId="tab-1"
+         attachDisabled={false}
+         dictationDisabled={false}
+         sendDisabled={false}
+diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
+index aee0f79..a0dfbc3 100644
+--- a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
+@@ -6,9 +6,13 @@ import type {
+   SessionOptionDescriptor,
+   SessionOptionsSurface
+ } from '../../../../shared/native-chat-session-options'
++import type { AgentType } from '../../../../shared/agent-status-types'
+ import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
++import { CodevChatProviderPicker } from './CodevChatProviderPicker'
+ 
+ export type NativeChatComposerActionsProps = {
++  agent: AgentType
++  terminalTabId: string
+   attachDisabled: boolean
+   dictationDisabled: boolean
+   sendDisabled: boolean
+@@ -26,6 +30,8 @@ export type NativeChatComposerActionsProps = {
+ }
+ 
+ export function NativeChatComposerActions({
++  agent,
++  terminalTabId,
+   attachDisabled,
+   dictationDisabled,
+   sendDisabled,
+@@ -69,6 +75,11 @@ export function NativeChatComposerActions({
+       <div className="ml-auto flex items-center gap-1.5">
+         {/* Why: keep session controls beside the actions they affect; the
+         model trigger is ordered last so it sits directly next to dictation. */}
++        <CodevChatProviderPicker
++          agent={agent}
++          terminalTabId={terminalTabId}
++          isWorking={isWorking}
++        />
+         <NativeChatSessionOptionPickers
+           surface={sessionOptionsSurface}
+           snapshot={sessionOptionsSnapshot}
+diff --git a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
+index 6f954a6..18296ea 100644
+--- a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
+@@ -18,8 +18,11 @@ import type {
+   SessionOptionDescriptor,
+   SessionOptionsSurface
+ } from '../../../../shared/native-chat-session-options'
++import type { AgentType } from '../../../../shared/agent-status-types'
+ 
+ export type NativeChatComposerFieldProps = {
++  agent: AgentType
++  terminalTabId: string
+   textareaRef: RefObject<HTMLTextAreaElement | null>
+   draft: string
+   disabled: boolean
+@@ -95,7 +98,9 @@ export function NativeChatComposerField({
+   onSend,
+   onStop,
+   sessionOptionsSurface,
+-  sessionOptionsSnapshot
++  sessionOptionsSnapshot,
++  agent,
++  terminalTabId
+ }: NativeChatComposerFieldProps): React.JSX.Element {
+   return (
+     <div className="shrink-0 bg-background">
+@@ -199,6 +204,8 @@ export function NativeChatComposerField({
+             />
+             <div className="flex flex-wrap items-center gap-2 pt-0.5">
+               <NativeChatComposerActions
++                agent={agent}
++                terminalTabId={terminalTabId}
+                 attachDisabled={attachDisabled}
+                 dictationDisabled={dictationDisabled}
+                 sendDisabled={sendButtonDisabled}
 diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
 index e7d3eda..1e5c164 100644
 --- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
@@ -1208,6 +1411,19 @@ index 0000000..45c52d8
 +  flush()
 +  return messages
 +}
+diff --git a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx b/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
+index 96f8287..e957449 100644
+--- a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
++++ b/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
+@@ -29,6 +29,8 @@ afterEach(() => cleanup())
+ function renderField(draft: string): HTMLTextAreaElement {
+   render(
+     <NativeChatComposerField
++      agent="claude"
++      terminalTabId="tab-1"
+       textareaRef={createRef<HTMLTextAreaElement>()}
+       draft={draft}
+       disabled={false}
 diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
 index 4a90af7..64a6889 100644
 --- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
@@ -7830,6 +8046,174 @@ index 0000000..7e003a6
 +export function resetCodevBridgeForTests(): void {
 +  singleton?.dispose()
 +  singleton = null
++}
+diff --git a/src/renderer/src/web/codev-chat-provider-switch.test.ts b/src/renderer/src/web/codev-chat-provider-switch.test.ts
+new file mode 100644
+index 0000000..021b984
+--- /dev/null
++++ b/src/renderer/src/web/codev-chat-provider-switch.test.ts
+@@ -0,0 +1,81 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++
++const launchAgentInNewTab = vi.fn()
++const closeTab = vi.fn()
++let storeState: {
++  tabsByWorktree: Record<string, Array<{ id: string }>>
++  closeTab: typeof closeTab
++}
++
++vi.mock('@/lib/launch-agent-in-new-tab', () => ({
++  launchAgentInNewTab: (...args: unknown[]) => launchAgentInNewTab(...args)
++}))
++vi.mock('@/store', () => ({
++  useAppStore: { getState: () => storeState }
++}))
++
++import {
++  isCodevChatProvider,
++  otherCodevChatProvider,
++  switchCodevChatProvider
++} from './codev-chat-provider-switch'
++
++beforeEach(() => {
++  vi.useFakeTimers()
++  storeState = {
++    tabsByWorktree: { 'wt-1': [{ id: 'chat-old' }, { id: 'sibling' }] },
++    closeTab
++  }
++})
++
++afterEach(() => {
++  vi.clearAllTimers()
++  vi.useRealTimers()
++  vi.clearAllMocks()
++})
++
++describe('isCodevChatProvider / otherCodevChatProvider', () => {
++  it('recognizes exactly claude and codex', () => {
++    expect(isCodevChatProvider('claude')).toBe(true)
++    expect(isCodevChatProvider('codex')).toBe(true)
++    expect(isCodevChatProvider('gemini')).toBe(false)
++    expect(isCodevChatProvider(null)).toBe(false)
++  })
++
++  it('toggles between the two providers', () => {
++    expect(otherCodevChatProvider('claude')).toBe('codex')
++    expect(otherCodevChatProvider('codex')).toBe('claude')
++  })
++})
++
++describe('switchCodevChatProvider', () => {
++  it('launches the new provider in the tab’s worktree and retires the old tab', () => {
++    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++
++    expect(launchAgentInNewTab).toHaveBeenCalledWith({
++      agent: 'codex',
++      worktreeId: 'wt-1',
++      promptDelivery: 'draft',
++      launchSource: 'new_workspace_composer'
++    })
++    expect(closeTab).not.toHaveBeenCalled()
++
++    vi.runAllTimers()
++    expect(closeTab).toHaveBeenCalledWith('chat-old', { reason: 'user' })
++  })
++
++  it('keeps the previous tab when it is the worktree’s only one (replacement not mirrored yet)', () => {
++    storeState.tabsByWorktree = { 'wt-1': [{ id: 'chat-old' }] }
++
++    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++    vi.runAllTimers()
++
++    expect(launchAgentInNewTab).toHaveBeenCalledTimes(1)
++    expect(closeTab).not.toHaveBeenCalled()
++  })
++
++  it('does nothing when the tab cannot be located', () => {
++    switchCodevChatProvider({ terminalTabId: 'missing', nextAgent: 'codex' })
++    expect(launchAgentInNewTab).not.toHaveBeenCalled()
++  })
++})
+diff --git a/src/renderer/src/web/codev-chat-provider-switch.ts b/src/renderer/src/web/codev-chat-provider-switch.ts
+new file mode 100644
+index 0000000..c0b9315
+--- /dev/null
++++ b/src/renderer/src/web/codev-chat-provider-switch.ts
+@@ -0,0 +1,75 @@
++import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
++import { useAppStore } from '@/store'
++import type { AgentType } from '../../../shared/agent-status-types'
++import type { CodevDefaultChatAgent } from './codev-bootstrap'
++
++function worktreeIdForTerminalTab(tabId: string): string | null {
++  const { tabsByWorktree } = useAppStore.getState()
++  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
++    if (tabs.some((tab) => tab.id === tabId)) {
++      return worktreeId
++    }
++  }
++  return null
++}
++
++/** Providers CoDev lets a member switch a chat tab between, in menu order. */
++export const CODEV_CHAT_PROVIDERS: readonly CodevDefaultChatAgent[] = ['claude', 'codex']
++
++export function isCodevChatProvider(
++  agent: AgentType | null | undefined
++): agent is CodevDefaultChatAgent {
++  return agent === 'claude' || agent === 'codex'
++}
++
++/** True in CoDev-embedded mode, where the in-chat provider switcher is offered. */
++export function codevChatProviderSwitchEnabled(win: Window = window): boolean {
++  return Boolean(win.__CODEV_EMBEDDED__)
++}
++
++/** The provider the tab is not on, for a one-tap toggle affordance. */
++export function otherCodevChatProvider(
++  agent: CodevDefaultChatAgent
++): CodevDefaultChatAgent {
++  return agent === 'claude' ? 'codex' : 'claude'
++}
++
++const RETIRE_PREVIOUS_TAB_DELAY_MS = 2_000
++
++/**
++ * Switch a native chat tab's provider.
++ *
++ * CoDev chat tabs each run one agent CLI in their PTY, so a switch means
++ * starting a fresh chat on the new provider in the same worktree and retiring
++ * the current tab. `launchAgentInNewTab` activates the new tab immediately
++ * (local) or once the paired host mirrors it (web runtime); the retirement of
++ * the previous tab is deferred and re-checked so it never leaves the worktree
++ * without a tab while that mirror is in flight. If the check still cannot
++ * confirm a replacement, the previous tab is left for the member to close.
++ */
++export function switchCodevChatProvider(args: {
++  terminalTabId: string
++  nextAgent: CodevDefaultChatAgent
++}): void {
++  const { terminalTabId, nextAgent } = args
++  const worktreeId = worktreeIdForTerminalTab(terminalTabId)
++  if (!worktreeId) {
++    return
++  }
++
++  launchAgentInNewTab({
++    agent: nextAgent,
++    worktreeId,
++    promptDelivery: 'draft',
++    launchSource: 'new_workspace_composer'
++  })
++
++  setTimeout(() => {
++    const state = useAppStore.getState()
++    const tabs = state.tabsByWorktree[worktreeId] ?? []
++    const previousStillOpen = tabs.some((tab) => tab.id === terminalTabId)
++    if (previousStillOpen && tabs.length > 1) {
++      state.closeTab(terminalTabId, { reason: 'user' })
++    }
++  }, RETIRE_PREVIOUS_TAB_DELAY_MS)
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
