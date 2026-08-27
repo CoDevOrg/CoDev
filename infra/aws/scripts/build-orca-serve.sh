@@ -43,6 +43,38 @@ command -v container >/dev/null 2>&1 || {
 
 mkdir -p "${output_dir}"
 
+# Apple's `container` runs builds inside a long-lived builder VM whose size is
+# fixed when it starts, and it defaults to 2 CPUs / 2 GiB. Orca's `tsc` pass
+# needs considerably more than that: with the default the build dies partway
+# through with `Killed` / exit code 137 / "cannot allocate memory", which
+# looks like a source problem but is purely a builder sizing one. `container
+# build -m` does not resize a builder that is already running, so grow it here
+# by restarting it whenever it is smaller than this build needs.
+readonly builder_memory_gib="${CODEV_ORCA_BUILDER_MEMORY_GIB:-8}"
+readonly builder_cpus="${CODEV_ORCA_BUILDER_CPUS:-4}"
+
+ensure_builder_capacity() {
+  local wanted_bytes=$((builder_memory_gib * 1024 * 1024 * 1024))
+  local status memory_bytes cpus
+  status="$(container builder status --format json 2>/dev/null || true)"
+  memory_bytes="$(jq -r \
+    '.[0].configuration.resources.memoryInBytes // 0' <<<"${status}" 2>/dev/null || echo 0)"
+  cpus="$(jq -r '.[0].configuration.resources.cpus // 0' <<<"${status}" 2>/dev/null || echo 0)"
+
+  if [[ "${memory_bytes}" -ge "${wanted_bytes}" && "${cpus}" -ge "${builder_cpus}" ]]; then
+    return 0
+  fi
+
+  echo "Resizing container builder to ${builder_cpus} CPUs / ${builder_memory_gib}GiB (was ${cpus} CPUs / $((memory_bytes / 1024 / 1024))MB)..."
+  container builder stop >/dev/null 2>&1 || true
+  container builder delete >/dev/null 2>&1 || true
+  container builder start \
+    --cpus "${builder_cpus}" \
+    --memory "${builder_memory_gib}G"
+}
+
+ensure_builder_capacity
+
 echo "Building orca serve from source (stablyai/orca) for ${host_arch}..."
 container build \
   --arch "${container_arch}" \
