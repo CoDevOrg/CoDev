@@ -55,9 +55,7 @@ describe("getWorkspaceCreditStatus", () => {
   it("counts live elapsed time on a still-open interval", async () => {
     mockListWorkspaceMembers.mockResolvedValue([member("user-1")]);
     const startedAt = new Date(Date.now() - 5 * 60_000);
-    mockSelect.mockReturnValue(
-      intervalsSelect([{ startedAt, endedAt: null }]),
-    );
+    mockSelect.mockReturnValue(intervalsSelect([{ startedAt, endedAt: null }]));
 
     const status = await getWorkspaceCreditStatus("workspace-1");
 
@@ -93,9 +91,7 @@ describe("getWorkspaceCreditStatus", () => {
     const startedAt = new Date(
       Date.now() - (MONTHLY_MINUTES_PER_MEMBER + 100) * 60_000,
     );
-    mockSelect.mockReturnValue(
-      intervalsSelect([{ startedAt, endedAt: null }]),
-    );
+    mockSelect.mockReturnValue(intervalsSelect([{ startedAt, endedAt: null }]));
 
     const status = await getWorkspaceCreditStatus("workspace-1");
 

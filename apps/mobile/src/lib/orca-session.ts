@@ -24,8 +24,15 @@ export async function connectOrcaWorkspace(
   }
   const offer = parsePairingCode(result.pairingCode);
   if (!offer) {
-    throw new OrcaSessionError("Could not decode this workspace's pairing offer.");
+    throw new OrcaSessionError(
+      "Could not decode this workspace's pairing offer.",
+    );
   }
-  const client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, options);
+  const client = connect(
+    offer.endpoint,
+    offer.deviceToken,
+    offer.publicKeyB64,
+    options,
+  );
   return { state: "ready", client };
 }

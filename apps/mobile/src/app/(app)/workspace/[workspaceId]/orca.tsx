@@ -69,7 +69,11 @@ export default function OrcaTerminalScreen() {
             if (event.type === "scrollback" || event.type === "resized") {
               if (!initializedRef.current) {
                 initializedRef.current = true;
-                terminalRef.current?.init(VIEWPORT.cols, VIEWPORT.rows, event.serialized);
+                terminalRef.current?.init(
+                  VIEWPORT.cols,
+                  VIEWPORT.rows,
+                  event.serialized,
+                );
                 setState({ phase: "streaming" });
               } else {
                 terminalRef.current?.write(event.serialized);
@@ -77,7 +81,11 @@ export default function OrcaTerminalScreen() {
             } else if (event.type === "data") {
               if (!initializedRef.current) {
                 initializedRef.current = true;
-                terminalRef.current?.init(VIEWPORT.cols, VIEWPORT.rows, event.chunk);
+                terminalRef.current?.init(
+                  VIEWPORT.cols,
+                  VIEWPORT.rows,
+                  event.chunk,
+                );
                 setState({ phase: "streaming" });
               } else {
                 terminalRef.current?.write(event.chunk);
@@ -147,7 +155,12 @@ export default function OrcaTerminalScreen() {
           )}
         </View>
       ) : null}
-      <View style={[styles.terminalContainer, state.phase !== "streaming" && styles.hidden]}>
+      <View
+        style={[
+          styles.terminalContainer,
+          state.phase !== "streaming" && styles.hidden,
+        ]}
+      >
         <TerminalWebView ref={terminalRef} style={styles.terminal} />
       </View>
       {state.phase === "streaming" ? (

@@ -6,7 +6,11 @@ import type { RpcClient } from "@/vendor/orca/mobile/src/transport/rpc-client";
 
 export class OrcaTerminalError extends Error {}
 
-async function call<T>(client: RpcClient, method: string, params?: unknown): Promise<T> {
+async function call<T>(
+  client: RpcClient,
+  method: string,
+  params?: unknown,
+): Promise<T> {
   const response = await client.sendRequest(method, params);
   if (!response.ok) {
     throw new OrcaTerminalError(response.error.message);
@@ -16,19 +20,38 @@ async function call<T>(client: RpcClient, method: string, params?: unknown): Pro
 
 /** Reuses the workspace's existing terminal if one is live, otherwise creates one. */
 export async function ensureOrcaTerminal(client: RpcClient): Promise<string> {
-  const list = await call<RuntimeTerminalListResult>(client, "terminal.list", {});
+  const list = await call<RuntimeTerminalListResult>(
+    client,
+    "terminal.list",
+    {},
+  );
   const existing = list.terminals[0];
   if (existing) {
     return existing.handle;
   }
-  const created = await call<{ terminal: RuntimeTerminalCreate }>(client, "terminal.create", {});
+  const created = await call<{ terminal: RuntimeTerminalCreate }>(
+    client,
+    "terminal.create",
+    {},
+  );
   return created.terminal.handle;
 }
 
 export type OrcaTerminalStreamEvent =
-  | { type: "subscribed"; streamId: number | null; lines?: string[]; truncated?: boolean }
+  | {
+      type: "subscribed";
+      streamId: number | null;
+      lines?: string[];
+      truncated?: boolean;
+    }
   | { type: "data"; streamId: number; chunk: string }
-  | { type: "scrollback" | "resized"; streamId: number; serialized: string; cols?: number; rows?: number }
+  | {
+      type: "scrollback" | "resized";
+      streamId: number;
+      serialized: string;
+      cols?: number;
+      rows?: number;
+    }
   | { type: "metadata"; streamId: number }
   | { type: "end" }
   | { type: "error"; streamId: number; message: string };

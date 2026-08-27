@@ -119,7 +119,11 @@ export async function exchangeCliDeviceAuthorization(deviceCode: string) {
       });
     if (!authorization?.userId) return null;
 
-    return mintCliAccessToken(authorization.userId, authorization.clientType, transaction);
+    return mintCliAccessToken(
+      authorization.userId,
+      authorization.clientType,
+      transaction,
+    );
   });
 }
 

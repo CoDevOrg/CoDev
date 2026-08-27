@@ -22,7 +22,10 @@ const passwordErrorCopy: Record<string, string> = {
   exists: "This account already has a password set.",
 };
 
-function initials(name: string | null | undefined, email: string | null | undefined) {
+function initials(
+  name: string | null | undefined,
+  email: string | null | undefined,
+) {
   const source = name?.trim() || email?.trim() || "";
   if (!source) return "?";
   const parts = source.split(/\s+/).filter(Boolean);
@@ -132,7 +135,8 @@ export default async function PersonalProfilePage({
           />
           <SignInMethodRow
             action={
-              !connectedAccounts.github.connected && isGitHubAuthConfigured() ? (
+              !connectedAccounts.github.connected &&
+              isGitHubAuthConfigured() ? (
                 <form
                   action={connectGitHubAccount.bind(
                     null,

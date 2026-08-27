@@ -22,9 +22,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
     throw new ApiError(
       body?.error ?? `Request failed with status ${response.status}.`,
       response.status,
@@ -131,7 +131,9 @@ export function listInstallationRepositories(installationId: number) {
 }
 
 export function createWorkspace(
-  input: { installationId: number; repositoryId: number } | Record<string, never> = {},
+  input:
+    | { installationId: number; repositoryId: number }
+    | Record<string, never> = {},
 ) {
   return request<{ workspace: { id: string } }>("/api/workspaces", {
     method: "POST",

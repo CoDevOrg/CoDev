@@ -55,13 +55,18 @@ export default function SessionDetailScreen() {
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
-    void queryClient.invalidateQueries({ queryKey: ["activity", workspaceId, sessionId] });
+    void queryClient.invalidateQueries({
+      queryKey: ["agent-sessions", workspaceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["activity", workspaceId, sessionId],
+    });
     void queryClient.invalidateQueries({ queryKey: ["attention"] });
   };
 
   const replyMutation = useMutation({
-    mutationFn: (prompt: string) => sendAgentTurn(workspaceId, sessionId, prompt),
+    mutationFn: (prompt: string) =>
+      sendAgentTurn(workspaceId, sessionId, prompt),
     onSuccess: () => {
       setDraft("");
       invalidate();
@@ -125,7 +130,10 @@ export default function SessionDetailScreen() {
             editable={canReply}
           />
           <Pressable
-            style={[styles.sendButton, (!draft.trim() || !canReply) && styles.sendButtonDisabled]}
+            style={[
+              styles.sendButton,
+              (!draft.trim() || !canReply) && styles.sendButtonDisabled,
+            ]}
             disabled={!draft.trim() || !canReply || replyMutation.isPending}
             onPress={() => replyMutation.mutate(draft.trim())}
           >
@@ -163,7 +171,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.dark.line,
   },
-  empty: { textAlign: "center", marginTop: Spacing.lg, transform: [{ scaleY: -1 }] },
+  empty: {
+    textAlign: "center",
+    marginTop: Spacing.lg,
+    transform: [{ scaleY: -1 }],
+  },
   composer: {
     flexDirection: "row",
     gap: Spacing.xs,

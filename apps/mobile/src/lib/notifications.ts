@@ -23,7 +23,9 @@ Notifications.setNotificationHandler({
  */
 export async function registerForPushNotifications() {
   if (!Device.isDevice) {
-    console.warn("Push notifications require a physical device or a dev-client build in Simulator.");
+    console.warn(
+      "Push notifications require a physical device or a dev-client build in Simulator.",
+    );
     return;
   }
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -38,7 +40,9 @@ export async function registerForPushNotifications() {
     | string
     | undefined;
   if (!projectId) {
-    console.warn("No EAS project id configured yet — skipping push token registration.");
+    console.warn(
+      "No EAS project id configured yet — skipping push token registration.",
+    );
     return;
   }
 

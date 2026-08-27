@@ -5,7 +5,13 @@ node_modules
 playwright-report
 test-results
 pnpm-lock.yaml
+apps/mobile/.expo
+apps/mobile/expo-env.d.ts
 packages/db/drizzle
 apps/web/app/.well-known/workflow
 apps/web/.swc
 apps/web/public/orca
+
+# Vendored verbatim from stablyai/orca — kept byte-identical to upstream so
+# re-vendoring is a clean copy (see third_party/orca-mobile/UPSTREAM.md).
+apps/mobile/src/vendor/orca

@@ -304,14 +304,13 @@
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      rgba(242, 237, 224, 0.035) 0,
-      rgba(242, 237, 224, 0.035) 1px,
-      transparent 1px,
-      transparent 14px
-    );
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(242, 237, 224, 0.035) 0,
+    rgba(242, 237, 224, 0.035) 1px,
+    transparent 1px,
+    transparent 14px
+  );
   content: "";
   pointer-events: none;
 }
@@ -356,7 +355,9 @@
   color: var(--muted);
   font-size: 13.5px;
   text-decoration: none;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .app-sidebar-link:hover {

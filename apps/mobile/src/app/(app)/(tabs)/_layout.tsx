@@ -38,11 +38,7 @@ export default function TabsLayout() {
               onPress={() => router.push("/workspace/new")}
               style={{ paddingHorizontal: Spacing.xs }}
             >
-              <Ionicons
-                name="add"
-                color={Colors.dark.accentBright}
-                size={26}
-              />
+              <Ionicons name="add" color={Colors.dark.accentBright} size={26} />
             </Pressable>
           ),
         }}

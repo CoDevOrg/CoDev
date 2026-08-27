@@ -67,7 +67,7 @@ Defaults:
   Firecracker writable disks are cloned with metadata-only copy-on-write so
   restore does not copy multi-GiB images
 - Workspace idle timeout: 4 hours before automatic Firecracker hibernation
-- Host shutdown: 10 minutes after the last microVM *and* the last Orca IDE
+- Host shutdown: 10 minutes after the last microVM _and_ the last Orca IDE
   session go idle. The IDE half matters: a workspace opened straight into its
   IDE never provisions a microVM, so a sandbox-only idle check would power the
   host off while somebody was still working in it.
@@ -185,7 +185,7 @@ storage are additional charges.
 ### Why not Spot
 
 Spot was roughly half the hourly rate, but it is the wrong trade for a host
-whose entire lifecycle is stop-when-idle and start-on-demand. A *stopped* Spot
+whose entire lifecycle is stop-when-idle and start-on-demand. A _stopped_ Spot
 instance only restarts when its pool has spare capacity, so reopening a
 workspace could fail outright with `there is no available Spot capacity` —
 turning a routine wake into a dead end that no amount of retrying inside a

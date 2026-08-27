@@ -56,9 +56,9 @@ export async function signInWithCredentials(input: {
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
     throw new Error(body?.error ?? "Could not sign in.");
   }
   const result = (await response.json()) as { token: string };

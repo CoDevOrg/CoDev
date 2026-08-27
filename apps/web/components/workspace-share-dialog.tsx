@@ -69,7 +69,10 @@ export function WorkspaceShareDialog({
       setState("loading");
       setMessage("");
       try {
-        const payload = await readJson<{ invites: Invite[]; members: Member[] }>(
+        const payload = await readJson<{
+          invites: Invite[];
+          members: Member[];
+        }>(
           await fetch(`/api/workspaces/${workspaceId}/invites`, {
             signal: controller.signal,
           }),
@@ -109,7 +112,9 @@ export function WorkspaceShareDialog({
       setMembers(payload.members);
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "The invite could not be created.",
+        error instanceof Error
+          ? error.message
+          : "The invite could not be created.",
       );
     }
     setCreating(false);
@@ -127,10 +132,14 @@ export function WorkspaceShareDialog({
         const payload = (await response.json()) as { error?: string };
         throw new Error(payload.error ?? "The invite could not be revoked.");
       }
-      setInvites((current) => current.filter((invite) => invite.inviteId !== inviteId));
+      setInvites((current) =>
+        current.filter((invite) => invite.inviteId !== inviteId),
+      );
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "The invite could not be revoked.",
+        error instanceof Error
+          ? error.message
+          : "The invite could not be revoked.",
       );
     }
     setRevokingId("");
@@ -143,7 +152,9 @@ export function WorkspaceShareDialog({
 
   if (!open) return null;
 
-  const pendingInvites = invites.filter((invite) => invite.status === "pending");
+  const pendingInvites = invites.filter(
+    (invite) => invite.status === "pending",
+  );
 
   return (
     <div
@@ -164,8 +175,8 @@ export function WorkspaceShareDialog({
             <p className="eyebrow">Share workspace</p>
             <h2 id="workspace-share-title">People with access</h2>
             <p>
-              Invite links expire in 24 hours and can be used once. Anyone
-              with the link can join at the role you choose.
+              Invite links expire in 24 hours and can be used once. Anyone with
+              the link can join at the role you choose.
             </p>
           </div>
           <button
@@ -235,9 +246,14 @@ export function WorkspaceShareDialog({
               <div className="share-row" key={invite.inviteId}>
                 <span>
                   <strong>{invite.invitee ?? "Anyone with the link"}</strong>
-                  <small> · expires {new Date(invite.expiresAt).toLocaleString()}</small>
+                  <small>
+                    {" "}
+                    · expires {new Date(invite.expiresAt).toLocaleString()}
+                  </small>
                 </span>
-                <span className="role-label">{ROLE_LABEL[invite.accessRole]}</span>
+                <span className="role-label">
+                  {ROLE_LABEL[invite.accessRole]}
+                </span>
                 {canInvite ? (
                   <button
                     type="button"
@@ -268,7 +284,9 @@ export function WorkspaceShareDialog({
                     <small> @{member.login}</small>
                   </span>
                 </span>
-                <span className="role-label">{ROLE_LABEL[member.accessRole]}</span>
+                <span className="role-label">
+                  {ROLE_LABEL[member.accessRole]}
+                </span>
               </div>
             ))}
           </div>

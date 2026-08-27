@@ -138,7 +138,11 @@ export async function closeOrphanOrcaIntervals() {
         return true;
       });
     if (!stillRunning) {
-      await closeSandboxInterval(workspaceId, "reconcile", ORCA_INTERVAL_SOURCE);
+      await closeSandboxInterval(
+        workspaceId,
+        "reconcile",
+        ORCA_INTERVAL_SOURCE,
+      );
       closed += 1;
     }
   }

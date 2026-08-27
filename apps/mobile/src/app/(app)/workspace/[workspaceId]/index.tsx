@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Card } from "@/components/card";
@@ -65,7 +71,11 @@ export default function WorkspaceDetailScreen() {
                 }
                 style={styles.headerButton}
               >
-                <Ionicons name="add" color={Colors.dark.accentBright} size={26} />
+                <Ionicons
+                  name="add"
+                  color={Colors.dark.accentBright}
+                  size={26}
+                />
               </Pressable>
             </View>
           ),

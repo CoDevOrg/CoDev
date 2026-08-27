@@ -37,9 +37,7 @@ export async function setAccountPassword(
   const [updated] = await getDatabase()
     .update(schema.users)
     .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
-    .where(
-      and(eq(schema.users.id, user.id), isNull(schema.users.passwordHash)),
-    )
+    .where(and(eq(schema.users.id, user.id), isNull(schema.users.passwordHash)))
     .returning({ id: schema.users.id });
 
   if (!updated) {

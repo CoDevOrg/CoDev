@@ -31,6 +31,7 @@ apple-design/
 ## 🎨 Features
 
 ### Design System
+
 - **Minimalist Design**: Clean, uncluttered interfaces
 - **8px Grid System**: Consistent spacing throughout
 - **Fluid Typography**: Responsive text using clamp()
@@ -39,6 +40,7 @@ apple-design/
 - **Smooth Animations**: 300-600ms transitions
 
 ### Components
+
 - Hero sections
 - Navigation bars
 - Project cards
@@ -50,18 +52,21 @@ apple-design/
 - And more...
 
 ### Color System
+
 - Light & Dark mode palettes
 - Semantic colors (success, error, warning, info)
 - Pre-defined gradients
 - Accessibility-compliant (WCAG AA minimum)
 
 ### Typography
+
 - System font stack
 - Responsive type scale
 - Clear hierarchy
 - Optimal readability
 
 ### Animations
+
 - Hover effects (lift, scale, glow)
 - Entrance animations (fade, slide, scale)
 - Loading states (skeleton, spinner)
@@ -75,15 +80,15 @@ apple-design/
 ```html
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Portfolio</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <!-- Your content -->
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Portfolio</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Your content -->
+  </body>
 </html>
 ```
 
@@ -91,7 +96,7 @@ apple-design/
 
 ```css
 /* Import from examples/color-palette.css */
-@import url('examples/color-palette.css');
+@import url("examples/color-palette.css");
 
 /* Or define your own */
 :root {
@@ -113,7 +118,8 @@ apple-design/
 
 ```css
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -128,6 +134,7 @@ h1 {
 ### 4. Use Templates
 
 Copy templates from `templates/` folder and customize:
+
 - `hero-section.html` - For landing page hero
 - `project-card.html` - For portfolio project showcase
 - `contact-form.html` - For contact page
@@ -136,7 +143,9 @@ Copy templates from `templates/` folder and customize:
 ## 📖 Documentation
 
 ### Core Principles
+
 See [design-principles.md](references/design-principles.md) for detailed guidelines on:
+
 - Minimalism & clarity
 - Typography excellence
 - Color philosophy
@@ -145,7 +154,9 @@ See [design-principles.md](references/design-principles.md) for detailed guideli
 - Motion & interactivity
 
 ### Color System
+
 See [color-system.md](references/color-system.md) for:
+
 - Complete color palettes
 - Gradient presets
 - Dark mode implementation
@@ -153,7 +164,9 @@ See [color-system.md](references/color-system.md) for:
 - Theme switching
 
 ### Typography
+
 See [typography-system.md](references/typography-system.md) for:
+
 - Font stacks
 - Type scales
 - Fluid typography
@@ -161,7 +174,9 @@ See [typography-system.md](references/typography-system.md) for:
 - Accessibility
 
 ### Animations
+
 See [animation-guide.md](references/animation-guide.md) for:
+
 - Animation principles
 - Timing & easing
 - Common patterns
@@ -169,7 +184,9 @@ See [animation-guide.md](references/animation-guide.md) for:
 - Accessibility
 
 ### Components
+
 See [components-reference.md](references/components-reference.md) for:
+
 - Navigation
 - Hero sections
 - Cards
@@ -180,15 +197,19 @@ See [components-reference.md](references/components-reference.md) for:
 ## 🛠️ Utility Scripts
 
 ### Generate Color Variables
+
 ```bash
 node scripts/generate-color-vars.js
 ```
+
 Creates CSS custom properties from color palette.
 
 ### Check Contrast Ratios
+
 ```bash
 node scripts/check-contrast.js
 ```
+
 Validates WCAG contrast compliance for your colors.
 
 See [scripts/README.md](scripts/README.md) for detailed usage.
@@ -196,12 +217,14 @@ See [scripts/README.md](scripts/README.md) for detailed usage.
 ## ✅ Best Practices
 
 ### Performance
+
 - ✅ Animate only `transform` and `opacity`
 - ✅ Use `will-change` sparingly
 - ✅ Optimize images (WebP, lazy loading)
 - ❌ Avoid animating `width`, `height`, `top`, `left`
 
 ### Accessibility
+
 - ✅ Maintain 4.5:1 contrast ratio (WCAG AA)
 - ✅ Provide focus indicators
 - ✅ Use semantic HTML
@@ -210,12 +233,14 @@ See [scripts/README.md](scripts/README.md) for detailed usage.
 - ✅ Minimum touch target: 44x44px
 
 ### Responsive Design
+
 - ✅ Mobile-first approach
 - ✅ Use `clamp()` for fluid typography
 - ✅ Flexible grid layouts
 - ✅ Test on real devices
 
 ### Code Organization
+
 - ✅ Use CSS variables
 - ✅ Keep specificity low
 - ✅ Document complex calculations
@@ -224,6 +249,7 @@ See [scripts/README.md](scripts/README.md) for detailed usage.
 ## 🎯 Use Cases
 
 This design system is perfect for:
+
 - Portfolio websites
 - Landing pages
 - Product showcases
@@ -234,10 +260,12 @@ This design system is perfect for:
 ## 📚 Resources
 
 ### Official Apple Resources
+
 - [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/)
 - [SF Pro Font](https://developer.apple.com/fonts/)
 
 ### Useful Tools
+
 - [Framer Motion](https://www.framer.com/motion/) - React animations
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS
 - [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
@@ -246,6 +274,7 @@ This design system is perfect for:
 ## 💡 Examples
 
 ### Hero Section
+
 ```html
 <section class="hero">
   <div class="hero-content">
@@ -257,6 +286,7 @@ This design system is perfect for:
 ```
 
 ### Glass Card
+
 ```css
 .glass-card {
   background: rgba(255, 255, 255, 0.1);
@@ -268,6 +298,7 @@ This design system is perfect for:
 ```
 
 ### Hover Animation
+
 ```css
 .card {
   transition: transform 300ms ease;

@@ -92,7 +92,10 @@ export default function NewWorkspaceScreen() {
   if (installationsQuery.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={Colors.dark.textSecondary} style={styles.spinner} />
+        <ActivityIndicator
+          color={Colors.dark.textSecondary}
+          style={styles.spinner}
+        />
       </SafeAreaView>
     );
   }
@@ -106,7 +109,11 @@ export default function NewWorkspaceScreen() {
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <View style={styles.emptyState}>
           <ThemedText type="smallBold">No GitHub access yet</ThemedText>
-          <ThemedText themeColor="textSecondary" type="small" style={styles.emptyBody}>
+          <ThemedText
+            themeColor="textSecondary"
+            type="small"
+            style={styles.emptyBody}
+          >
             {message ??
               "Connect a GitHub account or install the CoDev GitHub App from the web dashboard to pick a repository."}
           </ThemedText>
@@ -164,7 +171,10 @@ export default function NewWorkspaceScreen() {
         )}
         ListEmptyComponent={
           repositoriesQuery.isLoading ? (
-            <ActivityIndicator color={Colors.dark.textSecondary} style={styles.spinner} />
+            <ActivityIndicator
+              color={Colors.dark.textSecondary}
+              style={styles.spinner}
+            />
           ) : (
             <ThemedText themeColor="textSecondary" style={styles.emptyBody}>
               No repositories available for this account.

@@ -34,7 +34,12 @@ export async function getApiUserAnyAuth(
         .where(eq(schema.users.id, token.userId))
         .limit(1);
       if (!user) return null;
-      return { id: user.id, name: user.name, email: user.email, image: user.avatarUrl };
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.avatarUrl,
+      };
     } catch (error) {
       if (error instanceof CliAuthError) return null;
       throw error;

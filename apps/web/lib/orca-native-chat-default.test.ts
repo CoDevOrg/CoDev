@@ -3,6 +3,8 @@ import { runInNewContext } from "node:vm";
 
 import { describe, expect, it } from "vitest";
 
+// Both copies of the preload run byte-identical (brand-web.mjs copies the
+// infra one into the bundle), so assert against each.
 const preloadPaths = [
   "public/orca/codev-preload.js",
   "../../infra/aws/orca-build/codev-preload.js",
@@ -22,25 +24,26 @@ function runPreload(path: string, initial: Record<string, unknown>) {
   return JSON.parse(stored) as Record<string, unknown>;
 }
 
-describe.each(preloadPaths)("native agent chat defaults in %s", (path) => {
-  it("opens new Codex and Claude agent tabs in native chat", () => {
+describe.each(preloadPaths)("CoDev Orca preload seeds in %s", (path) => {
+  it("applies the one-shot mobile-button default", () => {
     expect(runPreload(path, {})).toMatchObject({
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      codevNativeChatDefaultV2Applied: true,
+      showMobileButton: false,
+      codevMobileDefaultApplied: true,
     });
   });
 
-  it("does not override a choice made after the CoDev default was applied", () => {
+  it("does not re-apply the mobile default once the marker is set", () => {
     expect(
       runPreload(path, {
-        codevNativeChatDefaultV2Applied: true,
-        experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false,
+        codevMobileDefaultApplied: true,
+        showMobileButton: true,
       }),
-    ).toMatchObject({
-      experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
-    });
+    ).toMatchObject({ showMobileButton: true });
+  });
+
+  it("no longer seeds native chat here — that moved to getStoredSettings() in the vendored patch, which forces it on for every CoDev-embedded client and cannot be defeated by a stale localStorage blob", () => {
+    const seeded = runPreload(path, {});
+    expect(seeded).not.toHaveProperty("experimentalNativeChat");
+    expect(seeded).not.toHaveProperty("openAgentTabsInChatByDefault");
   });
 });

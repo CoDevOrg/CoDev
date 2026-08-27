@@ -99,7 +99,12 @@ export async function notifyWorkspaceMembers(
       await client.sendPushNotificationsAsync(chunk);
     }
   } catch (error) {
-    console.error("notifyWorkspaceMembers failed", { workspaceId, sessionId, reason, error });
+    console.error("notifyWorkspaceMembers failed", {
+      workspaceId,
+      sessionId,
+      reason,
+      error,
+    });
   }
 }
 

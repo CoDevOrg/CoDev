@@ -185,8 +185,8 @@ export function RepositoryPicker({
             {!githubConnected ? (
               <div className="workspace-create-connect">
                 <p>
-                  Connect your GitHub account to open one of your
-                  repositories in a new workspace.
+                  Connect your GitHub account to open one of your repositories
+                  in a new workspace.
                 </p>
                 {githubAuthConfigured ? (
                   <form action={connectGitHubAccount.bind(null, "/dashboard")}>
@@ -289,9 +289,8 @@ export function RepositoryPicker({
                     Manage repository access ↗
                   </a>
                   <p className="security-note">
-                    Private source is transferred as a bounded,
-                    credential-free snapshot. GitHub tokens never enter the
-                    sandbox.
+                    Private source is transferred as a bounded, credential-free
+                    snapshot. GitHub tokens never enter the sandbox.
                   </p>
                 </div>
               </>

@@ -10,6 +10,7 @@ Create stunning, modern UI designs inspired by Apple's design language. This des
 ## When to Use This Skill
 
 Use this skill when:
+
 - Designing portfolio websites or personal sites
 - Creating landing pages or product showcases
 - Implementing hero sections with visual impact
@@ -67,8 +68,8 @@ Use this skill when:
 
 ```css
 /* System font stack */
-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display',
-             'Segoe UI', sans-serif;
+font-family:
+  -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
 
 /* Fluid responsive typography */
 h1 {
@@ -92,13 +93,13 @@ Use 8px-based spacing scale:
 
 ```css
 :root {
-  --space-2: 0.5rem;   /* 8px */
-  --space-4: 1rem;     /* 16px */
-  --space-6: 1.5rem;   /* 24px */
-  --space-8: 2rem;     /* 32px */
-  --space-12: 3rem;    /* 48px */
-  --space-16: 4rem;    /* 64px */
-  --space-24: 6rem;    /* 96px */
+  --space-2: 0.5rem; /* 8px */
+  --space-4: 1rem; /* 16px */
+  --space-6: 1.5rem; /* 24px */
+  --space-8: 2rem; /* 32px */
+  --space-12: 3rem; /* 48px */
+  --space-16: 4rem; /* 64px */
+  --space-24: 6rem; /* 96px */
 }
 ```
 
@@ -217,7 +218,9 @@ Use 8px-based spacing scale:
 ```css
 /* Lift effect */
 .hover-lift {
-  transition: transform 300ms ease, box-shadow 300ms ease;
+  transition:
+    transform 300ms ease,
+    box-shadow 300ms ease;
 }
 
 .hover-lift:hover {
@@ -261,6 +264,7 @@ Use 8px-based spacing scale:
 When this skill is activated for Apple-inspired design:
 
 ### 1. Always Prioritize
+
 - Clean, minimalist aesthetics
 - Generous whitespace and breathing room
 - Smooth, delightful animations (300-600ms)
@@ -269,6 +273,7 @@ When this skill is activated for Apple-inspired design:
 - Accessibility (WCAG AA minimum)
 
 ### 2. Component Creation Workflow
+
 1. **Start with semantic HTML structure**
 2. **Apply modern CSS** (flexbox, grid, custom properties)
 3. **Add glassmorphism** for cards and overlays where appropriate
@@ -277,6 +282,7 @@ When this skill is activated for Apple-inspired design:
 6. **Test responsiveness** at mobile, tablet, desktop breakpoints
 
 ### 3. Styling Approach
+
 - **Use CSS variables** for all colors and spacing
 - **Apply system font stack** for typography
 - **Implement soft shadows** for depth (layered shadows)
@@ -285,6 +291,7 @@ When this skill is activated for Apple-inspired design:
 - **Follow 8px spacing grid** consistently
 
 ### 4. Never Do
+
 - Use overly complex animations
 - Ignore responsive design
 - Sacrifice accessibility for aesthetics
@@ -293,6 +300,7 @@ When this skill is activated for Apple-inspired design:
 - Animate width/height (use transform instead)
 
 ### 5. For Portfolio Sites Specifically
+
 - Create **impactful hero sections** with large typography and gradients
 - Design **project cards** with image zoom on hover
 - Build **clean navigation** with blur effects
@@ -301,6 +309,7 @@ When this skill is activated for Apple-inspired design:
 - Use **glassmorphism** strategically for visual interest
 
 ### 6. Code Quality Standards
+
 - Write clean, well-commented code
 - Use modern CSS features (grid, clamp, custom properties)
 - Optimize for performance (GPU-accelerated properties only)
@@ -309,6 +318,7 @@ When this skill is activated for Apple-inspired design:
 - Use semantic HTML elements
 
 ### 7. When Suggesting Designs
+
 - Provide **complete, working code examples**
 - Include **both HTML/JSX and CSS**
 - Show **responsive variations** (mobile, tablet, desktop)
@@ -317,7 +327,9 @@ When this skill is activated for Apple-inspired design:
 - Reference **templates** from the templates/ folder when applicable
 
 ### 8. Reference Documentation
+
 When users need detailed information, direct them to:
+
 - **Design philosophy**: [design-principles.md](../../../.shared/skills/apple-design/references/design-principles.md)
 - **Color palettes & gradients**: [color-system.md](../../../.shared/skills/apple-design/references/color-system.md)
 - **Typography scale & hierarchy**: [typography-system.md](../../../.shared/skills/apple-design/references/typography-system.md)
@@ -325,17 +337,21 @@ When users need detailed information, direct them to:
 - **Component library**: [components-reference.md](../../../.shared/skills/apple-design/references/components-reference.md)
 
 ### 9. Templates Available
+
 Ready-to-use templates in `../../../.shared/skills/apple-design/templates/` folder:
+
 - `hero-section.html` - Full-screen hero with gradient
 - `project-card.html` - Project showcase cards with hover effects
 
 Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
+
 - `color-palette.css` - Complete color system with utilities
 - `animations.css` - Animation library with all patterns
 
 ## Best Practices
 
 ### Performance
+
 - ✅ Animate only `transform` and `opacity`
 - ✅ Use `will-change` sparingly
 - ✅ Optimize images (WebP, lazy loading)
@@ -343,6 +359,7 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 - ❌ Avoid animating `width`, `height`, `top`, `left`
 
 ### Accessibility
+
 - ✅ Maintain 4.5:1 contrast ratio for text
 - ✅ Provide focus indicators (2px outline, 2px offset)
 - ✅ Use semantic HTML
@@ -351,6 +368,7 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 - ✅ Minimum touch target: 44x44px
 
 ### Responsive Design
+
 - ✅ Mobile-first approach
 - ✅ Use `clamp()` for fluid typography
 - ✅ Flexible grid layouts with `auto-fit` or `auto-fill`
@@ -358,6 +376,7 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 - ✅ Breakpoints: 640px (sm), 768px (md), 1024px (lg), 1280px (xl)
 
 ### Code Organization
+
 - ✅ Use CSS variables for theme values
 - ✅ Organize styles by component
 - ✅ Keep specificity low (avoid nesting > 3 levels)
@@ -367,14 +386,16 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 ## Quick Reference
 
 ### Shadow Scale
+
 ```css
---shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.04);
---shadow-md: 0 4px 12px rgba(0,0,0,0.08);
---shadow-lg: 0 8px 24px rgba(0,0,0,0.08), 0 16px 32px rgba(0,0,0,0.08);
---shadow-xl: 0 24px 48px rgba(0,0,0,0.12);
+--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0, 0, 0, 0.04);
+--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+--shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.08);
+--shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.12);
 ```
 
 ### Border Radius Scale
+
 ```css
 --radius-sm: 8px;
 --radius-md: 12px;
@@ -385,13 +406,15 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 ```
 
 ### Animation Duration
+
 ```css
---duration-fast: 150ms;    /* Micro-interactions */
---duration-base: 300ms;    /* Standard transitions */
---duration-slow: 500ms;    /* Complex animations */
+--duration-fast: 150ms; /* Micro-interactions */
+--duration-base: 300ms; /* Standard transitions */
+--duration-slow: 500ms; /* Complex animations */
 ```
 
 ### Easing Functions
+
 ```css
 --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 --ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -401,16 +424,19 @@ Pre-built examples in `../../../.shared/skills/apple-design/examples/` folder:
 ## Resources
 
 ### Official Apple Resources
+
 - [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/)
 - [SF Pro Font](https://developer.apple.com/fonts/)
 
 ### Useful Tools
+
 - [Framer Motion](https://www.framer.com/motion/) - React animations
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS
 - [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
 - [Coolors](https://coolors.co/) - Color palette generator
 
 ### Internal Documentation
+
 - 📖 [Design Principles](../../../.shared/skills/apple-design/references/design-principles.md) - Philosophy and guidelines
 - 🎨 [Color System](../../../.shared/skills/apple-design/references/color-system.md) - Palettes, gradients, dark mode
 - ✏️ [Typography System](../../../.shared/skills/apple-design/references/typography-system.md) - Fonts, scales, hierarchy

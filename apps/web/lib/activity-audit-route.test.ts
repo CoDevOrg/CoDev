@@ -13,6 +13,7 @@ vi.mock("@/lib/api", () => ({
       { status },
     ),
   getApiUser: mocks.getApiUser,
+  getApiUserAnyAuth: mocks.getApiUser,
 }));
 vi.mock("@/lib/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
