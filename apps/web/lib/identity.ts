@@ -10,6 +10,7 @@ import { auth as nextAuth } from "@/auth";
 import { getDatabase } from "./database";
 import { resolveGithubConnection } from "./github";
 import { deriveClerkLogin } from "./identity-profile";
+import { isWaitlistModeEnabled } from "./waitlist-mode";
 
 export type AppUser = {
   id: string;
@@ -86,6 +87,7 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
         .limit(1)
     : [];
   const existingId = existingByClerk?.id ?? existingByEmail?.id;
+  if (!existingId && isWaitlistModeEnabled()) return null;
   const returning = { id: schema.users.id };
   const [localUser] = existingId
     ? await database

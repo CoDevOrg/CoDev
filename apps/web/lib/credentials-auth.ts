@@ -7,6 +7,7 @@ import { schema } from "@codev/db";
 import { hashPassword, verifyPassword } from "./crypto";
 import { getDatabase } from "./database";
 import { getNewAccountPasswordError } from "./password-policy";
+import { isWaitlistModeEnabled } from "./waitlist-mode";
 
 export type CredentialsIntent = "sign-in" | "sign-up";
 
@@ -43,9 +44,11 @@ export function resolveCredentialsAuthorizeStep(input: {
   email: string;
   password: string;
   existingUser: boolean;
+  waitlistModeEnabled: boolean;
 }): CredentialsAuthorizeStep {
   if (!input.email || !input.password) return "reject";
   if (input.existingUser) return "verify-existing";
+  if (input.waitlistModeEnabled) return "reject";
   if (
     input.intent === "sign-up" &&
     input.name &&
@@ -96,6 +99,7 @@ export async function resolveCredentialsSignIn(credentials: {
     email,
     password,
     existingUser: Boolean(existingUser),
+    waitlistModeEnabled: isWaitlistModeEnabled(),
   });
 
   if (step === "reject") return null;

@@ -68,6 +68,7 @@ export const serverEnvironmentSchema = z.object({
   CODEX_OAUTH_REDIRECT_URI: optionalUrl,
   CODEX_OAUTH_SCOPE: z.string().min(1).optional(),
   HOSTED_CODEX_EMERGENCY_DISABLED: z.enum(["true", "false"]).optional(),
+  WAITLIST_MODE_DISABLED: z.enum(["true", "false"]).optional(),
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,

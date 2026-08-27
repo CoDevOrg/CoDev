@@ -11,6 +11,7 @@ import { Brand } from "@/components/app-chrome";
 import { ClerkSignIn } from "@/components/clerk-sign-in";
 import { CredentialsSignInForm } from "@/components/credentials-sign-in-form";
 import { clerkAuthConfigured } from "@/lib/identity";
+import { isWaitlistModeEnabled } from "@/lib/waitlist-mode";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -83,6 +84,7 @@ export default async function SignInPage({
   const { callbackUrl, error, mode, reset } = await searchParams;
   const githubConfigured = isGitHubAuthConfigured();
   const googleConfigured = isGoogleAuthConfigured();
+  const waitlistModeEnabled = isWaitlistModeEnabled();
   const safeCallback =
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
@@ -98,8 +100,9 @@ export default async function SignInPage({
         <p className="eyebrow">Sign in</p>
         <h1>Welcome to CoDev.</h1>
         <p>
-          Continue with Google or GitHub, or sign in with the email you already
-          use. New to CoDev? Create an account below.
+          {waitlistModeEnabled
+            ? "Continue with Google, GitHub, or the email you already use."
+            : "Continue with Google or GitHub, or sign in with the email you already use. New to CoDev? Create an account below."}
         </p>
 
         {reset ? (
@@ -115,10 +118,20 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {error ? (
+        {error === "AccessDenied" && waitlistModeEnabled ? (
           <div className="inline-alert error" role="alert">
-            That email or password did not work. Sign in with your existing
-            account, or create a new one below.
+            New accounts are waitlist-only right now.{" "}
+            <Link href="/">Join the waitlist</Link> and we&apos;ll email you
+            when a spot opens up.
+          </div>
+        ) : error ? (
+          <div className="inline-alert error" role="alert">
+            That email or password did not work.{" "}
+            {waitlistModeEnabled ? (
+              "Sign in with your existing account."
+            ) : (
+              "Sign in with your existing account, or create a new one below."
+            )}
           </div>
         ) : null}
 
@@ -165,6 +178,7 @@ export default async function SignInPage({
             </div>
 
             <CredentialsSignInForm
+              allowSignUp={!waitlistModeEnabled}
               initialMode={mode === "sign-up" ? "sign-up" : "sign-in"}
               action={async (formData) => {
                 "use server";

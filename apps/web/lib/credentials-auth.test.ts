@@ -36,6 +36,20 @@ describe("credentials email auth", () => {
         email: "ada@example.com",
         password: "whatever-they-already-use",
         existingUser: true,
+        waitlistModeEnabled: false,
+      }),
+    ).toBe("verify-existing");
+  });
+
+  it("lets an existing account sign in even while waitlist mode is on", () => {
+    expect(
+      resolveCredentialsAuthorizeStep({
+        intent: "sign-in",
+        name: "",
+        email: "ada@example.com",
+        password: "whatever-they-already-use",
+        existingUser: true,
+        waitlistModeEnabled: true,
       }),
     ).toBe("verify-existing");
   });
@@ -48,6 +62,7 @@ describe("credentials email auth", () => {
         email: "ada@example.com",
         password: "StrongPass1!",
         existingUser: false,
+        waitlistModeEnabled: false,
       }),
     ).toBe("reject");
   });
@@ -60,6 +75,7 @@ describe("credentials email auth", () => {
         email: "ada@example.com",
         password: "StrongPass1!",
         existingUser: false,
+        waitlistModeEnabled: false,
       }),
     ).toBe("create-account");
     expect(
@@ -69,6 +85,20 @@ describe("credentials email auth", () => {
         email: "ada@example.com",
         password: "StrongPass1!",
         existingUser: false,
+        waitlistModeEnabled: false,
+      }),
+    ).toBe("reject");
+  });
+
+  it("blocks new account creation while waitlist mode is on, even with a valid sign-up", () => {
+    expect(
+      resolveCredentialsAuthorizeStep({
+        intent: "sign-up",
+        name: "Ada",
+        email: "ada@example.com",
+        password: "StrongPass1!",
+        existingUser: false,
+        waitlistModeEnabled: true,
       }),
     ).toBe("reject");
   });

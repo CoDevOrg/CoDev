@@ -9,13 +9,17 @@ import { getNewAccountPasswordRequirements } from "@/lib/password-policy";
 type CredentialsSignInFormProps = Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   initialMode?: CredentialsIntent;
+  allowSignUp?: boolean;
 }>;
 
 export function CredentialsSignInForm({
   action,
   initialMode = "sign-in",
+  allowSignUp = true,
 }: CredentialsSignInFormProps) {
-  const [mode, setMode] = useState<CredentialsIntent>(initialMode);
+  const [mode, setMode] = useState<CredentialsIntent>(
+    allowSignUp ? initialMode : "sign-in",
+  );
   const [password, setPassword] = useState("");
   const creatingAccount = mode === "sign-up";
   const requirements = getNewAccountPasswordRequirements(password);
@@ -89,12 +93,16 @@ export function CredentialsSignInForm({
               Sign in
             </button>
           </>
-        ) : (
+        ) : allowSignUp ? (
           <>
             New to CoDev?{" "}
             <button type="button" onClick={() => setMode("sign-up")}>
               Create an account
             </button>
+          </>
+        ) : (
+          <>
+            New to CoDev? <Link href="/">Join the waitlist</Link>
           </>
         )}
       </p>

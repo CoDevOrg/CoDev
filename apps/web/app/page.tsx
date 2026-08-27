@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { Brand } from "@/components/app-chrome";
 import { LandingAudience } from "@/components/landing-audience";
+import { WaitlistCta } from "@/components/waitlist-cta";
 import { getCurrentAppUser } from "@/lib/identity";
 
 export const metadata: Metadata = {
@@ -76,9 +77,10 @@ export default async function HomePage() {
             reviewing, and shipping with the complete context.
           </p>
           <div className="landing-hero-actions">
-            <Link className="landing-primary-action" href="/sign-in">
-              Start building together <span aria-hidden="true">↗</span>
-            </Link>
+            <WaitlistCta
+              triggerClassName="landing-primary-action"
+              triggerLabel="Join the waitlist"
+            />
             <a className="landing-text-action" href="#product">
               See the workspace <span aria-hidden="true">↓</span>
             </a>
@@ -426,12 +428,10 @@ export default async function HomePage() {
             <em>Together, it&apos;s transformative.</em>
           </h2>
         </div>
-        <Link
-          className="landing-primary-action landing-primary-action-light"
-          href="/sign-in"
-        >
-          Build with CoDev <span aria-hidden="true">↗</span>
-        </Link>
+        <WaitlistCta
+          triggerClassName="landing-primary-action landing-primary-action-light"
+          triggerLabel="Join the waitlist"
+        />
       </section>
 
       <footer className="landing-footer">

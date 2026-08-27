@@ -14,6 +14,7 @@ import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
 import { resolveGithubConnection } from "@/lib/github";
 import { mergeUserIntoCanonical } from "@/lib/user-merge";
+import { isWaitlistModeEnabled } from "@/lib/waitlist-mode";
 
 interface GitHubProfile {
   id: number;
@@ -136,6 +137,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               .where(eq(schema.users.email, googleProfile.email))
               .limit(1);
         const existingId = existingByGoogle?.id ?? existingByEmail?.id;
+        if (!existingId && isWaitlistModeEnabled()) return false;
         const [localUser] = existingId
           ? await database
               .update(schema.users)
@@ -242,25 +244,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               .where(eq(schema.users.email, githubProfile.email))
               .limit(1)
           : [];
-        [localUser] =
-          existingByGithub?.id || existingByEmail?.id
-            ? await database
-                .update(schema.users)
-                .set({
-                  githubUserId,
-                  login: githubProfile.login,
-                  name: githubProfile.name,
-                  email: githubProfile.email,
-                  avatarUrl: githubProfile.avatar_url,
-                  updatedAt: now,
-                })
-                .where(
-                  eq(
-                    schema.users.id,
-                    existingByGithub?.id ?? existingByEmail!.id,
-                  ),
-                )
-                .returning({ id: schema.users.id })
+        const existingId = existingByGithub?.id ?? existingByEmail?.id;
+        if (!existingId && isWaitlistModeEnabled()) return false;
+        [localUser] = existingId
+          ? await database
+              .update(schema.users)
+              .set({
+                githubUserId,
+                login: githubProfile.login,
+                name: githubProfile.name,
+                email: githubProfile.email,
+                avatarUrl: githubProfile.avatar_url,
+                updatedAt: now,
+              })
+              .where(eq(schema.users.id, existingId))
+              .returning({ id: schema.users.id })
             : await database
                 .insert(schema.users)
                 .values({

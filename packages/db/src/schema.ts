@@ -143,6 +143,17 @@ export const users = pgTable(
   ],
 );
 
+export const waitlistEntries = pgTable(
+  "waitlist_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    name: text("name"),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("waitlist_entries_email_idx").on(table.email)],
+);
+
 export const githubConnections = pgTable(
   "github_connections",
   {

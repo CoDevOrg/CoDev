@@ -376,6 +376,11 @@ export const designPartnerFeedbackInputSchema = z.object({
   workspaceId: identifierSchema.nullable(),
 });
 
+export const waitlistJoinInputSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(320),
+  name: z.string().trim().max(200).optional(),
+});
+
 export const environmentVariableNameSchema = z
   .string()
   .trim()
@@ -433,6 +438,7 @@ export type AgentActivityEvent = z.infer<typeof agentActivityEventSchema>;
 export type DesignPartnerFeedbackInput = z.infer<
   typeof designPartnerFeedbackInputSchema
 >;
+export type WaitlistJoinInput = z.infer<typeof waitlistJoinInputSchema>;
 export type EnvironmentVariable = z.infer<typeof environmentVariableSchema>;
 export type CreateEnvironmentVariable = z.infer<
   typeof createEnvironmentVariableSchema
