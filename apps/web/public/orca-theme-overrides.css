@@ -213,6 +213,20 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 /*
+ * "Add a setup script" worktree prompt. Orca offers to save a per-project
+ * command that it would run whenever it creates a worktree. CoDev provisions
+ * worktrees through the orchestrator rather than Orca's local hook runner,
+ * the sandbox does not persist the choice between sessions, and monorepo
+ * detection surfaces no confident command here — so the card reappears on
+ * every workspace open with an empty field and nothing actionable. Hidden
+ * via its stable authored attribute (not a minified class), so this rule
+ * does not drift when the vendored bundle is rebuilt.
+ */
+[data-setup-script-prompt-layer] {
+  display: none !important;
+}
+
+/*
  * Protect editor, terminal, and diff surfaces from background overrides so
  * syntax highlighting and terminal ANSI colors remain readable.
  */

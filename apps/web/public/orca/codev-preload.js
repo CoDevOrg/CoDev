@@ -16,6 +16,39 @@
             return function () {};
           };
         }
+        // CoDev runs the vendored IDE against a fresh, deliberately
+        // credential-free sandbox: a GitHub token is used only for the initial
+        // clone and is never persisted, so `gh` is never "logged in" inside
+        // the workspace. That is by design (see the orchestrator's orca
+        // backend), and CoDev shows pull requests, issues, and checks through
+        // its own UI rather than the GitHub CLI. Normalise the preflight
+        // result so Orca's Landing screen never renders a "GitHub CLI is not
+        // authenticated" banner the user cannot act on. Keyed off the stable
+        // window.api.preflight bridge contract so it survives vendored-bundle
+        // rebuilds.
+        if (
+          value &&
+          value.preflight &&
+          typeof value.preflight.check === "function" &&
+          !value.preflight.__codevGhNormalized
+        ) {
+          var preflight = value.preflight;
+          var originalCheck = preflight.check;
+          preflight.check = function () {
+            return Promise.resolve(
+              originalCheck.apply(preflight, arguments),
+            ).then(function (status) {
+              if (status && typeof status === "object" && status.gh) {
+                status.gh = Object.assign({}, status.gh, {
+                  installed: true,
+                  authenticated: true,
+                });
+              }
+              return status;
+            });
+          };
+          preflight.__codevGhNormalized = true;
+        }
       } catch (_error) {
         // Branding is best-effort and must never block the IDE from booting.
       }
