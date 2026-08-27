@@ -5,9 +5,17 @@ test("landing page explains CoDev and offers a clear start", async ({
 }) => {
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") {
-      consoleErrors.push(message.text());
+    if (message.type() !== "error") {
+      return;
     }
+    // `@vercel/analytics` requests `/_vercel/insights/script.js`, which only
+    // exists on Vercel's edge — it 404s under `next start` (CI, local), and
+    // that surfaces as a console error. It's an off-platform artifact, not an
+    // app defect, so don't fail the smoke check on it.
+    if (message.location().url.includes("/_vercel/insights/")) {
+      return;
+    }
+    consoleErrors.push(message.text());
   });
 
   await page.goto("/");
