@@ -95,7 +95,7 @@ and falls back to the `codev=1` fragment for callers that run before
 `web/main.tsx` sets the flag. This replaced the earlier, defeatable
 one-shot `codev-preload.js` localStorage seed.
 
-The launched agent CLI also has to come up *past its own first-run wizard*,
+The launched agent CLI also has to come up _past its own first-run wizard_,
 which the chat surface cannot drive. `seed_claude_config` in
 [`services/orchestrator/src/backend/orca.rs`](../../services/orchestrator/src/backend/orca.rs)
 writes the workspace Linux user's Claude Code config before `orca serve`
@@ -112,8 +112,8 @@ a permissions bypass is a security decision, not a first-run annoyance.
 ### Per-member agent subscriptions
 
 A workspace is shared, but a linked coding subscription is personal. One
-`orca serve` runs per workspace as one Linux user, so a credential in *that
-process's* environment is necessarily whichever member started the session —
+`orca serve` runs per workspace as one Linux user, so a credential in _that
+process's_ environment is necessarily whichever member started the session —
 which is what every other member's agents would then spend. Instead:
 
 1. `write_member_agent_credentials`
@@ -153,7 +153,7 @@ Model and reasoning-effort pickers for `codex`/`claude` come from the existing
 surface once a tab has a live PTY (`use-native-chat-session-options.ts`
 returned `null` while `targetPtyId` was absent, since a pre-PTY pick could not
 reach the already-queued startup command). CoDev opens the default chat tab
-with an empty composer *before* the paired host's PTY mirrors, so the patch
+with an empty composer _before_ the paired host's PTY mirrors, so the patch
 lifts that guard when `isCodevEmbedded()`: the surface is built in `'draft'`
 mode from the catalog defaults so the model/effort pills are visible from
 first paint, then re-created in `'live'` mode once the PTY arrives, which
