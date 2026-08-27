@@ -25,8 +25,10 @@ test("landing page explains CoDev and offers a clear start", async ({
       name: /Local changes should not be local knowledge/,
     }),
   ).toBeVisible();
+  // The redesigned landing page repeats this CTA (hero + audience panel), so
+  // scope to the primary hero action rather than matching every instance.
   await expect(
-    page.getByRole("link", { name: /Start building together/ }),
+    page.getByRole("link", { name: /Start building together/ }).first(),
   ).toHaveAttribute("href", "/sign-in");
   expect(consoleErrors).toEqual([]);
 });
