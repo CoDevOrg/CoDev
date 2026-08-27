@@ -57,7 +57,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --build src/vendor/orca && tsc --noEmit",
     "build": "expo export",
     "test": "echo \"no tests yet\"",
     "postinstall": "node scripts/build-terminal-webview-engine.mjs"
