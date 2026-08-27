@@ -65,6 +65,25 @@ from the user's existing authenticated GitHub installations. Choosing one
 creates and opens its dedicated CoDev workspace. GitHub credentials remain
 server-only and never cross the iframe bridge.
 
+### Default chat tab (agent-first workspace)
+
+Stock Orca opens a worktree on an idle terminal tab. CoDev workspaces are
+agent-first, so the CoDev patch (`src/renderer/src/web/codev-default-chat-tab.ts`,
+wired from `codev-project-bootstrap.ts` and `App.tsx`) opens the workspace's
+default checkout onto a **native chat tab** instead: right after the default
+checkout becomes the active worktree, it calls Orca's own
+`launchAgentInNewTab` (the same path the tab-bar quick-launch uses, so paired
+web-runtime sessions spawn the agent on the host correctly) with
+`promptDelivery: 'draft'` — the composer opens empty and editable, nothing is
+auto-submitted. It runs once per project handoff and is a no-op when the
+worktree already has an agent tab (a reload that mirrored a running session).
+The agent is `claude` by default; the parent can pin `claude` or `codex`
+through a new `codevDefaultAgent` pairing-fragment param
+(`buildOrcaIframeSource` → `readCodevBootstrap` → `window.__CODEV_DEFAULT_AGENT__`),
+which `WorkspaceHome` sets from the member's linked provider. The pre-existing
+`codev-preload.js` seeding of `experimentalNativeChat` /
+`openAgentTabsInChatByDefault` is what makes that launched tab render as chat.
+
 ## Branding patches (modify the vendored bundle directly)
 
 Unlike the theme bridge above, these edits touch files inside

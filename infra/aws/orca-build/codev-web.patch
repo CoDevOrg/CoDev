@@ -35,7 +35,7 @@ index c5b3e6d..c740715 100644
      return tab
    }
 diff --git a/src/main/runtime/rpc/methods/client-ui-schemas.ts b/src/main/runtime/rpc/methods/client-ui-schemas.ts
-index 4cb6e43..490d7f8 100644
+index 0e07476..8a4a3b2 100644
 --- a/src/main/runtime/rpc/methods/client-ui-schemas.ts
 +++ b/src/main/runtime/rpc/methods/client-ui-schemas.ts
 @@ -45,7 +45,8 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
@@ -49,10 +49,10 @@ index 4cb6e43..490d7f8 100644
  // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
  // schema validates their shape rather than enumerating them.
 diff --git a/src/main/runtime/rpc/methods/client-ui.test.ts b/src/main/runtime/rpc/methods/client-ui.test.ts
-index 718513c..f845b4b 100644
+index 2a4b17b..ac9d14b 100644
 --- a/src/main/runtime/rpc/methods/client-ui.test.ts
 +++ b/src/main/runtime/rpc/methods/client-ui.test.ts
-@@ -706,7 +706,7 @@ describe('client ui.set RPC', () => {
+@@ -705,7 +705,7 @@ describe('client UI RPC methods', () => {
      })
    })
  
@@ -62,10 +62,10 @@ index 718513c..f845b4b 100644
      async (rightSidebarTab) => {
        const runtime = {
 diff --git a/src/renderer/src/App.tsx b/src/renderer/src/App.tsx
-index 294fc4a..a8a38f9 100644
+index 294fc4a..d541012 100644
 --- a/src/renderer/src/App.tsx
 +++ b/src/renderer/src/App.tsx
-@@ -42,6 +42,12 @@ import {
+@@ -42,6 +42,13 @@ import {
    ContextMenuTrigger
  } from '@/components/ui/context-menu'
  import { useAppStore } from './store'
@@ -75,10 +75,11 @@ index 294fc4a..a8a38f9 100644
 +  isCodevProjectBootstrapReady,
 +  openCodevProject
 +} from './web/codev-project-bootstrap'
++import { launchCodevDefaultChatTab } from './web/codev-default-chat-tab'
  import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
  import { useShallow } from 'zustand/react/shallow'
  import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
-@@ -334,6 +340,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
+@@ -334,6 +341,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
  const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
  const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
  const Settings = lazy(() => import('./components/settings/Settings'))
@@ -86,7 +87,7 @@ index 294fc4a..a8a38f9 100644
  const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
  const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
  const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
-@@ -497,7 +504,12 @@ function App(): React.JSX.Element {
+@@ -497,7 +505,12 @@ function App(): React.JSX.Element {
      }))
    )
  
@@ -100,7 +101,7 @@ index 294fc4a..a8a38f9 100644
    const activeModal = useAppStore((s) => s.activeModal)
    const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
    const featureInteractions = useAppStore((s) => s.featureInteractions)
-@@ -521,6 +533,56 @@ function App(): React.JSX.Element {
+@@ -521,6 +534,57 @@ function App(): React.JSX.Element {
    const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
    const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
    const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -132,7 +133,8 @@ index 294fc4a..a8a38f9 100644
 +      store: useAppStore.getState(),
 +      getStore: useAppStore.getState,
 +      openDefaultCheckout: openProjectDefaultCheckout,
-+      activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar
++      activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar,
++      launchDefaultChatTab: launchCodevDefaultChatTab
 +    })
 +      .then((opened) => {
 +        window.parent.postMessage(
@@ -917,6 +919,482 @@ index 0000000..0d6cb67
 +    ...(input.strategy === 'merged' ? { mergedContents: input.mergedContents ?? '' } : {})
 +  })
 +}
+diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
+index e7d3eda..1e5c164 100644
+--- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
+@@ -304,6 +304,27 @@ describe('NativeChatSessionOptionPickers', () => {
+     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
+   })
+ 
++  it('keeps reasoning effort choices in native chat when the picker is driven behind it', async () => {
++    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
++    render(
++      <NativeChatSessionOptionPickers
++        surface={{ ...surface, setOption }}
++        snapshot={[
++          model(),
++          {
++            ...effort,
++            action: { type: 'agent-picker' }
++          }
++        ]}
++        isWorking={false}
++      />
++    )
++
++    expect(screen.queryByText('Choose in agent picker…')).toBeNull()
++    screen.getByRole('radio', { name: 'High' }).click()
++    await waitFor(() => expect(setOption).toHaveBeenCalledWith('effort', 'high'))
++  })
++
+   it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
+     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
+     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
+index 2b83d68..ac3db9a 100644
+--- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
+@@ -126,8 +126,9 @@ function DescriptorMenuRows(props: {
+       </DropdownMenuItem>
+     )
+   }
+-  // Why: agent-picker opens the TUI; it is not a set of radio choices.
+-  if (descriptor.action?.type === 'agent-picker') {
++  // Some agent pickers can be driven safely behind the native surface. Those
++  // expose their real choices here so the user never has to leave chat.
++  if (descriptor.action?.type === 'agent-picker' && descriptor.id !== 'effort') {
+     return (
+       <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
+         {translate(
+diff --git a/src/renderer/src/components/native-chat/NativeChatView.tsx b/src/renderer/src/components/native-chat/NativeChatView.tsx
+index 2fb4581..4a0cb26 100644
+--- a/src/renderer/src/components/native-chat/NativeChatView.tsx
++++ b/src/renderer/src/components/native-chat/NativeChatView.tsx
+@@ -53,6 +53,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
+ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
+ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+ import type { NativeChatViewProps } from './native-chat-view-types'
++import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
++import { assembleNativeChatSession } from './native-chat-session-assembler'
+ 
+ export type { NativeChatViewProps } from './native-chat-view-types'
+ 
+@@ -138,6 +140,35 @@ function NativeChatResolvedView({
+     transcriptPath,
+     runtimeEnvironmentId
+   })
++  const [terminalFallbackMessages, setTerminalFallbackMessages] = useState(() =>
++    agent === 'codex' ? codexTerminalScreenToMessages(readTerminalScreen?.() ?? null) : []
++  )
++  useEffect(() => {
++    if (agent !== 'codex' || !readTerminalScreen) {
++      setTerminalFallbackMessages([])
++      return
++    }
++    const refresh = (): void => {
++      setTerminalFallbackMessages(codexTerminalScreenToMessages(readTerminalScreen()))
++    }
++    refresh()
++    const timer = window.setInterval(refresh, 500)
++    return () => window.clearInterval(timer)
++  }, [agent, readTerminalScreen])
++  const sessionWithTerminalFallback = useMemo<typeof session>(() => {
++    if (terminalFallbackMessages.length === 0) return session
++    const assembled = assembleNativeChatSession({
++      sources: { transcript: session.messages, scrape: terminalFallbackMessages },
++      sessionId: session.sessionId,
++      agent: session.agent,
++      status: session.status,
++      ...(session.error ? { error: session.error } : {})
++    })
++    return {
++      ...session,
++      ...assembled
++    }
++  }, [session, terminalFallbackMessages])
+   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
+   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
+   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
+@@ -147,12 +178,12 @@ function NativeChatResolvedView({
+   const launchDraftSignal = useNativeChatLaunchDraftSignal({
+     terminalTabId,
+     agent,
+-    messages: session.messages,
+-    transcriptLoading: session.readPhase === 'loading'
++    messages: sessionWithTerminalFallback.messages,
++    transcriptLoading: sessionWithTerminalFallback.readPhase === 'loading'
+   })
+   // The live-session merge reconciles hooks with replayable transcript turn
+   // boundaries; all working consumers must use that one lifecycle decision.
+-  const liveWorking = session.status === 'working'
++  const liveWorking = sessionWithTerminalFallback.status === 'working'
+   // The agent's in-progress reply preview (hook), shown as a live streaming
+   // bubble while it works — before the completed turn flushes to the transcript.
+   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+@@ -224,20 +255,31 @@ function NativeChatResolvedView({
+   // Prune echoes whose real user turn is now in the transcript.
+   useEffect(() => {
+     setPending((prev) =>
+-      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
++      writePendingSendCache(
++        pendingScope,
++        prunePendingSends(prev, sessionWithTerminalFallback.messages)
++      )
+     )
+-  }, [session.messages, pendingScope])
++  }, [sessionWithTerminalFallback.messages, pendingScope])
+   useEffect(() => {
+-    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
++    if (
++      !paneLaunchPrompt ||
++      !shouldPruneLaunchPrompt(paneLaunchPrompt, sessionWithTerminalFallback.messages)
++    ) {
+       return
+     }
+     clearNativeChatLaunchPrompt(terminalTabId)
+-  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
++  }, [
++    clearNativeChatLaunchPrompt,
++    paneLaunchPrompt,
++    sessionWithTerminalFallback.messages,
++    terminalTabId
++  ])
+   const onOptimisticSend = useCallback(
+     (text: string, imagePaths?: string[]) => {
+       setWorkingInterrupted(false)
+       const sentAt = Date.now()
+-      const boundary = session.messages.at(-1)
++      const boundary = sessionWithTerminalFallback.messages.at(-1)
+       const entry: NativeChatPendingSend = {
+         id: nextNativeChatPendingSendId(sentAt),
+         text,
+@@ -249,7 +291,7 @@ function NativeChatResolvedView({
+       setPending(appendPendingSendCache(pendingScope, entry))
+       return entry.id
+     },
+-    [pendingScope, session.messages]
++    [pendingScope, sessionWithTerminalFallback.messages]
+   )
+   const onOptimisticSendCanceled = useCallback(
+     (pendingId: string) => {
+@@ -268,15 +310,18 @@ function NativeChatResolvedView({
+   )
+ 
+   const launchPromptMessage = useMemo(
+-    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
+-    [paneLaunchPrompt, session.messages]
++    () => launchPromptAsMessage(paneLaunchPrompt, sessionWithTerminalFallback.messages),
++    [paneLaunchPrompt, sessionWithTerminalFallback.messages]
+   )
+   const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
+     if (!launchPromptMessage) {
+-      return session
++      return sessionWithTerminalFallback
++    }
++    return {
++      ...sessionWithTerminalFallback,
++      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
+     }
+-    return { ...session, messages: [...session.messages, launchPromptMessage] }
+-  }, [launchPromptMessage, session])
++  }, [launchPromptMessage, sessionWithTerminalFallback])
+ 
+   const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
+     const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
+diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
+new file mode 100644
+index 0000000..7f84a6a
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from 'vitest'
++import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
++
++describe('codexTerminalScreenToMessages', () => {
++  it('extracts user prompts and completed Codex replies', () => {
++    const messages = codexTerminalScreenToMessages(`
++› /model gpt-5.6-luna
++• Model changed to gpt-5.6-luna high
++› hi
++• Hi! What would you like to work on?
++› Ask Codex to do anything
++gpt-5.6-luna high
++`)
++
++    expect(messages.map((message) => [message.role, message.blocks[0]])).toEqual([
++      ['user', { type: 'text', text: 'hi' }],
++      ['assistant', { type: 'text', text: 'Hi! What would you like to work on?' }]
++    ])
++  })
++
++  it('does not turn model notices into assistant chat', () => {
++    expect(
++      codexTerminalScreenToMessages('› /model gpt-5.6-luna\n• Model changed to gpt-5.6-luna high')
++    ).toEqual([])
++  })
++})
+diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
+new file mode 100644
+index 0000000..45c52d8
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
+@@ -0,0 +1,68 @@
++import type { NativeChatMessage } from '../../../../shared/native-chat-types'
++import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
++
++const CODEX_PROMPT = /^\s*›\s+(.*)$/
++const CODEX_REPLY = /^\s*•\s+(.*)$/
++
++function isComposerPlaceholder(value: string): boolean {
++  return /^(?:Ask Codex to|Type a message|Describe a task)/i.test(value)
++}
++
++/**
++ * Best-effort fallback for Codex's alternate-screen TUI when the structured
++ * transcript hook is unavailable. Only explicit Codex prompt/reply markers are
++ * accepted; status lines, model notices, and the composer placeholder are
++ * intentionally ignored.
++ */
++export function codexTerminalScreenToMessages(screen: string | null): NativeChatMessage[] {
++  if (!screen) return []
++
++  const messages: NativeChatMessage[] = []
++  let activeRole: 'user' | 'assistant' | null = null
++  let activeLines: string[] = []
++
++  const flush = (): void => {
++    const text = activeLines.join('\n').trim()
++    if (activeRole && text) {
++      messages.push({
++        id: `codex-screen-${messages.length}-${activeRole}-${text}`,
++        role: activeRole,
++        blocks: [{ type: 'text', text }],
++        timestamp: null,
++        source: 'scrape'
++      })
++    }
++    activeRole = null
++    activeLines = []
++  }
++
++  for (const line of stripScrollbackAnsi(screen).split('\n')) {
++    const prompt = line.match(CODEX_PROMPT)?.[1]?.trim()
++    if (prompt !== undefined) {
++      flush()
++      if (prompt && !prompt.startsWith('/') && !isComposerPlaceholder(prompt)) {
++        activeRole = 'user'
++        activeLines = [prompt]
++      }
++      continue
++    }
++
++    const reply = line.match(CODEX_REPLY)?.[1]?.trim()
++    if (reply !== undefined) {
++      flush()
++      // Codex uses bullets for both assistant prose and local model/status
++      // notices. A reply is only conversational when it follows a user prompt.
++      if (messages.at(-1)?.role === 'user') {
++        activeRole = 'assistant'
++        activeLines = [reply]
++      }
++      continue
++    }
++
++    if (activeRole && line.trim()) {
++      activeLines.push(line.trim())
++    }
++  }
++  flush()
++  return messages
++}
+diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
+index 4a90af7..64a6889 100644
+--- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
++++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
+@@ -121,6 +121,44 @@ describe('native chat PTY session options', () => {
+     })
+   })
+ 
++  it('applies a Codex effort choice without opening the terminal picker surface', async () => {
++    seedNativeChatAppliedSessionOptions('pty-codex', 'codex', {
++      model: 'gpt-5.6-terra',
++      effort: 'medium'
++    })
++    const applyAgentPickerChoice = vi.fn().mockResolvedValue(undefined)
++    const persist = vi.fn()
++    const surface = createNativeChatPtySessionOptions({
++      agent: 'codex',
++      scopeKey: 'pty-codex',
++      mode: 'live',
++      dispatchCommand: vi.fn(),
++      applyAgentPickerChoice,
++      persistSelection: persist
++    })!
++
++    await surface.setOption('effort', 'high')
++
++    expect(applyAgentPickerChoice).toHaveBeenCalledWith({
++      optionId: 'effort',
++      value: 'high',
++      modelId: 'gpt-5.6-terra'
++    })
++    expect(persist).toHaveBeenCalledWith({
++      optionId: 'effort',
++      value: 'high',
++      modelId: 'gpt-5.6-terra'
++    })
++    expect(surface.getSnapshot()).toEqual(
++      expect.arrayContaining([
++        expect.objectContaining({
++          id: 'effort',
++          kind: expect.objectContaining({ currentValue: 'high' })
++        })
++      ])
++    )
++  })
++
+   it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
+     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+       model: 'sonnet',
+diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
+index e1a1480..81a8a01 100644
+--- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
++++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
+@@ -48,6 +48,11 @@ export type CreateNativeChatPtySessionOptionsArgs = {
+   reportedValues?: Record<string, SessionOptionValue> | null
+   dispatchCommand: NativeChatSessionOptionDispatchCommand
+   onAgentPicker?: () => void
++  applyAgentPickerChoice?: (args: {
++    optionId: string
++    value: SessionOptionValue
++    modelId: string | null
++  }) => Promise<void>
+   persistSelection?: PersistSelection
+   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
+ }
+@@ -116,6 +121,7 @@ export function createNativeChatPtySessionOptions(
+     getRecord: () => record,
+     dispatchCommand: args.dispatchCommand,
+     onAgentPicker: args.onAgentPicker,
++    applyAgentPickerChoice: args.applyAgentPickerChoice,
+     persistSelection: args.persistSelection,
+     onDraftValuesChanged: args.onDraftValuesChanged,
+     publish,
+diff --git a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
+index df96ea2..721f48b 100644
+--- a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
++++ b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
+@@ -33,6 +33,11 @@ type SessionOptionApplyContext = {
+   getRecord: () => NativeChatSessionOptionRecord
+   dispatchCommand: NativeChatSessionOptionDispatchCommand
+   onAgentPicker?: () => void
++  applyAgentPickerChoice?: (args: {
++    optionId: string
++    value: SessionOptionValue
++    modelId: string | null
++  }) => Promise<void>
+   persistSelection?: (args: {
+     modelId: string
+     optionId: string
+@@ -193,7 +198,12 @@ async function applySetOption(
+   }
+   const { apply, modelId: previousModelId } = resolved
+   if (ctx.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
+-    throw new Error('This option must be changed in the agent picker.')
++    if (!ctx.applyAgentPickerChoice) {
++      throw new Error('This option must be changed in the agent picker.')
++    }
++    await ctx.applyAgentPickerChoice({ optionId: id, value, modelId: previousModelId })
++    ctx.setTrackedValue(id, value, 'applied')
++    return finish(ctx, { modelId: previousModelId, optionId: id, value })
+   }
+ 
+   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
+index a722a1f..2207991 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
+@@ -1,7 +1,12 @@
+ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
++import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
++import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+ import type { AgentType } from '../../../../shared/agent-status-types'
+ import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
+-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
++import type {
++  SessionOptionDescriptor,
++  SessionOptionValue
++} from '../../../../shared/native-chat-session-options'
+ import { useAppStore } from '../../store'
+ import {
+   createNativeChatPtySessionOptions,
+@@ -23,6 +28,36 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
+ const subscribeEmpty = (): (() => void) => () => {}
+ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
+ 
++const CODEX_EFFORT_INDEX: Record<string, number> = {
++  low: 0,
++  medium: 1,
++  high: 2,
++  xhigh: 3,
++  max: 4,
++  ultra: 5
++}
++
++async function waitForTerminalText(
++  readTerminalScreen: (() => string | null) | undefined,
++  expected: string,
++  timeoutMs = 3000
++): Promise<void> {
++  const deadline = Date.now() + timeoutMs
++  while (Date.now() < deadline) {
++    if (readTerminalScreen?.()?.includes(expected)) return
++    await new Promise((resolve) => setTimeout(resolve, 50))
++  }
++  throw new Error(`Codex did not open ${expected}.`)
++}
++
++export function codexEffortPickerInput(value: SessionOptionValue): string {
++  const index = CODEX_EFFORT_INDEX[String(value)]
++  if (index === undefined) {
++    throw new Error(`Codex does not support reasoning effort ${String(value)} here.`)
++  }
++  return `\u001b[H${'\u001b[B'.repeat(index)}\r`
++}
++
+ export function useNativeChatSessionOptions(args: {
+   agent: AgentType
+   terminalTabId: string
+@@ -61,6 +96,20 @@ export function useNativeChatSessionOptions(args: {
+           )
+         : null
+     let settingsWrite = Promise.resolve()
++    const applyAgentPickerChoice =
++      agent === 'codex'
++        ? async ({ optionId, value }: { optionId: string; value: SessionOptionValue }) => {
++            if (optionId !== 'effort') {
++              throw new Error('This Codex option is not available in chat.')
++            }
++            await dispatchCommand('/model')
++            await waitForTerminalText(readTerminalScreen, 'Select Model and Effort')
++            const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
++            sendRuntimePtyInput(settings, targetPtyId, '\r')
++            await waitForTerminalText(readTerminalScreen, 'Select Reasoning Level')
++            sendRuntimePtyInput(settings, targetPtyId, codexEffortPickerInput(value))
++          }
++        : undefined
+     return createNativeChatPtySessionOptions({
+       agent,
+       scopeKey,
+@@ -73,6 +122,7 @@ export function useNativeChatSessionOptions(args: {
+       reportedValues,
+       dispatchCommand,
+       onAgentPicker,
++      applyAgentPickerChoice,
+       persistSelection: async ({ modelId, optionId, value }) => {
+         // Why: read the live persisted defaults at write time (after any prior
+         // write in this chain settles) and merge only this selection onto them,
 diff --git a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx b/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
 index e048925..ba0cc30 100644
 --- a/src/renderer/src/components/right-sidebar/AiVaultPanel.tsx
@@ -6633,10 +7111,10 @@ index 2ebecc5..32289ea 100644
          <Tooltip>
            <TooltipTrigger asChild>
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
-index 5ecc70a..d9b63d5 100644
+index 5ecc70a..a92e4f7 100644
 --- a/src/renderer/src/env.d.ts
 +++ b/src/renderer/src/env.d.ts
-@@ -67,6 +67,11 @@ declare global {
+@@ -67,6 +67,12 @@ declare global {
      | undefined
    // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
    interface Window {
@@ -6644,6 +7122,7 @@ index 5ecc70a..d9b63d5 100644
 +    __CODEV_PROJECT_PATH__?: string
 +    __CODEV_PROJECT_KIND__?: 'git' | 'folder'
 +    __CODEV_PROJECT_NAME__?: string
++    __CODEV_DEFAULT_AGENT__?: 'claude' | 'codex'
 +    __CODEV_SETTINGS_ONLY__?: boolean
      __paneManagers?: Map<string, PaneManager>
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
@@ -6693,10 +7172,10 @@ index 9b639b0..8fc68ec 100644
        } else {
 diff --git a/src/renderer/src/web/codev-bootstrap.test.ts b/src/renderer/src/web/codev-bootstrap.test.ts
 new file mode 100644
-index 0000000..47df499
+index 0000000..4834882
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.test.ts
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,63 @@
 +import { describe, expect, it } from 'vitest'
 +import { readCodevBootstrap } from './codev-bootstrap'
 +
@@ -6710,6 +7189,29 @@ index 0000000..47df499
 +      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
 +      projectKind: 'git',
 +      projectName: 'yousef20920/CoDev'
++    })
++  })
++
++  it('carries a pinned default chat agent from the pairing fragment', () => {
++    expect(
++      readCodevBootstrap({
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevDefaultAgent=codex'
++      } as Location)
++    ).toEqual({
++      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++      projectKind: 'git',
++      defaultAgent: 'codex'
++    })
++  })
++
++  it('ignores an unknown default chat agent instead of failing the bootstrap', () => {
++    expect(
++      readCodevBootstrap({
++        hash: '#pairing=secret&codev=1&codevProject=%2Fsrv%2Fcodev%2Fworkspaces%2Fc1f9fe13-6881-44a6-adbd-96bc5a946afa&codevProjectKind=git&codevDefaultAgent=cursor'
++      } as Location)
++    ).toEqual({
++      projectPath: '/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa',
++      projectKind: 'git'
 +    })
 +  })
 +
@@ -6739,20 +7241,37 @@ index 0000000..47df499
 +})
 diff --git a/src/renderer/src/web/codev-bootstrap.ts b/src/renderer/src/web/codev-bootstrap.ts
 new file mode 100644
-index 0000000..7fe10a9
+index 0000000..fd8209a
 --- /dev/null
 +++ b/src/renderer/src/web/codev-bootstrap.ts
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,67 @@
++/**
++ * Agents CoDev is allowed to open the workspace's default chat tab with. Kept
++ * narrow on purpose: only the native-chat-rendered CLIs whose credentials the
++ * CoDev runtime host injects (see `docs/provider-oauth-openai-codex.md` and the
++ * linked Anthropic credential injection).
++ */
++export type CodevDefaultChatAgent = 'claude' | 'codex'
++
 +export type CodevBootstrap = {
 +  projectPath: string
 +  projectKind: 'git' | 'folder'
 +  projectName?: string
++  /**
++   * Which agent the workspace's default chat tab launches with. Absent when the
++   * pairing fragment does not pin one; consumers fall back to their own default.
++   */
++  defaultAgent?: CodevDefaultChatAgent
 +  /**
 +   * Personal settings surface: CoDev opened this client outside any workspace
 +   * to render the signed-in member's own settings, so workspace-scoped
 +   * settings and the workspace chrome are hidden.
 +   */
 +  settingsOnly?: boolean
++}
++
++function readDefaultAgent(value: string | null): CodevDefaultChatAgent | null {
++  return value === 'claude' || value === 'codex' ? value : null
 +}
 +
 +// codev-orchestrator validates every session's project root against one
@@ -6773,6 +7292,7 @@ index 0000000..7fe10a9
 +  const projectPath = params.get('codevProject')
 +  const projectKind = params.get('codevProjectKind')
 +  const projectName = params.get('codevProjectName')
++  const defaultAgent = readDefaultAgent(params.get('codevDefaultAgent'))
 +  const settingsOnly = params.get('codevSettingsOnly') === '1'
 +  if (!projectPath || (projectKind !== 'git' && projectKind !== 'folder')) {
 +    return null
@@ -6788,6 +7308,7 @@ index 0000000..7fe10a9
 +    projectPath,
 +    projectKind,
 +    ...(projectName ? { projectName } : {}),
++    ...(defaultAgent ? { defaultAgent } : {}),
 +    ...(settingsOnly ? { settingsOnly: true } : {})
 +  }
 +}
@@ -7310,12 +7831,194 @@ index 0000000..7e003a6
 +  singleton?.dispose()
 +  singleton = null
 +}
+diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
+new file mode 100644
+index 0000000..729bfcd
+--- /dev/null
++++ b/src/renderer/src/web/codev-default-chat-tab.test.ts
+@@ -0,0 +1,107 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++
++const launchAgentInNewTab = vi.fn()
++const getState = vi.fn()
++
++vi.mock('@/lib/launch-agent-in-new-tab', () => ({
++  launchAgentInNewTab: (...args: unknown[]) => launchAgentInNewTab(...args)
++}))
++vi.mock('@/store', () => ({
++  useAppStore: { getState: () => getState() }
++}))
++
++import {
++  CODEV_DEFAULT_CHAT_AGENT,
++  codevDefaultChatAgent,
++  launchCodevDefaultChatTab,
++  worktreeHasAgentTab
++} from './codev-default-chat-tab'
++
++function fakeWindow(overrides: Partial<Window>): Window {
++  return overrides as Window
++}
++
++afterEach(() => {
++  vi.clearAllMocks()
++})
++
++describe('codevDefaultChatAgent', () => {
++  it('is null outside CoDev-embedded mode', () => {
++    expect(codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: false }))).toBeNull()
++  })
++
++  it('falls back to Claude when the fragment pins nothing', () => {
++    expect(codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: true }))).toBe(
++      CODEV_DEFAULT_CHAT_AGENT
++    )
++  })
++
++  it('honors a pinned Codex default', () => {
++    expect(
++      codevDefaultChatAgent(fakeWindow({ __CODEV_EMBEDDED__: true, __CODEV_DEFAULT_AGENT__: 'codex' }))
++    ).toBe('codex')
++  })
++})
++
++describe('worktreeHasAgentTab', () => {
++  it('is true when a legacy tab already carries a launch agent', () => {
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1' }, { id: 't2', launchAgent: 'claude' }] },
++      unifiedTabsByWorktree: {}
++    })
++    expect(worktreeHasAgentTab('wt-1')).toBe(true)
++  })
++
++  it('is true when a unified tab is already in chat view', () => {
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1' }] },
++      unifiedTabsByWorktree: { 'wt-1': [{ id: 't1', viewMode: 'chat' }] }
++    })
++    expect(worktreeHasAgentTab('wt-1')).toBe(true)
++  })
++
++  it('is false for a worktree with only plain terminal tabs', () => {
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1' }] },
++      unifiedTabsByWorktree: { 'wt-1': [{ id: 't1', viewMode: 'terminal' }] }
++    })
++    expect(worktreeHasAgentTab('wt-1')).toBe(false)
++  })
++})
++
++describe('launchCodevDefaultChatTab', () => {
++  it('launches the default agent as an editable draft in the worktree', () => {
++    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: true }))
++    getState.mockReturnValue({ tabsByWorktree: {}, unifiedTabsByWorktree: {} })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++
++    expect(launchAgentInNewTab).toHaveBeenCalledWith({
++      agent: 'claude',
++      worktreeId: 'wt-1',
++      promptDelivery: 'draft',
++      launchSource: 'new_workspace_composer'
++    })
++    vi.unstubAllGlobals()
++  })
++
++  it('does nothing when the worktree already has an agent tab', () => {
++    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: true }))
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
++      unifiedTabsByWorktree: {}
++    })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++
++    expect(launchAgentInNewTab).not.toHaveBeenCalled()
++    vi.unstubAllGlobals()
++  })
++
++  it('does nothing outside CoDev-embedded mode', () => {
++    vi.stubGlobal('window', fakeWindow({ __CODEV_EMBEDDED__: false }))
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++    expect(launchAgentInNewTab).not.toHaveBeenCalled()
++    vi.unstubAllGlobals()
++  })
++})
+diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
+new file mode 100644
+index 0000000..1c8044b
+--- /dev/null
++++ b/src/renderer/src/web/codev-default-chat-tab.ts
+@@ -0,0 +1,63 @@
++import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
++import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
++import { useAppStore } from '@/store'
++import type { TuiAgent } from '../../../shared/types'
++import type { CodevDefaultChatAgent } from './codev-bootstrap'
++
++/**
++ * The agent CoDev opens a workspace's default chat tab with when the pairing
++ * fragment does not pin one. Claude is the safe default: its credential is
++ * injected into every CoDev runtime host, and it renders in the native chat
++ * surface.
++ */
++export const CODEV_DEFAULT_CHAT_AGENT: CodevDefaultChatAgent = 'claude'
++
++/**
++ * Resolve the agent for the workspace's default chat tab. Returns `null`
++ * outside CoDev-embedded mode so the caller stays a no-op for stock Orca.
++ */
++export function codevDefaultChatAgent(win: Window = window): TuiAgent | null {
++  if (!win.__CODEV_EMBEDDED__) {
++    return null
++  }
++  const pinned = win.__CODEV_DEFAULT_AGENT__
++  const agent: TuiAgent = pinned === 'claude' || pinned === 'codex' ? pinned : CODEV_DEFAULT_CHAT_AGENT
++  return isNativeChatSupportedAgent(agent) ? agent : null
++}
++
++/**
++ * True when the worktree already owns an agent tab — a reload that mirrored a
++ * still-running session, or a chat tab this bootstrap opened on a previous
++ * pass. Opening another default chat tab on top of it would duplicate the
++ * surface, so the caller skips.
++ */
++export function worktreeHasAgentTab(worktreeId: string): boolean {
++  const state = useAppStore.getState()
++  const legacyTabs = state.tabsByWorktree[worktreeId] ?? []
++  if (legacyTabs.some((tab) => Boolean(tab.launchAgent))) {
++    return true
++  }
++  const unifiedTabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
++  return unifiedTabs.some((tab) => tab.viewMode === 'chat')
++}
++
++/**
++ * Open the workspace's default native chat tab in the just-activated worktree.
++ * No-op outside CoDev-embedded mode or when the worktree already has an agent
++ * tab. Reuses the same launch path as the tab-bar quick-launch so paired
++ * (web-runtime) sessions spawn the agent on the host correctly.
++ */
++export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }): void {
++  const agent = codevDefaultChatAgent()
++  if (!agent || worktreeHasAgentTab(worktreeId)) {
++    return
++  }
++  launchAgentInNewTab({
++    agent,
++    worktreeId,
++    // Leave the composer empty and editable — the member types the first
++    // message; nothing is auto-submitted.
++    promptDelivery: 'draft',
++    launchSource: 'new_workspace_composer'
++  })
++}
 diff --git a/src/renderer/src/web/codev-project-bootstrap.test.ts b/src/renderer/src/web/codev-project-bootstrap.test.ts
 new file mode 100644
-index 0000000..0d1ff9b
+index 0000000..203e5cb
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.test.ts
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,288 @@
 +import { describe, expect, it, vi } from 'vitest'
 +import { isCodevProjectBootstrapReady, openCodevProject } from './codev-project-bootstrap'
 +
@@ -7419,6 +8122,65 @@ index 0000000..0d1ff9b
 +      'worktree-1',
 +      'ssh:private-host'
 +    )
++  })
++
++  it('opens the default chat tab once, after the checkout becomes active', async () => {
++    const store = createStore([
++      { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
++    ])
++    store.worktreesByRepo['repo-1'] = [
++      { id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }
++    ]
++    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      store.activeWorktreeId = worktreeId
++    })
++    const launchDefaultChatTab = vi.fn()
++
++    await expect(
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar,
++        launchDefaultChatTab
++      })
++    ).resolves.toBe(true)
++
++    expect(launchDefaultChatTab).toHaveBeenCalledTimes(1)
++    expect(launchDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-1' })
++  })
++
++  it('completes the handoff even when opening the default chat tab throws', async () => {
++    const store = createStore([
++      { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
++    ])
++    store.worktreesByRepo['repo-1'] = [
++      { id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }
++    ]
++    const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
++    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
++      store.activeWorktreeId = worktreeId
++    })
++    const launchDefaultChatTab = vi.fn(() => {
++      throw new Error('agent launch failed')
++    })
++
++    await expect(
++      openCodevProject({
++        projectPath,
++        projectKind: 'git',
++        store,
++        getStore: () => store,
++        openDefaultCheckout,
++        activateDefaultCheckoutFromSidebar,
++        launchDefaultChatTab
++      })
++    ).resolves.toBe(true)
++
++    expect(launchDefaultChatTab).toHaveBeenCalledTimes(1)
 +  })
 +
 +  it('adds and activates a new project as one startup operation', async () => {
@@ -7547,10 +8309,10 @@ index 0000000..0d1ff9b
 +})
 diff --git a/src/renderer/src/web/codev-project-bootstrap.ts b/src/renderer/src/web/codev-project-bootstrap.ts
 new file mode 100644
-index 0000000..0aa361a
+index 0000000..1d90be6
 --- /dev/null
 +++ b/src/renderer/src/web/codev-project-bootstrap.ts
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,142 @@
 +type CodevProjectRepo = {
 +  id: string
 +  path: string
@@ -7586,6 +8348,17 @@ index 0000000..0aa361a
 +  executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
 +}) => Promise<void>
 +
++/**
++ * Opens the workspace's default chat tab in the just-activated worktree.
++ *
++ * CoDev workspaces are agent-first: the surface a member lands on when a
++ * workspace opens is a native chat, not an idle shell. This runs once per
++ * project handoff, immediately after the default checkout becomes the active
++ * worktree, and is a no-op when that worktree already has an agent tab (e.g. a
++ * reload that mirrored a still-running session).
++ */
++type LaunchDefaultChatTab = (args: { worktreeId: string }) => void | Promise<void>
++
 +const CODEV_ACTIVATION_ATTEMPTS = 46
 +const CODEV_ACTIVATION_RETRY_DELAY_MS = 2_000
 +
@@ -7611,6 +8384,7 @@ index 0000000..0aa361a
 +  getStore,
 +  openDefaultCheckout,
 +  activateDefaultCheckoutFromSidebar,
++  launchDefaultChatTab,
 +  waitForActivationRetry = waitForCodevActivationRetry
 +}: {
 +  projectPath: string
@@ -7620,6 +8394,7 @@ index 0000000..0aa361a
 +  getStore: () => CodevProjectStore
 +  openDefaultCheckout: OpenDefaultCheckout
 +  activateDefaultCheckoutFromSidebar: ActivateDefaultCheckoutFromSidebar
++  launchDefaultChatTab?: LaunchDefaultChatTab
 +  waitForActivationRetry?: () => Promise<void>
 +}): Promise<boolean> {
 +  const repo =
@@ -7630,6 +8405,21 @@ index 0000000..0aa361a
 +  }
 +  if (projectName && repo.displayName !== projectName) {
 +    await store.updateRepo(repo.id, { displayName: projectName })
++  }
++
++  let defaultChatTabLaunched = false
++  const finishActivation = async (worktreeId: string): Promise<true> => {
++    if (!defaultChatTabLaunched) {
++      defaultChatTabLaunched = true
++      try {
++        await launchDefaultChatTab?.({ worktreeId })
++      } catch (error) {
++        // The workspace is usable without the chat tab; the member can open one
++        // by hand. Never fail the whole handoff on it.
++        console.warn('CoDev could not open the default chat tab:', error)
++      }
++    }
++    return true
 +  }
 +
 +  for (let attempt = 0; attempt < CODEV_ACTIVATION_ATTEMPTS; attempt += 1) {
@@ -7646,14 +8436,14 @@ index 0000000..0aa361a
 +      )
 +      if (defaultCheckout) {
 +        if (getStore().activeWorktreeId === defaultCheckout.id) {
-+          return true
++          return finishActivation(defaultCheckout.id)
 +        }
 +        await activateDefaultCheckoutFromSidebar(
 +          defaultCheckout.id,
 +          defaultCheckout.hostId ?? repo.executionHostId ?? undefined
 +        )
 +        if (getStore().activeWorktreeId === defaultCheckout.id) {
-+          return true
++          return finishActivation(defaultCheckout.id)
 +        }
 +      }
 +    } catch (error) {
@@ -8087,10 +8877,10 @@ index 0000000..05d7117
 +  })
 +}
 diff --git a/src/renderer/src/web/main.tsx b/src/renderer/src/web/main.tsx
-index eae3a54..eeedb6c 100644
+index eae3a54..e16bbed 100644
 --- a/src/renderer/src/web/main.tsx
 +++ b/src/renderer/src/web/main.tsx
-@@ -19,10 +19,17 @@ import {
+@@ -19,10 +19,18 @@ import {
  import { installWebPreloadApi } from './web-preload-api'
  import { I18nProvider } from '../i18n/I18nProvider'
  import { translate } from '../i18n/i18n'
@@ -8104,257 +8894,11 @@ index eae3a54..eeedb6c 100644
 +  window.__CODEV_PROJECT_PATH__ = codevBootstrap?.projectPath
 +  window.__CODEV_PROJECT_KIND__ = codevBootstrap?.projectKind
 +  window.__CODEV_PROJECT_NAME__ = codevBootstrap?.projectName
++  window.__CODEV_DEFAULT_AGENT__ = codevBootstrap?.defaultAgent
 +  window.__CODEV_SETTINGS_ONLY__ = codevBootstrap?.settingsOnly === true
    const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
-diff --git a/src/shared/types.ts b/src/shared/types.ts
-index cfa041d..84fe0a6 100644
---- a/src/shared/types.ts
-+++ b/src/shared/types.ts
-@@ -3344,6 +3344,7 @@ export type RightSidebarTab =
-   | 'source-control'
-   | 'checks'
-   | 'ports'
-+  | 'activity'
-   // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
-   // static union stays closed while plugin tabs remain type-representable.
-   | `plugin:${string}`
-diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
-index e7d3eda..1e5c164 100644
---- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
-+++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.test.tsx
-@@ -304,6 +304,27 @@ describe('NativeChatSessionOptionPickers', () => {
-     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
-   })
- 
-+  it('keeps reasoning effort choices in native chat when the picker is driven behind it', async () => {
-+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
-+    render(
-+      <NativeChatSessionOptionPickers
-+        surface={{ ...surface, setOption }}
-+        snapshot={[
-+          model(),
-+          {
-+            ...effort,
-+            action: { type: 'agent-picker' }
-+          }
-+        ]}
-+        isWorking={false}
-+      />
-+    )
-+
-+    expect(screen.queryByText('Choose in agent picker…')).toBeNull()
-+    screen.getByRole('radio', { name: 'High' }).click()
-+    await waitFor(() => expect(setOption).toHaveBeenCalledWith('effort', 'high'))
-+  })
-+
-   it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
-     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
-     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
-diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-index 2b83d68..b71acc1 100644
---- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-+++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-@@ -126,8 +126,9 @@ function DescriptorMenuRows(props: {
-       </DropdownMenuItem>
-     )
-   }
--  // Why: agent-picker opens the TUI; it is not a set of radio choices.
--  if (descriptor.action?.type === 'agent-picker') {
-+  // Some agent pickers can be driven safely behind the native surface. Those
-+  // expose their real choices here so the user never has to leave chat.
-+  if (descriptor.action?.type === 'agent-picker' && descriptor.id !== 'effort') {
-     return (
-       <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
-         {translate(
-diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
-index 4a90af7..64a6889 100644
---- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.test.ts
-@@ -121,6 +121,44 @@ describe('native chat PTY session options', () => {
-     })
-   })
- 
-+  it('applies a Codex effort choice without opening the terminal picker surface', async () => {
-+    seedNativeChatAppliedSessionOptions('pty-codex', 'codex', {
-+      model: 'gpt-5.6-terra',
-+      effort: 'medium'
-+    })
-+    const applyAgentPickerChoice = vi.fn().mockResolvedValue(undefined)
-+    const persist = vi.fn()
-+    const surface = createNativeChatPtySessionOptions({
-+      agent: 'codex',
-+      scopeKey: 'pty-codex',
-+      mode: 'live',
-+      dispatchCommand: vi.fn(),
-+      applyAgentPickerChoice,
-+      persistSelection: persist
-+    })!
-+
-+    await surface.setOption('effort', 'high')
-+
-+    expect(applyAgentPickerChoice).toHaveBeenCalledWith({
-+      optionId: 'effort',
-+      value: 'high',
-+      modelId: 'gpt-5.6-terra'
-+    })
-+    expect(persist).toHaveBeenCalledWith({
-+      optionId: 'effort',
-+      value: 'high',
-+      modelId: 'gpt-5.6-terra'
-+    })
-+    expect(surface.getSnapshot()).toEqual(
-+      expect.arrayContaining([
-+        expect.objectContaining({
-+          id: 'effort',
-+          kind: expect.objectContaining({ currentValue: 'high' })
-+        })
-+      ])
-+    )
-+  })
-+
-   it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
-     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-       model: 'sonnet',
-diff --git a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
-index e1a1480..81a8a01 100644
---- a/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-pty-session-options.ts
-@@ -48,6 +48,11 @@ export type CreateNativeChatPtySessionOptionsArgs = {
-   reportedValues?: Record<string, SessionOptionValue> | null
-   dispatchCommand: NativeChatSessionOptionDispatchCommand
-   onAgentPicker?: () => void
-+  applyAgentPickerChoice?: (args: {
-+    optionId: string
-+    value: SessionOptionValue
-+    modelId: string | null
-+  }) => Promise<void>
-   persistSelection?: PersistSelection
-   onDraftValuesChanged?: (values: Record<string, SessionOptionValue>) => void
- }
-@@ -116,6 +121,7 @@ export function createNativeChatPtySessionOptions(
-     getRecord: () => record,
-     dispatchCommand: args.dispatchCommand,
-     onAgentPicker: args.onAgentPicker,
-+    applyAgentPickerChoice: args.applyAgentPickerChoice,
-     persistSelection: args.persistSelection,
-     onDraftValuesChanged: args.onDraftValuesChanged,
-     publish,
-diff --git a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
-index df96ea2..721f48b 100644
---- a/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-session-option-apply.ts
-@@ -33,6 +33,11 @@ type SessionOptionApplyContext = {
-   getRecord: () => NativeChatSessionOptionRecord
-   dispatchCommand: NativeChatSessionOptionDispatchCommand
-   onAgentPicker?: () => void
-+  applyAgentPickerChoice?: (args: {
-+    optionId: string
-+    value: SessionOptionValue
-+    modelId: string | null
-+  }) => Promise<void>
-   persistSelection?: (args: {
-     modelId: string
-     optionId: string
-@@ -193,7 +198,12 @@ async function applySetOption(
-   }
-   const { apply, modelId: previousModelId } = resolved
-   if (ctx.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
--    throw new Error('This option must be changed in the agent picker.')
-+    if (!ctx.applyAgentPickerChoice) {
-+      throw new Error('This option must be changed in the agent picker.')
-+    }
-+    await ctx.applyAgentPickerChoice({ optionId: id, value, modelId: previousModelId })
-+    ctx.setTrackedValue(id, value, 'applied')
-+    return finish(ctx, { modelId: previousModelId, optionId: id, value })
-   }
- 
-   const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
-diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
-index a722a1f..0280172 100644
---- a/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
-+++ b/src/renderer/src/components/native-chat/use-native-chat-session-options.ts
-@@ -1,7 +1,12 @@
- import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-+import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
- import type { AgentType } from '../../../../shared/agent-status-types'
- import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
--import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-+import type {
-+  SessionOptionDescriptor,
-+  SessionOptionValue
-+} from '../../../../shared/native-chat-session-options'
- import { useAppStore } from '../../store'
- import {
-   createNativeChatPtySessionOptions,
-@@ -23,6 +28,36 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
- const subscribeEmpty = (): (() => void) => () => {}
- const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
- 
-+const CODEX_EFFORT_INDEX: Record<string, number> = {
-+  low: 0,
-+  medium: 1,
-+  high: 2,
-+  xhigh: 3,
-+  max: 4,
-+  ultra: 5
-+}
-+
-+async function waitForTerminalText(
-+  readTerminalScreen: (() => string | null) | undefined,
-+  expected: string,
-+  timeoutMs = 3000
-+): Promise<void> {
-+  const deadline = Date.now() + timeoutMs
-+  while (Date.now() < deadline) {
-+    if (readTerminalScreen?.()?.includes(expected)) return
-+    await new Promise((resolve) => setTimeout(resolve, 50))
-+  }
-+  throw new Error(`Codex did not open ${expected}.`)
-+}
-+
-+export function codexEffortPickerInput(value: SessionOptionValue): string {
-+  const index = CODEX_EFFORT_INDEX[String(value)]
-+  if (index === undefined) {
-+    throw new Error(`Codex does not support reasoning effort ${String(value)} here.`)
-+  }
-+  return `\u001b[H${'\u001b[B'.repeat(index)}\r`
-+}
-+
- export function useNativeChatSessionOptions(args: {
-   agent: AgentType
-   terminalTabId: string
-@@ -61,6 +96,20 @@ export function useNativeChatSessionOptions(args: {
-           )
-         : null
-     let settingsWrite = Promise.resolve()
-+    const applyAgentPickerChoice =
-+      agent === 'codex'
-+        ? async ({ optionId, value }: { optionId: string; value: SessionOptionValue }) => {
-+            if (optionId !== 'effort') {
-+              throw new Error('This Codex option is not available in chat.')
-+            }
-+            await dispatchCommand('/model')
-+            await waitForTerminalText(readTerminalScreen, 'Select Model and Effort')
-+            const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-+            sendRuntimePtyInput(settings, targetPtyId, '\r')
-+            await waitForTerminalText(readTerminalScreen, 'Select Reasoning Level')
-+            sendRuntimePtyInput(settings, targetPtyId, codexEffortPickerInput(value))
-+          }
-+        : undefined
-     return createNativeChatPtySessionOptions({
-       agent,
-       scopeKey,
-@@ -73,6 +122,7 @@ export function useNativeChatSessionOptions(args: {
-       reportedValues,
-       dispatchCommand,
-       onAgentPicker,
-+      applyAgentPickerChoice,
-       persistSelection: async ({ modelId, optionId, value }) => {
-         // Why: read the live persisted defaults at write time (after any prior
-         // write in this chain settles) and merge only this selection onto them,
 diff --git a/src/shared/agent-session-option-catalog-claude-codex.ts b/src/shared/agent-session-option-catalog-claude-codex.ts
 index 0464fd1..693c796 100644
 --- a/src/shared/agent-session-option-catalog-claude-codex.ts
@@ -8416,244 +8960,15 @@ index 0464fd1..693c796 100644
 -  unknownModelOptions: [codexEffort(true)]
 +  unknownModelOptions: [codexEffort('xhigh')]
  }
-diff --git a/src/renderer/src/components/native-chat/NativeChatView.tsx b/src/renderer/src/components/native-chat/NativeChatView.tsx
-index 2fb4581..4a0cb26 100644
---- a/src/renderer/src/components/native-chat/NativeChatView.tsx
-+++ b/src/renderer/src/components/native-chat/NativeChatView.tsx
-@@ -53,6 +53,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
- import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
- import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
- import type { NativeChatViewProps } from './native-chat-view-types'
-+import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
-+import { assembleNativeChatSession } from './native-chat-session-assembler'
- 
- export type { NativeChatViewProps } from './native-chat-view-types'
- 
-@@ -138,6 +140,35 @@ function NativeChatResolvedView({
-     transcriptPath,
-     runtimeEnvironmentId
-   })
-+  const [terminalFallbackMessages, setTerminalFallbackMessages] = useState(() =>
-+    agent === 'codex' ? codexTerminalScreenToMessages(readTerminalScreen?.() ?? null) : []
-+  )
-+  useEffect(() => {
-+    if (agent !== 'codex' || !readTerminalScreen) {
-+      setTerminalFallbackMessages([])
-+      return
-+    }
-+    const refresh = (): void => {
-+      setTerminalFallbackMessages(codexTerminalScreenToMessages(readTerminalScreen()))
-+    }
-+    refresh()
-+    const timer = window.setInterval(refresh, 500)
-+    return () => window.clearInterval(timer)
-+  }, [agent, readTerminalScreen])
-+  const sessionWithTerminalFallback = useMemo<typeof session>(() => {
-+    if (terminalFallbackMessages.length === 0) return session
-+    const assembled = assembleNativeChatSession({
-+      sources: { transcript: session.messages, scrape: terminalFallbackMessages },
-+      sessionId: session.sessionId,
-+      agent: session.agent,
-+      status: session.status,
-+      ...(session.error ? { error: session.error } : {})
-+    })
-+    return {
-+      ...session,
-+      ...assembled
-+    }
-+  }, [session, terminalFallbackMessages])
-   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
-   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
-   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-@@ -147,12 +178,12 @@ function NativeChatResolvedView({
-   const launchDraftSignal = useNativeChatLaunchDraftSignal({
-     terminalTabId,
-     agent,
--    messages: session.messages,
--    transcriptLoading: session.readPhase === 'loading'
-+    messages: sessionWithTerminalFallback.messages,
-+    transcriptLoading: sessionWithTerminalFallback.readPhase === 'loading'
-   })
-   // The live-session merge reconciles hooks with replayable transcript turn
-   // boundaries; all working consumers must use that one lifecycle decision.
--  const liveWorking = session.status === 'working'
-+  const liveWorking = sessionWithTerminalFallback.status === 'working'
-   // The agent's in-progress reply preview (hook), shown as a live streaming
-   // bubble while it works — before the completed turn flushes to the transcript.
-   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
-@@ -224,20 +255,31 @@ function NativeChatResolvedView({
-   // Prune echoes whose real user turn is now in the transcript.
-   useEffect(() => {
-     setPending((prev) =>
--      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
-+      writePendingSendCache(
-+        pendingScope,
-+        prunePendingSends(prev, sessionWithTerminalFallback.messages)
-+      )
-     )
--  }, [session.messages, pendingScope])
-+  }, [sessionWithTerminalFallback.messages, pendingScope])
-   useEffect(() => {
--    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
-+    if (
-+      !paneLaunchPrompt ||
-+      !shouldPruneLaunchPrompt(paneLaunchPrompt, sessionWithTerminalFallback.messages)
-+    ) {
-       return
-     }
-     clearNativeChatLaunchPrompt(terminalTabId)
--  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-+  }, [
-+    clearNativeChatLaunchPrompt,
-+    paneLaunchPrompt,
-+    sessionWithTerminalFallback.messages,
-+    terminalTabId
-+  ])
-   const onOptimisticSend = useCallback(
-     (text: string, imagePaths?: string[]) => {
-       setWorkingInterrupted(false)
-       const sentAt = Date.now()
--      const boundary = session.messages.at(-1)
-+      const boundary = sessionWithTerminalFallback.messages.at(-1)
-       const entry: NativeChatPendingSend = {
-         id: nextNativeChatPendingSendId(sentAt),
-         text,
-@@ -249,7 +291,7 @@ function NativeChatResolvedView({
-       setPending(appendPendingSendCache(pendingScope, entry))
-       return entry.id
-     },
--    [pendingScope, session.messages]
-+    [pendingScope, sessionWithTerminalFallback.messages]
-   )
-   const onOptimisticSendCanceled = useCallback(
-     (pendingId: string) => {
-@@ -268,15 +310,18 @@ function NativeChatResolvedView({
-   )
- 
-   const launchPromptMessage = useMemo(
--    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
--    [paneLaunchPrompt, session.messages]
-+    () => launchPromptAsMessage(paneLaunchPrompt, sessionWithTerminalFallback.messages),
-+    [paneLaunchPrompt, sessionWithTerminalFallback.messages]
-   )
-   const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
-     if (!launchPromptMessage) {
--      return session
-+      return sessionWithTerminalFallback
-+    }
-+    return {
-+      ...sessionWithTerminalFallback,
-+      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
-     }
--    return { ...session, messages: [...session.messages, launchPromptMessage] }
--  }, [launchPromptMessage, session])
-+  }, [launchPromptMessage, sessionWithTerminalFallback])
- 
-   const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
-     const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
-diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
-new file mode 100644
-index 0000000..45c52d8
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.ts
-@@ -0,0 +1,68 @@
-+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-+import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
-+
-+const CODEX_PROMPT = /^\s*›\s+(.*)$/
-+const CODEX_REPLY = /^\s*•\s+(.*)$/
-+
-+function isComposerPlaceholder(value: string): boolean {
-+  return /^(?:Ask Codex to|Type a message|Describe a task)/i.test(value)
-+}
-+
-+/**
-+ * Best-effort fallback for Codex's alternate-screen TUI when the structured
-+ * transcript hook is unavailable. Only explicit Codex prompt/reply markers are
-+ * accepted; status lines, model notices, and the composer placeholder are
-+ * intentionally ignored.
-+ */
-+export function codexTerminalScreenToMessages(screen: string | null): NativeChatMessage[] {
-+  if (!screen) return []
-+
-+  const messages: NativeChatMessage[] = []
-+  let activeRole: 'user' | 'assistant' | null = null
-+  let activeLines: string[] = []
-+
-+  const flush = (): void => {
-+    const text = activeLines.join('\n').trim()
-+    if (activeRole && text) {
-+      messages.push({
-+        id: `codex-screen-${messages.length}-${activeRole}-${text}`,
-+        role: activeRole,
-+        blocks: [{ type: 'text', text }],
-+        timestamp: null,
-+        source: 'scrape'
-+      })
-+    }
-+    activeRole = null
-+    activeLines = []
-+  }
-+
-+  for (const line of stripScrollbackAnsi(screen).split('\n')) {
-+    const prompt = line.match(CODEX_PROMPT)?.[1]?.trim()
-+    if (prompt !== undefined) {
-+      flush()
-+      if (prompt && !prompt.startsWith('/') && !isComposerPlaceholder(prompt)) {
-+        activeRole = 'user'
-+        activeLines = [prompt]
-+      }
-+      continue
-+    }
-+
-+    const reply = line.match(CODEX_REPLY)?.[1]?.trim()
-+    if (reply !== undefined) {
-+      flush()
-+      // Codex uses bullets for both assistant prose and local model/status
-+      // notices. A reply is only conversational when it follows a user prompt.
-+      if (messages.at(-1)?.role === 'user') {
-+        activeRole = 'assistant'
-+        activeLines = [reply]
-+      }
-+      continue
-+    }
-+
-+    if (activeRole && line.trim()) {
-+      activeLines.push(line.trim())
-+    }
-+  }
-+  flush()
-+  return messages
-+}
-diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
-new file mode 100644
-index 0000000..7f84a6a
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
-@@ -0,0 +1,26 @@
-+import { describe, expect, it } from 'vitest'
-+import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
-+
-+describe('codexTerminalScreenToMessages', () => {
-+  it('extracts user prompts and completed Codex replies', () => {
-+    const messages = codexTerminalScreenToMessages(`
-+› /model gpt-5.6-luna
-+• Model changed to gpt-5.6-luna high
-+› hi
-+• Hi! What would you like to work on?
-+› Ask Codex to do anything
-+gpt-5.6-luna high
-+`)
-+
-+    expect(messages.map((message) => [message.role, message.blocks[0]])).toEqual([
-+      ['user', { type: 'text', text: 'hi' }],
-+      ['assistant', { type: 'text', text: 'Hi! What would you like to work on?' }]
-+    ])
-+  })
-+
-+  it('does not turn model notices into assistant chat', () => {
-+    expect(
-+      codexTerminalScreenToMessages('› /model gpt-5.6-luna\n• Model changed to gpt-5.6-luna high')
-+    ).toEqual([])
-+  })
-+})
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index cfa041d..84fe0a6 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -3344,6 +3344,7 @@ export type RightSidebarTab =
+   | 'source-control'
+   | 'checks'
+   | 'ports'
++  | 'activity'
+   // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
+   // static union stays closed while plugin tabs remain type-representable.
+   | `plugin:${string}`

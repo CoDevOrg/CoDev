@@ -179,6 +179,23 @@ describe("buildOrcaIframeSource", () => {
     );
     expect(fragment.get("codevProjectKind")).toBe("git");
     expect(fragment.get("codevProjectName")).toBe("yousef20920/CoDev");
+    expect(fragment.get("codevDefaultAgent")).toBeNull();
+  });
+
+  it("pins the default chat agent when one is provided", () => {
+    const source = buildOrcaIframeSource({
+      webClientPath: "/orca/web-index.html",
+      pairingCode: "secret pairing offer",
+      workspacePath:
+        "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+      projectKind: "git",
+      defaultAgent: "codex",
+    });
+    const fragment = new URLSearchParams(
+      new URL(source, "https://codev.example").hash.slice(1),
+    );
+
+    expect(fragment.get("codevDefaultAgent")).toBe("codex");
   });
 });
 

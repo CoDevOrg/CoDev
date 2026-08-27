@@ -201,12 +201,16 @@ export async function createOrcaManagedProposal(
   }
 }
 
+/** Agent the embedded IDE opens the workspace's default chat tab with. */
+export type OrcaDefaultAgent = "claude" | "codex";
+
 export function buildOrcaIframeSource({
   webClientPath,
   pairingCode,
   workspacePath,
   projectKind,
   projectName,
+  defaultAgent,
   settingsOnly,
 }: {
   webClientPath: string;
@@ -214,6 +218,8 @@ export function buildOrcaIframeSource({
   workspacePath: string;
   projectKind: "git" | "folder";
   projectName?: string;
+  /** Pins which agent the workspace's default chat tab launches with. */
+  defaultAgent?: OrcaDefaultAgent;
   /** Render the personal settings surface instead of the workspace IDE. */
   settingsOnly?: boolean;
 }) {
@@ -225,6 +231,9 @@ export function buildOrcaIframeSource({
   });
   if (projectName) {
     fragment.set("codevProjectName", projectName);
+  }
+  if (defaultAgent) {
+    fragment.set("codevDefaultAgent", defaultAgent);
   }
   if (settingsOnly) {
     fragment.set("codevSettingsOnly", "1");
@@ -663,10 +672,12 @@ export function OrcaWorkspace({
   workspaceId,
   repository,
   canInvite,
+  defaultAgent,
 }: {
   workspaceId: string;
   repository: string | null;
   canInvite: boolean;
+  defaultAgent?: OrcaDefaultAgent;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
     phase: "connecting",
@@ -826,6 +837,7 @@ export function OrcaWorkspace({
             workspacePath,
             projectKind: repository ? "git" : "folder",
             ...(repository ? { projectName: repository } : {}),
+            ...(defaultAgent ? { defaultAgent } : {}),
           }),
           workspacePath,
         });
@@ -846,7 +858,7 @@ export function OrcaWorkspace({
         clearTimeout(retryTimer);
       }
     };
-  }, [workspaceId, repository, attempt]);
+  }, [workspaceId, repository, attempt, defaultAgent]);
 
   if (connection.phase === "ready") {
     return (

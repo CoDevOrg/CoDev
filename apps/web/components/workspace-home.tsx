@@ -7,6 +7,23 @@ import { WorkspaceAgentChat } from "@/components/workspace-agent-chat";
 
 type ChatProvider = "openai" | "anthropic";
 
+/**
+ * Agent the embedded IDE opens the workspace's default chat tab with. Follows
+ * the member's linked provider so the tab starts on a subscription they can
+ * actually use; falls back to Claude inside the bundle when unset.
+ */
+function defaultAgentForProviders(
+  providers: ChatProvider[],
+): "claude" | "codex" | undefined {
+  if (providers.includes("anthropic")) {
+    return "claude";
+  }
+  if (providers.includes("openai")) {
+    return "codex";
+  }
+  return undefined;
+}
+
 export function WorkspaceHome({
   workspaceId,
   repository,
@@ -25,11 +42,13 @@ export function WorkspaceHome({
   const [view, setView] = useState<"chat" | "ide">("ide");
 
   if (view === "ide") {
+    const defaultAgent = defaultAgentForProviders(availableProviders);
     return (
       <OrcaWorkspace
         canInvite={canInvite}
         repository={repository}
         workspaceId={workspaceId}
+        {...(defaultAgent ? { defaultAgent } : {})}
       />
     );
   }
