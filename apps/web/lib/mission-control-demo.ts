@@ -127,6 +127,12 @@ export function createDemoSnapshot(now = Date.now()): MissionControlSnapshot {
           model: "Claude Opus 5",
           phase: "testing",
           activity: "Running pnpm test --filter auth",
+          brief: {
+            goal: "Stop refresh-token rotation from dropping active sessions",
+            currentStep: "Covering the clock-skew edge case with a test",
+            status: "active",
+            filesLikelyToTouch: ["src/auth/**"],
+          },
           ownerId: "m-alex",
           watcherIds: ["m-jordan"],
           startedAt: now - 8 * 60_000,
@@ -242,6 +248,15 @@ export function createDemoSnapshot(now = Date.now()): MissionControlSnapshot {
           model: "GPT-5.6 Luna",
           phase: "blocked",
           activity: "Waiting on a write claim held by another agent",
+          brief: {
+            goal: "Fix keyboard focus escaping the repository picker listbox",
+            currentStep: "Blocked — needs src/lib/workspaces.ts",
+            status: "blocked",
+            filesLikelyToTouch: [
+              "components/repository-picker.tsx",
+              "src/lib/workspaces.ts",
+            ],
+          },
           ownerId: "m-casey",
           watcherIds: [],
           startedAt: now - 4 * 60_000,
@@ -301,6 +316,43 @@ export function createDemoSnapshot(now = Date.now()): MissionControlSnapshot {
         },
         now,
       ),
+    ],
+    overlaps: [
+      {
+        id: "ov-perf-ui",
+        leftAgentId: "a-perf",
+        rightAgentId: "a-ui",
+        kind: "file_overlap",
+        score: 0.5,
+        rationale:
+          "Both plan to edit src/lib/workspaces.ts — the perf rewrite and the a11y fix will collide on merge.",
+        status: "open",
+      },
+    ],
+    history: [
+      {
+        id: "h-1",
+        kind: "dead_end",
+        title:
+          "Memoizing the workspace list in React did not help — the cost is the query",
+        authorName: "Alex Morgan",
+        at: now - 46 * 60_000,
+      },
+      {
+        id: "h-2",
+        kind: "decision",
+        title: "Idempotency keys go on a new column, not a hash of the payload",
+        authorName: "Jordan Lee",
+        at: now - 38 * 60_000,
+      },
+      {
+        id: "h-3",
+        kind: "finding",
+        title:
+          "invoice.paid and invoice.payment_succeeded both write the invoice row",
+        authorName: "Jordan Lee",
+        at: now - 22 * 60_000,
+      },
     ],
   };
 }

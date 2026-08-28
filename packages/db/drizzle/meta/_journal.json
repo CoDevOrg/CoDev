@@ -225,6 +225,13 @@
       "when": 1787901652034,
       "tag": "0031_lively_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787932649838,
+      "tag": "0032_wet_imperial_guard",
+      "breakpoints": true
     }
   ]
 }

@@ -45,6 +45,18 @@ export type AgentLogLine = {
   authorId?: string;
 };
 
+/**
+ * The workspace brain's view of one agent: what it told the shared brain it
+ * is trying to do, distinct from `title` (the human's original ask) and
+ * `activity` (the raw last line of output).
+ */
+export type AgentBriefView = {
+  goal: string;
+  currentStep: string;
+  status: "planning" | "active" | "blocked" | "paused" | "done";
+  filesLikelyToTouch: string[];
+};
+
 export type MissionControlAgent = {
   id: string;
   /** What this agent was asked to do, in the owner's words. */
@@ -65,6 +77,34 @@ export type MissionControlAgent = {
   log: AgentLogLine[];
   /** Set when another agent holds a claim this one wants. */
   blockedBy?: { agentId: string; path: string };
+  /** The agent's self-declared brief, once it has posted one. */
+  brief?: AgentBriefView;
+};
+
+/** A collision the workspace brain has flagged between two agents. */
+export type MissionControlOverlap = {
+  id: string;
+  leftAgentId: string;
+  rightAgentId: string;
+  kind: "duplicate_intent" | "file_overlap" | "claim_contest";
+  score: number;
+  rationale: string;
+  status: "open" | "acknowledged";
+};
+
+/** One durable note in the workspace brain's history. */
+export type BrainHistoryEntry = {
+  id: string;
+  kind:
+    | "decision"
+    | "attempt"
+    | "dead_end"
+    | "finding"
+    | "convention"
+    | "handoff";
+  title: string;
+  authorName: string | null;
+  at: number;
 };
 
 export type MissionControlSnapshot = {
@@ -73,7 +113,27 @@ export type MissionControlSnapshot = {
   members: MissionControlMember[];
   agents: MissionControlAgent[];
   maxAgents: number;
+  /** Open overlap warnings between the live agents. Warn-only, never blocking. */
+  overlaps: MissionControlOverlap[];
+  /** Recent workspace-brain history, newest first. */
+  history: BrainHistoryEntry[];
 };
+
+export const BRAIN_ENTRY_LABEL: Record<BrainHistoryEntry["kind"], string> = {
+  decision: "Decision",
+  attempt: "Attempt",
+  dead_end: "Dead end",
+  finding: "Finding",
+  convention: "Convention",
+  handoff: "Handoff",
+};
+
+export const OVERLAP_KIND_LABEL: Record<MissionControlOverlap["kind"], string> =
+  {
+    duplicate_intent: "Same work",
+    file_overlap: "Same files",
+    claim_contest: "Claim conflict",
+  };
 
 export const AGENT_PHASE_LABEL: Record<AgentPhase, string> = {
   planning: "Planning",

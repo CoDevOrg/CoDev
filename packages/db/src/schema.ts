@@ -8,6 +8,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -82,6 +83,31 @@ export const claimStatus = pgEnum("claim_status", [
 export const messageStatus = pgEnum("coordination_message_status", [
   "pending",
   "delivered",
+  "resolved",
+]);
+export const agentBriefStatus = pgEnum("agent_brief_status", [
+  "planning",
+  "active",
+  "blocked",
+  "paused",
+  "done",
+]);
+export const brainEntryKind = pgEnum("brain_entry_kind", [
+  "decision",
+  "attempt",
+  "dead_end",
+  "finding",
+  "convention",
+  "handoff",
+]);
+export const brainOverlapKind = pgEnum("brain_overlap_kind", [
+  "duplicate_intent",
+  "file_overlap",
+  "claim_contest",
+]);
+export const brainOverlapStatus = pgEnum("brain_overlap_status", [
+  "open",
+  "acknowledged",
   "resolved",
 ]);
 export const publicationStatus = pgEnum("publication_status", [
@@ -724,6 +750,134 @@ export const coordinationMessages = pgTable(
   (table) => [
     index("coordination_messages_target_status_idx").on(
       table.toSessionId,
+      table.status,
+    ),
+  ],
+);
+
+export type AgentBriefPlanStep = {
+  label: string;
+  state: "done" | "active" | "pending";
+};
+
+/**
+ * The workspace brain's live face: one mutable row per agent session that
+ * declares, in the owner's language, what that agent is trying to accomplish.
+ * Agents publish this right after planning — before they hold a single path
+ * claim — so overlap between two agents' *intent* can be seen early.
+ */
+export const agentBriefs = pgTable(
+  "agent_briefs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: uuid("session_id")
+      .references(() => agentSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    goal: text("goal").notNull().default(""),
+    approachSummary: text("approach_summary").notNull().default(""),
+    planSteps: jsonb("plan_steps")
+      .$type<AgentBriefPlanStep[]>()
+      .default([])
+      .notNull(),
+    currentStep: text("current_step").notNull().default(""),
+    filesLikelyToTouch: jsonb("files_likely_to_touch")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    keywords: jsonb("keywords").$type<string[]>().default([]).notNull(),
+    status: agentBriefStatus("status").default("planning").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("agent_briefs_session_idx").on(table.sessionId),
+    index("agent_briefs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+  ],
+);
+
+/**
+ * The workspace brain's durable face: an append-only log of decisions,
+ * attempts, dead ends and findings that outlives the worktree it came from,
+ * so a later agent can learn what was already tried instead of repeating it.
+ */
+export const brainEntries = pgTable(
+  "brain_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: uuid("session_id").references(() => agentSessions.id, {
+      onDelete: "set null",
+    }),
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    kind: brainEntryKind("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    paths: jsonb("paths").$type<string[]>().default([]).notNull(),
+    keywords: jsonb("keywords").$type<string[]>().default([]).notNull(),
+    supersedesId: uuid("supersedes_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("brain_entries_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("brain_entries_workspace_kind_idx").on(table.workspaceId, table.kind),
+  ],
+);
+
+/**
+ * A detected risk that two agent sessions are colliding — same intent, same
+ * files, or a contested claim. The pair is always stored with the
+ * lexicographically smaller session id on the left so a pair has one row per
+ * kind. Warn-only: recorded and surfaced, never blocking.
+ */
+export const brainOverlaps = pgTable(
+  "brain_overlaps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    leftSessionId: uuid("left_session_id")
+      .references(() => agentSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    rightSessionId: uuid("right_session_id")
+      .references(() => agentSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    kind: brainOverlapKind("kind").notNull(),
+    score: real("score").notNull().default(0),
+    evidence: jsonb("evidence")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    rationale: text("rationale").notNull().default(""),
+    status: brainOverlapStatus("status").default("open").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("brain_overlaps_pair_kind_idx").on(
+      table.workspaceId,
+      table.leftSessionId,
+      table.rightSessionId,
+      table.kind,
+    ),
+    index("brain_overlaps_workspace_status_idx").on(
+      table.workspaceId,
       table.status,
     ),
   ],

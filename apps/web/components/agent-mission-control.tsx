@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AGENT_PHASE_LABEL,
+  BRAIN_ENTRY_LABEL,
+  OVERLAP_KIND_LABEL,
   agentDiffTotals,
   elapsedLabel,
   memberById,
@@ -97,6 +99,18 @@ function AgentCard({
       </header>
 
       <h3 className="mc-card-title">{agent.title}</h3>
+
+      {agent.brief?.goal ? (
+        <p
+          className="mc-card-goal"
+          title="Goal the agent posted to the workspace brain"
+        >
+          <i className="mc-brain-mark" aria-hidden>
+            ◈
+          </i>{" "}
+          {agent.brief.goal}
+        </p>
+      ) : null}
 
       <p
         className={`mc-activity${agent.phase === "blocked" ? " is-blocked" : ""}`}
@@ -475,6 +489,44 @@ export function AgentMissionControl({
         </div>
       </header>
 
+      {snapshot.overlaps.length > 0 ? (
+        <section
+          className="mc-overlaps"
+          aria-label="Workspace brain overlap warnings"
+        >
+          <p className="mc-overlaps-head">
+            <i className="mc-brain-mark" aria-hidden>
+              ◈
+            </i>{" "}
+            The workspace brain sees agents converging
+          </p>
+          <ul>
+            {snapshot.overlaps.map((overlap) => {
+              const left = snapshot.agents.find(
+                (agent) => agent.id === overlap.leftAgentId,
+              );
+              const right = snapshot.agents.find(
+                (agent) => agent.id === overlap.rightAgentId,
+              );
+              const leftName =
+                memberById(snapshot, left?.ownerId)?.name ?? "an agent";
+              const rightName =
+                memberById(snapshot, right?.ownerId)?.name ?? "an agent";
+              return (
+                <li key={overlap.id} className="mc-blocked-note">
+                  <span className="mc-chip">
+                    {OVERLAP_KIND_LABEL[overlap.kind]}
+                  </span>{" "}
+                  {leftName}&rsquo;s and {rightName}&rsquo;s agents —{" "}
+                  {overlap.rationale} They should coordinate before this becomes
+                  a merge conflict.
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="mc-grid">
         {snapshot.agents.map((agent) => (
           <AgentCard
@@ -487,6 +539,30 @@ export function AgentMissionControl({
           />
         ))}
       </div>
+
+      {snapshot.history.length > 0 ? (
+        <section
+          className="mc-brain-history"
+          aria-label="Workspace brain history"
+        >
+          <p className="mc-sub">
+            Workspace brain · what has been tried and decided
+          </p>
+          <ul>
+            {snapshot.history.slice(0, 8).map((entry) => (
+              <li key={entry.id}>
+                <span className="mc-chip">{BRAIN_ENTRY_LABEL[entry.kind]}</span>{" "}
+                {entry.title}
+                <span className="mc-log-time">
+                  {" "}
+                  {entry.authorName ? `${entry.authorName} · ` : ""}
+                  {relativeLabel(entry.at, now)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {open ? (
         <AgentDrawer

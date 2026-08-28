@@ -33,6 +33,15 @@ import {
   requireActivePathClaim,
   updateCoordinationMessageStatus,
 } from "./agent-coordination";
+import {
+  buildAgentBriefing,
+  recordBrainEntry,
+  safeDetectOverlaps,
+  searchBrain,
+  updateAgentBrief,
+  type OverlapAdjudicator,
+} from "./workspace-brain";
+import { createModelOverlapAdjudicator } from "./workspace-brain-adjudicator";
 import { getStepMetadata } from "workflow";
 
 import {
@@ -254,6 +263,101 @@ const tools: OpenAI.Responses.Tool[] = [
       additionalProperties: false,
     },
     strict: true,
+  },
+  {
+    type: "function",
+    name: "brain_update_brief",
+    description:
+      "Publish or update this session's brief in the workspace brain so other agents and watching humans can see what you are doing. Call it right after you plan, then keep currentStep and status fresh as you work.",
+    parameters: {
+      type: "object",
+      properties: {
+        goal: {
+          type: "string",
+          description:
+            "One sentence: what this session is trying to accomplish.",
+        },
+        approachSummary: {
+          type: "string",
+          description: "How you intend to do it — the shape of the change.",
+        },
+        planSteps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              state: { type: "string", enum: ["done", "active", "pending"] },
+            },
+            required: ["label", "state"],
+            additionalProperties: false,
+          },
+        },
+        currentStep: {
+          type: "string",
+          description: "What you are doing this moment.",
+        },
+        filesLikelyToTouch: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Relative paths or directory/** globs you expect to edit. Used to predict collisions before you hold a claim.",
+        },
+        status: {
+          type: "string",
+          enum: ["planning", "active", "blocked", "paused", "done"],
+        },
+      },
+      required: ["currentStep"],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
+    name: "brain_search",
+    description:
+      "Search the workspace brain — past decisions, attempts, dead ends and other agents' live goals — before you plan, so you do not repeat work or collide with another agent.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Free text describing what you are about to work on.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
+    name: "brain_record",
+    description:
+      "Append a durable note to the workspace brain: a decision you made, an approach that failed (dead_end), a finding, or a convention. Future agents read these.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          enum: [
+            "decision",
+            "attempt",
+            "dead_end",
+            "finding",
+            "convention",
+            "handoff",
+          ],
+        },
+        title: { type: "string" },
+        body: { type: "string" },
+        paths: { type: "array", items: { type: "string" } },
+      },
+      required: ["kind", "title"],
+      additionalProperties: false,
+    },
+    strict: false,
   },
   {
     type: "function",
@@ -908,6 +1012,52 @@ async function executeTool(
         ),
       );
     }
+    case "brain_update_brief": {
+      const patch: Record<string, unknown> = {};
+      for (const key of [
+        "goal",
+        "approachSummary",
+        "planSteps",
+        "currentStep",
+        "filesLikelyToTouch",
+        "status",
+      ]) {
+        if (input[key] !== undefined) patch[key] = input[key];
+      }
+      if (!Object.keys(patch).length) {
+        throw new Error(
+          "brain_update_brief needs at least one of goal, approachSummary, planSteps, currentStep, filesLikelyToTouch, status.",
+        );
+      }
+      return JSON.stringify(
+        await updateAgentBrief(context.workspaceId, context.sessionId, patch),
+      );
+    }
+    case "brain_search": {
+      if (typeof input.query !== "string" || !input.query.trim()) {
+        throw new Error("brain_search requires a query.");
+      }
+      return JSON.stringify(
+        await searchBrain(context.workspaceId, context.sessionId, {
+          query: input.query,
+          limit: 8,
+        }),
+      );
+    }
+    case "brain_record":
+      return JSON.stringify(
+        await recordBrainEntry(
+          context.workspaceId,
+          context.sessionId,
+          context.authorId,
+          {
+            kind: input.kind,
+            title: input.title,
+            body: typeof input.body === "string" ? input.body : "",
+            paths: Array.isArray(input.paths) ? input.paths : [],
+          },
+        ),
+      );
     case "git_status":
       return await getSandboxGitOutput(
         context.workspaceId,
@@ -1088,12 +1238,31 @@ export async function prepareAgentTurn(
       ),
     )
     .orderBy(asc(schema.agentTurns.createdAt));
-  const transcript = history
+  const transcriptBody = history
     .map(
       (turn) =>
         `User request:\n${turn.prompt}\n\nAgent result:\n${turn.output ?? "(in progress)"}`,
     )
     .join("\n\n---\n\n");
+
+  // The workspace brain's always-on context: what other agents in this
+  // workspace are doing, any overlap it has flagged for this session, and
+  // relevant history. Advisory only — a failure here must not stop the turn.
+  const briefing = await buildAgentBriefing(
+    context.workspaceId,
+    context.sessionId,
+    context.prompt,
+  ).catch(() => null);
+  const transcript = briefing
+    ? `${briefing.text}\n\n---\n\n${transcriptBody}`
+    : transcriptBody;
+  if (briefing) {
+    await addEvent(context, `${turnId}:brain-briefing`, "brain.briefing", {
+      otherAgents: briefing.otherAgents,
+      overlaps: briefing.overlaps,
+      priorAttempts: briefing.priorAttempts,
+    });
+  }
 
   await addEvent(context, `${turnId}:started`, "turn.started", {
     prompt: context.prompt,
@@ -1171,6 +1340,7 @@ export async function prepareAgentTurn(
       output: result.output,
       ...(cursorUsage ? { usage: cursorUsage } : {}),
     });
+    await recordTurnOutcomeInBrain(context, result.output);
     return { kind: "done" };
   }
 
@@ -1234,7 +1404,7 @@ export async function prepareAgentTurn(
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. The workspace has team channels where its humans talk to each other: read them with read_team_chat when the request depends on intent, priorities, or decisions that are not in the repository, and use post_team_chat to answer a question you were mentioned in or to report a blocking finding where the team will see it. Do not merge into the integration worktree or escape this worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. This workspace has a shared brain across every agent: the turn transcript may begin with a 'Workspace Brain briefing' describing what other agents are doing and any overlap flagged for you. Before you plan, call brain_search with what you are about to do; right after you plan, call brain_update_brief with your goal, plan and the files you expect to touch, and keep currentStep and status fresh as you work. If the brain reports another agent doing the same work, coordinate (request_claim_coordination or post_team_chat) or narrow your scope rather than proceeding in parallel — it is a warning, not a block. When an approach fails, call brain_record with kind dead_end so no one retries it. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. The workspace has team channels where its humans talk to each other: read them with read_team_chat when the request depends on intent, priorities, or decisions that are not in the repository, and use post_team_chat to answer a question you were mentioned in or to report a blocking finding where the team will see it. Do not merge into the integration worktree or escape this worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse, usage }) => {
@@ -1277,7 +1447,61 @@ export async function prepareAgentTurn(
     output: finalOutput,
     ...(totalUsage ? { usage: totalUsage } : {}),
   });
+  await recordTurnOutcomeInBrain(context, finalOutput);
   return { kind: "done" };
+}
+
+/**
+ * After a turn lands, leave a trace in the workspace brain — an `attempt`
+ * entry other agents can find — and recompute overlaps with the turn's own
+ * model behind the duplicate-work check. Everything here is best-effort.
+ */
+async function recordTurnOutcomeInBrain(
+  context: AgentContext,
+  outcome: string,
+) {
+  const title = context.prompt.split("\n")[0]?.slice(0, 180) || "Agent turn";
+  try {
+    await recordBrainEntry(
+      context.workspaceId,
+      context.sessionId,
+      context.authorId,
+      {
+        kind: "attempt",
+        title,
+        body: outcome.slice(0, 4_000),
+        paths: [],
+      },
+    );
+  } catch {
+    // The history note is advisory.
+  }
+
+  let adjudicator: OverlapAdjudicator | undefined;
+  try {
+    const provider = parseAgentProvider(context.provider);
+    if (provider !== "cursor") {
+      const credential = await assertProviderConnectionForTurn(
+        context.authorId,
+        context.workspaceId,
+        provider,
+      );
+      if (credential.authType !== "HOSTED_CODEX_SUBSCRIPTION") {
+        adjudicator = createModelOverlapAdjudicator(
+          createAgentModel(
+            credential,
+            context.model || getAgentModel(provider),
+          ),
+        );
+      }
+    }
+  } catch {
+    adjudicator = undefined;
+  }
+  await safeDetectOverlaps(
+    context.workspaceId,
+    adjudicator ? { adjudicator } : {},
+  );
 }
 
 /**
@@ -1359,6 +1583,7 @@ export async function finishCodexTurn(
   await addEvent(context, `${turnId}:completed`, "turn.completed", {
     output: finalOutput,
   });
+  await recordTurnOutcomeInBrain(context, finalOutput);
 }
 
 export async function failCurrentTurnKeepSession(

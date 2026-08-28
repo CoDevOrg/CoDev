@@ -20,6 +20,7 @@ export function createDatabase(connectionString: string) {
 
 export { schema };
 export type {
+  AgentBriefPlanStep,
   AgentTurnAttachment,
   WorkspaceChatPromptAttachment,
 } from "./schema";
