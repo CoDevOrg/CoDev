@@ -9455,10 +9455,10 @@ index 0000000..7efd832
 +})
 diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
 new file mode 100644
-index 0000000..cb9b6ea
+index 0000000..e364531
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.ts
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,165 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 +import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
@@ -9530,8 +9530,22 @@ index 0000000..cb9b6ea
 +    const agentTabs = tabs.filter((tab) => Boolean(tab.launchAgent))
 +    const shells = tabs.filter((tab) => !tab.launchAgent)
 +    if (agentTabs.length > 0 && shells.length > 0) {
++      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 +      for (const shell of shells) {
 +        state.closeTab(shell.id, { reason: 'cleanup' })
++        if (runtimeEnvironmentId) {
++          // A paired host owns its tab list and re-mirrors anything closed
++          // only in the client, so the close has to reach the host too.
++          void import('@/runtime/web-runtime-session').then(
++            ({ closeWebRuntimeSessionTab }) =>
++              closeWebRuntimeSessionTab({
++                worktreeId,
++                tabId: shell.id,
++                environmentId: runtimeEnvironmentId,
++                reason: 'cleanup'
++              })
++          )
++        }
 +      }
 +      clearInterval(timer)
 +      return
