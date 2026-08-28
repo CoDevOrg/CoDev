@@ -1351,36 +1351,40 @@ index 6f954a6..18296ea 100644
                  dictationDisabled={dictationDisabled}
                  sendDisabled={sendButtonDisabled}
 diff --git a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-index 354732b..c6f60d1 100644
+index 354732b..ca4639d 100644
 --- a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-@@ -18,6 +18,10 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
+@@ -18,6 +18,11 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
  import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
  import { isNativeChatPastedImagePath } from './native-chat-image-paste'
  import { NativeChatToolRun } from './NativeChatToolRun'
 +import {
 +  formatTurnDuration,
-+  nativeChatTurnDurations
++  nativeChatTurnDurations,
++  nativeChatTurnTotals
 +} from './native-chat-durations'
  import { NativeChatCopyButton } from './NativeChatCopyButton'
  import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
  
-@@ -128,10 +132,13 @@ function MessageRow({
+@@ -128,10 +133,16 @@ function MessageRow({
    onScrollMessageToTop,
    onLinkClick,
    allowFileUriLinks = false,
 -  deliveryFailed = false
 +  deliveryFailed = false,
-+  durationMs = null
++  durationMs = null,
++  turnTotalMs = null
  }: {
    message: NativeChatMessage
    expandSignal: boolean
-+  /** How long this turn took, so the reader can see what the wait bought. */
++  /** This message's own span, used for the tool run it contains. */
 +  durationMs?: number | null
++  /** Set on the last message of a turn: how long the whole answer took. */
++  turnTotalMs?: number | null
    /** Align this message's top to the top of the scroll viewport. */
    onScrollMessageToTop: (el: HTMLElement) => void
    onLinkClick?: CommentMarkdownLinkClickHandler
-@@ -166,10 +173,17 @@ function MessageRow({
+@@ -166,10 +177,17 @@ function MessageRow({
      // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
      // transcript caught up.)
      return (
@@ -1400,7 +1404,7 @@ index 354732b..c6f60d1 100644
            {markdown ? (
              <>
                <ImageAttachmentRefs blocks={prose} />
-@@ -204,6 +218,7 @@ function MessageRow({
+@@ -204,6 +222,7 @@ function MessageRow({
    return (
      <div
        ref={rowRef}
@@ -1408,7 +1412,7 @@ index 354732b..c6f60d1 100644
        className={cn(
          'group relative max-w-full text-sm leading-relaxed text-foreground',
          // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-@@ -211,6 +226,13 @@ function MessageRow({
+@@ -211,6 +230,13 @@ function MessageRow({
          isSystem && 'text-xs text-muted-foreground'
        )}
      >
@@ -1422,7 +1426,7 @@ index 354732b..c6f60d1 100644
        {showControls ? (
          <AgentControls
            markdown={markdown}
-@@ -228,7 +250,13 @@ function MessageRow({
+@@ -228,7 +254,20 @@ function MessageRow({
            allowFileUriLinks={allowFileUriLinks}
          />
        ) : null}
@@ -1434,10 +1438,17 @@ index 354732b..c6f60d1 100644
 +          durationLabel={formatTurnDuration(durationMs)}
 +        />
 +      ) : null}
++      {formatTurnDuration(turnTotalMs) ? (
++        <p className="mt-2 font-mono text-[10.5px] text-muted-foreground/70">
++          {translate('components.native-chat.respondedIn', 'Responded in {{value0}}', {
++            value0: formatTurnDuration(turnTotalMs) ?? ''
++          })}
++        </p>
++      ) : null}
      </div>
    )
  }
-@@ -254,6 +282,20 @@ export function NativeChatMessageList({
+@@ -254,6 +293,24 @@ export function NativeChatMessageList({
  }): React.JSX.Element {
    const scrollRef = useRef<HTMLDivElement | null>(null)
    const contentRef = useRef<HTMLDivElement | null>(null)
@@ -1455,10 +1466,14 @@ index 354732b..c6f60d1 100644
 +    () => nativeChatTurnDurations(session.messages, now),
 +    [session.messages, now]
 +  )
++  const turnTotals = useMemo(
++    () => nativeChatTurnTotals(session.messages, now, isWorking),
++    [session.messages, now, isWorking]
++  )
    const [stuckToBottom, setStuckToBottom] = useState(true)
    const [showJump, setShowJump] = useState(false)
  
-@@ -377,6 +419,9 @@ export function NativeChatMessageList({
+@@ -377,6 +434,9 @@ export function NativeChatMessageList({
        >
          <div
            ref={contentRef}
@@ -1468,7 +1483,7 @@ index 354732b..c6f60d1 100644
            // Why: same max width as the composer column; horizontal inset comes
            // from the scroll container so content aligns with the composer field.
            className="mx-auto flex w-full max-w-4xl flex-col gap-5"
-@@ -399,10 +444,11 @@ export function NativeChatMessageList({
+@@ -399,10 +459,12 @@ export function NativeChatMessageList({
                </button>
              </div>
            ) : null}
@@ -1478,6 +1493,7 @@ index 354732b..c6f60d1 100644
                key={message.id}
                message={message}
 +              durationMs={turnDurations[index] ?? null}
++              turnTotalMs={turnTotals[index] ?? null}
                expandSignal={expandSignal}
                onScrollMessageToTop={scrollMessageToTop}
                onLinkClick={onLinkClick}
@@ -1818,14 +1834,15 @@ index 96f8287..e957449 100644
        disabled={false}
 diff --git a/src/renderer/src/components/native-chat/native-chat-durations.test.ts b/src/renderer/src/components/native-chat/native-chat-durations.test.ts
 new file mode 100644
-index 0000000..2441aff
+index 0000000..e5ca8b9
 --- /dev/null
 +++ b/src/renderer/src/components/native-chat/native-chat-durations.test.ts
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,132 @@
 +import { describe, expect, it } from 'vitest'
 +import {
 +  formatTurnDuration,
-+  nativeChatTurnDurations
++  nativeChatTurnDurations,
++  nativeChatTurnTotals
 +} from './native-chat-durations'
 +import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 +
@@ -1886,12 +1903,79 @@ index 0000000..2441aff
 +    expect(formatTurnDuration(600_000)).toBe('10m 00s')
 +  })
 +})
++
++describe('nativeChatTurnTotals', () => {
++  function turn(role: NativeChatMessage['role'], timestamp: number | null): NativeChatMessage {
++    return {
++      id: `${role}-${timestamp}`,
++      role,
++      blocks: [{ type: 'text', text: 'x' }],
++      timestamp,
++      source: 'transcript'
++    }
++  }
++
++  it('measures a finished turn from the prompt to its last message', () => {
++    const t = 1_000_000
++    const totals = nativeChatTurnTotals(
++      [turn('user', t), turn('assistant', t + 3_000), turn('assistant', t + 11_000)],
++      t + 90_000,
++      false
++    )
++    expect(totals).toEqual([null, null, 11_000])
++  })
++
++  it('survives a response split into tool and prose sharing one timestamp', () => {
++    // The real failure: both assistant messages carry the same transcript
++    // timestamp, so per-message spans are 0 and report nothing.
++    const t = 1_000_000
++    const totals = nativeChatTurnTotals(
++      [turn('user', t), turn('assistant', t + 9_000), turn('assistant', t + 9_000)],
++      t + 20_000,
++      false
++    )
++    expect(totals[2]).toBe(9_000)
++  })
++
++  it('ticks the in-flight turn against the clock', () => {
++    const t = 1_000_000
++    const totals = nativeChatTurnTotals(
++      [turn('user', t), turn('assistant', t + 2_000)],
++      t + 7_500,
++      true
++    )
++    expect(totals[1]).toBe(7_500)
++  })
++
++  it('closes each turn on its own last message', () => {
++    const t = 1_000_000
++    const totals = nativeChatTurnTotals(
++      [
++        turn('user', t),
++        turn('assistant', t + 5_000),
++        turn('user', t + 30_000),
++        turn('assistant', t + 34_000)
++      ],
++      t + 40_000,
++      false
++    )
++    expect(totals).toEqual([null, 5_000, null, 4_000])
++  })
++
++  it('reports nothing when the prompt has no timestamp', () => {
++    const t = 1_000_000
++    expect(nativeChatTurnTotals([turn('user', null), turn('assistant', t)], t, false)).toEqual([
++      null,
++      null
++    ])
++  })
++})
 diff --git a/src/renderer/src/components/native-chat/native-chat-durations.ts b/src/renderer/src/components/native-chat/native-chat-durations.ts
 new file mode 100644
-index 0000000..78b62b7
+index 0000000..4a56699
 --- /dev/null
 +++ b/src/renderer/src/components/native-chat/native-chat-durations.ts
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,96 @@
 +import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 +
 +/**
@@ -1927,6 +2011,57 @@ index 0000000..78b62b7
 +    if (span < 0 || span > MAX_PLAUSIBLE_SPAN_MS) return null
 +    return span
 +  })
++}
++
++/**
++ * How long each *turn* took: from the user's message to the last message the
++ * agent produced before the next user message.
++ *
++ * Per-message spans alone are not enough. One assistant response is split into
++ * separate tool and prose messages that carry the same transcript timestamp,
++ * so the gap between them is zero and nothing is reportable — which is exactly
++ * what happened on the first live turn. The turn span is the number a person
++ * actually means by "how long did that take", and it survives any block
++ * splitting.
++ *
++ * Returns a duration only on the final message of each turn; every other index
++ * is null, so a caller can render it once per answer.
++ */
++export function nativeChatTurnTotals(
++  messages: readonly NativeChatMessage[],
++  now: number,
++  /** The turn in flight has no closing message yet; measure it against `now`. */
++  isWorking: boolean,
++): Array<number | null> {
++  const totals: Array<number | null> = messages.map(() => null)
++  let turnStart: number | null = null
++  let turnStartIndex = -1
++
++  const close = (endIndex: number, end: number | null) => {
++    if (turnStart === null || endIndex < 0 || end === null) return
++    const span = end - turnStart
++    if (span < 0 || span > MAX_PLAUSIBLE_SPAN_MS) return
++    totals[endIndex] = span
++  }
++
++  messages.forEach((message, index) => {
++    if (message.role === 'user') {
++      // Close the previous turn on the message before this prompt.
++      close(index - 1, messages[index - 1]?.timestamp ?? null)
++      turnStart = message.timestamp
++      turnStartIndex = index
++      return
++    }
++    if (turnStartIndex < 0) return
++  })
++
++  // The trailing turn: still running (measure to now) or finished at its last
++  // message.
++  const lastIndex = messages.length - 1
++  if (lastIndex >= 0 && messages[lastIndex]?.role !== 'user') {
++    close(lastIndex, isWorking ? now : (messages[lastIndex]?.timestamp ?? null))
++  }
++  return totals
 +}
 +
 +/** `6s` / `1m 04s`. Null when the span is too short to be worth reporting. */
@@ -2695,122 +2830,102 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..cff6d2d
+index 0000000..ad8e912
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,195 @@
-+import { useCallback, useEffect, useState, type JSX } from 'react'
-+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-+import {
-+  getCodevBridgeSnapshot,
-+  requestCodevBridge,
-+  subscribeCodevBridge
-+} from '../../web/codev-bridge'
-+import type {
-+  CodevWorkboardCapacity,
-+  CodevWorkboardSlot,
-+  CodevWorkboardSnapshot
-+} from '../sidebar/CodevWorkboardView'
+@@ -0,0 +1,157 @@
++import { useEffect, useMemo, useState, type JSX } from 'react'
++import { useShallow } from 'zustand/react/shallow'
++import { useAppStore } from '@/store'
++import { formatAgentTypeLabel } from '@/lib/agent-status'
++import { AGENT_STATUS_STATES, type AgentStatusEntry } from '../../../../shared/agent-status-types'
 +
 +/**
 + * Every agent running in this workspace, always on screen.
 + *
-+ * CoDev's whole premise is several people steering several agents against one
-+ * repository, and until now that was only legible by opening a panel and
-+ * reading a status string. This is the workspace's default right-sidebar tab
-+ * so the state of the room is visible while you work, without clicking
-+ * anything: who started each agent, what it is doing this second, which
-+ * worktree it holds, and how long it has been at it.
++ * CoDev's premise is several people steering several agents against one
++ * repository, and that was only legible by opening a panel and reading a
++ * status string. This is the workspace's default right-sidebar tab so the
++ * state of the room is visible while you work, without clicking anything.
 + *
-+ * Data comes from the same workspace-bound `workboard.list` bridge call the
-+ * kanban drawer uses; nothing here talks to a provider directly.
++ * Reads Orca's own live agent status rather than CoDev's workboard. The
++ * workboard tracks *managed* agent sessions (a row plus a worktree slot), but
++ * an agent started from the workspace's chat tab is a PTY inside the existing
++ * worktree and never becomes one — so a workboard-backed panel truthfully
++ * reported "0 agents" with an agent visibly working two panes away. This
++ * reports what is actually running.
 + */
 +
-+const REFRESH_MS = 3_000
++const TICK_MS = 1_000
 +
-+function initials(name: string): string {
-+  const parts = name.trim().split(/\s+/).filter(Boolean)
-+  if (parts.length === 0) return '··'
-+  const first = parts[0]?.[0] ?? ''
-+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : ''
-+  return (first + last).toUpperCase()
++type LiveAgent = AgentStatusEntry & { paneKey: string }
++
++function elapsed(since: number, now: number): string {
++  const seconds = Math.max(0, Math.floor((now - since) / 1000))
++  if (seconds < 60) return `${seconds}s`
++  const minutes = Math.floor(seconds / 60)
++  if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`
++  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
 +}
 +
-+/** Stable per-person hue so one collaborator is one colour across the panel. */
-+function hueFor(name: string): number {
++/** Stable per-agent hue so one pane keeps one colour as it moves through states. */
++function hueFor(key: string): number {
 +  let hash = 0
-+  for (let i = 0; i < name.length; i += 1) {
-+    hash = (hash * 31 + name.charCodeAt(i)) % 360
-+  }
++  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) % 360
 +  return hash
 +}
 +
-+/** Map the backend's free-text status onto the small set the panel styles. */
-+function toneFor(status: string): 'working' | 'blocked' | 'ready' | 'idle' {
-+  const value = status.toLowerCase()
-+  if (value.includes('block') || value.includes('conflict') || value.includes('wait')) {
-+    return 'blocked'
-+  }
-+  if (value.includes('review') || value.includes('ready') || value.includes('done')) {
-+    return 'ready'
-+  }
-+  if (value.includes('run') || value.includes('work') || value.includes('active')) {
-+    return 'working'
-+  }
-+  return 'idle'
++function isLiveState(value: unknown): value is AgentStatusEntry['state'] {
++  return (
++    typeof value === 'string' &&
++    (AGENT_STATUS_STATES as readonly string[]).includes(value)
++  )
 +}
 +
-+function AgentCard({ slot }: { slot: CodevWorkboardSlot }): JSX.Element {
-+  const tone = toneFor(slot.status)
-+  const hue = hueFor(slot.owner)
++const STATE_LABEL: Record<AgentStatusEntry['state'], string> = {
++  working: 'Working',
++  blocked: 'Needs you',
++  waiting: 'Waiting',
++  done: 'Done'
++}
++
++function AgentCard({ agent, now }: { agent: LiveAgent; now: number }): JSX.Element {
++  const tone = agent.state
++  const label = formatAgentTypeLabel(agent.agentType)
++  const hue = hueFor(agent.paneKey)
 +
 +  return (
 +    <li className={`codev-agent-card is-${tone}`}>
 +      <div className="codev-agent-top">
 +        <span
 +          className="codev-agent-avatar"
-+          title={`Started by ${slot.owner}`}
++          title={label}
 +          style={{
 +            background: `linear-gradient(150deg, hsl(${hue} 58% 46%), hsl(${hue} 50% 32%))`
 +          }}
 +        >
-+          {initials(slot.owner)}
++          {label.slice(0, 2).toUpperCase()}
 +        </span>
 +        <div className="codev-agent-who">
-+          <span className="codev-agent-owner">{slot.owner}</span>
-+          <span className="codev-agent-worktree" title={slot.worktree}>
-+            {slot.worktree}
-+          </span>
++          <span className="codev-agent-owner">{label}</span>
++          {agent.model ? (
++            <span className="codev-agent-worktree" title={agent.model}>
++              {agent.model}
++            </span>
++          ) : null}
 +        </div>
 +        <span className={`codev-agent-status is-${tone}`}>
 +          <i aria-hidden />
-+          {slot.status}
++          {STATE_LABEL[agent.state]}
 +        </span>
 +      </div>
 +
-+      <p className="codev-agent-assignment">{slot.assignment}</p>
-+
-+      <p className="codev-agent-task">
-+        <i className="codev-agent-caret" aria-hidden />
-+        <span>{slot.currentTask}</span>
-+      </p>
++      {agent.prompt ? <p className="codev-agent-assignment">{agent.prompt}</p> : null}
 +
 +      <div className="codev-agent-foot">
-+        <span className="codev-agent-provider">{slot.provider}</span>
-+        <span className="codev-agent-elapsed">{slot.elapsed}</span>
-+        {slot.worktreeId ? (
-+          <button
-+            type="button"
-+            className="codev-agent-open"
-+            onClick={() => {
-+              if (slot.worktreeId) {
-+                void activateAndRevealWorktree(slot.worktreeId)
-+              }
-+            }}
-+          >
-+            Open
-+          </button>
-+        ) : null}
++        <span className="codev-agent-elapsed">
++          {STATE_LABEL[agent.state].toLowerCase()} for {elapsed(agent.stateStartedAt, now)}
++        </span>
 +      </div>
 +    </li>
 +  )
@@ -2818,40 +2933,32 @@ index 0000000..cff6d2d
 +
 +export function CodevLiveAgentsPanel(): JSX.Element | null {
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
-+  const [slots, setSlots] = useState<CodevWorkboardSlot[]>([])
-+  const [capacity, setCapacity] = useState<CodevWorkboardCapacity | null>(null)
-+  const [connected, setConnected] = useState(
-+    () => getCodevBridgeSnapshot().status === 'connected'
-+  )
-+  const [loaded, setLoaded] = useState(false)
++  const [now, setNow] = useState(() => Date.now())
 +
-+  useEffect(() => subscribeCodevBridge(() => {
-+    setConnected(getCodevBridgeSnapshot().status === 'connected')
-+  }), [])
++  // Shallow-compare the map so an unrelated pane's status tick does not
++  // re-render every card.
++  const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
 +
-+  const refresh = useCallback(async () => {
-+    try {
-+      const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.list')
-+      setSlots(result.slots ?? [])
-+      setCapacity(result.capacity ?? null)
-+      setLoaded(true)
-+    } catch {
-+      // A dropped poll must not blank the panel: keep the last good picture and
-+      // let the next tick recover.
-+    }
-+  }, [])
++  const agents = useMemo<LiveAgent[]>(() => {
++    return Object.entries(statuses ?? {})
++      .map(([paneKey, entry]) => ({ ...entry, paneKey }))
++      .filter((entry) => isLiveState(entry.state))
++      .sort((a, b) => b.updatedAt - a.updatedAt)
++  }, [statuses])
++
++  const busy = agents.some((agent) => agent.state === 'working')
 +
 +  useEffect(() => {
-+    if (!embedded || !connected) return
-+    void refresh()
-+    const timer = setInterval(() => void refresh(), REFRESH_MS)
++    // Only tick while something is moving; a settled panel needs no clock.
++    if (!busy) return
++    setNow(Date.now())
++    const timer = setInterval(() => setNow(Date.now()), TICK_MS)
 +    return () => clearInterval(timer)
-+  }, [embedded, connected, refresh])
++  }, [busy])
 +
 +  if (!embedded) return null
 +
-+  const active = slots.filter((slot) => slot.occupied)
-+  const free = Math.max(0, (capacity?.maxActiveSessions ?? slots.length) - active.length)
++  const working = agents.filter((agent) => agent.state === 'working').length
 +
 +  return (
 +    <section className="codev-agents-panel" aria-label="Live agents in this workspace">
@@ -2864,33 +2971,23 @@ index 0000000..cff6d2d
 +          <h3>Agents</h3>
 +        </div>
 +        <span className="codev-agents-count">
-+          <strong>{active.length}</strong>
-+          <span>/{capacity?.maxActiveSessions ?? slots.length}</span>
++          <strong>{working}</strong>
++          <span>/{agents.length || 0}</span>
 +        </span>
 +      </header>
 +
-+      {!connected ? (
-+        <p className="codev-agents-empty">Reconnecting to CoDev…</p>
-+      ) : !loaded ? (
-+        <p className="codev-agents-empty">Reading the workspace…</p>
-+      ) : active.length === 0 ? (
++      {agents.length === 0 ? (
 +        <p className="codev-agents-empty">
 +          No agents running yet. Start one from the chat tab and it appears here
-+          for everyone in the workspace.
++          the moment it begins working.
 +        </p>
 +      ) : (
 +        <ul className="codev-agents-list">
-+          {active.map((slot) => (
-+            <AgentCard key={slot.sessionId ?? slot.slot} slot={slot} />
++          {agents.map((agent) => (
++            <AgentCard key={agent.paneKey} agent={agent} now={now} />
 +          ))}
 +        </ul>
 +      )}
-+
-+      {loaded && active.length > 0 && free > 0 ? (
-+        <p className="codev-agents-free">
-+          {free} {free === 1 ? 'slot' : 'slots'} free
-+        </p>
-+      ) : null}
 +    </section>
 +  )
 +}
