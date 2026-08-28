@@ -3245,10 +3245,10 @@ index 0000000..6f8a206
 +})
 diff --git a/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx b/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx
 new file mode 100644
-index 0000000..e0068e2
+index 0000000..6937511
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx
-@@ -0,0 +1,491 @@
+@@ -0,0 +1,506 @@
 +import { useEffect, useState, type JSX, type KeyboardEvent } from 'react'
 +
 +/**
@@ -3388,8 +3388,17 @@ index 0000000..e0068e2
 +  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
 +}
 +
++/**
++ * A local `done` agent is not "ready to merge" — it is a chat session sitting
++ * idle between turns. Only managed sessions reach a real merge-ready state.
++ */
++function phaseLabel(agent: MissionControlAgent): string {
++  if (agent.origin === 'you' && agent.phase === 'done') return 'Idle'
++  return MISSION_CONTROL_PHASE_LABEL[agent.phase]
++}
++
 +function runtimeText(agent: MissionControlAgent, now: number): string {
-+  if (agent.phase === 'done') return 'Done'
++  if (agent.phase === 'done') return agent.origin === 'you' ? 'Idle' : 'Done'
 +  if (agent.startedAt) return missionControlElapsed(agent.startedAt, now)
 +  return agent.serverElapsed ?? '—'
 +}
@@ -3422,11 +3431,17 @@ index 0000000..e0068e2
 +  )
 +}
 +
-+function PhasePill({ phase }: { phase: MissionControlPhase }): JSX.Element {
++function PhasePill({
++  phase,
++  label
++}: {
++  phase: MissionControlPhase
++  label?: string
++}): JSX.Element {
 +  return (
 +    <span className={`codev-mc-phase is-${phase}`}>
 +      <i aria-hidden />
-+      {MISSION_CONTROL_PHASE_LABEL[phase]}
++      {label ?? MISSION_CONTROL_PHASE_LABEL[phase]}
 +    </span>
 +  )
 +}
@@ -3467,7 +3482,7 @@ index 0000000..e0068e2
 +              {agent.model ? ` · ${agent.model}` : ''}
 +            </span>
 +          </div>
-+          <PhasePill phase={agent.phase} />
++          <PhasePill phase={agent.phase} label={phaseLabel(agent)} />
 +        </div>
 +
 +        <p className="codev-mc-title">{agent.title}</p>
@@ -3555,7 +3570,7 @@ index 0000000..e0068e2
 +        </header>
 +
 +        <div className="codev-mc-drawer-strip">
-+          <PhasePill phase={agent.phase} />
++          <PhasePill phase={agent.phase} label={phaseLabel(agent)} />
 +          <span className="codev-mc-chip">{runtimeText(agent, now)}</span>
 +          <span className="codev-mc-chip">
 +            {agent.origin === 'you' ? 'Your chat tab' : 'Managed session'}
