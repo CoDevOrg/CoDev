@@ -8172,16 +8172,17 @@ index d3e3718..8baf85f 100644
      agent,
      cmdOverrides,
 diff --git a/src/renderer/src/store/right-sidebar-route.ts b/src/renderer/src/store/right-sidebar-route.ts
-index 38bddf6..ba44d11 100644
+index 38bddf6..f983e99 100644
 --- a/src/renderer/src/store/right-sidebar-route.ts
 +++ b/src/renderer/src/store/right-sidebar-route.ts
-@@ -43,7 +43,8 @@ export function normalizeRightSidebarRoute(
+@@ -43,7 +43,9 @@ export function normalizeRightSidebarRoute(
      tab === 'pr-checks' ||
      tab === 'source-control' ||
      tab === 'checks' ||
 -    tab === 'ports'
 +    tab === 'ports' ||
-+    tab === 'activity'
++    tab === 'activity' ||
++    tab === 'codev-agents'
    ) {
      return {
        rightSidebarTab: tab,

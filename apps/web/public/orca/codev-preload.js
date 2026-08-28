@@ -71,6 +71,21 @@
       settings[mobileMarker] = true;
       window.localStorage.setItem(key, JSON.stringify(settings));
     }
+
+    // Land members on the live-agents panel the first time, so the state of
+    // the workspace is visible without opening anything. Marker-guarded and
+    // one-shot: whatever they pick afterwards is theirs and is never
+    // overwritten.
+    var uiKey = "orca.web.ui.v1";
+    var agentsMarker = "codevLiveAgentsDefaultApplied";
+    var uiRaw = window.localStorage.getItem(uiKey);
+    var ui = uiRaw ? JSON.parse(uiRaw) : {};
+    if (ui && typeof ui === "object" && !ui[agentsMarker]) {
+      ui.rightSidebarTab = "codev-agents";
+      ui.rightSidebarOpen = true;
+      ui[agentsMarker] = true;
+      window.localStorage.setItem(uiKey, JSON.stringify(ui));
+    }
   } catch (_error) {
     // Browser-local preference seeding is best-effort.
   }
