@@ -43,9 +43,9 @@ export async function assertWorkspaceQuota(userId: string) {
         ]),
       ),
     );
-  if ((result?.value ?? 0) >= 3) {
+  if ((result?.value ?? 0) >= 2) {
     throw new QuotaError(
-      "You can have at most three active workspaces.",
+      "You can have at most two active workspaces.",
       "active_workspace_limit",
       300,
     );
