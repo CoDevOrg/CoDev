@@ -1,0 +1,1 @@
+import{Mg as e,bm as t,em as n,jg as r}from"./web-index-D_pydsOL.js";function i(e,i){if(!e)return[];let a=new Set(r(i)),o=[];for(let r of t){if(a.has(r))continue;let t=n(r);(e[t]??[]).length>0&&o.push({agent:r,actionId:t})}return o}function a(t){return e(t.defaultTuiAgent===`blank`?null:t.defaultTuiAgent,t.detectedAgentIds??[],t.disabledTuiAgents)}export{a as n,i as t};

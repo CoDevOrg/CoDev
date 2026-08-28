@@ -740,9 +740,15 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
 /// onboarding is already skipped by the `ANTHROPIC_API_KEY` /
 /// `CLAUDE_CODE_OAUTH_TOKEN` env var set at spawn.
 ///
-/// Deliberately *not* seeded: `bypassPermissionsModeAccepted`. Pre-accepting a
-/// permissions bypass on the member's behalf is a security decision, not a
-/// first-run annoyance, and the wizard does not ask for it.
+/// `bypassPermissionsModeAccepted` is seeded too. Standing alone that would be
+/// a security decision rather than a first-run annoyance — but Orca already
+/// launches every Claude agent with `--dangerously-skip-permissions`
+/// unconditionally (`agentDefaultArgs` in `src/shared/constants.ts`, "yolo
+/// mode where the CLI supports it"), so the bypass is in force either way and
+/// withholding the acceptance only strands the CLI on a consent prompt the
+/// chat surface cannot answer. The workspace is precisely the isolated
+/// container the CLI's own warning asks for: a dedicated Linux user, in a
+/// per-workspace clone, on a disposable cloud host.
 async fn seed_claude_config(user: &str, project_root: &Path) -> Result<()> {
     let home = PathBuf::from(format!("/home/{user}"));
 
@@ -800,6 +806,8 @@ fn claude_config_with_onboarding_skipped(existing: Option<Value>, project_root: 
         .expect("existing is filtered to objects; default is an object");
 
     root.entry("hasCompletedOnboarding")
+        .or_insert(Value::Bool(true));
+    root.entry("bypassPermissionsModeAccepted")
         .or_insert(Value::Bool(true));
 
     let projects = root
@@ -1192,10 +1200,11 @@ mod tests {
             config["projects"]["/srv/codev/workspaces/w"]["hasTrustDialogAccepted"],
             json!(true)
         );
-        // The theme lives in ~/.claude/settings.json, not here, and a
-        // permissions bypass is never pre-accepted on the member's behalf.
+        // Orca launches Claude with --dangerously-skip-permissions regardless,
+        // so the consent prompt is pure friction; accept it up front.
+        assert_eq!(config["bypassPermissionsModeAccepted"], json!(true));
+        // The theme lives in ~/.claude/settings.json, not here.
         assert!(config.get("theme").is_none());
-        assert!(config.get("bypassPermissionsModeAccepted").is_none());
     }
 
     #[test]

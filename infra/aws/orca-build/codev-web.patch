@@ -8548,10 +8548,10 @@ index 0000000..ff1e3a8
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
-index 0000000..087071d
+index 0000000..5daa977
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.test.ts
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,163 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
@@ -8635,58 +8635,63 @@ index 0000000..087071d
 +})
 +
 +describe('launchCodevDefaultChatTab', () => {
-+  it('launches the default agent as an editable draft in the worktree', () => {
++  it('launches the default agent without a draft, so the tab opens in chat', () => {
 +    setWindow({ __CODEV_EMBEDDED__: true })
-+    getState.mockReturnValue({ tabsByWorktree: {}, unifiedTabsByWorktree: {}, closeTab: vi.fn() })
++    getState.mockReturnValue({
++      tabsByWorktree: {},
++      unifiedTabsByWorktree: {},
++      closeTab: vi.fn()
++    })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
 +
++    // promptDelivery: 'draft' means "mirror this unsent text into the
++    // composer"; with no text decideInitialAgentTabViewMode refuses chat and
++    // the tab silently opens as a terminal. Passing nothing is what keeps it
++    // in chat.
 +    expect(launchAgentInNewTab).toHaveBeenCalledWith({
 +      agent: 'claude',
 +      worktreeId: 'wt-1',
-+      promptDelivery: 'draft',
 +      launchSource: 'new_workspace_composer'
 +    })
 +  })
 +
-+  it('retires the stock terminal tabs that existed before the launch', () => {
++  it('retires the stock terminal once the host has mirrored the chat tab', () => {
 +    setWindow({ __CODEV_EMBEDDED__: true })
 +    const closeTab = vi.fn()
-+    // Pre-launch: one idle shell. Post-launch (after the mirror lands): shell + chat tab.
++    // The paired host mirrors its tabs late: nothing exists at launch, then the
++    // shell and the chat tab appear.
 +    getState
 +      .mockReturnValueOnce({
-+        tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
++        tabsByWorktree: {},
 +        unifiedTabsByWorktree: {},
-+        closeTab
-+      })
-+      .mockReturnValueOnce({
-+        tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
-+        unifiedTabsByWorktree: {},
-+        closeTab
++        closeTab,
 +      })
 +      .mockReturnValue({
-+        tabsByWorktree: { 'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }] },
++        tabsByWorktree: {
++          'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }],
++        },
 +        unifiedTabsByWorktree: {},
-+        closeTab
++        closeTab,
 +      })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
-+    vi.runAllTimers()
++    vi.advanceTimersByTime(5_000)
 +
 +    expect(closeTab).toHaveBeenCalledWith('shell', { reason: 'cleanup' })
 +  })
 +
-+  it('keeps the stock terminal when the chat tab has not mirrored yet', () => {
++  it('never closes a shell while no agent tab exists yet', () => {
 +    setWindow({ __CODEV_EMBEDDED__: true })
 +    const closeTab = vi.fn()
 +    getState.mockReturnValue({
 +      tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
 +      unifiedTabsByWorktree: {},
-+      closeTab
++      closeTab,
 +    })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
-+    vi.runAllTimers()
++    vi.advanceTimersByTime(30_000)
 +
 +    expect(closeTab).not.toHaveBeenCalled()
 +  })
@@ -8712,10 +8717,10 @@ index 0000000..087071d
 +})
 diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
 new file mode 100644
-index 0000000..5f26d62
+index 0000000..3763d0d
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.ts
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,106 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 +import { useAppStore } from '@/store'
@@ -8731,9 +8736,10 @@ index 0000000..5f26d62
 + */
 +export const CODEV_DEFAULT_CHAT_AGENT: CodevDefaultChatAgent = 'claude'
 +
-+/** How long to wait for the new chat tab to appear before retiring the stock
-+ *  terminal tabs it replaces (a paired host mirrors its tab list async). */
-+const RETIRE_STOCK_TABS_DELAY_MS = 2_500
++/** How long to keep watching for the host to mirror its tabs before giving up
++ *  on retiring the stock terminal the chat tab replaces. */
++const RETIRE_STOCK_TABS_INTERVAL_MS = 1_500
++const RETIRE_STOCK_TABS_ATTEMPTS = 12
 +
 +/**
 + * Resolve the agent for the workspace's default chat tab. Returns `null`
@@ -8765,32 +8771,36 @@ index 0000000..5f26d62
 +}
 +
 +/**
-+ * Close the stock terminal tabs the default chat tab replaces.
++ * Close the stock terminal tab(s) the default chat tab replaces.
 + *
 + * CoDev workspaces are agent-first, so the worktree should open on the chat
-+ * tab alone — not the chat tab plus the idle shell Orca (or the paired host)
-+ * created first. Only tabs that existed *before* the chat launch and still
-+ * carry no agent are retired, and never the worktree's last remaining tab, so
-+ * a slow host mirror leaves the shell in place rather than an empty worktree.
++ * tab alone — not the chat tab plus the idle shell the host created first.
++ *
++ * A paired host mirrors its tab list asynchronously, so the shell frequently
++ * does not exist yet when the launch is issued (an earlier version captured
++ * the tab ids up front and therefore had nothing to retire). Re-check a few
++ * times instead, and only ever close a tab once an agent tab is actually
++ * present, so a failed launch cannot leave the worktree empty.
 + */
-+function retireStockTerminalTabs(worktreeId: string, stockTabIds: readonly string[]): void {
-+  if (stockTabIds.length === 0) {
-+    return
-+  }
-+  setTimeout(() => {
++function retireStockTerminalTabs(worktreeId: string): void {
++  let attempt = 0
++  const timer = setInterval(() => {
++    attempt += 1
 +    const state = useAppStore.getState()
 +    const tabs = state.tabsByWorktree[worktreeId] ?? []
-+    let remaining = tabs.length
-+    for (const tab of tabs) {
-+      if (remaining <= 1) {
-+        break
++    const agentTabs = tabs.filter((tab) => Boolean(tab.launchAgent))
++    const shells = tabs.filter((tab) => !tab.launchAgent)
++    if (agentTabs.length > 0 && shells.length > 0) {
++      for (const shell of shells) {
++        state.closeTab(shell.id, { reason: 'cleanup' })
 +      }
-+      if (stockTabIds.includes(tab.id) && !tab.launchAgent) {
-+        state.closeTab(tab.id, { reason: 'cleanup' })
-+        remaining -= 1
-+      }
++      clearInterval(timer)
++      return
 +    }
-+  }, RETIRE_STOCK_TABS_DELAY_MS)
++    if (attempt >= RETIRE_STOCK_TABS_ATTEMPTS) {
++      clearInterval(timer)
++    }
++  }, RETIRE_STOCK_TABS_INTERVAL_MS)
 +}
 +
 +/**
@@ -8805,16 +8815,17 @@ index 0000000..5f26d62
 +  if (!agent || worktreeHasAgentTab(worktreeId)) {
 +    return
 +  }
-+  const stockTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
 +  launchAgentInNewTab({
 +    agent,
 +    worktreeId,
-+    // Leave the composer empty and editable — the member types the first
-+    // message; nothing is auto-submitted.
-+    promptDelivery: 'draft',
++    // Deliberately no promptDelivery: `'draft'` means "there is unsent text to
++    // mirror into the composer", and `decideInitialAgentTabViewMode` refuses
++    // chat when that text is empty (canMirrorLaunchDraftToNativeChat('') is
++    // false) — which silently opened this tab as a terminal. There is no
++    // prompt here at all, so the default is both correct and opens in chat.
 +    launchSource: 'new_workspace_composer'
 +  })
-+  retireStockTerminalTabs(worktreeId, stockTabIds)
++  retireStockTerminalTabs(worktreeId)
 +}
 diff --git a/src/renderer/src/web/codev-embedded.test.ts b/src/renderer/src/web/codev-embedded.test.ts
 new file mode 100644
