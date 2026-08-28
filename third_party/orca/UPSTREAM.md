@@ -44,6 +44,30 @@ stable across upstream rebuilds.
 the vendored bundle, so it survives re-vendoring untouched and needs no
 reapplication.
 
+### Team rail replaces the IDE's project tree
+
+A CoDev workspace is exactly one repository, so Orca's "Projects" section
+listed a single row plus an Add Project button for a second project CoDev does
+not support. That section is hidden inside the iframe by
+`apps/web/components/orca-project-tree.ts`, which runs on the loaded document
+(not through the patch) and targets Orca's own authored class names —
+`.sidebar-header` and `.worktree-list` — rather than compiled Tailwind. Each
+step is independent and fails open: an upstream rename leaves one element
+visible instead of breaking the sidebar. The Add Project button stays visible
+until a project is actually open, because CoDev's own bootstrap clicks it and
+the empty state is the member's recovery path.
+
+In its place, `apps/web/components/workspace-team-panel.tsx` renders a
+first-party team rail to the left of the iframe: who is in the workspace, what
+each person is working on (their own status, else their agent's current task,
+else the file they have open), running agents, and the workspace's chat
+channels. Like the top bar, this is parent-page chrome rather than a patch, so
+it survives re-vendoring untouched. Channels are backed by
+`workspace_channels` / `workspace_channel_messages` and are readable and
+writable by agents through the `read_team_chat` and `post_team_chat` tools; an
+`@agent` mention queues the message plus recent channel context onto the
+workspace's live agent session.
+
 ### Native project bootstrap and GitHub repository picker
 
 `ensureOrcaSession` (`apps/web/lib/orca-host.ts`) has `codev-orchestrator`
