@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-28T11:47:21.2846292Z",
+  "title": "Design System: CoDev Shared Workbench",
+  "extensions": {
+    "colorMeta": {
+      "forest": {
+        "role": "primary",
+        "displayName": "Workbench Forest",
+        "canonical": "#0F3D2E",
+        "tonalRamp": [
+          "#061A13",
+          "#0B2B20",
+          "#0F3D2E",
+          "#28604D",
+          "#4F816D",
+          "#86AA9B",
+          "#C2D5CD",
+          "#EFF5F2"
+        ]
+      },
+      "action-orange": {
+        "role": "secondary",
+        "displayName": "Action Orange",
+        "canonical": "#FF6A00",
+        "tonalRamp": [
+          "#3B1600",
+          "#742B00",
+          "#B54200",
+          "#E85F00",
+          "#FF6A00",
+          "#FF9B54",
+          "#FFD0AD",
+          "#FFF2E8"
+        ]
+      },
+      "agent-blue": {
+        "role": "tertiary",
+        "displayName": "Codex Blue",
+        "canonical": "#2563EB",
+        "tonalRamp": [
+          "#071B49",
+          "#0E317B",
+          "#1748AF",
+          "#2563EB",
+          "#5C86EE",
+          "#91AAF3",
+          "#C5D2F8",
+          "#F0F4FF"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "True Ink",
+        "canonical": "#0D0D0D",
+        "tonalRamp": [
+          "#0D0D0D",
+          "#252525",
+          "#414141",
+          "#626262",
+          "#858585",
+          "#ABABAB",
+          "#D4D4D4",
+          "#F5F5F5"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Soft Canvas",
+        "canonical": "#F7F8F6",
+        "tonalRamp": [
+          "#1D211B",
+          "#343A31",
+          "#51594C",
+          "#737C6E",
+          "#9BA397",
+          "#C4CAC0",
+          "#E4E8E1",
+          "#F7F8F6"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "One decisive category statement in the first viewport."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Short section-level product claims."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Readable explanation held to 45-68 characters."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Sentence-case category and status labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "workspace-lift",
+        "value": "0 8px 8px rgba(15, 61, 46, 0.08)",
+        "purpose": "Separates the hero workspace stage from the page."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-standard",
+        "value": "160ms ease",
+        "purpose": "Button and status feedback."
+      },
+      {
+        "name": "move-standard",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Small directional transforms and underline motion."
+      },
+      {
+        "name": "codex-typing",
+        "value": "7.2s steps(56, end) infinite",
+        "purpose": "Reveals the Codex response while keeping the full text accessible."
+      },
+      {
+        "name": "claude-typing",
+        "value": "7.8s steps(58, end) 550ms infinite",
+        "purpose": "Runs beside Codex with a slight natural offset."
+      }
+    ],
+    "breakpoints": [
+      { "name": "wide", "value": "1264px" },
+      { "name": "desktop-stack", "value": "1080px" },
+      { "name": "tablet", "value": "832px" },
+      { "name": "mobile", "value": "640px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one decisive action on a page or section.",
+      "html": "<a class=\"ds-btn-primary\" href=\"#\">Start a shared workspace <span aria-hidden=\"true\">→</span></a>",
+      "css": ".ds-btn-primary { display:inline-flex; min-height:48px; align-items:center; justify-content:center; gap:8px; padding:0 24px; border:1px solid #FF6A00; border-radius:999px; background:#FF6A00; color:#0D0D0D; font:720 16px/1 Geist Sans,Arial,sans-serif; text-decoration:none; transition:background 160ms ease,border-color 160ms ease,transform 160ms cubic-bezier(.22,1,.36,1); } .ds-btn-primary:hover { background:#E85F00; border-color:#E85F00; transform:translateY(-1px); } .ds-btn-primary:focus-visible { outline:3px solid #2563EB; outline-offset:3px; }"
+    },
+    {
+      "name": "Secondary Action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet companion action that never competes with orange.",
+      "html": "<a class=\"ds-btn-secondary\" href=\"#\"><span aria-hidden=\"true\">▷</span> Watch it work</a>",
+      "css": ".ds-btn-secondary { display:inline-flex; min-height:48px; align-items:center; justify-content:center; gap:8px; padding:0 24px; border:1px solid #0F3D2E; border-radius:999px; background:#FFFFFF; color:#0F3D2E; font:650 16px/1 Geist Sans,Arial,sans-serif; text-decoration:none; transition:background 160ms ease,transform 160ms cubic-bezier(.22,1,.36,1); } .ds-btn-secondary:hover { background:#E8F0EC; transform:translateY(-1px); } .ds-btn-secondary:focus-visible { outline:3px solid #2563EB; outline-offset:3px; }"
+    },
+    {
+      "name": "Primary Navigation",
+      "kind": "nav",
+      "description": "A plain structural row that preserves category focus.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Primary navigation\"><strong>CoDev</strong><div><a href=\"#\">Product</a><a href=\"#\">Why CoDev</a><a href=\"#\">How it works</a></div><a class=\"ds-nav-action\" href=\"#\">Start a workspace</a></nav>",
+      "css": ".ds-nav { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; min-height:80px; border-bottom:1px solid #D9DFDC; color:#0D0D0D; font:570 14px/1 Geist Sans,Arial,sans-serif; } .ds-nav strong { color:#0F3D2E; font-size:23px; } .ds-nav div { display:flex; gap:32px; } .ds-nav a { color:inherit; text-decoration:none; } .ds-nav a:hover { text-decoration:underline; text-underline-offset:6px; } .ds-nav a:focus-visible { outline:3px solid #2563EB; outline-offset:3px; } .ds-nav-action { justify-self:end; padding:14px 18px; border-radius:999px; background:#FF6A00; font-weight:720; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "description": "A semantic agent or review state with text plus color.",
+      "html": "<span class=\"ds-status\"><span class=\"ds-status-dot\" aria-hidden=\"true\"></span> Working</span>",
+      "css": ".ds-status { display:inline-flex; align-items:center; gap:8px; min-height:28px; padding:4px 10px; border:1px solid #D9DFDC; border-radius:8px; background:#FFFFFF; color:#4E5953; font:650 14px/1 Geist Sans,Arial,sans-serif; } .ds-status-dot { width:7px; height:7px; border-radius:50%; background:#2563EB; } .ds-status:focus-visible { outline:3px solid #2563EB; outline-offset:3px; }"
+    },
+    {
+      "name": "Live Workspace Stage",
+      "kind": "custom",
+      "refersTo": "workspace-stage",
+      "description": "The signature product proof: two people directing two agents in one shared repository.",
+      "html": "<section class=\"ds-workspace\" aria-label=\"Live workspace with Codex and Claude working in parallel\"><header><strong>acme / calendar</strong><span>4 online</span></header><div class=\"ds-agent-grid\"><article><b>Codex</b><p>Yousef · Refactor the event parser</p></article><article><b>Claude</b><p>Maya · Add calendar color sync</p></article></div><footer>Codex and Claude are typing at the same time</footer></section>",
+      "css": ".ds-workspace { overflow:hidden; border:1px solid #D9DFDC; border-radius:16px; background:#FFFFFF; color:#0D0D0D; box-shadow:0 8px 8px rgba(15,61,46,.08); font:450 14px/1.45 Geist Sans,Arial,sans-serif; } .ds-workspace header { display:flex; justify-content:space-between; padding:16px; border-bottom:1px solid #D9DFDC; } .ds-agent-grid { display:grid; grid-template-columns:1fr 1fr; } .ds-agent-grid article { min-height:120px; padding:20px; border-right:1px solid #D9DFDC; } .ds-agent-grid article:last-child { border-right:0; } .ds-agent-grid p { color:#4E5953; } .ds-workspace footer { padding:16px; background:#092A20; color:#FFFFFF; font-weight:700; } .ds-workspace:focus-within { outline:3px solid #2563EB; outline-offset:3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Shared Workbench",
+    "overview": "CoDev should feel like walking up to a bright team workbench where every person, agent, task, and change is already visible. The composition is direct and side-by-side: a decisive category statement sits beside a concrete shared workspace rather than making visitors decode an abstract promise. The system is precise enough for serious engineering work, human enough for a team room, and visibly active without becoming noisy. The visual language is clean, neutral, and structural. Forest establishes trust and shared state, orange is reserved for decisive action, and blue identifies Codex without turning the entire surface into an AI-themed color field.",
+    "keyCharacteristics": [
+      "Immediate category clarity paired with visible product proof.",
+      "Neutral white and soft-canvas surfaces with forest structure and rare orange action.",
+      "Large, compact sans-serif headlines and readable body copy.",
+      "Thin borders, restrained rounding, and almost-flat elevation.",
+      "Semantic live state: people, agents, tasks, files, changes, and review status.",
+      "CSS-first motion with a complete reduced-motion presentation."
+    ],
+    "rules": [
+      {
+        "name": "The Rare Orange Rule",
+        "body": "Orange appears on primary action and active-status details only; if it starts coloring whole sections, the hierarchy is broken.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Color Rule",
+        "body": "Pair every status color with a label, icon, or status text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Plain-Speech Rule",
+        "body": "Typography amplifies a concrete product statement; it never compensates for vague copy.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Lifted Object Rule",
+        "body": "A viewport may contain one intentionally lifted product object.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do name the category in the first viewport: multiplayer IDE for people and AI agents.",
+      "Do place concrete product proof beside the primary claim on desktop and immediately after it on mobile.",
+      "Do preserve complete product meaning when motion is reduced or unavailable."
+    ],
+    "donts": [
+      "Don't create a generic technical SaaS page whose headline could describe any collaboration tool.",
+      "Don't use dark terminal cosplay, neon AI gradients, glassmorphism, or decorative code aesthetics.",
+      "Don't present CoDev as a downloadable desktop product; it is a hosted website."
+    ]
+  }
+}

@@ -7,6 +7,7 @@ playwright-report/
 **/artifacts/verification/
 test-results/
 .testsprite/
+.env
 .env.local
 .env.*.local
 .vercel/

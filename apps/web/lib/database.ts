@@ -28,5 +28,10 @@ export function getDatabase() {
 }
 
 export async function checkDatabaseConnection() {
-  await getDatabaseClient().pool.query("select 1");
+  await getDatabaseClient().pool.query(`
+    select "owner_id"
+    from "workspaces"
+    where "status" in ('pending', 'provisioning', 'ready', 'stopping')
+    limit 0
+  `);
 }
