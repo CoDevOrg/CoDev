@@ -42,6 +42,7 @@ export default async function WorkspacePage({
   return (
     <WorkspaceHome
       availableProviders={availableProviders}
+      canCreateChannel={permissionsForRole(workspace.accessRole).edit}
       canInvite={permissionsForRole(workspace.accessRole).invite}
       hasRepository={Boolean(
         workspace.repository && workspace.githubRepositoryId,

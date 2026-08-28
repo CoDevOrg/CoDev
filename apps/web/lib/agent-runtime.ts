@@ -54,8 +54,24 @@ import {
   syncAgentWorktreeWithGitHub,
 } from "./agent-github";
 import { appendWorkspaceStateEvent } from "./workspace-state";
+import {
+  findChannelBySlug,
+  postChannelMessage,
+  readTeamChatContext,
+} from "./team-chat";
 
 const MAX_TOOL_ROUNDS = 12;
+
+/** Agents write `#general` the way people do; storage keys off the bare slug. */
+function channelSlugArgument(value: unknown) {
+  return typeof value === "string" ? value.trim().replace(/^#/, "") : "";
+}
+
+/** How an agent signs its own channel posts. */
+function agentChatLabel(context: { provider: string }) {
+  const provider = context.provider.trim();
+  return provider ? `Agent · ${provider}` : "Agent";
+}
 
 function codexFinalMessage(output: string) {
   let final = "";
@@ -140,6 +156,41 @@ const tools: OpenAI.Responses.Tool[] = [
     name: "list_coordination",
     description: "List structured messages sent to or from this agent session.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "read_team_chat",
+    description:
+      "Read what the humans on this workspace are saying to each other in their team channels. Use it for intent, decisions, and priorities that are not in the repository.",
+    parameters: {
+      type: "object",
+      properties: {
+        channel: {
+          type: "string",
+          description:
+            "Channel name without the leading '#'. Pass an empty string to read every channel open to agents.",
+        },
+      },
+      required: ["channel"],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "post_team_chat",
+    description:
+      "Post a message into a team channel so the humans see it. Use it to answer a mention, report progress, or ask a blocking question.",
+    parameters: {
+      type: "object",
+      properties: {
+        channel: { type: "string" },
+        body: { type: "string" },
+      },
+      required: ["channel", "body"],
+      additionalProperties: false,
+    },
     strict: true,
   },
   {
@@ -764,6 +815,35 @@ async function executeTool(
       return JSON.stringify(
         await listCoordinationMessages(context.workspaceId, context.sessionId),
       );
+    case "read_team_chat": {
+      const slug = channelSlugArgument(input.channel);
+      return JSON.stringify(
+        await readTeamChatContext(
+          context.workspaceId,
+          slug ? { channelSlug: slug } : {},
+        ),
+      );
+    }
+    case "post_team_chat": {
+      const slug = channelSlugArgument(input.channel);
+      if (!slug) throw new Error("post_team_chat requires a channel name.");
+      if (typeof input.body !== "string" || input.body.trim().length === 0) {
+        throw new Error("post_team_chat requires a message body.");
+      }
+      const channel = await findChannelBySlug(context.workspaceId, slug);
+      if (!channel) throw new Error(`No channel named #${slug}.`);
+      const { message } = await postChannelMessage({
+        workspaceId: context.workspaceId,
+        channelId: channel.id,
+        body: input.body.trim(),
+        author: {
+          kind: "agent",
+          label: agentChatLabel(context),
+          agentSessionId: context.sessionId,
+        },
+      });
+      return JSON.stringify({ posted: true, channel: slug, id: message.id });
+    }
     case "request_claim_coordination":
       return JSON.stringify(
         await createCoordinationMessage(
@@ -1142,7 +1222,7 @@ export async function prepareAgentTurn(
     maxOutputTokens: 4096,
     stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
     system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. Do not merge into the integration worktree or escape this worktree.",
+      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. The workspace has team channels where its humans talk to each other: read them with read_team_chat when the request depends on intent, priorities, or decisions that are not in the repository, and use post_team_chat to answer a question you were mentioned in or to report a blocking finding where the team will see it. Do not merge into the integration worktree or escape this worktree.",
     messages: [{ role: "user", content: modelInput(context, transcript) }],
     tools: createAgentTools(context),
     onStepEnd: async ({ text, response: stepResponse, usage }) => {

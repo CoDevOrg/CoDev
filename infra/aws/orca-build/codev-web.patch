@@ -1147,14 +1147,106 @@ index 0000000..0d6cb67
 +    ...(input.strategy === 'merged' ? { mergedContents: input.mergedContents ?? '' } : {})
 +  })
 +}
+diff --git a/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx b/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx
+new file mode 100644
+index 0000000..7705684
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx
+@@ -0,0 +1,85 @@
++import { Users } from 'lucide-react'
++import type { CodevChatCoordination, CodevChatMember } from './use-codev-chat-coordination'
++
++function initials(name: string): string {
++  return name
++    .split(/\s+/)
++    .filter(Boolean)
++    .slice(0, 2)
++    .map((part) => part[0]?.toUpperCase())
++    .join('')
++}
++
++function MemberAvatar({ member }: { member: CodevChatMember }): React.JSX.Element {
++  return member.avatarUrl ? (
++    <img src={member.avatarUrl} alt="" className="size-5 rounded-full object-cover" />
++  ) : (
++    <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[8px] font-semibold">
++      {initials(member.name)}
++    </span>
++  )
++}
++
++export function CodevChatPresenceBar({
++  coordination
++}: {
++  coordination: CodevChatCoordination
++}): React.JSX.Element | null {
++  if (!coordination.enabled) return null
++
++  const holderIsViewer = coordination.holder?.id === coordination.viewer?.id
++  const status = coordination.error
++    ? coordination.error
++    : !coordination.ready
++      ? 'Connecting shared composer…'
++      : coordination.canEdit
++        ? 'You have the composer'
++        : coordination.holder
++          ? `${holderIsViewer ? 'Another one of your tabs' : coordination.holder.name} has the composer`
++          : 'Shared composer is available'
++
++  return (
++    <div
++      data-codev-chat-presence="true"
++      className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-1.5 text-[11px] text-muted-foreground"
++      role="status"
++      aria-live="polite"
++    >
++      <Users className="size-3.5 shrink-0" />
++      <div className="flex -space-x-1" aria-label={`${coordination.participants.length} viewing`}>
++        {coordination.participants.slice(0, 3).map((participant) => (
++          <span
++            key={participant.id}
++            className="rounded-full border border-background"
++            title={`${participant.name} is viewing`}
++          >
++            <MemberAvatar member={participant} />
++          </span>
++        ))}
++      </div>
++      <span className="min-w-0 flex-1 truncate">
++        {coordination.participants.length || 1} viewing · {status}
++      </span>
++      {coordination.canEdit ? (
++        <button
++          type="button"
++          onClick={() => void coordination.release()}
++          className="shrink-0 rounded-full border border-border px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++        >
++          Release
++        </button>
++      ) : !coordination.holder ? (
++        <button
++          type="button"
++          disabled={!coordination.ready || coordination.acquiring}
++          onClick={() => void coordination.acquire()}
++          className="shrink-0 rounded-full bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
++        >
++          {coordination.acquiring ? 'Taking control…' : 'Take control'}
++        </button>
++      ) : (
++        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 font-medium">View only</span>
++      )}
++    </div>
++  )
++}
 diff --git a/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
 new file mode 100644
-index 0000000..5702f58
+index 0000000..2201cf6
 --- /dev/null
 +++ b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
-@@ -0,0 +1,85 @@
-+import { memo } from 'react'
-+import { ChevronDown } from 'lucide-react'
+@@ -0,0 +1,108 @@
++import { memo, useState } from 'react'
++import { ChevronDown, LoaderCircle } from 'lucide-react'
++import { toast } from 'sonner'
 +import { Button } from '@/components/ui/button'
 +import {
 +  DropdownMenu,
@@ -1178,6 +1270,8 @@ index 0000000..5702f58
 +  terminalTabId: string
 +  /** Chat is mid-turn; switching now would abandon a running reply. */
 +  isWorking: boolean
++  disabled?: boolean
++  disabledReason?: string | null
 +}
 +
 +/**
@@ -1191,8 +1285,11 @@ index 0000000..5702f58
 +function CodevChatProviderPickerInner({
 +  agent,
 +  terminalTabId,
-+  isWorking
++  isWorking,
++  disabled = false,
++  disabledReason = null
 +}: CodevChatProviderPickerProps): React.JSX.Element | null {
++  const [switching, setSwitching] = useState(false)
 +  if (!codevChatProviderSwitchEnabled() || !isCodevChatProvider(agent)) {
 +    return null
 +  }
@@ -1200,7 +1297,7 @@ index 0000000..5702f58
 +    <DropdownMenu>
 +      <Tooltip>
 +        <TooltipTrigger asChild>
-+          <DropdownMenuTrigger asChild disabled={isWorking}>
++          <DropdownMenuTrigger asChild disabled={isWorking || disabled || switching}>
 +            <Button
 +              type="button"
 +              variant="ghost"
@@ -1209,12 +1306,18 @@ index 0000000..5702f58
 +              className="max-w-48 text-muted-foreground"
 +            >
 +              <span className="truncate">{formatAgentTypeLabel(agent)}</span>
-+              <ChevronDown className="size-3" />
++              {switching ? (
++                <LoaderCircle className="size-3 animate-spin" />
++              ) : (
++                <ChevronDown className="size-3" />
++              )}
 +            </Button>
 +          </DropdownMenuTrigger>
 +        </TooltipTrigger>
 +        <TooltipContent side="top" sideOffset={4}>
-+          {isWorking ? 'Wait for the reply to finish to switch provider' : 'Provider'}
++          {isWorking
++            ? 'Wait for the reply to finish to switch provider'
++            : (disabledReason ?? 'Provider')}
 +        </TooltipContent>
 +      </Tooltip>
 +      <DropdownMenuContent align="start" className="w-52">
@@ -1222,12 +1325,23 @@ index 0000000..5702f58
 +          value={agent}
 +          onValueChange={(next) => {
 +            if (next !== agent && isCodevChatProvider(next)) {
-+              switchCodevChatProvider({ terminalTabId, nextAgent: next })
++              setSwitching(true)
++              void switchCodevChatProvider({ terminalTabId, nextAgent: next })
++                .catch((error) => {
++                  toast.error('Could not switch provider', {
++                    description: error instanceof Error ? error.message : String(error)
++                  })
++                })
++                .finally(() => setSwitching(false))
 +            }
 +          }}
 +        >
 +          {CODEV_CHAT_PROVIDERS.map((provider) => (
-+            <DropdownMenuRadioItem key={provider} value={provider} disabled={isWorking}>
++            <DropdownMenuRadioItem
++              key={provider}
++              value={provider}
++              disabled={isWorking || disabled || switching}
++            >
 +              {formatAgentTypeLabel(provider)}
 +            </DropdownMenuRadioItem>
 +          ))}
@@ -1239,10 +1353,218 @@ index 0000000..5702f58
 +
 +export const CodevChatProviderPicker = memo(CodevChatProviderPickerInner)
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposer.tsx b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
-index 3cad0b3..619134f 100644
+index 3cad0b3..7d06b01 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposer.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
-@@ -388,6 +388,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+@@ -68,6 +68,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+       paneKey,
+       targetPtyId,
+       agent,
++      coordination,
+       canSend = true,
+       isWorking = false,
+       onStop,
+@@ -101,6 +102,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+     const [activeSuggestion, setActiveSuggestion] = useState(0)
+     const [notice, setNotice] = useState<string | null>(null)
+     const [dictationPressed, setDictationPressed] = useState(false)
++    const [submitting, setSubmitting] = useState(false)
+     const textareaRef = useRef<HTMLTextAreaElement>(null)
+     const isComposingRef = useRef(false)
+     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
+@@ -174,9 +176,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+         setDraft,
+         setNotice
+       })
+-    const sendButtonDisabled = isWorking
+-      ? !hasPty || !onStop
+-      : disabled || (draft.trim() === '' && imageAttachments.length === 0)
++    const sendButtonDisabled = submitting
++      ? true
++      : isWorking
++        ? !hasPty || !onStop || !canSend
++        : disabled || (draft.trim() === '' && imageAttachments.length === 0)
+ 
+     const { insertTypedText, focus } = useNativeChatTypedInsertion({
+       textareaRef,
+@@ -237,7 +241,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+     const send = useCallback(() => {
+       const text = draft
+       const imagePaths = imageAttachments.map((attachment) => attachment.path)
+-      if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
++      if ((text.trim() === '' && imagePaths.length === 0) || disabled || submitting) {
+         return
+       }
+       // Why: block a normal send while a session-option command (e.g. /model) is
+@@ -251,62 +255,102 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+         return
+       }
+       const classification = classifySend(text)
+-      // A parked launch draft must be cleared line-by-line before the body.
+-      const { sendOptions } = resolveNativeChatLaunchDraftSend({
+-        launchDraft,
+-        launchDraftResolved,
+-        agent,
+-        readScreen: () => readTerminalScreen?.()
+-      })
+-      let pendingHandle: NativeChatSendHandle | null = null
+-      // Why: image attachments take the attachment send path even for a
+-      // command/unknown send, otherwise `clearImageAttachments()` below drops
+-      // them silently when the text starts with the agent's slash/skill prefix.
+-      if (classification !== 'chat' && imagePaths.length === 0) {
+-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+-      } else if (imagePaths.length > 0) {
+-        pendingHandle = sendNativeChatMessageWithImageAttachments(
+-          target.settings,
+-          target.ptyId,
+-          text,
+-          imagePaths,
+-          sendOptions
+-        )
+-      } else if (text.trim().length > 0) {
+-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+-      } else {
+-        submitNativeChatPrompt(target.settings, target.ptyId)
+-      }
+-      if (classification !== 'chat') {
+-        if (pendingHandle) {
+-          trackPendingSend(pendingHandle)
++      const deliver = (): void => {
++        // A parked launch draft must be cleared line-by-line before the body.
++        const { sendOptions } = resolveNativeChatLaunchDraftSend({
++          launchDraft,
++          launchDraftResolved,
++          agent,
++          readScreen: () => readTerminalScreen?.()
++        })
++        let pendingHandle: NativeChatSendHandle | null = null
++        // Why: image attachments take the attachment send path even for a
++        // command/unknown send, otherwise `clearImageAttachments()` below drops
++        // them silently when the text starts with the agent's slash/skill prefix.
++        if (classification !== 'chat' && imagePaths.length === 0) {
++          pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
++        } else if (imagePaths.length > 0) {
++          pendingHandle = sendNativeChatMessageWithImageAttachments(
++            target.settings,
++            target.ptyId,
++            text,
++            imagePaths,
++            sendOptions
++          )
++        } else if (text.trim().length > 0) {
++          pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
++        } else {
++          submitNativeChatPrompt(target.settings, target.ptyId)
+         }
+-        // Why: only verified catalog commands can truthfully claim they ran or
+-        // mutate session-option state; unknown slash-like text has no such proof.
+-        if (classification === 'command') {
+-          onSlashCommand?.(text.trim())
+-          sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+-        }
+-      } else {
+-        const pendingId = onOptimisticSend?.(text, imagePaths)
+-        if (pendingHandle) {
+-          trackPendingSend(pendingHandle, pendingId)
++        if (classification !== 'chat') {
++          if (pendingHandle) {
++            trackPendingSend(pendingHandle)
++          }
++          // Why: only verified catalog commands can truthfully claim they ran or
++          // mutate session-option state; unknown slash-like text has no such proof.
++          if (classification === 'command') {
++            onSlashCommand?.(text.trim())
++            sessionOptionsSurface?.recordOutgoingCommand(text.trim())
++          }
++        } else {
++          const pendingId = onOptimisticSend?.(text, imagePaths)
++          if (pendingHandle) {
++            trackPendingSend(pendingHandle, pendingId)
++          }
+         }
++        // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
++        // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
++        emitNativeChatMessageSent({
++          agent,
++          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
++        })
++        setHistory((prev) => pushHistory(prev, text))
++        setDraft('')
++        setCaret(0)
++        clearSkillOrigin()
++        clearImageAttachments()
++        setNotice(null)
++        // The send cleared the TUI input line before its body, so retire the seed.
++        useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
+       }
+-      // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
+-      // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
+-      emitNativeChatMessageSent({
+-        agent,
+-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+-      })
+-      setHistory((prev) => pushHistory(prev, text))
+-      setDraft('')
+-      setCaret(0)
+-      clearSkillOrigin()
+-      clearImageAttachments()
+-      setNotice(null)
+-      // The send cleared the TUI input line before its body, so retire the seed.
+-      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
++
++      if (
++        classification === 'chat' &&
++        coordination?.enabled &&
++        (agent === 'claude' || agent === 'codex')
++      ) {
++        const modelDescriptor = sessionOptionsSnapshot.find(
++          (descriptor) => descriptor.category === 'model'
++        )
++        const effortDescriptor = sessionOptionsSnapshot.find(
++          (descriptor) => descriptor.id === 'effort'
++        )
++        const currentValue = (descriptor: (typeof sessionOptionsSnapshot)[number] | undefined) =>
++          descriptor?.kind.currentValue
++        setSubmitting(true)
++        void coordination
++          .recordPrompt({
++            prompt: text.trim(),
++            attachments: imagePaths.map((path) => ({
++              name: path.split(/[\\/]/).at(-1) ?? 'Image',
++              type: 'image'
++            })),
++            provider: agent === 'claude' ? 'claude' : 'codex',
++            model:
++              typeof currentValue(modelDescriptor) === 'string'
++                ? String(currentValue(modelDescriptor))
++                : null,
++            effort:
++              typeof currentValue(effortDescriptor) === 'string'
++                ? String(currentValue(effortDescriptor))
++                : null
++          })
++          .then(deliver)
++          .catch((error) => setNotice(error instanceof Error ? error.message : String(error)))
++          .finally(() => setSubmitting(false))
++        return
++      }
++      deliver()
+     }, [
+       agent,
+       classifySend,
+@@ -314,8 +358,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+       clearImageAttachments,
+       draft,
+       imageAttachments,
++      coordination,
+       disabled,
+       isDispatchingSessionOption,
++      sessionOptionsSnapshot,
++      submitting,
+       launchDraft,
+       launchDraftResolved,
+       readTerminalScreen,
+@@ -388,6 +435,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
  
      return (
        <NativeChatComposerField
@@ -1251,6 +1573,22 @@ index 3cad0b3..619134f 100644
          textareaRef={textareaRef}
          draft={draft}
          disabled={disabled}
+@@ -398,6 +447,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+         notice={notice}
+         imageAttachments={imageAttachments}
+         sendButtonDisabled={sendButtonDisabled}
++        submitting={submitting}
+         isWorking={isWorking}
+         attachDisabled={disabled}
+         dictationDisabled={dictationDisabled}
+@@ -443,6 +493,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+         onStop={interrupt}
+         sessionOptionsSurface={sessionOptionsSurface}
+         sessionOptionsSnapshot={sessionOptionsSnapshot}
++        coordination={coordination}
+       />
+     )
+   }
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
 index 2e1b02a..d33e385 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
@@ -1276,10 +1614,16 @@ index 2e1b02a..d33e385 100644
          dictationDisabled={false}
          sendDisabled={false}
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
-index aee0f79..a0dfbc3 100644
+index aee0f79..118c14b 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
-@@ -6,9 +6,13 @@ import type {
+@@ -1,4 +1,4 @@
+-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
++import { ArrowUp, LoaderCircle, Mic, Plus, Square } from 'lucide-react'
+ import { Button } from '@/components/ui/button'
+ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+ import { translate } from '@/i18n/i18n'
+@@ -6,12 +6,17 @@ import type {
    SessionOptionDescriptor,
    SessionOptionsSurface
  } from '../../../../shared/native-chat-session-options'
@@ -1293,7 +1637,16 @@ index aee0f79..a0dfbc3 100644
    attachDisabled: boolean
    dictationDisabled: boolean
    sendDisabled: boolean
-@@ -26,6 +30,8 @@ export type NativeChatComposerActionsProps = {
++  submitting?: boolean
+   isWorking: boolean
+   isDictating: boolean
+   isDictationHoldMode: boolean
+@@ -23,12 +28,17 @@ export type NativeChatComposerActionsProps = {
+   onStop?: () => void
+   sessionOptionsSurface: SessionOptionsSurface | null
+   sessionOptionsSnapshot: SessionOptionDescriptor[]
++  canConfigure?: boolean
++  configureDisabledReason?: string | null
  }
  
  export function NativeChatComposerActions({
@@ -1302,7 +1655,22 @@ index aee0f79..a0dfbc3 100644
    attachDisabled,
    dictationDisabled,
    sendDisabled,
-@@ -69,6 +75,11 @@ export function NativeChatComposerActions({
++  submitting = false,
+   isWorking,
+   isDictating,
+   isDictationHoldMode,
+@@ -39,7 +49,9 @@ export function NativeChatComposerActions({
+   onSend,
+   onStop,
+   sessionOptionsSurface,
+-  sessionOptionsSnapshot
++  sessionOptionsSnapshot,
++  canConfigure = true,
++  configureDisabledReason = null
+ }: NativeChatComposerActionsProps): React.JSX.Element {
+   const dictationLabel = isDictating
+     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
+@@ -69,10 +81,19 @@ export function NativeChatComposerActions({
        <div className="ml-auto flex items-center gap-1.5">
          {/* Why: keep session controls beside the actions they affect; the
          model trigger is ordered last so it sits directly next to dictation. */}
@@ -1310,19 +1678,48 @@ index aee0f79..a0dfbc3 100644
 +          agent={agent}
 +          terminalTabId={terminalTabId}
 +          isWorking={isWorking}
++          disabled={!canConfigure}
++          disabledReason={configureDisabledReason}
 +        />
          <NativeChatSessionOptionPickers
            surface={sessionOptionsSurface}
            snapshot={sessionOptionsSnapshot}
+           isWorking={isWorking}
++          disabled={!canConfigure}
++          disabledReason={configureDisabledReason}
+         />
+         <Tooltip>
+           <TooltipTrigger asChild>
+@@ -131,7 +152,9 @@ export function NativeChatComposerActions({
+           size="icon"
+           className="size-8 rounded-full pointer-coarse:size-10"
+         >
+-          {isWorking ? (
++          {submitting ? (
++            <LoaderCircle className="size-4 animate-spin" />
++          ) : isWorking ? (
+             <Square className="size-3.5 fill-current" />
+           ) : (
+             <ArrowUp className="size-4" />
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
-index 6f954a6..18296ea 100644
+index 6f954a6..1168816 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
-@@ -18,8 +18,11 @@ import type {
+@@ -4,7 +4,7 @@ import type {
+   KeyboardEventHandler,
+   RefObject
+ } from 'react'
+-import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
++import { CircleAlert, Image as ImageIcon, X } from 'lucide-react'
+ import { translate } from '@/i18n/i18n'
+ import { cn } from '@/lib/utils'
+ import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
+@@ -18,8 +18,12 @@ import type {
    SessionOptionDescriptor,
    SessionOptionsSurface
  } from '../../../../shared/native-chat-session-options'
 +import type { AgentType } from '../../../../shared/agent-status-types'
++import type { CodevChatCoordination } from './use-codev-chat-coordination'
  
  export type NativeChatComposerFieldProps = {
 +  agent: AgentType
@@ -1330,18 +1727,73 @@ index 6f954a6..18296ea 100644
    textareaRef: RefObject<HTMLTextAreaElement | null>
    draft: string
    disabled: boolean
-@@ -95,7 +98,9 @@ export function NativeChatComposerField({
+@@ -30,6 +34,7 @@ export type NativeChatComposerFieldProps = {
+   notice: string | null
+   imageAttachments: readonly NativeChatComposerImageAttachment[]
+   sendButtonDisabled: boolean
++  submitting?: boolean
+   isWorking: boolean
+   attachDisabled: boolean
+   dictationDisabled: boolean
+@@ -54,6 +59,7 @@ export type NativeChatComposerFieldProps = {
+   onStop?: () => void
+   sessionOptionsSurface: SessionOptionsSurface | null
+   sessionOptionsSnapshot: SessionOptionDescriptor[]
++  coordination?: CodevChatCoordination
+ }
+ 
+ export type NativeChatComposerImageAttachment = {
+@@ -72,6 +78,7 @@ export function NativeChatComposerField({
+   notice,
+   imageAttachments,
+   sendButtonDisabled,
++  submitting = false,
+   isWorking,
+   attachDisabled,
+   dictationDisabled,
+@@ -95,7 +102,10 @@ export function NativeChatComposerField({
    onSend,
    onStop,
    sessionOptionsSurface,
 -  sessionOptionsSnapshot
 +  sessionOptionsSnapshot,
++  coordination,
 +  agent,
 +  terminalTabId
  }: NativeChatComposerFieldProps): React.JSX.Element {
    return (
      <div className="shrink-0 bg-background">
-@@ -199,6 +204,8 @@ export function NativeChatComposerField({
+@@ -116,12 +126,13 @@ export function NativeChatComposerField({
+           ) : null}
+           {notice ? (
+             <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+-              <ImageOff className="size-3.5 shrink-0" />
++              <CircleAlert className="size-3.5 shrink-0" />
+               <span>{notice}</span>
+             </div>
+           ) : null}
+           <div
+             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
++            data-codev-chat-composer="true"
+             className={cn(
+               // Why: always-on hairline (token-level border, not focus ring) —
+               // no focus/click border flash. The box is a container, not a
+@@ -185,7 +196,13 @@ export function NativeChatComposerField({
+                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                   : undefined
+               }
+-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
++              placeholder={
++                coordination?.enabled && !coordination.canEdit
++                  ? coordination.holder
++                    ? `${coordination.holder.name} has the composer`
++                    : 'Take control to write a message'
++                  : nativeChatComposerPlaceholder(hasPty, canSend)
++              }
+               // Why: coarse-pointer min-height follows the app's touch target convention.
+               // field-sizing:content grows the field with the draft; the 8lh cap (plus
+               // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+@@ -199,9 +216,12 @@ export function NativeChatComposerField({
              />
              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                <NativeChatComposerActions
@@ -1350,11 +1802,37 @@ index 6f954a6..18296ea 100644
                  attachDisabled={attachDisabled}
                  dictationDisabled={dictationDisabled}
                  sendDisabled={sendButtonDisabled}
++                submitting={submitting}
+                 isWorking={isWorking}
+                 isDictating={isDictating}
+                 isDictationHoldMode={isDictationHoldMode}
+@@ -213,6 +233,14 @@ export function NativeChatComposerField({
+                 onStop={onStop}
+                 sessionOptionsSurface={sessionOptionsSurface}
+                 sessionOptionsSnapshot={sessionOptionsSnapshot}
++                canConfigure={!coordination?.enabled || coordination.canEdit}
++                configureDisabledReason={
++                  coordination?.enabled && !coordination.canEdit
++                    ? coordination.holder
++                      ? `${coordination.holder.name} has the composer`
++                      : 'Take control of the composer first'
++                    : null
++                }
+               />
+             </div>
+           </div>
 diff --git a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-index 354732b..ca4639d 100644
+index 354732b..21ac82f 100644
 --- a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-@@ -18,6 +18,11 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
+@@ -1,5 +1,5 @@
+ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+-import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
++import { ArrowDown, ArrowUp, Bot, Image as ImageIcon } from 'lucide-react'
+ import CommentMarkdown, {
+   type CommentMarkdownLinkClickHandler
+ } from '@/components/sidebar/CommentMarkdown'
+@@ -18,13 +18,38 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
  import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
  import { isNativeChatPastedImagePath } from './native-chat-image-paste'
  import { NativeChatToolRun } from './NativeChatToolRun'
@@ -1365,15 +1843,45 @@ index 354732b..ca4639d 100644
 +} from './native-chat-durations'
  import { NativeChatCopyButton } from './NativeChatCopyButton'
  import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
++import { formatAgentTypeLabel } from '@/lib/agent-status'
++import type { AgentType } from '../../../../shared/agent-status-types'
++import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
  
-@@ -128,10 +133,16 @@ function MessageRow({
+ function geometryOf(el: HTMLElement): ScrollGeometry {
+   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
+ }
+ 
++function displayTime(timestamp: number | null): string | null {
++  if (timestamp == null) return null
++  return new Intl.DateTimeFormat(undefined, {
++    hour: 'numeric',
++    minute: '2-digit'
++  }).format(timestamp)
++}
++
++function memberInitials(name: string): string {
++  return name
++    .split(/\s+/)
++    .filter(Boolean)
++    .slice(0, 2)
++    .map((part) => part[0]?.toUpperCase())
++    .join('')
++}
++
+ function proseToMarkdown(blocks: NativeChatBlock[]): string {
+   return blocks
+     .map((block) => {
+@@ -128,15 +153,27 @@ function MessageRow({
    onScrollMessageToTop,
    onLinkClick,
    allowFileUriLinks = false,
 -  deliveryFailed = false
 +  deliveryFailed = false,
 +  durationMs = null,
-+  turnTotalMs = null
++  turnTotalMs = null,
++  agent,
++  viewerId,
++  receipt
  }: {
    message: NativeChatMessage
    expandSignal: boolean
@@ -1384,16 +1892,41 @@ index 354732b..ca4639d 100644
    /** Align this message's top to the top of the scroll viewport. */
    onScrollMessageToTop: (el: HTMLElement) => void
    onLinkClick?: CommentMarkdownLinkClickHandler
-@@ -166,10 +177,17 @@ function MessageRow({
+   allowFileUriLinks?: boolean
+   deliveryFailed?: boolean
++  agent: AgentType
++  viewerId: string | null
++  receipt: CodevChatPromptReceipt | null
+ }): React.JSX.Element | null {
+   const rowRef = useRef<HTMLDivElement | null>(null)
+   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
+@@ -166,10 +203,34 @@ function MessageRow({
      // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
      // transcript caught up.)
      return (
 -      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-+      <div
-+        ref={rowRef}
-+        data-codev-chat-row="user"
-+        className="flex flex-col items-end gap-0.5"
-+      >
++      <div ref={rowRef} data-codev-chat-row="user" className="flex flex-col items-end gap-1">
++        <div
++          data-codev-chat-author="true"
++          className="flex max-w-[90%] items-center gap-1.5 text-[11px] text-muted-foreground"
++        >
++          {receipt?.author.avatarUrl ? (
++            <img
++              src={receipt.author.avatarUrl}
++              alt=""
++              className="size-5 rounded-full object-cover"
++            />
++          ) : (
++            <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[8px] font-semibold text-accent-foreground">
++              {memberInitials(receipt?.author.name ?? 'Member')}
++            </span>
++          )}
++          <strong className="font-medium text-foreground">
++            {receipt?.author.name ?? 'Workspace member'}
++            {receipt?.author.id === viewerId ? ' · You' : ''}
++          </strong>
++          {displayTime(message.timestamp) ? <span>{displayTime(message.timestamp)}</span> : null}
++        </div>
          {/* User turns get a distinct muted fill (not the card/canvas color) so
              the prompt reads apart from the assistant's body copy. */}
 -        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
@@ -1404,18 +1937,32 @@ index 354732b..ca4639d 100644
            {markdown ? (
              <>
                <ImageAttachmentRefs blocks={prose} />
-@@ -204,6 +222,7 @@ function MessageRow({
+@@ -204,13 +265,35 @@ function MessageRow({
    return (
      <div
        ref={rowRef}
 +      data-codev-chat-row={isReasoning ? 'reasoning' : isSystem ? 'system' : 'assistant'}
        className={cn(
          'group relative max-w-full text-sm leading-relaxed text-foreground',
++        !isReasoning && !isSystem && 'rounded-2xl border border-border/70 bg-card/35 px-5 py-4',
          // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-@@ -211,6 +230,13 @@ function MessageRow({
+         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
          isSystem && 'text-xs text-muted-foreground'
        )}
      >
++      {!isReasoning && !isSystem ? (
++        <div
++          data-codev-chat-assistant-header="true"
++          className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground"
++        >
++          <span className="flex size-6 items-center justify-center rounded-lg bg-primary/15 text-primary">
++            <Bot className="size-3.5" />
++          </span>
++          <strong className="font-semibold text-foreground">{formatAgentTypeLabel(agent)}</strong>
++          {receipt?.model ? <span>{receipt.model}</span> : null}
++          {receipt?.effort ? <span>· {receipt.effort} effort</span> : null}
++        </div>
++      ) : null}
 +      {isReasoning && formatTurnDuration(durationMs) ? (
 +        <p className="mb-1 font-mono text-[10.5px] not-italic text-muted-foreground/80">
 +          {translate('components.native-chat.thoughtFor', 'Thought for {{value0}}', {
@@ -1426,7 +1973,7 @@ index 354732b..ca4639d 100644
        {showControls ? (
          <AgentControls
            markdown={markdown}
-@@ -228,7 +254,20 @@ function MessageRow({
+@@ -228,7 +311,20 @@ function MessageRow({
            allowFileUriLinks={allowFileUriLinks}
          />
        ) : null}
@@ -1448,7 +1995,27 @@ index 354732b..ca4639d 100644
      </div>
    )
  }
-@@ -254,6 +293,24 @@ export function NativeChatMessageList({
+@@ -236,6 +332,9 @@ function MessageRow({
+ export function NativeChatMessageList({
+   session,
+   isWorking,
++  agent,
++  viewerId,
++  promptReceipts,
+   expandSignal,
+   fontScale,
+   onLinkClick,
+@@ -244,6 +343,9 @@ export function NativeChatMessageList({
+ }: {
+   session: NativeChatLiveSession
+   isWorking: boolean
++  agent: AgentType
++  viewerId: string | null
++  promptReceipts: ReadonlyMap<string, CodevChatPromptReceipt>
+   /** Toolbar-driven desired open state for every tool run; each flip re-syncs. */
+   expandSignal: boolean
+   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
+@@ -254,6 +356,24 @@ export function NativeChatMessageList({
  }): React.JSX.Element {
    const scrollRef = useRef<HTMLDivElement | null>(null)
    const contentRef = useRef<HTMLDivElement | null>(null)
@@ -1473,7 +2040,25 @@ index 354732b..ca4639d 100644
    const [stuckToBottom, setStuckToBottom] = useState(true)
    const [showJump, setShowJump] = useState(false)
  
-@@ -377,6 +434,9 @@ export function NativeChatMessageList({
+@@ -274,6 +394,17 @@ export function NativeChatMessageList({
+     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
+     [session.messages]
+   )
++  const receiptByMessage = useMemo(() => {
++    const resolved = new Map<string, CodevChatPromptReceipt>()
++    let current: CodevChatPromptReceipt | null = null
++    for (const message of messages) {
++      if (message.role === 'user') {
++        current = promptReceipts.get(message.id) ?? null
++      }
++      if (current) resolved.set(message.id, current)
++    }
++    return resolved
++  }, [messages, promptReceipts])
+   const showTypingIndicator =
+     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
+ 
+@@ -377,6 +508,9 @@ export function NativeChatMessageList({
        >
          <div
            ref={contentRef}
@@ -1483,7 +2068,7 @@ index 354732b..ca4639d 100644
            // Why: same max width as the composer column; horizontal inset comes
            // from the scroll container so content aligns with the composer field.
            className="mx-auto flex w-full max-w-4xl flex-col gap-5"
-@@ -399,10 +459,12 @@ export function NativeChatMessageList({
+@@ -399,10 +533,15 @@ export function NativeChatMessageList({
                </button>
              </div>
            ) : null}
@@ -1492,6 +2077,9 @@ index 354732b..ca4639d 100644
              <MessageRow
                key={message.id}
                message={message}
++              agent={agent}
++              viewerId={viewerId}
++              receipt={receiptByMessage.get(message.id) ?? null}
 +              durationMs={turnDurations[index] ?? null}
 +              turnTotalMs={turnTotals[index] ?? null}
                expandSignal={expandSignal}
@@ -1530,10 +2118,19 @@ index e7d3eda..1e5c164 100644
      const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
      const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
 diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-index 2b83d68..ac3db9a 100644
+index 2b83d68..46fea87 100644
 --- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-@@ -126,8 +126,9 @@ function DescriptorMenuRows(props: {
+@@ -33,6 +33,8 @@ export type NativeChatSessionOptionPickersProps = {
+   surface: SessionOptionsSurface | null
+   snapshot: SessionOptionDescriptor[]
+   isWorking: boolean
++  disabled?: boolean
++  disabledReason?: string | null
+ }
+ 
+ function PickerTooltipContent(props: {
+@@ -126,8 +128,9 @@ function DescriptorMenuRows(props: {
        </DropdownMenuItem>
      )
    }
@@ -1545,6 +2142,71 @@ index 2b83d68..ac3db9a 100644
      return (
        <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
          {translate(
+@@ -207,7 +210,9 @@ function runSurfaceCall(
+ function NativeChatSessionOptionPickersInner({
+   surface,
+   snapshot,
+-  isWorking
++  isWorking,
++  disabled = false,
++  disabledReason = null
+ }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
+   const [pendingId, setPendingId] = useState<string | null>(null)
+   const model = snapshot.find((descriptor) => descriptor.category === 'model')
+@@ -223,13 +228,14 @@ function NativeChatSessionOptionPickersInner({
+     runSurfaceCall(descriptor.id, setPendingId, () => surface.invokeAction(descriptor.id))
+   }
+ 
+-  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
++  const modelReason = disabledReason ?? nativeChatSessionOptionDisabledReason(model.disabledReason)
+   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
+   const optionsTooltip = nativeChatOptionsPillTitle(options)
+   const optionsReason =
+-    options.length > 0 && options.every((descriptor) => !descriptor.settable)
++    disabledReason ??
++    (options.length > 0 && options.every((descriptor) => !descriptor.settable)
+       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
+-      : null
++      : null)
+ 
+   return (
+     <div className="flex min-w-0 items-center gap-0.5">
+@@ -238,7 +244,7 @@ function NativeChatSessionOptionPickersInner({
+           <PickerTrigger
+             label={nativeChatOptionsPillLabel(options)}
+             tooltipLabel={optionsTooltip}
+-            disabled={isWorking || pendingId !== null}
++            disabled={disabled || isWorking || pendingId !== null}
+             disabledReason={optionsReason}
+             dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
+           />
+@@ -254,7 +260,7 @@ function NativeChatSessionOptionPickersInner({
+                   ) : null}
+                   <DescriptorMenuRows
+                     descriptor={descriptor}
+-                    pending={pendingId !== null}
++                    pending={disabled || pendingId !== null}
+                     setValue={(value) => setOption(descriptor, value)}
+                     invokeAction={() => invokeAction(descriptor)}
+                   />
+@@ -268,7 +274,7 @@ function NativeChatSessionOptionPickersInner({
+         <PickerTrigger
+           label={nativeChatModelPillLabel(model)}
+           tooltipLabel={modelTooltip}
+-          disabled={isWorking || pendingId !== null}
++          disabled={disabled || isWorking || pendingId !== null}
+           disabledReason={modelReason}
+           dispatched={model.valueSource === 'dispatched'}
+         />
+@@ -278,7 +284,7 @@ function NativeChatSessionOptionPickersInner({
+           ) : null}
+           <DescriptorMenuRows
+             descriptor={model}
+-            pending={pendingId !== null}
++            pending={disabled || pendingId !== null}
+             setValue={(value) => setOption(model, value)}
+             invokeAction={() => invokeAction(model)}
+           />
 diff --git a/src/renderer/src/components/native-chat/NativeChatToolRun.tsx b/src/renderer/src/components/native-chat/NativeChatToolRun.tsx
 index e0c5cd1..5858d63 100644
 --- a/src/renderer/src/components/native-chat/NativeChatToolRun.tsx
@@ -1579,22 +2241,26 @@ index e0c5cd1..5858d63 100644
            className={cn(
              'size-3.5 shrink-0 text-muted-foreground transition-all',
 diff --git a/src/renderer/src/components/native-chat/NativeChatView.tsx b/src/renderer/src/components/native-chat/NativeChatView.tsx
-index 2fb4581..4a0cb26 100644
+index 2fb4581..ed1b999 100644
 --- a/src/renderer/src/components/native-chat/NativeChatView.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatView.tsx
-@@ -53,6 +53,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
+@@ -53,6 +53,11 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
  import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
  import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
  import type { NativeChatViewProps } from './native-chat-view-types'
 +import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
 +import { assembleNativeChatSession } from './native-chat-session-assembler'
++import { useCodevChatCoordination } from './use-codev-chat-coordination'
++import { matchCodevChatPromptReceipts } from './codev-chat-attribution'
++import { CodevChatPresenceBar } from './CodevChatPresenceBar'
  
  export type { NativeChatViewProps } from './native-chat-view-types'
  
-@@ -138,6 +140,35 @@ function NativeChatResolvedView({
+@@ -138,6 +143,36 @@ function NativeChatResolvedView({
      transcriptPath,
      runtimeEnvironmentId
    })
++  const coordination = useCodevChatCoordination(paneKey)
 +  const [terminalFallbackMessages, setTerminalFallbackMessages] = useState(() =>
 +    agent === 'codex' ? codexTerminalScreenToMessages(readTerminalScreen?.() ?? null) : []
 +  )
@@ -1627,7 +2293,7 @@ index 2fb4581..4a0cb26 100644
    const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
    const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
    const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-@@ -147,12 +178,12 @@ function NativeChatResolvedView({
+@@ -147,12 +182,12 @@ function NativeChatResolvedView({
    const launchDraftSignal = useNativeChatLaunchDraftSignal({
      terminalTabId,
      agent,
@@ -1643,7 +2309,7 @@ index 2fb4581..4a0cb26 100644
    // The agent's in-progress reply preview (hook), shown as a live streaming
    // bubble while it works — before the completed turn flushes to the transcript.
    const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
-@@ -224,20 +255,31 @@ function NativeChatResolvedView({
+@@ -224,20 +259,31 @@ function NativeChatResolvedView({
    // Prune echoes whose real user turn is now in the transcript.
    useEffect(() => {
      setPending((prev) =>
@@ -1680,7 +2346,7 @@ index 2fb4581..4a0cb26 100644
        const entry: NativeChatPendingSend = {
          id: nextNativeChatPendingSendId(sentAt),
          text,
-@@ -249,7 +291,7 @@ function NativeChatResolvedView({
+@@ -249,7 +295,7 @@ function NativeChatResolvedView({
        setPending(appendPendingSendCache(pendingScope, entry))
        return entry.id
      },
@@ -1689,7 +2355,7 @@ index 2fb4581..4a0cb26 100644
    )
    const onOptimisticSendCanceled = useCallback(
      (pendingId: string) => {
-@@ -268,15 +310,18 @@ function NativeChatResolvedView({
+@@ -268,15 +314,18 @@ function NativeChatResolvedView({
    )
  
    const launchPromptMessage = useMemo(
@@ -1702,17 +2368,193 @@ index 2fb4581..4a0cb26 100644
      if (!launchPromptMessage) {
 -      return session
 +      return sessionWithTerminalFallback
-+    }
-+    return {
-+      ...sessionWithTerminalFallback,
-+      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
      }
 -    return { ...session, messages: [...session.messages, launchPromptMessage] }
 -  }, [launchPromptMessage, session])
++    return {
++      ...sessionWithTerminalFallback,
++      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
++    }
 +  }, [launchPromptMessage, sessionWithTerminalFallback])
  
    const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
      const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
+@@ -322,6 +371,10 @@ function NativeChatResolvedView({
+       ]
+     }
+   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
++  const promptReceipts = useMemo(
++    () => matchCodevChatPromptReceipts(sessionWithPending.messages, coordination.receipts),
++    [coordination.receipts, sessionWithPending.messages]
++  )
+   // Derive the view state from the pending-augmented session so a send into an
+   // otherwise-empty conversation flips to the list (showing the queued bubble)
+   // instead of staying on the empty state.
+@@ -414,6 +467,9 @@ function NativeChatResolvedView({
+           <NativeChatMessageList
+             session={sessionWithPending}
+             isWorking={isWorking}
++            agent={agent}
++            viewerId={coordination.viewer?.id ?? null}
++            promptReceipts={promptReceipts}
+             expandSignal={false}
+             fontScale={fontScale.scale}
+             onLinkClick={nativeChatFileLinkClick}
+@@ -422,13 +478,14 @@ function NativeChatResolvedView({
+           />
+         )}
+       </div>
++      <CodevChatPresenceBar coordination={coordination} />
+       {/* Live interactive prompt (question / approval) is the bottom input region
+           (mobile parity). A question card supplies its own answer input, so it
+           fully replaces the composer while active — no stray "Send a message". */}
+       <NativeChatInteractiveCard
+         paneKey={paneKey}
+         send={interactiveSend}
+-        canSend={canSend}
++        canSend={canSend && coordination.canEdit}
+         messages={sessionAfterCommandBoundaries.messages}
+         transcriptSettled={session.readPhase === 'ready'}
+         onShowingQuestionChange={setQuestionActive}
+@@ -444,8 +501,9 @@ function NativeChatResolvedView({
+           paneKey={paneKey}
+           targetPtyId={targetPtyId}
+           agent={agent}
+-          canSend={canSend}
++          canSend={canSend && coordination.canEdit}
+           isWorking={isWorking}
++          coordination={coordination}
+           onStop={stopAgent}
+           onOptimisticSend={onOptimisticSend}
+           onOptimisticSendCanceled={onOptimisticSendCanceled}
+diff --git a/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts b/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts
+new file mode 100644
+index 0000000..d3e33d8
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts
+@@ -0,0 +1,59 @@
++import { describe, expect, it } from 'vitest'
++import type { NativeChatMessage } from '../../../../shared/native-chat-types'
++import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
++import { matchCodevChatPromptReceipts } from './codev-chat-attribution'
++
++function message(id: string, text: string, timestamp: number): NativeChatMessage {
++  return {
++    id,
++    role: 'user',
++    blocks: [{ type: 'text', text }],
++    timestamp,
++    source: 'transcript'
++  }
++}
++
++function receipt(
++  id: string,
++  prompt: string,
++  createdAt: string,
++  authorName: string
++): CodevChatPromptReceipt {
++  return {
++    id,
++    clientMessageId: crypto.randomUUID(),
++    author: { id: crypto.randomUUID(), name: authorName, avatarUrl: null },
++    prompt,
++    attachments: [],
++    provider: 'claude',
++    model: 'sonnet',
++    effort: 'high',
++    createdAt
++  }
++}
++
++describe('matchCodevChatPromptReceipts', () => {
++  it('attributes repeated prompts in chronological order', () => {
++    const first = Date.parse('2026-08-28T12:00:00.000Z')
++    const matches = matchCodevChatPromptReceipts(
++      [message('one', 'Run tests', first), message('two', 'Run tests', first + 1_000)],
++      [
++        receipt('receipt-one', 'Run tests', new Date(first).toISOString(), 'Alex'),
++        receipt('receipt-two', 'Run tests', new Date(first + 1_000).toISOString(), 'Jordan')
++      ]
++    )
++
++    expect(matches.get('one')?.author.name).toBe('Alex')
++    expect(matches.get('two')?.author.name).toBe('Jordan')
++  })
++
++  it('does not attach a stale receipt to old provider history', () => {
++    const now = Date.parse('2026-08-28T12:00:00.000Z')
++    const matches = matchCodevChatPromptReceipts(
++      [message('old', 'Same words', now - 60 * 60 * 1000)],
++      [receipt('new', 'Same words', new Date(now).toISOString(), 'Jordan')]
++    )
++
++    expect(matches.has('old')).toBe(false)
++  })
++})
+diff --git a/src/renderer/src/components/native-chat/codev-chat-attribution.ts b/src/renderer/src/components/native-chat/codev-chat-attribution.ts
+new file mode 100644
+index 0000000..6f28ede
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/codev-chat-attribution.ts
+@@ -0,0 +1,57 @@
++import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
++import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
++
++const MATCH_WINDOW_MS = 5 * 60 * 1000
++
++function messageText(message: NativeChatMessage): string {
++  return message.blocks
++    .filter(isTextBlock)
++    .map((block) => block.text)
++    .join('\n\n')
++    .trim()
++}
++
++/**
++ * Match the provider-owned transcript to CoDev's idempotent prompt receipts.
++ * Repeated identical prompts are consumed in chronological order, while the
++ * timestamp guard prevents an old receipt being attached to unrelated history.
++ */
++export function matchCodevChatPromptReceipts(
++  messages: readonly NativeChatMessage[],
++  receipts: readonly CodevChatPromptReceipt[]
++): ReadonlyMap<string, CodevChatPromptReceipt> {
++  const available = receipts.map((receipt, index) => ({
++    receipt,
++    index,
++    timestamp: Date.parse(receipt.createdAt)
++  }))
++  const consumed = new Set<number>()
++  const matches = new Map<string, CodevChatPromptReceipt>()
++
++  for (const message of messages) {
++    if (message.role !== 'user') continue
++    const text = messageText(message)
++    const candidates = available.filter(
++      (candidate) => !consumed.has(candidate.index) && candidate.receipt.prompt.trim() === text
++    )
++    if (candidates.length === 0) continue
++    const matched =
++      message.timestamp == null
++        ? candidates[0]
++        : candidates
++            .filter(
++              (candidate) =>
++                Number.isFinite(candidate.timestamp) &&
++                Math.abs(candidate.timestamp - message.timestamp!) <= MATCH_WINDOW_MS
++            )
++            .sort(
++              (left, right) =>
++                Math.abs(left.timestamp - message.timestamp!) -
++                Math.abs(right.timestamp - message.timestamp!)
++            )[0]
++    if (!matched) continue
++    consumed.add(matched.index)
++    matches.set(message.id, matched.receipt)
++  }
++  return matches
++}
 diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
 new file mode 100644
 index 0000000..7f84a6a
@@ -1819,6 +2661,100 @@ index 0000000..45c52d8
 +  flush()
 +  return messages
 +}
+diff --git a/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts b/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
+index 5f84fc4..b032df4 100644
+--- a/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
++++ b/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
+@@ -93,7 +93,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
+         }),
+         'tab-1'
+       )
+-    ).toEqual({ kind: 'runtime' })
++    ).toEqual({ kind: 'runtime', worktreePath: '/repo/worktree' })
+   })
+ 
+   it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
+@@ -102,7 +102,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
+         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
+         'tab-1'
+       )
+-    ).toEqual({ kind: 'runtime' })
++    ).toEqual({ kind: 'runtime', worktreePath: '/repo/worktree' })
+   })
+ 
+   it('reports not-ready when the tab has no worktree owner', () => {
+diff --git a/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts b/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
+index 76b3b64..7320ff7 100644
+--- a/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
++++ b/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
+@@ -25,12 +25,15 @@ export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
+   worktreePath: string
+ }
+ 
++export type NativeChatRuntimeAttachmentOwner = {
++  kind: 'runtime'
++  worktreePath: string
++}
++
+ export type NativeChatAttachmentOwner =
+   | { kind: 'local' }
+   | NativeChatSshAttachmentOwner
+-  /** Runtime-owned (`remote:`) panes keep the composer's existing
+-   *  local-attachment block; runtime upload support is a separate seam. */
+-  | { kind: 'runtime' }
++  | NativeChatRuntimeAttachmentOwner
+   /** Store not hydrated / worktree unknown. Callers must not attach local
+    *  paths in this window — the worktree may turn out to be remote, and the
+    *  agent would silently receive paths it cannot read (see #6648). */
+@@ -58,8 +61,9 @@ export function resolveNativeChatAttachmentOwner(
+   if (!worktreeId) {
+     return { kind: 'not-ready' }
+   }
++  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
+   if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
+-    return { kind: 'runtime' }
++    return worktreePath ? { kind: 'runtime', worktreePath } : { kind: 'not-ready' }
+   }
+   const connectionId = getConnectionIdFromState(state, worktreeId)
+   if (connectionId === undefined) {
+@@ -68,7 +72,6 @@ export function resolveNativeChatAttachmentOwner(
+   if (connectionId === null) {
+     return { kind: 'local' }
+   }
+-  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
+   if (!worktreePath) {
+     return { kind: 'not-ready' }
+   }
+@@ -122,3 +125,29 @@ export async function uploadNativeChatAttachmentPaths(
+     toast.dismiss(pending)
+   }
+ }
++
++export async function uploadNativeChatRuntimeAttachmentPaths(
++  paths: string[],
++  owner: NativeChatRuntimeAttachmentOwner
++): Promise<string[] | null> {
++  const pending = toast.loading(
++    translate(
++      'components.native-chat.composer.uploadingAttachments',
++      'Uploading {{value0}} file(s) to workspace…',
++      { value0: paths.length }
++    )
++  )
++  try {
++    const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
++      paths,
++      worktreePath: owner.worktreePath
++    })
++    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
++    return resolvedPaths
++  } catch (err) {
++    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
++    return null
++  } finally {
++    toast.dismiss(pending)
++  }
++}
 diff --git a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx b/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
 index 96f8287..e957449 100644
 --- a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
@@ -1832,6 +2768,26 @@ index 96f8287..e957449 100644
        textareaRef={createRef<HTMLTextAreaElement>()}
        draft={draft}
        disabled={false}
+diff --git a/src/renderer/src/components/native-chat/native-chat-composer-types.ts b/src/renderer/src/components/native-chat/native-chat-composer-types.ts
+index 58e97cc..aa431f9 100644
+--- a/src/renderer/src/components/native-chat/native-chat-composer-types.ts
++++ b/src/renderer/src/components/native-chat/native-chat-composer-types.ts
+@@ -1,5 +1,6 @@
+ import type { AgentType } from '../../../../shared/agent-status-types'
+ import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
++import type { CodevChatCoordination } from './use-codev-chat-coordination'
+ 
+ export type NativeChatComposerProps = {
+   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
+@@ -9,6 +10,8 @@ export type NativeChatComposerProps = {
+   /** Specific split-pane PTY this chat view owns. */
+   targetPtyId: string | null
+   agent: AgentType
++  /** Server-authoritative ownership and attribution for CoDev shared chats. */
++  coordination?: CodevChatCoordination
+   /** Guard desktop sends while a mobile client owns the terminal input lease. */
+   canSend?: boolean
+   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
 diff --git a/src/renderer/src/components/native-chat/native-chat-durations.test.ts b/src/renderer/src/components/native-chat/native-chat-durations.test.ts
 new file mode 100644
 index 0000000..e5ca8b9
@@ -2175,6 +3131,397 @@ index df96ea2..721f48b 100644
    }
  
    const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
+diff --git a/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts b/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts
+new file mode 100644
+index 0000000..4427d07
+--- /dev/null
++++ b/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts
+@@ -0,0 +1,294 @@
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
++import { isCodevEmbedded } from '@/web/codev-embedded'
++
++export type CodevChatMember = {
++  id: string
++  name: string
++  avatarUrl: string | null
++}
++
++export type CodevChatPromptReceipt = {
++  id: string
++  clientMessageId: string
++  author: CodevChatMember
++  prompt: string
++  attachments: Array<{ name: string; type: string }>
++  provider: string
++  model: string | null
++  effort: string | null
++  createdAt: string
++}
++
++type CodevChatSnapshot = {
++  viewer: CodevChatMember
++  lease: {
++    holder: CodevChatMember
++    clientId: string
++    expiresAt: string
++  } | null
++  participants: CodevChatMember[]
++  receipts: CodevChatPromptReceipt[]
++  serverTime: string
++}
++
++type CoordinationResponse = CodevChatSnapshot & {
++  leaseToken?: string
++}
++
++export type CodevChatCoordination = {
++  enabled: boolean
++  ready: boolean
++  canEdit: boolean
++  acquiring: boolean
++  viewer: CodevChatMember | null
++  holder: CodevChatMember | null
++  participants: CodevChatMember[]
++  receipts: CodevChatPromptReceipt[]
++  error: string | null
++  acquire: () => Promise<boolean>
++  release: () => Promise<void>
++  recordPrompt: (input: {
++    prompt: string
++    attachments: Array<{ name: string; type: string }>
++    provider: 'claude' | 'codex'
++    model: string | null
++    effort: string | null
++  }) => Promise<string>
++}
++
++const HEARTBEAT_MS = 10_000
++const REFRESH_MS = 2_000
++const RENEW_MS = 10_000
++
++function workspaceIdFromProjectPath(): string | null {
++  const path = window.__CODEV_PROJECT_PATH__
++  const value = path?.split('/').filter(Boolean).at(-1) ?? null
++  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null
++}
++
++function clientIdForThisTab(): string {
++  const key = 'codev.chat.client-id'
++  const existing = window.sessionStorage.getItem(key)
++  if (existing) return existing
++  const created = crypto.randomUUID()
++  window.sessionStorage.setItem(key, created)
++  return created
++}
++
++async function readJson(response: Response): Promise<Record<string, unknown>> {
++  return (await response.json().catch(() => ({}))) as Record<string, unknown>
++}
++
++export function useCodevChatCoordination(chatId: string): CodevChatCoordination {
++  const enabled = isCodevEmbedded()
++  const workspaceId = enabled ? workspaceIdFromProjectPath() : null
++  const [clientId] = useState(() => (enabled ? clientIdForThisTab() : ''))
++  const [snapshot, setSnapshot] = useState<CodevChatSnapshot | null>(null)
++  const [acquiring, setAcquiring] = useState(false)
++  const [error, setError] = useState<string | null>(null)
++  const leaseTokenRef = useRef<string | null>(null)
++  const endpoint = workspaceId ? `/api/workspaces/${workspaceId}/chat-coordination` : null
++
++  const post = useCallback(
++    async (body: Record<string, unknown>): Promise<CoordinationResponse> => {
++      if (!endpoint) throw new Error('Shared chat coordination is unavailable.')
++      const response = await fetch(endpoint, {
++        method: 'POST',
++        headers: { 'content-type': 'application/json' },
++        credentials: 'same-origin',
++        body: JSON.stringify({ ...body, chatId, clientId })
++      })
++      const payload = await readJson(response)
++      if (!response.ok) {
++        throw new Error(
++          typeof payload.error === 'string' ? payload.error : 'Shared chat coordination failed.'
++        )
++      }
++      return payload as CoordinationResponse
++    },
++    [chatId, clientId, endpoint]
++  )
++
++  const refresh = useCallback(async () => {
++    if (!endpoint) return
++    try {
++      const response = await fetch(`${endpoint}?chatId=${encodeURIComponent(chatId)}`, {
++        cache: 'no-store',
++        credentials: 'same-origin'
++      })
++      const payload = await readJson(response)
++      if (!response.ok) {
++        throw new Error(
++          typeof payload.error === 'string' ? payload.error : 'Could not refresh shared chat.'
++        )
++      }
++      const next = payload as unknown as CodevChatSnapshot
++      setSnapshot(next)
++      const token = leaseTokenRef.current
++      if (
++        token &&
++        (!next.lease || next.lease.clientId !== clientId || next.lease.holder.id !== next.viewer.id)
++      ) {
++        leaseTokenRef.current = null
++      }
++      setError(null)
++    } catch (cause) {
++      setError(cause instanceof Error ? cause.message : String(cause))
++    }
++  }, [chatId, clientId, endpoint])
++
++  useEffect(() => {
++    if (!enabled || !endpoint) return
++    let cancelled = false
++    const heartbeat = async (): Promise<void> => {
++      try {
++        const next = await post({ action: 'heartbeat' })
++        if (!cancelled) {
++          setSnapshot(next)
++          setError(null)
++        }
++      } catch (cause) {
++        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
++      }
++    }
++    void heartbeat()
++    const heartbeatTimer = window.setInterval(() => void heartbeat(), HEARTBEAT_MS)
++    const refreshTimer = window.setInterval(() => void refresh(), REFRESH_MS)
++    return () => {
++      cancelled = true
++      window.clearInterval(heartbeatTimer)
++      window.clearInterval(refreshTimer)
++      const token = leaseTokenRef.current
++      if (token) {
++        navigator.sendBeacon(
++          endpoint,
++          new Blob(
++            [
++              JSON.stringify({
++                action: 'release',
++                chatId,
++                clientId,
++                leaseToken: token
++              })
++            ],
++            { type: 'application/json' }
++          )
++        )
++      }
++      navigator.sendBeacon(
++        endpoint,
++        new Blob([JSON.stringify({ action: 'leave', chatId, clientId })], {
++          type: 'application/json'
++        })
++      )
++    }
++  }, [chatId, clientId, enabled, endpoint, post, refresh])
++
++  useEffect(() => {
++    if (!enabled || !endpoint) return
++    const timer = window.setInterval(() => {
++      const leaseToken = leaseTokenRef.current
++      if (!leaseToken) return
++      void post({ action: 'renew', leaseToken })
++        .then((next) => {
++          setSnapshot(next)
++          setError(null)
++        })
++        .catch((cause) => {
++          leaseTokenRef.current = null
++          setError(cause instanceof Error ? cause.message : String(cause))
++          void refresh()
++        })
++    }, RENEW_MS)
++    return () => window.clearInterval(timer)
++  }, [enabled, endpoint, post, refresh])
++
++  const acquire = useCallback(async (): Promise<boolean> => {
++    if (!enabled) return true
++    if (!endpoint || acquiring) return false
++    if (leaseTokenRef.current) return true
++    setAcquiring(true)
++    try {
++      const next = await post({ action: 'acquire' })
++      if (!next.leaseToken) throw new Error('The server did not grant composer control.')
++      leaseTokenRef.current = next.leaseToken
++      setSnapshot(next)
++      setError(null)
++      return true
++    } catch (cause) {
++      setError(cause instanceof Error ? cause.message : String(cause))
++      await refresh()
++      return false
++    } finally {
++      setAcquiring(false)
++    }
++  }, [acquiring, enabled, endpoint, post, refresh])
++
++  const release = useCallback(async (): Promise<void> => {
++    const leaseToken = leaseTokenRef.current
++    leaseTokenRef.current = null
++    if (!enabled || !leaseToken) return
++    try {
++      const next = await post({ action: 'release', leaseToken })
++      setSnapshot(next)
++      setError(null)
++    } catch (cause) {
++      setError(cause instanceof Error ? cause.message : String(cause))
++      await refresh()
++    }
++  }, [enabled, post, refresh])
++
++  const recordPrompt = useCallback(
++    async (input: {
++      prompt: string
++      attachments: Array<{ name: string; type: string }>
++      provider: 'claude' | 'codex'
++      model: string | null
++      effort: string | null
++    }): Promise<string> => {
++      if (!enabled) return crypto.randomUUID()
++      const leaseToken = leaseTokenRef.current
++      if (!leaseToken) {
++        throw new Error('Take control of the composer before sending.')
++      }
++      const clientMessageId = crypto.randomUUID()
++      const next = await post({
++        action: 'submit',
++        leaseToken,
++        clientMessageId,
++        ...input
++      })
++      setSnapshot(next)
++      setError(null)
++      return clientMessageId
++    },
++    [enabled, post]
++  )
++
++  const canEdit =
++    !enabled ||
++    Boolean(
++      snapshot?.lease &&
++      snapshot.lease.clientId === clientId &&
++      snapshot.lease.holder.id === snapshot.viewer.id &&
++      leaseTokenRef.current
++    )
++
++  return useMemo(
++    () => ({
++      enabled,
++      ready: !enabled || snapshot !== null,
++      canEdit,
++      acquiring,
++      viewer: snapshot?.viewer ?? null,
++      holder: snapshot?.lease?.holder ?? null,
++      participants: snapshot?.participants ?? [],
++      receipts: snapshot?.receipts ?? [],
++      error,
++      acquire,
++      release,
++      recordPrompt
++    }),
++    [acquire, acquiring, canEdit, enabled, error, recordPrompt, release, snapshot]
++  )
++}
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts b/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
+index 60ecf44..8d0353a 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
+@@ -1,13 +1,12 @@
+ import { useCallback, useRef, useState, type RefObject } from 'react'
+-import { translate } from '@/i18n/i18n'
+ import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+ import {
+   formatNativeChatFileReference,
+-  nativeChatComposerTargetIsRemote,
+   type NativeChatResolvedTarget
+ } from './native-chat-composer-target'
+ import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+ import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
++import { nativeChatWorktreeNotReadyNotice } from './native-chat-attachment-upload'
+ 
+ export type UseNativeChatComposerAttachmentsArgs = {
+   attachmentScopeKey: string
+@@ -106,14 +105,8 @@ export function useNativeChatComposerAttachments({
+   // before calling this — see native-chat-attachment-upload.ts).
+   const attachResolvedPaths = useCallback(
+     (paths: string[]) => {
+-      const target = resolveTarget()
+-      if (!target || nativeChatComposerTargetIsRemote(target.ptyId)) {
+-        setNotice(
+-          translate(
+-            'components.native-chat.composer.localAttachmentUnsupported',
+-            'Local attachments are not available for remote sessions.'
+-          )
+-        )
++      if (!resolveTarget()) {
++        setNotice(nativeChatWorktreeNotReadyNotice())
+         return
+       }
+       const imagePaths = paths.filter(isNativeChatImageAttachmentPath)
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts b/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
+index d2e1937..15310e6 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
+@@ -4,6 +4,7 @@ import {
+   nativeChatWorktreeNotReadyNotice,
+   resolveNativeChatAttachmentOwner,
+   uploadNativeChatAttachmentPaths,
++  uploadNativeChatRuntimeAttachmentPaths,
+   type NativeChatAttachmentOwner
+ } from './native-chat-attachment-upload'
+ 
+@@ -48,14 +49,15 @@ export function useNativeChatExternalAttachments({
+         setNotice(nativeChatWorktreeNotReadyNotice())
+         return
+       }
+-      if (owner.kind !== 'ssh') {
+-        // 'runtime' proceeds so attachResolvedPaths' existing remote-session
+-        // gate reports the unsupported state.
++      if (owner.kind === 'local') {
+         attachResolvedPaths(paths)
+         return
+       }
+       void (async () => {
+-        const remotePaths = await uploadNativeChatAttachmentPaths(paths, owner)
++        const remotePaths =
++          owner.kind === 'runtime'
++            ? await uploadNativeChatRuntimeAttachmentPaths(paths, owner)
++            : await uploadNativeChatAttachmentPaths(paths, owner)
+         if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
+           return
+         }
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts b/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
+index 5a6094c..e34503a 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
+@@ -1,4 +1,5 @@
+ import { useCallback, useEffect } from 'react'
++import { toast } from 'sonner'
+ import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
+ 
+ export function useNativeChatFileAttachmentActions(
+@@ -20,7 +21,11 @@ export function useNativeChatFileAttachmentActions(
+       if (filePath) {
+         attachExternalPaths([filePath])
+       }
+-    })()
++    })().catch((error) => {
++      toast.error('Could not attach file', {
++        description: error instanceof Error ? error.message : String(error)
++      })
++    })
+   }, [attachExternalPaths])
+ 
+   return { pickAttachment }
 diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
 index a24d1b8..3687b6e 100644
 --- a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
@@ -9845,16 +11192,16 @@ index 0000000..7e003a6
 +}
 diff --git a/src/renderer/src/web/codev-chat-provider-switch.test.ts b/src/renderer/src/web/codev-chat-provider-switch.test.ts
 new file mode 100644
-index 0000000..021b984
+index 0000000..a97173f
 --- /dev/null
 +++ b/src/renderer/src/web/codev-chat-provider-switch.test.ts
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,88 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
 +const closeTab = vi.fn()
 +let storeState: {
-+  tabsByWorktree: Record<string, Array<{ id: string }>>
++  tabsByWorktree: Record<string, Array<{ id: string; launchAgent?: string }>>
 +  closeTab: typeof closeTab
 +}
 +
@@ -9877,6 +11224,7 @@ index 0000000..021b984
 +    tabsByWorktree: { 'wt-1': [{ id: 'chat-old' }, { id: 'sibling' }] },
 +    closeTab
 +  }
++  launchAgentInNewTab.mockReturnValue({ tabId: null })
 +})
 +
 +afterEach(() => {
@@ -9900,8 +11248,8 @@ index 0000000..021b984
 +})
 +
 +describe('switchCodevChatProvider', () => {
-+  it('launches the new provider in the tab’s worktree and retires the old tab', () => {
-+    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++  it('launches the new provider in the tab’s worktree and retires the old tab after verification', async () => {
++    const switched = switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
 +
 +    expect(launchAgentInNewTab).toHaveBeenCalledWith({
 +      agent: 'codex',
@@ -9911,31 +11259,37 @@ index 0000000..021b984
 +    })
 +    expect(closeTab).not.toHaveBeenCalled()
 +
-+    vi.runAllTimers()
++    storeState.tabsByWorktree['wt-1']?.push({ id: 'chat-new', launchAgent: 'codex' })
++    await vi.runAllTimersAsync()
++    await switched
 +    expect(closeTab).toHaveBeenCalledWith('chat-old', { reason: 'user' })
 +  })
 +
-+  it('keeps the previous tab when it is the worktree’s only one (replacement not mirrored yet)', () => {
++  it('keeps the previous tab when the replacement never mirrors', async () => {
 +    storeState.tabsByWorktree = { 'wt-1': [{ id: 'chat-old' }] }
 +
-+    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
-+    vi.runAllTimers()
++    const switched = switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++    const rejection = expect(switched).rejects.toThrow('did not open')
++    await vi.runAllTimersAsync()
++    await rejection
 +
 +    expect(launchAgentInNewTab).toHaveBeenCalledTimes(1)
 +    expect(closeTab).not.toHaveBeenCalled()
 +  })
 +
-+  it('does nothing when the tab cannot be located', () => {
-+    switchCodevChatProvider({ terminalTabId: 'missing', nextAgent: 'codex' })
++  it('reports when the tab cannot be located', async () => {
++    await expect(
++      switchCodevChatProvider({ terminalTabId: 'missing', nextAgent: 'codex' })
++    ).rejects.toThrow('not attached')
 +    expect(launchAgentInNewTab).not.toHaveBeenCalled()
 +  })
 +})
 diff --git a/src/renderer/src/web/codev-chat-provider-switch.ts b/src/renderer/src/web/codev-chat-provider-switch.ts
 new file mode 100644
-index 0000000..ff1e3a8
+index 0000000..204f81f
 --- /dev/null
 +++ b/src/renderer/src/web/codev-chat-provider-switch.ts
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,94 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { useAppStore } from '@/store'
 +import type { AgentType } from '../../../shared/agent-status-types'
@@ -9967,13 +11321,12 @@ index 0000000..ff1e3a8
 +}
 +
 +/** The provider the tab is not on, for a one-tap toggle affordance. */
-+export function otherCodevChatProvider(
-+  agent: CodevDefaultChatAgent
-+): CodevDefaultChatAgent {
++export function otherCodevChatProvider(agent: CodevDefaultChatAgent): CodevDefaultChatAgent {
 +  return agent === 'claude' ? 'codex' : 'claude'
 +}
 +
-+const RETIRE_PREVIOUS_TAB_DELAY_MS = 2_000
++const PROVIDER_SWITCH_TIMEOUT_MS = 12_000
++const PROVIDER_SWITCH_POLL_MS = 150
 +
 +/**
 + * Switch a native chat tab's provider.
@@ -9986,31 +11339,50 @@ index 0000000..ff1e3a8
 + * without a tab while that mirror is in flight. If the check still cannot
 + * confirm a replacement, the previous tab is left for the member to close.
 + */
-+export function switchCodevChatProvider(args: {
++export async function switchCodevChatProvider(args: {
 +  terminalTabId: string
 +  nextAgent: CodevDefaultChatAgent
-+}): void {
++}): Promise<void> {
 +  const { terminalTabId, nextAgent } = args
 +  const worktreeId = worktreeIdForTerminalTab(terminalTabId)
 +  if (!worktreeId) {
-+    return
++    throw new Error('This chat is not attached to a workspace.')
 +  }
++  const existingTabIds = new Set(
++    (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
++  )
 +
-+  launchAgentInNewTab({
++  const launch = launchAgentInNewTab({
 +    agent: nextAgent,
 +    worktreeId,
 +    promptDelivery: 'draft',
 +    launchSource: 'new_workspace_composer'
 +  })
++  if (!launch) {
++    throw new Error(`Could not start ${nextAgent}. Check that the provider is connected.`)
++  }
 +
-+  setTimeout(() => {
++  const deadline = Date.now() + PROVIDER_SWITCH_TIMEOUT_MS
++  while (Date.now() < deadline) {
 +    const state = useAppStore.getState()
 +    const tabs = state.tabsByWorktree[worktreeId] ?? []
++    const replacement = tabs.find(
++      (tab) =>
++        tab.id !== terminalTabId && !existingTabIds.has(tab.id) && tab.launchAgent === nextAgent
++    )
++    if (!replacement) {
++      await new Promise((resolve) => setTimeout(resolve, PROVIDER_SWITCH_POLL_MS))
++      continue
++    }
 +    const previousStillOpen = tabs.some((tab) => tab.id === terminalTabId)
 +    if (previousStillOpen && tabs.length > 1) {
 +      state.closeTab(terminalTabId, { reason: 'user' })
 +    }
-+  }, RETIRE_PREVIOUS_TAB_DELAY_MS)
++    return
++  }
++  throw new Error(
++    `${nextAgent === 'claude' ? 'Claude' : 'Codex'} did not open. The current chat was kept.`
++  )
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
@@ -11374,7 +12746,7 @@ index eae3a54..f3f06e4 100644
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
 diff --git a/src/renderer/src/web/web-preload-api.ts b/src/renderer/src/web/web-preload-api.ts
-index 0067f12..f08a2e7 100644
+index 0067f12..dae3be7 100644
 --- a/src/renderer/src/web/web-preload-api.ts
 +++ b/src/renderer/src/web/web-preload-api.ts
 @@ -50,6 +50,7 @@ import {
@@ -11385,7 +12757,148 @@ index 0067f12..f08a2e7 100644
  import {
    createDefaultLocalOrcaProfile,
    DEFAULT_LOCAL_ORCA_PROFILE_ID
-@@ -3667,7 +3668,7 @@ function getStoredSettings(): GlobalSettings {
+@@ -168,6 +169,11 @@ export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
+ export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+ export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+ const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
++const WEB_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
++const stagedBrowserAttachments = new Map<
++  string,
++  { name: string; type: string; contentBase64: string }
++>()
+ 
+ let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
+ let activeClient: WebRuntimeClient | null = null
+@@ -190,6 +196,53 @@ function blobToBase64(blob: Blob): Promise<string> {
+   })
+ }
+ 
++function pickWebAttachment(): Promise<string | null> {
++  return new Promise((resolve, reject) => {
++    const input = document.createElement('input')
++    input.type = 'file'
++    input.multiple = false
++    input.hidden = true
++    input.addEventListener(
++      'change',
++      () => {
++        const file = input.files?.[0]
++        input.remove()
++        if (!file) {
++          resolve(null)
++          return
++        }
++        if (file.size > WEB_ATTACHMENT_MAX_BYTES) {
++          reject(new Error('Attachments must be 20 MB or smaller.'))
++          return
++        }
++        void blobToBase64(file)
++          .then((contentBase64) => {
++            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'attachment'
++            const stagedPath = `/__codev_browser_upload__/${crypto.randomUUID()}/${safeName}`
++            stagedBrowserAttachments.set(stagedPath, {
++              name: safeName,
++              type: file.type,
++              contentBase64
++            })
++            resolve(stagedPath)
++          })
++          .catch(reject)
++      },
++      { once: true }
++    )
++    input.addEventListener(
++      'cancel',
++      () => {
++        input.remove()
++        resolve(null)
++      },
++      { once: true }
++    )
++    document.body.appendChild(input)
++    input.click()
++  })
++}
++
+ function assertClipboardImageBlobWithinLimit(blob: Blob): void {
+   assertClipboardImageByteLengthWithinLimit(blob.size)
+ }
+@@ -1933,8 +1986,63 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
+       })
+     },
+     importExternalPaths: async () => ({ results: [] }),
+-    stageExternalPathsForRuntimeUpload: async () => ({ sources: [] }),
+-    resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
++    stageExternalPathsForRuntimeUpload: async ({ sourcePaths }) => ({
++      sources: sourcePaths.map((sourcePath) => {
++        const staged = stagedBrowserAttachments.get(sourcePath)
++        return staged
++          ? {
++              sourcePath,
++              status: 'staged' as const,
++              name: staged.name,
++              kind: 'file' as const,
++              entries: [
++                { relativePath: '', kind: 'file' as const, contentBase64: staged.contentBase64 }
++              ]
++            }
++          : { sourcePath, status: 'skipped' as const, reason: 'missing' as const }
++      })
++    }),
++    resolveDroppedPathsForAgent: async ({ paths, worktreePath }) => {
++      const file = await resolveRuntimeFilePath(worktreePath)
++      const worktree = toRuntimeWorktreeSelector(file.worktree.id)
++      await callRuntimeResult('files.createDir', {
++        worktree,
++        relativePath: '.orca'
++      }).catch(() => {})
++      await callRuntimeResult('files.createDir', {
++        worktree,
++        relativePath: '.orca/drops'
++      }).catch(() => {})
++      const resolvedPaths: string[] = []
++      const skipped: Array<{
++        sourcePath: string
++        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
++      }> = []
++      const failed: Array<{ sourcePath: string; reason: string }> = []
++      for (const path of paths) {
++        const staged = stagedBrowserAttachments.get(path)
++        if (!staged) {
++          skipped.push({ sourcePath: path, reason: 'missing' })
++          continue
++        }
++        const relativePath = `.orca/drops/${crypto.randomUUID()}-${staged.name}`
++        try {
++          await callRuntimeResult(
++            'files.writeBase64',
++            { worktree, relativePath, contentBase64: staged.contentBase64 },
++            30_000
++          )
++          resolvedPaths.push(`${worktreePath}/${relativePath}`)
++          stagedBrowserAttachments.delete(path)
++        } catch (error) {
++          failed.push({
++            sourcePath: path,
++            reason: error instanceof Error ? error.message : String(error)
++          })
++        }
++      }
++      return { resolvedPaths, skipped, failed }
++    },
+     watchWorktree: () => Promise.resolve(),
+     unwatchWorktree: () => Promise.resolve(),
+     onFsChanged: () => noopUnsubscribe
+@@ -3136,7 +3244,7 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
+         return false
+       }
+     },
+-    pickAttachment: () => Promise.resolve(null),
++    pickAttachment: pickWebAttachment,
+     pickImage: () => Promise.resolve(null),
+     pickRepoIconImage: () => Promise.resolve(null),
+     pickAudio: () => Promise.resolve(null),
+@@ -3667,7 +3775,7 @@ function getStoredSettings(): GlobalSettings {
        // Keep readJson's invalid-JSON fallback non-destructive.
      }
    }
@@ -11394,7 +12907,7 @@ index 0067f12..f08a2e7 100644
      {
        ...defaults,
        floatingTerminalEnabled: false,
-@@ -3676,6 +3677,18 @@ function getStoredSettings(): GlobalSettings {
+@@ -3676,6 +3784,18 @@ function getStoredSettings(): GlobalSettings {
      },
      migratedStored
    )

@@ -121,6 +121,11 @@ export const cliDeviceAuthorizationStatus = pgEnum(
 );
 export const cliClientType = pgEnum("cli_client_type", ["cli", "mobile"]);
 export const mobilePlatform = pgEnum("mobile_platform", ["ios", "android"]);
+export const channelMessageAuthorKind = pgEnum("channel_message_author_kind", [
+  "member",
+  "agent",
+  "system",
+]);
 export const users = pgTable(
   "users",
   {
@@ -882,6 +887,232 @@ export const userComputeUsage = pgTable("user_compute_usage", {
     .defaultNow()
     .notNull(),
 });
+
+/**
+ * Human conversation inside a workspace. Distinct from `coordinationMessages`,
+ * which is the agent-to-agent negotiation channel: these rows are what the
+ * team says to each other, and agents read them as context rather than
+ * driving them.
+ */
+export const workspaceChannels = pgTable(
+  "workspace_channels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    slug: text("slug").notNull(),
+    topic: text("topic"),
+    /** Agents may read and post here. Off makes a channel human-only. */
+    agentAccess: boolean("agent_access").default(true).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("workspace_channels_workspace_slug_idx").on(
+      table.workspaceId,
+      table.slug,
+    ),
+    index("workspace_channels_workspace_idx").on(
+      table.workspaceId,
+      table.archivedAt,
+    ),
+  ],
+);
+
+export const workspaceChannelMessages = pgTable(
+  "workspace_channel_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channelId: uuid("channel_id")
+      .references(() => workspaceChannels.id, { onDelete: "cascade" })
+      .notNull(),
+    /** Denormalized so a workspace-wide digest for agents is one query. */
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    authorKind: channelMessageAuthorKind("author_kind")
+      .default("member")
+      .notNull(),
+    /** Null for agent and system posts, which have no CoDev user row. */
+    authorId: uuid("author_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    /** Display name for non-member authors, e.g. the agent's own name. */
+    authorLabel: text("author_label"),
+    agentSessionId: uuid("agent_session_id").references(
+      () => agentSessions.id,
+      { onDelete: "set null" },
+    ),
+    body: text("body").notNull(),
+    /** Member user ids mentioned in `body`, resolved at post time. */
+    mentions: jsonb("mentions").$type<string[]>().default([]).notNull(),
+    /** The post asked the agent for something, not just a teammate. */
+    mentionsAgent: boolean("mentions_agent").default(false).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("workspace_channel_messages_channel_idx").on(
+      table.channelId,
+      table.createdAt,
+    ),
+    index("workspace_channel_messages_workspace_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const workspaceChannelReads = pgTable(
+  "workspace_channel_reads",
+  {
+    channelId: uuid("channel_id")
+      .references(() => workspaceChannels.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.channelId, table.userId] }),
+    index("workspace_channel_reads_user_idx").on(table.userId),
+  ],
+);
+
+/**
+ * A member's own answer to "what are you working on". Editor presence is
+ * inferred and expires in Redis; this is deliberate, durable, and theirs.
+ */
+export const workspaceMemberStatuses = pgTable(
+  "workspace_member_statuses",
+  {
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    emoji: text("emoji"),
+    headline: text("headline"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.userId] }),
+    index("workspace_member_statuses_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+/**
+ * Short-lived ownership of one terminal-backed chat composer. The row is a
+ * lease rather than a permanent lock so a closed or disconnected browser can
+ * never strand a shared workspace.
+ */
+export const workspaceChatLeases = pgTable(
+  "workspace_chat_leases",
+  {
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: text("chat_id").notNull(),
+    holderId: uuid("holder_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    clientId: text("client_id").notNull(),
+    leaseToken: text("lease_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.chatId] }),
+    index("workspace_chat_leases_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+/**
+ * Ephemeral viewers of a shared chat. Heartbeats expire automatically; the
+ * rows are only used to render truthful collaborator presence.
+ */
+export const workspaceChatParticipants = pgTable(
+  "workspace_chat_participants",
+  {
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: text("chat_id").notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    clientId: text("client_id").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.workspaceId, table.chatId, table.userId, table.clientId],
+    }),
+    index("workspace_chat_participants_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export type WorkspaceChatPromptAttachment = {
+  name: string;
+  type: string;
+};
+
+/**
+ * Durable attribution for prompts written into the shared terminal. The
+ * provider transcript remains the source of truth for content and output;
+ * these receipts let every viewer identify who submitted each user turn.
+ */
+export const workspaceChatPromptReceipts = pgTable(
+  "workspace_chat_prompt_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: text("chat_id").notNull(),
+    authorId: uuid("author_id")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    clientMessageId: uuid("client_message_id").notNull(),
+    prompt: text("prompt").notNull(),
+    attachments: jsonb("attachments")
+      .$type<WorkspaceChatPromptAttachment[]>()
+      .default([])
+      .notNull(),
+    provider: text("provider").notNull(),
+    model: text("model"),
+    effort: text("effort"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("workspace_chat_prompt_receipts_client_message_idx").on(
+      table.workspaceId,
+      table.chatId,
+      table.clientMessageId,
+    ),
+    index("workspace_chat_prompt_receipts_chat_created_idx").on(
+      table.workspaceId,
+      table.chatId,
+      table.createdAt,
+    ),
+  ],
+);
 
 export const sandboxRuntimeIntervals = pgTable(
   "sandbox_runtime_intervals",

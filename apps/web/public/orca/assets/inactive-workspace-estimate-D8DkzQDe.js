@@ -1,0 +1,1 @@
+import{bp as e,fi as t,pi as n}from"./web-index-BhXirqSz.js";function r(r,i,a){let o=0;for(let s of r){let r=i.get(s.repoId);if(!r||e(r)||s.isMainWorktree)continue;let c=t(s);c>0&&n({isArchived:s.isArchived,lastActivityAt:c},a)&&(o+=1)}return o}export{r as t};

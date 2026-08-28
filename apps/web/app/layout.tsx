@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 
 import "./globals.css";
 import "./app-theme.css";
+import "./team-chat.css";
 
 import { clerkAuthConfigured } from "@/lib/identity";
 import { AppClerkProvider } from "@/components/clerk-provider";

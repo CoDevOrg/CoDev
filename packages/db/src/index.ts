@@ -19,5 +19,8 @@ export function createDatabase(connectionString: string) {
 }
 
 export { schema };
-export type { AgentTurnAttachment } from "./schema";
+export type {
+  AgentTurnAttachment,
+  WorkspaceChatPromptAttachment,
+} from "./schema";
 export { normalizePostgresConnectionString } from "./connection";

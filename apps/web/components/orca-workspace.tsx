@@ -19,8 +19,10 @@ import {
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
 import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
+import { watchOrcaProjectTree } from "@/components/orca-project-tree";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
+import { WorkspaceTeamPanel } from "@/components/workspace-team-panel";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -323,27 +325,32 @@ function injectOrcaThemeAndBranding(
       doc.head.appendChild(link);
     }
 
+    const stopHidingProjectTree = watchOrcaProjectTree(doc);
+
     if (applyOrcaWorkspaceBranding(doc, workspaceName)) {
-      return () => undefined;
+      return stopHidingProjectTree;
     }
     if (!doc.body) {
-      return () => undefined;
+      return stopHidingProjectTree;
     }
 
     const observer = new MutationObserver(() => {
       if (applyOrcaWorkspaceBranding(doc, workspaceName)) {
-        stopWatching();
+        stopWatchingBranding();
       }
     });
     observer.observe(doc.body, { childList: true, subtree: true });
-    const timeout = setTimeout(stopWatching, 10_000);
+    const timeout = setTimeout(stopWatchingBranding, 10_000);
 
-    function stopWatching() {
+    function stopWatchingBranding() {
       observer.disconnect();
       clearTimeout(timeout);
     }
 
-    return stopWatching;
+    return () => {
+      stopWatchingBranding();
+      stopHidingProjectTree();
+    };
   } catch {
     // Same-origin injection is best-effort; stock Orca colors are fine as fallback.
     return () => undefined;
@@ -667,11 +674,13 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
+  canCreateChannel,
   children,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  canCreateChannel: boolean;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -688,7 +697,16 @@ function WorkspaceChrome({
           right sidebar (CodevLiveAgentsPanel) rather than a second rail beside
           it. The live count stays in the top bar so it is visible from the
           parent page too. */}
-      <div className="workspace-body">{children}</div>
+      <div className="workspace-body">
+        {/* Team chat is parent-page chrome on purpose. It replaces the IDE's
+            project tree (one workspace is one project here), and living
+            outside the iframe keeps it working across Orca re-vendoring. */}
+        <WorkspaceTeamPanel
+          canCreateChannel={canCreateChannel}
+          workspaceId={workspaceId}
+        />
+        {children}
+      </div>
     </div>
   );
 }
@@ -702,11 +720,14 @@ export function OrcaWorkspace({
   workspaceId,
   repository,
   canInvite,
+  canCreateChannel = false,
   defaultAgent,
 }: {
   workspaceId: string;
   repository: string | null;
   canInvite: boolean;
+  /** Viewers can read and post in channels but not add new ones. */
+  canCreateChannel?: boolean;
   defaultAgent?: OrcaDefaultAgent;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
@@ -971,6 +992,7 @@ export function OrcaWorkspace({
   if (connection.phase === "ready") {
     return (
       <WorkspaceChrome
+        canCreateChannel={canCreateChannel}
         canInvite={canInvite}
         repository={repository}
         workspaceId={workspaceId}
@@ -1007,6 +1029,7 @@ export function OrcaWorkspace({
 
   return (
     <WorkspaceChrome
+      canCreateChannel={canCreateChannel}
       canInvite={canInvite}
       repository={repository}
       workspaceId={workspaceId}
