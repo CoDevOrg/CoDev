@@ -2833,11 +2833,12 @@ new file mode 100644
 index 0000000..8d47057
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,205 @@
 +import { useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
 +import { useAppStore } from '@/store'
 +import { formatAgentTypeLabel } from '@/lib/agent-status'
++import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 +import { AGENT_STATUS_STATES, type AgentStatusEntry } from '../../../../shared/agent-status-types'
 +
 +/**
@@ -2893,6 +2894,19 @@ index 0000000..8d47057
 +  const tone = agent.state
 +  const label = formatAgentTypeLabel(agent.agentType)
 +  const hue = hueFor(agent.paneKey)
++  const setActiveTab = useAppStore((state) => state.setActiveTab)
++  const currentAction = agent.toolName
++    ? `${agent.toolName}${agent.toolInput ? ` · ${agent.toolInput}` : ''}`
++    : agent.lastAssistantMessage || agent.prompt || 'Waiting for activity'
++  const recentStates = agent.stateHistory.slice(-4).map((entry) => entry.state).concat(agent.state)
++  const tabId = agent.paneKey.split(':', 1)[0]
++
++  function stepIn() {
++    if (!tabId) return
++    setActiveTab(tabId)
++    // Match Orca's own tab selection flow: focus after the state update commits.
++    requestAnimationFrame(() => focusTerminalTabSurface(tabId))
++  }
 +
 +  return (
 +    <li className={`codev-agent-card is-${tone}`}>
@@ -2921,6 +2935,31 @@ index 0000000..8d47057
 +      </div>
 +
 +      {agent.prompt ? <p className="codev-agent-assignment">{agent.prompt}</p> : null}
++      <p className={`codev-agent-task${agent.state === 'blocked' ? ' is-blocked' : ''}`}>
++        <i className="codev-agent-caret" aria-hidden />
++        <span>{currentAction}</span>
++      </p>
++
++      <div className="codev-agent-progress" aria-label={`Turn state: ${STATE_LABEL[agent.state]}`}>
++        {recentStates.map((state, index) => (
++          <span key={`${state}-${index}`} className={`is-${state}`} />
++        ))}
++      </div>
++      <p className="codev-agent-progress-label">
++        {agent.state === 'working' ? 'Live turn in progress' : STATE_LABEL[agent.state]}
++        {agent.subagents?.length ? ` · ${agent.subagents.length} teammate${agent.subagents.length === 1 ? '' : 's'}` : ''}
++      </p>
++
++      {agent.subagents?.length ? (
++        <ul className="codev-agent-subagents" aria-label="Agent teammates">
++          {agent.subagents.map((subagent) => (
++            <li key={subagent.id}>
++              <i className={`is-${subagent.state}`} aria-hidden />
++              <span>{subagent.description || formatAgentTypeLabel(subagent.agentType)}</span>
++            </li>
++          ))}
++        </ul>
++      ) : null}
 +
 +      <div className="codev-agent-foot">
 +        <span className="codev-agent-elapsed">
@@ -2931,6 +2970,9 @@ index 0000000..8d47057
 +            ? STATE_LABEL[agent.state]
 +            : `${STATE_LABEL[agent.state].toLowerCase()} for ${elapsed(agent.stateStartedAt, now)}`}
 +        </span>
++        <button className="codev-agent-open" type="button" onClick={stepIn}>
++          Step in
++        </button>
 +      </div>
 +    </li>
 +  )
@@ -2975,7 +3017,7 @@ index 0000000..8d47057
 +            <i className="codev-agents-dot" aria-hidden />
 +            {working > 0 ? `${working} working` : 'Live in this workspace'}
 +          </p>
-+          <h3>Agents</h3>
++          <h3>Mission Control</h3>
 +        </div>
 +        <span className="codev-agents-count" title={`${working} working`}>
 +          <strong>{agents.length}</strong>
@@ -2984,8 +3026,8 @@ index 0000000..8d47057
 +
 +      {agents.length === 0 ? (
 +        <p className="codev-agents-empty">
-+          No agents running yet. Start one from the chat tab and it appears here
-+          the moment it begins working.
++          Start an agent from a chat tab and it appears here the moment it
++          begins working. Its live turn, tool activity, and teammates stay in view.
 +        </p>
 +      ) : (
 +        <ul className="codev-agents-list">
@@ -4050,7 +4092,7 @@ index f9587ab..9b3054e 100644
 +            {
 +              id: 'codev-agents' as const,
 +              icon: Radio,
-+              title: 'Live agents',
++              title: 'Mission Control',
 +              shortcut: ''
 +            }
 +          ]

@@ -556,6 +556,87 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   opacity: 0.9;
 }
 
+.codev-agent-task.is-blocked {
+  color: #e3c98a;
+}
+
+.codev-agent-task span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A compact, honest progress line: it reflects the observed turn-state
+   history rather than inventing a plan that the runtime cannot provide. */
+.codev-agent-progress {
+  display: flex;
+  gap: 3px;
+  height: 3px;
+}
+
+.codev-agent-progress span {
+  flex: 1;
+  min-width: 8px;
+  border-radius: 999px;
+  background: rgba(242, 237, 224, 0.12);
+}
+
+.codev-agent-progress .is-working {
+  background: #d9642c;
+}
+
+.codev-agent-progress .is-blocked {
+  background: #d9a62c;
+}
+
+.codev-agent-progress .is-done {
+  background: #4ea87a;
+}
+
+.codev-agent-progress-label {
+  margin: -0.12rem 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  opacity: 0.62;
+}
+
+.codev-agent-subagents {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.38rem 0.5rem;
+  list-style: none;
+  border-left: 1px solid rgba(242, 237, 224, 0.14);
+  background: rgba(242, 237, 224, 0.025);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.codev-agent-subagents li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.codev-agent-subagents span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codev-agent-subagents i {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(242, 237, 224, 0.36);
+}
+
+.codev-agent-subagents i.is-working { background: #d9642c; }
+.codev-agent-subagents i.is-blocked { background: #d9a62c; }
+
 .codev-agent-caret {
   flex: none;
   width: 5px;
