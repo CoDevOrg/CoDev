@@ -13,15 +13,15 @@ const landing = readFileSync(resolve(process.cwd(), "app/landing.css"), "utf8");
 describe("CoDev product theme", () => {
   it("sets one dark palette for every AppChrome product page", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
-    expect(appTheme).toContain("--surface: var(--codev-forest-950);");
+    expect(appTheme).toContain("--surface: var(--codev-black-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
-    expect(appTheme).toContain("--codev-orange-500: #d9642c;");
-    expect(appTheme).toContain("--orange: var(--codev-orange-500);");
+    expect(appTheme).toContain("--codev-gold-500: #c9a66b;");
+    expect(appTheme).toContain("--orange: var(--codev-gold-500);");
   });
 
   it("uses the same dark surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(20, 44, 34, 0.7);");
+    expect(appTheme).toContain("background: rgba(19, 18, 16, 0.7);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
@@ -48,7 +48,7 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(
       ".auth-page .auth-password-guidance .met > span {",
     );
-    expect(appTheme).toContain("color: var(--codev-orange-400);");
+    expect(appTheme).toContain("color: var(--codev-gold-400);");
   });
 
   it("keeps the public landing page in its own stylesheet", () => {
@@ -57,7 +57,7 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #061a14;");
+    expect(landing).toContain("--lp-bg: #050504;");
     for (const rule of landing.split("\n")) {
       if (!rule.endsWith("{") || rule.startsWith(" ") || rule.startsWith("@")) {
         continue;

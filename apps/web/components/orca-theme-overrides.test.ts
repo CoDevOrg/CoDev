@@ -33,9 +33,9 @@ describe("Orca theme overrides", () => {
     expect(themeOverrides).toContain("[data-setup-script-prompt-layer] {");
   });
 
-  it("uses the CoDev orange mark in Orca's empty workspace state", () => {
+  it("uses the CoDev gold mark in Orca's empty workspace state", () => {
     expect(themeOverrides).toContain(".codev-orca-empty-logo {");
-    expect(themeOverrides).toContain("hue-rotate(340deg)");
+    expect(themeOverrides).toContain("hue-rotate(7deg)");
   });
 
   it("styles the live Agents panel, including collapsed rows, logos, and the expanded page", () => {

@@ -6,48 +6,62 @@
  * settings, and future product surfaces. The embedded Orca IDE has an
  * isolated document and receives the same palette through
  * `/orca-theme-overrides.css`.
+ *
+ * Palette: warm near-black structure, ivory ink, dry antique gold accent.
+ * Gold is matte 18k — not costume yellow, not burnt orange.
  */
 :root {
-  --codev-forest-950: #0d1f17;
-  --codev-forest-900: #142c22;
-  --codev-forest-800: #1b3a2c;
-  --codev-forest-700: #244633;
-  --codev-beige-100: #f2ede0;
-  --codev-beige-200: #ddd5c5;
-  --codev-sage-300: #9db3a5;
-  --codev-sage-500: #527e68;
-  --codev-orange-500: #d9642c;
-  --codev-orange-400: #e1732d;
+  --codev-black-950: #0a0908;
+  --codev-black-900: #131210;
+  --codev-black-800: #1c1b18;
+  --codev-black-700: #27261f;
+  --codev-beige-100: #f3efe6;
+  --codev-beige-200: #d8d0c0;
+  --codev-stone-300: #a39b8c;
+  --codev-stone-500: #7a7368;
+  --codev-gold-500: #c9a66b;
+  --codev-gold-400: #d4b67a;
+  --codev-on-gold: var(--codev-black-950);
+
+  /* Compatibility aliases for older token names. */
+  --codev-forest-950: var(--codev-black-950);
+  --codev-forest-900: var(--codev-black-900);
+  --codev-forest-800: var(--codev-black-800);
+  --codev-forest-700: var(--codev-black-700);
+  --codev-sage-300: var(--codev-stone-300);
+  --codev-sage-500: var(--codev-stone-500);
+  --codev-orange-500: var(--codev-gold-500);
+  --codev-orange-400: var(--codev-gold-400);
 }
 
 .app-page,
 .auth-page {
   --ink: var(--codev-beige-100);
-  --muted: var(--codev-sage-300);
-  --muted-2: #7a9184;
-  --line: rgba(242, 237, 224, 0.1);
-  --line-strong: rgba(217, 101, 45, 0.32);
-  --surface: var(--codev-forest-950);
-  --surface-2: var(--codev-forest-900);
-  --surface-3: var(--codev-forest-800);
-  --navy: var(--codev-forest-950);
-  --gold: var(--codev-orange-500);
-  --gold-bright: var(--codev-orange-400);
-  --gold-soft: rgba(217, 101, 45, 0.16);
-  --teal: var(--codev-orange-500);
-  --teal-soft: rgba(217, 101, 45, 0.16);
-  --orange: var(--codev-orange-500);
-  --violet: var(--codev-sage-500);
+  --muted: var(--codev-stone-300);
+  --muted-2: #6e6860;
+  --line: rgba(243, 239, 230, 0.1);
+  --line-strong: rgba(201, 166, 107, 0.32);
+  --surface: var(--codev-black-950);
+  --surface-2: var(--codev-black-900);
+  --surface-3: var(--codev-black-800);
+  --navy: var(--codev-black-950);
+  --gold: var(--codev-gold-500);
+  --gold-bright: var(--codev-gold-400);
+  --gold-soft: rgba(201, 166, 107, 0.16);
+  --teal: var(--codev-gold-500);
+  --teal-soft: rgba(201, 166, 107, 0.16);
+  --orange: var(--codev-gold-500);
+  --violet: var(--codev-stone-500);
   min-height: 100dvh;
   background:
     radial-gradient(
       circle at 82% 0,
-      rgba(217, 101, 45, 0.16),
+      rgba(201, 166, 107, 0.14),
       transparent 28rem
     ),
     radial-gradient(
       circle at 8% 15%,
-      rgba(82, 126, 104, 0.2),
+      rgba(201, 166, 107, 0.06),
       transparent 32rem
     ),
     var(--surface);
@@ -57,20 +71,20 @@
 
 .app-page .app-nav {
   border-color: var(--line);
-  background: rgba(13, 31, 23, 0.78);
+  background: rgba(10, 9, 8, 0.78);
   color: var(--ink);
   backdrop-filter: blur(14px);
 }
 
 .app-page .wordmark {
-  color: var(--codev-orange-500);
+  color: var(--codev-gold-500);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   font-weight: 700;
 }
 
 .app-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(49%) sepia(72%) saturate(1035%)
-    hue-rotate(340deg) brightness(90%) contrast(88%);
+  filter: brightness(0) saturate(100%) invert(76%) sepia(22%) saturate(748%)
+    hue-rotate(7deg) brightness(92%) contrast(86%);
 }
 
 .auth-page {
@@ -79,12 +93,12 @@
   background:
     radial-gradient(
       circle at 78% 10%,
-      rgba(217, 101, 45, 0.18),
+      rgba(201, 166, 107, 0.16),
       transparent 26rem
     ),
     radial-gradient(
       circle at 12% 42%,
-      rgba(82, 126, 104, 0.18),
+      rgba(201, 166, 107, 0.07),
       transparent 30rem
     ),
     var(--surface);
@@ -108,19 +122,19 @@
   position: relative;
   z-index: 1;
   border-color: var(--line);
-  background: rgba(13, 31, 23, 0.78);
+  background: rgba(10, 9, 8, 0.78);
   color: var(--ink);
   backdrop-filter: blur(14px);
 }
 
 .auth-page .wordmark,
 .auth-page .auth-nav > a {
-  color: var(--codev-orange-500);
+  color: var(--codev-gold-500);
 }
 
 .auth-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(49%) sepia(72%) saturate(1035%)
-    hue-rotate(340deg) brightness(90%) contrast(88%);
+  filter: brightness(0) saturate(100%) invert(76%) sepia(22%) saturate(748%)
+    hue-rotate(7deg) brightness(92%) contrast(86%);
 }
 
 .auth-page .auth-card {
@@ -129,8 +143,8 @@
   border-color: var(--line-strong);
   background: linear-gradient(
     145deg,
-    rgba(27, 58, 44, 0.96),
-    rgba(20, 44, 34, 0.98)
+    rgba(28, 27, 24, 0.96),
+    rgba(19, 18, 16, 0.98)
   );
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
 }
@@ -149,7 +163,7 @@
 
 .auth-page .auth-card .eyebrow,
 .auth-page .inline-alert {
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .auth-page .auth-credentials-form label > span {
@@ -163,17 +177,17 @@
 }
 
 .auth-page .auth-credentials-form input::placeholder {
-  color: var(--codev-sage-300);
+  color: var(--codev-stone-300);
 }
 
 .auth-page .auth-submit {
-  border-color: var(--codev-orange-500);
-  background: var(--codev-orange-500);
-  color: var(--codev-beige-100);
+  border-color: var(--codev-gold-500);
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
 }
 
 .auth-page .auth-submit:hover {
-  background: var(--codev-orange-400);
+  background: var(--codev-gold-400);
 }
 
 .auth-page .auth-mode-switch {
@@ -183,7 +197,7 @@
 .auth-page .auth-mode-switch button,
 .auth-page .auth-mode-switch a,
 .auth-page .auth-forgot-password a {
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .auth-page a.auth-submit {
@@ -201,7 +215,7 @@
 }
 
 .auth-page .auth-password-guidance .met > span {
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .auth-page .github-button,
@@ -329,7 +343,7 @@
   top: 0;
   padding: 20px 12px;
   border-right: 1px solid var(--line);
-  background: rgba(13, 31, 23, 0.82);
+  background: rgba(10, 9, 8, 0.82);
   backdrop-filter: blur(14px);
   overflow-y: auto;
 }
@@ -366,8 +380,8 @@
 }
 
 .app-sidebar-link.is-active {
-  background: rgba(217, 101, 45, 0.14);
-  color: var(--codev-orange-400);
+  background: rgba(201, 166, 107, 0.14);
+  color: var(--codev-gold-400);
 }
 
 .app-sidebar-link-icon {
@@ -431,8 +445,8 @@
   overflow: hidden;
   border-color: var(--line);
   background:
-    linear-gradient(118deg, rgba(217, 101, 45, 0.12), transparent 38%),
-    linear-gradient(145deg, rgba(27, 58, 44, 0.96), rgba(20, 44, 34, 0.96));
+    linear-gradient(118deg, rgba(201, 166, 107, 0.12), transparent 38%),
+    linear-gradient(145deg, rgba(28, 27, 24, 0.96), rgba(19, 18, 16, 0.96));
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
 }
 
@@ -445,8 +459,8 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(239, 138, 78, 0.26) 0%,
-    rgba(217, 101, 45, 0.1) 30%,
+    rgba(212, 182, 122, 0.22) 0%,
+    rgba(201, 166, 107, 0.1) 30%,
     transparent 70%
   );
   content: "";
@@ -467,9 +481,9 @@
 }
 
 .home-badge {
-  border-color: rgba(217, 101, 45, 0.38);
-  background: rgba(217, 101, 45, 0.15);
-  color: var(--codev-orange-400);
+  border-color: rgba(201, 166, 107, 0.38);
+  background: rgba(201, 166, 107, 0.15);
+  color: var(--codev-gold-400);
 }
 
 .home-welcome-text h1,
@@ -479,7 +493,7 @@
 }
 
 .home-highlight-name {
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .home-welcome-text p,
@@ -491,18 +505,18 @@
 .stat-card {
   min-width: 145px;
   border-color: rgba(242, 237, 224, 0.12);
-  background: rgba(13, 31, 23, 0.52);
+  background: rgba(10, 9, 8, 0.52);
 }
 
 .stat-value-active {
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .workspace-browser {
   padding: clamp(20px, 3vw, 32px);
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(20, 44, 34, 0.7);
+  background: rgba(19, 18, 16, 0.7);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
 }
 
@@ -527,7 +541,7 @@
 
 .workspace-view-toggle button.is-active {
   background: var(--teal-soft);
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .new-workspace-tile,
@@ -544,18 +558,18 @@
 }
 
 .new-workspace-plus {
-  border-color: rgba(217, 101, 45, 0.48);
+  border-color: rgba(201, 166, 107, 0.48);
   background:
-    linear-gradient(135deg, rgba(217, 101, 45, 0.16), transparent 60%),
+    linear-gradient(135deg, rgba(201, 166, 107, 0.16), transparent 60%),
     var(--surface-3);
-  color: var(--codev-orange-400);
+  color: var(--codev-gold-400);
 }
 
 .workspace-card-presence {
   min-height: 108px;
   padding: 18px 16px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(135deg, rgba(217, 101, 45, 0.1), transparent 66%);
+  background: linear-gradient(135deg, rgba(201, 166, 107, 0.1), transparent 66%);
 }
 
 .workspace-card-presence-label {
@@ -583,8 +597,8 @@
   overflow: hidden;
   border: 2px solid var(--surface-3);
   border-radius: 50%;
-  background: var(--codev-orange-500);
-  color: var(--codev-beige-100);
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
   font-size: 13px;
   font-weight: 700;
   object-fit: cover;
@@ -676,12 +690,12 @@
 
 .workspace-card-access {
   border-color: var(--line);
-  background: rgba(82, 126, 104, 0.12);
+  background: rgba(201, 166, 107, 0.1);
 }
 
 .workspace-create-overlay,
 .delete-workspace-backdrop {
-  background: rgba(5, 15, 10, 0.72) !important;
+  background: rgba(0, 0, 0, 0.72) !important;
 }
 
 .workspace-create-modal,

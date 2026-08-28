@@ -26,29 +26,29 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
 
-  --color-background: #0a0a0a;
-  --color-foreground: #fafafa;
-  --color-card: #171717;
-  --color-card-foreground: #fafafa;
-  --color-primary: #e5e5e5;
-  --color-primary-foreground: #171717;
-  --color-secondary: #262626;
-  --color-secondary-foreground: #fafafa;
-  --color-muted: #262626;
-  --color-muted-foreground: #a1a1a1;
-  --color-accent: #404040;
-  --color-accent-foreground: #fafafa;
+  --color-background: #0a0908;
+  --color-foreground: #f3efe6;
+  --color-card: #131210;
+  --color-card-foreground: #f3efe6;
+  --color-primary: #c9a66b;
+  --color-primary-foreground: #0a0908;
+  --color-secondary: #1c1b18;
+  --color-secondary-foreground: #f3efe6;
+  --color-muted: #1c1b18;
+  --color-muted-foreground: #a39b8c;
+  --color-accent: #27261f;
+  --color-accent-foreground: #f3efe6;
   --color-destructive: #ff6568;
-  --color-border: rgb(255 255 255 / 0.07);
-  --color-input: rgb(255 255 255 / 0.15);
-  --color-ring: #737373;
+  --color-border: rgb(243 239 230 / 0.1);
+  --color-input: rgb(243 239 230 / 0.16);
+  --color-ring: #c9a66b;
 
-  --color-worktree-sidebar: #2a2a2a;
-  --color-worktree-sidebar-foreground: #fafafa;
-  --color-worktree-sidebar-accent: #353535;
-  --color-worktree-sidebar-accent-foreground: #fafafa;
-  --color-worktree-sidebar-border: rgb(255 255 255 / 0.07);
-  --color-worktree-sidebar-ring: #737373;
+  --color-worktree-sidebar: #1c1b18;
+  --color-worktree-sidebar-foreground: #f3efe6;
+  --color-worktree-sidebar-accent: #27261f;
+  --color-worktree-sidebar-accent-foreground: #f3efe6;
+  --color-worktree-sidebar-border: rgb(243 239 230 / 0.1);
+  --color-worktree-sidebar-ring: #c9a66b;
 }
 
 /* Scope root: the settings layout wraps its content in this class instead

@@ -2,13 +2,14 @@
    Public landing page.
 
    Scoped entirely under `.lp-page` so it can never leak into the product
-   surfaces in globals.css / app-theme.css. The palette is CoDev's forest and
-   beige, pitched dark so the animated backdrop has something to glow against.
+   surfaces in globals.css / app-theme.css. The palette is CoDev's warm black
+   and dry antique gold, pitched dark so the animated backdrop has something
+   to glow against.
    ========================================================================== */
 
 .lp-page {
-  --lp-bg: #061a14;
-  --lp-bg-2: #0a2419;
+  --lp-bg: #050504;
+  --lp-bg-2: #12110e;
   --lp-ink: #f5eddf;
   --lp-muted: rgba(245, 237, 223, 0.62);
   --lp-faint: rgba(245, 237, 223, 0.4);
@@ -16,9 +17,9 @@
   --lp-line-strong: rgba(245, 237, 223, 0.22);
   --lp-panel: rgba(245, 237, 223, 0.045);
   --lp-panel-2: rgba(245, 237, 223, 0.08);
-  --lp-lime: #b6e36f;
-  --lp-orange: #ff8146;
-  --lp-sky: #7ec9ff;
+  --lp-lime: #c9a66b;
+  --lp-orange: #d4b67a;
+  --lp-sky: #e6d4a8;
   --lp-warn: #f5c451;
   --lp-shell: min(1200px, calc(100% - 48px));
   --lp-px: 0;
@@ -36,7 +37,7 @@
 
 .lp-page ::selection {
   background: var(--lp-lime);
-  color: #08251b;
+  color: #0a0908;
 }
 
 /* --------------------------------------------------------------------------
@@ -54,7 +55,7 @@
 }
 
 /* The brand mark is used as a mask so the rotating colour underneath shows
-   through it, rather than tinting a flat green PNG. */
+   through it, rather than tinting a flat PNG. */
 .lp-mark {
   position: absolute;
   top: 46%;
@@ -89,7 +90,7 @@
   height: min(52vw, 34rem);
   background: radial-gradient(
     circle,
-    rgba(255, 129, 70, 0.34),
+    rgba(201, 166, 107, 0.34),
     transparent 68%
   );
   animation: codev-page-ambient 26s ease-in-out infinite alternate;
@@ -103,7 +104,7 @@
   height: min(58vw, 40rem);
   background: radial-gradient(
     circle,
-    rgba(182, 227, 111, 0.24),
+    rgba(201, 166, 107, 0.24),
     transparent 70%
   );
   animation: lp-drift 22s ease-in-out infinite;
@@ -117,7 +118,7 @@
   height: min(48vw, 32rem);
   background: radial-gradient(
     circle,
-    rgba(126, 201, 255, 0.2),
+    rgba(230, 212, 168, 0.2),
     transparent 70%
   );
   animation: lp-drift 30s ease-in-out infinite reverse;
@@ -211,8 +212,8 @@
 }
 
 .lp-brand img {
-  filter: brightness(0) saturate(100%) invert(93%) sepia(9%) saturate(437%)
-    hue-rotate(334deg) brightness(103%) contrast(93%);
+  filter: brightness(0) saturate(100%) invert(76%) sepia(22%) saturate(748%)
+    hue-rotate(7deg) brightness(92%) contrast(86%);
 }
 
 .lp-nav nav {
@@ -261,12 +262,12 @@
 .lp-cta-primary {
   background: var(--lp-orange);
   color: #14110c;
-  box-shadow: 0 12px 34px rgba(255, 129, 70, 0.28);
+  box-shadow: 0 12px 34px rgba(201, 166, 107, 0.28);
 }
 
 .lp-cta-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 44px rgba(255, 129, 70, 0.36);
+  box-shadow: 0 18px 44px rgba(201, 166, 107, 0.36);
 }
 
 .lp-cta-primary:disabled {
@@ -291,7 +292,7 @@
   min-height: 40px;
   padding: 0 18px;
   background: var(--lp-ink);
-  color: #08251b;
+  color: #0a0908;
   font-size: 14px;
 }
 
@@ -340,7 +341,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--lp-lime);
-  box-shadow: 0 0 0 0 rgba(182, 227, 111, 0.55);
+  box-shadow: 0 0 0 0 rgba(201, 166, 107, 0.55);
   animation: lp-pulse 2.2s ease-out infinite;
 }
 
@@ -437,11 +438,11 @@
 
 @keyframes lp-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(182, 227, 111, 0.5);
+    box-shadow: 0 0 0 0 rgba(201, 166, 107, 0.5);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 9px rgba(182, 227, 111, 0);
+    box-shadow: 0 0 0 9px rgba(201, 166, 107, 0);
   }
 }
 
@@ -513,7 +514,7 @@
 .lp-demo-tabs button.is-active {
   border-color: transparent;
   background: var(--lp-ink);
-  color: #08251b;
+  color: #0a0908;
   font-weight: 560;
 }
 
@@ -542,7 +543,7 @@
   background: linear-gradient(
     180deg,
     rgba(10, 36, 25, 0.92),
-    rgba(6, 26, 20, 0.92)
+    rgba(5, 5, 4, 0.92)
   );
   box-shadow:
     0 40px 90px rgba(0, 0, 0, 0.45),
@@ -609,7 +610,7 @@
   justify-content: center;
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(6, 26, 20, 0.7);
+  border: 1px solid rgba(5, 5, 4, 0.7);
   border-radius: 50%;
   font-weight: 620;
   font-size: 10px;
@@ -618,17 +619,17 @@
 }
 
 .lp-tone-lime {
-  background: rgba(182, 227, 111, 0.2);
+  background: rgba(201, 166, 107, 0.2);
   color: var(--lp-lime);
 }
 
 .lp-tone-orange {
-  background: rgba(255, 129, 70, 0.2);
+  background: rgba(201, 166, 107, 0.2);
   color: var(--lp-orange);
 }
 
 .lp-tone-sky {
-  background: rgba(126, 201, 255, 0.18);
+  background: rgba(230, 212, 168, 0.18);
   color: var(--lp-sky);
 }
 
@@ -682,9 +683,9 @@
   align-items: center;
   gap: 8px;
   padding: 5px 13px;
-  border: 1px solid rgba(182, 227, 111, 0.3);
+  border: 1px solid rgba(201, 166, 107, 0.3);
   border-radius: 999px;
-  background: rgba(182, 227, 111, 0.1);
+  background: rgba(201, 166, 107, 0.1);
   color: var(--lp-lime);
   font-size: 12px;
 }
@@ -799,7 +800,7 @@
 }
 
 .lp-state.is-done {
-  border-color: rgba(182, 227, 111, 0.35);
+  border-color: rgba(201, 166, 107, 0.35);
   color: var(--lp-lime);
 }
 
@@ -842,7 +843,7 @@
 
 .lp-claim.lp-tone-lime {
   border-left-color: var(--lp-lime);
-  background: rgba(182, 227, 111, 0.07);
+  background: rgba(201, 166, 107, 0.07);
 }
 
 .lp-claim.lp-tone-lime span {
@@ -851,7 +852,7 @@
 
 .lp-claim.lp-tone-orange {
   border-left-color: var(--lp-orange);
-  background: rgba(255, 129, 70, 0.07);
+  background: rgba(201, 166, 107, 0.07);
 }
 
 .lp-claim.lp-tone-orange span {
@@ -912,8 +913,8 @@
 }
 
 .lp-log-ok {
-  border-color: rgba(182, 227, 111, 0.35) !important;
-  background: rgba(182, 227, 111, 0.08) !important;
+  border-color: rgba(201, 166, 107, 0.35) !important;
+  background: rgba(201, 166, 107, 0.08) !important;
   color: var(--lp-lime);
   font-weight: 560;
 }
@@ -932,36 +933,42 @@
 /* Scene: merge ------------------------------------------------------------ */
 
 .lp-scene-merge {
-  position: relative;
   display: grid;
   align-items: center;
-  gap: 24px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 22px 0;
+  gap: 0;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  padding: 26px 0;
 }
 
+/* Height is locked to the branch column (3 × 56px rows + 2 × 34px gaps) so the
+   SVG's 1:1 y axis lines each curve up with its card. Keep in sync with
+   MERGE_ROW / MERGE_GAP in landing-workspace-demo.tsx. */
 .lp-merge-graph {
-  position: absolute;
-  inset: 22px 0;
+  height: 236px;
   pointer-events: none;
 }
 
+/* The graph is drawn left-to-right with a clip wipe rather than a dash offset:
+   the viewBox is stretched non-uniformly on x, which makes `stroke-dasharray`
+   lengths unreliable, while an inset clip is purely geometric. */
 .lp-merge-graph svg {
+  display: block;
   width: 100%;
   height: 100%;
+  overflow: visible;
+  clip-path: inset(-4px 100% -4px -4px);
+  transition: clip-path 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lp-merge-graph.is-merged svg {
+  clip-path: inset(-4px -4px -4px -4px);
 }
 
 .lp-merge-path {
   fill: none;
   stroke-width: 2;
-  stroke-dasharray: 420;
-  stroke-dashoffset: 420;
-  opacity: 0.55;
-  transition: stroke-dashoffset 1.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.lp-merge-path.is-merged {
-  stroke-dashoffset: 0;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
 }
 
 .lp-stroke-lime {
@@ -977,21 +984,20 @@
 }
 
 .lp-merge-branches {
-  position: relative;
   display: grid;
-  gap: 32px;
+  gap: 34px;
+  grid-auto-rows: 56px;
 }
 
 .lp-merge-branch {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  align-self: start;
-  width: fit-content;
-  padding: 10px 14px;
+  justify-content: center;
+  padding: 0 14px;
   border: 1px solid var(--lp-line);
   border-radius: 10px;
-  background: rgba(6, 26, 20, 0.9);
+  background: rgba(5, 5, 4, 0.9);
 }
 
 .lp-merge-branch code {
@@ -1024,7 +1030,7 @@
   padding: 18px 22px;
   border: 1px solid var(--lp-line-strong);
   border-radius: 14px;
-  background: rgba(6, 26, 20, 0.94);
+  background: rgba(5, 5, 4, 0.94);
   text-align: center;
   transition:
     border-color 0.5s ease,
@@ -1042,8 +1048,8 @@
 }
 
 .lp-merge-target.is-merged {
-  border-color: rgba(182, 227, 111, 0.5);
-  box-shadow: 0 0 40px rgba(182, 227, 111, 0.16);
+  border-color: rgba(201, 166, 107, 0.5);
+  box-shadow: 0 0 40px rgba(201, 166, 107, 0.16);
 }
 
 .lp-merge-target.is-merged span {
@@ -1084,7 +1090,7 @@
   border: 0;
   border-radius: 8px;
   background: var(--lp-ink);
-  color: #08251b;
+  color: #0a0908;
   font: inherit;
   font-weight: 560;
   font-size: 12px;
@@ -1175,7 +1181,7 @@
 }
 
 .lp-cursor::first-line {
-  color: #08251b;
+  color: #0a0908;
 }
 
 .lp-cursor-1 {
@@ -1268,11 +1274,11 @@
 }
 
 .lp-contrast-after {
-  border-color: rgba(182, 227, 111, 0.28) !important;
+  border-color: rgba(201, 166, 107, 0.28) !important;
   background: linear-gradient(
     150deg,
-    rgba(182, 227, 111, 0.1),
-    rgba(255, 129, 70, 0.05)
+    rgba(201, 166, 107, 0.1),
+    rgba(201, 166, 107, 0.05)
   ) !important;
 }
 
@@ -1363,7 +1369,7 @@
   background: linear-gradient(
     180deg,
     rgba(10, 36, 25, 0.9),
-    rgba(6, 26, 20, 0.9)
+    rgba(5, 5, 4, 0.9)
   );
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(14px);
@@ -1486,8 +1492,8 @@
 }
 
 .lp-personas button.is-active {
-  border-color: rgba(182, 227, 111, 0.5);
-  background: rgba(182, 227, 111, 0.14);
+  border-color: rgba(201, 166, 107, 0.5);
+  background: rgba(201, 166, 107, 0.14);
   color: var(--lp-lime);
 }
 
@@ -1515,9 +1521,9 @@
 .lp-form-error {
   margin: 0;
   padding: 10px 13px;
-  border: 1px solid rgba(255, 129, 70, 0.4);
+  border: 1px solid rgba(201, 166, 107, 0.4);
   border-radius: 10px;
-  background: rgba(255, 129, 70, 0.1);
+  background: rgba(201, 166, 107, 0.1);
   color: var(--lp-orange);
   font-size: 13px;
 }
@@ -1535,7 +1541,7 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: rgba(182, 227, 111, 0.16);
+  background: rgba(201, 166, 107, 0.16);
   color: var(--lp-lime);
   font-size: 20px;
   animation: lp-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1648,6 +1654,22 @@
     border-left: 0;
   }
 
+  /* The window chrome is decoration; drop the parts that would push the
+     presence stack past the panel edge on a phone. */
+  .lp-window-bar {
+    gap: 10px;
+    padding: 12px 13px;
+  }
+
+  .lp-repo em,
+  .lp-dots {
+    display: none;
+  }
+
+  .lp-merge-target {
+    margin-top: 10px;
+  }
+
   .lp-agent {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -1694,7 +1716,7 @@
     width: auto;
   }
 
-  .lp-merge-path {
-    stroke-dashoffset: 0;
+  .lp-merge-graph svg {
+    clip-path: none;
   }
 }

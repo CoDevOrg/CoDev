@@ -12,7 +12,7 @@
 .team-rail {
   --team-line: rgba(242, 237, 224, 0.09);
   --team-line-strong: rgba(242, 237, 224, 0.16);
-  --team-accent: #d9642c;
+  --team-accent: #c9a66b;
   --team-online: #4ea87a;
   display: flex;
   flex-direction: column;
@@ -57,7 +57,7 @@
 
 .team-rail-expand:hover {
   border-color: var(--team-accent);
-  background: rgba(217, 101, 45, 0.16);
+  background: rgba(201, 166, 107, 0.16);
 }
 
 .team-rail-expand-badge {
@@ -68,7 +68,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--team-accent);
-  color: #fff;
+  color: #0a0908;
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -135,9 +135,9 @@
 .team-rail-error {
   margin: 0;
   padding: 6px 8px;
-  border: 1px solid rgba(217, 101, 45, 0.35);
+  border: 1px solid rgba(201, 166, 107, 0.35);
   border-radius: 7px;
-  background: rgba(217, 101, 45, 0.1);
+  background: rgba(201, 166, 107, 0.1);
   color: #f2c3a6;
   font-size: 11px;
 }
@@ -221,7 +221,7 @@
 
 .team-status-emoji-option.is-selected {
   border-color: var(--team-accent);
-  background: rgba(217, 101, 45, 0.18);
+  background: rgba(201, 166, 107, 0.18);
 }
 
 .team-status-row {
@@ -235,7 +235,7 @@
   padding: 5px 7px;
   border: 1px solid var(--team-line-strong);
   border-radius: 7px;
-  background: rgba(13, 31, 23, 0.6);
+  background: rgba(10, 9, 8, 0.6);
   color: var(--workspace-ink);
   font: inherit;
   font-size: 11.5px;
@@ -246,7 +246,7 @@
 .team-composer textarea:focus-visible {
   border-color: var(--team-accent);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(217, 101, 45, 0.2);
+  box-shadow: 0 0 0 2px rgba(201, 166, 107, 0.2);
 }
 
 .team-status-save {
@@ -302,7 +302,7 @@
   place-items: center;
   overflow: hidden;
   border-radius: 50%;
-  background: rgba(82, 126, 104, 0.35);
+  background: rgba(122, 115, 104, 0.35);
   font-size: 10px;
   font-weight: 700;
 }
@@ -331,9 +331,9 @@
   place-items: center;
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(217, 101, 45, 0.4);
+  border: 1px solid rgba(201, 166, 107, 0.4);
   border-radius: 50%;
-  background: rgba(217, 101, 45, 0.16);
+  background: rgba(201, 166, 107, 0.16);
   color: #f0b28c;
 }
 
@@ -437,8 +437,8 @@
 }
 
 .team-channel.is-active {
-  border-color: rgba(217, 101, 45, 0.45);
-  background: rgba(217, 101, 45, 0.14);
+  border-color: rgba(201, 166, 107, 0.45);
+  background: rgba(201, 166, 107, 0.14);
 }
 
 .team-channel-name {
@@ -465,7 +465,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--team-accent);
-  color: #fff;
+  color: #0a0908;
   font-size: 9.5px;
   font-weight: 700;
   line-height: 15px;
@@ -519,7 +519,7 @@
   padding: 4px 7px;
   border: 1px solid var(--team-line-strong);
   border-radius: 8px;
-  background: rgba(13, 31, 23, 0.6);
+  background: rgba(10, 9, 8, 0.6);
   color: var(--workspace-muted);
   font-size: 11.5px;
 }
@@ -540,7 +540,7 @@
   border: none;
   border-radius: 6px;
   background: var(--team-accent);
-  color: #fff;
+  color: #0a0908;
   cursor: pointer;
   font-size: 10px;
   font-weight: 700;
@@ -562,7 +562,7 @@
 .team-rail-foot code {
   padding: 0 3px;
   border-radius: 4px;
-  background: rgba(217, 101, 45, 0.18);
+  background: rgba(201, 166, 107, 0.18);
   color: #f0b28c;
   font-size: 9.5px;
 }
@@ -639,9 +639,9 @@
   align-items: center;
   gap: 4px;
   padding: 1px 6px;
-  border: 1px solid rgba(217, 101, 45, 0.35);
+  border: 1px solid rgba(201, 166, 107, 0.35);
   border-radius: 999px;
-  background: rgba(217, 101, 45, 0.12);
+  background: rgba(201, 166, 107, 0.12);
   color: #f0b28c;
   font-size: 9.5px;
   font-weight: 600;
@@ -687,7 +687,7 @@
 .team-conversation-notice code {
   padding: 0 3px;
   border-radius: 4px;
-  background: rgba(217, 101, 45, 0.18);
+  background: rgba(201, 166, 107, 0.18);
   color: #f0b28c;
 }
 
@@ -729,7 +729,7 @@
 .team-message-tag {
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(217, 101, 45, 0.2);
+  background: rgba(201, 166, 107, 0.2);
   color: #f0b28c;
   font-size: 8.5px;
   font-weight: 700;
@@ -747,21 +747,21 @@
 
 .team-message.is-agent .team-message-body {
   padding: 7px 9px;
-  border-left: 2px solid rgba(217, 101, 45, 0.5);
+  border-left: 2px solid rgba(201, 166, 107, 0.5);
   border-radius: 0 8px 8px 0;
-  background: rgba(217, 101, 45, 0.08);
+  background: rgba(201, 166, 107, 0.08);
 }
 
 .team-mention {
   padding: 0 2px;
   border-radius: 4px;
-  background: rgba(82, 126, 104, 0.28);
+  background: rgba(122, 115, 104, 0.28);
   color: #cfe6d9;
   font-weight: 600;
 }
 
 .team-mention.is-agent {
-  background: rgba(217, 101, 45, 0.22);
+  background: rgba(201, 166, 107, 0.22);
   color: #f4bd99;
 }
 
@@ -790,7 +790,7 @@
   padding: 8px 9px;
   border: 1px solid rgba(242, 237, 224, 0.16);
   border-radius: 9px;
-  background: rgba(13, 31, 23, 0.55);
+  background: rgba(10, 9, 8, 0.55);
   color: var(--workspace-ink);
   font: inherit;
   font-size: 12.5px;
@@ -810,9 +810,9 @@
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border: 1px solid rgba(217, 101, 45, 0.35);
+  border: 1px solid rgba(201, 166, 107, 0.35);
   border-radius: 999px;
-  background: rgba(217, 101, 45, 0.1);
+  background: rgba(201, 166, 107, 0.1);
   color: #f0b28c;
   cursor: pointer;
   font-size: 10.5px;
@@ -820,7 +820,7 @@
 }
 
 .team-composer-mention:hover {
-  background: rgba(217, 101, 45, 0.2);
+  background: rgba(201, 166, 107, 0.2);
 }
 
 .team-composer-send {
@@ -831,7 +831,7 @@
   border: none;
   border-radius: 8px;
   background: var(--team-accent);
-  color: #fff;
+  color: #0a0908;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }

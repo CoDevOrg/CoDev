@@ -3,34 +3,34 @@ import { Platform } from "react-native";
 /**
  * CoDev's brand palette, ported from apps/web/app/app-theme.css. The web app
  * is dark-mode only (no light variant is defined there), so both keys below
- * intentionally resolve to the same forest/beige/orange values — the mobile
- * app stays on-brand regardless of the device's system appearance setting.
+ * intentionally resolve to the same black / ivory / dry-gold values — the
+ * mobile app stays on-brand regardless of the device's system appearance.
  */
 const palette = {
-  forest950: "#0d1f17",
-  forest900: "#142c22",
-  forest800: "#1b3a2c",
-  forest700: "#244633",
-  beige100: "#f2ede0",
-  beige200: "#ddd5c5",
-  sage300: "#9db3a5",
-  sage500: "#527e68",
-  orange500: "#d9642c",
-  orange400: "#e1732d",
+  black950: "#0a0908",
+  black900: "#131210",
+  black800: "#1c1b18",
+  black700: "#27261f",
+  beige100: "#f3efe6",
+  beige200: "#d8d0c0",
+  stone300: "#a39b8c",
+  stone500: "#7a7368",
+  gold500: "#c9a66b",
+  gold400: "#d4b67a",
 } as const;
 
 const semantic = {
   text: palette.beige100,
-  textSecondary: palette.sage300,
-  textMuted: "#7a9184",
-  background: palette.forest950,
-  backgroundElement: palette.forest900,
-  backgroundSelected: palette.forest800,
-  accent: palette.orange500,
-  accentBright: palette.orange400,
+  textSecondary: palette.stone300,
+  textMuted: "#6e6860",
+  background: palette.black950,
+  backgroundElement: palette.black900,
+  backgroundSelected: palette.black800,
+  accent: palette.gold500,
+  accentBright: palette.gold400,
   danger: "#ff6568",
-  line: "rgba(242,237,224,0.1)",
-  lineStrong: "rgba(217,101,45,0.32)",
+  line: "rgba(243,239,230,0.1)",
+  lineStrong: "rgba(201,166,107,0.32)",
 } as const;
 
 export const Colors = {
@@ -94,7 +94,7 @@ export const StatusColors: Record<
   idle: semantic.textSecondary,
   running: semantic.accentBright,
   waiting: semantic.accent,
-  completed: palette.sage500,
+  completed: "#4ea87a",
   interrupted: semantic.textMuted,
   failed: semantic.danger,
 };

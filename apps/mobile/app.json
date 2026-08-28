@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "codevmobile",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0d1f17",
+    "backgroundColor": "#0a0908",
     "ios": {
       "icon": "./assets/expo.icon",
       "supportsTablet": false,
@@ -16,7 +16,7 @@
     "android": {
       "package": "com.trycodev.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#0d1f17",
+        "backgroundColor": "#0a0908",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -33,13 +33,13 @@
       [
         "expo-notifications",
         {
-          "color": "#d9642c"
+          "color": "#c9a66b"
         }
       ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0d1f17",
+          "backgroundColor": "#0a0908",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

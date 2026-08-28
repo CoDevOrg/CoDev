@@ -1,59 +1,59 @@
 :root {
-  /* Unified CoDev palette — paper, deep green, burnt orange, muted green. */
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9642c;
-  --violet: #527e68;
-  --workspace-surface: #0d1f17;
-  --workspace-surface-2: #142c22;
-  --workspace-surface-3: #1b3a2c;
-  --workspace-ink: #f2ede0;
-  --workspace-muted: #9db3a5;
-  color-scheme: light;
+  /* Unified CoDev palette — warm near-black, ivory ink, dry antique gold. */
+  --ink: #f3efe6;
+  --muted: #a39b8c;
+  --muted-2: #6e6860;
+  --line: rgba(243, 239, 230, 0.1);
+  --line-strong: rgba(201, 166, 107, 0.32);
+  --surface: #0a0908;
+  --surface-2: #131210;
+  --surface-3: #1c1b18;
+  --navy: #0a0908;
+  --gold: #c9a66b;
+  --gold-bright: #d4b67a;
+  --gold-soft: rgba(201, 166, 107, 0.12);
+  --teal: #c9a66b;
+  --teal-soft: rgba(201, 166, 107, 0.12);
+  --orange: #c9a66b;
+  --violet: #7a7368;
+  --workspace-surface: #0a0908;
+  --workspace-surface-2: #131210;
+  --workspace-surface-3: #1c1b18;
+  --workspace-ink: #f3efe6;
+  --workspace-muted: #a39b8c;
+  color-scheme: dark;
 }
 
 /* Shared warm product theme. One palette, two tonal tiers (app shell / workspace). */
 
 .app-page,
 .auth-page {
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9642c;
-  --violet: #527e68;
+  --ink: #f3efe6;
+  --muted: #a39b8c;
+  --muted-2: #6e6860;
+  --line: rgba(243, 239, 230, 0.1);
+  --line-strong: rgba(201, 166, 107, 0.32);
+  --surface: #0a0908;
+  --surface-2: #131210;
+  --surface-3: #1c1b18;
+  --navy: #0a0908;
+  --gold: #c9a66b;
+  --gold-bright: #d4b67a;
+  --gold-soft: rgba(201, 166, 107, 0.12);
+  --teal: #c9a66b;
+  --teal-soft: rgba(201, 166, 107, 0.12);
+  --orange: #c9a66b;
+  --violet: #7a7368;
   min-height: 100vh;
   background:
     radial-gradient(
       circle at 82% 0,
-      rgba(217, 101, 45, 0.13),
+      rgba(201, 166, 107, 0.13),
       transparent 28rem
     ),
     radial-gradient(
       circle at 12% 35%,
-      rgba(91, 137, 94, 0.12),
+      rgba(201, 166, 107, 0.06),
       transparent 30rem
     ),
     var(--surface);
@@ -63,20 +63,20 @@
 .workspace-page {
   --ink: var(--workspace-ink);
   --muted: var(--workspace-muted);
-  --muted-2: #7a9184;
-  --line: rgba(242, 237, 224, 0.1);
-  --line-strong: rgba(217, 101, 45, 0.28);
+  --muted-2: #6e6860;
+  --line: rgba(243, 239, 230, 0.1);
+  --line-strong: rgba(201, 166, 107, 0.28);
   --surface: var(--workspace-surface);
   --surface-2: var(--workspace-surface-2);
   --surface-3: var(--workspace-surface-3);
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.16);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.16);
-  --orange: #d9642c;
-  --violet: #527e68;
+  --navy: #0a0908;
+  --gold: #c9a66b;
+  --gold-bright: #d4b67a;
+  --gold-soft: rgba(201, 166, 107, 0.16);
+  --teal: #c9a66b;
+  --teal-soft: rgba(201, 166, 107, 0.16);
+  --orange: #c9a66b;
+  --violet: #7a7368;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -285,11 +285,11 @@
   padding: 12px;
   border: 1px solid rgba(242, 237, 224, 0.1);
   border-radius: 12px;
-  background: rgba(13, 31, 23, 0.55);
+  background: rgba(10, 9, 8, 0.55);
 }
 
 .workspace-agent-card.is-occupied {
-  border-color: rgba(217, 101, 45, 0.38);
+  border-color: rgba(201, 166, 107, 0.38);
   box-shadow: inset 3px 0 0 var(--teal);
 }
 
@@ -588,8 +588,8 @@
 
 .workspace-chat-bubble-error {
   align-self: flex-start;
-  border: 1px solid rgba(217, 101, 45, 0.35);
-  background: rgba(217, 101, 45, 0.08);
+  border: 1px solid rgba(201, 166, 107, 0.35);
+  background: rgba(201, 166, 107, 0.08);
   color: var(--workspace-ink);
 }
 
@@ -696,7 +696,7 @@
   background:
     radial-gradient(
       circle at 82% 0,
-      rgba(217, 101, 45, 0.15),
+      rgba(201, 166, 107, 0.15),
       transparent 25rem
     ),
     var(--surface);
@@ -718,7 +718,7 @@
 }
 
 .user-menu {
-  color: rgba(23, 59, 45, 0.72);
+  color: rgba(243, 239, 230, 0.62);
 }
 
 .user-menu img,
@@ -740,7 +740,7 @@
 }
 
 .auth-card::before {
-  border-color: rgba(217, 101, 45, 0.18);
+  border-color: rgba(201, 166, 107, 0.18);
 }
 
 .auth-card > p:not(.eyebrow) {
@@ -756,12 +756,12 @@
 
 .setup-panel,
 .inline-alert {
-  border-color: rgba(217, 101, 45, 0.24);
-  background: rgba(217, 101, 45, 0.08);
+  border-color: rgba(201, 166, 107, 0.24);
+  background: rgba(201, 166, 107, 0.08);
 }
 
 .setup-panel p {
-  color: rgba(23, 59, 45, 0.68);
+  color: rgba(243, 239, 230, 0.55);
 }
 
 .panel-heading h2 {
@@ -806,7 +806,7 @@ select,
 }
 
 .workspace-card:hover {
-  border-color: rgba(217, 101, 45, 0.42);
+  border-color: rgba(201, 166, 107, 0.42);
   background: var(--surface-2);
 }
 
@@ -1447,14 +1447,14 @@ select,
 }
 
 html {
-  background: #0d1f17;
+  background: #0a0908;
   scroll-behavior: smooth;
 }
 
 body {
   min-width: 320px;
   margin: 0;
-  background: #0d1f17;
+  background: #0a0908;
   color: var(--ink);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
@@ -1521,7 +1521,7 @@ button {
   display: flex;
   margin-left: 48px;
   gap: 26px;
-  color: #9ba5b8;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -1666,16 +1666,16 @@ button {
 }
 
 .auth-password-guidance .met {
-  color: #18794e;
+  color: #4ea87a;
 }
 
 .auth-password-guidance .unmet {
-  color: rgba(23, 59, 45, 0.68);
+  color: rgba(243, 239, 230, 0.55);
 }
 
 .auth-mode-switch {
   margin: 2px 0 0;
-  color: rgba(23, 59, 45, 0.72);
+  color: rgba(243, 239, 230, 0.62);
   font-size: 14px;
   text-align: center;
 }
@@ -1684,7 +1684,7 @@ button {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--codev-orange-500, #d9642c);
+  color: var(--codev-gold-500, #c9a66b);
   cursor: pointer;
   font: inherit;
   font-weight: 650;
@@ -1693,7 +1693,7 @@ button {
 }
 
 .auth-mode-switch a {
-  color: var(--codev-orange-500, #d9642c);
+  color: var(--codev-gold-500, #c9a66b);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1706,7 +1706,7 @@ button {
 }
 
 .auth-forgot-password a {
-  color: var(--codev-orange-500, #d9642c);
+  color: var(--codev-gold-500, #c9a66b);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1729,7 +1729,7 @@ button {
 }
 
 .auth-submit:hover {
-  background: #173b2d;
+  background: #1c1b18;
 }
 
 .github-button,
@@ -1741,10 +1741,10 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: 1px solid #dfe5e3;
+  border: 1px solid var(--line);
   border-radius: 7px;
-  background: #eef2f8;
-  color: #0e1c35;
+  background: var(--surface-3);
+  color: var(--ink);
   font-weight: 650;
   cursor: pointer;
 }
@@ -1961,7 +1961,7 @@ select,
   border-radius: 999px;
   background: var(--ink);
   color: var(--surface);
-  box-shadow: 0 14px 40px rgba(8, 24, 17, 0.22);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
   cursor: pointer;
   font-size: 13px;
   font-weight: 560;
@@ -1984,7 +1984,7 @@ select,
 }
 
 .feedback-dialog::backdrop {
-  background: rgba(11, 31, 23, 0.34);
+  background: rgba(10, 9, 8, 0.34);
   backdrop-filter: blur(6px);
 }
 
@@ -1995,7 +1995,7 @@ select,
   border-radius: 18px;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 28px 90px rgba(8, 24, 17, 0.28);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
 }
 
 .feedback-dialog-heading {
@@ -2008,7 +2008,7 @@ select,
 
 .feedback-dialog-heading .eyebrow {
   margin: 0 0 4px;
-  color: var(--accent, #d9642c);
+  color: var(--accent, #c9a66b);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2707,7 +2707,7 @@ footer > span {
 /* Workspace home and account menu refinements */
 
 .app-page {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 .profile-menu {
@@ -3655,9 +3655,9 @@ footer > span {
   gap: 20px;
   padding: 28px 32px;
   border-radius: 18px;
-  background: var(--surface-2, #ffffff);
-  border: 1px solid rgba(23, 59, 45, 0.12);
-  box-shadow: 0 8px 24px -8px rgba(23, 59, 45, 0.08);
+  background: var(--surface-2, #131210);
+  border: 1px solid rgba(243, 239, 230, 0.12);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35);
 }
 
 .home-welcome-header {
@@ -3682,27 +3682,27 @@ footer > span {
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: var(--teal-soft, rgba(21, 128, 61, 0.1));
-  color: var(--teal, #15803d);
-  border: 1px solid rgba(21, 128, 61, 0.2);
+  background: var(--teal-soft, rgba(201, 166, 107, 0.1));
+  color: var(--teal, #c9a66b);
+  border: 1px solid rgba(201, 166, 107, 0.2);
   margin-bottom: 10px;
 }
 
 .home-welcome-text h1 {
   font-size: 30px;
   font-weight: 750;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #f3efe6);
   margin: 0 0 8px 0;
   letter-spacing: -0.025em;
   line-height: 1.2;
 }
 
 .home-highlight-name {
-  color: var(--teal, #15803d);
+  color: var(--teal, #c9a66b);
 }
 
 .home-welcome-text p {
-  color: var(--muted, #52665a);
+  color: var(--muted, #a39b8c);
   font-size: 14.5px;
   line-height: 1.55;
   margin: 0;
@@ -3720,15 +3720,15 @@ footer > span {
   gap: 4px;
   padding: 12px 18px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(23, 59, 45, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(243, 239, 230, 0.1);
   min-width: 130px;
 }
 
 .stat-label {
   font-size: 11px;
   font-weight: 600;
-  color: var(--muted, #64748b);
+  color: var(--muted, #a39b8c);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -3736,7 +3736,7 @@ footer > span {
 .stat-value {
   font-size: 18px;
   font-weight: 750;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #f3efe6);
 }
 
 .resume-primary-button {
@@ -3747,9 +3747,9 @@ footer > span {
   border-radius: 10px;
   font-size: 13.5px;
   font-weight: 650;
-  color: #ffffff;
-  background: var(--teal, #15803d);
-  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.25);
+  color: #0a0908;
+  background: var(--teal, #c9a66b);
+  box-shadow: 0 4px 12px rgba(201, 166, 107, 0.22);
   transition:
     transform 0.15s ease,
     background-color 0.15s ease;
@@ -3758,8 +3758,8 @@ footer > span {
 
 .resume-primary-button:hover {
   transform: translateY(-1px);
-  background: #166534;
-  color: #ffffff;
+  background: #d4b67a;
+  color: #0a0908;
 }
 
 .home-section-header {
@@ -3769,12 +3769,12 @@ footer > span {
 .home-section-header h2 {
   font-size: 20px;
   font-weight: 700;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #f3efe6);
   margin: 0 0 4px 0;
 }
 
 .home-section-header p {
   font-size: 13px;
-  color: var(--muted, #64748b);
+  color: var(--muted, #a39b8c);
   margin: 0;
 }
