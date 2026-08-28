@@ -2828,38 +2828,17 @@ index 0000000..7965918
 +    </section>
 +  )
 +}
-diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
+diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx
 new file mode 100644
-index 0000000..8d47057
+index 0000000..1111111
 --- /dev/null
-+++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,205 @@
-+import { useEffect, useMemo, useState, type JSX } from 'react'
-+import { useShallow } from 'zustand/react/shallow'
-+import { useAppStore } from '@/store'
++++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx
+@@ -0,0 +1,185 @@
++import type { JSX } from 'react'
 +import { formatAgentTypeLabel } from '@/lib/agent-status'
-+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 +import { AGENT_STATUS_STATES, type AgentStatusEntry } from '../../../../shared/agent-status-types'
 +
-+/**
-+ * Every agent running in this workspace, always on screen.
-+ *
-+ * CoDev's premise is several people steering several agents against one
-+ * repository, and that was only legible by opening a panel and reading a
-+ * status string. This is the workspace's default right-sidebar tab so the
-+ * state of the room is visible while you work, without clicking anything.
-+ *
-+ * Reads Orca's own live agent status rather than CoDev's workboard. The
-+ * workboard tracks *managed* agent sessions (a row plus a worktree slot), but
-+ * an agent started from the workspace's chat tab is a PTY inside the existing
-+ * worktree and never becomes one — so a workboard-backed panel truthfully
-+ * reported "0 agents" with an agent visibly working two panes away. This
-+ * reports what is actually running.
-+ */
-+
-+const TICK_MS = 1_000
-+
-+type LiveAgent = AgentStatusEntry & { paneKey: string }
++export type LiveAgent = AgentStatusEntry & { paneKey: string }
 +
 +function elapsed(since: number, now: number): string {
 +  const seconds = Math.max(0, Math.floor((now - since) / 1000))
@@ -2876,7 +2855,7 @@ index 0000000..8d47057
 +  return hash
 +}
 +
-+function isLiveState(value: unknown): value is AgentStatusEntry['state'] {
++export function isLiveAgentState(value: unknown): value is AgentStatusEntry['state'] {
 +  return (
 +    typeof value === 'string' &&
 +    (AGENT_STATUS_STATES as readonly string[]).includes(value)
@@ -2890,97 +2869,199 @@ index 0000000..8d47057
 +  done: 'Done'
 +}
 +
-+function AgentCard({ agent, now }: { agent: LiveAgent; now: number }): JSX.Element {
++function currentActionFor(agent: LiveAgent): string {
++  if (agent.toolName) {
++    return `${agent.toolName}${agent.toolInput ? ` · ${agent.toolInput}` : ''}`
++  }
++  return agent.lastAssistantMessage || agent.prompt || 'Waiting for activity'
++}
++
++function AgentCard({
++  agent,
++  now,
++  onStepIn
++}: {
++  agent: LiveAgent
++  now: number
++  onStepIn: (tabId: string) => void
++}): JSX.Element {
 +  const tone = agent.state
 +  const label = formatAgentTypeLabel(agent.agentType)
 +  const hue = hueFor(agent.paneKey)
-+  const setActiveTab = useAppStore((state) => state.setActiveTab)
-+  const currentAction = agent.toolName
-+    ? `${agent.toolName}${agent.toolInput ? ` · ${agent.toolInput}` : ''}`
-+    : agent.lastAssistantMessage || agent.prompt || 'Waiting for activity'
++  const currentAction = currentActionFor(agent)
++  const preview = agent.prompt || currentAction
 +  const recentStates = agent.stateHistory.slice(-4).map((entry) => entry.state).concat(agent.state)
 +  const tabId = agent.paneKey.split(':', 1)[0]
-+
-+  function stepIn() {
-+    if (!tabId) return
-+    setActiveTab(tabId)
-+    // Match Orca's own tab selection flow: focus after the state update commits.
-+    requestAnimationFrame(() => focusTerminalTabSurface(tabId))
-+  }
++  const teammateCount = agent.subagents?.length ?? 0
 +
 +  return (
-+    <li className={`codev-agent-card is-${tone}`}>
-+      <div className="codev-agent-top">
-+        <span
-+          className="codev-agent-avatar"
-+          title={label}
-+          style={{
-+            background: `linear-gradient(150deg, hsl(${hue} 58% 46%), hsl(${hue} 50% 32%))`
-+          }}
-+        >
-+          {label.slice(0, 2).toUpperCase()}
-+        </span>
-+        <div className="codev-agent-who">
-+          <span className="codev-agent-owner">{label}</span>
-+          {agent.model ? (
-+            <span className="codev-agent-worktree" title={agent.model}>
-+              {agent.model}
-+            </span>
++    <li>
++      <details className={`codev-agent-card is-${tone}`}>
++        <summary className="codev-agent-summary">
++          <span
++            className="codev-agent-avatar"
++            title={label}
++            style={{
++              background: `linear-gradient(150deg, hsl(${hue} 58% 46%), hsl(${hue} 50% 32%))`
++            }}
++          >
++            {label.slice(0, 2).toUpperCase()}
++          </span>
++          <div className="codev-agent-who">
++            <span className="codev-agent-owner">{label}</span>
++            {agent.model ? (
++              <span className="codev-agent-worktree" title={agent.model}>
++                {agent.model}
++              </span>
++            ) : null}
++          </div>
++          <span className={`codev-agent-status is-${tone}`}>
++            <i aria-hidden />
++            {STATE_LABEL[agent.state]}
++          </span>
++          <span className="codev-agent-expand" aria-hidden />
++          <p className="codev-agent-preview">{preview}</p>
++        </summary>
++
++        <div className="codev-agent-details">
++          {agent.prompt && agent.prompt !== currentAction ? (
++            <p className="codev-agent-assignment">{agent.prompt}</p>
 +          ) : null}
++          <p className={`codev-agent-task${agent.state === 'blocked' ? ' is-blocked' : ''}`}>
++            <i className="codev-agent-caret" aria-hidden />
++            <span>{currentAction}</span>
++          </p>
++
++          <div className="codev-agent-progress" aria-label={`Turn state: ${STATE_LABEL[agent.state]}`}>
++            {recentStates.map((state, index) => (
++              <span key={`${state}-${index}`} className={`is-${state}`} />
++            ))}
++          </div>
++          <p className="codev-agent-progress-label">
++            {agent.state === 'working' ? 'Live turn in progress' : STATE_LABEL[agent.state]}
++            {teammateCount
++              ? ` · ${teammateCount} teammate${teammateCount === 1 ? '' : 's'}`
++              : ''}
++          </p>
++
++          {teammateCount ? (
++            <ul className="codev-agent-subagents" aria-label="Agent teammates">
++              {agent.subagents!.map((subagent) => (
++                <li key={subagent.id}>
++                  <i className={`is-${subagent.state}`} aria-hidden />
++                  <span>{subagent.description || formatAgentTypeLabel(subagent.agentType)}</span>
++                </li>
++              ))}
++            </ul>
++          ) : null}
++
++          <div className="codev-agent-foot">
++            <span className="codev-agent-elapsed">
++              {now - agent.stateStartedAt < 2_000
++                ? STATE_LABEL[agent.state]
++                : `${STATE_LABEL[agent.state].toLowerCase()} for ${elapsed(agent.stateStartedAt, now)}`}
++            </span>
++            <button
++              className="codev-agent-open"
++              type="button"
++              onClick={() => {
++                if (!tabId) return
++                onStepIn(tabId)
++              }}
++            >
++              Step in
++            </button>
++          </div>
 +        </div>
-+        <span className={`codev-agent-status is-${tone}`}>
-+          <i aria-hidden />
-+          {STATE_LABEL[agent.state]}
-+        </span>
-+      </div>
-+
-+      {agent.prompt ? <p className="codev-agent-assignment">{agent.prompt}</p> : null}
-+      <p className={`codev-agent-task${agent.state === 'blocked' ? ' is-blocked' : ''}`}>
-+        <i className="codev-agent-caret" aria-hidden />
-+        <span>{currentAction}</span>
-+      </p>
-+
-+      <div className="codev-agent-progress" aria-label={`Turn state: ${STATE_LABEL[agent.state]}`}>
-+        {recentStates.map((state, index) => (
-+          <span key={`${state}-${index}`} className={`is-${state}`} />
-+        ))}
-+      </div>
-+      <p className="codev-agent-progress-label">
-+        {agent.state === 'working' ? 'Live turn in progress' : STATE_LABEL[agent.state]}
-+        {agent.subagents?.length ? ` · ${agent.subagents.length} teammate${agent.subagents.length === 1 ? '' : 's'}` : ''}
-+      </p>
-+
-+      {agent.subagents?.length ? (
-+        <ul className="codev-agent-subagents" aria-label="Agent teammates">
-+          {agent.subagents.map((subagent) => (
-+            <li key={subagent.id}>
-+              <i className={`is-${subagent.state}`} aria-hidden />
-+              <span>{subagent.description || formatAgentTypeLabel(subagent.agentType)}</span>
-+            </li>
-+          ))}
-+        </ul>
-+      ) : null}
-+
-+      <div className="codev-agent-foot">
-+        <span className="codev-agent-elapsed">
-+          {/* A freshly rehydrated row restarts its clock, and "done for 0s"
-+              reads like a bug. Show the bare state until it has run long
-+              enough for the number to mean something. */}
-+          {now - agent.stateStartedAt < 2_000
-+            ? STATE_LABEL[agent.state]
-+            : `${STATE_LABEL[agent.state].toLowerCase()} for ${elapsed(agent.stateStartedAt, now)}`}
-+        </span>
-+        <button className="codev-agent-open" type="button" onClick={stepIn}>
-+          Step in
-+        </button>
-+      </div>
++      </details>
 +    </li>
 +  )
 +}
 +
++export function CodevLiveAgentsView({
++  agents,
++  now,
++  onStepIn
++}: {
++  agents: LiveAgent[]
++  now: number
++  onStepIn: (tabId: string) => void
++}): JSX.Element {
++  const working = agents.filter((agent) => agent.state === 'working').length
++
++  return (
++    <section className="codev-agents-panel" aria-label="Agents in this workspace">
++      <header className="codev-agents-head">
++        <div>
++          <p className="codev-agents-kicker">
++            <i className="codev-agents-dot" aria-hidden />
++            {working > 0 ? `${working} working` : 'Live in this workspace'}
++          </p>
++          <h3>Agents</h3>
++        </div>
++        <span className="codev-agents-count" title={`${working} working`}>
++          <strong>{agents.length}</strong>
++        </span>
++      </header>
++
++      {agents.length === 0 ? (
++        <p className="codev-agents-empty">
++          Start an agent from a chat tab and it appears here. Open a row for
++          its live turn, teammates, and a way to step in.
++        </p>
++      ) : (
++        <ul className="codev-agents-list">
++          {agents.map((agent) => (
++            <AgentCard key={agent.paneKey} agent={agent} now={now} onStepIn={onStepIn} />
++          ))}
++        </ul>
++      )}
++    </section>
++  )
++}
+diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
+@@ -0,0 +1,74 @@
++import { useEffect, useMemo, useState, type JSX } from 'react'
++import { useShallow } from 'zustand/react/shallow'
++import { useAppStore } from '@/store'
++import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
++import {
++  CodevLiveAgentsView,
++  isLiveAgentState,
++  type LiveAgent
++} from './CodevLiveAgentsView'
++
++/**
++ * Every agent running in this workspace, in one right-sidebar tab.
++ *
++ * CoDev's premise is several people steering several agents against one
++ * repository. Orca also ships an Agent Dashboard and a session-history
++ * "Agents" panel; those overlap this purpose, so CoDev workspaces hide
++ * them and keep this as the single place for "what are agents doing?"
++ *
++ * Reads Orca's own live agent status rather than CoDev's workboard. The
++ * workboard tracks *managed* agent sessions (a row plus a worktree slot), but
++ * an agent started from the workspace's chat tab is a PTY inside the existing
++ * worktree and never becomes one — so a workboard-backed panel truthfully
++ * reported "0 agents" with an agent visibly working two panes away. This
++ * reports what is actually running.
++ *
++ * Rows stay compact until opened, so a busy workspace stays scannable; the
++ * live turn, teammates, and Step in live behind that disclosure.
++ */
++
++const TICK_MS = 1_000
++
++export { CodevLiveAgentsView, type LiveAgent } from './CodevLiveAgentsView'
++
 +export function CodevLiveAgentsPanel(): JSX.Element | null {
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
 +  const [now, setNow] = useState(() => Date.now())
++  const setActiveTab = useAppStore((state) => state.setActiveTab)
 +
 +  // Shallow-compare the map so an unrelated pane's status tick does not
 +  // re-render every card.
@@ -2991,7 +3072,7 @@ index 0000000..8d47057
 +      .map(([paneKey, entry]) => ({ ...entry, paneKey }))
 +      // A status row with no agent identity is a plain terminal pane or a
 +      // half-torn-down entry, not an agent; listing it as "Agent" is noise.
-+      .filter((entry) => isLiveState(entry.state) && Boolean(entry.agentType))
++      .filter((entry) => isLiveAgentState(entry.state) && Boolean(entry.agentType))
 +      .sort((a, b) => b.updatedAt - a.updatedAt)
 +  }, [statuses])
 +
@@ -3007,38 +3088,91 @@ index 0000000..8d47057
 +
 +  if (!embedded) return null
 +
-+  const working = agents.filter((agent) => agent.state === 'working').length
-+
 +  return (
-+    <section className="codev-agents-panel" aria-label="Live agents in this workspace">
-+      <header className="codev-agents-head">
-+        <div>
-+          <p className="codev-agents-kicker">
-+            <i className="codev-agents-dot" aria-hidden />
-+            {working > 0 ? `${working} working` : 'Live in this workspace'}
-+          </p>
-+          <h3>Mission Control</h3>
-+        </div>
-+        <span className="codev-agents-count" title={`${working} working`}>
-+          <strong>{agents.length}</strong>
-+        </span>
-+      </header>
-+
-+      {agents.length === 0 ? (
-+        <p className="codev-agents-empty">
-+          Start an agent from a chat tab and it appears here the moment it
-+          begins working. Its live turn, tool activity, and teammates stay in view.
-+        </p>
-+      ) : (
-+        <ul className="codev-agents-list">
-+          {agents.map((agent) => (
-+            <AgentCard key={agent.paneKey} agent={agent} now={now} />
-+          ))}
-+        </ul>
-+      )}
-+    </section>
++    <CodevLiveAgentsView
++      agents={agents}
++      now={now}
++      onStepIn={(tabId) => {
++        setActiveTab(tabId)
++        requestAnimationFrame(() => focusTerminalTabSurface(tabId))
++      }}
++    />
 +  )
 +}
+diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx
+@@ -0,0 +1,53 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import { CodevLiveAgentsView, type LiveAgent } from './CodevLiveAgentsView'
++
++const now = Date.parse('2026-08-28T06:00:00.000Z')
++
++const working: LiveAgent = {
++  paneKey: 'tab-claude:leaf-1',
++  state: 'working',
++  prompt: 'Ship the agents sidebar as one surface.',
++  updatedAt: now,
++  stateStartedAt: now - 45_000,
++  agentType: 'claude',
++  model: 'opus',
++  stateHistory: [{ state: 'waiting', prompt: '', startedAt: now - 90_000 }],
++  toolName: 'Edit',
++  toolInput: 'CodevLiveAgentsPanel.tsx',
++  lastAssistantMessage: 'Updating the sidebar tab list.',
++  subagents: [
++    {
++      id: 'sub-1',
++      agentType: 'claude',
++      description: 'Draft the CSS for collapsed rows',
++      state: 'working',
++      startedAt: now - 12_000
++    }
++  ]
++}
++
++describe('CodevLiveAgentsView', () => {
++  it('renders the Agents heading and a collapsed row that hides details until opened', () => {
++    const html = renderToStaticMarkup(
++      <CodevLiveAgentsView agents={[working]} now={now} onStepIn={() => undefined} />
++    )
++    expect(html).toContain('>Agents<')
++    expect(html).toContain('aria-label="Agents in this workspace"')
++    expect(html).toContain('Ship the agents sidebar as one surface.')
++    expect(html).toContain('Edit · CodevLiveAgentsPanel.tsx')
++    expect(html).toContain('Draft the CSS for collapsed rows')
++    expect(html).toContain('Step in')
++    expect(html).toContain('<details class="codev-agent-card is-working">')
++    expect(html).not.toContain('<details class="codev-agent-card is-working" open')
++    expect(html).toContain('class="codev-agent-details"')
++  })
++
++  it('shows the empty state when nothing is running', () => {
++    const html = renderToStaticMarkup(
++      <CodevLiveAgentsView agents={[]} now={now} onStepIn={() => undefined} />
++    )
++    expect(html).toContain('Start an agent from a chat tab and it appears here.')
++    expect(html).not.toContain('Step in')
++  })
++})
+diff --git a/src/renderer/src/components/sidebar/SidebarNav.tsx b/src/renderer/src/components/sidebar/SidebarNav.tsx
+index 849bf12..fedc123 100644
+--- a/src/renderer/src/components/sidebar/SidebarNav.tsx
++++ b/src/renderer/src/components/sidebar/SidebarNav.tsx
+@@ -64,5 +64,8 @@ const SidebarNav = React.memo(function SidebarNav() {
+-  const showAgentsButton = (experimentalSidebarButtons & 1) !== 0
+-  const showAgentDashboardButton = (experimentalSidebarButtons & 2) !== 0
++  // CoDev has one team-facing agent surface in the right sidebar. Leaving
++  // Orca's experimental left-sidebar entries visible duplicates that purpose.
++  const codevEmbedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const showAgentsButton = !codevEmbedded && (experimentalSidebarButtons & 1) !== 0
++  const showAgentDashboardButton = !codevEmbedded && (experimentalSidebarButtons & 2) !== 0
+   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
+   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
+   const automationsActive = activeView === 'automations'
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
 index 0000000..f673b66
@@ -4077,11 +4211,11 @@ index f9587ab..9b3054e 100644
  /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
  import React, { useEffect, useMemo, useRef, useState } from 'react'
 -import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
-+import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow , Radio } from 'lucide-react'
++import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow, Radio } from 'lucide-react'
  import { useAppStore } from '@/store'
  import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
  import { useRepoById } from '@/store/selectors'
-@@ -112,6 +112,18 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -112,11 +112,29 @@ function RightSidebarInner(): React.JSX.Element {
          title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
          shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
        },
@@ -4092,15 +4226,32 @@ index f9587ab..9b3054e 100644
 +            {
 +              id: 'codev-agents' as const,
 +              icon: Radio,
-+              title: 'Mission Control',
++              title: 'Agents',
 +              shortcut: ''
 +            }
 +          ]
 +        : []),
++      // Orca's session-history "Agents" tab overlaps this live list. Hide it
++      // in CoDev so there is one Agents surface, on the right.
+-      {
+-        id: 'vault',
+-        icon: AgentSessionHistoryIcon,
+-        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+-        shortcut: ''
+-      },
++      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
++        ? []
++        : [
++            {
++              id: 'vault' as const,
++              icon: AgentSessionHistoryIcon,
++              title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
++              shortcut: ''
++            }
++          ]),
        {
-         id: 'vault',
-         icon: AgentSessionHistoryIcon,
-@@ -156,6 +168,12 @@ function RightSidebarInner(): React.JSX.Element {
+         id: 'workspaces',
+@@ -156,6 +174,12 @@ function RightSidebarInner(): React.JSX.Element {
          shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
          sshOnly: true
        },
@@ -4113,7 +4264,7 @@ index f9587ab..9b3054e 100644
        // Why: plugin panels append after the built-in tabs so core navigation
        // keeps stable positions regardless of which plugins are installed.
        ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
-@@ -175,7 +193,8 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -175,7 +199,8 @@ function RightSidebarInner(): React.JSX.Element {
        getVisibleRightSidebarActivityItems(activityItems, {
          isFolder,
          isFolderWorkspace,

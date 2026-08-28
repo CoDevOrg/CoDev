@@ -37,4 +37,10 @@ describe("Orca theme overrides", () => {
     expect(themeOverrides).toContain(".codev-orca-empty-logo {");
     expect(themeOverrides).toContain("hue-rotate(340deg)");
   });
+
+  it("styles the live Agents panel, including collapsed rows", () => {
+    expect(themeOverrides).toContain(".codev-agents-panel {");
+    expect(themeOverrides).toContain(".codev-agent-summary {");
+    expect(themeOverrides).toContain(".codev-agent-details {");
+  });
 });
