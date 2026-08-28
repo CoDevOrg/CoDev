@@ -1,1 +1,0 @@
-import{Jv as e,Wv as t,_v as n}from"./web-index-BtWLod6u.js";var r=e(t(),1);n();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

@@ -1,1 +1,0 @@
-import{Mg as e,Ng as t,tm as n,xm as r}from"./web-index-BtWLod6u.js";function i(t,i){if(!t)return[];let a=new Set(e(i)),o=[];for(let e of r){if(a.has(e))continue;let r=n(e);(t[r]??[]).length>0&&o.push({agent:e,actionId:r})}return o}function a(e){return t(e.defaultTuiAgent===`blank`?null:e.defaultTuiAgent,e.detectedAgentIds??[],e.disabledTuiAgents)}export{a as n,i as t};

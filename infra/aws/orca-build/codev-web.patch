@@ -2830,10 +2830,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..ad8e912
+index 0000000..5031abb
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,156 @@
 +import { useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
 +import { useAppStore } from '@/store'
@@ -2966,13 +2966,12 @@ index 0000000..ad8e912
 +        <div>
 +          <p className="codev-agents-kicker">
 +            <i className="codev-agents-dot" aria-hidden />
-+            Live in this workspace
++            {working > 0 ? `${working} working` : 'Live in this workspace'}
 +          </p>
 +          <h3>Agents</h3>
 +        </div>
-+        <span className="codev-agents-count">
-+          <strong>{working}</strong>
-+          <span>/{agents.length || 0}</span>
++        <span className="codev-agents-count" title={`${working} working`}>
++          <strong>{agents.length}</strong>
 +        </span>
 +      </header>
 +
@@ -8268,6 +8267,69 @@ index d3e3718..8baf85f 100644
    const startupPlanBase = {
      agent,
      cmdOverrides,
+diff --git a/src/renderer/src/lib/native-chat-initial-view-mode.test.ts b/src/renderer/src/lib/native-chat-initial-view-mode.test.ts
+index 5744c76..cdfc3a5 100644
+--- a/src/renderer/src/lib/native-chat-initial-view-mode.test.ts
++++ b/src/renderer/src/lib/native-chat-initial-view-mode.test.ts
+@@ -1,4 +1,4 @@
+-import { describe, it, expect } from 'vitest'
++import { afterEach, describe, expect, it, vi } from 'vitest'
+ import {
+   decideInitialAgentTabViewMode,
+   initialAgentTabViewModeProps
+@@ -154,3 +154,24 @@ describe('decideInitialAgentTabViewMode', () => {
+     ).toEqual({})
+   })
+ })
++
++describe('CoDev-embedded clients', () => {
++  afterEach(() => {
++    vi.unstubAllGlobals()
++  })
++
++  it('opens a supported agent in chat even before settings have loaded', () => {
++    // launchCodevDefaultChatTab fires right after project activation and can
++    // beat the async settings read; returning undefined here sent the paired
++    // host viewMode 'terminal', so the tab came back a raw TUI on reload.
++    vi.stubGlobal('window', { __CODEV_EMBEDDED__: true, location: { hash: '' } })
++    expect(
++      decideInitialAgentTabViewMode({ agent: 'claude' })
++    ).toBe('chat')
++  })
++
++  it('still refuses an agent with no native chat renderer', () => {
++    vi.stubGlobal('window', { __CODEV_EMBEDDED__: true, location: { hash: '' } })
++    expect(decideInitialAgentTabViewMode({ agent: 'aider' })).toBeUndefined()
++  })
++})
+diff --git a/src/renderer/src/lib/native-chat-initial-view-mode.ts b/src/renderer/src/lib/native-chat-initial-view-mode.ts
+index 1d2e17c..2263ce2 100644
+--- a/src/renderer/src/lib/native-chat-initial-view-mode.ts
++++ b/src/renderer/src/lib/native-chat-initial-view-mode.ts
+@@ -1,4 +1,5 @@
+ import type { GlobalSettings, Tab, TuiAgent } from '../../../shared/types'
++import { isCodevEmbedded } from '@/web/codev-embedded'
+ import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
+ import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
+ 
+@@ -22,7 +23,16 @@ export function decideInitialAgentTabViewMode(args: {
+   launchDraftText?: string
+   nativeChatTranscriptIsLocalReadable?: boolean
+ }): Tab['viewMode'] {
+-  if (args.experimentalNativeChat !== true || args.openAgentTabsInChatByDefault !== true) {
++  // CoDev always wants chat, and must not depend on when settings finish
++  // loading. `launchCodevDefaultChatTab` fires right after project activation,
++  // which can beat the async settings read — and the resulting `undefined`
++  // was sent to the paired host as `viewMode: 'terminal'`, so the tab looked
++  // right locally and came back a raw TUI on the next reload.
++  const codevForcesChat = isCodevEmbedded()
++  if (
++    !codevForcesChat &&
++    (args.experimentalNativeChat !== true || args.openAgentTabsInChatByDefault !== true)
++  ) {
+     return undefined
+   }
+   if (!isNativeChatSupportedAgent(args.agent)) {
 diff --git a/src/renderer/src/store/right-sidebar-route.ts b/src/renderer/src/store/right-sidebar-route.ts
 index 38bddf6..f983e99 100644
 --- a/src/renderer/src/store/right-sidebar-route.ts
@@ -9470,10 +9532,10 @@ index 0000000..2706170
 +})
 diff --git a/src/renderer/src/web/codev-embedded.ts b/src/renderer/src/web/codev-embedded.ts
 new file mode 100644
-index 0000000..85565c9
+index 0000000..e5f2025
 --- /dev/null
 +++ b/src/renderer/src/web/codev-embedded.ts
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,34 @@
 +/**
 + * True when the Orca web client is running inside a CoDev workspace shell
 + * (the parent opened it with the `codev=1` pairing-fragment contract; see
@@ -9486,15 +9548,19 @@ index 0000000..85565c9
 + * still resolve correctly.
 + */
 +export function isCodevEmbedded(
-+  win: {
++  win?: {
 +    __CODEV_EMBEDDED__?: boolean
 +    location?: { hash?: string }
-+  } = window
++  }
 +): boolean {
-+  if (win.__CODEV_EMBEDDED__) {
++  // Callable from anywhere, including node test environments and any
++  // server-side render: no window means not embedded, never a throw.
++  const target = win ?? (typeof window === 'undefined' ? undefined : window)
++  if (!target) return false
++  if (target.__CODEV_EMBEDDED__) {
 +    return true
 +  }
-+  const hash = win.location?.hash
++  const hash = target.location?.hash
 +  if (!hash) {
 +    return false
 +  }
