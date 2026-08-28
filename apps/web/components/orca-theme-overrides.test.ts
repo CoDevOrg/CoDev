@@ -38,9 +38,13 @@ describe("Orca theme overrides", () => {
     expect(themeOverrides).toContain("hue-rotate(340deg)");
   });
 
-  it("styles the live Agents panel, including collapsed rows", () => {
+  it("styles the live Agents panel, including collapsed rows, logos, and the expanded page", () => {
     expect(themeOverrides).toContain(".codev-agents-panel {");
     expect(themeOverrides).toContain(".codev-agent-summary {");
     expect(themeOverrides).toContain(".codev-agent-details {");
+    expect(themeOverrides).toContain(".codev-agent-logo {");
+    expect(themeOverrides).toContain(".codev-agent-face {");
+    expect(themeOverrides).toContain(".codev-agents-page-toggle {");
+    expect(themeOverrides).toContain(".codev-agents-history-list {");
   });
 });

@@ -76,6 +76,12 @@ describe("workspace presence route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       viewerId: userId,
+      viewer: {
+        id: userId,
+        login: "alex",
+        name: "Alex Morgan",
+        avatarUrl: null,
+      },
       members: [
         {
           user: {

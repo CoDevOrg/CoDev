@@ -55,6 +55,12 @@ export async function GET(
     const presence = await listWorkspacePresenceEntries(workspaceId);
     return Response.json({
       viewerId: user.id,
+      viewer: {
+        id: user.id,
+        login: user.login,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+      },
       members: presence.map(({ user, path, cursor }) => ({
         user,
         path,

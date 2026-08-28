@@ -493,15 +493,142 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   padding: 0 0.7rem 0.65rem;
 }
 
-.codev-agent-avatar {
+.codev-agents-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.codev-agents-page-toggle {
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(217, 101, 45, 0.34);
+  background: transparent;
+  color: #f0c3a4;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.codev-agents-page-toggle:hover {
+  background: var(--codev-orange-500, #d9642c);
+  color: #fff;
+}
+
+.codev-agents-panel.is-expanded {
+  position: sticky;
+  top: 0;
+  min-height: 100%;
+}
+
+.codev-agents-section-label {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--codev-workspace-muted);
+}
+
+.codev-agents-create-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.codev-agents-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(242, 237, 224, 0.12);
+  background: rgba(242, 237, 224, 0.05);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.codev-agents-create-btn:hover:not(:disabled) {
+  border-color: rgba(217, 101, 45, 0.4);
+  background: var(--codev-accent-soft);
+}
+
+.codev-agents-create-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.codev-agents-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codev-agents-history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.45rem;
+  row-gap: 0.2rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 11px;
+  border: 1px solid rgba(242, 237, 224, 0.08);
+  background: rgba(242, 237, 224, 0.03);
+}
+
+.codev-agents-history-row .codev-agent-preview {
+  grid-column: 1 / -1;
+}
+
+.codev-agent-marks {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.codev-agent-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: none;
   width: 22px;
   height: 22px;
+  border-radius: 6px;
+  background: rgba(242, 237, 224, 0.08);
+  overflow: hidden;
+}
+
+.codev-agent-logo.is-history {
+  width: 20px;
+  height: 20px;
+}
+
+.codev-agent-logo img,
+.codev-agent-logo svg {
+  display: block;
+}
+
+.codev-agent-face {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  font-size: 9px;
+  border: 1px solid var(--codev-workspace-surface-2);
+  object-fit: cover;
+  background: #244633;
+}
+
+.codev-agent-face.is-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
   font-weight: 700;
   color: #fff;
 }
