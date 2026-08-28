@@ -1218,7 +1218,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(0, 0, 0, 0.58);
   z-index: 60;
   animation: codev-mc-fade 120ms ease;
 }
@@ -1234,9 +1234,9 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex-direction: column;
   gap: 0.7rem;
   padding: 1rem 1rem 1.1rem;
-  background: #17150f;
-  border-left: 1px solid rgba(242, 237, 224, 0.12);
-  box-shadow: -18px 0 46px rgba(0, 0, 0, 0.45);
+  background: #1d1b14;
+  border-left: 1px solid rgba(242, 237, 224, 0.2);
+  box-shadow: -26px 0 64px rgba(0, 0, 0, 0.62);
   overflow-y: auto;
   animation: codev-mc-slide 150ms ease;
 }
