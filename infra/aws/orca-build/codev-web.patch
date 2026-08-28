@@ -9218,10 +9218,10 @@ index 0000000..ff1e3a8
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
-index 0000000..5daa977
+index 0000000..3e6ddb9
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.test.ts
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,203 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
@@ -9310,7 +9310,8 @@ index 0000000..5daa977
 +    getState.mockReturnValue({
 +      tabsByWorktree: {},
 +      unifiedTabsByWorktree: {},
-+      closeTab: vi.fn()
++      closeTab: vi.fn(),
++      setTabViewMode: vi.fn()
 +    })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
@@ -9336,6 +9337,7 @@ index 0000000..5daa977
 +        tabsByWorktree: {},
 +        unifiedTabsByWorktree: {},
 +        closeTab,
++        setTabViewMode: vi.fn(),
 +      })
 +      .mockReturnValue({
 +        tabsByWorktree: {
@@ -9343,6 +9345,7 @@ index 0000000..5daa977
 +        },
 +        unifiedTabsByWorktree: {},
 +        closeTab,
++        setTabViewMode: vi.fn(),
 +      })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
@@ -9366,17 +9369,54 @@ index 0000000..5daa977
 +    expect(closeTab).not.toHaveBeenCalled()
 +  })
 +
-+  it('does nothing when the worktree already has an agent tab', () => {
++  it('does not launch a second agent when the worktree already has one', () => {
 +    setWindow({ __CODEV_EMBEDDED__: true })
 +    getState.mockReturnValue({
 +      tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
 +      unifiedTabsByWorktree: {},
-+      closeTab: vi.fn()
++      closeTab: vi.fn(),
++      setTabViewMode: vi.fn()
 +    })
 +
 +    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
 +
 +    expect(launchAgentInNewTab).not.toHaveBeenCalled()
++  })
++
++  it('puts an existing agent tab back into chat when it reopens as a terminal', () => {
++    // A workspace opened before the launch-time fix keeps viewMode 'terminal'
++    // on the host and comes back a raw TUI on every reload.
++    setWindow({ __CODEV_EMBEDDED__: true })
++    const setTabViewMode = vi.fn()
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
++      unifiedTabsByWorktree: {
++        'wt-1': [{ id: 'u1', entityId: 't1', viewMode: 'terminal' }]
++      },
++      closeTab: vi.fn(),
++      setTabViewMode
++    })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++
++    expect(setTabViewMode).toHaveBeenCalledWith('u1', 'chat')
++  })
++
++  it('leaves a tab that is already in chat alone', () => {
++    setWindow({ __CODEV_EMBEDDED__: true })
++    const setTabViewMode = vi.fn()
++    getState.mockReturnValue({
++      tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
++      unifiedTabsByWorktree: {
++        'wt-1': [{ id: 'u1', entityId: 't1', viewMode: 'chat' }]
++      },
++      closeTab: vi.fn(),
++      setTabViewMode
++    })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++
++    expect(setTabViewMode).not.toHaveBeenCalled()
 +  })
 +
 +  it('does nothing outside CoDev-embedded mode', () => {
@@ -9387,11 +9427,12 @@ index 0000000..5daa977
 +})
 diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
 new file mode 100644
-index 0000000..3763d0d
+index 0000000..e8ced2e
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.ts
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,147 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
++import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 +import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 +import { useAppStore } from '@/store'
 +import type { TuiAgent } from '../../../shared/types'
@@ -9473,6 +9514,41 @@ index 0000000..3763d0d
 +  }, RETIRE_STOCK_TABS_INTERVAL_MS)
 +}
 +
++
++/**
++ * Put this worktree's agent tabs back into chat.
++ *
++ * The launch-time decision only covers tabs created after it. A workspace
++ * opened before that fix — or any tab whose `viewMode` the paired host stored
++ * as `terminal` — comes back as a raw agent TUI on every reload, which is the
++ * surface CoDev exists to replace. Opening a workspace is the moment to
++ * re-assert the default; a member can still toggle to the terminal from the
++ * tab afterwards for the rest of the session.
++ */
++function ensureAgentTabsRenderAsChat(worktreeId: string): void {
++  const state = useAppStore.getState()
++  const agentTabIds = new Set(
++    (state.tabsByWorktree[worktreeId] ?? [])
++      .filter((tab) => Boolean(tab.launchAgent))
++      .map((tab) => tab.id)
++  )
++  if (agentTabIds.size === 0) return
++
++  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
++  for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
++    const isAgentTab = agentTabIds.has(tab.entityId) || agentTabIds.has(tab.id)
++    if (!isAgentTab || tab.viewMode === 'chat') continue
++    state.setTabViewMode(tab.id, 'chat')
++    if (runtimeEnvironmentId) {
++      // The host keeps its own copy and wins on the next hydration, so tell it
++      // too — otherwise this repair is undone by the following reload.
++      void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
++        setWebRuntimeTabProps({ worktreeId, tabId: tab.id, viewMode: 'chat' })
++      )
++    }
++  }
++}
++
 +/**
 + * Open the workspace's default native chat tab in the just-activated worktree
 + * and retire the stock terminal tab(s) it replaces. No-op outside
@@ -9482,7 +9558,10 @@ index 0000000..3763d0d
 + */
 +export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }): void {
 +  const agent = codevDefaultChatAgent()
-+  if (!agent || worktreeHasAgentTab(worktreeId)) {
++  if (!agent) return
++  if (worktreeHasAgentTab(worktreeId)) {
++    // Already has an agent; just make sure it is not showing as a raw TUI.
++    ensureAgentTabsRenderAsChat(worktreeId)
 +    return
 +  }
 +  launchAgentInNewTab({
@@ -9496,6 +9575,8 @@ index 0000000..3763d0d
 +    launchSource: 'new_workspace_composer'
 +  })
 +  retireStockTerminalTabs(worktreeId)
++  // The host mirrors tabs late, so re-assert once they land.
++  setTimeout(() => ensureAgentTabsRenderAsChat(worktreeId), RETIRE_STOCK_TABS_INTERVAL_MS * 2)
 +}
 diff --git a/src/renderer/src/web/codev-embedded.test.ts b/src/renderer/src/web/codev-embedded.test.ts
 new file mode 100644
