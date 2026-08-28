@@ -142,7 +142,10 @@ export function LandingWorkspaceDemo() {
 
   useEffect(() => {
     if (reducedMotion) return;
-    const timer = window.setInterval(() => setTick((value) => value + 1), 1_500);
+    const timer = window.setInterval(
+      () => setTick((value) => value + 1),
+      1_500,
+    );
     return () => window.clearInterval(timer);
   }, [reducedMotion]);
 
@@ -314,24 +317,31 @@ function MergeScene({ tick }: { tick: number }) {
   const merged = tick % 6 >= 3;
   return (
     <div className="lp-scene lp-scene-merge">
+      <div className="lp-merge-branches">
+        {BRANCHES.map((branch) => (
+          <div
+            className={`lp-merge-branch lp-tone-${branch.tone}`}
+            key={branch.name}
+          >
+            <code>{branch.name}</code>
+            <small>{branch.files} files changed</small>
+          </div>
+        ))}
+      </div>
       <div className="lp-merge-graph" aria-hidden="true">
-        <svg viewBox="0 0 320 200" preserveAspectRatio="none">
+        {/* `pathLength` normalises each curve to 1 unit so the draw-on dash
+            maths stays correct however wide the column renders. */}
+        <svg viewBox="0 0 200 200" preserveAspectRatio="none">
           {BRANCHES.map((branch, index) => (
             <path
               key={branch.name}
+              pathLength={1}
               className={`lp-merge-path lp-stroke-${branch.tone}${merged ? " is-merged" : ""}`}
-              d={`M8 ${34 + index * 66} H150 Q206 ${34 + index * 66} 206 100 H312`}
+              style={{ transitionDelay: `${index * 0.18}s` }}
+              d={`M0 ${34 + index * 66} H70 Q110 ${34 + index * 66} 110 100 H200`}
             />
           ))}
         </svg>
-      </div>
-      <div className="lp-merge-branches">
-        {BRANCHES.map((branch) => (
-          <div className={`lp-merge-branch lp-tone-${branch.tone}`} key={branch.name}>
-            <code>{branch.name}</code>
-            <small>{branch.files} files</small>
-          </div>
-        ))}
       </div>
       <div className={merged ? "lp-merge-target is-merged" : "lp-merge-target"}>
         <strong>main</strong>

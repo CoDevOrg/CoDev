@@ -43,7 +43,9 @@ test("the workspace tour switches scenes on demand", async ({ page }) => {
 
   const tour = page.getByRole("tablist", { name: "Workspace tour" });
   await expect(tour).toBeVisible();
-  await expect(page.getByRole("heading", { name: /every agent is doing/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /every agent is doing/ }),
+  ).toBeVisible();
 
   await page.getByRole("tab", { name: "Coordination" }).click();
   await expect(
@@ -52,7 +54,9 @@ test("the workspace tour switches scenes on demand", async ({ page }) => {
   await expect(page.getByText("src/checkout/reserve.ts").first()).toBeVisible();
 
   await page.getByRole("tab", { name: "Sharing" }).click();
-  await expect(page.getByRole("heading", { name: /Share it like a doc/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Share it like a doc/ }),
+  ).toBeVisible();
   await expect(page.getByText("codev.dev/w/side-project")).toBeVisible();
 });
 

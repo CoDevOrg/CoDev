@@ -21,9 +21,8 @@ export function RequestAccessForm() {
   const [githubLogin, setGithubLogin] = useState("");
 
   const handle = githubLogin.trim().replace(/^@/, "");
-  const validHandle = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(
-    handle,
-  );
+  const validHandle =
+    /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/.test(handle);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,7 +112,9 @@ export function RequestAccessForm() {
             maxLength={320}
             placeholder="you@gmail.com"
           />
-          <small>Use the Google or GitHub email you&apos;ll sign in with.</small>
+          <small>
+            Use the Google or GitHub email you&apos;ll sign in with.
+          </small>
         </div>
       </div>
 

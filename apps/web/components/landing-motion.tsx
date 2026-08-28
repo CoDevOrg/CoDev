@@ -16,7 +16,9 @@ export function LandingMotion() {
     if (reduced.matches) return;
 
     page.dataset.motion = "on";
-    const nodes = Array.from(page.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const nodes = Array.from(
+      page.querySelectorAll<HTMLElement>("[data-reveal]"),
+    );
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {

@@ -15,7 +15,9 @@ async function send(payload: {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     if (process.env.NODE_ENV !== "production") {
-      console.info(`Access-request email for ${payload.to}: ${payload.subject}`);
+      console.info(
+        `Access-request email for ${payload.to}: ${payload.subject}`,
+      );
     } else {
       console.error("Access-request email skipped: RESEND_API_KEY is not set.");
     }
