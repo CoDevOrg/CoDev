@@ -1147,106 +1147,14 @@ index 0000000..0d6cb67
 +    ...(input.strategy === 'merged' ? { mergedContents: input.mergedContents ?? '' } : {})
 +  })
 +}
-diff --git a/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx b/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx
-new file mode 100644
-index 0000000..7705684
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/CodevChatPresenceBar.tsx
-@@ -0,0 +1,85 @@
-+import { Users } from 'lucide-react'
-+import type { CodevChatCoordination, CodevChatMember } from './use-codev-chat-coordination'
-+
-+function initials(name: string): string {
-+  return name
-+    .split(/\s+/)
-+    .filter(Boolean)
-+    .slice(0, 2)
-+    .map((part) => part[0]?.toUpperCase())
-+    .join('')
-+}
-+
-+function MemberAvatar({ member }: { member: CodevChatMember }): React.JSX.Element {
-+  return member.avatarUrl ? (
-+    <img src={member.avatarUrl} alt="" className="size-5 rounded-full object-cover" />
-+  ) : (
-+    <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[8px] font-semibold">
-+      {initials(member.name)}
-+    </span>
-+  )
-+}
-+
-+export function CodevChatPresenceBar({
-+  coordination
-+}: {
-+  coordination: CodevChatCoordination
-+}): React.JSX.Element | null {
-+  if (!coordination.enabled) return null
-+
-+  const holderIsViewer = coordination.holder?.id === coordination.viewer?.id
-+  const status = coordination.error
-+    ? coordination.error
-+    : !coordination.ready
-+      ? 'Connecting shared composer…'
-+      : coordination.canEdit
-+        ? 'You have the composer'
-+        : coordination.holder
-+          ? `${holderIsViewer ? 'Another one of your tabs' : coordination.holder.name} has the composer`
-+          : 'Shared composer is available'
-+
-+  return (
-+    <div
-+      data-codev-chat-presence="true"
-+      className="mx-auto flex w-full max-w-4xl items-center gap-2 px-4 py-1.5 text-[11px] text-muted-foreground"
-+      role="status"
-+      aria-live="polite"
-+    >
-+      <Users className="size-3.5 shrink-0" />
-+      <div className="flex -space-x-1" aria-label={`${coordination.participants.length} viewing`}>
-+        {coordination.participants.slice(0, 3).map((participant) => (
-+          <span
-+            key={participant.id}
-+            className="rounded-full border border-background"
-+            title={`${participant.name} is viewing`}
-+          >
-+            <MemberAvatar member={participant} />
-+          </span>
-+        ))}
-+      </div>
-+      <span className="min-w-0 flex-1 truncate">
-+        {coordination.participants.length || 1} viewing · {status}
-+      </span>
-+      {coordination.canEdit ? (
-+        <button
-+          type="button"
-+          onClick={() => void coordination.release()}
-+          className="shrink-0 rounded-full border border-border px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-+        >
-+          Release
-+        </button>
-+      ) : !coordination.holder ? (
-+        <button
-+          type="button"
-+          disabled={!coordination.ready || coordination.acquiring}
-+          onClick={() => void coordination.acquire()}
-+          className="shrink-0 rounded-full bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
-+        >
-+          {coordination.acquiring ? 'Taking control…' : 'Take control'}
-+        </button>
-+      ) : (
-+        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 font-medium">View only</span>
-+      )}
-+    </div>
-+  )
-+}
 diff --git a/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
 new file mode 100644
-index 0000000..2201cf6
+index 0000000..5702f58
 --- /dev/null
 +++ b/src/renderer/src/components/native-chat/CodevChatProviderPicker.tsx
-@@ -0,0 +1,108 @@
-+import { memo, useState } from 'react'
-+import { ChevronDown, LoaderCircle } from 'lucide-react'
-+import { toast } from 'sonner'
+@@ -0,0 +1,85 @@
++import { memo } from 'react'
++import { ChevronDown } from 'lucide-react'
 +import { Button } from '@/components/ui/button'
 +import {
 +  DropdownMenu,
@@ -1270,8 +1178,6 @@ index 0000000..2201cf6
 +  terminalTabId: string
 +  /** Chat is mid-turn; switching now would abandon a running reply. */
 +  isWorking: boolean
-+  disabled?: boolean
-+  disabledReason?: string | null
 +}
 +
 +/**
@@ -1285,11 +1191,8 @@ index 0000000..2201cf6
 +function CodevChatProviderPickerInner({
 +  agent,
 +  terminalTabId,
-+  isWorking,
-+  disabled = false,
-+  disabledReason = null
++  isWorking
 +}: CodevChatProviderPickerProps): React.JSX.Element | null {
-+  const [switching, setSwitching] = useState(false)
 +  if (!codevChatProviderSwitchEnabled() || !isCodevChatProvider(agent)) {
 +    return null
 +  }
@@ -1297,7 +1200,7 @@ index 0000000..2201cf6
 +    <DropdownMenu>
 +      <Tooltip>
 +        <TooltipTrigger asChild>
-+          <DropdownMenuTrigger asChild disabled={isWorking || disabled || switching}>
++          <DropdownMenuTrigger asChild disabled={isWorking}>
 +            <Button
 +              type="button"
 +              variant="ghost"
@@ -1306,18 +1209,12 @@ index 0000000..2201cf6
 +              className="max-w-48 text-muted-foreground"
 +            >
 +              <span className="truncate">{formatAgentTypeLabel(agent)}</span>
-+              {switching ? (
-+                <LoaderCircle className="size-3 animate-spin" />
-+              ) : (
-+                <ChevronDown className="size-3" />
-+              )}
++              <ChevronDown className="size-3" />
 +            </Button>
 +          </DropdownMenuTrigger>
 +        </TooltipTrigger>
 +        <TooltipContent side="top" sideOffset={4}>
-+          {isWorking
-+            ? 'Wait for the reply to finish to switch provider'
-+            : (disabledReason ?? 'Provider')}
++          {isWorking ? 'Wait for the reply to finish to switch provider' : 'Provider'}
 +        </TooltipContent>
 +      </Tooltip>
 +      <DropdownMenuContent align="start" className="w-52">
@@ -1325,23 +1222,12 @@ index 0000000..2201cf6
 +          value={agent}
 +          onValueChange={(next) => {
 +            if (next !== agent && isCodevChatProvider(next)) {
-+              setSwitching(true)
-+              void switchCodevChatProvider({ terminalTabId, nextAgent: next })
-+                .catch((error) => {
-+                  toast.error('Could not switch provider', {
-+                    description: error instanceof Error ? error.message : String(error)
-+                  })
-+                })
-+                .finally(() => setSwitching(false))
++              switchCodevChatProvider({ terminalTabId, nextAgent: next })
 +            }
 +          }}
 +        >
 +          {CODEV_CHAT_PROVIDERS.map((provider) => (
-+            <DropdownMenuRadioItem
-+              key={provider}
-+              value={provider}
-+              disabled={isWorking || disabled || switching}
-+            >
++            <DropdownMenuRadioItem key={provider} value={provider} disabled={isWorking}>
 +              {formatAgentTypeLabel(provider)}
 +            </DropdownMenuRadioItem>
 +          ))}
@@ -1353,218 +1239,10 @@ index 0000000..2201cf6
 +
 +export const CodevChatProviderPicker = memo(CodevChatProviderPickerInner)
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposer.tsx b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
-index 3cad0b3..7d06b01 100644
+index 3cad0b3..619134f 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposer.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposer.tsx
-@@ -68,6 +68,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-       paneKey,
-       targetPtyId,
-       agent,
-+      coordination,
-       canSend = true,
-       isWorking = false,
-       onStop,
-@@ -101,6 +102,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-     const [activeSuggestion, setActiveSuggestion] = useState(0)
-     const [notice, setNotice] = useState<string | null>(null)
-     const [dictationPressed, setDictationPressed] = useState(false)
-+    const [submitting, setSubmitting] = useState(false)
-     const textareaRef = useRef<HTMLTextAreaElement>(null)
-     const isComposingRef = useRef(false)
-     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
-@@ -174,9 +176,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-         setDraft,
-         setNotice
-       })
--    const sendButtonDisabled = isWorking
--      ? !hasPty || !onStop
--      : disabled || (draft.trim() === '' && imageAttachments.length === 0)
-+    const sendButtonDisabled = submitting
-+      ? true
-+      : isWorking
-+        ? !hasPty || !onStop || !canSend
-+        : disabled || (draft.trim() === '' && imageAttachments.length === 0)
- 
-     const { insertTypedText, focus } = useNativeChatTypedInsertion({
-       textareaRef,
-@@ -237,7 +241,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-     const send = useCallback(() => {
-       const text = draft
-       const imagePaths = imageAttachments.map((attachment) => attachment.path)
--      if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
-+      if ((text.trim() === '' && imagePaths.length === 0) || disabled || submitting) {
-         return
-       }
-       // Why: block a normal send while a session-option command (e.g. /model) is
-@@ -251,62 +255,102 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-         return
-       }
-       const classification = classifySend(text)
--      // A parked launch draft must be cleared line-by-line before the body.
--      const { sendOptions } = resolveNativeChatLaunchDraftSend({
--        launchDraft,
--        launchDraftResolved,
--        agent,
--        readScreen: () => readTerminalScreen?.()
--      })
--      let pendingHandle: NativeChatSendHandle | null = null
--      // Why: image attachments take the attachment send path even for a
--      // command/unknown send, otherwise `clearImageAttachments()` below drops
--      // them silently when the text starts with the agent's slash/skill prefix.
--      if (classification !== 'chat' && imagePaths.length === 0) {
--        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
--      } else if (imagePaths.length > 0) {
--        pendingHandle = sendNativeChatMessageWithImageAttachments(
--          target.settings,
--          target.ptyId,
--          text,
--          imagePaths,
--          sendOptions
--        )
--      } else if (text.trim().length > 0) {
--        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
--      } else {
--        submitNativeChatPrompt(target.settings, target.ptyId)
--      }
--      if (classification !== 'chat') {
--        if (pendingHandle) {
--          trackPendingSend(pendingHandle)
-+      const deliver = (): void => {
-+        // A parked launch draft must be cleared line-by-line before the body.
-+        const { sendOptions } = resolveNativeChatLaunchDraftSend({
-+          launchDraft,
-+          launchDraftResolved,
-+          agent,
-+          readScreen: () => readTerminalScreen?.()
-+        })
-+        let pendingHandle: NativeChatSendHandle | null = null
-+        // Why: image attachments take the attachment send path even for a
-+        // command/unknown send, otherwise `clearImageAttachments()` below drops
-+        // them silently when the text starts with the agent's slash/skill prefix.
-+        if (classification !== 'chat' && imagePaths.length === 0) {
-+          pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-+        } else if (imagePaths.length > 0) {
-+          pendingHandle = sendNativeChatMessageWithImageAttachments(
-+            target.settings,
-+            target.ptyId,
-+            text,
-+            imagePaths,
-+            sendOptions
-+          )
-+        } else if (text.trim().length > 0) {
-+          pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-+        } else {
-+          submitNativeChatPrompt(target.settings, target.ptyId)
-         }
--        // Why: only verified catalog commands can truthfully claim they ran or
--        // mutate session-option state; unknown slash-like text has no such proof.
--        if (classification === 'command') {
--          onSlashCommand?.(text.trim())
--          sessionOptionsSurface?.recordOutgoingCommand(text.trim())
--        }
--      } else {
--        const pendingId = onOptimisticSend?.(text, imagePaths)
--        if (pendingHandle) {
--          trackPendingSend(pendingHandle, pendingId)
-+        if (classification !== 'chat') {
-+          if (pendingHandle) {
-+            trackPendingSend(pendingHandle)
-+          }
-+          // Why: only verified catalog commands can truthfully claim they ran or
-+          // mutate session-option state; unknown slash-like text has no such proof.
-+          if (classification === 'command') {
-+            onSlashCommand?.(text.trim())
-+            sessionOptionsSurface?.recordOutgoingCommand(text.trim())
-+          }
-+        } else {
-+          const pendingId = onOptimisticSend?.(text, imagePaths)
-+          if (pendingHandle) {
-+            trackPendingSend(pendingHandle, pendingId)
-+          }
-         }
-+        // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
-+        // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
-+        emitNativeChatMessageSent({
-+          agent,
-+          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
-+        })
-+        setHistory((prev) => pushHistory(prev, text))
-+        setDraft('')
-+        setCaret(0)
-+        clearSkillOrigin()
-+        clearImageAttachments()
-+        setNotice(null)
-+        // The send cleared the TUI input line before its body, so retire the seed.
-+        useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
-       }
--      // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
--      // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
--      emitNativeChatMessageSent({
--        agent,
--        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
--      })
--      setHistory((prev) => pushHistory(prev, text))
--      setDraft('')
--      setCaret(0)
--      clearSkillOrigin()
--      clearImageAttachments()
--      setNotice(null)
--      // The send cleared the TUI input line before its body, so retire the seed.
--      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
-+
-+      if (
-+        classification === 'chat' &&
-+        coordination?.enabled &&
-+        (agent === 'claude' || agent === 'codex')
-+      ) {
-+        const modelDescriptor = sessionOptionsSnapshot.find(
-+          (descriptor) => descriptor.category === 'model'
-+        )
-+        const effortDescriptor = sessionOptionsSnapshot.find(
-+          (descriptor) => descriptor.id === 'effort'
-+        )
-+        const currentValue = (descriptor: (typeof sessionOptionsSnapshot)[number] | undefined) =>
-+          descriptor?.kind.currentValue
-+        setSubmitting(true)
-+        void coordination
-+          .recordPrompt({
-+            prompt: text.trim(),
-+            attachments: imagePaths.map((path) => ({
-+              name: path.split(/[\\/]/).at(-1) ?? 'Image',
-+              type: 'image'
-+            })),
-+            provider: agent === 'claude' ? 'claude' : 'codex',
-+            model:
-+              typeof currentValue(modelDescriptor) === 'string'
-+                ? String(currentValue(modelDescriptor))
-+                : null,
-+            effort:
-+              typeof currentValue(effortDescriptor) === 'string'
-+                ? String(currentValue(effortDescriptor))
-+                : null
-+          })
-+          .then(deliver)
-+          .catch((error) => setNotice(error instanceof Error ? error.message : String(error)))
-+          .finally(() => setSubmitting(false))
-+        return
-+      }
-+      deliver()
-     }, [
-       agent,
-       classifySend,
-@@ -314,8 +358,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-       clearImageAttachments,
-       draft,
-       imageAttachments,
-+      coordination,
-       disabled,
-       isDispatchingSessionOption,
-+      sessionOptionsSnapshot,
-+      submitting,
-       launchDraft,
-       launchDraftResolved,
-       readTerminalScreen,
-@@ -388,6 +435,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
+@@ -388,6 +388,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
  
      return (
        <NativeChatComposerField
@@ -1573,22 +1251,6 @@ index 3cad0b3..7d06b01 100644
          textareaRef={textareaRef}
          draft={draft}
          disabled={disabled}
-@@ -398,6 +447,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-         notice={notice}
-         imageAttachments={imageAttachments}
-         sendButtonDisabled={sendButtonDisabled}
-+        submitting={submitting}
-         isWorking={isWorking}
-         attachDisabled={disabled}
-         dictationDisabled={dictationDisabled}
-@@ -443,6 +493,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
-         onStop={interrupt}
-         sessionOptionsSurface={sessionOptionsSurface}
-         sessionOptionsSnapshot={sessionOptionsSnapshot}
-+        coordination={coordination}
-       />
-     )
-   }
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
 index 2e1b02a..d33e385 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerActions.test.tsx
@@ -1614,16 +1276,10 @@ index 2e1b02a..d33e385 100644
          dictationDisabled={false}
          sendDisabled={false}
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
-index aee0f79..118c14b 100644
+index aee0f79..a0dfbc3 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposerActions.tsx
-@@ -1,4 +1,4 @@
--import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
-+import { ArrowUp, LoaderCircle, Mic, Plus, Square } from 'lucide-react'
- import { Button } from '@/components/ui/button'
- import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
- import { translate } from '@/i18n/i18n'
-@@ -6,12 +6,17 @@ import type {
+@@ -6,9 +6,13 @@ import type {
    SessionOptionDescriptor,
    SessionOptionsSurface
  } from '../../../../shared/native-chat-session-options'
@@ -1637,16 +1293,7 @@ index aee0f79..118c14b 100644
    attachDisabled: boolean
    dictationDisabled: boolean
    sendDisabled: boolean
-+  submitting?: boolean
-   isWorking: boolean
-   isDictating: boolean
-   isDictationHoldMode: boolean
-@@ -23,12 +28,17 @@ export type NativeChatComposerActionsProps = {
-   onStop?: () => void
-   sessionOptionsSurface: SessionOptionsSurface | null
-   sessionOptionsSnapshot: SessionOptionDescriptor[]
-+  canConfigure?: boolean
-+  configureDisabledReason?: string | null
+@@ -26,6 +30,8 @@ export type NativeChatComposerActionsProps = {
  }
  
  export function NativeChatComposerActions({
@@ -1655,22 +1302,7 @@ index aee0f79..118c14b 100644
    attachDisabled,
    dictationDisabled,
    sendDisabled,
-+  submitting = false,
-   isWorking,
-   isDictating,
-   isDictationHoldMode,
-@@ -39,7 +49,9 @@ export function NativeChatComposerActions({
-   onSend,
-   onStop,
-   sessionOptionsSurface,
--  sessionOptionsSnapshot
-+  sessionOptionsSnapshot,
-+  canConfigure = true,
-+  configureDisabledReason = null
- }: NativeChatComposerActionsProps): React.JSX.Element {
-   const dictationLabel = isDictating
-     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
-@@ -69,10 +81,19 @@ export function NativeChatComposerActions({
+@@ -69,6 +75,11 @@ export function NativeChatComposerActions({
        <div className="ml-auto flex items-center gap-1.5">
          {/* Why: keep session controls beside the actions they affect; the
          model trigger is ordered last so it sits directly next to dictation. */}
@@ -1678,48 +1310,19 @@ index aee0f79..118c14b 100644
 +          agent={agent}
 +          terminalTabId={terminalTabId}
 +          isWorking={isWorking}
-+          disabled={!canConfigure}
-+          disabledReason={configureDisabledReason}
 +        />
          <NativeChatSessionOptionPickers
            surface={sessionOptionsSurface}
            snapshot={sessionOptionsSnapshot}
-           isWorking={isWorking}
-+          disabled={!canConfigure}
-+          disabledReason={configureDisabledReason}
-         />
-         <Tooltip>
-           <TooltipTrigger asChild>
-@@ -131,7 +152,9 @@ export function NativeChatComposerActions({
-           size="icon"
-           className="size-8 rounded-full pointer-coarse:size-10"
-         >
--          {isWorking ? (
-+          {submitting ? (
-+            <LoaderCircle className="size-4 animate-spin" />
-+          ) : isWorking ? (
-             <Square className="size-3.5 fill-current" />
-           ) : (
-             <ArrowUp className="size-4" />
 diff --git a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
-index 6f954a6..1168816 100644
+index 6f954a6..18296ea 100644
 --- a/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatComposerField.tsx
-@@ -4,7 +4,7 @@ import type {
-   KeyboardEventHandler,
-   RefObject
- } from 'react'
--import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
-+import { CircleAlert, Image as ImageIcon, X } from 'lucide-react'
- import { translate } from '@/i18n/i18n'
- import { cn } from '@/lib/utils'
- import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
-@@ -18,8 +18,12 @@ import type {
+@@ -18,8 +18,11 @@ import type {
    SessionOptionDescriptor,
    SessionOptionsSurface
  } from '../../../../shared/native-chat-session-options'
 +import type { AgentType } from '../../../../shared/agent-status-types'
-+import type { CodevChatCoordination } from './use-codev-chat-coordination'
  
  export type NativeChatComposerFieldProps = {
 +  agent: AgentType
@@ -1727,73 +1330,18 @@ index 6f954a6..1168816 100644
    textareaRef: RefObject<HTMLTextAreaElement | null>
    draft: string
    disabled: boolean
-@@ -30,6 +34,7 @@ export type NativeChatComposerFieldProps = {
-   notice: string | null
-   imageAttachments: readonly NativeChatComposerImageAttachment[]
-   sendButtonDisabled: boolean
-+  submitting?: boolean
-   isWorking: boolean
-   attachDisabled: boolean
-   dictationDisabled: boolean
-@@ -54,6 +59,7 @@ export type NativeChatComposerFieldProps = {
-   onStop?: () => void
-   sessionOptionsSurface: SessionOptionsSurface | null
-   sessionOptionsSnapshot: SessionOptionDescriptor[]
-+  coordination?: CodevChatCoordination
- }
- 
- export type NativeChatComposerImageAttachment = {
-@@ -72,6 +78,7 @@ export function NativeChatComposerField({
-   notice,
-   imageAttachments,
-   sendButtonDisabled,
-+  submitting = false,
-   isWorking,
-   attachDisabled,
-   dictationDisabled,
-@@ -95,7 +102,10 @@ export function NativeChatComposerField({
+@@ -95,7 +98,9 @@ export function NativeChatComposerField({
    onSend,
    onStop,
    sessionOptionsSurface,
 -  sessionOptionsSnapshot
 +  sessionOptionsSnapshot,
-+  coordination,
 +  agent,
 +  terminalTabId
  }: NativeChatComposerFieldProps): React.JSX.Element {
    return (
      <div className="shrink-0 bg-background">
-@@ -116,12 +126,13 @@ export function NativeChatComposerField({
-           ) : null}
-           {notice ? (
-             <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
--              <ImageOff className="size-3.5 shrink-0" />
-+              <CircleAlert className="size-3.5 shrink-0" />
-               <span>{notice}</span>
-             </div>
-           ) : null}
-           <div
-             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
-+            data-codev-chat-composer="true"
-             className={cn(
-               // Why: always-on hairline (token-level border, not focus ring) —
-               // no focus/click border flash. The box is a container, not a
-@@ -185,7 +196,13 @@ export function NativeChatComposerField({
-                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
-                   : undefined
-               }
--              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
-+              placeholder={
-+                coordination?.enabled && !coordination.canEdit
-+                  ? coordination.holder
-+                    ? `${coordination.holder.name} has the composer`
-+                    : 'Take control to write a message'
-+                  : nativeChatComposerPlaceholder(hasPty, canSend)
-+              }
-               // Why: coarse-pointer min-height follows the app's touch target convention.
-               // field-sizing:content grows the field with the draft; the 8lh cap (plus
-               // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-@@ -199,9 +216,12 @@ export function NativeChatComposerField({
+@@ -199,6 +204,8 @@ export function NativeChatComposerField({
              />
              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                <NativeChatComposerActions
@@ -1802,37 +1350,11 @@ index 6f954a6..1168816 100644
                  attachDisabled={attachDisabled}
                  dictationDisabled={dictationDisabled}
                  sendDisabled={sendButtonDisabled}
-+                submitting={submitting}
-                 isWorking={isWorking}
-                 isDictating={isDictating}
-                 isDictationHoldMode={isDictationHoldMode}
-@@ -213,6 +233,14 @@ export function NativeChatComposerField({
-                 onStop={onStop}
-                 sessionOptionsSurface={sessionOptionsSurface}
-                 sessionOptionsSnapshot={sessionOptionsSnapshot}
-+                canConfigure={!coordination?.enabled || coordination.canEdit}
-+                configureDisabledReason={
-+                  coordination?.enabled && !coordination.canEdit
-+                    ? coordination.holder
-+                      ? `${coordination.holder.name} has the composer`
-+                      : 'Take control of the composer first'
-+                    : null
-+                }
-               />
-             </div>
-           </div>
 diff --git a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-index 354732b..21ac82f 100644
+index 354732b..ca4639d 100644
 --- a/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatMessageList.tsx
-@@ -1,5 +1,5 @@
- import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
--import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
-+import { ArrowDown, ArrowUp, Bot, Image as ImageIcon } from 'lucide-react'
- import CommentMarkdown, {
-   type CommentMarkdownLinkClickHandler
- } from '@/components/sidebar/CommentMarkdown'
-@@ -18,13 +18,38 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
+@@ -18,6 +18,11 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
  import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
  import { isNativeChatPastedImagePath } from './native-chat-image-paste'
  import { NativeChatToolRun } from './NativeChatToolRun'
@@ -1843,45 +1365,15 @@ index 354732b..21ac82f 100644
 +} from './native-chat-durations'
  import { NativeChatCopyButton } from './NativeChatCopyButton'
  import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
-+import { formatAgentTypeLabel } from '@/lib/agent-status'
-+import type { AgentType } from '../../../../shared/agent-status-types'
-+import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
  
- function geometryOf(el: HTMLElement): ScrollGeometry {
-   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
- }
- 
-+function displayTime(timestamp: number | null): string | null {
-+  if (timestamp == null) return null
-+  return new Intl.DateTimeFormat(undefined, {
-+    hour: 'numeric',
-+    minute: '2-digit'
-+  }).format(timestamp)
-+}
-+
-+function memberInitials(name: string): string {
-+  return name
-+    .split(/\s+/)
-+    .filter(Boolean)
-+    .slice(0, 2)
-+    .map((part) => part[0]?.toUpperCase())
-+    .join('')
-+}
-+
- function proseToMarkdown(blocks: NativeChatBlock[]): string {
-   return blocks
-     .map((block) => {
-@@ -128,15 +153,27 @@ function MessageRow({
+@@ -128,10 +133,16 @@ function MessageRow({
    onScrollMessageToTop,
    onLinkClick,
    allowFileUriLinks = false,
 -  deliveryFailed = false
 +  deliveryFailed = false,
 +  durationMs = null,
-+  turnTotalMs = null,
-+  agent,
-+  viewerId,
-+  receipt
++  turnTotalMs = null
  }: {
    message: NativeChatMessage
    expandSignal: boolean
@@ -1892,41 +1384,16 @@ index 354732b..21ac82f 100644
    /** Align this message's top to the top of the scroll viewport. */
    onScrollMessageToTop: (el: HTMLElement) => void
    onLinkClick?: CommentMarkdownLinkClickHandler
-   allowFileUriLinks?: boolean
-   deliveryFailed?: boolean
-+  agent: AgentType
-+  viewerId: string | null
-+  receipt: CodevChatPromptReceipt | null
- }): React.JSX.Element | null {
-   const rowRef = useRef<HTMLDivElement | null>(null)
-   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
-@@ -166,10 +203,34 @@ function MessageRow({
+@@ -166,10 +177,17 @@ function MessageRow({
      // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
      // transcript caught up.)
      return (
 -      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-+      <div ref={rowRef} data-codev-chat-row="user" className="flex flex-col items-end gap-1">
-+        <div
-+          data-codev-chat-author="true"
-+          className="flex max-w-[90%] items-center gap-1.5 text-[11px] text-muted-foreground"
-+        >
-+          {receipt?.author.avatarUrl ? (
-+            <img
-+              src={receipt.author.avatarUrl}
-+              alt=""
-+              className="size-5 rounded-full object-cover"
-+            />
-+          ) : (
-+            <span className="flex size-5 items-center justify-center rounded-full bg-accent text-[8px] font-semibold text-accent-foreground">
-+              {memberInitials(receipt?.author.name ?? 'Member')}
-+            </span>
-+          )}
-+          <strong className="font-medium text-foreground">
-+            {receipt?.author.name ?? 'Workspace member'}
-+            {receipt?.author.id === viewerId ? ' · You' : ''}
-+          </strong>
-+          {displayTime(message.timestamp) ? <span>{displayTime(message.timestamp)}</span> : null}
-+        </div>
++      <div
++        ref={rowRef}
++        data-codev-chat-row="user"
++        className="flex flex-col items-end gap-0.5"
++      >
          {/* User turns get a distinct muted fill (not the card/canvas color) so
              the prompt reads apart from the assistant's body copy. */}
 -        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
@@ -1937,32 +1404,18 @@ index 354732b..21ac82f 100644
            {markdown ? (
              <>
                <ImageAttachmentRefs blocks={prose} />
-@@ -204,13 +265,35 @@ function MessageRow({
+@@ -204,6 +222,7 @@ function MessageRow({
    return (
      <div
        ref={rowRef}
 +      data-codev-chat-row={isReasoning ? 'reasoning' : isSystem ? 'system' : 'assistant'}
        className={cn(
          'group relative max-w-full text-sm leading-relaxed text-foreground',
-+        !isReasoning && !isSystem && 'rounded-2xl border border-border/70 bg-card/35 px-5 py-4',
          // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
+@@ -211,6 +230,13 @@ function MessageRow({
          isSystem && 'text-xs text-muted-foreground'
        )}
      >
-+      {!isReasoning && !isSystem ? (
-+        <div
-+          data-codev-chat-assistant-header="true"
-+          className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground"
-+        >
-+          <span className="flex size-6 items-center justify-center rounded-lg bg-primary/15 text-primary">
-+            <Bot className="size-3.5" />
-+          </span>
-+          <strong className="font-semibold text-foreground">{formatAgentTypeLabel(agent)}</strong>
-+          {receipt?.model ? <span>{receipt.model}</span> : null}
-+          {receipt?.effort ? <span>· {receipt.effort} effort</span> : null}
-+        </div>
-+      ) : null}
 +      {isReasoning && formatTurnDuration(durationMs) ? (
 +        <p className="mb-1 font-mono text-[10.5px] not-italic text-muted-foreground/80">
 +          {translate('components.native-chat.thoughtFor', 'Thought for {{value0}}', {
@@ -1973,7 +1426,7 @@ index 354732b..21ac82f 100644
        {showControls ? (
          <AgentControls
            markdown={markdown}
-@@ -228,7 +311,20 @@ function MessageRow({
+@@ -228,7 +254,20 @@ function MessageRow({
            allowFileUriLinks={allowFileUriLinks}
          />
        ) : null}
@@ -1995,27 +1448,7 @@ index 354732b..21ac82f 100644
      </div>
    )
  }
-@@ -236,6 +332,9 @@ function MessageRow({
- export function NativeChatMessageList({
-   session,
-   isWorking,
-+  agent,
-+  viewerId,
-+  promptReceipts,
-   expandSignal,
-   fontScale,
-   onLinkClick,
-@@ -244,6 +343,9 @@ export function NativeChatMessageList({
- }: {
-   session: NativeChatLiveSession
-   isWorking: boolean
-+  agent: AgentType
-+  viewerId: string | null
-+  promptReceipts: ReadonlyMap<string, CodevChatPromptReceipt>
-   /** Toolbar-driven desired open state for every tool run; each flip re-syncs. */
-   expandSignal: boolean
-   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
-@@ -254,6 +356,24 @@ export function NativeChatMessageList({
+@@ -254,6 +293,24 @@ export function NativeChatMessageList({
  }): React.JSX.Element {
    const scrollRef = useRef<HTMLDivElement | null>(null)
    const contentRef = useRef<HTMLDivElement | null>(null)
@@ -2040,25 +1473,7 @@ index 354732b..21ac82f 100644
    const [stuckToBottom, setStuckToBottom] = useState(true)
    const [showJump, setShowJump] = useState(false)
  
-@@ -274,6 +394,17 @@ export function NativeChatMessageList({
-     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
-     [session.messages]
-   )
-+  const receiptByMessage = useMemo(() => {
-+    const resolved = new Map<string, CodevChatPromptReceipt>()
-+    let current: CodevChatPromptReceipt | null = null
-+    for (const message of messages) {
-+      if (message.role === 'user') {
-+        current = promptReceipts.get(message.id) ?? null
-+      }
-+      if (current) resolved.set(message.id, current)
-+    }
-+    return resolved
-+  }, [messages, promptReceipts])
-   const showTypingIndicator =
-     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
- 
-@@ -377,6 +508,9 @@ export function NativeChatMessageList({
+@@ -377,6 +434,9 @@ export function NativeChatMessageList({
        >
          <div
            ref={contentRef}
@@ -2068,7 +1483,7 @@ index 354732b..21ac82f 100644
            // Why: same max width as the composer column; horizontal inset comes
            // from the scroll container so content aligns with the composer field.
            className="mx-auto flex w-full max-w-4xl flex-col gap-5"
-@@ -399,10 +533,15 @@ export function NativeChatMessageList({
+@@ -399,10 +459,12 @@ export function NativeChatMessageList({
                </button>
              </div>
            ) : null}
@@ -2077,9 +1492,6 @@ index 354732b..21ac82f 100644
              <MessageRow
                key={message.id}
                message={message}
-+              agent={agent}
-+              viewerId={viewerId}
-+              receipt={receiptByMessage.get(message.id) ?? null}
 +              durationMs={turnDurations[index] ?? null}
 +              turnTotalMs={turnTotals[index] ?? null}
                expandSignal={expandSignal}
@@ -2118,19 +1530,10 @@ index e7d3eda..1e5c164 100644
      const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
      const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
 diff --git a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-index 2b83d68..46fea87 100644
+index 2b83d68..ac3db9a 100644
 --- a/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
-@@ -33,6 +33,8 @@ export type NativeChatSessionOptionPickersProps = {
-   surface: SessionOptionsSurface | null
-   snapshot: SessionOptionDescriptor[]
-   isWorking: boolean
-+  disabled?: boolean
-+  disabledReason?: string | null
- }
- 
- function PickerTooltipContent(props: {
-@@ -126,8 +128,9 @@ function DescriptorMenuRows(props: {
+@@ -126,8 +126,9 @@ function DescriptorMenuRows(props: {
        </DropdownMenuItem>
      )
    }
@@ -2142,71 +1545,6 @@ index 2b83d68..46fea87 100644
      return (
        <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
          {translate(
-@@ -207,7 +210,9 @@ function runSurfaceCall(
- function NativeChatSessionOptionPickersInner({
-   surface,
-   snapshot,
--  isWorking
-+  isWorking,
-+  disabled = false,
-+  disabledReason = null
- }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
-   const [pendingId, setPendingId] = useState<string | null>(null)
-   const model = snapshot.find((descriptor) => descriptor.category === 'model')
-@@ -223,13 +228,14 @@ function NativeChatSessionOptionPickersInner({
-     runSurfaceCall(descriptor.id, setPendingId, () => surface.invokeAction(descriptor.id))
-   }
- 
--  const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
-+  const modelReason = disabledReason ?? nativeChatSessionOptionDisabledReason(model.disabledReason)
-   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
-   const optionsTooltip = nativeChatOptionsPillTitle(options)
-   const optionsReason =
--    options.length > 0 && options.every((descriptor) => !descriptor.settable)
-+    disabledReason ??
-+    (options.length > 0 && options.every((descriptor) => !descriptor.settable)
-       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
--      : null
-+      : null)
- 
-   return (
-     <div className="flex min-w-0 items-center gap-0.5">
-@@ -238,7 +244,7 @@ function NativeChatSessionOptionPickersInner({
-           <PickerTrigger
-             label={nativeChatOptionsPillLabel(options)}
-             tooltipLabel={optionsTooltip}
--            disabled={isWorking || pendingId !== null}
-+            disabled={disabled || isWorking || pendingId !== null}
-             disabledReason={optionsReason}
-             dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
-           />
-@@ -254,7 +260,7 @@ function NativeChatSessionOptionPickersInner({
-                   ) : null}
-                   <DescriptorMenuRows
-                     descriptor={descriptor}
--                    pending={pendingId !== null}
-+                    pending={disabled || pendingId !== null}
-                     setValue={(value) => setOption(descriptor, value)}
-                     invokeAction={() => invokeAction(descriptor)}
-                   />
-@@ -268,7 +274,7 @@ function NativeChatSessionOptionPickersInner({
-         <PickerTrigger
-           label={nativeChatModelPillLabel(model)}
-           tooltipLabel={modelTooltip}
--          disabled={isWorking || pendingId !== null}
-+          disabled={disabled || isWorking || pendingId !== null}
-           disabledReason={modelReason}
-           dispatched={model.valueSource === 'dispatched'}
-         />
-@@ -278,7 +284,7 @@ function NativeChatSessionOptionPickersInner({
-           ) : null}
-           <DescriptorMenuRows
-             descriptor={model}
--            pending={pendingId !== null}
-+            pending={disabled || pendingId !== null}
-             setValue={(value) => setOption(model, value)}
-             invokeAction={() => invokeAction(model)}
-           />
 diff --git a/src/renderer/src/components/native-chat/NativeChatToolRun.tsx b/src/renderer/src/components/native-chat/NativeChatToolRun.tsx
 index e0c5cd1..5858d63 100644
 --- a/src/renderer/src/components/native-chat/NativeChatToolRun.tsx
@@ -2241,26 +1579,22 @@ index e0c5cd1..5858d63 100644
            className={cn(
              'size-3.5 shrink-0 text-muted-foreground transition-all',
 diff --git a/src/renderer/src/components/native-chat/NativeChatView.tsx b/src/renderer/src/components/native-chat/NativeChatView.tsx
-index 2fb4581..ed1b999 100644
+index 2fb4581..4a0cb26 100644
 --- a/src/renderer/src/components/native-chat/NativeChatView.tsx
 +++ b/src/renderer/src/components/native-chat/NativeChatView.tsx
-@@ -53,6 +53,11 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
+@@ -53,6 +53,8 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
  import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
  import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
  import type { NativeChatViewProps } from './native-chat-view-types'
 +import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
 +import { assembleNativeChatSession } from './native-chat-session-assembler'
-+import { useCodevChatCoordination } from './use-codev-chat-coordination'
-+import { matchCodevChatPromptReceipts } from './codev-chat-attribution'
-+import { CodevChatPresenceBar } from './CodevChatPresenceBar'
  
  export type { NativeChatViewProps } from './native-chat-view-types'
  
-@@ -138,6 +143,36 @@ function NativeChatResolvedView({
+@@ -138,6 +140,35 @@ function NativeChatResolvedView({
      transcriptPath,
      runtimeEnvironmentId
    })
-+  const coordination = useCodevChatCoordination(paneKey)
 +  const [terminalFallbackMessages, setTerminalFallbackMessages] = useState(() =>
 +    agent === 'codex' ? codexTerminalScreenToMessages(readTerminalScreen?.() ?? null) : []
 +  )
@@ -2293,7 +1627,7 @@ index 2fb4581..ed1b999 100644
    const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
    const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
    const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-@@ -147,12 +182,12 @@ function NativeChatResolvedView({
+@@ -147,12 +178,12 @@ function NativeChatResolvedView({
    const launchDraftSignal = useNativeChatLaunchDraftSignal({
      terminalTabId,
      agent,
@@ -2309,7 +1643,7 @@ index 2fb4581..ed1b999 100644
    // The agent's in-progress reply preview (hook), shown as a live streaming
    // bubble while it works — before the completed turn flushes to the transcript.
    const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
-@@ -224,20 +259,31 @@ function NativeChatResolvedView({
+@@ -224,20 +255,31 @@ function NativeChatResolvedView({
    // Prune echoes whose real user turn is now in the transcript.
    useEffect(() => {
      setPending((prev) =>
@@ -2346,7 +1680,7 @@ index 2fb4581..ed1b999 100644
        const entry: NativeChatPendingSend = {
          id: nextNativeChatPendingSendId(sentAt),
          text,
-@@ -249,7 +295,7 @@ function NativeChatResolvedView({
+@@ -249,7 +291,7 @@ function NativeChatResolvedView({
        setPending(appendPendingSendCache(pendingScope, entry))
        return entry.id
      },
@@ -2355,7 +1689,7 @@ index 2fb4581..ed1b999 100644
    )
    const onOptimisticSendCanceled = useCallback(
      (pendingId: string) => {
-@@ -268,15 +314,18 @@ function NativeChatResolvedView({
+@@ -268,15 +310,18 @@ function NativeChatResolvedView({
    )
  
    const launchPromptMessage = useMemo(
@@ -2368,193 +1702,17 @@ index 2fb4581..ed1b999 100644
      if (!launchPromptMessage) {
 -      return session
 +      return sessionWithTerminalFallback
-     }
--    return { ...session, messages: [...session.messages, launchPromptMessage] }
--  }, [launchPromptMessage, session])
++    }
 +    return {
 +      ...sessionWithTerminalFallback,
 +      messages: [...sessionWithTerminalFallback.messages, launchPromptMessage]
-+    }
+     }
+-    return { ...session, messages: [...session.messages, launchPromptMessage] }
+-  }, [launchPromptMessage, session])
 +  }, [launchPromptMessage, sessionWithTerminalFallback])
  
    const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
      const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
-@@ -322,6 +371,10 @@ function NativeChatResolvedView({
-       ]
-     }
-   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
-+  const promptReceipts = useMemo(
-+    () => matchCodevChatPromptReceipts(sessionWithPending.messages, coordination.receipts),
-+    [coordination.receipts, sessionWithPending.messages]
-+  )
-   // Derive the view state from the pending-augmented session so a send into an
-   // otherwise-empty conversation flips to the list (showing the queued bubble)
-   // instead of staying on the empty state.
-@@ -414,6 +467,9 @@ function NativeChatResolvedView({
-           <NativeChatMessageList
-             session={sessionWithPending}
-             isWorking={isWorking}
-+            agent={agent}
-+            viewerId={coordination.viewer?.id ?? null}
-+            promptReceipts={promptReceipts}
-             expandSignal={false}
-             fontScale={fontScale.scale}
-             onLinkClick={nativeChatFileLinkClick}
-@@ -422,13 +478,14 @@ function NativeChatResolvedView({
-           />
-         )}
-       </div>
-+      <CodevChatPresenceBar coordination={coordination} />
-       {/* Live interactive prompt (question / approval) is the bottom input region
-           (mobile parity). A question card supplies its own answer input, so it
-           fully replaces the composer while active — no stray "Send a message". */}
-       <NativeChatInteractiveCard
-         paneKey={paneKey}
-         send={interactiveSend}
--        canSend={canSend}
-+        canSend={canSend && coordination.canEdit}
-         messages={sessionAfterCommandBoundaries.messages}
-         transcriptSettled={session.readPhase === 'ready'}
-         onShowingQuestionChange={setQuestionActive}
-@@ -444,8 +501,9 @@ function NativeChatResolvedView({
-           paneKey={paneKey}
-           targetPtyId={targetPtyId}
-           agent={agent}
--          canSend={canSend}
-+          canSend={canSend && coordination.canEdit}
-           isWorking={isWorking}
-+          coordination={coordination}
-           onStop={stopAgent}
-           onOptimisticSend={onOptimisticSend}
-           onOptimisticSendCanceled={onOptimisticSendCanceled}
-diff --git a/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts b/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts
-new file mode 100644
-index 0000000..d3e33d8
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/codev-chat-attribution.test.ts
-@@ -0,0 +1,59 @@
-+import { describe, expect, it } from 'vitest'
-+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-+import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
-+import { matchCodevChatPromptReceipts } from './codev-chat-attribution'
-+
-+function message(id: string, text: string, timestamp: number): NativeChatMessage {
-+  return {
-+    id,
-+    role: 'user',
-+    blocks: [{ type: 'text', text }],
-+    timestamp,
-+    source: 'transcript'
-+  }
-+}
-+
-+function receipt(
-+  id: string,
-+  prompt: string,
-+  createdAt: string,
-+  authorName: string
-+): CodevChatPromptReceipt {
-+  return {
-+    id,
-+    clientMessageId: crypto.randomUUID(),
-+    author: { id: crypto.randomUUID(), name: authorName, avatarUrl: null },
-+    prompt,
-+    attachments: [],
-+    provider: 'claude',
-+    model: 'sonnet',
-+    effort: 'high',
-+    createdAt
-+  }
-+}
-+
-+describe('matchCodevChatPromptReceipts', () => {
-+  it('attributes repeated prompts in chronological order', () => {
-+    const first = Date.parse('2026-08-28T12:00:00.000Z')
-+    const matches = matchCodevChatPromptReceipts(
-+      [message('one', 'Run tests', first), message('two', 'Run tests', first + 1_000)],
-+      [
-+        receipt('receipt-one', 'Run tests', new Date(first).toISOString(), 'Alex'),
-+        receipt('receipt-two', 'Run tests', new Date(first + 1_000).toISOString(), 'Jordan')
-+      ]
-+    )
-+
-+    expect(matches.get('one')?.author.name).toBe('Alex')
-+    expect(matches.get('two')?.author.name).toBe('Jordan')
-+  })
-+
-+  it('does not attach a stale receipt to old provider history', () => {
-+    const now = Date.parse('2026-08-28T12:00:00.000Z')
-+    const matches = matchCodevChatPromptReceipts(
-+      [message('old', 'Same words', now - 60 * 60 * 1000)],
-+      [receipt('new', 'Same words', new Date(now).toISOString(), 'Jordan')]
-+    )
-+
-+    expect(matches.has('old')).toBe(false)
-+  })
-+})
-diff --git a/src/renderer/src/components/native-chat/codev-chat-attribution.ts b/src/renderer/src/components/native-chat/codev-chat-attribution.ts
-new file mode 100644
-index 0000000..6f28ede
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/codev-chat-attribution.ts
-@@ -0,0 +1,57 @@
-+import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
-+import type { CodevChatPromptReceipt } from './use-codev-chat-coordination'
-+
-+const MATCH_WINDOW_MS = 5 * 60 * 1000
-+
-+function messageText(message: NativeChatMessage): string {
-+  return message.blocks
-+    .filter(isTextBlock)
-+    .map((block) => block.text)
-+    .join('\n\n')
-+    .trim()
-+}
-+
-+/**
-+ * Match the provider-owned transcript to CoDev's idempotent prompt receipts.
-+ * Repeated identical prompts are consumed in chronological order, while the
-+ * timestamp guard prevents an old receipt being attached to unrelated history.
-+ */
-+export function matchCodevChatPromptReceipts(
-+  messages: readonly NativeChatMessage[],
-+  receipts: readonly CodevChatPromptReceipt[]
-+): ReadonlyMap<string, CodevChatPromptReceipt> {
-+  const available = receipts.map((receipt, index) => ({
-+    receipt,
-+    index,
-+    timestamp: Date.parse(receipt.createdAt)
-+  }))
-+  const consumed = new Set<number>()
-+  const matches = new Map<string, CodevChatPromptReceipt>()
-+
-+  for (const message of messages) {
-+    if (message.role !== 'user') continue
-+    const text = messageText(message)
-+    const candidates = available.filter(
-+      (candidate) => !consumed.has(candidate.index) && candidate.receipt.prompt.trim() === text
-+    )
-+    if (candidates.length === 0) continue
-+    const matched =
-+      message.timestamp == null
-+        ? candidates[0]
-+        : candidates
-+            .filter(
-+              (candidate) =>
-+                Number.isFinite(candidate.timestamp) &&
-+                Math.abs(candidate.timestamp - message.timestamp!) <= MATCH_WINDOW_MS
-+            )
-+            .sort(
-+              (left, right) =>
-+                Math.abs(left.timestamp - message.timestamp!) -
-+                Math.abs(right.timestamp - message.timestamp!)
-+            )[0]
-+    if (!matched) continue
-+    consumed.add(matched.index)
-+    matches.set(message.id, matched.receipt)
-+  }
-+  return matches
-+}
 diff --git a/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts b/src/renderer/src/components/native-chat/codex-terminal-transcript.test.ts
 new file mode 100644
 index 0000000..7f84a6a
@@ -2661,100 +1819,6 @@ index 0000000..45c52d8
 +  flush()
 +  return messages
 +}
-diff --git a/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts b/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
-index 5f84fc4..b032df4 100644
---- a/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-attachment-upload.test.ts
-@@ -93,7 +93,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
-         }),
-         'tab-1'
-       )
--    ).toEqual({ kind: 'runtime' })
-+    ).toEqual({ kind: 'runtime', worktreePath: '/repo/worktree' })
-   })
- 
-   it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
-@@ -102,7 +102,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
-         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
-         'tab-1'
-       )
--    ).toEqual({ kind: 'runtime' })
-+    ).toEqual({ kind: 'runtime', worktreePath: '/repo/worktree' })
-   })
- 
-   it('reports not-ready when the tab has no worktree owner', () => {
-diff --git a/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts b/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
-index 76b3b64..7320ff7 100644
---- a/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-attachment-upload.ts
-@@ -25,12 +25,15 @@ export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
-   worktreePath: string
- }
- 
-+export type NativeChatRuntimeAttachmentOwner = {
-+  kind: 'runtime'
-+  worktreePath: string
-+}
-+
- export type NativeChatAttachmentOwner =
-   | { kind: 'local' }
-   | NativeChatSshAttachmentOwner
--  /** Runtime-owned (`remote:`) panes keep the composer's existing
--   *  local-attachment block; runtime upload support is a separate seam. */
--  | { kind: 'runtime' }
-+  | NativeChatRuntimeAttachmentOwner
-   /** Store not hydrated / worktree unknown. Callers must not attach local
-    *  paths in this window — the worktree may turn out to be remote, and the
-    *  agent would silently receive paths it cannot read (see #6648). */
-@@ -58,8 +61,9 @@ export function resolveNativeChatAttachmentOwner(
-   if (!worktreeId) {
-     return { kind: 'not-ready' }
-   }
-+  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
-   if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
--    return { kind: 'runtime' }
-+    return worktreePath ? { kind: 'runtime', worktreePath } : { kind: 'not-ready' }
-   }
-   const connectionId = getConnectionIdFromState(state, worktreeId)
-   if (connectionId === undefined) {
-@@ -68,7 +72,6 @@ export function resolveNativeChatAttachmentOwner(
-   if (connectionId === null) {
-     return { kind: 'local' }
-   }
--  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
-   if (!worktreePath) {
-     return { kind: 'not-ready' }
-   }
-@@ -122,3 +125,29 @@ export async function uploadNativeChatAttachmentPaths(
-     toast.dismiss(pending)
-   }
- }
-+
-+export async function uploadNativeChatRuntimeAttachmentPaths(
-+  paths: string[],
-+  owner: NativeChatRuntimeAttachmentOwner
-+): Promise<string[] | null> {
-+  const pending = toast.loading(
-+    translate(
-+      'components.native-chat.composer.uploadingAttachments',
-+      'Uploading {{value0}} file(s) to workspace…',
-+      { value0: paths.length }
-+    )
-+  )
-+  try {
-+    const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
-+      paths,
-+      worktreePath: owner.worktreePath
-+    })
-+    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
-+    return resolvedPaths
-+  } catch (err) {
-+    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
-+    return null
-+  } finally {
-+    toast.dismiss(pending)
-+  }
-+}
 diff --git a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx b/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
 index 96f8287..e957449 100644
 --- a/src/renderer/src/components/native-chat/native-chat-composer-autogrow.test.tsx
@@ -2768,26 +1832,6 @@ index 96f8287..e957449 100644
        textareaRef={createRef<HTMLTextAreaElement>()}
        draft={draft}
        disabled={false}
-diff --git a/src/renderer/src/components/native-chat/native-chat-composer-types.ts b/src/renderer/src/components/native-chat/native-chat-composer-types.ts
-index 58e97cc..aa431f9 100644
---- a/src/renderer/src/components/native-chat/native-chat-composer-types.ts
-+++ b/src/renderer/src/components/native-chat/native-chat-composer-types.ts
-@@ -1,5 +1,6 @@
- import type { AgentType } from '../../../../shared/agent-status-types'
- import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
-+import type { CodevChatCoordination } from './use-codev-chat-coordination'
- 
- export type NativeChatComposerProps = {
-   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
-@@ -9,6 +10,8 @@ export type NativeChatComposerProps = {
-   /** Specific split-pane PTY this chat view owns. */
-   targetPtyId: string | null
-   agent: AgentType
-+  /** Server-authoritative ownership and attribution for CoDev shared chats. */
-+  coordination?: CodevChatCoordination
-   /** Guard desktop sends while a mobile client owns the terminal input lease. */
-   canSend?: boolean
-   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
 diff --git a/src/renderer/src/components/native-chat/native-chat-durations.test.ts b/src/renderer/src/components/native-chat/native-chat-durations.test.ts
 new file mode 100644
 index 0000000..e5ca8b9
@@ -3131,397 +2175,6 @@ index df96ea2..721f48b 100644
    }
  
    const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
-diff --git a/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts b/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts
-new file mode 100644
-index 0000000..4427d07
---- /dev/null
-+++ b/src/renderer/src/components/native-chat/use-codev-chat-coordination.ts
-@@ -0,0 +1,294 @@
-+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-+import { isCodevEmbedded } from '@/web/codev-embedded'
-+
-+export type CodevChatMember = {
-+  id: string
-+  name: string
-+  avatarUrl: string | null
-+}
-+
-+export type CodevChatPromptReceipt = {
-+  id: string
-+  clientMessageId: string
-+  author: CodevChatMember
-+  prompt: string
-+  attachments: Array<{ name: string; type: string }>
-+  provider: string
-+  model: string | null
-+  effort: string | null
-+  createdAt: string
-+}
-+
-+type CodevChatSnapshot = {
-+  viewer: CodevChatMember
-+  lease: {
-+    holder: CodevChatMember
-+    clientId: string
-+    expiresAt: string
-+  } | null
-+  participants: CodevChatMember[]
-+  receipts: CodevChatPromptReceipt[]
-+  serverTime: string
-+}
-+
-+type CoordinationResponse = CodevChatSnapshot & {
-+  leaseToken?: string
-+}
-+
-+export type CodevChatCoordination = {
-+  enabled: boolean
-+  ready: boolean
-+  canEdit: boolean
-+  acquiring: boolean
-+  viewer: CodevChatMember | null
-+  holder: CodevChatMember | null
-+  participants: CodevChatMember[]
-+  receipts: CodevChatPromptReceipt[]
-+  error: string | null
-+  acquire: () => Promise<boolean>
-+  release: () => Promise<void>
-+  recordPrompt: (input: {
-+    prompt: string
-+    attachments: Array<{ name: string; type: string }>
-+    provider: 'claude' | 'codex'
-+    model: string | null
-+    effort: string | null
-+  }) => Promise<string>
-+}
-+
-+const HEARTBEAT_MS = 10_000
-+const REFRESH_MS = 2_000
-+const RENEW_MS = 10_000
-+
-+function workspaceIdFromProjectPath(): string | null {
-+  const path = window.__CODEV_PROJECT_PATH__
-+  const value = path?.split('/').filter(Boolean).at(-1) ?? null
-+  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null
-+}
-+
-+function clientIdForThisTab(): string {
-+  const key = 'codev.chat.client-id'
-+  const existing = window.sessionStorage.getItem(key)
-+  if (existing) return existing
-+  const created = crypto.randomUUID()
-+  window.sessionStorage.setItem(key, created)
-+  return created
-+}
-+
-+async function readJson(response: Response): Promise<Record<string, unknown>> {
-+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
-+}
-+
-+export function useCodevChatCoordination(chatId: string): CodevChatCoordination {
-+  const enabled = isCodevEmbedded()
-+  const workspaceId = enabled ? workspaceIdFromProjectPath() : null
-+  const [clientId] = useState(() => (enabled ? clientIdForThisTab() : ''))
-+  const [snapshot, setSnapshot] = useState<CodevChatSnapshot | null>(null)
-+  const [acquiring, setAcquiring] = useState(false)
-+  const [error, setError] = useState<string | null>(null)
-+  const leaseTokenRef = useRef<string | null>(null)
-+  const endpoint = workspaceId ? `/api/workspaces/${workspaceId}/chat-coordination` : null
-+
-+  const post = useCallback(
-+    async (body: Record<string, unknown>): Promise<CoordinationResponse> => {
-+      if (!endpoint) throw new Error('Shared chat coordination is unavailable.')
-+      const response = await fetch(endpoint, {
-+        method: 'POST',
-+        headers: { 'content-type': 'application/json' },
-+        credentials: 'same-origin',
-+        body: JSON.stringify({ ...body, chatId, clientId })
-+      })
-+      const payload = await readJson(response)
-+      if (!response.ok) {
-+        throw new Error(
-+          typeof payload.error === 'string' ? payload.error : 'Shared chat coordination failed.'
-+        )
-+      }
-+      return payload as CoordinationResponse
-+    },
-+    [chatId, clientId, endpoint]
-+  )
-+
-+  const refresh = useCallback(async () => {
-+    if (!endpoint) return
-+    try {
-+      const response = await fetch(`${endpoint}?chatId=${encodeURIComponent(chatId)}`, {
-+        cache: 'no-store',
-+        credentials: 'same-origin'
-+      })
-+      const payload = await readJson(response)
-+      if (!response.ok) {
-+        throw new Error(
-+          typeof payload.error === 'string' ? payload.error : 'Could not refresh shared chat.'
-+        )
-+      }
-+      const next = payload as unknown as CodevChatSnapshot
-+      setSnapshot(next)
-+      const token = leaseTokenRef.current
-+      if (
-+        token &&
-+        (!next.lease || next.lease.clientId !== clientId || next.lease.holder.id !== next.viewer.id)
-+      ) {
-+        leaseTokenRef.current = null
-+      }
-+      setError(null)
-+    } catch (cause) {
-+      setError(cause instanceof Error ? cause.message : String(cause))
-+    }
-+  }, [chatId, clientId, endpoint])
-+
-+  useEffect(() => {
-+    if (!enabled || !endpoint) return
-+    let cancelled = false
-+    const heartbeat = async (): Promise<void> => {
-+      try {
-+        const next = await post({ action: 'heartbeat' })
-+        if (!cancelled) {
-+          setSnapshot(next)
-+          setError(null)
-+        }
-+      } catch (cause) {
-+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
-+      }
-+    }
-+    void heartbeat()
-+    const heartbeatTimer = window.setInterval(() => void heartbeat(), HEARTBEAT_MS)
-+    const refreshTimer = window.setInterval(() => void refresh(), REFRESH_MS)
-+    return () => {
-+      cancelled = true
-+      window.clearInterval(heartbeatTimer)
-+      window.clearInterval(refreshTimer)
-+      const token = leaseTokenRef.current
-+      if (token) {
-+        navigator.sendBeacon(
-+          endpoint,
-+          new Blob(
-+            [
-+              JSON.stringify({
-+                action: 'release',
-+                chatId,
-+                clientId,
-+                leaseToken: token
-+              })
-+            ],
-+            { type: 'application/json' }
-+          )
-+        )
-+      }
-+      navigator.sendBeacon(
-+        endpoint,
-+        new Blob([JSON.stringify({ action: 'leave', chatId, clientId })], {
-+          type: 'application/json'
-+        })
-+      )
-+    }
-+  }, [chatId, clientId, enabled, endpoint, post, refresh])
-+
-+  useEffect(() => {
-+    if (!enabled || !endpoint) return
-+    const timer = window.setInterval(() => {
-+      const leaseToken = leaseTokenRef.current
-+      if (!leaseToken) return
-+      void post({ action: 'renew', leaseToken })
-+        .then((next) => {
-+          setSnapshot(next)
-+          setError(null)
-+        })
-+        .catch((cause) => {
-+          leaseTokenRef.current = null
-+          setError(cause instanceof Error ? cause.message : String(cause))
-+          void refresh()
-+        })
-+    }, RENEW_MS)
-+    return () => window.clearInterval(timer)
-+  }, [enabled, endpoint, post, refresh])
-+
-+  const acquire = useCallback(async (): Promise<boolean> => {
-+    if (!enabled) return true
-+    if (!endpoint || acquiring) return false
-+    if (leaseTokenRef.current) return true
-+    setAcquiring(true)
-+    try {
-+      const next = await post({ action: 'acquire' })
-+      if (!next.leaseToken) throw new Error('The server did not grant composer control.')
-+      leaseTokenRef.current = next.leaseToken
-+      setSnapshot(next)
-+      setError(null)
-+      return true
-+    } catch (cause) {
-+      setError(cause instanceof Error ? cause.message : String(cause))
-+      await refresh()
-+      return false
-+    } finally {
-+      setAcquiring(false)
-+    }
-+  }, [acquiring, enabled, endpoint, post, refresh])
-+
-+  const release = useCallback(async (): Promise<void> => {
-+    const leaseToken = leaseTokenRef.current
-+    leaseTokenRef.current = null
-+    if (!enabled || !leaseToken) return
-+    try {
-+      const next = await post({ action: 'release', leaseToken })
-+      setSnapshot(next)
-+      setError(null)
-+    } catch (cause) {
-+      setError(cause instanceof Error ? cause.message : String(cause))
-+      await refresh()
-+    }
-+  }, [enabled, post, refresh])
-+
-+  const recordPrompt = useCallback(
-+    async (input: {
-+      prompt: string
-+      attachments: Array<{ name: string; type: string }>
-+      provider: 'claude' | 'codex'
-+      model: string | null
-+      effort: string | null
-+    }): Promise<string> => {
-+      if (!enabled) return crypto.randomUUID()
-+      const leaseToken = leaseTokenRef.current
-+      if (!leaseToken) {
-+        throw new Error('Take control of the composer before sending.')
-+      }
-+      const clientMessageId = crypto.randomUUID()
-+      const next = await post({
-+        action: 'submit',
-+        leaseToken,
-+        clientMessageId,
-+        ...input
-+      })
-+      setSnapshot(next)
-+      setError(null)
-+      return clientMessageId
-+    },
-+    [enabled, post]
-+  )
-+
-+  const canEdit =
-+    !enabled ||
-+    Boolean(
-+      snapshot?.lease &&
-+      snapshot.lease.clientId === clientId &&
-+      snapshot.lease.holder.id === snapshot.viewer.id &&
-+      leaseTokenRef.current
-+    )
-+
-+  return useMemo(
-+    () => ({
-+      enabled,
-+      ready: !enabled || snapshot !== null,
-+      canEdit,
-+      acquiring,
-+      viewer: snapshot?.viewer ?? null,
-+      holder: snapshot?.lease?.holder ?? null,
-+      participants: snapshot?.participants ?? [],
-+      receipts: snapshot?.receipts ?? [],
-+      error,
-+      acquire,
-+      release,
-+      recordPrompt
-+    }),
-+    [acquire, acquiring, canEdit, enabled, error, recordPrompt, release, snapshot]
-+  )
-+}
-diff --git a/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts b/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
-index 60ecf44..8d0353a 100644
---- a/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
-+++ b/src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
-@@ -1,13 +1,12 @@
- import { useCallback, useRef, useState, type RefObject } from 'react'
--import { translate } from '@/i18n/i18n'
- import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
- import {
-   formatNativeChatFileReference,
--  nativeChatComposerTargetIsRemote,
-   type NativeChatResolvedTarget
- } from './native-chat-composer-target'
- import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
- import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
-+import { nativeChatWorktreeNotReadyNotice } from './native-chat-attachment-upload'
- 
- export type UseNativeChatComposerAttachmentsArgs = {
-   attachmentScopeKey: string
-@@ -106,14 +105,8 @@ export function useNativeChatComposerAttachments({
-   // before calling this — see native-chat-attachment-upload.ts).
-   const attachResolvedPaths = useCallback(
-     (paths: string[]) => {
--      const target = resolveTarget()
--      if (!target || nativeChatComposerTargetIsRemote(target.ptyId)) {
--        setNotice(
--          translate(
--            'components.native-chat.composer.localAttachmentUnsupported',
--            'Local attachments are not available for remote sessions.'
--          )
--        )
-+      if (!resolveTarget()) {
-+        setNotice(nativeChatWorktreeNotReadyNotice())
-         return
-       }
-       const imagePaths = paths.filter(isNativeChatImageAttachmentPath)
-diff --git a/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts b/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
-index d2e1937..15310e6 100644
---- a/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
-+++ b/src/renderer/src/components/native-chat/use-native-chat-external-attachments.ts
-@@ -4,6 +4,7 @@ import {
-   nativeChatWorktreeNotReadyNotice,
-   resolveNativeChatAttachmentOwner,
-   uploadNativeChatAttachmentPaths,
-+  uploadNativeChatRuntimeAttachmentPaths,
-   type NativeChatAttachmentOwner
- } from './native-chat-attachment-upload'
- 
-@@ -48,14 +49,15 @@ export function useNativeChatExternalAttachments({
-         setNotice(nativeChatWorktreeNotReadyNotice())
-         return
-       }
--      if (owner.kind !== 'ssh') {
--        // 'runtime' proceeds so attachResolvedPaths' existing remote-session
--        // gate reports the unsupported state.
-+      if (owner.kind === 'local') {
-         attachResolvedPaths(paths)
-         return
-       }
-       void (async () => {
--        const remotePaths = await uploadNativeChatAttachmentPaths(paths, owner)
-+        const remotePaths =
-+          owner.kind === 'runtime'
-+            ? await uploadNativeChatRuntimeAttachmentPaths(paths, owner)
-+            : await uploadNativeChatAttachmentPaths(paths, owner)
-         if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
-           return
-         }
-diff --git a/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts b/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
-index 5a6094c..e34503a 100644
---- a/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
-+++ b/src/renderer/src/components/native-chat/use-native-chat-file-attachment-actions.ts
-@@ -1,4 +1,5 @@
- import { useCallback, useEffect } from 'react'
-+import { toast } from 'sonner'
- import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
- 
- export function useNativeChatFileAttachmentActions(
-@@ -20,7 +21,11 @@ export function useNativeChatFileAttachmentActions(
-       if (filePath) {
-         attachExternalPaths([filePath])
-       }
--    })()
-+    })().catch((error) => {
-+      toast.error('Could not attach file', {
-+        description: error instanceof Error ? error.message : String(error)
-+      })
-+    })
-   }, [attachExternalPaths])
- 
-   return { pickAttachment }
 diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
 index a24d1b8..3687b6e 100644
 --- a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
@@ -4175,327 +2828,184 @@ index 0000000..7965918
 +    </section>
 +  )
 +}
-diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx
-new file mode 100644
-index 0000000..6312a00
---- /dev/null
-+++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.test.tsx
-@@ -0,0 +1,151 @@
-+import { renderToStaticMarkup } from 'react-dom/server'
-+import { describe, expect, it } from 'vitest'
-+import {
-+  claimPendingCodevAgentOwner,
-+  noteCodevAgentLaunch,
-+  resetCodevAgentOwnersForTests,
-+  resolveLiveAgentOwner
-+} from './codev-agent-owners'
-+import { CodevLiveAgentsView, type AgentHistoryRow, type LiveAgent } from './CodevLiveAgentsView'
-+
-+const now = Date.parse('2026-08-28T06:00:00.000Z')
-+
-+const working: LiveAgent = {
-+  paneKey: 'tab-claude:leaf-1',
-+  state: 'working',
-+  prompt: 'Ship the agents sidebar as one surface.',
-+  updatedAt: now,
-+  stateStartedAt: now - 45_000,
-+  agentType: 'claude',
-+  model: 'opus',
-+  stateHistory: [{ state: 'waiting', prompt: '', startedAt: now - 90_000 }],
-+  toolName: 'Edit',
-+  toolInput: 'CodevLiveAgentsPanel.tsx',
-+  lastAssistantMessage: 'Updating the sidebar tab list.',
-+  subagents: [
-+    {
-+      id: 'sub-1',
-+      agentType: 'claude',
-+      description: 'Draft the CSS for collapsed rows',
-+      state: 'working',
-+      startedAt: now - 12_000
-+    }
-+  ]
-+}
-+
-+const owner = {
-+  id: 'member-alex',
-+  name: 'Alex Morgan',
-+  login: 'alex',
-+  avatarUrl: 'https://avatars.example/alex.png'
-+}
-+
-+const compactProps = {
-+  agents: [working] as LiveAgent[],
-+  owners: { [working.paneKey]: owner },
-+  history: [] as AgentHistoryRow[],
-+  now,
-+  expanded: false,
-+  canLaunch: true,
-+  onStepIn: () => undefined,
-+  onToggleExpanded: () => undefined,
-+  onLaunch: () => undefined
-+}
-+
-+describe('CodevLiveAgentsView', () => {
-+  it('renders the Agents heading and a collapsed row that hides details until opened', () => {
-+    const html = renderToStaticMarkup(<CodevLiveAgentsView {...compactProps} />)
-+    expect(html).toContain('>Agents<')
-+    expect(html).toContain('aria-label="Agents in this workspace"')
-+    expect(html).toContain('Ship the agents sidebar as one surface.')
-+    expect(html).toContain('Edit · CodevLiveAgentsPanel.tsx')
-+    expect(html).toContain('Draft the CSS for collapsed rows')
-+    expect(html).toContain('Step in')
-+    expect(html).toContain('<details class="codev-agent-card is-working">')
-+    expect(html).not.toContain('<details class="codev-agent-card is-working" open')
-+    expect(html).toContain('class="codev-agent-details"')
-+  })
-+
-+  it('shows the product logo and the live owner photo instead of two-letter initials', () => {
-+    const html = renderToStaticMarkup(<CodevLiveAgentsView {...compactProps} />)
-+    expect(html).toContain('class="codev-agent-logo"')
-+    expect(html).toContain('fill="#D97757"')
-+    expect(html).toContain('src="https://avatars.example/alex.png"')
-+    expect(html).toContain('Alex Morgan')
-+    expect(html).not.toContain('>CL<')
-+    expect(html).not.toContain('>CO<')
-+  })
-+
-+  it('opens a page with live agents, history, and new-agent launches', () => {
-+    const html = renderToStaticMarkup(
-+      <CodevLiveAgentsView
-+        {...compactProps}
-+        expanded
-+        history={[
-+          {
-+            id: 'hist-1',
-+            title: 'Tighten the Agents page',
-+            agent: 'codex',
-+            when: '2h ago',
-+            preview: 'Resume the previous turn.'
-+          }
-+        ]}
-+      />
-+    )
-+    expect(html).toContain('aria-label="Agents page"')
-+    expect(html).toContain('New agent')
-+    expect(html).toContain('Claude Code')
-+    expect(html).toContain('Codex')
-+    expect(html).toContain('Cursor')
-+    expect(html).toContain('>Live<')
-+    expect(html).toContain('>History<')
-+    expect(html).toContain('Tighten the Agents page')
-+    expect(html).toContain('Resume the previous turn.')
-+    expect(html).toContain('>Close<')
-+    expect(html).toContain('<details class="codev-agent-card is-working" open')
-+  })
-+
-+  it('shows the empty state when nothing is running', () => {
-+    const html = renderToStaticMarkup(
-+      <CodevLiveAgentsView {...compactProps} agents={[]} owners={{}} />
-+    )
-+    expect(html).toContain('Start an agent from a chat tab and it appears here.')
-+    expect(html).toContain('Open')
-+    expect(html).not.toContain('Step in')
-+  })
-+})
-+
-+describe('resolveLiveAgentOwner', () => {
-+  it('prefers the stamped member, then a workboard name, then a solo presence', () => {
-+    resetCodevAgentOwnersForTests()
-+    const alex = owner
-+    const jordan = {
-+      id: 'member-jordan',
-+      name: 'Jordan Lee',
-+      login: 'jordan',
-+      avatarUrl: null
-+    }
-+    expect(
-+      resolveLiveAgentOwner({
-+        memberId: alex.id,
-+        people: [alex, jordan]
-+      })
-+    ).toEqual(alex)
-+    expect(
-+      resolveLiveAgentOwner({
-+        worktreeId: 'wt-1',
-+        people: [alex, jordan],
-+        workboardOwnerByWorktreeId: { 'wt-1': 'Jordan Lee' }
-+      })
-+    ).toEqual(jordan)
-+    expect(resolveLiveAgentOwner({ people: [jordan] })).toEqual(jordan)
-+  })
-+
-+  it('claims a pending launch for the next matching live tab', () => {
-+    resetCodevAgentOwnersForTests()
-+    noteCodevAgentLaunch('claude', owner.id, now)
-+    expect(claimPendingCodevAgentOwner('claude', 'tab-claude', now)).toBe(owner.id)
-+    expect(claimPendingCodevAgentOwner('claude', 'tab-claude', now)).toBe(owner.id)
-+    expect(claimPendingCodevAgentOwner('codex', 'tab-codex', now)).toBeNull()
-+  })
-+})
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..2ef43e8
+index 0000000..c049c4e
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,275 @@
-+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+@@ -0,0 +1,257 @@
++import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
++import { toast } from 'sonner'
 +import { useAppStore } from '@/store'
-+import { useActiveWorktree } from '@/store/selectors'
-+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
++import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 +import {
 +  getCodevBridgeSnapshot,
 +  requestCodevBridge,
 +  subscribeCodevBridge
-+} from '@/web/codev-bridge'
-+import { useCodevWorkboard } from '../sidebar/codev-workboard-store'
++} from '../../web/codev-bridge'
++import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 +import {
-+  claimPendingCodevAgentOwner,
-+  noteCodevAgentLaunch,
-+  rememberCodevAgentOwner,
-+  resolveLiveAgentOwner,
-+  type AgentPerson
-+} from './codev-agent-owners'
-+import {
-+  CodevLiveAgentsView,
-+  isLiveAgentState,
-+  type AgentHistoryRow,
-+  type LiveAgent
-+} from './CodevLiveAgentsView'
-+import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
++  CodevMissionControlView,
++  mergeMissionControlAgents,
++  missionControlPhaseFromState,
++  missionControlPhaseFromStatus,
++  type MissionControlAgent
++} from './CodevMissionControlView'
 +
 +/**
-+ * Every agent running in this workspace, in one right-sidebar tab.
++ * Mission Control container.
 + *
 + * CoDev's premise is several people steering several agents against one
-+ * repository. Orca also ships an Agent Dashboard and a session-history
-+ * "Agents" panel; those overlap this purpose, so CoDev workspaces hide
-+ * them and keep this as the single place for "what are agents doing?"
++ * repository, and until now that was only legible by opening a panel and
++ * reading a status string. This is the workspace's default right-sidebar tab,
++ * so the state of the room is on screen while you work.
 + *
-+ * Reads Orca's own live agent status rather than CoDev's workboard. The
-+ * workboard tracks *managed* agent sessions (a row plus a worktree slot), but
-+ * an agent started from the workspace's chat tab is a PTY inside the existing
-+ * worktree and never becomes one — so a workboard-backed panel truthfully
-+ * reported "0 agents" with an agent visibly working two panes away. This
-+ * reports what is actually running.
++ * Two real sources, merged:
 + *
-+ * Rows stay compact until opened, so a busy workspace stays scannable; Open
-+ * widens this into a page with live cards, session history, and new-agent
-+ * launches. Each row shows the product logo and the live member photo of
-+ * whoever is running that agent.
++ *  - Orca's local `agentStatusByPaneKey` — the agent in *this* tab, updated as
++ *    tokens stream. The workboard never sees a chat-tab PTY agent, so without
++ *    this the panel would read "0 agents" with one visibly working.
++ *  - `workboard.list` over the CoDev bridge — every teammate's managed agent
++ *    session, polled on an interval, with real owner attribution and a
++ *    session id that "Steer" and "Pause" act on.
 + */
 +
++const REFRESH_MS = 5_000
 +const TICK_MS = 1_000
-+const PRESENCE_MS = 5_000
-+const EXPANDED_SIDEBAR_WIDTH = 560
 +
-+type PresenceUser = {
-+  id?: string
-+  login?: string
-+  name?: string | null
-+  avatarUrl?: string | null
++type WorkboardSlot = {
++  occupied?: boolean
++  sessionId?: string | null
++  worktreeId?: string | null
++  assignment?: string
++  owner?: string
++  provider?: string
++  status?: string
++  currentTask?: string
++  elapsed?: string
 +}
 +
-+type PresencePayload = {
-+  viewerId?: string
-+  viewer?: PresenceUser
-+  members?: Array<{ user?: PresenceUser }>
++type WorkboardSnapshot = {
++  viewer?: { id?: string; name?: string; canCoSteer?: boolean }
++  slots?: WorkboardSlot[]
 +}
 +
-+function personFrom(user: PresenceUser | undefined): AgentPerson | null {
-+  if (!user?.id) return null
-+  const name = user.name?.trim() || user.login?.trim()
-+  if (!name) return null
-+  return {
-+    id: user.id,
-+    name,
-+    login: user.login?.trim() || undefined,
-+    avatarUrl: user.avatarUrl?.trim() ? user.avatarUrl.trim() : null
-+  }
++function isLiveState(value: unknown): boolean {
++  return (
++    typeof value === 'string' && (AGENT_STATUS_STATES as readonly string[]).includes(value)
++  )
 +}
 +
-+function historyWhen(iso: string | null, now: number): string {
-+  if (!iso) return 'Earlier'
-+  const then = Date.parse(iso)
-+  if (!Number.isFinite(then)) return 'Earlier'
-+  const seconds = Math.max(0, Math.floor((now - then) / 1000))
-+  if (seconds < 60) return 'Just now'
-+  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`
-+  if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`
-+  return `${Math.floor(seconds / 86_400)}d ago`
++/** Stable per-name hue so a person keeps one colour across the panel. */
++function hueFor(key: string): number {
++  let hash = 0
++  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) % 360
++  return hash
 +}
 +
-+export { CodevLiveAgentsView, type LiveAgent } from './CodevLiveAgentsView'
++function providerLabel(raw: string): string {
++  const value = raw.toLowerCase()
++  if (value.includes('claude') || value.includes('anthropic')) return 'Claude'
++  if (value.includes('codex') || value.includes('openai')) return 'Codex'
++  if (value.includes('cursor')) return 'Cursor'
++  if (!raw) return 'Agent'
++  return raw.charAt(0).toUpperCase() + raw.slice(1)
++}
 +
 +export function CodevLiveAgentsPanel(): JSX.Element | null {
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
 +  const [now, setNow] = useState(() => Date.now())
-+  const [expanded, setExpanded] = useState(false)
-+  const [people, setPeople] = useState<AgentPerson[]>([])
-+  const [history, setHistory] = useState<AgentHistoryRow[]>([])
-+  const [connected, setConnected] = useState(
-+    () => typeof window !== 'undefined' && getCodevBridgeSnapshot().status === 'connected'
++  const [bridgeStatus, setBridgeStatus] = useState<string>(() =>
++    typeof window === 'undefined' ? 'disconnected' : getCodevBridgeSnapshot().status
 +  )
-+  const previousWidth = useRef<number | null>(null)
-+  const setActiveTab = useAppStore((state) => state.setActiveTab)
-+  const setRightSidebarWidth = useAppStore((state) => state.setRightSidebarWidth)
-+  const rightSidebarWidth = useAppStore((state) => state.rightSidebarWidth)
-+  const activeWorktree = useActiveWorktree()
-+  const workboard = useCodevWorkboard()
++  const [managed, setManaged] = useState<MissionControlAgent[]>([])
++  const [viewerName, setViewerName] = useState('You')
++  const [canCoSteer, setCanCoSteer] = useState(false)
++  const [openKey, setOpenKey] = useState<string | null>(null)
++  const [steerBusy, setSteerBusy] = useState(false)
 +
 +  const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
-+  const tabsByWorktree = useAppStore(useShallow((state) => state.tabsByWorktree))
 +
-+  const agents = useMemo<LiveAgent[]>(() => {
++  useEffect(
++    () =>
++      subscribeCodevBridge(() => {
++        setBridgeStatus(getCodevBridgeSnapshot().status)
++      }),
++    []
++  )
++
++  const local = useMemo<MissionControlAgent[]>(() => {
 +    return Object.entries(statuses ?? {})
-+      .map(([paneKey, entry]) => ({ ...entry, paneKey }))
-+      .filter((entry) => isLiveAgentState(entry.state) && Boolean(entry.agentType))
-+      .sort((a, b) => b.updatedAt - a.updatedAt)
-+  }, [statuses])
-+
-+  const tabsById = useMemo(() => {
-+    const next = new Map<string, { codevMemberId?: string }>()
-+    for (const tabs of Object.values(tabsByWorktree ?? {})) {
-+      for (const tab of tabs ?? []) {
-+        next.set(tab.id, tab)
-+      }
-+    }
-+    return next
-+  }, [tabsByWorktree])
-+
-+  const workboardOwnerByWorktreeId = useMemo(() => {
-+    const next: Record<string, string> = {}
-+    for (const slot of workboard?.slots ?? []) {
-+      if (slot.worktreeId && slot.owner && slot.owner !== 'Unassigned') {
-+        next[slot.worktreeId] = slot.owner
-+      }
-+    }
-+    return next
-+  }, [workboard])
-+
-+  const owners = useMemo(() => {
-+    const next: Record<string, AgentPerson | null> = {}
-+    for (const agent of agents) {
-+      const tabId = agent.tabId || agent.paneKey.split(':', 1)[0] || ''
-+      const tab = tabId ? tabsById.get(tabId) : undefined
-+      const memberId =
-+        tab?.codevMemberId ||
-+        (agent.agentType && tabId
-+          ? claimPendingCodevAgentOwner(agent.agentType, tabId)
-+          : null)
-+      if (memberId && tabId) rememberCodevAgentOwner(tabId, memberId)
-+      next[agent.paneKey] = resolveLiveAgentOwner({
-+        memberId,
-+        worktreeId: agent.worktreeId,
-+        people,
-+        workboardOwnerByWorktreeId
++      // A status row with no agent identity is a plain terminal pane or a
++      // half-torn-down entry, not an agent.
++      .filter(([, entry]) => isLiveState(entry.state) && Boolean(entry.agentType))
++      .map(([paneKey, entry]) => {
++        const label = providerLabel(String(entry.agentType ?? ''))
++        const phase = missionControlPhaseFromState(entry.state)
++        return {
++          key: `local:${paneKey}`,
++          origin: 'you' as const,
++          sessionId: null,
++          worktreeId: entry.worktreeId ?? null,
++          ownerName: viewerName,
++          ownerHue: hueFor(viewerName || paneKey),
++          providerLabel: label,
++          model: entry.model ?? null,
++          phase,
++          title: entry.prompt || `${label} session`,
++          activity: entry.prompt || 'Waiting for the next instruction.',
++          startedAt: entry.stateStartedAt,
++          serverElapsed: null,
++          canSteer: false
++        }
 +      })
-+    }
-+    return next
-+  }, [agents, people, tabsById, workboardOwnerByWorktreeId])
++  }, [statuses, viewerName])
 +
-+  const busy = agents.some((agent) => agent.state === 'working')
++  const refreshManaged = useCallback(async () => {
++    if (bridgeStatus !== 'connected') return
++    try {
++      const snapshot = await requestCodevBridge<WorkboardSnapshot>('workboard.list')
++      if (snapshot?.viewer?.name) setViewerName(snapshot.viewer.name)
++      setCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
++      const rows = (snapshot?.slots ?? [])
++        .filter((slot) => slot.occupied && slot.sessionId)
++        .map<MissionControlAgent>((slot) => ({
++          key: `managed:${slot.sessionId}`,
++          origin: 'managed',
++          sessionId: slot.sessionId ?? null,
++          worktreeId: slot.worktreeId ?? null,
++          ownerName: slot.owner?.trim() || 'Teammate',
++          ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
++          providerLabel: providerLabel(String(slot.provider ?? '')),
++          model: null,
++          phase: missionControlPhaseFromStatus(String(slot.status ?? '')),
++          title: slot.assignment?.trim() || 'Agent session',
++          activity: slot.currentTask?.trim() || slot.status?.trim() || 'Working.',
++          startedAt: null,
++          serverElapsed: slot.elapsed?.trim() || null,
++          canSteer: Boolean(snapshot?.viewer?.canCoSteer)
++        }))
++      setManaged(rows)
++    } catch {
++      // Keep the last known managed set; local agents still render, and the
++      // interval retries on its own.
++    }
++  }, [bridgeStatus])
++
++  useEffect(() => {
++    if (!embedded) return
++    void refreshManaged()
++    const timer = setInterval(() => void refreshManaged(), REFRESH_MS)
++    return () => clearInterval(timer)
++  }, [embedded, refreshManaged])
++
++  const agents = useMemo(
++    () => mergeMissionControlAgents(managed, local),
++    [managed, local]
++  )
++
++  const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
 +
 +  useEffect(() => {
 +    if (!busy) return
@@ -4504,145 +3014,373 @@ index 0000000..2ef43e8
 +    return () => clearInterval(timer)
 +  }, [busy])
 +
-+  useEffect(
-+    () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
-+    []
++  const byKey = useCallback(
++    (key: string) => agents.find((agent) => agent.key === key) ?? null,
++    [agents]
 +  )
 +
-+  useEffect(() => {
-+    if (!embedded || !connected) return
-+    let disposed = false
-+    const refresh = (): void => {
-+      void requestCodevBridge<PresencePayload>('presence.list')
-+        .then((payload) => {
-+          if (disposed) return
-+          const directory = new Map<string, AgentPerson>()
-+          const viewer = personFrom(payload.viewer)
-+          if (viewer) directory.set(viewer.id, viewer)
-+          for (const member of payload.members ?? []) {
-+            const person = personFrom(member.user)
-+            if (person) directory.set(person.id, person)
-+          }
-+          setPeople([...directory.values()])
-+        })
-+        .catch(() => {
-+          if (!disposed) setPeople([])
-+        })
-+    }
-+    refresh()
-+    const timer = window.setInterval(refresh, PRESENCE_MS)
-+    return () => {
-+      disposed = true
-+      window.clearInterval(timer)
-+    }
-+  }, [connected, embedded])
-+
-+  useEffect(() => {
-+    if (!expanded || !embedded) return
-+    let disposed = false
-+    void window.api?.aiVault
-+      ?.listSessions({ limit: 24 })
-+      .then((result: AiVaultListResult) => {
-+        if (disposed) return
-+        setHistory(
-+          (result.sessions ?? []).map((session) => ({
-+            id: session.id,
-+            title: session.title || 'Untitled session',
-+            agent: session.agent,
-+            when: historyWhen(session.updatedAt ?? session.modifiedAt, Date.now()),
-+            preview:
-+              session.previewMessages.find((message) => message.text.trim())?.text.trim() ?? ''
-+          }))
-+        )
-+      })
-+      .catch(() => {
-+        if (!disposed) setHistory([])
-+      })
-+    return () => {
-+      disposed = true
-+    }
-+  }, [embedded, expanded])
-+
-+  useEffect(() => {
-+    if (!expanded) return
-+    const onKey = (event: KeyboardEvent): void => {
-+      if (event.key === 'Escape') setExpanded(false)
-+    }
-+    window.addEventListener('keydown', onKey)
-+    return () => window.removeEventListener('keydown', onKey)
-+  }, [expanded])
-+
-+  useEffect(() => {
-+    if (expanded) {
-+      if (previousWidth.current === null) previousWidth.current = rightSidebarWidth
-+      if (rightSidebarWidth < EXPANDED_SIDEBAR_WIDTH) {
-+        setRightSidebarWidth(EXPANDED_SIDEBAR_WIDTH)
++  const handleStepIn = useCallback(
++    (key: string) => {
++      const agent = byKey(key)
++      if (!agent) return
++      if (agent.worktreeId) {
++        activateAndRevealWorktree(agent.worktreeId, { revealInSidebar: true })
++        setOpenKey(null)
++        return
 +      }
-+      return
-+    }
-+    if (previousWidth.current !== null) {
-+      setRightSidebarWidth(previousWidth.current)
-+      previousWidth.current = null
-+    }
-+  }, [expanded, rightSidebarWidth, setRightSidebarWidth])
++      toast.message('This agent runs in your chat tab', {
++        description: 'Open the chat tab to follow it live.'
++      })
++    },
++    [byKey]
++  )
++
++  const handleSteer = useCallback(
++    async (key: string, text: string) => {
++      const agent = byKey(key)
++      const prompt = text.trim()
++      if (!agent?.sessionId || !prompt) return
++      setSteerBusy(true)
++      try {
++        await requestCodevBridge('agents.enqueue', { sessionId: agent.sessionId, prompt })
++        toast.success(`Steer queued for ${agent.ownerName}'s agent`)
++        void refreshManaged()
++      } catch (error: unknown) {
++        toast.error('Could not steer this agent', {
++          description: error instanceof Error ? error.message : String(error)
++        })
++      } finally {
++        setSteerBusy(false)
++      }
++    },
++    [byKey, refreshManaged]
++  )
++
++  const handlePause = useCallback(
++    async (key: string) => {
++      const agent = byKey(key)
++      if (!agent?.sessionId) return
++      try {
++        await requestCodevBridge('agents.interrupt', { sessionId: agent.sessionId })
++        toast.success('Asked the agent to pause after this step')
++        void refreshManaged()
++      } catch (error: unknown) {
++        toast.error('Could not pause this agent', {
++          description: error instanceof Error ? error.message : String(error)
++        })
++      }
++    },
++    [byKey, refreshManaged]
++  )
 +
 +  if (!embedded) return null
 +
 +  return (
-+    <CodevLiveAgentsView
-+      agents={agents}
-+      owners={owners}
-+      history={history}
++    <CodevMissionControlView
++      agents={agents.map((agent) =>
++        agent.origin === 'managed' ? { ...agent, canSteer: canCoSteer } : agent
++      )}
 +      now={now}
-+      expanded={expanded}
-+      canLaunch={Boolean(activeWorktree?.id)}
-+      onStepIn={(tabId) => {
-+        setActiveTab(tabId)
-+        requestAnimationFrame(() => focusTerminalTabSurface(tabId))
-+      }}
-+      onToggleExpanded={() => setExpanded((open) => !open)}
-+      onLaunch={(agent) => {
-+        if (!activeWorktree?.id) return
-+        noteCodevAgentLaunch(agent)
-+        launchAgentInNewTab({
-+          agent,
-+          worktreeId: activeWorktree.id,
-+          launchSource: 'tab_bar_quick_launch'
-+        })
-+      }}
++      openKey={openKey}
++      steerBusy={steerBusy}
++      onOpen={setOpenKey}
++      onClose={() => setOpenKey(null)}
++      onStepIn={handleStepIn}
++      onSteer={handleSteer}
++      onPause={handlePause}
 +    />
 +  )
 +}
-diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx
+diff --git a/src/renderer/src/components/right-sidebar/CodevMissionControlView.test.tsx b/src/renderer/src/components/right-sidebar/CodevMissionControlView.test.tsx
 new file mode 100644
-index 0000000..c361a92
+index 0000000..6f8a206
 --- /dev/null
-+++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsView.tsx
-@@ -0,0 +1,313 @@
-+import type { JSX } from 'react'
-+import { AgentIcon } from '@/lib/agent-catalog'
-+import { formatAgentTypeLabel } from '@/lib/agent-status'
-+import type { TuiAgent } from '../../../../shared/types'
-+import { AGENT_STATUS_STATES, type AgentStatusEntry } from '../../../../shared/agent-status-types'
-+import type { AgentPerson } from './codev-agent-owners'
++++ b/src/renderer/src/components/right-sidebar/CodevMissionControlView.test.tsx
+@@ -0,0 +1,146 @@
++import { renderToStaticMarkup } from 'react-dom/server'
++import { describe, expect, it } from 'vitest'
++import {
++  CodevMissionControlView,
++  mergeMissionControlAgents,
++  missionControlPhaseFromStatus,
++  sortMissionControlAgents,
++  type MissionControlAgent
++} from './CodevMissionControlView'
 +
-+export type LiveAgent = AgentStatusEntry & { paneKey: string }
-+
-+export type AgentHistoryRow = {
-+  id: string
-+  title: string
-+  agent: string
-+  when: string
-+  preview: string
++function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
++  return {
++    key: 'managed:s1',
++    origin: 'managed',
++    sessionId: 's1',
++    worktreeId: 'w1',
++    ownerName: 'Alex Morgan',
++    ownerHue: 200,
++    providerLabel: 'Claude',
++    model: 'sonnet',
++    phase: 'working',
++    title: 'Wire the billing webhook',
++    activity: 'Editing app/api/webhooks/route.ts',
++    startedAt: null,
++    serverElapsed: '01:20',
++    canSteer: true,
++    ...overrides
++  }
 +}
 +
-+export const CODE_AGENTS = [
-+  { id: 'claude' as const, label: 'Claude Code' },
-+  { id: 'codex' as const, label: 'Codex' },
-+  { id: 'cursor' as const, label: 'Cursor' }
-+]
++describe('missionControlPhaseFromStatus', () => {
++  it('maps server status strings onto phases', () => {
++    expect(missionControlPhaseFromStatus('Active')).toBe('working')
++    expect(missionControlPhaseFromStatus('Awaiting review')).toBe('reviewing')
++    expect(missionControlPhaseFromStatus('Blocked on claim')).toBe('blocked')
++    expect(missionControlPhaseFromStatus('Running tests')).toBe('testing')
++    expect(missionControlPhaseFromStatus('Merged')).toBe('done')
++    expect(missionControlPhaseFromStatus('Queued')).toBe('waiting')
++  })
++})
 +
-+function elapsed(since: number, now: number): string {
++describe('sortMissionControlAgents', () => {
++  it('surfaces whatever needs a human first', () => {
++    const order = sortMissionControlAgents([
++      agent({ key: 'a', phase: 'done' }),
++      agent({ key: 'b', phase: 'blocked' }),
++      agent({ key: 'c', phase: 'working' })
++    ]).map((entry) => entry.key)
++    expect(order).toEqual(['b', 'c', 'a'])
++  })
++})
++
++describe('mergeMissionControlAgents', () => {
++  it('drops a local entry that a managed session already covers for the same worktree', () => {
++    const merged = mergeMissionControlAgents(
++      [agent({ key: 'managed:s1', worktreeId: 'w1' })],
++      [agent({ key: 'local:p1', origin: 'you', sessionId: null, worktreeId: 'w1' })]
++    )
++    expect(merged).toHaveLength(1)
++    expect(merged[0]!.key).toBe('managed:s1')
++  })
++
++  it('keeps a local agent that has no managed twin', () => {
++    const merged = mergeMissionControlAgents(
++      [agent({ key: 'managed:s1', worktreeId: 'w1' })],
++      [agent({ key: 'local:p9', origin: 'you', sessionId: null, worktreeId: 'w9' })]
++    )
++    expect(merged.map((entry) => entry.key).sort()).toEqual(['local:p9', 'managed:s1'])
++  })
++})
++
++describe('CodevMissionControlView', () => {
++  const noop = (): void => undefined
++
++  it('renders a card per agent with owner, provider and activity', () => {
++    const html = renderToStaticMarkup(
++      <CodevMissionControlView
++        agents={[
++          agent({ key: 'managed:s1', ownerName: 'Alex Morgan', phase: 'working' }),
++          agent({
++            key: 'local:p1',
++            origin: 'you',
++            sessionId: null,
++            worktreeId: 'w2',
++            ownerName: 'You',
++            providerLabel: 'Codex',
++            title: 'Draft the release notes',
++            activity: 'Reading git log',
++            phase: 'planning'
++          })
++        ]}
++        now={Date.now()}
++        openKey={null}
++        steerBusy={false}
++        onOpen={noop}
++        onClose={noop}
++        onStepIn={noop}
++        onSteer={noop}
++        onPause={noop}
++      />
++    )
++    expect(html).toContain('Mission Control')
++    expect(html).toContain('Alex Morgan')
++    expect(html).toContain('Wire the billing webhook')
++    expect(html).toContain('Editing app/api/webhooks/route.ts')
++    expect(html).toContain('Draft the release notes')
++    expect(html).toContain('your chat tab')
++    expect(html).toContain('2 people steering')
++  })
++
++  it('opens the steer drawer for a managed agent', () => {
++    const html = renderToStaticMarkup(
++      <CodevMissionControlView
++        agents={[agent({ key: 'managed:s1', canSteer: true })]}
++        now={Date.now()}
++        openKey="managed:s1"
++        steerBusy={false}
++        onOpen={noop}
++        onClose={noop}
++        onStepIn={noop}
++        onSteer={noop}
++        onPause={noop}
++      />
++    )
++    expect(html).toContain('codev-mc-drawer')
++    expect(html).toContain('Add a test for that case')
++    expect(html).toContain('co-steer turn')
++  })
++
++  it('shows the empty state when nothing is running', () => {
++    const html = renderToStaticMarkup(
++      <CodevMissionControlView
++        agents={[]}
++        now={Date.now()}
++        openKey={null}
++        steerBusy={false}
++        onOpen={noop}
++        onClose={noop}
++        onStepIn={noop}
++        onSteer={noop}
++        onPause={noop}
++      />
++    )
++    expect(html).toContain('No agents are running yet')
++  })
++})
+diff --git a/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx b/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx
+new file mode 100644
+index 0000000..e0068e2
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevMissionControlView.tsx
+@@ -0,0 +1,491 @@
++import { useEffect, useState, type JSX, type KeyboardEvent } from 'react'
++
++/**
++ * Mission Control — the workspace's live agent view.
++ *
++ * Pure and prop-driven so it renders identically from the container's merged
++ * feed and from a test's fixture. The container (`CodevLiveAgentsPanel`) owns
++ * the two real sources this stitches together:
++ *
++ *  - your own agent, from Orca's local `agentStatusByPaneKey`, updated the
++ *    instant a token streams; and
++ *  - every teammate's managed agent session, polled over the CoDev bridge
++ *    (`workboard.list`), so the panel shows the whole room, not just this tab.
++ *
++ * Nothing here is simulated. "Step in" reveals the agent's worktree; "Steer"
++ * and "Pause" call the same co-steer endpoints the workboard uses.
++ */
++
++export type MissionControlPhase =
++  | 'planning'
++  | 'working'
++  | 'testing'
++  | 'reviewing'
++  | 'blocked'
++  | 'waiting'
++  | 'done'
++
++export type MissionControlAgent = {
++  /** Stable identity: `local:<paneKey>` or `managed:<sessionId>`. */
++  key: string
++  /** `you` renders as "your chat tab"; `managed` exposes steer + pause. */
++  origin: 'you' | 'managed'
++  sessionId: string | null
++  worktreeId: string | null
++  ownerName: string
++  ownerHue: number
++  providerLabel: string
++  model: string | null
++  phase: MissionControlPhase
++  /** The assignment, in the owner's words. */
++  title: string
++  /** The one line describing what it is doing right now. */
++  activity: string
++  /** Epoch ms; drives the live-ticking runtime for local agents. */
++  startedAt: number | null
++  /** `MM:SS` from the server, used when `startedAt` is unknown. */
++  serverElapsed: string | null
++  canSteer: boolean
++}
++
++export const MISSION_CONTROL_PHASE_LABEL: Record<MissionControlPhase, string> = {
++  planning: 'Planning',
++  working: 'Working',
++  testing: 'Running tests',
++  reviewing: 'In review',
++  blocked: 'Blocked',
++  waiting: 'Waiting',
++  done: 'Ready to merge'
++}
++
++/** Ordering for the list: whatever needs a human first, settled work last. */
++const PHASE_RANK: Record<MissionControlPhase, number> = {
++  blocked: 0,
++  working: 1,
++  testing: 2,
++  reviewing: 3,
++  planning: 4,
++  waiting: 5,
++  done: 6
++}
++
++const QUICK_STEERS = [
++  'Add a test for that case',
++  'Wrong approach — back out',
++  'Explain your reasoning',
++  'Looks good — keep going'
++] as const
++
++export function missionControlPhaseFromState(state: string): MissionControlPhase {
++  if (state === 'blocked') return 'blocked'
++  if (state === 'waiting') return 'waiting'
++  if (state === 'done') return 'done'
++  return 'working'
++}
++
++export function missionControlPhaseFromStatus(status: string): MissionControlPhase {
++  const value = status.toLowerCase()
++  if (/(block|conflict|claim)/.test(value)) return 'blocked'
++  if (/(review|await review)/.test(value)) return 'reviewing'
++  if (/test/.test(value)) return 'testing'
++  if (/(plan|scoping)/.test(value)) return 'planning'
++  if (/(done|merged|complete|ready|closed)/.test(value)) return 'done'
++  if (/(wait|idle|queued|paused|standby)/.test(value)) return 'waiting'
++  return 'working'
++}
++
++export function sortMissionControlAgents(agents: MissionControlAgent[]): MissionControlAgent[] {
++  return [...agents].sort((a, b) => {
++    const byPhase = PHASE_RANK[a.phase] - PHASE_RANK[b.phase]
++    if (byPhase !== 0) return byPhase
++    return (b.startedAt ?? 0) - (a.startedAt ?? 0)
++  })
++}
++
++/**
++ * Managed sessions win over a local entry for the same worktree: a teammate's
++ * co-steered session and this tab's mirror of it are one agent, and the
++ * managed record carries the real owner and session id.
++ */
++export function mergeMissionControlAgents(
++  managed: MissionControlAgent[],
++  local: MissionControlAgent[]
++): MissionControlAgent[] {
++  const claimed = new Set(
++    managed.map((agent) => agent.worktreeId).filter((id): id is string => Boolean(id))
++  )
++  const keptLocal = local.filter((agent) => !agent.worktreeId || !claimed.has(agent.worktreeId))
++  return sortMissionControlAgents([...managed, ...keptLocal])
++}
++
++export function missionControlInitials(name: string): string {
++  const parts = name.trim().split(/\s+/).filter(Boolean)
++  if (parts.length === 0) return '·'
++  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
++  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
++}
++
++export function missionControlFaceBackground(hue: number): string {
++  return `linear-gradient(150deg, hsl(${hue} 60% 46%), hsl(${hue} 52% 32%))`
++}
++
++export function missionControlElapsed(since: number, now: number): string {
 +  const seconds = Math.max(0, Math.floor((now - since) / 1000))
 +  if (seconds < 60) return `${seconds}s`
 +  const minutes = Math.floor(seconds / 60)
@@ -4650,284 +3388,354 @@ index 0000000..c361a92
 +  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
 +}
 +
-+export function isLiveAgentState(value: unknown): value is AgentStatusEntry['state'] {
++function runtimeText(agent: MissionControlAgent, now: number): string {
++  if (agent.phase === 'done') return 'Done'
++  if (agent.startedAt) return missionControlElapsed(agent.startedAt, now)
++  return agent.serverElapsed ?? '—'
++}
++
++function Face({
++  name,
++  hue,
++  size = 22,
++  title
++}: {
++  name: string
++  hue: number
++  size?: number
++  title?: string
++}): JSX.Element {
 +  return (
-+    typeof value === 'string' &&
-+    (AGENT_STATUS_STATES as readonly string[]).includes(value)
++    <span
++      className="codev-mc-face"
++      title={title ?? name}
++      aria-hidden
++      style={{
++        width: size,
++        height: size,
++        fontSize: Math.round(size * 0.4),
++        background: missionControlFaceBackground(hue)
++      }}
++    >
++      {missionControlInitials(name)}
++    </span>
 +  )
 +}
 +
-+const STATE_LABEL: Record<AgentStatusEntry['state'], string> = {
-+  working: 'Working',
-+  blocked: 'Needs you',
-+  waiting: 'Waiting',
-+  done: 'Done'
-+}
-+
-+function currentActionFor(agent: LiveAgent): string {
-+  if (agent.toolName) {
-+    return `${agent.toolName}${agent.toolInput ? ` · ${agent.toolInput}` : ''}`
-+  }
-+  return agent.lastAssistantMessage || agent.prompt || 'Waiting for activity'
-+}
-+
-+function initialsFor(name: string): string {
-+  const parts = name.trim().split(/\s+/).filter(Boolean)
-+  if (parts.length >= 2) {
-+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase()
-+  }
-+  return name.slice(0, 2).toUpperCase() || '?'
-+}
-+
-+function tabIdFor(agent: LiveAgent): string {
-+  return agent.tabId || agent.paneKey.split(':', 1)[0] || ''
-+}
-+
-+function OwnerFace({ owner }: { owner: AgentPerson }): JSX.Element {
-+  if (owner.avatarUrl) {
-+    return (
-+      <img
-+        className="codev-agent-face"
-+        src={owner.avatarUrl}
-+        alt=""
-+        title={owner.name}
-+      />
-+    )
-+  }
++function PhasePill({ phase }: { phase: MissionControlPhase }): JSX.Element {
 +  return (
-+    <span className="codev-agent-face is-initials" title={owner.name}>
-+      {initialsFor(owner.name)}
++    <span className={`codev-mc-phase is-${phase}`}>
++      <i aria-hidden />
++      {MISSION_CONTROL_PHASE_LABEL[phase]}
 +    </span>
 +  )
 +}
 +
 +function AgentCard({
 +  agent,
-+  owner,
 +  now,
-+  expanded,
++  onOpen,
 +  onStepIn
 +}: {
-+  agent: LiveAgent
-+  owner: AgentPerson | null
++  agent: MissionControlAgent
 +  now: number
-+  expanded: boolean
-+  onStepIn: (tabId: string) => void
++  onOpen: () => void
++  onStepIn: () => void
 +}): JSX.Element {
-+  const tone = agent.state
-+  const label = formatAgentTypeLabel(agent.agentType)
-+  const currentAction = currentActionFor(agent)
-+  const preview = agent.prompt || currentAction
-+  const recentStates = agent.stateHistory.slice(-4).map((entry) => entry.state).concat(agent.state)
-+  const tabId = tabIdFor(agent)
-+  const teammateCount = agent.subagents?.length ?? 0
++  const activate = (event: KeyboardEvent<HTMLDivElement>): void => {
++    if (event.key === 'Enter' || event.key === ' ') {
++      event.preventDefault()
++      onOpen()
++    }
++  }
 +
 +  return (
-+    <li>
-+      <details className={`codev-agent-card is-${tone}`} open={expanded || undefined}>
-+        <summary className="codev-agent-summary">
-+          <span className="codev-agent-marks">
-+            <span className="codev-agent-logo" title={label}>
-+              <AgentIcon agent={agent.agentType as TuiAgent} size={16} />
-+            </span>
-+            {owner ? <OwnerFace owner={owner} /> : null}
-+          </span>
-+          <div className="codev-agent-who">
-+            <span className="codev-agent-owner">{owner?.name ?? label}</span>
-+            <span className="codev-agent-worktree" title={agent.model ?? label}>
-+              {agent.model ? `${label} · ${agent.model}` : label}
++    <li className={`codev-mc-card is-${agent.phase}`}>
++      <div
++        className="codev-mc-card-open"
++        role="button"
++        tabIndex={0}
++        onClick={onOpen}
++        onKeyDown={activate}
++      >
++        <div className="codev-mc-card-head">
++          <Face name={agent.ownerName} hue={agent.ownerHue} title={`Started by ${agent.ownerName}`} />
++          <div className="codev-mc-card-who">
++            <span className="codev-mc-owner">{agent.ownerName}</span>
++            <span className="codev-mc-sub">
++              {agent.providerLabel}
++              {agent.model ? ` · ${agent.model}` : ''}
 +            </span>
 +          </div>
-+          <span className={`codev-agent-status is-${tone}`}>
-+            <i aria-hidden />
-+            {STATE_LABEL[agent.state]}
-+          </span>
-+          <span className="codev-agent-expand" aria-hidden />
-+          <p className="codev-agent-preview">{preview}</p>
-+        </summary>
-+
-+        <div className="codev-agent-details">
-+          {agent.prompt && agent.prompt !== currentAction ? (
-+            <p className="codev-agent-assignment">{agent.prompt}</p>
-+          ) : null}
-+          <p className={`codev-agent-task${agent.state === 'blocked' ? ' is-blocked' : ''}`}>
-+            <i className="codev-agent-caret" aria-hidden />
-+            <span>{currentAction}</span>
-+          </p>
-+
-+          <div className="codev-agent-progress" aria-label={`Turn state: ${STATE_LABEL[agent.state]}`}>
-+            {recentStates.map((state, index) => (
-+              <span key={`${state}-${index}`} className={`is-${state}`} />
-+            ))}
-+          </div>
-+          <p className="codev-agent-progress-label">
-+            {agent.state === 'working' ? 'Live turn in progress' : STATE_LABEL[agent.state]}
-+            {teammateCount
-+              ? ` · ${teammateCount} teammate${teammateCount === 1 ? '' : 's'}`
-+              : ''}
-+          </p>
-+
-+          {teammateCount ? (
-+            <ul className="codev-agent-subagents" aria-label="Agent teammates">
-+              {agent.subagents!.map((subagent) => (
-+                <li key={subagent.id}>
-+                  <i className={`is-${subagent.state}`} aria-hidden />
-+                  <span>{subagent.description || formatAgentTypeLabel(subagent.agentType)}</span>
-+                </li>
-+              ))}
-+            </ul>
-+          ) : null}
-+
-+          <div className="codev-agent-foot">
-+            <span className="codev-agent-elapsed">
-+              {now - agent.stateStartedAt < 2_000
-+                ? STATE_LABEL[agent.state]
-+                : `${STATE_LABEL[agent.state].toLowerCase()} for ${elapsed(agent.stateStartedAt, now)}`}
-+            </span>
-+            <button
-+              className="codev-agent-open"
-+              type="button"
-+              onClick={() => {
-+                if (!tabId) return
-+                onStepIn(tabId)
-+              }}
-+            >
-+              Step in
-+            </button>
-+          </div>
++          <PhasePill phase={agent.phase} />
 +        </div>
-+      </details>
++
++        <p className="codev-mc-title">{agent.title}</p>
++
++        <p className={`codev-mc-activity${agent.phase === 'blocked' ? ' is-blocked' : ''}`}>
++          <i className="codev-mc-caret" aria-hidden />
++          <span>{agent.activity}</span>
++        </p>
++
++        <div className="codev-mc-cardfoot">
++          <span className="codev-mc-runtime">{runtimeText(agent, now)}</span>
++          <span className="codev-mc-tag">
++            {agent.origin === 'you' ? 'your chat tab' : 'managed session'}
++          </span>
++        </div>
++      </div>
++
++      <div className="codev-mc-card-actions">
++        <button type="button" onClick={onStepIn}>
++          Step in
++        </button>
++        <button type="button" onClick={onOpen} disabled={agent.origin !== 'managed'}>
++          Steer
++        </button>
++      </div>
 +    </li>
 +  )
 +}
 +
-+function NewAgentRow({
-+  canLaunch,
-+  onLaunch
++function AgentDrawer({
++  agent,
++  now,
++  busy,
++  onClose,
++  onStepIn,
++  onSteer,
++  onPause
 +}: {
-+  canLaunch: boolean
-+  onLaunch: (agent: (typeof CODE_AGENTS)[number]['id']) => void
++  agent: MissionControlAgent
++  now: number
++  busy: boolean
++  onClose: () => void
++  onStepIn: () => void
++  onSteer: (text: string) => void
++  onPause: () => void
 +}): JSX.Element {
++  const [draft, setDraft] = useState('')
++  const steerable = agent.origin === 'managed' && agent.canSteer && Boolean(agent.sessionId)
++
++  useEffect(() => {
++    const onKey = (event: globalThis.KeyboardEvent): void => {
++      if (event.key === 'Escape') onClose()
++    }
++    window.addEventListener('keydown', onKey)
++    return () => window.removeEventListener('keydown', onKey)
++  }, [onClose])
++
++  const submit = (): void => {
++    const text = draft.trim()
++    if (!text) return
++    onSteer(text)
++    setDraft('')
++  }
++
 +  return (
-+    <div className="codev-agents-create">
-+      <p className="codev-agents-section-label">New agent</p>
-+      <div className="codev-agents-create-row">
-+        {CODE_AGENTS.map((entry) => (
++    <>
++      <div className="codev-mc-scrim" onClick={onClose} aria-hidden />
++      <aside className="codev-mc-drawer" role="dialog" aria-modal="true" aria-label={agent.title}>
++        <header className="codev-mc-drawer-head">
++          <div>
++            <p className="codev-mc-drawer-kicker">
++              {agent.ownerName} · {agent.providerLabel}
++              {agent.model ? ` · ${agent.model}` : ''}
++            </p>
++            <h4>{agent.title}</h4>
++          </div>
 +          <button
-+            key={entry.id}
 +            type="button"
-+            className="codev-agents-create-btn"
-+            disabled={!canLaunch}
-+            onClick={() => onLaunch(entry.id)}
++            className="codev-mc-drawer-close"
++            onClick={onClose}
++            aria-label="Close agent detail"
 +          >
-+            <AgentIcon agent={entry.id} size={14} />
-+            {entry.label}
++            ✕
 +          </button>
-+        ))}
-+      </div>
-+    </div>
++        </header>
++
++        <div className="codev-mc-drawer-strip">
++          <PhasePill phase={agent.phase} />
++          <span className="codev-mc-chip">{runtimeText(agent, now)}</span>
++          <span className="codev-mc-chip">
++            {agent.origin === 'you' ? 'Your chat tab' : 'Managed session'}
++          </span>
++        </div>
++
++        <p className="codev-mc-drawer-activity">
++          <i className="codev-mc-caret" aria-hidden />
++          <span>{agent.activity}</span>
++        </p>
++
++        <div className="codev-mc-drawer-actions">
++          <button type="button" className="codev-mc-ghost" onClick={onStepIn}>
++            {agent.worktreeId ? 'Open this worktree' : 'Open the chat tab'}
++          </button>
++          {steerable ? (
++            <button type="button" className="codev-mc-ghost" onClick={onPause} disabled={busy}>
++              Pause
++            </button>
++          ) : null}
++        </div>
++
++        {steerable ? (
++          <footer className="codev-mc-steer">
++            <div className="codev-mc-quick">
++              {QUICK_STEERS.map((text) => (
++                <button
++                  key={text}
++                  type="button"
++                  className="codev-mc-quick-chip"
++                  disabled={busy}
++                  onClick={() => onSteer(text)}
++                >
++                  {text}
++                </button>
++              ))}
++            </div>
++            <div className="codev-mc-steer-row">
++              <input
++                className="codev-mc-steer-input"
++                placeholder={`Steer ${agent.ownerName.split(' ')[0] ?? 'this'}'s agent…`}
++                value={draft}
++                disabled={busy}
++                onChange={(event) => setDraft(event.target.value)}
++                onKeyDown={(event) => {
++                  if (event.key === 'Enter') {
++                    event.preventDefault()
++                    submit()
++                  }
++                }}
++                aria-label="Steer this agent"
++              />
++              <button
++                type="button"
++                className="codev-mc-steer-send"
++                onClick={submit}
++                disabled={busy || !draft.trim()}
++              >
++                {busy ? 'Sending…' : 'Steer'}
++              </button>
++            </div>
++            <p className="codev-mc-steer-note">
++              Queued as a co-steer turn — every instruction is attributed in the shared transcript.
++            </p>
++          </footer>
++        ) : (
++          <p className="codev-mc-steer-note">
++            {agent.origin === 'you'
++              ? 'This agent runs in your chat tab — type there to steer it directly.'
++              : 'Co-steer permission is required to send this agent instructions.'}
++          </p>
++        )}
++      </aside>
++    </>
 +  )
 +}
 +
-+export function CodevLiveAgentsView({
++export function CodevMissionControlView({
 +  agents,
-+  owners,
-+  history,
 +  now,
-+  expanded,
-+  canLaunch,
++  openKey,
++  steerBusy,
++  onOpen,
++  onClose,
 +  onStepIn,
-+  onToggleExpanded,
-+  onLaunch
++  onSteer,
++  onPause
 +}: {
-+  agents: LiveAgent[]
-+  owners: Record<string, AgentPerson | null>
-+  history: AgentHistoryRow[]
++  agents: MissionControlAgent[]
 +  now: number
-+  expanded: boolean
-+  canLaunch: boolean
-+  onStepIn: (tabId: string) => void
-+  onToggleExpanded: () => void
-+  onLaunch: (agent: (typeof CODE_AGENTS)[number]['id']) => void
++  openKey: string | null
++  steerBusy: boolean
++  onOpen: (key: string) => void
++  onClose: () => void
++  onStepIn: (key: string) => void
++  onSteer: (key: string, text: string) => void
++  onPause: (key: string) => void
 +}): JSX.Element {
-+  const working = agents.filter((agent) => agent.state === 'working').length
++  const open = agents.find((agent) => agent.key === openKey) ?? null
++  const working = agents.filter((agent) => agent.phase === 'working').length
++  const blocked = agents.filter((agent) => agent.phase === 'blocked').length
++  const owners: Array<{ name: string; hue: number }> = []
++  for (const agent of agents) {
++    if (!owners.some((owner) => owner.name === agent.ownerName)) {
++      owners.push({ name: agent.ownerName, hue: agent.ownerHue })
++    }
++  }
 +
 +  return (
-+    <section
-+      className={`codev-agents-panel${expanded ? ' is-expanded' : ''}`}
-+      aria-label={expanded ? 'Agents page' : 'Agents in this workspace'}
-+    >
++    <section className="codev-agents-panel codev-mc" aria-label="Live agents in this workspace">
 +      <header className="codev-agents-head">
 +        <div>
 +          <p className="codev-agents-kicker">
 +            <i className="codev-agents-dot" aria-hidden />
-+            {working > 0 ? `${working} working` : 'Live in this workspace'}
++            {working > 0 ? `${working} working now` : 'Live in this workspace'}
 +          </p>
-+          <h3>Agents</h3>
++          <h3>Mission Control</h3>
 +        </div>
-+        <div className="codev-agents-head-actions">
-+          <span className="codev-agents-count" title={`${working} working`}>
-+            <strong>{agents.length}</strong>
-+          </span>
-+          <button
-+            type="button"
-+            className="codev-agents-page-toggle"
-+            onClick={onToggleExpanded}
-+          >
-+            {expanded ? 'Close' : 'Open'}
-+          </button>
-+        </div>
++        <span className="codev-agents-count">
++          <strong>{agents.length}</strong>
++          <span>/ {Math.max(agents.length, 3)}</span>
++        </span>
 +      </header>
 +
-+      {expanded ? <NewAgentRow canLaunch={canLaunch} onLaunch={onLaunch} /> : null}
++      {owners.length > 0 ? (
++        <div className="codev-mc-people">
++          <div className="codev-mc-people-faces">
++            {owners.map((owner) => (
++              <Face
++                key={owner.name}
++                name={owner.name}
++                hue={owner.hue}
++                size={24}
++                title={`${owner.name} in this workspace`}
++              />
++            ))}
++          </div>
++          <span className="codev-mc-people-label">
++            {owners.length === 1 ? '1 person steering' : `${owners.length} people steering`}
++          </span>
++        </div>
++      ) : null}
 +
-+      {expanded ? <p className="codev-agents-section-label">Live</p> : null}
++      {blocked > 0 ? (
++        <p className="codev-mc-alert" role="status">
++          {blocked === 1
++            ? 'One agent is blocked on a file claim — CoDev is holding the write so two agents cannot collide.'
++            : `${blocked} agents are blocked on file claims.`}
++        </p>
++      ) : null}
 +
 +      {agents.length === 0 ? (
 +        <p className="codev-agents-empty">
-+          {expanded
-+            ? 'No agents are running. Start Claude Code, Codex, or Cursor above.'
-+            : 'Start an agent from a chat tab and it appears here. Open the page for history and a new agent.'}
++          No agents are running yet. Start one from the chat tab, or open the agent workboard to
++          launch a managed session — it appears here the moment it moves.
 +        </p>
 +      ) : (
-+        <ul className="codev-agents-list">
++        <ul className="codev-mc-list">
 +          {agents.map((agent) => (
 +            <AgentCard
-+              key={agent.paneKey}
++              key={agent.key}
 +              agent={agent}
-+              owner={owners[agent.paneKey] ?? null}
 +              now={now}
-+              expanded={expanded}
-+              onStepIn={onStepIn}
++              onOpen={() => onOpen(agent.key)}
++              onStepIn={() => onStepIn(agent.key)}
 +            />
 +          ))}
 +        </ul>
 +      )}
 +
-+      {expanded ? (
-+        <div className="codev-agents-history">
-+          <p className="codev-agents-section-label">History</p>
-+          {history.length === 0 ? (
-+            <p className="codev-agents-empty">Past sessions show up here after an agent has run.</p>
-+          ) : (
-+            <ul className="codev-agents-history-list">
-+              {history.map((row) => (
-+                <li key={row.id} className="codev-agents-history-row">
-+                  <span className="codev-agent-logo is-history" title={formatAgentTypeLabel(row.agent)}>
-+                    <AgentIcon agent={row.agent as TuiAgent} size={14} />
-+                  </span>
-+                  <div className="codev-agent-who">
-+                    <span className="codev-agent-owner">{row.title}</span>
-+                    <span className="codev-agent-worktree">
-+                      {formatAgentTypeLabel(row.agent)} · {row.when}
-+                    </span>
-+                  </div>
-+                  {row.preview ? <p className="codev-agent-preview">{row.preview}</p> : null}
-+                </li>
-+              ))}
-+            </ul>
-+          )}
-+        </div>
++      {open ? (
++        <AgentDrawer
++          agent={open}
++          now={now}
++          busy={steerBusy}
++          onClose={onClose}
++          onStepIn={() => onStepIn(open.key)}
++          onSteer={(text) => onSteer(open.key, text)}
++          onPause={() => onPause(open.key)}
++        />
 +      ) : null}
 +    </section>
 +  )
@@ -5962,116 +4770,22 @@ index 1b62145..82ad1c9 100644
            </span>
            {nodeStatus ? (
              <span
-diff --git a/src/renderer/src/components/right-sidebar/codev-agent-owners.ts b/src/renderer/src/components/right-sidebar/codev-agent-owners.ts
-new file mode 100644
-index 0000000..cc436b4
---- /dev/null
-+++ b/src/renderer/src/components/right-sidebar/codev-agent-owners.ts
-@@ -0,0 +1,82 @@
-+export type AgentPerson = {
-+  id: string
-+  name: string
-+  login?: string
-+  avatarUrl: string | null
-+}
-+
-+type PendingLaunch = { agent: string; memberId: string; at: number }
-+
-+const PENDING_WINDOW_MS = 60_000
-+const pendingLaunches: PendingLaunch[] = []
-+const ownersByTabId = new Map<string, string>()
-+
-+function currentMemberId(): string | null {
-+  if (typeof window === 'undefined') return null
-+  const value = window.__CODEV_MEMBER_ID__
-+  return typeof value === 'string' && value.trim() ? value.trim() : null
-+}
-+
-+export function noteCodevAgentLaunch(
-+  agent: string,
-+  memberId = currentMemberId(),
-+  at = Date.now()
-+): void {
-+  if (!memberId) return
-+  pendingLaunches.push({ agent, memberId, at })
-+}
-+
-+export function rememberCodevAgentOwner(tabId: string, memberId: string): void {
-+  if (!tabId || !memberId) return
-+  ownersByTabId.set(tabId, memberId)
-+}
-+
-+export function claimPendingCodevAgentOwner(
-+  agent: string,
-+  tabId: string,
-+  now = Date.now()
-+): string | null {
-+  const remembered = ownersByTabId.get(tabId)
-+  if (remembered) return remembered
-+  const cutoff = now - PENDING_WINDOW_MS
-+  const index = pendingLaunches.findIndex(
-+    (entry) => entry.agent === agent && entry.at >= cutoff
-+  )
-+  if (index < 0) return null
-+  const [hit] = pendingLaunches.splice(index, 1)
-+  ownersByTabId.set(tabId, hit.memberId)
-+  return hit.memberId
-+}
-+
-+export function resolveLiveAgentOwner(input: {
-+  memberId?: string | null
-+  worktreeId?: string | null
-+  people: AgentPerson[]
-+  workboardOwnerByWorktreeId?: Record<string, string>
-+}): AgentPerson | null {
-+  const byId = new Map(input.people.map((person) => [person.id, person]))
-+  if (input.memberId) {
-+    const owned = byId.get(input.memberId)
-+    if (owned) return owned
-+  }
-+  const workboardName =
-+    input.worktreeId && input.workboardOwnerByWorktreeId
-+      ? input.workboardOwnerByWorktreeId[input.worktreeId]
-+      : undefined
-+  if (workboardName) {
-+    const needle = workboardName.trim().toLowerCase()
-+    const match = input.people.find((person) => {
-+      const name = person.name.trim().toLowerCase()
-+      const login = person.login?.trim().toLowerCase()
-+      return name === needle || login === needle
-+    })
-+    if (match) return match
-+  }
-+  if (input.people.length === 1) return input.people[0] ?? null
-+  return null
-+}
-+
-+export function resetCodevAgentOwnersForTests(): void {
-+  pendingLaunches.length = 0
-+  ownersByTabId.clear()
-+}
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index f9587ab..2c1842f 100644
+index f9587ab..9b3054e 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
 @@ -1,6 +1,6 @@
  /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
  import React, { useEffect, useMemo, useRef, useState } from 'react'
 -import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
-+import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow, Radio } from 'lucide-react'
++import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow , Radio } from 'lucide-react'
  import { useAppStore } from '@/store'
  import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
  import { useRepoById } from '@/store/selectors'
-@@ -112,12 +112,30 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -112,6 +112,18 @@ function RightSidebarInner(): React.JSX.Element {
          title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
          shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
        },
--      {
--        id: 'vault',
--        icon: AgentSessionHistoryIcon,
--        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
--        shortcut: ''
--      },
 +      // CoDev: every agent running in this workspace, always on screen. Listed
 +      // first so it is the tab a member lands on.
 +      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
@@ -6079,27 +4793,15 @@ index f9587ab..2c1842f 100644
 +            {
 +              id: 'codev-agents' as const,
 +              icon: Radio,
-+              title: 'Agents',
++              title: 'Live agents',
 +              shortcut: ''
 +            }
 +          ]
 +        : []),
-+      // Orca's session-history "Agents" tab overlaps this live list. Hide it
-+      // in CoDev so there is one Agents surface, on the right.
-+      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
-+        ? []
-+        : [
-+            {
-+              id: 'vault' as const,
-+              icon: AgentSessionHistoryIcon,
-+              title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
-+              shortcut: ''
-+            }
-+          ]),
        {
-         id: 'workspaces',
-         icon: Workflow,
-@@ -156,6 +174,12 @@ function RightSidebarInner(): React.JSX.Element {
+         id: 'vault',
+         icon: AgentSessionHistoryIcon,
+@@ -156,6 +168,12 @@ function RightSidebarInner(): React.JSX.Element {
          shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
          sshOnly: true
        },
@@ -6112,7 +4814,7 @@ index f9587ab..2c1842f 100644
        // Why: plugin panels append after the built-in tabs so core navigation
        // keeps stable positions regardless of which plugins are installed.
        ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
-@@ -175,7 +199,8 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -175,7 +193,8 @@ function RightSidebarInner(): React.JSX.Element {
        getVisibleRightSidebarActivityItems(activityItems, {
          isFolder,
          isFolderWorkspace,
@@ -9411,24 +8113,6 @@ index 6bbe058..c5befa7 100644
        worktreeIds.length,
        worktreeId,
        worktrees
-diff --git a/src/renderer/src/components/sidebar/SidebarNav.tsx b/src/renderer/src/components/sidebar/SidebarNav.tsx
-index b14295d..344b766 100644
---- a/src/renderer/src/components/sidebar/SidebarNav.tsx
-+++ b/src/renderer/src/components/sidebar/SidebarNav.tsx
-@@ -61,8 +61,11 @@ const SidebarNav = React.memo(function SidebarNav() {
-       (shouldShowAgentsButton(s.settings) ? 1 : 0) |
-       (shouldShowAgentDashboardButton(s.settings) ? 2 : 0)
-   )
--  const showAgentsButton = (experimentalSidebarButtons & 1) !== 0
--  const showAgentDashboardButton = (experimentalSidebarButtons & 2) !== 0
-+  // CoDev has one team-facing agent surface in the right sidebar. Leaving
-+  // Orca's experimental left-sidebar entries visible duplicates that purpose.
-+  const codevEmbedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
-+  const showAgentsButton = !codevEmbedded && (experimentalSidebarButtons & 1) !== 0
-+  const showAgentDashboardButton = !codevEmbedded && (experimentalSidebarButtons & 2) !== 0
-   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
-   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
-   const automationsActive = activeView === 'automations'
 diff --git a/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx b/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx
 index cd7b94d..a8ed72d 100644
 --- a/src/renderer/src/components/sidebar/WorkspaceKanbanCard.tsx
@@ -9832,10 +8516,10 @@ index 0000000..4d16c39
 +})
 diff --git a/src/renderer/src/components/sidebar/codev-workboard-store.tsx b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
 new file mode 100644
-index 0000000..6c73f31
+index 0000000..bd4626a
 --- /dev/null
 +++ b/src/renderer/src/components/sidebar/codev-workboard-store.tsx
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,90 @@
 +import { useSyncExternalStore, type JSX } from 'react'
 +import type { Worktree } from '../../../../shared/types'
 +import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
@@ -9872,12 +8556,8 @@ index 0000000..6c73f31
 +  return snapshot
 +}
 +
-+export function useCodevWorkboard(): CodevWorkboardSnapshot | null {
-+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-+}
-+
 +export function useCodevWorkboardSlot(worktree: Pick<Worktree, 'path' | 'comment'>): CodevWorkboardSlot | null {
-+  const board = useCodevWorkboard()
++  const board = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 +  const worktreeId = getCodevProposalWorktreeId(worktree.path, worktree.comment)
 +  if (!worktreeId || !board?.slots) {
 +    return null
@@ -10178,7 +8858,7 @@ index 0000000..17fb114
 +})
 diff --git a/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
 new file mode 100644
-index 0000000..d6ecb4a
+index 0000000..d2406c6
 --- /dev/null
 +++ b/src/renderer/src/components/tab-bar/CodevPresenceSegment.tsx
 @@ -0,0 +1,82 @@
@@ -10191,7 +8871,7 @@ index 0000000..d6ecb4a
 +} from '@/web/codev-bridge'
 +
 +export type CodevPresenceMember = {
-+  user: { id: string; login: string; name: string | null; avatarUrl?: string | null }
++  user: { id: string; login: string; name: string | null }
 +  path: string | null
 +}
 +
@@ -10314,18 +8994,10 @@ index 5ecc70a..feabb92 100644
      __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
      __terminalParkingDebug?: {
 diff --git a/src/renderer/src/lib/launch-agent-in-new-tab.ts b/src/renderer/src/lib/launch-agent-in-new-tab.ts
-index d3e3718..5f7905c 100644
+index d3e3718..8baf85f 100644
 --- a/src/renderer/src/lib/launch-agent-in-new-tab.ts
 +++ b/src/renderer/src/lib/launch-agent-in-new-tab.ts
-@@ -29,6 +29,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
- import { getConnectionIdFromState } from '@/lib/connection-context'
- import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
- import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-+import { noteCodevAgentLaunch, rememberCodevAgentOwner } from '@/components/right-sidebar/codev-agent-owners'
- 
- export type LaunchAgentInNewTabArgs = {
-   agent: TuiAgent
-@@ -106,7 +107,18 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
+@@ -106,7 +106,18 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
      agentArgs !== undefined
        ? agentArgs
        : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
@@ -10345,36 +9017,6 @@ index d3e3718..5f7905c 100644
    const startupPlanBase = {
      agent,
      cmdOverrides,
-@@ -166,6 +178,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
-       viewMode: initialViewModeProps.viewMode ?? 'terminal',
-       onPromptDelivered
-     })
-+    if (typeof window !== 'undefined' && window.__CODEV_MEMBER_ID__) {
-+      noteCodevAgentLaunch(agent, window.__CODEV_MEMBER_ID__)
-+    }
-     return {
-       tabId: null,
-       startupPlan,
-@@ -178,11 +193,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
- 
-   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
-   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
-+  const codevMemberId =
-+    typeof window !== 'undefined' && window.__CODEV_MEMBER_ID__
-+      ? window.__CODEV_MEMBER_ID__
-+      : undefined
-   const tab = store.createTab(worktreeId, groupId, undefined, {
-     launchAgent: agent,
-+    ...(codevMemberId ? { codevMemberId } : {}),
-     quickCommandLabel,
-     ...initialViewModeProps
-   })
-+  if (codevMemberId) {
-+    rememberCodevAgentOwner(tab.id, codevMemberId)
-+  }
-   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
-   if (initialCwd?.trim()) {
-     // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
 diff --git a/src/renderer/src/lib/native-chat-initial-view-mode.test.ts b/src/renderer/src/lib/native-chat-initial-view-mode.test.ts
 index 5744c76..cdfc3a5 100644
 --- a/src/renderer/src/lib/native-chat-initial-view-mode.test.ts
@@ -10438,20 +9080,6 @@ index 1d2e17c..2263ce2 100644
      return undefined
    }
    if (!isNativeChatSupportedAgent(args.agent)) {
-diff --git a/src/renderer/src/runtime/web-session-tabs-sync.ts b/src/renderer/src/runtime/web-session-tabs-sync.ts
-index 0f21d8b..ea52f1b 100644
---- a/src/renderer/src/runtime/web-session-tabs-sync.ts
-+++ b/src/renderer/src/runtime/web-session-tabs-sync.ts
-@@ -663,7 +663,8 @@ function buildMirroredTerminalTabs(
-         sortOrder: sortOffset + index,
-         createdAt: existing?.createdAt ?? now + index,
-         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
--        ...(launchAgent ? { launchAgent } : {})
-+        ...(launchAgent ? { launchAgent } : {}),
-+        ...(existing?.codevMemberId ? { codevMemberId: existing.codevMemberId } : {})
-       },
-       hostTabId: parentTabId,
-       ptyIds,
 diff --git a/src/renderer/src/store/right-sidebar-route.ts b/src/renderer/src/store/right-sidebar-route.ts
 index 38bddf6..f983e99 100644
 --- a/src/renderer/src/store/right-sidebar-route.ts
@@ -10467,27 +9095,6 @@ index 38bddf6..f983e99 100644
    ) {
      return {
        rightSidebarTab: tab,
-diff --git a/src/renderer/src/store/slices/terminals.ts b/src/renderer/src/store/slices/terminals.ts
-index 7167e1c..76b1c48 100644
---- a/src/renderer/src/store/slices/terminals.ts
-+++ b/src/renderer/src/store/slices/terminals.ts
-@@ -661,6 +661,8 @@ export type TerminalSlice = {
-       id?: string
-       /** Coding-harness agent launched here, recorded so the tab bar shows the provider icon before the agent's first hook event. */
-       launchAgent?: TuiAgent
-+      /** CoDev member who launched this agent; used for the live owner photo on the Agents panel. */
-+      codevMemberId?: string
-       quickCommandLabel?: string | null
-       /** Initial native-chat view mode; agent launches pass 'chat' when openAgentTabsInChatByDefault is on, else omitted for the 'terminal' default. */
-       viewMode?: Tab['viewMode']
-@@ -1388,6 +1390,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice>
-         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
-         ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
-         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
-+        ...(options?.codevMemberId ? { codevMemberId: options.codevMemberId } : {}),
-         // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
-         ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
-       }
 diff --git a/src/renderer/src/store/slices/ui.ts b/src/renderer/src/store/slices/ui.ts
 index b738f18..af3054d 100644
 --- a/src/renderer/src/store/slices/ui.ts
@@ -11192,16 +9799,16 @@ index 0000000..7e003a6
 +}
 diff --git a/src/renderer/src/web/codev-chat-provider-switch.test.ts b/src/renderer/src/web/codev-chat-provider-switch.test.ts
 new file mode 100644
-index 0000000..a97173f
+index 0000000..021b984
 --- /dev/null
 +++ b/src/renderer/src/web/codev-chat-provider-switch.test.ts
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,81 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
 +const closeTab = vi.fn()
 +let storeState: {
-+  tabsByWorktree: Record<string, Array<{ id: string; launchAgent?: string }>>
++  tabsByWorktree: Record<string, Array<{ id: string }>>
 +  closeTab: typeof closeTab
 +}
 +
@@ -11224,7 +9831,6 @@ index 0000000..a97173f
 +    tabsByWorktree: { 'wt-1': [{ id: 'chat-old' }, { id: 'sibling' }] },
 +    closeTab
 +  }
-+  launchAgentInNewTab.mockReturnValue({ tabId: null })
 +})
 +
 +afterEach(() => {
@@ -11248,8 +9854,8 @@ index 0000000..a97173f
 +})
 +
 +describe('switchCodevChatProvider', () => {
-+  it('launches the new provider in the tab’s worktree and retires the old tab after verification', async () => {
-+    const switched = switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++  it('launches the new provider in the tab’s worktree and retires the old tab', () => {
++    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
 +
 +    expect(launchAgentInNewTab).toHaveBeenCalledWith({
 +      agent: 'codex',
@@ -11259,37 +9865,31 @@ index 0000000..a97173f
 +    })
 +    expect(closeTab).not.toHaveBeenCalled()
 +
-+    storeState.tabsByWorktree['wt-1']?.push({ id: 'chat-new', launchAgent: 'codex' })
-+    await vi.runAllTimersAsync()
-+    await switched
++    vi.runAllTimers()
 +    expect(closeTab).toHaveBeenCalledWith('chat-old', { reason: 'user' })
 +  })
 +
-+  it('keeps the previous tab when the replacement never mirrors', async () => {
++  it('keeps the previous tab when it is the worktree’s only one (replacement not mirrored yet)', () => {
 +    storeState.tabsByWorktree = { 'wt-1': [{ id: 'chat-old' }] }
 +
-+    const switched = switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
-+    const rejection = expect(switched).rejects.toThrow('did not open')
-+    await vi.runAllTimersAsync()
-+    await rejection
++    switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
++    vi.runAllTimers()
 +
 +    expect(launchAgentInNewTab).toHaveBeenCalledTimes(1)
 +    expect(closeTab).not.toHaveBeenCalled()
 +  })
 +
-+  it('reports when the tab cannot be located', async () => {
-+    await expect(
-+      switchCodevChatProvider({ terminalTabId: 'missing', nextAgent: 'codex' })
-+    ).rejects.toThrow('not attached')
++  it('does nothing when the tab cannot be located', () => {
++    switchCodevChatProvider({ terminalTabId: 'missing', nextAgent: 'codex' })
 +    expect(launchAgentInNewTab).not.toHaveBeenCalled()
 +  })
 +})
 diff --git a/src/renderer/src/web/codev-chat-provider-switch.ts b/src/renderer/src/web/codev-chat-provider-switch.ts
 new file mode 100644
-index 0000000..204f81f
+index 0000000..ff1e3a8
 --- /dev/null
 +++ b/src/renderer/src/web/codev-chat-provider-switch.ts
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,76 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { useAppStore } from '@/store'
 +import type { AgentType } from '../../../shared/agent-status-types'
@@ -11321,12 +9921,13 @@ index 0000000..204f81f
 +}
 +
 +/** The provider the tab is not on, for a one-tap toggle affordance. */
-+export function otherCodevChatProvider(agent: CodevDefaultChatAgent): CodevDefaultChatAgent {
++export function otherCodevChatProvider(
++  agent: CodevDefaultChatAgent
++): CodevDefaultChatAgent {
 +  return agent === 'claude' ? 'codex' : 'claude'
 +}
 +
-+const PROVIDER_SWITCH_TIMEOUT_MS = 12_000
-+const PROVIDER_SWITCH_POLL_MS = 150
++const RETIRE_PREVIOUS_TAB_DELAY_MS = 2_000
 +
 +/**
 + * Switch a native chat tab's provider.
@@ -11339,50 +9940,31 @@ index 0000000..204f81f
 + * without a tab while that mirror is in flight. If the check still cannot
 + * confirm a replacement, the previous tab is left for the member to close.
 + */
-+export async function switchCodevChatProvider(args: {
++export function switchCodevChatProvider(args: {
 +  terminalTabId: string
 +  nextAgent: CodevDefaultChatAgent
-+}): Promise<void> {
++}): void {
 +  const { terminalTabId, nextAgent } = args
 +  const worktreeId = worktreeIdForTerminalTab(terminalTabId)
 +  if (!worktreeId) {
-+    throw new Error('This chat is not attached to a workspace.')
++    return
 +  }
-+  const existingTabIds = new Set(
-+    (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-+  )
 +
-+  const launch = launchAgentInNewTab({
++  launchAgentInNewTab({
 +    agent: nextAgent,
 +    worktreeId,
 +    promptDelivery: 'draft',
 +    launchSource: 'new_workspace_composer'
 +  })
-+  if (!launch) {
-+    throw new Error(`Could not start ${nextAgent}. Check that the provider is connected.`)
-+  }
 +
-+  const deadline = Date.now() + PROVIDER_SWITCH_TIMEOUT_MS
-+  while (Date.now() < deadline) {
++  setTimeout(() => {
 +    const state = useAppStore.getState()
 +    const tabs = state.tabsByWorktree[worktreeId] ?? []
-+    const replacement = tabs.find(
-+      (tab) =>
-+        tab.id !== terminalTabId && !existingTabIds.has(tab.id) && tab.launchAgent === nextAgent
-+    )
-+    if (!replacement) {
-+      await new Promise((resolve) => setTimeout(resolve, PROVIDER_SWITCH_POLL_MS))
-+      continue
-+    }
 +    const previousStillOpen = tabs.some((tab) => tab.id === terminalTabId)
 +    if (previousStillOpen && tabs.length > 1) {
 +      state.closeTab(terminalTabId, { reason: 'user' })
 +    }
-+    return
-+  }
-+  throw new Error(
-+    `${nextAgent === 'claude' ? 'Claude' : 'Codex'} did not open. The current chat was kept.`
-+  )
++  }, RETIRE_PREVIOUS_TAB_DELAY_MS)
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
@@ -12746,7 +11328,7 @@ index eae3a54..f3f06e4 100644
    // Why: current runtime links carry scope metadata. Runtime-scope offers keep
    // the instant save path; mobile/legacy-unknown offers must be shown/probed.
 diff --git a/src/renderer/src/web/web-preload-api.ts b/src/renderer/src/web/web-preload-api.ts
-index 0067f12..dae3be7 100644
+index 0067f12..f08a2e7 100644
 --- a/src/renderer/src/web/web-preload-api.ts
 +++ b/src/renderer/src/web/web-preload-api.ts
 @@ -50,6 +50,7 @@ import {
@@ -12757,148 +11339,7 @@ index 0067f12..dae3be7 100644
  import {
    createDefaultLocalOrcaProfile,
    DEFAULT_LOCAL_ORCA_PROFILE_ID
-@@ -168,6 +169,11 @@ export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
- export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
- export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
- const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
-+const WEB_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024
-+const stagedBrowserAttachments = new Map<
-+  string,
-+  { name: string; type: string; contentBase64: string }
-+>()
- 
- let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
- let activeClient: WebRuntimeClient | null = null
-@@ -190,6 +196,53 @@ function blobToBase64(blob: Blob): Promise<string> {
-   })
- }
- 
-+function pickWebAttachment(): Promise<string | null> {
-+  return new Promise((resolve, reject) => {
-+    const input = document.createElement('input')
-+    input.type = 'file'
-+    input.multiple = false
-+    input.hidden = true
-+    input.addEventListener(
-+      'change',
-+      () => {
-+        const file = input.files?.[0]
-+        input.remove()
-+        if (!file) {
-+          resolve(null)
-+          return
-+        }
-+        if (file.size > WEB_ATTACHMENT_MAX_BYTES) {
-+          reject(new Error('Attachments must be 20 MB or smaller.'))
-+          return
-+        }
-+        void blobToBase64(file)
-+          .then((contentBase64) => {
-+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'attachment'
-+            const stagedPath = `/__codev_browser_upload__/${crypto.randomUUID()}/${safeName}`
-+            stagedBrowserAttachments.set(stagedPath, {
-+              name: safeName,
-+              type: file.type,
-+              contentBase64
-+            })
-+            resolve(stagedPath)
-+          })
-+          .catch(reject)
-+      },
-+      { once: true }
-+    )
-+    input.addEventListener(
-+      'cancel',
-+      () => {
-+        input.remove()
-+        resolve(null)
-+      },
-+      { once: true }
-+    )
-+    document.body.appendChild(input)
-+    input.click()
-+  })
-+}
-+
- function assertClipboardImageBlobWithinLimit(blob: Blob): void {
-   assertClipboardImageByteLengthWithinLimit(blob.size)
- }
-@@ -1933,8 +1986,63 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
-       })
-     },
-     importExternalPaths: async () => ({ results: [] }),
--    stageExternalPathsForRuntimeUpload: async () => ({ sources: [] }),
--    resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
-+    stageExternalPathsForRuntimeUpload: async ({ sourcePaths }) => ({
-+      sources: sourcePaths.map((sourcePath) => {
-+        const staged = stagedBrowserAttachments.get(sourcePath)
-+        return staged
-+          ? {
-+              sourcePath,
-+              status: 'staged' as const,
-+              name: staged.name,
-+              kind: 'file' as const,
-+              entries: [
-+                { relativePath: '', kind: 'file' as const, contentBase64: staged.contentBase64 }
-+              ]
-+            }
-+          : { sourcePath, status: 'skipped' as const, reason: 'missing' as const }
-+      })
-+    }),
-+    resolveDroppedPathsForAgent: async ({ paths, worktreePath }) => {
-+      const file = await resolveRuntimeFilePath(worktreePath)
-+      const worktree = toRuntimeWorktreeSelector(file.worktree.id)
-+      await callRuntimeResult('files.createDir', {
-+        worktree,
-+        relativePath: '.orca'
-+      }).catch(() => {})
-+      await callRuntimeResult('files.createDir', {
-+        worktree,
-+        relativePath: '.orca/drops'
-+      }).catch(() => {})
-+      const resolvedPaths: string[] = []
-+      const skipped: Array<{
-+        sourcePath: string
-+        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-+      }> = []
-+      const failed: Array<{ sourcePath: string; reason: string }> = []
-+      for (const path of paths) {
-+        const staged = stagedBrowserAttachments.get(path)
-+        if (!staged) {
-+          skipped.push({ sourcePath: path, reason: 'missing' })
-+          continue
-+        }
-+        const relativePath = `.orca/drops/${crypto.randomUUID()}-${staged.name}`
-+        try {
-+          await callRuntimeResult(
-+            'files.writeBase64',
-+            { worktree, relativePath, contentBase64: staged.contentBase64 },
-+            30_000
-+          )
-+          resolvedPaths.push(`${worktreePath}/${relativePath}`)
-+          stagedBrowserAttachments.delete(path)
-+        } catch (error) {
-+          failed.push({
-+            sourcePath: path,
-+            reason: error instanceof Error ? error.message : String(error)
-+          })
-+        }
-+      }
-+      return { resolvedPaths, skipped, failed }
-+    },
-     watchWorktree: () => Promise.resolve(),
-     unwatchWorktree: () => Promise.resolve(),
-     onFsChanged: () => noopUnsubscribe
-@@ -3136,7 +3244,7 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
-         return false
-       }
-     },
--    pickAttachment: () => Promise.resolve(null),
-+    pickAttachment: pickWebAttachment,
-     pickImage: () => Promise.resolve(null),
-     pickRepoIconImage: () => Promise.resolve(null),
-     pickAudio: () => Promise.resolve(null),
-@@ -3667,7 +3775,7 @@ function getStoredSettings(): GlobalSettings {
+@@ -3667,7 +3668,7 @@ function getStoredSettings(): GlobalSettings {
        // Keep readJson's invalid-JSON fallback non-destructive.
      }
    }
@@ -12907,7 +11348,7 @@ index 0067f12..dae3be7 100644
      {
        ...defaults,
        floatingTerminalEnabled: false,
-@@ -3676,6 +3784,18 @@ function getStoredSettings(): GlobalSettings {
+@@ -3676,6 +3677,18 @@ function getStoredSettings(): GlobalSettings {
      },
      migratedStored
    )
@@ -12988,19 +11429,10 @@ index 0464fd1..693c796 100644
 +  unknownModelOptions: [codexEffort('xhigh')]
  }
 diff --git a/src/shared/types.ts b/src/shared/types.ts
-index cfa041d..ca73f68 100644
+index cfa041d..2d00765 100644
 --- a/src/shared/types.ts
 +++ b/src/shared/types.ts
-@@ -910,6 +910,8 @@ export type TerminalTab = {
-    *  hook status overrides this once the agent does anything. Plain terminals
-    *  and manually-started agents omit it. */
-   launchAgent?: TuiAgent
-+  /** CoDev member who launched this agent; the Agents panel uses it for their live photo. */
-+  codevMemberId?: string
-   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
-    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
-    *  not by the user doing work. Without this flag the resulting
-@@ -3344,6 +3346,9 @@ export type RightSidebarTab =
+@@ -3344,6 +3344,9 @@ export type RightSidebarTab =
    | 'source-control'
    | 'checks'
    | 'ports'
