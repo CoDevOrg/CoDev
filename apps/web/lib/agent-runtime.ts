@@ -53,6 +53,7 @@ import {
   publishAgentWorktreeToGitHub,
   syncAgentWorktreeWithGitHub,
 } from "./agent-github";
+import { lockAgentSession } from "./agent-session-lock";
 import { appendWorkspaceStateEvent } from "./workspace-state";
 import {
   findChannelBySlug,
@@ -520,27 +521,35 @@ async function addEvent(
 export async function claimNextAgentTurn(sessionId: string) {
   "use step";
 
-  let [turn] = await getDatabase()
-    .select({ id: schema.agentTurns.id })
-    .from(schema.agentTurns)
-    .where(
-      and(
-        eq(schema.agentTurns.sessionId, sessionId),
-        eq(schema.agentTurns.status, "queued"),
-      ),
-    )
-    .orderBy(asc(schema.agentTurns.createdAt))
-    .limit(1);
+  const result = await getDatabase().transaction(async (transaction) => {
+    await lockAgentSession(transaction, sessionId);
+    const [session] = await transaction
+      .select({
+        status: schema.agentSessions.status,
+        workspaceId: schema.agentSessions.workspaceId,
+      })
+      .from(schema.agentSessions)
+      .where(eq(schema.agentSessions.id, sessionId))
+      .limit(1);
+    if (!session || session.status !== "running") {
+      return { turnId: null, idleWorkspaceId: null };
+    }
 
-  if (!turn) {
-    await getDatabase()
-      .update(schema.agentSessions)
-      .set({ status: "idle", workflowRunId: null, updatedAt: new Date() })
-      .where(eq(schema.agentSessions.id, sessionId));
-    // Close the handoff race with a follow-up inserted while the session was
-    // still marked running. A concurrent kicker may also see idle; the
-    // queued→running conditional update below ensures only one workflow wins.
-    [turn] = await getDatabase()
+    const [alreadyRunning] = await transaction
+      .select({ id: schema.agentTurns.id })
+      .from(schema.agentTurns)
+      .where(
+        and(
+          eq(schema.agentTurns.sessionId, sessionId),
+          eq(schema.agentTurns.status, "running"),
+        ),
+      )
+      .limit(1);
+    if (alreadyRunning) {
+      return { turnId: null, idleWorkspaceId: null };
+    }
+
+    const [turn] = await transaction
       .select({ id: schema.agentTurns.id })
       .from(schema.agentTurns)
       .where(
@@ -549,36 +558,39 @@ export async function claimNextAgentTurn(sessionId: string) {
           eq(schema.agentTurns.status, "queued"),
         ),
       )
-      .orderBy(asc(schema.agentTurns.createdAt))
+      .orderBy(asc(schema.agentTurns.createdAt), asc(schema.agentTurns.id))
       .limit(1);
     if (!turn) {
-      const [session] = await getDatabase()
-        .select({ workspaceId: schema.agentSessions.workspaceId })
-        .from(schema.agentSessions)
-        .where(eq(schema.agentSessions.id, sessionId))
-        .limit(1);
-      if (session) {
-        await notifyWorkspaceMembers(session.workspaceId, sessionId, "idle");
-      }
-      return null;
+      await transaction
+        .update(schema.agentSessions)
+        .set({ status: "idle", workflowRunId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.agentSessions.id, sessionId),
+            eq(schema.agentSessions.status, "running"),
+          ),
+        );
+      return { turnId: null, idleWorkspaceId: session.workspaceId };
     }
-    await getDatabase()
-      .update(schema.agentSessions)
-      .set({ status: "running", updatedAt: new Date() })
-      .where(eq(schema.agentSessions.id, sessionId));
-  }
 
-  const [claimed] = await getDatabase()
-    .update(schema.agentTurns)
-    .set({ status: "running", startedAt: new Date(), updatedAt: new Date() })
-    .where(
-      and(
-        eq(schema.agentTurns.id, turn.id),
-        eq(schema.agentTurns.status, "queued"),
-      ),
-    )
-    .returning({ id: schema.agentTurns.id });
-  return claimed?.id ?? null;
+    const now = new Date();
+    const [claimed] = await transaction
+      .update(schema.agentTurns)
+      .set({ status: "running", startedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(schema.agentTurns.id, turn.id),
+          eq(schema.agentTurns.status, "queued"),
+        ),
+      )
+      .returning({ id: schema.agentTurns.id });
+    return { turnId: claimed?.id ?? null, idleWorkspaceId: null };
+  });
+
+  if (result.idleWorkspaceId) {
+    await notifyWorkspaceMembers(result.idleWorkspaceId, sessionId, "idle");
+  }
+  return result.turnId;
 }
 
 async function loadAgentContext(turnId: string): Promise<AgentContext> {
@@ -1368,12 +1380,15 @@ export async function failCurrentTurnKeepSession(
   await getDatabase()
     .update(schema.agentSessions)
     .set({
-      status: "idle",
       lastError: clipped,
-      workflowRunId: null,
       updatedAt: now,
     })
-    .where(eq(schema.agentSessions.id, sessionId));
+    .where(
+      and(
+        eq(schema.agentSessions.id, sessionId),
+        eq(schema.agentSessions.status, "running"),
+      ),
+    );
 }
 
 export async function failAgentSession(sessionId: string, message: string) {

@@ -7,6 +7,8 @@ import { schema } from "@codev/db";
 
 import { getWorkspaceAccess } from "./access";
 import { listAgentSessions } from "./agent-runtime";
+import { kickAgentSession } from "./agent-service";
+import { lockAgentSession } from "./agent-session-lock";
 import { getDatabase } from "./database";
 import {
   PROVIDER_BOUNDARY_EVENT_TYPE,
@@ -285,18 +287,27 @@ export async function enqueueSharedSessionInstruction(
   const session = await requireSession(workspaceId, sessionId);
   requireProviderCapability(session.provider, "queue");
   await requireLiveProviderConnection(workspaceId, user.id, session.provider);
-  await assertTurnQuota(user.id, sessionId);
-
   const now = new Date();
-  const [turn] = await getDatabase()
-    .insert(schema.agentTurns)
-    .values({
-      sessionId,
-      authorId: user.id,
-      prompt: trimmed,
-      status: "queued",
-    })
-    .returning({ id: schema.agentTurns.id });
+  const turn = await getDatabase().transaction(async (transaction) => {
+    await lockAgentSession(transaction, sessionId);
+    await assertTurnQuota(user.id, sessionId);
+    const [inserted] = await transaction
+      .insert(schema.agentTurns)
+      .values({
+        sessionId,
+        authorId: user.id,
+        prompt: trimmed,
+        status: "queued",
+      })
+      .returning({ id: schema.agentTurns.id });
+    if (inserted) {
+      await transaction
+        .update(schema.agentSessions)
+        .set({ updatedAt: now })
+        .where(eq(schema.agentSessions.id, sessionId));
+    }
+    return inserted;
+  });
   if (!turn) {
     throw new SharedSessionError("Could not queue this instruction.", 500);
   }
@@ -311,10 +322,7 @@ export async function enqueueSharedSessionInstruction(
       prompt: trimmed,
     },
   });
-  await getDatabase()
-    .update(schema.agentSessions)
-    .set({ updatedAt: now })
-    .where(eq(schema.agentSessions.id, sessionId));
+  await kickAgentSession(sessionId);
   return loadSharedSessionSnapshot(workspaceId, user);
 }
 
