@@ -2175,6 +2175,117 @@ index df96ea2..721f48b 100644
    }
  
    const liveFlipOnly = ctx.mode === 'live' && isFlipOnlyMidSession(apply.midSession)
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts b/src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts
+index 3d3a320..b92f217 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts
+@@ -620,7 +620,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
+     expect(latest?.messages.map((m) => m.id)).toContain('a-1')
+   })
+ 
+-  it('surfaces an error once the ~60s retry window is exhausted', async () => {
++  it('treats a still-missing transcript as an empty conversation once the ~60s window is exhausted, never an error', async () => {
+     vi.useFakeTimers()
+     const transport = getMockTransport('env-1', { autoSnapshot: false })
+     transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
+@@ -632,8 +632,34 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
+       await vi.advanceTimersByTimeAsync(70_000)
+     })
+ 
+-    expect(latest?.status).toBe('error')
+-    expect(latest?.error).toBe('No transcript found')
++    // A brand-new session whose transcript has not flushed is empty, not broken:
++    // the pane must never show "Could not load conversation" for it.
++    expect(latest?.status).not.toBe('error')
++    expect(latest?.error).toBeUndefined()
++    expect(latest?.messages).toEqual([])
++  })
++
++  it('keeps polling slowly after the window and upgrades to the transcript when it finally flushes', async () => {
++    vi.useFakeTimers()
++    const transport = getMockTransport('env-1', { autoSnapshot: false })
++    transport.readSession
++      .mockResolvedValue({ error: 'No transcript found', notFound: true })
++      .mockResolvedValueOnce({ error: 'No transcript found', notFound: true })
++
++    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
++
++    await act(async () => {
++      await vi.advanceTimersByTimeAsync(70_000)
++    })
++    expect(latest?.messages).toEqual([])
++
++    transport.readSession.mockResolvedValue({ messages: [assistant('late-1', 'here now')] })
++    await act(async () => {
++      await vi.advanceTimersByTimeAsync(11_000)
++    })
++
++    expect(latest?.status).not.toBe('error')
++    expect(latest?.messages.map((m) => m.id)).toContain('late-1')
+   })
+ 
+   it('renders live-appended content instead of loading while the read is still retrying', async () => {
+diff --git a/src/renderer/src/components/native-chat/use-native-chat-live-session.ts b/src/renderer/src/components/native-chat/use-native-chat-live-session.ts
+index 6513815..938094b 100644
+--- a/src/renderer/src/components/native-chat/use-native-chat-live-session.ts
++++ b/src/renderer/src/components/native-chat/use-native-chat-live-session.ts
+@@ -81,6 +81,11 @@ function nextSubscriptionId(): string {
+ const NOTFOUND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
+ const NOTFOUND_RETRY_FIXED_DELAY_MS = 10_000
+ const NOTFOUND_RETRY_WINDOW_MS = 60_000
++// After the fast window, a still-missing transcript for a brand-new session is
++// an empty conversation, not a failure — show the empty state but keep polling
++// slowly this much longer so a late first flush (cold CoDev VM, first-run
++// `claude`) still upgrades the pane to the real transcript.
++const NOTFOUND_SLOW_POLL_WINDOW_MS = 10 * 60_000
+ 
+ function notFoundRetryDelayMs(attempt: number): number {
+   return NOTFOUND_RETRY_DELAYS_MS[attempt] ?? NOTFOUND_RETRY_FIXED_DELAY_MS
+@@ -159,6 +164,7 @@ export function useNativeChatLiveSession(
+     // Set by the first authoritative frame so the readSession seed below can't clobber a live snapshot.
+     let frameArrived = false
+     let retryTimer: ReturnType<typeof setTimeout> | null = null
++    let notFoundSurfacedAsEmpty = false
+     const retryStartedAt = Date.now()
+     // Re-bound as a const: TS drops the `!sessionId` narrowing inside the hoisted nested function.
+     const activeSessionId = sessionId
+@@ -180,12 +186,30 @@ export function useNativeChatLiveSession(
+             return
+           }
+           if (result && 'error' in result) {
+-            // A not-yet-flushed transcript: stay in 'loading' and retry with backoff instead of a permanent error (#8401).
+-            if (result.notFound && Date.now() - retryStartedAt < NOTFOUND_RETRY_WINDOW_MS) {
+-              retryTimer = setTimeout(() => {
+-                retryTimer = null
+-                loadSession(attempt + 1)
+-              }, notFoundRetryDelayMs(attempt))
++            if (result.notFound) {
++              const elapsed = Date.now() - retryStartedAt
++              // Fast window: hold 'loading' and retry on a short backoff (#8401).
++              if (elapsed < NOTFOUND_RETRY_WINDOW_MS) {
++                retryTimer = setTimeout(() => {
++                  retryTimer = null
++                  loadSession(attempt + 1)
++                }, notFoundRetryDelayMs(attempt))
++                return
++              }
++              // After it: a missing transcript for a never-run session is an
++              // empty conversation, not a failure. Show the empty state — never
++              // "Could not load conversation" — and keep polling slowly so a
++              // late first flush still upgrades the pane.
++              if (!notFoundSurfacedAsEmpty) {
++                notFoundSurfacedAsEmpty = true
++                setRead({ phase: 'ready', messages: [] })
++              }
++              if (elapsed < NOTFOUND_SLOW_POLL_WINDOW_MS) {
++                retryTimer = setTimeout(() => {
++                  retryTimer = null
++                  loadSession(attempt + 1)
++                }, NOTFOUND_RETRY_FIXED_DELAY_MS)
++              }
+               return
+             }
+             setRead({ phase: 'error', error: result.error })
 diff --git a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts b/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
 index a24d1b8..3687b6e 100644
 --- a/src/renderer/src/components/native-chat/use-native-chat-session-options.test.ts
