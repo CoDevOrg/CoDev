@@ -244,3 +244,87 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 [class*="AgentTerminal"] * {
   /* Intentionally left alone — do not force CoDev surfaces here. */
 }
+
+/* ---------------------------------------------------------------------------
+ * Native chat — Claude-desktop reading feel
+ *
+ * Keyed to `data-codev-chat-*` attributes authored in the CoDev patch rather
+ * than to compiled Tailwind class names, so an Orca version bump cannot
+ * silently detune this the way the selectors above can.
+ *
+ * The goal is reading comfort: one narrow column, generous leading, quiet
+ * chrome, and a user turn that sits in the conversation instead of shouting
+ * from the edge.
+ * ------------------------------------------------------------------------ */
+
+[data-native-chat-root] [data-codev-chat-column] {
+  /* A measure, not a container: ~72 characters is the comfortable line length
+     the desktop app reads at. max-w-4xl is far wider than that on a big
+     monitor and makes long answers tiring. */
+  max-width: 46rem;
+  gap: 1.75rem;
+}
+
+[data-native-chat-root] [data-codev-chat-row="assistant"] {
+  font-size: 0.945rem;
+  line-height: 1.72;
+  letter-spacing: 0.001em;
+}
+
+/* Headings inside an answer need to separate from the prose above them; the
+   default markdown rhythm runs everything together at this line-height. */
+[data-native-chat-root] [data-codev-chat-row="assistant"] :is(h1, h2, h3, h4) {
+  margin-top: 1.5em;
+  margin-bottom: 0.55em;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+[data-native-chat-root] [data-codev-chat-row="assistant"] :is(p, ul, ol) {
+  margin-block: 0.7em;
+}
+
+[data-native-chat-root] [data-codev-chat-row="assistant"] :is(ul, ol) {
+  padding-inline-start: 1.35em;
+}
+
+[data-native-chat-root] [data-codev-chat-row="assistant"] li {
+  margin-block: 0.3em;
+}
+
+/* Inline code as a quiet chip rather than a coloured token. */
+[data-native-chat-root] [data-codev-chat-row="assistant"] :not(pre) > code {
+  padding: 0.12em 0.36em;
+  border-radius: 4px;
+  background: rgba(242, 237, 224, 0.09);
+  font-size: 0.88em;
+}
+
+[data-native-chat-root] [data-codev-chat-row="assistant"] pre {
+  border-radius: 10px;
+  border: 1px solid rgba(242, 237, 224, 0.09);
+}
+
+/* The user's own turn: present, but not a saturated pill hard against the
+   right edge. Softer fill, roomier padding, wider measure. */
+[data-native-chat-root] [data-codev-chat-bubble="user"] {
+  max-width: 90%;
+  padding: 0.7rem 0.95rem;
+  border-radius: 12px;
+  background: rgba(242, 237, 224, 0.07);
+  border: 1px solid rgba(242, 237, 224, 0.07);
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+/* Thinking is an aside: keep it legible but clearly secondary, and drop the
+   italic run-on that makes longer reasoning hard to scan. */
+[data-native-chat-root] [data-codev-chat-row="reasoning"] {
+  font-style: normal;
+  font-size: 0.895rem;
+  line-height: 1.66;
+  border-left-width: 2px;
+  border-left-color: rgba(217, 101, 45, 0.34);
+  padding-left: 0.9rem;
+  opacity: 0.82;
+}

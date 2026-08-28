@@ -1,0 +1,1 @@
+import{tv as e}from"./web-index-Bk33yLGJ.js";function t(t){let n,r;return()=>((n!==e.language||r===void 0)&&(n=e.language,r=t()),r)}export{t};
