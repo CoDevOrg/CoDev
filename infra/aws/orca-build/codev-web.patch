@@ -2830,10 +2830,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..5031abb
+index 0000000..8d47057
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,163 @@
 +import { useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
 +import { useAppStore } from '@/store'
@@ -2924,7 +2924,12 @@ index 0000000..5031abb
 +
 +      <div className="codev-agent-foot">
 +        <span className="codev-agent-elapsed">
-+          {STATE_LABEL[agent.state].toLowerCase()} for {elapsed(agent.stateStartedAt, now)}
++          {/* A freshly rehydrated row restarts its clock, and "done for 0s"
++              reads like a bug. Show the bare state until it has run long
++              enough for the number to mean something. */}
++          {now - agent.stateStartedAt < 2_000
++            ? STATE_LABEL[agent.state]
++            : `${STATE_LABEL[agent.state].toLowerCase()} for ${elapsed(agent.stateStartedAt, now)}`}
 +        </span>
 +      </div>
 +    </li>
@@ -2942,7 +2947,9 @@ index 0000000..5031abb
 +  const agents = useMemo<LiveAgent[]>(() => {
 +    return Object.entries(statuses ?? {})
 +      .map(([paneKey, entry]) => ({ ...entry, paneKey }))
-+      .filter((entry) => isLiveState(entry.state))
++      // A status row with no agent identity is a plain terminal pane or a
++      // half-torn-down entry, not an agent; listing it as "Agent" is noise.
++      .filter((entry) => isLiveState(entry.state) && Boolean(entry.agentType))
 +      .sort((a, b) => b.updatedAt - a.updatedAt)
 +  }, [statuses])
 +
@@ -9218,10 +9225,10 @@ index 0000000..ff1e3a8
 +}
 diff --git a/src/renderer/src/web/codev-default-chat-tab.test.ts b/src/renderer/src/web/codev-default-chat-tab.test.ts
 new file mode 100644
-index 0000000..3e6ddb9
+index 0000000..7efd832
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.test.ts
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,224 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 +
 +const launchAgentInNewTab = vi.fn()
@@ -9369,6 +9376,27 @@ index 0000000..3e6ddb9
 +    expect(closeTab).not.toHaveBeenCalled()
 +  })
 +
++  it('still sweeps a shell the host re-created next to an existing agent', () => {
++    // A reload takes the already-has-an-agent path; skipping the sweep there
++    // is how a second idle terminal came back on every reload.
++    setWindow({ __CODEV_EMBEDDED__: true })
++    const closeTab = vi.fn()
++    getState.mockReturnValue({
++      tabsByWorktree: {
++        'wt-1': [{ id: 'chat', launchAgent: 'claude' }, { id: 'shell' }]
++      },
++      unifiedTabsByWorktree: {},
++      closeTab,
++      setTabViewMode: vi.fn()
++    })
++
++    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
++    vi.advanceTimersByTime(5_000)
++
++    expect(launchAgentInNewTab).not.toHaveBeenCalled()
++    expect(closeTab).toHaveBeenCalledWith('shell', { reason: 'cleanup' })
++  })
++
 +  it('does not launch a second agent when the worktree already has one', () => {
 +    setWindow({ __CODEV_EMBEDDED__: true })
 +    getState.mockReturnValue({
@@ -9427,10 +9455,10 @@ index 0000000..3e6ddb9
 +})
 diff --git a/src/renderer/src/web/codev-default-chat-tab.ts b/src/renderer/src/web/codev-default-chat-tab.ts
 new file mode 100644
-index 0000000..e8ced2e
+index 0000000..cb9b6ea
 --- /dev/null
 +++ b/src/renderer/src/web/codev-default-chat-tab.ts
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,151 @@
 +import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 +import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 +import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
@@ -9560,8 +9588,12 @@ index 0000000..e8ced2e
 +  const agent = codevDefaultChatAgent()
 +  if (!agent) return
 +  if (worktreeHasAgentTab(worktreeId)) {
-+    // Already has an agent; just make sure it is not showing as a raw TUI.
++    // Already has an agent. Still make sure it is not showing as a raw TUI,
++    // and still retire any shell the host re-created alongside it — a reload
++    // takes this path, and skipping the sweep is how a second idle terminal
++    // came back every time.
 +    ensureAgentTabsRenderAsChat(worktreeId)
++    retireStockTerminalTabs(worktreeId)
 +    return
 +  }
 +  launchAgentInNewTab({

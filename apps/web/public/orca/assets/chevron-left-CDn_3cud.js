@@ -1,1 +1,0 @@
-import{Av as e}from"./web-index-BVxTx8bm.js";var t=e(`chevron-left`,[[`path`,{d:`m15 18-6-6 6-6`,key:`1wnfg3`}]]);export{t};

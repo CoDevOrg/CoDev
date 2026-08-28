@@ -1,1 +1,0 @@
-import{Xp as e}from"./web-index-BVxTx8bm.js";function t(t,n=2048){return e(t,n)}function n(e){return t(e)?null:e}export{t as n,n as t};
