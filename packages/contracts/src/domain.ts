@@ -376,6 +376,53 @@ export const designPartnerFeedbackInputSchema = z.object({
   workspaceId: identifierSchema.nullable(),
 });
 
+/**
+ * Private-beta access requests. The landing page is public, so this schema is
+ * the only thing standing between an anonymous form post and the database:
+ * every field is bounded, and blank optional inputs collapse to `undefined`
+ * rather than empty strings.
+ */
+export const accessRequestPersonaSchema = z.enum([
+  "friends",
+  "startup",
+  "class",
+  "open_source",
+  "solo",
+]);
+
+const optionalTrimmedText = (max: number) =>
+  z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().max(max).optional(),
+  );
+
+export const githubLoginSchema = z
+  .string()
+  .trim()
+  .max(39)
+  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/, {
+    message: "Use a valid GitHub username.",
+  });
+
+export const accessRequestInputSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().toLowerCase().pipe(z.email().max(320)),
+  githubLogin: z.preprocess(
+    (value) =>
+      typeof value === "string"
+        ? value.trim().replace(/^@/, "") || undefined
+        : value,
+    githubLoginSchema.optional(),
+  ),
+  persona: accessRequestPersonaSchema.optional(),
+  building: optionalTrimmedText(500),
+  referrer: optionalTrimmedText(200),
+});
+
+export type AccessRequestInput = z.infer<typeof accessRequestInputSchema>;
+export type AccessRequestPersona = z.infer<typeof accessRequestPersonaSchema>;
+
 export const environmentVariableNameSchema = z
   .string()
   .trim()

@@ -656,8 +656,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-ambient-orb-a,
-  .landing-ambient-orb-b,
   .home-welcome-hero::after {
     animation: none;
   }

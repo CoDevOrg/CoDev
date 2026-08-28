@@ -2941,10 +2941,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..c049c4e
+index 0000000..e436c46
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,276 @@
 +import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
 +import { toast } from 'sonner'
@@ -3054,6 +3054,25 @@ index 0000000..c049c4e
 +      .map(([paneKey, entry]) => {
 +        const label = providerLabel(String(entry.agentType ?? ''))
 +        const phase = missionControlPhaseFromState(entry.state)
++        // The prompt is often blank for a native-chat turn, so fall back to the
++        // agent tab's own title (Orca derives it from the first prompt) before
++        // the generic label.
++        const title = entry.prompt?.trim() || entry.terminalTitle?.trim() || `${label} session`
++        // What it is doing *right now*: a live question, then the current tool
++        // call, then its last message, then the prompt, then a state default.
++        const toolLine = entry.toolName
++          ? `${entry.toolName}${entry.toolInput ? ` · ${entry.toolInput}` : ''}`
++          : null
++        const activity =
++          entry.interactivePrompt?.trim() ||
++          (phase === 'working' ? toolLine : null) ||
++          entry.lastAssistantMessage?.trim() ||
++          entry.prompt?.trim() ||
++          (phase === 'done'
++            ? 'Idle — send a message to continue.'
++            : phase === 'blocked'
++              ? 'Waiting on your input.'
++              : 'Waiting for the next instruction.')
 +        return {
 +          key: `local:${paneKey}`,
 +          origin: 'you' as const,
@@ -3064,8 +3083,8 @@ index 0000000..c049c4e
 +          providerLabel: label,
 +          model: entry.model ?? null,
 +          phase,
-+          title: entry.prompt || `${label} session`,
-+          activity: entry.prompt || 'Waiting for the next instruction.',
++          title,
++          activity,
 +          startedAt: entry.stateStartedAt,
 +          serverElapsed: null,
 +          canSteer: false

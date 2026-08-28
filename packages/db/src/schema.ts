@@ -152,6 +152,44 @@ export const channelMessageAuthorKind = pgEnum("channel_message_author_kind", [
   "agent",
   "system",
 ]);
+export const accessRequestStatus = pgEnum("access_request_status", [
+  "pending",
+  "invited",
+  "declined",
+]);
+
+/**
+ * The private-beta waitlist behind the landing page's "Request access" form.
+ * It intentionally has no `users` foreign key: the whole point is that these
+ * people do not have an account yet. `ipHash` is a salted digest — never the
+ * raw address — and exists only so the public endpoint can throttle bursts
+ * without depending on the Redis limiter being provisioned.
+ */
+export const accessRequests = pgTable(
+  "access_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    githubLogin: text("github_login"),
+    persona: text("persona"),
+    building: text("building"),
+    referrer: text("referrer"),
+    ipHash: text("ip_hash"),
+    status: accessRequestStatus("status").default("pending").notNull(),
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("access_requests_email_idx").on(table.email),
+    index("access_requests_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    index("access_requests_ip_created_idx").on(table.ipHash, table.createdAt),
+  ],
+);
+
 export const users = pgTable(
   "users",
   {

@@ -8,6 +8,7 @@ const appTheme = readFileSync(
   "utf8",
 );
 const globals = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const landing = readFileSync(resolve(process.cwd(), "app/landing.css"), "utf8");
 
 describe("CoDev product theme", () => {
   it("sets one dark palette for every AppChrome product page", () => {
@@ -50,17 +51,24 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain("color: var(--codev-orange-400);");
   });
 
-  it("gives the public landing page a distinct high-contrast marketing surface", () => {
-    expect(globals).toContain(".landing-page {");
-    expect(globals).toContain("--landing-paper: #f4ecde;");
-    expect(globals).toContain(".landing-product {");
-    expect(globals).toContain("width: min(1240px, calc(100% - 64px));");
-    expect(globals).toContain("padding-inline: clamp(24px, 4vw, 72px);");
+  it("keeps the public landing page in its own stylesheet", () => {
+    // The marketing surface is deliberately not part of the product theme.
+    // Every rule is scoped under `.lp-page` in app/landing.css so it can never
+    // bleed into an authenticated page.
+    expect(globals).not.toContain(".landing-page {");
+    expect(landing).toContain(".lp-page {");
+    expect(landing).toContain("--lp-bg: #061a14;");
+    for (const rule of landing.split("\n")) {
+      if (!rule.endsWith("{") || rule.startsWith(" ") || rule.startsWith("@")) {
+        continue;
+      }
+      expect(rule).toMatch(/\.lp-|^@keyframes|^:/);
+    }
   });
 
   it("carries ambient motion through each CoDev page shell", () => {
     expect(appTheme).toContain("@keyframes codev-page-ambient {");
-    expect(globals).toContain("animation: codev-page-ambient 26s");
+    expect(landing).toContain("animation: codev-page-ambient 26s");
     expect(appTheme).toContain("@media (prefers-reduced-motion: reduce) {");
   });
 
@@ -69,10 +77,13 @@ describe("CoDev product theme", () => {
     expect(appTheme).not.toContain("background-position: 48% 22%");
     expect(appTheme).not.toContain("background-size: 135% 135%");
     expect(appTheme).not.toContain("mix-blend-mode: screen");
-    expect(globals).toContain(".landing-ambient");
-    expect(globals).toContain("position: fixed");
-    expect(globals).not.toContain("feTurbulence");
-    expect(globals).not.toContain("landing-paper-lines");
-    expect(globals).not.toContain("mix-blend-mode: multiply");
+    expect(landing).toContain("position: fixed");
+    expect(landing).not.toContain("feTurbulence");
+    expect(landing).not.toContain("mix-blend-mode: multiply");
+  });
+
+  it("stops every landing animation for readers who ask for reduced motion", () => {
+    expect(landing).toContain("@media (prefers-reduced-motion: reduce) {");
+    expect(landing).toContain("animation-iteration-count: 1 !important;");
   });
 });

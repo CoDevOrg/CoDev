@@ -21,24 +21,52 @@ test("landing page explains CoDev and offers a clear start", async ({
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", {
-      name: /Build software.*together/,
-    }),
+    page.getByRole("heading", { name: /Ship it together/ }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Create a shared workspace for every feature/),
+    page.getByText(/one shared cloud workspace where you, your friends/),
   ).toBeVisible();
+
+  // The private beta funnel: request access is the primary path, signing in is
+  // reserved for people who already hold an invite.
   await expect(
-    page.getByRole("heading", {
-      name: /Local changes should not be local knowledge/,
-    }),
-  ).toBeVisible();
-  // The redesigned landing page repeats this CTA (hero + audience panel), so
-  // scope to the primary hero action rather than matching every instance.
+    page.getByRole("link", { name: /Request access/ }).first(),
+  ).toHaveAttribute("href", "#request");
   await expect(
-    page.getByRole("link", { name: /Start building together/ }).first(),
+    page.getByRole("link", { name: "I have an invite" }),
   ).toHaveAttribute("href", "/sign-in");
   expect(consoleErrors).toEqual([]);
+});
+
+test("the workspace tour switches scenes on demand", async ({ page }) => {
+  await page.goto("/");
+
+  const tour = page.getByRole("tablist", { name: "Workspace tour" });
+  await expect(tour).toBeVisible();
+  await expect(page.getByRole("heading", { name: /every agent is doing/ })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Coordination" }).click();
+  await expect(
+    page.getByRole("heading", { name: /what the other agents are touching/ }),
+  ).toBeVisible();
+  await expect(page.getByText("src/checkout/reserve.ts").first()).toBeVisible();
+
+  await page.getByRole("tab", { name: "Sharing" }).click();
+  await expect(page.getByRole("heading", { name: /Share it like a doc/ })).toBeVisible();
+  await expect(page.getByText("codev.dev/w/side-project")).toBeVisible();
+});
+
+test("the access request form rejects an incomplete submission", async ({
+  request,
+}) => {
+  const response = await request.post("/api/access-requests", {
+    data: { name: "", email: "not-an-email" },
+  });
+
+  expect(response.status()).toBe(400);
+  await expect(response.json()).resolves.toEqual({
+    error: "Add your name and a valid email address.",
+  });
 });
 
 test("health endpoint reports the web service", async ({ request }) => {
