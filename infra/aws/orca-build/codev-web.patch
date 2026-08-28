@@ -189,30 +189,32 @@ index fcaf48a..52dd600 100644
      (tab) => {
        expect(normalizeRightSidebarTab(tab)).toBe(tab)
 diff --git a/src/main/persistence.ts b/src/main/persistence.ts
-index c5b3e6d..c740715 100644
+index c5b3e6d..f00b98f 100644
 --- a/src/main/persistence.ts
 +++ b/src/main/persistence.ts
-@@ -856,7 +856,8 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
+@@ -856,7 +856,9 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
      tab === 'pr-checks' ||
      tab === 'source-control' ||
      tab === 'checks' ||
 -    tab === 'ports'
 +    tab === 'ports' ||
-+    tab === 'activity'
++    tab === 'activity' ||
++    tab === 'codev-agents'
    ) {
      return tab
    }
 diff --git a/src/main/runtime/rpc/methods/client-ui-schemas.ts b/src/main/runtime/rpc/methods/client-ui-schemas.ts
-index 0e07476..8a4a3b2 100644
+index 0e07476..169a7c7 100644
 --- a/src/main/runtime/rpc/methods/client-ui-schemas.ts
 +++ b/src/main/runtime/rpc/methods/client-ui-schemas.ts
-@@ -45,7 +45,8 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
+@@ -45,7 +45,9 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
    'pr-checks',
    'source-control',
    'checks',
 -  'ports'
 +  'ports',
-+  'activity'
++  'activity',
++  'codev-agents'
  ] as const
  // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
  // schema validates their shape rather than enumerating them.
@@ -2691,6 +2693,207 @@ index 0000000..7965918
 +    </section>
 +  )
 +}
+diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
+new file mode 100644
+index 0000000..cff6d2d
+--- /dev/null
++++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
+@@ -0,0 +1,195 @@
++import { useCallback, useEffect, useState, type JSX } from 'react'
++import { activateAndRevealWorktree } from '@/lib/worktree-activation'
++import {
++  getCodevBridgeSnapshot,
++  requestCodevBridge,
++  subscribeCodevBridge
++} from '../../web/codev-bridge'
++import type {
++  CodevWorkboardCapacity,
++  CodevWorkboardSlot,
++  CodevWorkboardSnapshot
++} from '../sidebar/CodevWorkboardView'
++
++/**
++ * Every agent running in this workspace, always on screen.
++ *
++ * CoDev's whole premise is several people steering several agents against one
++ * repository, and until now that was only legible by opening a panel and
++ * reading a status string. This is the workspace's default right-sidebar tab
++ * so the state of the room is visible while you work, without clicking
++ * anything: who started each agent, what it is doing this second, which
++ * worktree it holds, and how long it has been at it.
++ *
++ * Data comes from the same workspace-bound `workboard.list` bridge call the
++ * kanban drawer uses; nothing here talks to a provider directly.
++ */
++
++const REFRESH_MS = 3_000
++
++function initials(name: string): string {
++  const parts = name.trim().split(/\s+/).filter(Boolean)
++  if (parts.length === 0) return '··'
++  const first = parts[0]?.[0] ?? ''
++  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : ''
++  return (first + last).toUpperCase()
++}
++
++/** Stable per-person hue so one collaborator is one colour across the panel. */
++function hueFor(name: string): number {
++  let hash = 0
++  for (let i = 0; i < name.length; i += 1) {
++    hash = (hash * 31 + name.charCodeAt(i)) % 360
++  }
++  return hash
++}
++
++/** Map the backend's free-text status onto the small set the panel styles. */
++function toneFor(status: string): 'working' | 'blocked' | 'ready' | 'idle' {
++  const value = status.toLowerCase()
++  if (value.includes('block') || value.includes('conflict') || value.includes('wait')) {
++    return 'blocked'
++  }
++  if (value.includes('review') || value.includes('ready') || value.includes('done')) {
++    return 'ready'
++  }
++  if (value.includes('run') || value.includes('work') || value.includes('active')) {
++    return 'working'
++  }
++  return 'idle'
++}
++
++function AgentCard({ slot }: { slot: CodevWorkboardSlot }): JSX.Element {
++  const tone = toneFor(slot.status)
++  const hue = hueFor(slot.owner)
++
++  return (
++    <li className={`codev-agent-card is-${tone}`}>
++      <div className="codev-agent-top">
++        <span
++          className="codev-agent-avatar"
++          title={`Started by ${slot.owner}`}
++          style={{
++            background: `linear-gradient(150deg, hsl(${hue} 58% 46%), hsl(${hue} 50% 32%))`
++          }}
++        >
++          {initials(slot.owner)}
++        </span>
++        <div className="codev-agent-who">
++          <span className="codev-agent-owner">{slot.owner}</span>
++          <span className="codev-agent-worktree" title={slot.worktree}>
++            {slot.worktree}
++          </span>
++        </div>
++        <span className={`codev-agent-status is-${tone}`}>
++          <i aria-hidden />
++          {slot.status}
++        </span>
++      </div>
++
++      <p className="codev-agent-assignment">{slot.assignment}</p>
++
++      <p className="codev-agent-task">
++        <i className="codev-agent-caret" aria-hidden />
++        <span>{slot.currentTask}</span>
++      </p>
++
++      <div className="codev-agent-foot">
++        <span className="codev-agent-provider">{slot.provider}</span>
++        <span className="codev-agent-elapsed">{slot.elapsed}</span>
++        {slot.worktreeId ? (
++          <button
++            type="button"
++            className="codev-agent-open"
++            onClick={() => {
++              if (slot.worktreeId) {
++                void activateAndRevealWorktree(slot.worktreeId)
++              }
++            }}
++          >
++            Open
++          </button>
++        ) : null}
++      </div>
++    </li>
++  )
++}
++
++export function CodevLiveAgentsPanel(): JSX.Element | null {
++  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
++  const [slots, setSlots] = useState<CodevWorkboardSlot[]>([])
++  const [capacity, setCapacity] = useState<CodevWorkboardCapacity | null>(null)
++  const [connected, setConnected] = useState(
++    () => getCodevBridgeSnapshot().status === 'connected'
++  )
++  const [loaded, setLoaded] = useState(false)
++
++  useEffect(() => subscribeCodevBridge(() => {
++    setConnected(getCodevBridgeSnapshot().status === 'connected')
++  }), [])
++
++  const refresh = useCallback(async () => {
++    try {
++      const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.list')
++      setSlots(result.slots ?? [])
++      setCapacity(result.capacity ?? null)
++      setLoaded(true)
++    } catch {
++      // A dropped poll must not blank the panel: keep the last good picture and
++      // let the next tick recover.
++    }
++  }, [])
++
++  useEffect(() => {
++    if (!embedded || !connected) return
++    void refresh()
++    const timer = setInterval(() => void refresh(), REFRESH_MS)
++    return () => clearInterval(timer)
++  }, [embedded, connected, refresh])
++
++  if (!embedded) return null
++
++  const active = slots.filter((slot) => slot.occupied)
++  const free = Math.max(0, (capacity?.maxActiveSessions ?? slots.length) - active.length)
++
++  return (
++    <section className="codev-agents-panel" aria-label="Live agents in this workspace">
++      <header className="codev-agents-head">
++        <div>
++          <p className="codev-agents-kicker">
++            <i className="codev-agents-dot" aria-hidden />
++            Live in this workspace
++          </p>
++          <h3>Agents</h3>
++        </div>
++        <span className="codev-agents-count">
++          <strong>{active.length}</strong>
++          <span>/{capacity?.maxActiveSessions ?? slots.length}</span>
++        </span>
++      </header>
++
++      {!connected ? (
++        <p className="codev-agents-empty">Reconnecting to CoDev…</p>
++      ) : !loaded ? (
++        <p className="codev-agents-empty">Reading the workspace…</p>
++      ) : active.length === 0 ? (
++        <p className="codev-agents-empty">
++          No agents running yet. Start one from the chat tab and it appears here
++          for everyone in the workspace.
++        </p>
++      ) : (
++        <ul className="codev-agents-list">
++          {active.map((slot) => (
++            <AgentCard key={slot.sessionId ?? slot.slot} slot={slot} />
++          ))}
++        </ul>
++      )}
++
++      {loaded && active.length > 0 && free > 0 ? (
++        <p className="codev-agents-free">
++          {free} {free === 1 ? 'slot' : 'slots'} free
++        </p>
++      ) : null}
++    </section>
++  )
++}
 diff --git a/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx b/src/renderer/src/components/right-sidebar/CodevSharedSessionPanel.test.tsx
 new file mode 100644
 index 0000000..f673b66
@@ -3722,18 +3925,37 @@ index 1b62145..82ad1c9 100644
            {nodeStatus ? (
              <span
 diff --git a/src/renderer/src/components/right-sidebar/index.tsx b/src/renderer/src/components/right-sidebar/index.tsx
-index f9587ab..ba118e0 100644
+index f9587ab..9b3054e 100644
 --- a/src/renderer/src/components/right-sidebar/index.tsx
 +++ b/src/renderer/src/components/right-sidebar/index.tsx
 @@ -1,6 +1,6 @@
  /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
  import React, { useEffect, useMemo, useRef, useState } from 'react'
 -import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
-+import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow } from 'lucide-react'
++import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow , Radio } from 'lucide-react'
  import { useAppStore } from '@/store'
  import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
  import { useRepoById } from '@/store/selectors'
-@@ -156,6 +156,12 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -112,6 +112,18 @@ function RightSidebarInner(): React.JSX.Element {
+         title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
+         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+       },
++      // CoDev: every agent running in this workspace, always on screen. Listed
++      // first so it is the tab a member lands on.
++      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
++        ? [
++            {
++              id: 'codev-agents' as const,
++              icon: Radio,
++              title: 'Live agents',
++              shortcut: ''
++            }
++          ]
++        : []),
+       {
+         id: 'vault',
+         icon: AgentSessionHistoryIcon,
+@@ -156,6 +168,12 @@ function RightSidebarInner(): React.JSX.Element {
          shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
          sshOnly: true
        },
@@ -3746,7 +3968,7 @@ index f9587ab..ba118e0 100644
        // Why: plugin panels append after the built-in tabs so core navigation
        // keeps stable positions regardless of which plugins are installed.
        ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
-@@ -175,7 +181,8 @@ function RightSidebarInner(): React.JSX.Element {
+@@ -175,7 +193,8 @@ function RightSidebarInner(): React.JSX.Element {
        getVisibleRightSidebarActivityItems(activityItems, {
          isFolder,
          isFolderWorkspace,
@@ -3805,19 +4027,20 @@ index bcb65fa..5730757 100644
      }
      if (item.folderOnly && !isFolderWorkspace) {
 diff --git a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
-index 8da2783..41186fe 100644
+index 8da2783..f3e021d 100644
 --- a/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
 +++ b/src/renderer/src/components/right-sidebar/right-sidebar-panel-content.tsx
-@@ -2,6 +2,8 @@ import { Suspense } from 'react'
+@@ -2,6 +2,9 @@ import { Suspense } from 'react'
  import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
  import type { ActiveRightSidebarTab } from '@/store/slices/editor'
  import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 +import { CodevReviewCheckpointPanel } from '../sidebar/CodevReviewCheckpointPanel'
 +import { CodevActivityAuditPanel } from './CodevActivityAuditPanel'
++import { CodevLiveAgentsPanel } from './CodevLiveAgentsPanel'
  
  const FileExplorer = lazy(() => import('./FileExplorer'))
  const SourceControl = lazy(() => import('./SourceControl'))
-@@ -25,8 +27,22 @@ export function RightSidebarPanelContent({
+@@ -25,8 +28,22 @@ export function RightSidebarPanelContent({
      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
        <Suspense fallback={null}>
          {effectiveTab === 'explorer' && <FileExplorer />}
@@ -3842,11 +4065,12 @@ index 8da2783..41186fe 100644
          {/* Why: SSH port forwarding still depends on the raw ports.detect data,
              which the workspace-scoped status bar popover intentionally does not
              expose. Keep this panel reachable only for SSH worktrees. */}
-@@ -34,6 +50,7 @@ export function RightSidebarPanelContent({
+@@ -34,6 +51,8 @@ export function RightSidebarPanelContent({
            <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
          )}
          {effectiveTab === 'vault' && <AiVaultPanel />}
 +        {effectiveTab === 'activity' && <CodevActivityAuditPanel />}
++        {effectiveTab === 'codev-agents' && <CodevLiveAgentsPanel />}
          {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
          {effectiveTab === 'pr-checks' && (
            <FolderWorkspacePrChecksPanel
@@ -7977,16 +8201,17 @@ index b738f18..af3054d 100644
        get().recordFeatureInteraction?.('workspace-creation')
      }
 diff --git a/src/renderer/src/store/slices/worktrees.ts b/src/renderer/src/store/slices/worktrees.ts
-index 9b639b0..8fc68ec 100644
+index 9b639b0..526c496 100644
 --- a/src/renderer/src/store/slices/worktrees.ts
 +++ b/src/renderer/src/store/slices/worktrees.ts
-@@ -2484,7 +2484,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
+@@ -2484,7 +2484,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
          tab === 'workspaces' ||
          tab === 'source-control' ||
          tab === 'checks' ||
 -        tab === 'ports'
 +        tab === 'ports' ||
-+        tab === 'activity'
++        tab === 'activity' ||
++        tab === 'codev-agents'
        ) {
          out[id] = tab
        } else {
@@ -10170,14 +10395,16 @@ index 0464fd1..693c796 100644
 +  unknownModelOptions: [codexEffort('xhigh')]
  }
 diff --git a/src/shared/types.ts b/src/shared/types.ts
-index cfa041d..84fe0a6 100644
+index cfa041d..2d00765 100644
 --- a/src/shared/types.ts
 +++ b/src/shared/types.ts
-@@ -3344,6 +3344,7 @@ export type RightSidebarTab =
+@@ -3344,6 +3344,9 @@ export type RightSidebarTab =
    | 'source-control'
    | 'checks'
    | 'ports'
 +  | 'activity'
++  // CoDev: live agents running in this workspace.
++  | 'codev-agents'
    // Plugin-contributed panels are keyed `plugin:<pluginId>/<panelId>` so the
    // static union stays closed while plugin tabs remain type-representable.
    | `plugin:${string}`

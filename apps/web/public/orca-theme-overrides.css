@@ -328,3 +328,267 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   padding-left: 0.9rem;
   opacity: 0.82;
 }
+
+/* ---------------------------------------------------------------------------
+ * Live agents panel (right sidebar)
+ *
+ * The workspace's default tab: who is running what, right now, without
+ * opening anything. Replaces the second right-hand rail the parent page used
+ * to render beside the IDE.
+ * ------------------------------------------------------------------------ */
+
+.codev-agents-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 0.8rem 1rem;
+  font-size: 12px;
+}
+
+.codev-agents-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.codev-agents-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.15rem;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--codev-orange-500, #d9642c);
+}
+
+.codev-agents-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: codev-agents-pulse 2s ease-in-out infinite;
+}
+
+@keyframes codev-agents-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.codev-agents-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.codev-agents-count strong {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.codev-agents-count span {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.codev-agents-empty,
+.codev-agents-free {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  opacity: 0.65;
+}
+
+.codev-agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codev-agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 11px;
+  border: 1px solid rgba(242, 237, 224, 0.09);
+  background: rgba(242, 237, 224, 0.035);
+  transition: border-color 150ms ease;
+}
+
+.codev-agent-card.is-working {
+  border-color: rgba(217, 101, 45, 0.32);
+}
+
+.codev-agent-card.is-blocked {
+  border-color: rgba(217, 166, 44, 0.34);
+}
+
+.codev-agent-card.is-ready {
+  border-color: rgba(78, 168, 122, 0.32);
+}
+
+.codev-agent-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.codev-agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.codev-agent-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.codev-agent-owner {
+  font-size: 11.5px;
+  font-weight: 620;
+  line-height: 1.25;
+}
+
+.codev-agent-worktree {
+  font-size: 10px;
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codev-agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.codev-agent-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.codev-agent-status.is-working {
+  color: #e8a882;
+  background: rgba(217, 101, 45, 0.16);
+}
+
+.codev-agent-status.is-working i {
+  animation: codev-agents-pulse 1.2s ease-in-out infinite;
+}
+
+.codev-agent-status.is-blocked {
+  color: #e3c98a;
+  background: rgba(217, 166, 44, 0.16);
+}
+
+.codev-agent-status.is-ready {
+  color: #7fc4a3;
+  background: rgba(78, 168, 122, 0.16);
+}
+
+.codev-agent-status.is-idle {
+  opacity: 0.7;
+  background: rgba(242, 237, 224, 0.08);
+}
+
+.codev-agent-assignment {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.codev-agent-task {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.24);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.codev-agent-caret {
+  flex: none;
+  width: 5px;
+  height: 9px;
+  background: var(--codev-orange-500, #d9642c);
+  animation: codev-agents-caret 1s steps(2) infinite;
+}
+
+@keyframes codev-agents-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.codev-agent-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 10px;
+}
+
+.codev-agent-provider,
+.codev-agent-elapsed {
+  opacity: 0.62;
+  font-variant-numeric: tabular-nums;
+}
+
+.codev-agent-open {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(217, 101, 45, 0.34);
+  background: transparent;
+  color: #f0c3a4;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.codev-agent-open:hover {
+  background: var(--codev-orange-500, #d9642c);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codev-agents-panel *,
+  .codev-agents-panel *::before {
+    animation: none !important;
+  }
+}

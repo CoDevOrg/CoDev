@@ -18,13 +18,9 @@ import {
   replyToCodevBridgeMessage,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
-import {
-  useLiveAgentActivity,
-  WorkspaceAgentActivityRail,
-} from "@/components/workspace-agent-activity";
+import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
-import { emptyLiveAgentCards } from "@/lib/live-agent-activity-view";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -688,14 +684,11 @@ function WorkspaceChrome({
         repository={repository}
         workspaceId={workspaceId}
       />
-      <div className="workspace-body">
-        {children}
-        <WorkspaceAgentActivityRail
-          cards={activity?.cards ?? emptyLiveAgentCards()}
-          occupied={activity?.occupied ?? 0}
-          max={activity?.max ?? MAX_PARALLEL_AGENT_SESSIONS}
-        />
-      </div>
+      {/* One right sidebar, not two: live agents now live inside the IDE's own
+          right sidebar (CodevLiveAgentsPanel) rather than a second rail beside
+          it. The live count stays in the top bar so it is visible from the
+          parent page too. */}
+      <div className="workspace-body">{children}</div>
     </div>
   );
 }
