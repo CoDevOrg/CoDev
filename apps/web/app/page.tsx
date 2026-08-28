@@ -3,226 +3,93 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Brand } from "@/components/app-chrome";
-import { LandingAudience } from "@/components/landing-audience";
+import { WorkspacePreview } from "@/components/landing-workspace-preview";
 import { getCurrentAppUser } from "@/lib/identity";
 
 export const metadata: Metadata = {
-  title: "The shared workspace for humans and AI agents",
+  title: "One shared room for your team and AI agents",
   description:
-    "Bring your team and AI agents into one live workspace to investigate, build, review, decide, and hand off work without losing context.",
+    "See agent work live, run tasks in parallel, review decisions, and hand off from one shared CoDev room.",
 };
 
-const useCases = [
-  {
-    index: "01",
-    title: "Incident response",
-    copy: "Engineers and agents investigate logs, code, and deployments in parallel—without duplicating work.",
-    meta: "Engineering · Security",
-  },
-  {
-    index: "02",
-    title: "Customer escalations",
-    copy: "Support and engineering work from the same facts, owners, decisions, and resolution history.",
-    meta: "Support · Product",
-  },
-  {
-    index: "03",
-    title: "Complex deals",
-    copy: "Keep sales, legal, security, and AI aligned around one living customer context.",
-    meta: "Sales · Legal · Security",
-  },
-  {
-    index: "04",
-    title: "Professional services",
-    copy: "Agents do the work while the right people review, approve, and remain accountable.",
-    meta: "Accounting · Advisory",
-  },
+const capabilities = [
+  [
+    "01",
+    "See the work live",
+    "Know who is working on what and what each agent is doing.",
+  ],
+  [
+    "02",
+    "Run in parallel",
+    "Branch an investigation or task without creating disconnected AI threads.",
+  ],
+  [
+    "03",
+    "Keep decisions attached",
+    "Record findings, approvals, and decisions next to the work that produced them.",
+  ],
+  [
+    "04",
+    "Hand off without a briefing",
+    "Anyone joining later gets the current state, not a pasted summary.",
+  ],
 ] as const;
 
-function WorkspacePreview() {
-  return (
-    <div className="mp-workspace" aria-label="A live CoDev incident workspace">
-      <div className="mp-workspace-bar">
-        <div className="mp-window-dots" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <span className="mp-room-name">payments-incident</span>
-        <div
-          className="mp-presence"
-          aria-label="Three people and three agents online"
-        >
-          <span className="mp-avatar mp-avatar-sarah">S</span>
-          <span className="mp-avatar mp-avatar-david">D</span>
-          <span className="mp-avatar mp-avatar-agent">AI</span>
-          <b>+3</b>
-        </div>
-      </div>
+const incidentTimeline = [
+  ["2:14 PM", "Checkout failures detected", "Sarah opens a CoDev room."],
+  [
+    "2:16 PM",
+    "Claude checks logs and traces",
+    "The first signal is shared with everyone.",
+  ],
+  [
+    "2:17 PM",
+    "David starts a database branch",
+    "Gemini investigates saturation in parallel.",
+  ],
+  [
+    "2:19 PM",
+    "Codex reviews the latest deployment",
+    "Alex keeps the rollback path ready.",
+  ],
+  [
+    "2:22 PM",
+    "Payment provider ruled out",
+    "The finding updates the room for every branch.",
+  ],
+  [
+    "2:25 PM",
+    "Connection pool exhaustion identified",
+    "The strongest hypothesis becomes shared state.",
+  ],
+  ["2:27 PM", "Rollback prepared", "Codex finishes the safety review."],
+  [
+    "2:29 PM",
+    "Sarah approves remediation",
+    "The decision and owner stay attached.",
+  ],
+] as const;
 
-      <div className="mp-workspace-grid">
-        <aside className="mp-room-sidebar">
-          <div className="mp-sidebar-section">
-            <span className="mp-sidebar-label">Workspace</span>
-            <b className="is-active">
-              <i /> Activity
-            </b>
-            <b>
-              <i /> Investigations <small>3</small>
-            </b>
-            <b>
-              <i /> Decisions <small>2</small>
-            </b>
-            <b>
-              <i /> Artifacts <small>6</small>
-            </b>
-          </div>
-          <div className="mp-sidebar-section mp-room-members">
-            <span className="mp-sidebar-label">In this room</span>
-            <p>
-              <i className="human" /> Sarah <small>Lead</small>
-            </p>
-            <p>
-              <i className="human" /> David <small>DB</small>
-            </p>
-            <p>
-              <i className="agent" /> Claude <small>Running</small>
-            </p>
-            <p>
-              <i className="agent" /> Codex <small>Reviewing</small>
-            </p>
-          </div>
-        </aside>
+const lanes = [
+  ["Database", "David", "Gemini", "Running"],
+  ["Deployments", "Sarah", "Codex", "Reviewing"],
+  ["Provider", "Alex", "Claude", "Complete"],
+] as const;
 
-        <div className="mp-room-main">
-          <div className="mp-incident-head">
-            <div>
-              <span>
-                <i /> SEV-1 · Active
-              </span>
-              <h2>Payment failures after deploy</h2>
-            </div>
-            <button type="button" tabIndex={-1}>
-              Share room
-            </button>
-          </div>
-
-          <div className="mp-status-strip">
-            <div>
-              <span>Current hypothesis</span>
-              <strong>Connection pool exhaustion</strong>
-            </div>
-            <div>
-              <span>Owner</span>
-              <strong>Sarah Kim</strong>
-            </div>
-            <div>
-              <span>Elapsed</span>
-              <strong>28 min</strong>
-            </div>
-          </div>
-
-          <div className="mp-activity">
-            <div className="mp-event">
-              <span className="mp-event-avatar claude">C</span>
-              <div>
-                <p>
-                  <strong>Claude</strong>
-                  <time>2 min ago</time>
-                  <em>Analyzing</em>
-                </p>
-                <span>
-                  Found a 4× increase in checkout DB connections after deploy{" "}
-                  <code>7f3a2c</code>.
-                </span>
-                <div className="mp-tool-call">
-                  <i /> Queried production logs · 1,284 events
-                </div>
-              </div>
-            </div>
-
-            <div className="mp-branches">
-              <div className="mp-branch">
-                <i />
-                <span>Database</span>
-                <strong>David + Gemini</strong>
-                <em>Running</em>
-              </div>
-              <div className="mp-branch">
-                <i />
-                <span>Recent deploys</span>
-                <strong>Sarah + Codex</strong>
-                <em>Reviewing</em>
-              </div>
-              <div className="mp-branch">
-                <i />
-                <span>Payment provider</span>
-                <strong>GPT</strong>
-                <em>Waiting</em>
-              </div>
-            </div>
-
-            <div className="mp-event mp-human-event">
-              <span className="mp-event-avatar sarah">S</span>
-              <div>
-                <p>
-                  <strong>Sarah</strong>
-                  <time>just now</time>
-                </p>
-                <span>
-                  Codex, review the rollback for data safety. David, keep
-                  tracing the pool.
-                </span>
-              </div>
-            </div>
-
-            <div className="mp-decision">
-              <i>✓</i>
-              <span>
-                <strong>Decision recorded</strong>Prepare rollback; wait for
-                database confirmation.
-              </span>
-              <b>Approved by Sarah</b>
-            </div>
-          </div>
-        </div>
-
-        <aside className="mp-context-panel">
-          <span className="mp-sidebar-label">Room context</span>
-          <div className="mp-context-block">
-            <b>Known facts</b>
-            <p>
-              <i /> Failures began at 14:32
-            </p>
-            <p>
-              <i /> Only checkout is affected
-            </p>
-          </div>
-          <div className="mp-context-block">
-            <b>Ruled out</b>
-            <p>
-              <i className="is-muted" /> Payment provider outage
-            </p>
-          </div>
-          <div className="mp-handoff">
-            <span>DL</span>
-            <p>
-              <strong>David joined</strong>Room context synced
-            </p>
-            <i>✓</i>
-          </div>
-        </aside>
-      </div>
-
-      <div className="mp-workspace-foot">
-        <span>
-          <i /> Live shared context
-        </span>
-        <p>3 people · 3 agents · 1 source of truth</p>
-      </div>
-    </div>
-  );
-}
+const secondaryUseCases = [
+  [
+    "Customer escalations",
+    "Support and engineering investigate the same customer problem with one shared history.",
+  ],
+  [
+    "Complex deals",
+    "Sales, security, legal, and AI work from the same account context.",
+  ],
+  [
+    "Professional services",
+    "Agents do the work while the right people review, revise, and approve it.",
+  ],
+] as const;
 
 export default async function HomePage() {
   if (await getCurrentAppUser()) redirect("/dashboard");
@@ -238,7 +105,7 @@ export default async function HomePage() {
             Sign in
           </Link>
           <Link className="mp-nav-cta" href="/sign-in">
-            Start a workspace <span>↗</span>
+            Create a room <span>↗</span>
           </Link>
         </nav>
       </header>
@@ -246,131 +113,231 @@ export default async function HomePage() {
       <section className="mp-hero">
         <div className="mp-hero-copy">
           <p className="mp-eyebrow">
-            <i /> Multiplayer work, with AI in the room
+            <i /> MULTIPLAYER AI FOR REAL WORK
           </p>
           <h1>
-            The shared workspace for <em>humans and AI agents.</em>
+            One shared room for your team and <em>AI agents.</em>
           </h1>
           <p className="mp-lede">
-            Investigate, build, review, and decide together. Everyone—and every
-            agent—works from the same live context.
+            Work on the same problem together. See what every agent is doing,
+            run work in parallel, share context, review decisions, and hand off
+            without starting over.
           </p>
           <div className="mp-hero-actions">
             <Link className="mp-primary-action" href="/sign-in">
-              Start a shared workspace <span>↗</span>
+              Create a room <span>↗</span>
             </Link>
             <a href="#how-it-works">
               See how it works <span>↓</span>
             </a>
           </div>
           <p className="mp-hero-note">
-            No private AI threads. No context reconstruction.
+            Works with Claude, GPT, Gemini, Codex, and your own agents.
           </p>
         </div>
         <WorkspacePreview />
       </section>
 
       <section className="mp-problem" id="how-it-works">
-        <div className="mp-section-heading">
-          <p>THE PROBLEM</p>
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>TODAY</p>
           <h2>
-            Your team works together.
-            <br />
-            <em>Your AI doesn&apos;t.</em>
+            Your team is working on the same problem in{" "}
+            <em>separate AI sessions.</em>
           </h2>
+          <span>
+            One person is in Claude. Another is in ChatGPT. Someone else is
+            running a coding agent. Useful work gets copied, summarized, and
+            lost between sessions.
+          </span>
         </div>
         <div
           className="mp-problem-flow"
-          aria-label="From fragmented AI work to one shared workspace"
+          aria-label="Separate AI sessions becoming one CoDev room"
         >
           <div className="mp-private-sessions">
             <article>
-              <span>C</span>
+              <span>S</span>
               <div>
-                <b>Claude</b>
-                <p>Sarah&apos;s private investigation</p>
+                <b>Sarah · Claude</b>
+                <p>Private investigation</p>
               </div>
-              <em>Hidden</em>
             </article>
             <article>
-              <span>G</span>
+              <span>D</span>
               <div>
-                <b>GPT</b>
-                <p>David&apos;s separate analysis</p>
+                <b>David · GPT</b>
+                <p>Separate analysis</p>
               </div>
-              <em>Hidden</em>
             </article>
             <article>
-              <span>⌁</span>
+              <span>A</span>
               <div>
-                <b>Slack</b>
-                <p>Partial outputs pasted later</p>
+                <b>Alex · Codex</b>
+                <p>Local agent run</p>
               </div>
-              <em>Fragmented</em>
             </article>
           </div>
-          <div className="mp-flow-arrow">
-            <span>→</span>
-            <p>One shared context</p>
+          <div className="mp-copy-steps">
+            <span>↓ copy</span>
+            <span>↓ summarize</span>
+            <span>↓ paste</span>
+            <span>↓ explain again</span>
           </div>
           <div className="mp-shared-state">
             <div className="mp-shared-icon">C</div>
             <div>
-              <b>CoDev workspace</b>
-              <p>
-                People, agents, tasks, decisions, and history stay connected.
-              </p>
+              <b>CoDev room</b>
+              <p>One room · One history · One shared context</p>
             </div>
             <span>Live</span>
           </div>
         </div>
       </section>
 
-      <LandingAudience />
-
-      <section className="mp-use-cases" id="use-cases">
-        <div className="mp-section-heading">
-          <p>BUILT FOR CONSEQUENCES</p>
+      <section className="mp-product-story">
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>HOW CODEV WORKS</p>
           <h2>
-            When the work is expensive,
-            <br />
-            <em>context matters.</em>
+            The room is the <em>source of truth.</em>
           </h2>
+          <span>
+            People, agents, files, tasks, findings, and decisions stay together
+            while the work happens.
+          </span>
         </div>
-        <div className="mp-case-grid">
-          {useCases.map((item) => (
-            <article key={item.index}>
-              <span>{item.index}</span>
-              <h3>{item.title}</h3>
-              <p>{item.copy}</p>
-              <small>{item.meta}</small>
+        <div className="mp-capability-grid">
+          {capabilities.map(([number, title, copy]) => (
+            <article key={number}>
+              <span>{number}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="mp-model-layer">
-        <div>
-          <p>ONE COLLABORATION LAYER</p>
+      <section className="mp-action-story">
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>SEE IT IN ACTION</p>
           <h2>
-            The workspace stays.
-            <br />
-            <em>The model can change.</em>
+            An incident starts. Everyone joins the <em>same investigation.</em>
+          </h2>
+        </div>
+        <div className="mp-timeline">
+          {incidentTimeline.map(([time, title, copy]) => (
+            <article key={time}>
+              <time>{time}</time>
+              <i />
+              <div>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+        <p className="mp-story-note">
+          No private agent sessions. No duplicate investigation. No catch-up
+          meeting.
+        </p>
+      </section>
+
+      <section className="mp-parallel-story">
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>WORK IN PARALLEL</p>
+          <h2>
+            Give every person and agent a <em>clear lane.</em>
           </h2>
           <span>
-            Use the right agent for each job without fragmenting the team&apos;s
-            work.
+            Split the problem into branches and keep every result connected to
+            the same room.
           </span>
+        </div>
+        <div className="mp-lane-diagram">
+          <div className="mp-lane-root">
+            <b>Payments incident</b>
+            <span>One shared room</span>
+          </div>
+          <div className="mp-lanes">
+            {lanes.map(([task, person, agent, status]) => (
+              <article key={task}>
+                <span>{task}</span>
+                <h3>{person}</h3>
+                <p>{agent}</p>
+                <small>{status}</small>
+              </article>
+            ))}
+          </div>
+        </div>
+        <p className="mp-story-note">
+          Everyone can see the other branches. Nothing disappears into a private
+          session.
+        </p>
+      </section>
+
+      <section className="mp-handoff-story">
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>PICK UP WHERE THEY LEFT OFF</p>
+          <h2>
+            Join halfway through and <em>know what is happening.</em>
+          </h2>
+          <span>
+            CoDev keeps the current hypothesis, open tasks, ruled-out ideas,
+            artifacts, decisions, and agent activity in one place.
+          </span>
+        </div>
+        <div className="mp-handoff-card">
+          <header>
+            <span>D</span>
+            <div>
+              <b>David joined</b>
+              <small>Room context synced</small>
+            </div>
+          </header>
+          <div>
+            <span>What happened</span>
+            <strong>Checkout failures began after deploy 7f3a2c</strong>
+          </div>
+          <div>
+            <span>Current hypothesis</span>
+            <strong>DB connection pool exhaustion</strong>
+          </div>
+          <div>
+            <span>Ruled out</span>
+            <strong>Payment provider · Redis</strong>
+          </div>
+          <div>
+            <span>In progress</span>
+            <strong>Rollback review</strong>
+          </div>
+          <div>
+            <span>Decision</span>
+            <strong>Do not roll back until DB confirmation</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="mp-model-layer">
+        <div>
+          <p>USE THE RIGHT AGENT</p>
+          <h2>
+            Claude, GPT, Gemini, Codex. <em>Same room.</em>
+          </h2>
+          <span>
+            Use different models or agents for different parts of the work
+            without fragmenting the team&apos;s context.
+          </span>
+          <small>The room belongs to your team, not to one AI provider.</small>
         </div>
         <div
           className="mp-model-diagram"
-          aria-label="AI providers connected to one CoDev workspace"
+          aria-label="AI providers connected to one CoDev room"
         >
           <div className="mp-model-workspace">
             <i>C</i>
             <span>
-              <b>Shared workspace</b>
-              <small>Context · Control · History</small>
+              <b>CoDev room</b>
+              <small>Context · Tasks · History · Decisions</small>
             </span>
           </div>
           <div className="mp-model-line" />
@@ -379,28 +346,49 @@ export default async function HomePage() {
             <span>GPT</span>
             <span>Gemini</span>
             <span>Codex</span>
-            <span>Your agents</span>
+            <span>Your agent</span>
           </div>
         </div>
+      </section>
+
+      <section className="mp-use-cases" id="use-cases">
+        <div className="mp-section-heading mp-section-heading-stack">
+          <p>BUILT FOR WORK THAT NEEDS A TEAM</p>
+          <h2>
+            The same room works wherever humans and agents{" "}
+            <em>need to coordinate.</em>
+          </h2>
+        </div>
+        <div className="mp-case-grid mp-secondary-grid">
+          {secondaryUseCases.map(([title, copy], index) => (
+            <article key={title}>
+              <span>0{index + 1}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </article>
+          ))}
+        </div>
+        <p className="mp-story-note">
+          Start with engineering. Expand wherever your team uses AI together.
+        </p>
       </section>
 
       <section className="mp-final-cta">
         <div>
           <p>BRING EVERYONE INTO THE ROOM</p>
           <h2>
-            One problem. One workspace.
-            <br />
-            <em>Your whole team—human and AI.</em>
+            Stop passing AI work around. <em>Work on it together.</em>
           </h2>
+          <span>Invite your team. Add your agents. Start working.</span>
         </div>
         <Link className="mp-primary-action mp-primary-light" href="/sign-in">
-          Start a shared workspace <span>↗</span>
+          Create a room <span>↗</span>
         </Link>
       </section>
 
       <footer className="mp-footer">
         <Brand />
-        <p>The shared workspace for humans and AI agents.</p>
+        <p>One shared room for your team and AI agents.</p>
         <span>Hosted on the web</span>
       </footer>
     </main>
