@@ -1,126 +1,188 @@
 "use client";
 
+import { Check, Pause, Play, RotateCcw, Share2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/**
- * The landing page's centrepiece: a running miniature of a CoDev workspace.
- * It is a scripted simulation, not live data — the real workspace lives behind
- * sign-in — so everything here is deterministic on first render and only starts
- * moving in an effect, which keeps server and client markup identical.
- */
+type DemoPhase = "join" | "write" | "verify" | "ready";
+type AgentTone = "orange" | "green" | "purple";
 
-type SceneKey = "live" | "coordinate" | "merge" | "share";
+type TypingSegment = {
+  line: number;
+  start: number;
+  text: string;
+};
 
-const SCENES: {
-  key: SceneKey;
-  tab: string;
-  title: string;
-  copy: string;
+type AgentTrack = {
+  id: string;
+  name: string;
+  model: string;
+  initials: string;
+  tone: AgentTone;
+  task: string;
+  segments: TypingSegment[];
+};
+
+const DEMO_DURATION = 15_000;
+
+const PHASES: {
+  key: DemoPhase;
+  label: string;
+  endpoint: number;
+  summary: string;
 }[] = [
   {
-    key: "live",
-    tab: "Live activity",
-    title: "See what every agent is doing, right now.",
-    copy: "No more staring at a spinner in someone else's chat. Every command, file, and test streams into the room as it happens.",
+    key: "join",
+    label: "Join",
+    endpoint: 2_150,
+    summary: "Three agents join the same checkout file with named cursors.",
   },
   {
-    key: "coordinate",
-    tab: "Coordination",
-    title: "Agents know what the other agents are touching.",
-    copy: "Before an agent edits a file it claims the path. Overlaps get caught up front and the second agent is rerouted instead of colliding.",
+    key: "write",
+    label: "Write",
+    endpoint: 10_350,
+    summary:
+      "Codex, Claude, and Review edit separate regions of the file together.",
   },
   {
-    key: "merge",
-    tab: "Clean merges",
-    title: "Separate worktrees. One clean merge.",
-    copy: "Everyone works in isolation, but the room shares one picture of the truth — so the branches come back together without a conflict pile-up.",
+    key: "verify",
+    label: "Verify",
+    endpoint: 13_150,
+    summary:
+      "The agents run the checkout tests and review the combined change.",
   },
   {
-    key: "share",
-    tab: "Sharing",
-    title: "Share it like a doc.",
-    copy: "Send one link. They land in the same repo, the same runtime, the same agent history — already caught up.",
+    key: "ready",
+    label: "Ready",
+    endpoint: DEMO_DURATION,
+    summary: "The shared file is tested and ready for a person to review.",
   },
 ];
 
-const AGENTS = [
+const AGENTS: AgentTrack[] = [
   {
-    id: "nova",
-    initials: "NV",
-    name: "Nova",
-    model: "Opus",
-    tone: "lime",
-    worktree: "agent/checkout-race",
-    steps: [
-      "Reading src/checkout/reserve.ts",
-      "Tracing reservation → payment",
-      "Writing a failing test",
-      "Making reservation idempotent",
-      "42 tests passed",
-    ],
-  },
-  {
-    id: "atlas",
-    initials: "AT",
-    name: "Atlas",
-    model: "Codex",
+    id: "codex",
+    name: "Codex",
+    model: "OpenAI",
+    initials: "CX",
     tone: "orange",
-    worktree: "agent/webhook-retries",
-    steps: [
-      "Reading src/webhooks/stripe.ts",
-      "Adding backoff to the retry queue",
-      "Replaying 1,204 stored events",
-      "18 tests passed",
-      "Ready for review",
+    task: "Validate checkout input",
+    segments: [
+      {
+        line: 7,
+        start: 2_450,
+        text: "  const cart = checkoutSchema.parse(input);",
+      },
+      {
+        line: 12,
+        start: 7_250,
+        text: '  await audit.record("checkout.reserved", order.id);',
+      },
     ],
   },
   {
-    id: "iris",
-    initials: "IR",
-    name: "Iris",
-    model: "Review",
-    tone: "sky",
-    worktree: "agent/review",
-    steps: [
-      "Watching both worktrees",
-      "Diffing 12 changed files",
-      "Flagged a missing rollback",
-      "Nova picked up the note",
-      "Clear to merge",
+    id: "claude",
+    name: "Claude",
+    model: "Anthropic",
+    initials: "CL",
+    tone: "green",
+    task: "Make reservations idempotent",
+    segments: [
+      {
+        line: 8,
+        start: 3_000,
+        text: "  const lock = await claim(`checkout:${cart.id}`);",
+      },
+      {
+        line: 11,
+        start: 6_750,
+        text: "  const order = await commit(cart, lock);",
+      },
     ],
   },
-] as const;
+  {
+    id: "review",
+    name: "Review",
+    model: "CoDev",
+    initials: "RV",
+    tone: "purple",
+    task: "Guard retries and review",
+    segments: [
+      {
+        line: 9,
+        start: 3_600,
+        text: "  if (!lock) return retryLater(cart);",
+      },
+      { line: 13, start: 7_800, text: "  return order;" },
+    ],
+  },
+];
 
-const CLAIM_LOG = [
-  { tone: "lime", text: "Nova claimed src/checkout/**" },
-  { tone: "orange", text: "Atlas planned an edit to src/checkout/reserve.ts" },
-  { tone: "warn", text: "Overlap detected — same file, two worktrees" },
-  { tone: "orange", text: "Atlas rerouted to src/webhooks/**" },
-  { tone: "ok", text: "0 conflicts · both agents still running" },
-] as const;
+const STATIC_LINES = new Map<number, string>([
+  [1, 'import { audit } from "@/lib/audit";'],
+  [2, 'import { checkoutSchema } from "@/lib/checkout";'],
+  [3, 'import { claim, commit } from "@/lib/reservations";'],
+  [4, ""],
+  [5, "type CheckoutResult = Promise<Order | Retry>;"],
+  [6, "export async function reserve(input: unknown): CheckoutResult {"],
+  [10, ""],
+  [14, "}"],
+]);
 
-const CLAIM_FILES = [
-  { path: "src/checkout/reserve.ts", owner: "Nova", tone: "lime" },
-  { path: "src/checkout/session.ts", owner: "Nova", tone: "lime" },
-  { path: "src/webhooks/stripe.ts", owner: "Atlas", tone: "orange" },
-  { path: "src/webhooks/queue.ts", owner: "Atlas", tone: "orange" },
-  { path: "src/lib/money.ts", owner: "Open", tone: "idle" },
-] as const;
+const FINAL_CODE = Array.from({ length: 14 }, (_, index) => {
+  const line = index + 1;
+  const segment = AGENTS.flatMap((agent) => agent.segments).find(
+    (candidate) => candidate.line === line,
+  );
+  return segment?.text ?? STATIC_LINES.get(line) ?? "";
+}).join("\n");
 
-const BRANCHES = [
-  { name: "agent/checkout-race", tone: "lime", files: 7 },
-  { name: "agent/webhook-retries", tone: "orange", files: 4 },
-  { name: "yousef/copy-tweaks", tone: "sky", files: 1 },
-] as const;
+function characterDelay(character: string, index: number) {
+  if (character === " ") return 24;
+  if (/[(){}[\],.;:`]/.test(character)) return 82;
+  return 39 + ((character.charCodeAt(0) + index * 7) % 23);
+}
 
-const GUESTS = [
-  { initials: "AK", name: "Alex", tone: "orange" },
-  { initials: "MR", name: "Maya", tone: "sky" },
-  { initials: "JD", name: "Jonas", tone: "lime" },
-] as const;
+function typingCheckpoints(text: string) {
+  let total = 0;
+  return Array.from(text, (character, index) => {
+    total += characterDelay(character, index);
+    return total;
+  });
+}
+
+const SEGMENT_TIMINGS = new Map(
+  AGENTS.flatMap((agent) =>
+    agent.segments.map(
+      (segment) =>
+        [
+          `${agent.id}-${segment.line}`,
+          typingCheckpoints(segment.text),
+        ] as const,
+    ),
+  ),
+);
+
+function visibleCharacterCount(
+  agentId: string,
+  segment: TypingSegment,
+  elapsed: number,
+) {
+  const localElapsed = elapsed - segment.start;
+  if (localElapsed <= 0) return 0;
+  const checkpoints = SEGMENT_TIMINGS.get(`${agentId}-${segment.line}`) ?? [];
+  let low = 0;
+  let high = checkpoints.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((checkpoints[middle] ?? Infinity) <= localElapsed) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
+
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(query.matches);
@@ -128,282 +190,376 @@ function usePrefersReducedMotion() {
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
+
   return reduced;
+}
+
+function phaseForElapsed(elapsed: number): DemoPhase {
+  if (elapsed < PHASES[0]!.endpoint) return "join";
+  if (elapsed < PHASES[1]!.endpoint) return "write";
+  if (elapsed < PHASES[2]!.endpoint) return "verify";
+  return "ready";
+}
+
+function statusForAgent(agent: AgentTrack, elapsed: number) {
+  const counts = agent.segments.map((segment) =>
+    visibleCharacterCount(agent.id, segment, elapsed),
+  );
+  const hasStarted = counts.some((count) => count > 0);
+  const isTyping = agent.segments.some(
+    (segment, index) =>
+      counts[index]! > 0 && counts[index]! < segment.text.length,
+  );
+  const isComplete = agent.segments.every(
+    (segment, index) => counts[index]! >= segment.text.length,
+  );
+
+  if (elapsed >= PHASES[2]!.endpoint) return "Ready";
+  if (elapsed >= PHASES[1]!.endpoint || isComplete) return "Reviewing";
+  if (isTyping || hasStarted) return "Editing";
+  return "Joining";
 }
 
 export function LandingWorkspaceDemo() {
   const reducedMotion = usePrefersReducedMotion();
-  const [scene, setScene] = useState<SceneKey>("live");
-  const [tick, setTick] = useState(0);
-  // Auto-play is a demo, not a carousel the reader has to fight. The first
-  // deliberate tab click hands control over for good.
-  const [autoPlay, setAutoPlay] = useState(true);
-  const region = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const elapsedRef = useRef(0);
+  const startedRef = useRef(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [inView, setInView] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
 
   useEffect(() => {
-    if (reducedMotion) return;
-    const timer = window.setInterval(
-      () => setTick((value) => value + 1),
-      1_500,
+    const node = rootRef.current;
+    if (!node) return;
+    if (typeof window.IntersectionObserver !== "function") {
+      const timer = window.setTimeout(() => {
+        setInView(true);
+        if (!reducedMotion && !startedRef.current) {
+          startedRef.current = true;
+          setPlaying(true);
+        }
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = Boolean(entry?.isIntersecting);
+        setInView(visible);
+        if (visible && !reducedMotion && !startedRef.current) {
+          startedRef.current = true;
+          setPlaying(true);
+        }
+      },
+      { threshold: 0.28 },
     );
-    return () => window.clearInterval(timer);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [reducedMotion]);
 
   useEffect(() => {
-    if (!autoPlay || reducedMotion) return;
-    const timer = window.setInterval(() => {
-      setScene((current) => {
-        const index = SCENES.findIndex((item) => item.key === current);
-        return SCENES[(index + 1) % SCENES.length]!.key;
-      });
-    }, 9_000);
-    return () => window.clearInterval(timer);
-  }, [autoPlay, reducedMotion]);
+    const update = () =>
+      setDocumentVisible(document.visibilityState === "visible");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
 
-  const active = useMemo(
-    () => SCENES.find((item) => item.key === scene) ?? SCENES[0]!,
-    [scene],
+  useEffect(() => {
+    if (!playing || !inView || !documentVisible || reducedMotion) return;
+
+    let frame = 0;
+    let previous = performance.now();
+    const step = (now: number) => {
+      const next = Math.min(
+        DEMO_DURATION,
+        elapsedRef.current + Math.min(now - previous, 100),
+      );
+      previous = now;
+      elapsedRef.current = next;
+      setElapsed(next);
+      if (next >= DEMO_DURATION) {
+        setPlaying(false);
+        return;
+      }
+      frame = window.requestAnimationFrame(step);
+    };
+    frame = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(frame);
+  }, [documentVisible, inView, playing, reducedMotion]);
+
+  const renderedElapsed = reducedMotion ? DEMO_DURATION : elapsed;
+  const isPlaying = playing && !reducedMotion;
+  const phase = phaseForElapsed(renderedElapsed);
+  const phaseDefinition =
+    PHASES.find((item) => item.key === phase) ?? PHASES[0]!;
+  const lineSegments = useMemo(
+    () =>
+      new Map(
+        AGENTS.flatMap((agent) =>
+          agent.segments.map((segment) => [segment.line, { agent, segment }]),
+        ),
+      ),
+    [],
   );
 
-  function selectScene(key: SceneKey) {
-    setAutoPlay(false);
-    setScene(key);
+  function setTimeline(next: number) {
+    elapsedRef.current = next;
+    setElapsed(next);
+  }
+
+  function choosePhase(nextPhase: DemoPhase) {
+    const definition = PHASES.find((item) => item.key === nextPhase);
+    if (!definition) return;
+    startedRef.current = true;
+    setPlaying(false);
+    setTimeline(
+      definition.key === "ready"
+        ? definition.endpoint
+        : definition.endpoint - 1,
+    );
+  }
+
+  function togglePlayback() {
+    startedRef.current = true;
+    if (elapsedRef.current >= DEMO_DURATION) setTimeline(0);
+    setPlaying((current) => !current);
+  }
+
+  function replay() {
+    startedRef.current = true;
+    setTimeline(0);
+    setPlaying(!reducedMotion);
   }
 
   return (
-    <div className="lp-demo" ref={region}>
-      <div className="lp-demo-tabs" role="tablist" aria-label="Workspace tour">
-        {SCENES.map((item) => (
+    <div className="lp-demo" ref={rootRef}>
+      <div className="lp-demo-controls">
+        <ol aria-label="Demo phases" className="lp-phase-list">
+          {PHASES.map((item, index) => (
+            <li key={item.key}>
+              <button
+                type="button"
+                aria-current={item.key === phase ? "step" : undefined}
+                className={item.key === phase ? "is-active" : undefined}
+                onClick={() => choosePhase(item.key)}
+              >
+                <span aria-hidden="true">{index + 1}</span>
+                {item.label}
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className="lp-playback-controls">
           <button
-            key={item.key}
             type="button"
-            role="tab"
-            id={`lp-tab-${item.key}`}
-            aria-selected={item.key === scene}
-            aria-controls="lp-demo-panel"
-            className={item.key === scene ? "is-active" : undefined}
-            onClick={() => selectScene(item.key)}
+            onClick={togglePlayback}
+            aria-label={isPlaying ? "Pause demo" : "Play demo"}
+            disabled={reducedMotion}
           >
-            {item.tab}
-            {item.key === scene && autoPlay && !reducedMotion ? (
-              <i className="lp-tab-progress" aria-hidden="true" />
-            ) : null}
+            {isPlaying ? (
+              <Pause aria-hidden size={14} />
+            ) : (
+              <Play aria-hidden size={14} />
+            )}
+            {isPlaying ? "Pause" : "Play"}
           </button>
-        ))}
-      </div>
-
-      <div
-        className="lp-window"
-        id="lp-demo-panel"
-        role="tabpanel"
-        aria-labelledby={`lp-tab-${scene}`}
-      >
-        <div className="lp-window-bar">
-          <span className="lp-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          <span className="lp-repo">
-            <b>friends</b>/side-project
-            <em>main</em>
-          </span>
-          <span className="lp-presence" aria-label="4 people in this workspace">
-            <i className="lp-avatar lp-tone-lime">YM</i>
-            <i className="lp-avatar lp-tone-orange">AK</i>
-            <i className="lp-avatar lp-tone-sky">MR</i>
-            <b>+1</b>
-          </span>
-        </div>
-
-        <div className="lp-window-body" data-scene={scene}>
-          {scene === "live" ? <LiveScene tick={tick} /> : null}
-          {scene === "coordinate" ? <CoordinateScene tick={tick} /> : null}
-          {scene === "merge" ? <MergeScene tick={tick} /> : null}
-          {scene === "share" ? <ShareScene tick={tick} /> : null}
-        </div>
-      </div>
-
-      <div className="lp-demo-caption" aria-live="polite">
-        <h3>{active.title}</h3>
-        <p>{active.copy}</p>
-      </div>
-    </div>
-  );
-}
-
-function LiveScene({ tick }: { tick: number }) {
-  return (
-    <div className="lp-scene lp-scene-live">
-      <div className="lp-scene-head">
-        <span className="lp-live-pill">
-          <i />3 agents running
-        </span>
-        <span className="lp-scene-meta">Everyone sees this same feed</span>
-      </div>
-      <div className="lp-agent-list">
-        {AGENTS.map((agent, index) => {
-          const step = (tick + index * 2) % agent.steps.length;
-          const line = agent.steps[step]!;
-          const done = step === agent.steps.length - 1;
-          return (
-            <article className="lp-agent" key={agent.id}>
-              <span className={`lp-avatar lp-tone-${agent.tone}`}>
-                {agent.initials}
-              </span>
-              <div className="lp-agent-main">
-                <header>
-                  <strong>{agent.name}</strong>
-                  <span className="lp-chip">{agent.model}</span>
-                  <code>{agent.worktree}</code>
-                </header>
-                <p
-                  key={`${agent.id}-${step}`}
-                  className="lp-typing"
-                  style={{ "--chars": line.length } as React.CSSProperties}
-                >
-                  {line}
-                </p>
-                <div className="lp-bar" aria-hidden="true">
-                  <i
-                    style={{
-                      width: `${((step + 1) / agent.steps.length) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <span className={done ? "lp-state is-done" : "lp-state"}>
-                {done ? "Done" : "Working"}
-              </span>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function CoordinateScene({ tick }: { tick: number }) {
-  const revealed = (tick % (CLAIM_LOG.length + 2)) + 1;
-  return (
-    <div className="lp-scene lp-scene-coordinate">
-      <div className="lp-claims">
-        <p className="lp-scene-label">Path claims</p>
-        {CLAIM_FILES.map((file) => (
-          <div className={`lp-claim lp-tone-${file.tone}`} key={file.path}>
-            <code>{file.path}</code>
-            <span>{file.owner}</span>
-          </div>
-        ))}
-      </div>
-      <div className="lp-log">
-        <p className="lp-scene-label">Coordination log</p>
-        <ul>
-          {CLAIM_LOG.slice(0, Math.min(revealed, CLAIM_LOG.length)).map(
-            (entry) => (
-              <li className={`lp-log-${entry.tone}`} key={entry.text}>
-                <i aria-hidden="true" />
-                {entry.text}
-              </li>
-            ),
-          )}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-function MergeScene({ tick }: { tick: number }) {
-  const merged = tick % 6 >= 3;
-  return (
-    <div className="lp-scene lp-scene-merge">
-      <div className="lp-merge-branches">
-        {BRANCHES.map((branch) => (
-          <div
-            className={`lp-merge-branch lp-tone-${branch.tone}`}
-            key={branch.name}
-          >
-            <code>{branch.name}</code>
-            <small>{branch.files} files changed</small>
-          </div>
-        ))}
-      </div>
-      <div className="lp-merge-graph" aria-hidden="true">
-        {/* `pathLength` normalises each curve to 1 unit so the draw-on dash
-            maths stays correct however wide the column renders. */}
-        <svg viewBox="0 0 200 200" preserveAspectRatio="none">
-          {BRANCHES.map((branch, index) => (
-            <path
-              key={branch.name}
-              pathLength={1}
-              className={`lp-merge-path lp-stroke-${branch.tone}${merged ? " is-merged" : ""}`}
-              style={{ transitionDelay: `${index * 0.18}s` }}
-              d={`M0 ${34 + index * 66} H70 Q110 ${34 + index * 66} 110 100 H200`}
-            />
-          ))}
-        </svg>
-      </div>
-      <div className={merged ? "lp-merge-target is-merged" : "lp-merge-target"}>
-        <strong>main</strong>
-        <span>{merged ? "✓ merged · 0 conflicts" : "waiting on review"}</span>
-      </div>
-    </div>
-  );
-}
-
-function ShareScene({ tick }: { tick: number }) {
-  const joined = Math.min(tick % (GUESTS.length + 3), GUESTS.length);
-  return (
-    <div className="lp-scene lp-scene-share">
-      <div className="lp-share-card">
-        <p className="lp-scene-label">Share this workspace</p>
-        <div className="lp-share-link">
-          <code>codev.dev/w/side-project</code>
-          <button type="button" tabIndex={-1} aria-hidden="true">
-            Copy link
+          <button type="button" onClick={replay} aria-label="Replay demo">
+            <RotateCcw aria-hidden size={14} />
+            Replay
           </button>
         </div>
-        <p className="lp-share-note">
-          Anyone with the link joins the running workspace — repo, terminal,
-          agents, and history included.
-        </p>
-        <div className="lp-share-people">
-          {GUESTS.map((guest, index) => (
-            <span
-              key={guest.name}
-              className={
-                index < joined
-                  ? `lp-share-person is-in lp-tone-${guest.tone}`
-                  : `lp-share-person lp-tone-${guest.tone}`
-              }
-            >
-              <i className={`lp-avatar lp-tone-${guest.tone}`}>
-                {guest.initials}
-              </i>
-              {guest.name}
-              <b>{index < joined ? "joined" : "invited"}</b>
-            </span>
-          ))}
-        </div>
       </div>
-      <div className="lp-share-editor" aria-hidden="true">
-        <pre>
-          <code>
-            {`export async function reserve(cart: Cart) {
-  const lock = await claim(cart.id);
-  if (!lock) return retryLater(cart);
-  return commit(cart, lock);
-}`}
-          </code>
-        </pre>
-        {GUESTS.slice(0, joined).map((guest, index) => (
+
+      <div className="lp-workspace" data-phase={phase}>
+        <header className="lp-workspace-topbar">
+          <span className="lp-workspace-mark" aria-hidden="true">
+            C
+          </span>
+          <span className="lp-workspace-repo">
+            <strong>acme/storefront</strong>
+            <code>main</code>
+          </span>
+          <span className="lp-workspace-live">
+            <i aria-hidden="true" /> 3 agents live
+          </span>
           <span
-            key={guest.name}
-            className={`lp-cursor lp-tone-${guest.tone} lp-cursor-${index + 1}`}
+            className="lp-workspace-people"
+            aria-label="Three people present"
           >
-            {guest.name}
+            <i>AM</i>
+            <i>JL</i>
+            <i>CR</i>
           </span>
-        ))}
+          <span className="lp-workspace-share">
+            <Share2 aria-hidden size={13} /> Share
+          </span>
+        </header>
+
+        <div className="lp-workspace-body">
+          <aside className="lp-team-rail" aria-label="Workspace team">
+            <div className="lp-rail-heading">
+              <span>Team room</span>
+              <strong>
+                <Users aria-hidden size={13} /> 3 online
+              </strong>
+            </div>
+            <div className="lp-team-person is-active">
+              <i className="lp-person-orange">AM</i>
+              <span>
+                <strong>Alex Morgan</strong>
+                <small>Watching reserve.ts</small>
+              </span>
+            </div>
+            <div className="lp-team-person">
+              <i className="lp-person-green">JL</i>
+              <span>
+                <strong>Jordan Lee</strong>
+                <small>Steering Claude</small>
+              </span>
+            </div>
+            <div className="lp-team-person">
+              <i className="lp-person-purple">CR</i>
+              <span>
+                <strong>Casey Rivera</strong>
+                <small>Reviewing changes</small>
+              </span>
+            </div>
+            <div className="lp-team-note">
+              <span>Shared context</span>
+              <p>Everyone sees the same file, cursors, and agent state.</p>
+            </div>
+          </aside>
+
+          <section className="lp-editor" aria-label="Shared code editor">
+            <header className="lp-editor-tabs">
+              <span className="is-open">
+                <i aria-hidden="true">TS</i> reserve.ts
+              </span>
+              <span>checkout.test.ts</span>
+              <b aria-label="Three agents editing this file">
+                <i className="lp-agent-dot lp-dot-orange" />
+                <i className="lp-agent-dot lp-dot-green" />
+                <i className="lp-agent-dot lp-dot-purple" />
+              </b>
+            </header>
+            <div className="lp-editor-breadcrumb">
+              src <b>›</b> checkout <b>›</b> reserve.ts
+            </div>
+            <pre className="lp-code" aria-hidden="true">
+              <code>
+                {Array.from({ length: 14 }, (_, index) => {
+                  const line = index + 1;
+                  const authored = lineSegments.get(line);
+                  if (!authored) {
+                    return (
+                      <span className="lp-code-row" key={line}>
+                        <i>{line}</i>
+                        <span>{STATIC_LINES.get(line) || " "}</span>
+                      </span>
+                    );
+                  }
+
+                  const count = visibleCharacterCount(
+                    authored.agent.id,
+                    authored.segment,
+                    renderedElapsed,
+                  );
+                  const text = authored.segment.text.slice(0, count);
+                  const hasStarted = renderedElapsed >= authored.segment.start;
+                  const complete = count >= authored.segment.text.length;
+                  const laterSegmentStarted = authored.agent.segments.some(
+                    (segment) =>
+                      segment.start > authored.segment.start &&
+                      renderedElapsed >= segment.start,
+                  );
+                  const showCursor = hasStarted && !laterSegmentStarted;
+
+                  return (
+                    <span
+                      className={`lp-code-row lp-code-${authored.agent.tone}${hasStarted ? " is-authored" : ""}`}
+                      key={line}
+                    >
+                      <i>{line}</i>
+                      <span>
+                        {text || " "}
+                        {showCursor ? (
+                          <b
+                            className={`lp-agent-cursor${complete ? " is-settled" : " is-typing"}`}
+                          >
+                            <em>{authored.agent.name}</em>
+                          </b>
+                        ) : null}
+                      </span>
+                    </span>
+                  );
+                })}
+              </code>
+            </pre>
+            <pre className="lp-sr-only" aria-label="Completed shared file">
+              {FINAL_CODE}
+            </pre>
+            <div
+              className={`lp-terminal${renderedElapsed >= PHASES[1]!.endpoint ? " is-visible" : ""}`}
+            >
+              <header>
+                <span>TERMINAL</span>
+                <code>pnpm test checkout</code>
+              </header>
+              <p>
+                <b>✓</b> checkout/reserve.test.ts <strong>42 passed</strong>
+                <small>1.8s</small>
+              </p>
+            </div>
+          </section>
+
+          <aside className="lp-agent-panel" aria-label="Live agents">
+            <div className="lp-agent-panel-heading">
+              <span>
+                <i /> Live agents
+              </span>
+              <strong>3/3</strong>
+            </div>
+            <ul>
+              {AGENTS.map((agent) => {
+                const status = statusForAgent(agent, renderedElapsed);
+                return (
+                  <li
+                    className={`lp-agent-card lp-agent-${agent.tone}`}
+                    key={agent.id}
+                  >
+                    <div>
+                      <i>{agent.initials}</i>
+                      <span>
+                        <strong>{agent.name}</strong>
+                        <small>{agent.model}</small>
+                      </span>
+                      <b>{status}</b>
+                    </div>
+                    <p>{agent.task}</p>
+                    <code>src/checkout/reserve.ts</code>
+                  </li>
+                );
+              })}
+            </ul>
+            <div
+              className={`lp-review-ready${phase === "ready" ? " is-visible" : ""}`}
+            >
+              <Check aria-hidden size={14} />
+              <span>
+                <strong>Ready for review</strong>
+                <small>1 file · 42 tests passed</small>
+              </span>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div className="lp-demo-status" aria-live="polite" id="lp-demo-status">
+        <span>{phaseDefinition.label}</span>
+        <p>{phaseDefinition.summary}</p>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ test-results/
 .testsprite/
 .env.local
 .env.*.local
+.env
 .vercel/
 .DS_Store
 services/orchestrator/bin/

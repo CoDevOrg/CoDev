@@ -15,22 +15,27 @@ test("landing page explains CoDev and offers a clear start", async ({
     if (message.location().url.includes("/_vercel/insights/")) {
       return;
     }
+    // A reused `next dev` server can log a transient HMR handshake failure
+    // while Playwright opens several pages. Production has no HMR socket.
+    if (message.text().includes("/_next/webpack-hmr")) {
+      return;
+    }
     consoleErrors.push(message.text());
   });
 
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: /Ship it together/ }),
+    page.getByRole("heading", { name: /Three agents.*One file/i }),
   ).toBeVisible();
   await expect(
-    page.getByText(/one shared cloud workspace where you, your friends/),
+    page.getByText(/hosted browser workspace where your team can watch/),
   ).toBeVisible();
 
   // The private beta funnel: request access is the primary path, signing in is
   // reserved for people who already hold an invite.
   await expect(
-    page.getByRole("link", { name: /Request access/ }).first(),
+    page.getByRole("link", { name: /Request beta access/ }),
   ).toHaveAttribute("href", "#request");
   await expect(
     page.getByRole("link", { name: "I have an invite" }),
@@ -38,26 +43,33 @@ test("landing page explains CoDev and offers a clear start", async ({
   expect(consoleErrors).toEqual([]);
 });
 
-test("the workspace tour switches scenes on demand", async ({ page }) => {
+test("the workspace demo shows three agents editing one file", async ({
+  page,
+}) => {
   await page.goto("/");
 
-  const tour = page.getByRole("tablist", { name: "Workspace tour" });
-  await expect(tour).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /every agent is doing/ }),
-  ).toBeVisible();
+  const demo = page.getByRole("region", { name: "Shared code editor" });
+  const agents = page.getByLabel("Live agents");
+  await expect(demo).toBeVisible();
+  await expect(agents.getByText("Codex")).toBeVisible();
+  await expect(agents.getByText("Claude")).toBeVisible();
+  await expect(agents.getByText("Review", { exact: true })).toBeVisible();
 
-  await page.getByRole("tab", { name: "Coordination" }).click();
+  await demo.scrollIntoViewIfNeeded();
   await expect(
-    page.getByRole("heading", { name: /what the other agents are touching/ }),
+    page.getByRole("button", { name: "Pause demo" }),
   ).toBeVisible();
-  await expect(page.getByText("src/checkout/reserve.ts").first()).toBeVisible();
+  await page.getByRole("button", { name: "Write" }).click();
+  await expect(
+    page.getByText(/edit separate regions of the file together/),
+  ).toBeVisible();
+  await expect(page.getByLabel("Completed shared file")).toContainText(
+    "checkoutSchema.parse(input)",
+  );
 
-  await page.getByRole("tab", { name: "Sharing" }).click();
-  await expect(
-    page.getByRole("heading", { name: /Share it like a doc/ }),
-  ).toBeVisible();
-  await expect(page.getByText("codev.dev/w/side-project")).toBeVisible();
+  await page.getByRole("button", { name: "Ready" }).click();
+  await expect(agents.getByText("Ready for review")).toBeVisible();
+  await expect(agents).toContainText("42 tests passed");
 });
 
 test("the access request form rejects an incomplete submission", async ({

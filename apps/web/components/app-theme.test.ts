@@ -3,12 +3,16 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const appTheme = readFileSync(
-  resolve(process.cwd(), "app/app-theme.css"),
-  "utf8",
+const normalizeLines = (contents: string) => contents.replaceAll("\r\n", "\n");
+const appTheme = normalizeLines(
+  readFileSync(resolve(process.cwd(), "app/app-theme.css"), "utf8"),
 );
-const globals = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
-const landing = readFileSync(resolve(process.cwd(), "app/landing.css"), "utf8");
+const globals = normalizeLines(
+  readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8"),
+);
+const landing = normalizeLines(
+  readFileSync(resolve(process.cwd(), "app/landing.css"), "utf8"),
+);
 
 describe("CoDev product theme", () => {
   it("sets one dark palette for every AppChrome product page", () => {
@@ -57,7 +61,9 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #061a14;");
+    expect(landing).toContain("--lp-forest-950: #0d1f17;");
+    expect(landing).toContain("--lp-paper: #f2ede0;");
+    expect(landing).toContain("--lp-orange: #d9642c;");
     for (const rule of landing.split("\n")) {
       if (!rule.endsWith("{") || rule.startsWith(" ") || rule.startsWith("@")) {
         continue;
@@ -66,20 +72,17 @@ describe("CoDev product theme", () => {
     }
   });
 
-  it("carries ambient motion through each CoDev page shell", () => {
+  it("keeps ambient motion in product shells without adding it to the landing hero", () => {
     expect(appTheme).toContain("@keyframes codev-page-ambient {");
-    expect(landing).toContain("animation: codev-page-ambient 26s");
+    expect(landing).not.toContain("animation: codev-page-ambient");
     expect(appTheme).toContain("@media (prefers-reduced-motion: reduce) {");
   });
 
-  it("moves landing atmosphere with compositor transforms instead of full-page paints", () => {
+  it("uses product artifacts instead of decorative landing effects", () => {
     expect(appTheme).toContain("transform: translate3d(40px, -32px, 0);");
-    expect(appTheme).not.toContain("background-position: 48% 22%");
-    expect(appTheme).not.toContain("background-size: 135% 135%");
-    expect(appTheme).not.toContain("mix-blend-mode: screen");
-    expect(landing).toContain("position: fixed");
+    expect(landing).not.toContain("background-clip: text");
+    expect(landing).not.toContain("lp-grid");
     expect(landing).not.toContain("feTurbulence");
-    expect(landing).not.toContain("mix-blend-mode: multiply");
   });
 
   it("stops every landing animation for readers who ask for reduced motion", () => {
