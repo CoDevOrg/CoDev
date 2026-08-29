@@ -15,13 +15,13 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
     expect(appTheme).toContain("--surface: var(--codev-black-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
-    expect(appTheme).toContain("--codev-gold-500: #c9a66b;");
+    expect(appTheme).toContain("--codev-gold-500: #f2604a;");
     expect(appTheme).toContain("--orange: var(--codev-gold-500);");
   });
 
   it("uses the same dark surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(19, 18, 16, 0.7);");
+    expect(appTheme).toContain("background: rgba(26, 29, 33, 0.7);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
@@ -57,7 +57,7 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #050504;");
+    expect(landing).toContain("--lp-bg: #121417;");
     expect(landing).toContain(".lp-hero h1 em {");
     expect(landing).toContain("var(--lp-lime)");
     expect(landing).toContain("var(--lp-sky)");
