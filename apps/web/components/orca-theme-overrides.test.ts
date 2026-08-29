@@ -31,6 +31,6 @@ describe("Orca theme overrides", () => {
 
   it("uses the CoDev orange mark in Orca's empty workspace state", () => {
     expect(themeOverrides).toContain(".codev-orca-empty-logo {");
-    expect(themeOverrides).toContain("hue-rotate(340deg)");
+    expect(themeOverrides).toContain("hue-rotate(334deg)");
   });
 });

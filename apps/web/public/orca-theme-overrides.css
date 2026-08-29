@@ -3,7 +3,7 @@
  *
  * This file is first-party CoDev CSS (not part of the upstream Orca build).
  * It is injected at runtime into the Orca iframe by orca-workspace.tsx so the
- * IDE chrome picks up CoDev's unified paper / deep-green / burnt-orange palette
+ * IDE chrome picks up CoDev's unified charcoal / coral product palette
  * without modifying apps/web/public/orca/.
  *
  * Scope intentionally excludes Monaco/editor, terminal, and diff viewers so
@@ -12,14 +12,14 @@
  */
 
 :root {
-  --codev-workspace-surface: #0d1f17;
-  --codev-workspace-surface-2: #142c22;
-  --codev-workspace-surface-3: #1b3a2c;
-  --codev-workspace-ink: #f2ede0;
-  --codev-workspace-muted: #9db3a5;
-  --codev-accent: #d9642c;
-  --codev-accent-soft: rgba(217, 100, 44, 0.16);
-  --codev-secondary: #527e68;
+  --codev-workspace-surface: #121417;
+  --codev-workspace-surface-2: #1a1d21;
+  --codev-workspace-surface-3: #24282e;
+  --codev-workspace-ink: #edeef0;
+  --codev-workspace-muted: #9c9ea3;
+  --codev-accent: #f2604a;
+  --codev-accent-soft: rgba(242, 96, 74, 0.16);
+  --codev-secondary: #5b9bd5;
 }
 
 /*
@@ -42,10 +42,10 @@ html.dark {
   --orca-security-secondary-foreground: var(--codev-workspace-ink);
   --orca-security-muted: var(--codev-workspace-surface-3);
   --orca-security-muted-foreground: var(--codev-workspace-muted);
-  --orca-security-accent: #244633;
+  --orca-security-accent: #2f343b;
   --orca-security-accent-foreground: var(--codev-workspace-ink);
-  --orca-security-border: rgba(242, 237, 224, 0.1);
-  --orca-security-input: rgba(242, 237, 224, 0.2);
+  --orca-security-border: rgba(237, 238, 240, 0.1);
+  --orca-security-input: rgba(237, 238, 240, 0.2);
   --orca-security-ring: var(--codev-accent);
 
   --background: var(--codev-workspace-surface);
@@ -60,25 +60,25 @@ html.dark {
   --secondary-foreground: var(--codev-workspace-ink);
   --muted: var(--codev-workspace-surface-3);
   --muted-foreground: var(--codev-workspace-muted);
-  --accent: #244633;
+  --accent: #2f343b;
   --accent-foreground: var(--codev-workspace-ink);
-  --border: rgba(242, 237, 224, 0.1);
-  --input: rgba(242, 237, 224, 0.2);
+  --border: rgba(237, 238, 240, 0.1);
+  --input: rgba(237, 238, 240, 0.2);
   --ring: var(--codev-accent);
 
   --worktree-sidebar: var(--codev-workspace-surface-2);
   --worktree-sidebar-foreground: var(--codev-workspace-ink);
-  --worktree-sidebar-accent: #244633;
+  --worktree-sidebar-accent: #2f343b;
   --worktree-sidebar-accent-foreground: var(--codev-workspace-ink);
-  --worktree-sidebar-border: rgba(242, 237, 224, 0.1);
+  --worktree-sidebar-border: rgba(237, 238, 240, 0.1);
   --worktree-sidebar-ring: var(--codev-accent);
   --sidebar: var(--codev-workspace-surface-2);
   --sidebar-foreground: var(--codev-workspace-ink);
   --sidebar-primary: var(--codev-accent);
   --sidebar-primary-foreground: var(--codev-workspace-ink);
-  --sidebar-accent: #244633;
+  --sidebar-accent: #2f343b;
   --sidebar-accent-foreground: var(--codev-workspace-ink);
-  --sidebar-border: rgba(242, 237, 224, 0.1);
+  --sidebar-border: rgba(237, 238, 240, 0.1);
   --sidebar-ring: var(--codev-accent);
 }
 
@@ -105,8 +105,8 @@ body,
   width: 64px !important;
   height: 64px !important;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(49%) sepia(72%) saturate(1035%)
-    hue-rotate(340deg) brightness(90%) contrast(88%);
+  filter: brightness(0) saturate(100%) invert(45%) sepia(51%) saturate(2559%)
+    hue-rotate(334deg) brightness(99%) contrast(91%);
 }
 
 /* Background retints for common Orca zinc / near-black surfaces. */
@@ -134,7 +134,7 @@ body,
 [class*="border-zinc-"],
 [class*="border-neutral-"],
 [class*="border-white/"] {
-  border-color: rgba(242, 237, 224, 0.1) !important;
+  border-color: rgba(237, 238, 240, 0.1) !important;
 }
 
 /* Text retints for muted chrome copy. */

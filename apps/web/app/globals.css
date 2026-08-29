@@ -1,59 +1,59 @@
 :root {
-  /* Unified CoDev palette — paper, deep green, burnt orange, muted green. */
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9642c;
-  --violet: #527e68;
-  --workspace-surface: #0d1f17;
-  --workspace-surface-2: #142c22;
-  --workspace-surface-3: #1b3a2c;
-  --workspace-ink: #f2ede0;
-  --workspace-muted: #9db3a5;
-  color-scheme: light;
+  /* Unified CoDev palette — charcoal graphite surfaces, coral accent. */
+  --ink: #edeef0;
+  --muted: #9c9ea3;
+  --muted-2: #7c7f85;
+  --line: rgba(237, 238, 240, 0.14);
+  --line-strong: rgba(237, 238, 240, 0.24);
+  --surface: #121417;
+  --surface-2: #1a1d21;
+  --surface-3: #24282e;
+  --navy: #0e1013;
+  --gold: #f2604a;
+  --gold-bright: #ff7c63;
+  --gold-soft: rgba(242, 96, 74, 0.12);
+  --teal: #f2604a;
+  --teal-soft: rgba(242, 96, 74, 0.12);
+  --orange: #f2604a;
+  --violet: #5b9bd5;
+  --workspace-surface: #121417;
+  --workspace-surface-2: #1a1d21;
+  --workspace-surface-3: #24282e;
+  --workspace-ink: #edeef0;
+  --workspace-muted: #9c9ea3;
+  color-scheme: dark;
 }
 
 /* Shared warm product theme. One palette, two tonal tiers (app shell / workspace). */
 
 .app-page,
 .auth-page {
-  --ink: #173b2d;
-  --muted: #557060;
-  --muted-2: #6b776f;
-  --line: rgba(23, 59, 45, 0.16);
-  --line-strong: rgba(23, 59, 45, 0.24);
-  --surface: #f2e8d8;
-  --surface-2: #f8f1e5;
-  --surface-3: #e7dbc9;
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.12);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.12);
-  --orange: #d9642c;
-  --violet: #527e68;
+  --ink: #edeef0;
+  --muted: #9c9ea3;
+  --muted-2: #7c7f85;
+  --line: rgba(237, 238, 240, 0.12);
+  --line-strong: rgba(237, 238, 240, 0.22);
+  --surface: #121417;
+  --surface-2: #1a1d21;
+  --surface-3: #24282e;
+  --navy: #0e1013;
+  --gold: #f2604a;
+  --gold-bright: #ff7c63;
+  --gold-soft: rgba(242, 96, 74, 0.12);
+  --teal: #f2604a;
+  --teal-soft: rgba(242, 96, 74, 0.12);
+  --orange: #f2604a;
+  --violet: #5b9bd5;
   min-height: 100vh;
   background:
     radial-gradient(
       circle at 82% 0,
-      rgba(217, 101, 45, 0.13),
+      rgba(242, 96, 74, 0.13),
       transparent 28rem
     ),
     radial-gradient(
       circle at 12% 35%,
-      rgba(91, 137, 94, 0.12),
+      rgba(91, 155, 213, 0.12),
       transparent 30rem
     ),
     var(--surface);
@@ -63,20 +63,20 @@
 .workspace-page {
   --ink: var(--workspace-ink);
   --muted: var(--workspace-muted);
-  --muted-2: #7a9184;
-  --line: rgba(242, 237, 224, 0.1);
-  --line-strong: rgba(217, 101, 45, 0.28);
+  --muted-2: #7c7f85;
+  --line: rgba(237, 238, 240, 0.1);
+  --line-strong: rgba(242, 96, 74, 0.28);
   --surface: var(--workspace-surface);
   --surface-2: var(--workspace-surface-2);
   --surface-3: var(--workspace-surface-3);
-  --navy: #0e3025;
-  --gold: #d9642c;
-  --gold-bright: #e1732d;
-  --gold-soft: rgba(217, 101, 45, 0.16);
-  --teal: #d9642c;
-  --teal-soft: rgba(217, 101, 45, 0.16);
-  --orange: #d9642c;
-  --violet: #527e68;
+  --navy: #0e1013;
+  --gold: #f2604a;
+  --gold-bright: #ff7c63;
+  --gold-soft: rgba(242, 96, 74, 0.16);
+  --teal: #f2604a;
+  --teal-soft: rgba(242, 96, 74, 0.16);
+  --orange: #f2604a;
+  --violet: #5b9bd5;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -94,7 +94,7 @@
   height: 44px;
   padding: 0 8px 0 12px;
   background: var(--workspace-surface-2);
-  border-bottom: 1px solid rgba(242, 237, 224, 0.1);
+  border-bottom: 1px solid rgba(237, 238, 240, 0.1);
 }
 
 .workspace-topbar-home {
@@ -111,7 +111,7 @@
 }
 
 .workspace-topbar-home:hover {
-  background: rgba(242, 237, 224, 0.08);
+  background: rgba(237, 238, 240, 0.08);
 }
 
 .workspace-topbar-home svg {
@@ -130,7 +130,7 @@
 .workspace-topbar-capacity {
   flex-shrink: 0;
   padding: 4px 8px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 999px;
   color: var(--workspace-muted);
   font-size: 11px;
@@ -149,7 +149,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 6px;
   background: transparent;
   color: var(--workspace-ink);
@@ -194,7 +194,7 @@
 
 .workspace-status-retry {
   padding: 8px 16px;
-  border: 1px solid rgba(242, 237, 224, 0.28);
+  border: 1px solid rgba(237, 238, 240, 0.28);
   border-radius: 8px;
   background: transparent;
   color: var(--workspace-ink);
@@ -242,7 +242,7 @@
 .workspace-iframe-loading-spinner {
   width: 22px;
   height: 22px;
-  border: 2px solid rgba(242, 237, 224, 0.16);
+  border: 2px solid rgba(237, 238, 240, 0.16);
   border-top-color: var(--teal);
   border-radius: 50%;
   animation: workspace-iframe-loading-spin 0.7s linear infinite;
@@ -267,7 +267,7 @@
   height: 52px;
   padding: 0 20px;
   background: var(--workspace-surface-2);
-  border-bottom: 1px solid rgba(242, 237, 224, 0.1);
+  border-bottom: 1px solid rgba(237, 238, 240, 0.1);
 }
 
 .workspace-chat-provider-group {
@@ -280,7 +280,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 999px;
   background: transparent;
   color: var(--workspace-muted);
@@ -325,7 +325,7 @@
 
 .workspace-chat-ide-button {
   padding: 6px 12px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 6px;
   background: transparent;
   color: var(--workspace-muted);
@@ -402,14 +402,14 @@
 
 .workspace-chat-bubble-agent {
   align-self: flex-start;
-  border: 1px solid rgba(242, 237, 224, 0.12);
+  border: 1px solid rgba(237, 238, 240, 0.12);
   color: var(--workspace-ink);
 }
 
 .workspace-chat-bubble-error {
   align-self: flex-start;
-  border: 1px solid rgba(217, 101, 45, 0.35);
-  background: rgba(217, 101, 45, 0.08);
+  border: 1px solid rgba(242, 96, 74, 0.35);
+  background: rgba(242, 96, 74, 0.08);
   color: var(--workspace-ink);
 }
 
@@ -468,7 +468,7 @@
   align-items: flex-end;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 12px;
   background: var(--workspace-surface-2);
 }
@@ -516,7 +516,7 @@
   background:
     radial-gradient(
       circle at 82% 0,
-      rgba(217, 101, 45, 0.15),
+      rgba(242, 96, 74, 0.15),
       transparent 25rem
     ),
     var(--surface);
@@ -524,12 +524,12 @@
 
 .app-nav,
 .auth-nav {
-  border-color: rgba(23, 59, 45, 0.18);
+  border-color: rgba(237, 238, 240, 0.18);
 }
 
 .app-nav nav,
 .auth-nav > a {
-  color: rgba(23, 59, 45, 0.64);
+  color: rgba(237, 238, 240, 0.64);
 }
 
 .app-nav nav a:hover,
@@ -538,13 +538,13 @@
 }
 
 .user-menu {
-  color: rgba(23, 59, 45, 0.72);
+  color: rgba(237, 238, 240, 0.72);
 }
 
 .user-menu img,
 .user-fallback,
 .member-avatar {
-  border-color: rgba(23, 59, 45, 0.2);
+  border-color: rgba(237, 238, 240, 0.2);
   background: var(--surface-3);
 }
 
@@ -554,34 +554,34 @@
 }
 
 .auth-card {
-  border-color: rgba(23, 59, 45, 0.18);
-  background: rgba(248, 241, 229, 0.92);
-  box-shadow: 0 28px 90px rgba(23, 59, 45, 0.14);
+  border-color: rgba(237, 238, 240, 0.18);
+  background: rgba(26, 29, 33, 0.92);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
 }
 
 .auth-card::before {
-  border-color: rgba(217, 101, 45, 0.18);
+  border-color: rgba(242, 96, 74, 0.18);
 }
 
 .auth-card > p:not(.eyebrow) {
-  color: rgba(23, 59, 45, 0.7);
+  color: rgba(237, 238, 240, 0.7);
 }
 
 .auth-card > small,
 .panel-status,
 .security-note,
 .form-message {
-  color: rgba(23, 59, 45, 0.55);
+  color: rgba(237, 238, 240, 0.55);
 }
 
 .setup-panel,
 .inline-alert {
-  border-color: rgba(217, 101, 45, 0.24);
-  background: rgba(217, 101, 45, 0.08);
+  border-color: rgba(242, 96, 74, 0.24);
+  background: rgba(242, 96, 74, 0.08);
 }
 
 .setup-panel p {
-  color: rgba(23, 59, 45, 0.68);
+  color: rgba(237, 238, 240, 0.68);
 }
 
 .panel-heading h2 {
@@ -592,7 +592,7 @@
 .workspace-card,
 .settings-panel {
   border-color: var(--line-strong);
-  background: rgba(248, 241, 229, 0.78);
+  background: rgba(26, 29, 33, 0.78);
 }
 
 .workspace-card > div:nth-child(2) span,
@@ -601,14 +601,14 @@
 .settings-muted-copy,
 .settings-placeholder p,
 .security-callout p {
-  color: rgba(23, 59, 45, 0.62);
+  color: rgba(237, 238, 240, 0.62);
 }
 
 .secondary-button,
 .danger-button {
   border-color: var(--line-strong);
-  background: rgba(255, 255, 255, 0.32);
-  color: rgba(23, 59, 45, 0.78);
+  background: rgba(237, 238, 240, 0.08);
+  color: rgba(237, 238, 240, 0.78);
 }
 
 select,
@@ -622,11 +622,11 @@ select,
 .picker-grid label > span,
 .credential-form label > span,
 .feedback-form label > span {
-  color: rgba(23, 59, 45, 0.58);
+  color: rgba(237, 238, 240, 0.58);
 }
 
 .workspace-card:hover {
-  border-color: rgba(217, 101, 45, 0.42);
+  border-color: rgba(242, 96, 74, 0.42);
   background: var(--surface-2);
 }
 
@@ -644,8 +644,8 @@ select,
   --landing-deep: #0e3025;
   --landing-paper: #f2e8d8;
   --landing-paper-light: #f8f1e5;
-  --landing-orange: #d9642c;
-  --landing-green-line: rgba(23, 59, 45, 0.2);
+  --landing-orange: #f2604a;
+  --landing-green-line: rgba(237, 238, 240, 0.2);
   position: relative;
   min-height: 100vh;
   overflow-x: clip;
@@ -661,8 +661,8 @@ select,
     linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 38%),
     repeating-linear-gradient(
       0deg,
-      rgba(23, 59, 45, 0.05) 0,
-      rgba(23, 59, 45, 0.05) 2px,
+      rgba(237, 238, 240, 0.05) 0,
+      rgba(237, 238, 240, 0.05) 2px,
       transparent 2px,
       transparent 12px
     );
@@ -692,7 +692,7 @@ select,
   height: min(46vw, 30rem);
   background: radial-gradient(
     circle,
-    rgba(217, 101, 45, 0.32) 0%,
+    rgba(242, 96, 74, 0.32) 0%,
     transparent 68%
   );
   animation: codev-page-ambient 26s ease-in-out infinite alternate;
@@ -705,7 +705,7 @@ select,
   height: min(52vw, 36rem);
   background: radial-gradient(
     circle,
-    rgba(91, 137, 94, 0.22) 0%,
+    rgba(91, 155, 213, 0.22) 0%,
     transparent 70%
   );
   animation: codev-ambient-float 18s ease-in-out infinite;
@@ -717,7 +717,7 @@ select,
   inset: 0;
   opacity: 0.12;
   background-image: radial-gradient(
-    rgba(23, 59, 45, 0.35) 0.55px,
+    rgba(237, 238, 240, 0.35) 0.55px,
     transparent 0.7px
   );
   background-size: 3px 3px;
@@ -769,7 +769,7 @@ select,
   display: flex;
   align-items: center;
   gap: 44px;
-  color: rgba(23, 59, 45, 0.7);
+  color: rgba(237, 238, 240, 0.7);
   font-size: 17px;
   font-weight: 560;
 }
@@ -855,7 +855,7 @@ select,
 .landing-hero-lede {
   max-width: 690px;
   margin: 47px auto 0;
-  color: rgba(23, 59, 45, 0.76);
+  color: rgba(237, 238, 240, 0.76);
   font-size: 23px;
   line-height: 1.62;
 }
@@ -904,7 +904,7 @@ select,
 
 .landing-hero-note {
   margin: 40px 0 0;
-  color: rgba(23, 59, 45, 0.52);
+  color: rgba(237, 238, 240, 0.52);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -920,7 +920,7 @@ select,
   display: flex;
   margin-bottom: 72px;
   justify-content: space-between;
-  color: rgba(23, 59, 45, 0.54);
+  color: rgba(237, 238, 240, 0.54);
   font-size: 13px;
   font-weight: 700;
 }
@@ -946,7 +946,7 @@ select,
 .landing-workflow-heading > p {
   max-width: 550px;
   margin: 9px 0 0;
-  color: rgba(23, 59, 45, 0.72);
+  color: rgba(237, 238, 240, 0.72);
   font-size: 21px;
   line-height: 1.7;
 }
@@ -990,7 +990,7 @@ select,
 .landing-benefits p {
   max-width: 390px;
   margin: 0;
-  color: rgba(23, 59, 45, 0.68);
+  color: rgba(237, 238, 240, 0.68);
   font-size: 17px;
   line-height: 1.6;
 }
@@ -1043,7 +1043,7 @@ select,
 
 .landing-workflow-step p {
   margin: 7px 0 0;
-  color: rgba(23, 59, 45, 0.66);
+  color: rgba(237, 238, 240, 0.66);
   font-size: 17px;
 }
 
@@ -1091,7 +1091,7 @@ select,
   align-items: center;
   gap: 39px;
   border-top: 1px solid var(--landing-green-line);
-  color: rgba(23, 59, 45, 0.57);
+  color: rgba(237, 238, 240, 0.57);
   font-size: 14px;
 }
 
@@ -3802,14 +3802,14 @@ select,
 }
 
 html {
-  background: #0d1f17;
+  background: #121417;
   scroll-behavior: smooth;
 }
 
 body {
   min-width: 320px;
   margin: 0;
-  background: #0d1f17;
+  background: #121417;
   color: var(--ink);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
@@ -3842,7 +3842,7 @@ button {
 }
 
 ::selection {
-  background: rgba(212, 175, 55, 0.24);
+  background: rgba(242, 96, 74, 0.24);
 }
 
 /* Authenticated product surfaces */
@@ -3853,7 +3853,7 @@ button {
   background:
     radial-gradient(
       circle at 76% 0,
-      rgba(212, 175, 55, 0.07),
+      rgba(242, 96, 74, 0.07),
       transparent 28rem
     ),
     var(--surface);
@@ -3966,7 +3966,7 @@ button {
 }
 
 .auth-credentials-form label > span {
-  color: rgba(23, 59, 45, 0.62);
+  color: rgba(237, 238, 240, 0.62);
   font-family: var(--font-geist-mono), monospace;
   font-size: 10px;
   font-weight: 650;
@@ -3978,18 +3978,18 @@ button {
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
-  border: 1px solid rgba(23, 59, 45, 0.2);
+  border: 1px solid rgba(237, 238, 240, 0.2);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.34);
   color: var(--ink);
 }
 
 .auth-credentials-form input::placeholder {
-  color: rgba(23, 59, 45, 0.42);
+  color: rgba(237, 238, 240, 0.42);
 }
 
 .auth-password-guidance {
-  color: rgba(23, 59, 45, 0.76);
+  color: rgba(237, 238, 240, 0.76);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -4025,12 +4025,12 @@ button {
 }
 
 .auth-password-guidance .unmet {
-  color: rgba(23, 59, 45, 0.68);
+  color: rgba(237, 238, 240, 0.68);
 }
 
 .auth-mode-switch {
   margin: 2px 0 0;
-  color: rgba(23, 59, 45, 0.72);
+  color: rgba(237, 238, 240, 0.72);
   font-size: 14px;
   text-align: center;
 }
@@ -4039,7 +4039,7 @@ button {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--landing-orange, #d9642c);
+  color: var(--landing-orange, #f2604a);
   cursor: pointer;
   font: inherit;
   font-weight: 650;
@@ -4048,7 +4048,7 @@ button {
 }
 
 .auth-mode-switch a {
-  color: var(--landing-orange, #d9642c);
+  color: var(--landing-orange, #f2604a);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -4061,7 +4061,7 @@ button {
 }
 
 .auth-forgot-password a {
-  color: var(--landing-orange, #d9642c);
+  color: var(--landing-orange, #f2604a);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -4074,17 +4074,17 @@ button {
   align-items: center;
   justify-content: center;
   padding: 0 14px;
-  border: 1px solid var(--navy);
+  border: 1px solid var(--orange);
   border-radius: 7px;
-  background: var(--navy);
-  color: #f8f1e5;
+  background: var(--orange);
+  color: #edeef0;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
 }
 
 .auth-submit:hover {
-  background: #173b2d;
+  background: var(--gold-bright);
 }
 
 .github-button,
@@ -4158,9 +4158,9 @@ button {
 .inline-alert {
   margin-top: 26px;
   padding: 16px;
-  border: 1px solid rgba(212, 175, 55, 0.22);
+  border: 1px solid rgba(242, 96, 74, 0.22);
   border-radius: 8px;
-  background: rgba(212, 175, 55, 0.07);
+  background: rgba(242, 96, 74, 0.07);
 }
 
 .setup-panel p {
@@ -4188,7 +4188,7 @@ button {
   height: 7px;
   border-radius: 50%;
   background: var(--teal);
-  box-shadow: 0 0 9px rgba(212, 175, 55, 0.55);
+  box-shadow: 0 0 9px rgba(242, 96, 74, 0.55);
 }
 
 .dot-muted {
@@ -4239,7 +4239,7 @@ button {
 }
 
 .secondary-button:hover {
-  border-color: rgba(212, 175, 55, 0.35);
+  border-color: rgba(242, 96, 74, 0.35);
   color: var(--ink);
 }
 
@@ -4363,7 +4363,7 @@ select,
 
 .feedback-dialog-heading .eyebrow {
   margin: 0 0 4px;
-  color: var(--accent, #d9642c);
+  color: var(--accent, #f2604a);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -4672,7 +4672,7 @@ button:disabled {
 }
 
 .workspace-card:hover {
-  border-color: rgba(212, 175, 55, 0.28);
+  border-color: rgba(242, 96, 74, 0.28);
   background: var(--surface-2);
 }
 
@@ -4740,7 +4740,7 @@ button:disabled {
   padding: 17px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(212, 175, 55, 0.035);
+  background: rgba(242, 96, 74, 0.035);
 }
 
 .security-callout strong {
@@ -4766,7 +4766,7 @@ button:disabled {
   padding: 10px;
   align-items: center;
   gap: 12px;
-  border: 1px solid rgba(212, 175, 55, 0.18);
+  border: 1px solid rgba(242, 96, 74, 0.18);
   border-radius: 7px;
   background: var(--teal-soft);
 }
@@ -5000,7 +5000,7 @@ button:disabled {
 
 .primary-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(212, 175, 55, 0.18);
+  box-shadow: 0 10px 30px rgba(242, 96, 74, 0.18);
 }
 
 .hero-note {
@@ -5062,7 +5062,7 @@ footer > span {
 /* Workspace home and account menu refinements */
 
 .app-page {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 .profile-menu {
@@ -5144,7 +5144,7 @@ footer > span {
   border: 1px solid var(--line-strong);
   border-radius: 14px;
   background: var(--surface-2);
-  box-shadow: 0 18px 45px rgba(23, 59, 45, 0.18);
+  box-shadow: 0 18px 45px rgba(237, 238, 240, 0.18);
 }
 
 .profile-menu-heading {
@@ -5275,7 +5275,7 @@ footer > span {
 .workspace-card:hover {
   border-color: var(--teal);
   background: var(--surface-2);
-  box-shadow: 0 14px 30px rgba(23, 59, 45, 0.1);
+  box-shadow: 0 14px 30px rgba(237, 238, 240, 0.1);
   transform: translateY(-2px);
 }
 
@@ -5356,7 +5356,7 @@ footer > span {
   display: grid;
   padding: 24px;
   place-items: center;
-  background: rgba(23, 59, 45, 0.3);
+  background: rgba(237, 238, 240, 0.3);
   backdrop-filter: blur(7px);
 }
 
@@ -5368,7 +5368,7 @@ footer > span {
   border: 1px solid var(--line-strong);
   border-radius: 18px;
   background: var(--surface-2);
-  box-shadow: 0 24px 80px rgba(23, 59, 45, 0.24);
+  box-shadow: 0 24px 80px rgba(237, 238, 240, 0.24);
 }
 
 .workspace-create-heading {
@@ -5561,7 +5561,7 @@ footer > span {
 .settings-card {
   border-color: var(--line-strong);
   background: var(--surface-2);
-  box-shadow: 0 10px 30px rgba(23, 59, 45, 0.06);
+  box-shadow: 0 10px 30px rgba(237, 238, 240, 0.06);
 }
 
 .settings-card-heading h2,
@@ -5806,7 +5806,7 @@ footer > span {
 
 .workspace-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(23, 59, 45, 0.09);
+  box-shadow: 0 12px 24px rgba(237, 238, 240, 0.09);
 }
 
 .workspace-card-icon {
@@ -5815,7 +5815,7 @@ footer > span {
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background:
-    linear-gradient(135deg, rgba(23, 59, 45, 0.08), transparent 58%),
+    linear-gradient(135deg, rgba(237, 238, 240, 0.08), transparent 58%),
     var(--surface-3);
 }
 
@@ -6011,8 +6011,8 @@ footer > span {
   padding: 28px 32px;
   border-radius: 18px;
   background: var(--surface-2, #ffffff);
-  border: 1px solid rgba(23, 59, 45, 0.12);
-  box-shadow: 0 8px 24px -8px rgba(23, 59, 45, 0.08);
+  border: 1px solid rgba(237, 238, 240, 0.12);
+  box-shadow: 0 8px 24px -8px rgba(237, 238, 240, 0.08);
 }
 
 .home-welcome-header {
@@ -6046,7 +6046,7 @@ footer > span {
 .home-welcome-text h1 {
   font-size: 30px;
   font-weight: 750;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #edeef0);
   margin: 0 0 8px 0;
   letter-spacing: -0.025em;
   line-height: 1.2;
@@ -6057,7 +6057,7 @@ footer > span {
 }
 
 .home-welcome-text p {
-  color: var(--muted, #52665a);
+  color: var(--muted, #9c9ea3);
   font-size: 14.5px;
   line-height: 1.55;
   margin: 0;
@@ -6075,8 +6075,8 @@ footer > span {
   gap: 4px;
   padding: 12px 18px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(23, 59, 45, 0.1);
+  background: rgba(237, 238, 240, 0.05);
+  border: 1px solid rgba(237, 238, 240, 0.1);
   min-width: 130px;
 }
 
@@ -6091,7 +6091,7 @@ footer > span {
 .stat-value {
   font-size: 18px;
   font-weight: 750;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #edeef0);
 }
 
 .resume-primary-button {
@@ -6124,7 +6124,7 @@ footer > span {
 .home-section-header h2 {
   font-size: 20px;
   font-weight: 700;
-  color: var(--ink, #173b2d);
+  color: var(--ink, #edeef0);
   margin: 0 0 4px 0;
 }
 

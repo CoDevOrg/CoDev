@@ -14,13 +14,13 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
     expect(appTheme).toContain("--surface: var(--codev-forest-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
-    expect(appTheme).toContain("--codev-orange-500: #d9642c;");
+    expect(appTheme).toContain("--codev-orange-500: #f2604a;");
     expect(appTheme).toContain("--orange: var(--codev-orange-500);");
   });
 
   it("uses the same dark surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(20, 44, 34, 0.7);");
+    expect(appTheme).toContain("background: rgba(26, 29, 33, 0.7);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
