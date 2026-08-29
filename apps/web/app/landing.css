@@ -691,135 +691,211 @@
   color: var(--lp-ink);
 }
 
-/* Invite dialog — a centered overlay, mirroring the real WorkspaceShareDialog. */
-.lp-invite-overlay {
+/* Large share dialog shown during the Join phase. */
+.lp-share-overlay {
   position: absolute;
-  inset: 0;
   z-index: 8;
+  inset: 0;
   display: grid;
+  padding: 22px;
   place-items: center;
-  padding: 16px;
-  background: rgba(10, 12, 14, 0.6);
-  backdrop-filter: blur(1px);
-  animation: lp-scrim-in 0.2s ease both;
+  background: rgba(10, 12, 14, 0.62);
+  backdrop-filter: blur(2px);
+  animation: lp-share-scrim-in 0.2s ease both;
 }
 
-@keyframes lp-scrim-in {
+.lp-share-panel {
+  display: grid;
+  width: min(520px, calc(100% - 18px));
+  padding: 22px;
+  gap: 18px;
+  border: 1px solid #2c3138;
+  border-radius: 14px;
+  background: #0c0e10;
+  box-shadow: 0 26px 70px -22px rgba(0, 0, 0, 0.78);
+  color: #edeef0;
+  text-align: left;
+  animation: lp-share-panel-in 0.26s ease both;
+}
+
+.lp-share-heading,
+.lp-share-heading > span,
+.lp-share-person,
+.lp-share-restricted,
+.lp-share-actions,
+.lp-share-actions > span {
+  display: flex;
+  align-items: center;
+}
+
+.lp-share-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lp-share-heading h3,
+.lp-share-section h4,
+.lp-share-person strong,
+.lp-share-person small,
+.lp-share-restricted strong,
+.lp-share-restricted small {
+  margin: 0;
+}
+
+.lp-share-heading h3 {
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.lp-share-heading > span {
+  gap: 15px;
+  color: #9ba1ab;
+}
+
+.lp-share-add {
+  min-height: 52px;
+  padding: 10px 13px;
+  border: 1px solid #f2604a;
+  border-radius: 5px;
+  background: #1a1d21;
+  color: #9ba1ab;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.lp-share-section {
+  display: grid;
+  gap: 13px;
+}
+
+.lp-share-section h4 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.lp-share-person {
+  gap: 11px;
+}
+
+.lp-share-person > i {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid #2c3138;
+  border-radius: 50%;
+  background: #5b9bd5;
+  color: #edeef0;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.lp-share-person > span,
+.lp-share-restricted > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lp-share-person strong,
+.lp-share-restricted strong {
+  color: #edeef0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lp-share-person small,
+.lp-share-restricted small {
+  color: #9ba1ab;
+  font-size: 11px;
+}
+
+.lp-share-person em {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.lp-share-general {
+  gap: 12px;
+}
+
+.lp-share-restricted {
+  gap: 11px;
+}
+
+.lp-share-restricted > i {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #2c3138;
+  border-radius: 50%;
+  background: #20242a;
+  color: #9ba1ab;
+}
+
+.lp-share-restricted strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lp-share-actions {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.lp-share-actions > span {
+  min-height: 39px;
+  padding: 0 16px;
+  gap: 8px;
+  border: 1px solid #f2604a;
+  border-radius: 22px;
+  background: #1a1d21;
+  color: #ff7c63;
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.lp-share-actions > span:last-child {
+  border-color: #f2604a;
+  background: #f2604a;
+  color: #0c0e10;
+}
+
+.lp-share-actions > span.is-copied {
+  border-color: #3fbf7a;
+  color: #3fbf7a;
+}
+
+.lp-share-actions > span.is-done {
+  border-color: #3fbf7a;
+  background: #3fbf7a;
+}
+
+@keyframes lp-share-scrim-in {
   from {
     opacity: 0;
   }
 }
 
-.lp-invite-pop {
-  display: grid;
-  box-sizing: border-box;
-  width: min(250px, 100%);
-  min-width: 0;
-  padding: 13px;
-  gap: 8px;
-  border: 1px solid rgba(237, 238, 240, 0.22);
-  border-radius: 12px;
-  background: var(--lp-bg-2);
-  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.7);
-  text-align: left;
-  cursor: default;
-  animation: lp-invite-in 0.24s ease both;
-}
-
-@keyframes lp-invite-in {
+@keyframes lp-share-panel-in {
   from {
     opacity: 0;
     transform: translateY(-8px) scale(0.98);
   }
 }
 
-.lp-invite-title {
-  color: var(--lp-ink);
-  font-size: 10.5px;
-  font-weight: 680;
-}
-
-.lp-invite-sub {
-  color: var(--lp-muted);
-  font-size: 8.5px;
-  font-style: normal;
-  line-height: 1.45;
-}
-
-.lp-invite-role {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid rgba(237, 238, 240, 0.1);
-  border-radius: 6px;
-  color: var(--lp-ink);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 620;
-}
-
-.lp-invite-role em {
-  color: var(--lp-muted);
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 550;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.lp-invite-line {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 5px 6px 5px 8px;
-  border: 1px solid rgba(237, 238, 240, 0.12);
-  border-radius: 6px;
-  background: var(--lp-panel-2);
-  font-style: normal;
-}
-
-.lp-invite-line code {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  color: var(--lp-muted);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lp-invite-line em {
-  flex: 0 0 auto;
-  padding: 3px 8px;
-  border-radius: 5px;
-  background: var(--lp-orange);
-  color: #0c0e10;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 750;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.lp-invite-line.is-done em {
-  background: var(--lp-sky);
-  color: #0c0e10;
-}
-
-.lp-invite-status {
-  min-height: 10px;
-  color: var(--lp-sky);
-  font-size: 8.5px;
-  font-style: normal;
-  font-weight: 550;
-}
-
-/* Guide cursor that walks the viewer through Share -> Copy -> Send. */
+/* Guide cursor that walks the viewer through Share -> Copy link -> Done. */
 .lp-demo-cursor {
   position: absolute;
   top: 0;
@@ -853,7 +929,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  border: 2px solid var(--lp-sky);
+  border: 2px solid #ff7c63;
   animation: lp-cursor-tap 0.45s ease-out;
 }
 
@@ -2076,7 +2152,7 @@
     display: none;
   }
 
-  .lp-invite-overlay {
+  .lp-share-overlay {
     padding: 8px;
   }
 

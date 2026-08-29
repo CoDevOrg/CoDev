@@ -1,6 +1,18 @@
 "use client";
 
-import { Check, Pause, Play, RotateCcw, Share2, Users } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  HelpCircle,
+  Link2,
+  LockKeyhole,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  Share2,
+  Users,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /** Pointer that walks the viewer through the invite steps in the Join phase. */
@@ -55,7 +67,7 @@ const INVITE = {
   shareOpensAt: 850,
   /** Cursor clicks Copy on the link row. */
   copyAt: 2_150,
-  /** Cursor clicks Send on the invite row. */
+  /** Cursor clicks Done after the link is copied. */
   sendAt: 3_150,
   /** The invited teammate lands in the room. */
   guestJoinsAt: 3_600,
@@ -405,17 +417,22 @@ function statusForAgent(agent: AgentTrack, elapsed: number) {
   return "Joining";
 }
 
-export function LandingWorkspaceDemo() {
+export function LandingWorkspaceDemo({
+  initialElapsed = 0,
+}: {
+  /** Allows deterministic inspection of a point in the choreographed demo. */
+  initialElapsed?: number;
+}) {
   const reducedMotion = usePrefersReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const shareRef = useRef<HTMLSpanElement>(null);
-  const copyRef = useRef<HTMLElement>(null);
-  const sendRef = useRef<HTMLElement>(null);
+  const copyRef = useRef<HTMLSpanElement>(null);
+  const sendRef = useRef<HTMLSpanElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
-  const elapsedRef = useRef(0);
+  const elapsedRef = useRef(initialElapsed);
   const startedRef = useRef(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(initialElapsed);
   const [playing, setPlaying] = useState(false);
   const [inView, setInView] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
@@ -660,36 +677,62 @@ export function LandingWorkspaceDemo() {
 
         {sharePanelOpen ? (
           <div
-            className="lp-invite-overlay"
+            className="lp-share-overlay"
             role="note"
-            aria-label="Share workspace"
+            aria-label="Share acme storefront workspace"
           >
-            <div className="lp-invite-pop">
-              <b className="lp-invite-title">Share workspace</b>
-              <i className="lp-invite-sub">
-                Anyone with the link joins at the role you pick. Links are
-                single-use and expire in 24h.
-              </i>
-              <i className="lp-invite-role">
-                <em>Role</em>
-                {INVITE.role}
-              </i>
-              <i className={`lp-invite-line${linkCopied ? " is-done" : ""}`}>
-                <code>{INVITE.link}</code>
-                <em ref={copyRef}>{linkCopied ? "Copied" : "Copy"}</em>
-              </i>
-              <i className={`lp-invite-line${inviteSent ? " is-done" : ""}`}>
-                <code>{INVITE.invitee}</code>
-                <em ref={sendRef}>{inviteSent ? "Sent" : "Send"}</em>
-              </i>
-              <i className="lp-invite-status">
-                {inviteSent
-                  ? "Sent. Casey opened the link."
-                  : linkCopied
-                    ? "Link copied."
-                    : " "}
-              </i>
-            </div>
+            <section className="lp-share-panel">
+              <header className="lp-share-heading">
+                <h3>Share &apos;acme/storefront&apos;</h3>
+                <span aria-hidden="true">
+                  <HelpCircle size={16} />
+                  <Settings size={16} />
+                </span>
+              </header>
+              <div className="lp-share-add">Add people, groups, or teams</div>
+              <div className="lp-share-section">
+                <h4>People with access</h4>
+                <div className="lp-share-person">
+                  <i>AM</i>
+                  <span>
+                    <strong>Alex Morgan (you)</strong>
+                    <small>alex@acme.dev</small>
+                  </span>
+                  <em>Owner</em>
+                </div>
+              </div>
+              <div className="lp-share-section lp-share-general">
+                <h4>General access</h4>
+                <div className="lp-share-restricted">
+                  <i>
+                    <LockKeyhole size={15} />
+                  </i>
+                  <span>
+                    <strong>
+                      Restricted <ChevronDown size={12} />
+                    </strong>
+                    <small>
+                      Only people with access can open with the link
+                    </small>
+                  </span>
+                </div>
+              </div>
+              <footer className="lp-share-actions">
+                <span
+                  className={linkCopied ? "is-copied" : undefined}
+                  ref={copyRef}
+                >
+                  {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
+                  {linkCopied ? "Link copied" : "Copy link"}
+                </span>
+                <span
+                  className={inviteSent ? "is-done" : undefined}
+                  ref={sendRef}
+                >
+                  Done
+                </span>
+              </footer>
+            </section>
           </div>
         ) : null}
 
