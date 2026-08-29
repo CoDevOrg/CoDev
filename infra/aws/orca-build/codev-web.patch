@@ -9150,6 +9150,62 @@ index 2ebecc5..32289ea 100644
        {tabStripOverflowState.hasOverflow ? (
          <Tooltip>
            <TooltipTrigger asChild>
+diff --git a/src/renderer/src/components/terminal-pane/TerminalPane.tsx b/src/renderer/src/components/terminal-pane/TerminalPane.tsx
+index 057f9e1..dbf55c1 100644
+--- a/src/renderer/src/components/terminal-pane/TerminalPane.tsx
++++ b/src/renderer/src/components/terminal-pane/TerminalPane.tsx
+@@ -119,6 +119,7 @@ import {
+   type NativeChatLeafRoute
+ } from '../native-chat/native-chat-leaf-routing'
+ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
++import { isCodevEmbedded } from '@/web/codev-embedded'
+ import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
+ import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
+ import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
+@@ -582,6 +583,14 @@ function TerminalPane(
+   // Per-leaf: a split can mix supported/unsupported agents; the leaf's live agent is authoritative, tab-wide hints only fill in before hooks arrive.
+   const isChatEligibleForLeaf = useCallback(
+     (leafId: string | null): boolean => {
++      // CoDev: the workspace agent tab is a chat surface by definition. During
++      // cold start the PTY is still booting and no agent hook has landed, so
++      // the generic checks below would report the leaf ineligible and the
++      // route resolver would demote the tab to the raw agent TUI. While the tab
++      // is already in chat mode, keep it eligible so it never drops out.
++      if (isCodevEmbedded() && isChatViewMode) {
++        return true
++      }
+       const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+       const launchAgent = nativeChatLaunchAgentForLeaf({
+         launchAgent: terminalTab?.launchAgent,
+@@ -599,6 +608,7 @@ function TerminalPane(
+       })
+     },
+     [
++      isChatViewMode,
+       tabAgentTypeByLeaf,
+       nativeChatEnabled,
+       nativeChatTranscriptIsLocalReadable,
+@@ -610,6 +620,20 @@ function TerminalPane(
+   )
+   const applyNativeChatLeafRoute = useCallback(
+     (route: NativeChatLeafRoute): void => {
++      // CoDev: never auto-demote the workspace agent tab to the raw agent TUI.
++      // A cold-start eligibility miss or a spurious mid-boot "agent exited"
++      // signal must not strip the chat surface — that surface is the whole
++      // point of the embed, and the composer re-launches the agent on the next
++      // send. Keep chat mode and anchor it to the live pane; normal routing
++      // resumes once the agent emits its first event.
++      if (isCodevEmbedded() && route.exitChat) {
++        const liveLeaf =
++          route.chatLeafId ?? managerRef.current?.getActivePane()?.leafId ?? chatLeafId
++        if (liveLeaf !== chatLeafId) {
++          setChatLeafId(liveLeaf)
++        }
++        return
++      }
+       if (route.chatLeafId !== chatLeafId) {
+         setChatLeafId(route.chatLeafId)
+       }
 diff --git a/src/renderer/src/env.d.ts b/src/renderer/src/env.d.ts
 index 5ecc70a..feabb92 100644
 --- a/src/renderer/src/env.d.ts
