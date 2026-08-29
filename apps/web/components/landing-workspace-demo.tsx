@@ -54,7 +54,7 @@ type AgentTrack = {
   editsTo: number;
 };
 
-const DEMO_DURATION = 17_600;
+const DEMO_DURATION = 34_000;
 
 /**
  * Beats inside the Join phase that walk through the real invite flow: the
@@ -131,14 +131,14 @@ const PHASES: {
   {
     key: "write",
     label: "Write",
-    endpoint: 12_950,
+    endpoint: 27_000,
     summary:
-      "Three agents, three branches. They hand off through the workspace brain, never the same file.",
+      "Two agents caught the same bug. They sorted it out between themselves — no orchestrator — and split the work.",
   },
   {
     key: "verify",
     label: "Verify",
-    endpoint: 15_750,
+    endpoint: 30_500,
     summary:
       "The agents run the checkout tests and review the combined change.",
   },
@@ -150,39 +150,44 @@ const PHASES: {
   },
 ];
 
+/**
+ * The crew. Each agent has ONE colour (tone) that is used everywhere it
+ * appears — live-agents panel, editor cursor, tabs, and the coordination
+ * board. Codex = orange, Claude = violet, Cursor = blue.
+ */
 const AGENTS: AgentTrack[] = [
   {
     id: "codex",
     name: "Codex",
     model: "OpenAI",
     initials: "CX",
-    tone: "purple",
-    task: "Validate checkout input",
-    branch: "agent/checkout-race",
-    editsFrom: 4_750,
-    editsTo: 11_200,
+    tone: "orange",
+    task: "Harden checkout validation",
+    branch: "agent/checkout-guard",
+    editsFrom: 4_900,
+    editsTo: 27_000,
   },
   {
     id: "claude",
     name: "Claude",
     model: "Anthropic",
     initials: "CL",
-    tone: "orange",
-    task: "Make reservations idempotent",
+    tone: "green",
+    task: "Idempotent reservations",
     branch: "agent/idempotency",
-    editsFrom: 5_000,
-    editsTo: 12_100,
+    editsFrom: 5_200,
+    editsTo: 27_000,
   },
   {
-    id: "review",
-    name: "Review",
-    model: "CoDev",
-    initials: "RV",
-    tone: "green",
-    task: "Guard retries, then review",
-    branch: "agent/retry-guard",
-    editsFrom: 5_250,
-    editsTo: 12_950,
+    id: "cursor",
+    name: "Cursor",
+    model: "Cursor",
+    initials: "CU",
+    tone: "purple",
+    task: "Retry with backoff",
+    branch: "agent/retry-backoff",
+    editsFrom: 5_400,
+    editsTo: 27_000,
   },
 ];
 
@@ -206,10 +211,10 @@ const FILES: EditorFile[] = [
   {
     id: "reserve",
     tab: "reserve.ts",
-    branch: "agent/checkout-race",
+    branch: "agent/checkout-guard",
     path: "src/checkout/reserve.ts",
     lines: 13,
-    agent: { name: "Codex", tone: "purple" },
+    agent: { name: "Codex", tone: "orange" },
     base: [
       [1, 'import { audit } from "@/lib/audit";'],
       [2, 'import { checkoutSchema } from "@/lib/checkout";'],
@@ -224,26 +229,26 @@ const FILES: EditorFile[] = [
     segments: [
       {
         line: 8,
-        start: 5_100,
+        start: 5_400,
         text: "  const cart = reserveSchema.parse(input);",
       },
       {
         line: 9,
-        start: 6_200,
+        start: 7_400,
         text: "  const lock = await claim(`checkout:${cart.id}`);",
       },
       {
         line: 10,
-        start: 7_200,
+        start: 9_600,
         text: "  const order = await commit(cart, lock);",
       },
       {
         line: 12,
-        start: 7_900,
+        start: 11_400,
         text: '  audit.record("checkout.reserved", order.id);',
       },
     ],
-    focus: [4_750, 8_400],
+    focus: [4_750, 12_400],
   },
   {
     id: "session",
@@ -251,7 +256,7 @@ const FILES: EditorFile[] = [
     branch: "agent/idempotency",
     path: "src/checkout/session.ts",
     lines: 12,
-    agent: { name: "Claude", tone: "orange" },
+    agent: { name: "Claude", tone: "green" },
     base: [
       [1, 'import { redis } from "@/lib/redis";'],
       [2, 'import { reserveSchema } from "./reserve";'],
@@ -263,28 +268,28 @@ const FILES: EditorFile[] = [
       [12, "}"],
     ],
     segments: [
-      { line: 6, start: 8_500, text: "  const held = await redis.get(key);" },
-      { line: 7, start: 9_200, text: "  if (held) return JSON.parse(held);" },
+      { line: 6, start: 12_800, text: "  const held = await redis.get(key);" },
+      { line: 7, start: 14_600, text: "  if (held) return JSON.parse(held);" },
       {
         line: 9,
-        start: 9_800,
+        start: 16_400,
         text: "  const session = reserveSchema.session(cartId);",
       },
       {
         line: 10,
-        start: 10_300,
+        start: 18_200,
         text: "  await redis.set(key, session, { ex: 900 });",
       },
     ],
-    focus: [8_400, 10_800],
+    focus: [12_400, 19_400],
   },
   {
     id: "retry",
     tab: "retry.ts",
-    branch: "agent/retry-guard",
+    branch: "agent/retry-backoff",
     path: "src/lib/retry.ts",
     lines: 9,
-    agent: { name: "Review", tone: "green" },
+    agent: { name: "Cursor", tone: "purple" },
     base: [
       [1, "type Task<T> = () => Promise<T>;"],
       [2, ""],
@@ -294,25 +299,84 @@ const FILES: EditorFile[] = [
       [9, "}"],
     ],
     segments: [
-      { line: 4, start: 10_850, text: "  for (let i = 0; i < tries; i++) {" },
-      { line: 5, start: 11_450, text: "    try { return await task(); }" },
+      { line: 4, start: 19_800, text: "  for (let i = 0; i < tries; i++) {" },
+      { line: 5, start: 21_800, text: "    try { return await task(); }" },
       {
         line: 6,
-        start: 12_050,
+        start: 23_800,
         text: "    catch (err) { return backoff(i, err); }",
       },
     ],
-    focus: [10_800, 12_950],
+    focus: [19_400, 27_000],
   },
 ];
 
-/** Workspace-brain events shown during Write: claims, hand-offs, no conflicts. */
-const COORD_EVENTS: { at: number; text: string }[] = [
-  { at: 5_200, text: "Codex claimed reserve.ts" },
-  { at: 7_600, text: "Claude is waiting on reserveSchema from Codex" },
-  { at: 8_500, text: "Codex pushed it, Claude picked up session.ts" },
-  { at: 11_200, text: "Review diffing all 3 branches, 0 file conflicts" },
+/**
+ * The Write-phase centrepiece. All three agents are building their own
+ * feature. Two of them (Codex and Cursor) independently land on the same bug
+ * in a shared file. The agents notice the overlap themselves, talk it out
+ * peer-to-peer (there is no orchestrator model in the loop), and split it:
+ * one takes the fix, the other keeps shipping its feature. Nothing is built
+ * twice, and there is never a conflict to merge.
+ */
+const SYNC = {
+  bugPath: "src/lib/money.ts",
+  detectedAt: 9_000,
+  msg1At: 13_500,
+  msg2At: 17_000,
+  splitAt: 20_500,
+} as const;
+
+/**
+ * Guided pop-outs layered over the Write phase. They do not exist in the real
+ * product — they are here so a first-time viewer can follow what the agents
+ * are doing. One shows at a time, each held long enough to read.
+ */
+const POPS: {
+  from: number;
+  to: number;
+  step: string;
+  title: string;
+  body: string;
+}[] = [
+  {
+    from: 5_600,
+    to: 8_800,
+    step: "1 / 4",
+    title: "Three agents, working at once",
+    body: "Codex, Claude and Cursor each pick up a feature and start editing in parallel — their own branch, their own files.",
+  },
+  {
+    from: 9_400,
+    to: 13_300,
+    step: "2 / 4",
+    title: "Two of them hit the same bug",
+    body: "Codex and Cursor both trip over the same rounding bug in money.ts. Left alone they would each fix it — duplicated work, and a merge conflict later.",
+  },
+  {
+    from: 13_900,
+    to: 20_200,
+    step: "3 / 4",
+    title: "They sort it out themselves",
+    body: "The agents see each other's changes live and message each other directly. No orchestrator model, no human in the loop — the agents decide.",
+  },
+  {
+    from: 21_200,
+    to: 26_400,
+    step: "4 / 4",
+    title: "One fix, done once",
+    body: "Cursor takes the fix. Codex drops it and stays on its feature. Zero duplicated work, zero conflicts to merge.",
+  },
 ];
+
+/** 0 features · 1 both flag the bug · 2 Cursor→Codex · 3 Codex→Cursor · 4 split */
+function syncStep(elapsed: number) {
+  if (elapsed < SYNC.detectedAt) return 0;
+  if (elapsed < SYNC.msg1At) return 1;
+  if (elapsed < SYNC.msg2At) return 2;
+  if (elapsed < SYNC.splitAt) return 3;
+  return 4;
+}
 
 function finalCodeFor(file: EditorFile) {
   const seg = new Map(file.segments.map((s) => [s.line, s.text]));
@@ -519,7 +583,50 @@ export function LandingWorkspaceDemo({
   const linkCopied = renderedElapsed >= INVITE.copyAt;
   const inviteSent = renderedElapsed >= INVITE.sendAt;
   const roster = TEAMMATES.filter((mate) => renderedElapsed >= mate.joinsAt);
-  const coordEvents = COORD_EVENTS.filter((ev) => renderedElapsed >= ev.at);
+  const step = syncStep(renderedElapsed);
+  const overlapping = step >= 1 && step <= 3;
+  const syncLanes = [
+    {
+      id: "codex",
+      name: "Codex",
+      tone: "orange" as AgentTone,
+      doing: overlapping ? SYNC.bugPath : "src/checkout/reserve.ts",
+      flagged: overlapping,
+      tag:
+        step === 1
+          ? { kind: "warn", label: "same bug" }
+          : step >= 4
+            ? { kind: "ok", label: "keeps shipping" }
+            : null,
+    },
+    {
+      id: "claude",
+      name: "Claude",
+      tone: "green" as AgentTone,
+      doing: "src/checkout/session.ts",
+      flagged: false,
+      tag: step >= 1 ? { kind: "calm", label: "untouched" } : null,
+    },
+    {
+      id: "cursor",
+      name: "Cursor",
+      tone: "purple" as AgentTone,
+      doing: step >= 1 ? SYNC.bugPath : "src/lib/retry.ts",
+      flagged: overlapping,
+      tag:
+        step === 1
+          ? { kind: "warn", label: "same bug" }
+          : step >= 4
+            ? { kind: "ok", label: "took the fix" }
+            : null,
+    },
+  ];
+  const activePop =
+    phase === "write" && !reducedMotion
+      ? (POPS.find(
+          (pop) => renderedElapsed >= pop.from && renderedElapsed < pop.to,
+        ) ?? null)
+      : null;
 
   // Guide cursor: which target it is heading for, whether it is shown, and
   // whether it is mid-tap. It leads each action by ~600ms so it has landed by
@@ -783,18 +890,25 @@ export function LandingWorkspaceDemo({
 
           <section className="lp-editor" aria-label="Code editor">
             <header className="lp-editor-tabs lp-editor-tabs-multi">
-              {FILES.map((file) => (
-                <span
-                  key={file.id}
-                  className={file.id === activeFile.id ? "is-open" : undefined}
-                >
-                  <i
-                    className={`lp-tab-dot lp-dot-${file.agent.tone}`}
-                    aria-hidden="true"
-                  />
-                  {file.tab}
-                </span>
-              ))}
+              {FILES.map((file) => {
+                const contested =
+                  overlapping && (file.id === "reserve" || file.id === "retry");
+                const classes = [
+                  file.id === activeFile.id ? "is-open" : "",
+                  contested ? "is-contested" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <span key={file.id} className={classes || undefined}>
+                    <i
+                      className={`lp-tab-dot lp-dot-${file.agent.tone}`}
+                      aria-hidden="true"
+                    />
+                    {file.tab}
+                  </span>
+                );
+              })}
             </header>
             <div className="lp-editor-breadcrumb">
               <span className="lp-editor-path">
@@ -875,19 +989,88 @@ export function LandingWorkspaceDemo({
               {RESERVE_FINAL}
             </pre>
             {phase === "write" ? (
-              <div className="lp-coord-log" aria-label="Workspace brain">
-                <header>
-                  <i className="lp-brain-mark" aria-hidden="true">
-                    {"◈"}
-                  </i>
-                  Workspace brain
-                </header>
-                <ul>
-                  {coordEvents.map((ev) => (
-                    <li key={ev.at}>{ev.text}</li>
+              <div className="lp-sync" aria-label="Agents coordinating">
+                <div className="lp-sync-head">
+                  <span className="lp-sync-title">
+                    <i aria-hidden="true">{"◆"}</i>
+                    Agents coordinating
+                    <em>peer to peer — no orchestrator</em>
+                  </span>
+                  <span className="lp-sync-metric">
+                    <strong>0</strong> conflicts
+                    <b aria-hidden="true">·</b>
+                    <strong>0</strong> rework
+                  </span>
+                </div>
+
+                <ul className="lp-sync-lanes">
+                  {syncLanes.map((lane) => (
+                    <li
+                      key={lane.id}
+                      className={`lp-sync-lane lp-tone-${lane.tone}${lane.flagged ? " is-flagged" : ""}`}
+                    >
+                      <i
+                        className={`lp-sync-dot lp-dot-${lane.tone}`}
+                        aria-hidden="true"
+                      />
+                      <b>{lane.name}</b>
+                      <span className="lp-sync-arrow" aria-hidden="true">
+                        →
+                      </span>
+                      <code>{lane.doing}</code>
+                      {lane.tag ? (
+                        <em className={`lp-sync-tag is-${lane.tag.kind}`}>
+                          {lane.tag.label}
+                        </em>
+                      ) : null}
+                    </li>
                   ))}
                 </ul>
+
+                {step >= 1 ? (
+                  <div
+                    className={`lp-sync-thread${step >= 4 ? " is-resolved" : ""}`}
+                  >
+                    {step === 1 ? (
+                      <p className="lp-sync-alert">
+                        <span aria-hidden="true">{"⚡"}</span>
+                        Codex and Cursor both landed on{" "}
+                        <code>{SYNC.bugPath}</code> — the same rounding bug
+                      </p>
+                    ) : null}
+                    {step === 2 || step === 3 ? (
+                      <p className="lp-sync-msg lp-tone-purple">
+                        <b>Cursor &rarr; Codex</b> same bug in money.ts,
+                        I&apos;ve got it
+                      </p>
+                    ) : null}
+                    {step === 3 ? (
+                      <p className="lp-sync-msg lp-tone-orange">
+                        <b>Codex &rarr; Cursor</b> all yours — I&apos;ll stay on
+                        checkout validation
+                      </p>
+                    ) : null}
+                    {step >= 4 ? (
+                      <p className="lp-sync-done">
+                        <Check size={11} aria-hidden="true" />
+                        The agents split it themselves. Cursor fixes it once,
+                        Codex keeps building — no rework, no conflict.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
+            ) : null}
+            {activePop ? (
+              <aside
+                key={activePop.step}
+                className="lp-pop"
+                aria-label={`Explainer ${activePop.step}: ${activePop.title}`}
+              >
+                <span className="lp-pop-step">{activePop.step}</span>
+                <h5>{activePop.title}</h5>
+                <p>{activePop.body}</p>
+              </aside>
             ) : null}
             <div
               className={`lp-terminal${renderedElapsed >= PHASES[1]!.endpoint ? " is-visible" : ""}`}

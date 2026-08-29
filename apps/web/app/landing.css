@@ -20,6 +20,7 @@
   --lp-lime: #f2604a;
   --lp-orange: #ff7c63;
   --lp-sky: #5b9bd5;
+  --lp-violet: #b08bf5;
   --lp-review-blue: #62c3dc;
   --lp-warn: #e8b44a;
   --lp-shell: min(1200px, calc(100% - 48px));
@@ -1181,7 +1182,7 @@
 }
 
 .lp-dot-green {
-  background: var(--lp-review-blue);
+  background: var(--lp-violet);
 }
 
 .lp-dot-purple {
@@ -1222,9 +1223,9 @@
   tab-size: 2;
 }
 
-/* Extra room so the coordination log never overlaps the last written line. */
+/* Extra room so the coordination board never overlaps the last written line. */
 .lp-code.has-coord {
-  padding-bottom: 136px;
+  padding-bottom: 188px;
 }
 
 /* Fades the pane in each time the editor follows an agent to a new tab. */
@@ -1270,8 +1271,8 @@
 }
 
 .lp-code-green {
-  --cursor: var(--lp-review-blue);
-  --cursor-soft: rgba(98, 195, 220, 0.11);
+  --cursor: var(--lp-violet);
+  --cursor-soft: rgba(176, 139, 245, 0.12);
 }
 
 .lp-code-purple {
@@ -1352,7 +1353,7 @@
 }
 
 .lp-active-typist-green {
-  --typist-color: var(--lp-review-blue);
+  --typist-color: var(--lp-violet);
 }
 
 .lp-active-typist-purple {
@@ -1429,15 +1430,15 @@
   color: var(--lp-faint);
 }
 
-/* Workspace-brain coordination log (Write phase) */
-.lp-coord-log {
+/* Agents-coordinating board — the Write-phase centrepiece */
+.lp-sync {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
-  min-height: 91px;
-  padding: 9px 14px 12px;
-  border-top: 1px solid rgba(237, 238, 240, 0.09);
+  min-height: 150px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(237, 238, 240, 0.14);
   background: #0a0c0e;
   color: var(--lp-muted);
   animation: lp-coord-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -1450,49 +1451,303 @@
   }
 }
 
-.lp-coord-log header {
+.lp-sync-head {
   display: flex;
   padding-bottom: 8px;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(237, 238, 240, 0.08);
+}
+
+.lp-sync-title {
+  display: inline-flex;
+  align-items: center;
   gap: 7px;
-  border-bottom: 1px solid rgba(237, 238, 240, 0.07);
-  color: var(--lp-muted);
-  font-size: 8px;
+  color: var(--lp-ink);
+  font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.lp-coord-log .lp-brain-mark {
+.lp-sync-title > i {
   color: var(--lp-sky);
   font-size: 10px;
   font-style: normal;
 }
 
-.lp-coord-log ul {
+.lp-sync-title em {
+  color: var(--lp-faint);
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.lp-sync-metric {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--lp-faint);
+  font-size: 7.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lp-sync-metric strong {
+  color: var(--lp-review-blue);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.lp-sync-metric b {
+  color: var(--lp-faint);
+  font-weight: 400;
+}
+
+.lp-sync-lanes {
   display: grid;
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   gap: 4px;
   list-style: none;
 }
 
-.lp-coord-log li {
-  color: var(--lp-muted);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 8.5px;
-  line-height: 1.4;
-  animation: lp-coord-line 260ms ease both;
+.lp-tone-orange {
+  --tone: var(--lp-orange);
+}
+.lp-tone-green {
+  --tone: var(--lp-violet);
+}
+.lp-tone-purple {
+  --tone: var(--lp-sky);
 }
 
-.lp-coord-log li:last-child {
-  color: var(--lp-sky);
+.lp-sync-lane {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 7px;
+  border: 1px solid rgba(237, 238, 240, 0.07);
+  border-left: 2px solid var(--tone, var(--lp-orange));
+  border-radius: 6px;
+  font-size: 8.5px;
+  animation: lp-coord-line 240ms ease both;
 }
 
 @keyframes lp-coord-line {
   from {
     opacity: 0;
     transform: translateX(-6px);
+  }
+}
+
+.lp-sync-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.lp-sync-lane b {
+  color: var(--lp-ink);
+  font-weight: 650;
+}
+
+.lp-sync-arrow {
+  color: var(--lp-faint);
+}
+
+.lp-sync-lane code {
+  overflow: hidden;
+  color: var(--lp-muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-sync-tag {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lp-sync-tag.is-warn {
+  background: rgba(255, 124, 99, 0.18);
+  color: var(--lp-orange);
+}
+
+.lp-sync-tag.is-ok {
+  background: rgba(98, 195, 220, 0.16);
+  color: var(--lp-review-blue);
+}
+
+.lp-sync-tag.is-calm {
+  background: rgba(237, 238, 240, 0.07);
+  color: var(--lp-faint);
+}
+
+.lp-sync-lane.is-flagged {
+  border-color: rgba(255, 124, 99, 0.55);
+  animation: lp-sync-shake 0.4s ease;
+}
+
+@keyframes lp-sync-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+}
+
+.lp-sync-thread {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: rgba(237, 238, 240, 0.035);
+  animation: lp-coord-line 240ms ease both;
+}
+
+.lp-sync-thread.is-resolved {
+  background: rgba(98, 195, 220, 0.08);
+}
+
+.lp-sync-alert {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--lp-warn);
+  font-size: 8.5px;
+}
+
+.lp-sync-alert code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+}
+
+.lp-sync-msg {
+  display: flex;
+  margin: 0;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--lp-muted);
+  font-size: 8.5px;
+  line-height: 1.5;
+  animation: lp-coord-line 220ms ease both;
+}
+
+.lp-sync-msg + .lp-sync-msg {
+  margin-top: 3px;
+}
+
+.lp-sync-msg b {
+  flex: 0 0 auto;
+  color: var(--tone, var(--lp-ink));
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.lp-sync-done {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--lp-review-blue);
+  font-size: 8.5px;
+  font-weight: 550;
+}
+
+.lp-sync-done svg {
+  flex: 0 0 auto;
+}
+
+/* Guided explainer pop-out layered over the Write phase */
+.lp-pop {
+  position: absolute;
+  left: 50%;
+  bottom: 168px;
+  z-index: 8;
+  width: min(362px, calc(100% - 28px));
+  padding: 12px 15px 13px;
+  transform: translateX(-50%);
+  border: 1px solid var(--lp-line-strong);
+  border-radius: 11px;
+  background: #14171b;
+  box-shadow: 0 22px 52px -16px rgba(0, 0, 0, 0.8);
+  animation: lp-pop-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.lp-pop::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--lp-line-strong);
+  border-bottom: 1px solid var(--lp-line-strong);
+  background: #14171b;
+}
+
+@keyframes lp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+}
+
+.lp-pop-step {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: var(--lp-warn);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.lp-pop h5 {
+  margin: 0 0 4px;
+  color: var(--lp-ink);
+  font-size: 12px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+.lp-pop p {
+  margin: 0;
+  color: var(--lp-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.lp-editor-tabs-multi > span.is-contested {
+  color: var(--lp-orange);
+  box-shadow: inset 0 -2px 0 var(--lp-orange);
+  animation: lp-tab-contested 0.6s ease infinite;
+}
+
+@keyframes lp-tab-contested {
+  50% {
+    background: rgba(242, 96, 74, 0.12);
   }
 }
 
@@ -1610,7 +1865,7 @@
 }
 
 .lp-agent-green {
-  --agent-color: var(--lp-review-blue);
+  --agent-color: var(--lp-violet);
 }
 
 .lp-agent-purple {
@@ -1622,7 +1877,7 @@
 }
 
 .lp-agent-green > div > i {
-  background: var(--lp-review-blue);
+  background: var(--lp-violet);
 }
 
 .lp-agent-purple > div > i {
