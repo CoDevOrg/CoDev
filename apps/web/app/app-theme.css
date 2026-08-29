@@ -569,7 +569,11 @@
   min-height: 108px;
   padding: 18px 16px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(135deg, rgba(201, 166, 107, 0.1), transparent 66%);
+  background: linear-gradient(
+    135deg,
+    rgba(201, 166, 107, 0.1),
+    transparent 66%
+  );
 }
 
 .workspace-card-presence-label {
