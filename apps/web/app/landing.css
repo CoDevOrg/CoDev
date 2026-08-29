@@ -572,6 +572,7 @@
 }
 
 .lp-workspace {
+  position: relative;
   overflow: hidden;
   border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 14px;
@@ -579,6 +580,8 @@
 }
 
 .lp-workspace-topbar {
+  position: relative;
+  z-index: 2;
   display: flex;
   height: 47px;
   padding: 0 12px;
@@ -671,6 +674,7 @@
 }
 
 .lp-workspace-share {
+  position: relative;
   display: inline-flex;
   height: 28px;
   padding: 0 9px;
@@ -679,6 +683,131 @@
   border: 1px solid rgba(237, 238, 240, 0.13);
   border-radius: 7px;
   color: var(--lp-muted);
+}
+
+.lp-workspace-share.is-open {
+  border-color: rgba(237, 238, 240, 0.3);
+  color: var(--lp-ink);
+}
+
+/* Invite dialog — a centered overlay, mirroring the real WorkspaceShareDialog. */
+.lp-invite-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 12, 14, 0.8);
+  backdrop-filter: blur(1.5px);
+  animation: lp-scrim-in 0.2s ease both;
+}
+
+@keyframes lp-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.lp-invite-pop {
+  display: grid;
+  width: 250px;
+  padding: 13px;
+  gap: 8px;
+  border: 1px solid rgba(237, 238, 240, 0.22);
+  border-radius: 12px;
+  background: var(--lp-bg-2);
+  box-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.7);
+  text-align: left;
+  cursor: default;
+  animation: lp-invite-in 0.24s ease both;
+}
+
+@keyframes lp-invite-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+.lp-invite-title {
+  color: var(--lp-ink);
+  font-size: 10.5px;
+  font-weight: 680;
+}
+
+.lp-invite-sub {
+  color: var(--lp-muted);
+  font-size: 8.5px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.lp-invite-role {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(237, 238, 240, 0.1);
+  border-radius: 6px;
+  color: var(--lp-ink);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 620;
+}
+
+.lp-invite-role em {
+  color: var(--lp-muted);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 550;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lp-invite-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 6px 5px 8px;
+  border: 1px solid rgba(237, 238, 240, 0.12);
+  border-radius: 6px;
+  background: var(--lp-panel-2);
+  font-style: normal;
+}
+
+.lp-invite-link code {
+  overflow: hidden;
+  color: var(--lp-muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-invite-link em {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--lp-orange);
+  color: #0c0e10;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.lp-invite-link.is-copied em {
+  background: var(--lp-sky);
+  color: #0c0e10;
+}
+
+.lp-invite-status {
+  min-height: 10px;
+  color: var(--lp-sky);
+  font-size: 8.5px;
+  font-style: normal;
+  font-weight: 550;
 }
 
 .lp-workspace-body {
@@ -783,6 +912,29 @@
 .lp-team-person small {
   color: var(--lp-muted);
   font-size: 9px;
+}
+
+.lp-team-person.is-joining {
+  animation: lp-person-in 0.42s ease both;
+}
+
+@keyframes lp-person-in {
+  from {
+    opacity: 0;
+    transform: translateX(-9px);
+  }
+}
+
+.lp-join-tag {
+  margin-left: auto;
+  padding: 2px 7px;
+  align-self: center;
+  border-radius: 999px;
+  background: rgba(91, 155, 213, 0.18);
+  color: var(--lp-sky);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
 }
 
 .lp-team-note {

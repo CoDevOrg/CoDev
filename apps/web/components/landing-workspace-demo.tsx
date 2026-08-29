@@ -22,7 +22,60 @@ type AgentTrack = {
   segments: TypingSegment[];
 };
 
-const DEMO_DURATION = 15_000;
+const DEMO_DURATION = 17_600;
+
+/**
+ * Beats inside the Join phase that walk through the real invite flow: the
+ * owner opens Share, a single-use link is created and copied, and the invited
+ * teammate lands straight in the running workspace. Mirrors
+ * WorkspaceShareDialog and the /invites/[token] accept step.
+ */
+const INVITE = {
+  shareOpensAt: 900,
+  linkAt: 1_700,
+  copiedAt: 2_650,
+  guestJoinsAt: 3_300,
+  shareClosesAt: 4_300,
+  role: "Co-steer",
+  link: "codev.dev/w/acme-storefront/j/7f3a91",
+} as const;
+
+type Teammate = {
+  id: string;
+  name: string;
+  initials: string;
+  tone: AgentTone;
+  detail: string;
+  /** ms into the timeline this person is first in the room (0 = from the start). */
+  joinsAt: number;
+};
+
+const TEAMMATES: Teammate[] = [
+  {
+    id: "alex",
+    name: "Alex Morgan",
+    initials: "AM",
+    tone: "orange",
+    detail: "Opened the workspace",
+    joinsAt: 0,
+  },
+  {
+    id: "jordan",
+    name: "Jordan Lee",
+    initials: "JL",
+    tone: "green",
+    detail: "Connected acme/storefront",
+    joinsAt: 0,
+  },
+  {
+    id: "casey",
+    name: "Casey Rivera",
+    initials: "CR",
+    tone: "purple",
+    detail: "Joined from the link",
+    joinsAt: INVITE.guestJoinsAt,
+  },
+];
 
 const PHASES: {
   key: DemoPhase;
@@ -33,20 +86,21 @@ const PHASES: {
   {
     key: "join",
     label: "Join",
-    endpoint: 2_150,
-    summary: "Three agents join the same checkout file with named cursors.",
+    endpoint: 4_750,
+    summary:
+      "Copy one invite link, pick a role, and your crew is in the running workspace.",
   },
   {
     key: "write",
     label: "Write",
-    endpoint: 10_350,
+    endpoint: 12_950,
     summary:
       "Codex, Claude, and Review edit separate regions of the file together.",
   },
   {
     key: "verify",
     label: "Verify",
-    endpoint: 13_150,
+    endpoint: 15_750,
     summary:
       "The agents run the checkout tests and review the combined change.",
   },
@@ -69,12 +123,12 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 7,
-        start: 2_450,
+        start: 5_050,
         text: "  const cart = checkoutSchema.parse(input);",
       },
       {
         line: 12,
-        start: 7_250,
+        start: 9_850,
         text: '  await audit.record("checkout.reserved", order.id);',
       },
     ],
@@ -89,12 +143,12 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 8,
-        start: 3_000,
+        start: 5_600,
         text: "  const lock = await claim(`checkout:${cart.id}`);",
       },
       {
         line: 11,
-        start: 6_750,
+        start: 9_350,
         text: "  const order = await commit(cart, lock);",
       },
     ],
@@ -109,10 +163,10 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 9,
-        start: 3_600,
+        start: 6_200,
         text: "  if (!lock) return retryLater(cart);",
       },
-      { line: 13, start: 7_800, text: "  return order;" },
+      { line: 13, start: 10_400, text: "  return order;" },
     ],
   },
 ];
@@ -305,6 +359,14 @@ export function LandingWorkspaceDemo() {
     [],
   );
 
+  const joining = phase === "join";
+  const sharePanelOpen =
+    renderedElapsed >= INVITE.shareOpensAt &&
+    renderedElapsed < INVITE.shareClosesAt;
+  const linkReady = renderedElapsed >= INVITE.linkAt;
+  const linkCopied = renderedElapsed >= INVITE.copiedAt;
+  const roster = TEAMMATES.filter((mate) => renderedElapsed >= mate.joinsAt);
+
   function setTimeline(next: number) {
     elapsedRef.current = next;
     setElapsed(next);
@@ -314,6 +376,14 @@ export function LandingWorkspaceDemo() {
     const definition = PHASES.find((item) => item.key === nextPhase);
     if (!definition) return;
     startedRef.current = true;
+    // Join is a choreographed sequence (open Share -> create link -> copy ->
+    // the teammate lands in the room), so replay it from the top rather than
+    // snapping to the end of the phase like the deterministic later phases.
+    if (nextPhase === "join") {
+      setTimeline(0);
+      setPlaying(!reducedMotion);
+      return;
+    }
     setPlaying(false);
     setTimeline(
       definition.key === "ready"
@@ -383,50 +453,78 @@ export function LandingWorkspaceDemo() {
             <code>main</code>
           </span>
           <span className="lp-workspace-live">
-            <i aria-hidden="true" /> 3 agents live
+            <i aria-hidden="true" />{" "}
+            {joining ? "Inviting the crew" : "3 agents live"}
           </span>
           <span
             className="lp-workspace-people"
-            aria-label="Three people present"
+            aria-label={`${roster.length} people in the workspace`}
           >
-            <i>AM</i>
-            <i>JL</i>
-            <i>CR</i>
+            {roster.map((mate) => (
+              <i key={mate.id}>{mate.initials}</i>
+            ))}
           </span>
-          <span className="lp-workspace-share">
+          <span
+            className={`lp-workspace-share${sharePanelOpen ? " is-open" : ""}`}
+          >
             <Share2 aria-hidden size={13} /> Share
           </span>
         </header>
+
+        {sharePanelOpen ? (
+          <div
+            className="lp-invite-overlay"
+            role="note"
+            aria-label="Share workspace"
+          >
+            <div className="lp-invite-pop">
+              <b className="lp-invite-title">Share workspace</b>
+              <i className="lp-invite-sub">
+                Anyone with the link joins at the role you pick. Links are
+                single-use and expire in 24h.
+              </i>
+              <i className="lp-invite-role">
+                <em>Role</em>
+                {INVITE.role}
+              </i>
+              <i className={`lp-invite-link${linkCopied ? " is-copied" : ""}`}>
+                <code>{linkReady ? INVITE.link : "Creating link…"}</code>
+                <em>{linkCopied ? "Copied" : "Copy"}</em>
+              </i>
+              <i className="lp-invite-status">
+                {linkCopied ? "Link copied — Casey opened it" : " "}
+              </i>
+            </div>
+          </div>
+        ) : null}
 
         <div className="lp-workspace-body">
           <aside className="lp-team-rail" aria-label="Workspace team">
             <div className="lp-rail-heading">
               <span>Team room</span>
               <strong>
-                <Users aria-hidden size={13} /> 3 online
+                <Users aria-hidden size={13} /> {roster.length} online
               </strong>
             </div>
-            <div className="lp-team-person is-active">
-              <i className="lp-person-orange">AM</i>
-              <span>
-                <strong>Alex Morgan</strong>
-                <small>Watching reserve.ts</small>
-              </span>
-            </div>
-            <div className="lp-team-person">
-              <i className="lp-person-green">JL</i>
-              <span>
-                <strong>Jordan Lee</strong>
-                <small>Steering Claude</small>
-              </span>
-            </div>
-            <div className="lp-team-person">
-              <i className="lp-person-purple">CR</i>
-              <span>
-                <strong>Casey Rivera</strong>
-                <small>Reviewing changes</small>
-              </span>
-            </div>
+            {roster.map((mate) => {
+              const fresh =
+                mate.joinsAt > 0 && renderedElapsed < mate.joinsAt + 1_500;
+              return (
+                <div
+                  key={mate.id}
+                  className={`lp-team-person${
+                    mate.id === "alex" ? " is-active" : ""
+                  }${fresh ? " is-joining" : ""}`}
+                >
+                  <i className={`lp-person-${mate.tone}`}>{mate.initials}</i>
+                  <span>
+                    <strong>{mate.name}</strong>
+                    <small>{mate.detail}</small>
+                  </span>
+                  {fresh ? <em className="lp-join-tag">joined</em> : null}
+                </div>
+              );
+            })}
             <div className="lp-team-note">
               <span>Shared context</span>
               <p>Everyone sees the same file, cursors, and agent state.</p>
