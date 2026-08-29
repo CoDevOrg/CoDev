@@ -572,6 +572,7 @@
 }
 
 .lp-workspace {
+  position: relative;
   overflow: hidden;
   border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 14px;
@@ -579,6 +580,8 @@
 }
 
 .lp-workspace-topbar {
+  position: relative;
+  z-index: 2;
   display: flex;
   height: 47px;
   padding: 0 12px;
@@ -679,6 +682,266 @@
   border: 1px solid rgba(237, 238, 240, 0.13);
   border-radius: 7px;
   color: var(--lp-muted);
+}
+
+.lp-workspace-share.is-open {
+  border-color: rgba(237, 238, 240, 0.3);
+  color: var(--lp-ink);
+}
+
+/* A high-fidelity share interaction, intentionally shown only during Join. */
+.lp-share-overlay {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  display: grid;
+  padding: 22px;
+  place-items: center;
+  background: rgba(10, 12, 14, 0.62);
+  backdrop-filter: blur(2px);
+  animation: lp-share-scrim-in 0.2s ease both;
+}
+
+.lp-share-panel {
+  display: grid;
+  width: min(520px, calc(100% - 18px));
+  padding: 22px;
+  gap: 18px;
+  border: 1px solid rgba(237, 238, 240, 0.2);
+  border-radius: 14px;
+  background: #f7f7f6;
+  box-shadow: 0 26px 70px -22px rgba(0, 0, 0, 0.78);
+  color: #202124;
+  text-align: left;
+  animation: lp-share-panel-in 0.26s ease both;
+}
+
+.lp-share-heading,
+.lp-share-heading > span,
+.lp-share-person,
+.lp-share-restricted,
+.lp-share-actions,
+.lp-share-actions > span {
+  display: flex;
+  align-items: center;
+}
+
+.lp-share-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lp-share-heading h3,
+.lp-share-section h4,
+.lp-share-person strong,
+.lp-share-person small,
+.lp-share-restricted strong,
+.lp-share-restricted small {
+  margin: 0;
+}
+
+.lp-share-heading h3 {
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.lp-share-heading > span {
+  gap: 15px;
+  color: #303238;
+}
+
+.lp-share-add {
+  min-height: 52px;
+  padding: 10px 13px;
+  border: 2px solid #1a73e8;
+  border-radius: 5px;
+  color: #1967d2;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.lp-share-section {
+  display: grid;
+  gap: 13px;
+}
+
+.lp-share-section h4 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.lp-share-person {
+  gap: 11px;
+}
+
+.lp-share-person > i {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid #202124;
+  border-radius: 50%;
+  background: #5b9bd5;
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.lp-share-person > span,
+.lp-share-restricted > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lp-share-person strong,
+.lp-share-restricted strong {
+  color: #202124;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lp-share-person small,
+.lp-share-restricted small {
+  color: #5f6368;
+  font-size: 11px;
+}
+
+.lp-share-person em {
+  margin-left: auto;
+  color: #8d9095;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.lp-share-general {
+  gap: 12px;
+}
+
+.lp-share-restricted {
+  gap: 11px;
+}
+
+.lp-share-restricted > i {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #e4e5e7;
+  color: #3c4043;
+}
+
+.lp-share-restricted strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lp-share-actions {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.lp-share-actions > span {
+  min-height: 39px;
+  padding: 0 16px;
+  gap: 8px;
+  border: 1px solid #7b7d80;
+  border-radius: 22px;
+  color: #1967d2;
+  font-size: 13px;
+  font-weight: 600;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.lp-share-actions > span:last-child {
+  border-color: #1967d2;
+  background: #1967d2;
+  color: #fff;
+}
+
+.lp-share-actions > span.is-copied {
+  border-color: #137333;
+  color: #137333;
+}
+
+.lp-share-actions > span.is-done {
+  background: #1558b0;
+}
+
+.lp-demo-cursor {
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  margin: -2px 0 0 -3px;
+  pointer-events: none;
+  transform: translate(46px, 360px);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.lp-demo-cursor svg {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+  transition: transform 0.12s ease;
+}
+
+.lp-demo-cursor.is-tapping svg {
+  transform: scale(0.8);
+}
+
+.lp-demo-cursor.is-tapping::after {
+  position: absolute;
+  top: 4px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border: 2px solid var(--lp-sky);
+  border-radius: 50%;
+  animation: lp-cursor-tap 0.45s ease-out;
+  content: "";
+}
+
+.lp-demo-cursor.is-leaving {
+  opacity: 0;
+  transition:
+    transform 0.5s ease,
+    opacity 0.45s ease;
+}
+
+@keyframes lp-share-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes lp-share-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes lp-cursor-tap {
+  from {
+    opacity: 0.9;
+    transform: translate(-40%, -40%) scale(0.4);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-40%, -40%) scale(4);
+  }
 }
 
 .lp-workspace-body {

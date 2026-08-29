@@ -75,4 +75,19 @@ describe("LandingWorkspaceDemo", () => {
     expect(screen.getByRole("button", { name: "Play demo" })).toBeDisabled();
     expect(screen.getByText(/ready for a person to review/i)).toBeVisible();
   });
+
+  it("shows the detailed sharing panel during the Join sequence", () => {
+    render(<LandingWorkspaceDemo initialElapsed={1_000} />);
+
+    const sharePanel = screen.getByRole("note", {
+      name: "Share acme storefront workspace",
+    });
+    expect(sharePanel).toHaveTextContent("Add people, groups, or teams");
+    expect(sharePanel).toHaveTextContent("People with access");
+    expect(sharePanel).toHaveTextContent("Alex Morgan (you)");
+    expect(sharePanel).toHaveTextContent("General access");
+    expect(sharePanel).toHaveTextContent("Restricted");
+    expect(sharePanel).toHaveTextContent("Copy link");
+    expect(sharePanel).toHaveTextContent("Done");
+  });
 });

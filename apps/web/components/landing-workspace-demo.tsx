@@ -1,7 +1,33 @@
 "use client";
 
-import { Check, Pause, Play, RotateCcw, Share2, Users } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  HelpCircle,
+  Link2,
+  LockKeyhole,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  Share2,
+  Users,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+function GuideCursor() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        d="M3.5 2 15 8.4l-4.7 1.15L13 15.1l-2.1 1.05-2.7-5.55L4 14.7Z"
+        fill="#f7f4ef"
+        stroke="#0c0e10"
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 type DemoPhase = "join" | "write" | "verify" | "ready";
 type AgentTone = "orange" | "green" | "purple";
@@ -22,7 +48,14 @@ type AgentTrack = {
   segments: TypingSegment[];
 };
 
-const DEMO_DURATION = 15_000;
+const DEMO_DURATION = 17_600;
+
+const SHARE_DEMO = {
+  opensAt: 850,
+  copyAt: 2_150,
+  doneAt: 3_250,
+  closesAt: 4_550,
+} as const;
 
 const PHASES: {
   key: DemoPhase;
@@ -33,20 +66,21 @@ const PHASES: {
   {
     key: "join",
     label: "Join",
-    endpoint: 2_150,
-    summary: "Three agents join the same checkout file with named cursors.",
+    endpoint: 4_750,
+    summary:
+      "Share one workspace link, choose its access, and bring the whole crew in.",
   },
   {
     key: "write",
     label: "Write",
-    endpoint: 10_350,
+    endpoint: 12_950,
     summary:
       "Codex, Claude, and Review edit separate regions of the file together.",
   },
   {
     key: "verify",
     label: "Verify",
-    endpoint: 13_150,
+    endpoint: 15_750,
     summary:
       "The agents run the checkout tests and review the combined change.",
   },
@@ -69,12 +103,12 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 7,
-        start: 2_450,
+        start: 5_050,
         text: "  const cart = checkoutSchema.parse(input);",
       },
       {
         line: 12,
-        start: 7_250,
+        start: 9_850,
         text: '  await audit.record("checkout.reserved", order.id);',
       },
     ],
@@ -89,12 +123,12 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 8,
-        start: 3_000,
+        start: 5_600,
         text: "  const lock = await claim(`checkout:${cart.id}`);",
       },
       {
         line: 11,
-        start: 6_750,
+        start: 9_350,
         text: "  const order = await commit(cart, lock);",
       },
     ],
@@ -109,10 +143,10 @@ const AGENTS: AgentTrack[] = [
     segments: [
       {
         line: 9,
-        start: 3_600,
+        start: 6_200,
         text: "  if (!lock) return retryLater(cart);",
       },
-      { line: 13, start: 7_800, text: "  return order;" },
+      { line: 13, start: 10_400, text: "  return order;" },
     ],
   },
 ];
@@ -220,12 +254,22 @@ function statusForAgent(agent: AgentTrack, elapsed: number) {
   return "Joining";
 }
 
-export function LandingWorkspaceDemo() {
+export function LandingWorkspaceDemo({
+  initialElapsed = 0,
+}: {
+  /** Allows deterministic inspection of a point in the choreographed demo. */
+  initialElapsed?: number;
+}) {
   const reducedMotion = usePrefersReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
-  const elapsedRef = useRef(0);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const shareRef = useRef<HTMLSpanElement>(null);
+  const copyRef = useRef<HTMLSpanElement>(null);
+  const doneRef = useRef<HTMLSpanElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const elapsedRef = useRef(initialElapsed);
   const startedRef = useRef(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(initialElapsed);
   const [playing, setPlaying] = useState(false);
   const [inView, setInView] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
@@ -304,6 +348,60 @@ export function LandingWorkspaceDemo() {
       ),
     [],
   );
+  const isJoinPhase = phase === "join";
+  const sharePanelOpen =
+    renderedElapsed >= SHARE_DEMO.opensAt &&
+    renderedElapsed < SHARE_DEMO.closesAt;
+  const linkCopied = renderedElapsed >= SHARE_DEMO.copyAt;
+  const shareComplete = renderedElapsed >= SHARE_DEMO.doneAt;
+  const cursorTarget: "share" | "copy" | "done" | "exit" =
+    renderedElapsed < SHARE_DEMO.copyAt - 600
+      ? "share"
+      : renderedElapsed < SHARE_DEMO.doneAt - 600
+        ? "copy"
+        : renderedElapsed < SHARE_DEMO.closesAt - 250
+          ? "done"
+          : "exit";
+  const showCursor =
+    !reducedMotion &&
+    isJoinPhase &&
+    renderedElapsed >= 250 &&
+    renderedElapsed < SHARE_DEMO.closesAt + 200;
+  const cursorTapping = [
+    SHARE_DEMO.opensAt,
+    SHARE_DEMO.copyAt,
+    SHARE_DEMO.doneAt,
+  ].some((at) => renderedElapsed >= at && renderedElapsed < at + 220);
+
+  useEffect(() => {
+    if (!showCursor) return;
+    const workspace = workspaceRef.current;
+    const cursor = cursorRef.current;
+    if (!workspace || !cursor) return;
+    const frame = window.requestAnimationFrame(() => {
+      const workspaceBounds = workspace.getBoundingClientRect();
+      const anchor =
+        cursorTarget === "share"
+          ? shareRef.current
+          : cursorTarget === "copy"
+            ? copyRef.current
+            : cursorTarget === "done"
+              ? doneRef.current
+              : null;
+      const x = anchor
+        ? anchor.getBoundingClientRect().left -
+          workspaceBounds.left +
+          anchor.getBoundingClientRect().width / 2
+        : workspaceBounds.width * 0.17;
+      const y = anchor
+        ? anchor.getBoundingClientRect().top -
+          workspaceBounds.top +
+          anchor.getBoundingClientRect().height / 2
+        : workspaceBounds.height * 0.82;
+      cursor.style.transform = `translate(${x}px, ${y}px)`;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [cursorTarget, showCursor]);
 
   function setTimeline(next: number) {
     elapsedRef.current = next;
@@ -314,6 +412,11 @@ export function LandingWorkspaceDemo() {
     const definition = PHASES.find((item) => item.key === nextPhase);
     if (!definition) return;
     startedRef.current = true;
+    if (nextPhase === "join") {
+      setTimeline(0);
+      setPlaying(!reducedMotion);
+      return;
+    }
     setPlaying(false);
     setTimeline(
       definition.key === "ready"
@@ -373,7 +476,7 @@ export function LandingWorkspaceDemo() {
         </div>
       </div>
 
-      <div className="lp-workspace" data-phase={phase}>
+      <div className="lp-workspace" data-phase={phase} ref={workspaceRef}>
         <header className="lp-workspace-topbar">
           <span className="lp-workspace-mark" aria-hidden="true">
             C
@@ -393,10 +496,86 @@ export function LandingWorkspaceDemo() {
             <i>JL</i>
             <i>CR</i>
           </span>
-          <span className="lp-workspace-share">
+          <span
+            className={`lp-workspace-share${sharePanelOpen ? " is-open" : ""}`}
+            ref={shareRef}
+          >
             <Share2 aria-hidden size={13} /> Share
           </span>
         </header>
+
+        {sharePanelOpen ? (
+          <div
+            className="lp-share-overlay"
+            role="note"
+            aria-label="Share acme storefront workspace"
+          >
+            <section className="lp-share-panel">
+              <header className="lp-share-heading">
+                <h3>Share ‘acme/storefront’</h3>
+                <span aria-hidden="true">
+                  <HelpCircle size={16} />
+                  <Settings size={16} />
+                </span>
+              </header>
+              <div className="lp-share-add">Add people, groups, or teams</div>
+              <div className="lp-share-section">
+                <h4>People with access</h4>
+                <div className="lp-share-person">
+                  <i>AM</i>
+                  <span>
+                    <strong>Alex Morgan (you)</strong>
+                    <small>alex@acme.dev</small>
+                  </span>
+                  <em>Owner</em>
+                </div>
+              </div>
+              <div className="lp-share-section lp-share-general">
+                <h4>General access</h4>
+                <div className="lp-share-restricted">
+                  <i>
+                    <LockKeyhole size={15} />
+                  </i>
+                  <span>
+                    <strong>
+                      Restricted <ChevronDown size={12} />
+                    </strong>
+                    <small>
+                      Only people with access can open with the link
+                    </small>
+                  </span>
+                </div>
+              </div>
+              <footer className="lp-share-actions">
+                <span
+                  className={linkCopied ? "is-copied" : undefined}
+                  ref={copyRef}
+                >
+                  {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
+                  {linkCopied ? "Link copied" : "Copy link"}
+                </span>
+                <span
+                  className={shareComplete ? "is-done" : undefined}
+                  ref={doneRef}
+                >
+                  Done
+                </span>
+              </footer>
+            </section>
+          </div>
+        ) : null}
+
+        {showCursor ? (
+          <div
+            aria-hidden="true"
+            className={`lp-demo-cursor${cursorTapping ? " is-tapping" : ""}${
+              cursorTarget === "exit" ? " is-leaving" : ""
+            }`}
+            ref={cursorRef}
+          >
+            <GuideCursor />
+          </div>
+        ) : null}
 
         <div className="lp-workspace-body">
           <aside className="lp-team-rail" aria-label="Workspace team">
