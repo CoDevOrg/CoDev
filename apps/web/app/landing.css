@@ -707,11 +707,11 @@
   width: min(520px, calc(100% - 18px));
   padding: 22px;
   gap: 18px;
-  border: 1px solid rgba(237, 238, 240, 0.2);
+  border: 1px solid #2c3138;
   border-radius: 14px;
-  background: #f7f7f6;
+  background: #0c0e10;
   box-shadow: 0 26px 70px -22px rgba(0, 0, 0, 0.78);
-  color: #202124;
+  color: #edeef0;
   text-align: left;
   animation: lp-share-panel-in 0.26s ease both;
 }
@@ -748,15 +748,16 @@
 
 .lp-share-heading > span {
   gap: 15px;
-  color: #303238;
+  color: #9ba1ab;
 }
 
 .lp-share-add {
   min-height: 52px;
   padding: 10px 13px;
-  border: 2px solid #1a73e8;
+  border: 1px solid #f2604a;
   border-radius: 5px;
-  color: #1967d2;
+  background: #1a1d21;
+  color: #9ba1ab;
   font-size: 13px;
   line-height: 1.35;
 }
@@ -781,10 +782,10 @@
   height: 32px;
   flex: 0 0 auto;
   place-items: center;
-  border: 2px solid #202124;
+  border: 2px solid #2c3138;
   border-radius: 50%;
   background: #5b9bd5;
-  color: #fff;
+  color: #edeef0;
   font-size: 9px;
   font-style: normal;
   font-weight: 750;
@@ -799,20 +800,20 @@
 
 .lp-share-person strong,
 .lp-share-restricted strong {
-  color: #202124;
+  color: #edeef0;
   font-size: 13px;
   font-weight: 500;
 }
 
 .lp-share-person small,
 .lp-share-restricted small {
-  color: #5f6368;
+  color: #9ba1ab;
   font-size: 11px;
 }
 
 .lp-share-person em {
   margin-left: auto;
-  color: #8d9095;
+  color: #6b7280;
   font-size: 12px;
   font-style: normal;
 }
@@ -831,9 +832,10 @@
   height: 32px;
   flex: 0 0 auto;
   place-items: center;
+  border: 1px solid #2c3138;
   border-radius: 50%;
-  background: #e4e5e7;
-  color: #3c4043;
+  background: #20242a;
+  color: #9ba1ab;
 }
 
 .lp-share-restricted strong {
@@ -851,9 +853,10 @@
   min-height: 39px;
   padding: 0 16px;
   gap: 8px;
-  border: 1px solid #7b7d80;
+  border: 1px solid #f2604a;
   border-radius: 22px;
-  color: #1967d2;
+  background: #1a1d21;
+  color: #ff7c63;
   font-size: 13px;
   font-weight: 600;
   transition:
@@ -862,18 +865,19 @@
 }
 
 .lp-share-actions > span:last-child {
-  border-color: #1967d2;
-  background: #1967d2;
-  color: #fff;
+  border-color: #f2604a;
+  background: #f2604a;
+  color: #0c0e10;
 }
 
 .lp-share-actions > span.is-copied {
-  border-color: #137333;
-  color: #137333;
+  border-color: #3fbf7a;
+  color: #3fbf7a;
 }
 
 .lp-share-actions > span.is-done {
-  background: #1558b0;
+  border-color: #3fbf7a;
+  background: #3fbf7a;
 }
 
 .lp-demo-cursor {
@@ -906,7 +910,7 @@
   left: 3px;
   width: 6px;
   height: 6px;
-  border: 2px solid var(--lp-sky);
+  border: 2px solid #ff7c63;
   border-radius: 50%;
   animation: lp-cursor-tap 0.45s ease-out;
   content: "";
