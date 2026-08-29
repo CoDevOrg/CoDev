@@ -88,11 +88,7 @@
   right: -10%;
   width: min(52vw, 34rem);
   height: min(52vw, 34rem);
-  background: radial-gradient(
-    circle,
-    rgba(242, 96, 74, 0.34),
-    transparent 68%
-  );
+  background: radial-gradient(circle, rgba(242, 96, 74, 0.34), transparent 68%);
   animation: codev-page-ambient 26s ease-in-out infinite alternate;
   translate: calc(var(--lp-px) * 34px) calc(var(--lp-py) * 34px);
 }
@@ -102,11 +98,7 @@
   left: -18%;
   width: min(58vw, 40rem);
   height: min(58vw, 40rem);
-  background: radial-gradient(
-    circle,
-    rgba(242, 96, 74, 0.24),
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(242, 96, 74, 0.24), transparent 70%);
   animation: lp-drift 22s ease-in-out infinite;
   translate: calc(var(--lp-px) * -26px) calc(var(--lp-py) * -26px);
 }
@@ -116,11 +108,7 @@
   bottom: -20%;
   width: min(48vw, 32rem);
   height: min(48vw, 32rem);
-  background: radial-gradient(
-    circle,
-    rgba(91, 155, 213, 0.2),
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(91, 155, 213, 0.2), transparent 70%);
   animation: lp-drift 30s ease-in-out infinite reverse;
   translate: calc(var(--lp-px) * 20px) calc(var(--lp-py) * 20px);
 }
