@@ -698,8 +698,8 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(10, 12, 14, 0.8);
-  backdrop-filter: blur(1.5px);
+  background: rgba(10, 12, 14, 0.6);
+  backdrop-filter: blur(1px);
   animation: lp-scrim-in 0.2s ease both;
 }
 
