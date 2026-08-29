@@ -23,6 +23,7 @@ import {
   workspaceRoleCapabilitiesSchema,
   workspaceSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
+  accessRequestInputSchema,
 } from "./index";
 
 const id = "019c8c2e-c801-7a53-b556-62475c4a60e7";
@@ -448,6 +449,28 @@ describe("publication contracts", () => {
         branchName: "codev/demo",
         title: "",
       }),
+    ).toThrow();
+  });
+});
+
+describe("access requests", () => {
+  it("accepts an email alone and treats name and persona as optional", () => {
+    expect(
+      accessRequestInputSchema.parse({
+        email: "Ada@Gmail.com",
+        name: "",
+        persona: "friends",
+      }),
+    ).toEqual({
+      email: "ada@gmail.com",
+      persona: "friends",
+    });
+  });
+
+  it("rejects a missing or invalid email", () => {
+    expect(() => accessRequestInputSchema.parse({ name: "Ada" })).toThrow();
+    expect(() =>
+      accessRequestInputSchema.parse({ email: "not-an-email" }),
     ).toThrow();
   });
 });

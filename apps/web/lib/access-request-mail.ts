@@ -51,14 +51,14 @@ async function send(payload: {
 /** Confirms to the requester that their private-beta request landed. */
 export async function sendAccessRequestReceipt(request: {
   email: string;
-  name: string;
+  name?: string | undefined;
 }) {
-  const firstName = request.name.split(/\s+/)[0] ?? request.name;
+  const firstName = request.name?.split(/\s+/)[0];
   await send({
     to: request.email,
     subject: "We got your CoDev access request",
     text: [
-      `Hi ${firstName},`,
+      firstName ? `Hi ${firstName},` : "Hi,",
       "",
       "Thanks for asking for access to CoDev. Your request is in — we're letting builders in a group at a time while the private beta is still small.",
       "",
@@ -75,8 +75,7 @@ export async function sendAccessRequestReceipt(request: {
  */
 export async function notifyTeamOfAccessRequest(request: {
   email: string;
-  name: string;
-  githubLogin?: string | undefined;
+  name?: string | undefined;
   persona?: string | undefined;
   building?: string | undefined;
 }) {
@@ -86,11 +85,10 @@ export async function notifyTeamOfAccessRequest(request: {
   await send({
     to,
     replyTo: request.email,
-    subject: `CoDev access request: ${request.name}`,
+    subject: `CoDev access request: ${request.name || request.email}`,
     text: [
-      `Name: ${request.name}`,
+      `Name: ${request.name || "(not given)"}`,
       `Email: ${request.email}`,
-      `GitHub: ${request.githubLogin ?? "—"}`,
       `Building with: ${request.persona ?? "—"}`,
       "",
       request.building ?? "(no description)",

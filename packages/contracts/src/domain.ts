@@ -397,24 +397,9 @@ const optionalTrimmedText = (max: number) =>
     z.string().trim().max(max).optional(),
   );
 
-export const githubLoginSchema = z
-  .string()
-  .trim()
-  .max(39)
-  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/, {
-    message: "Use a valid GitHub username.",
-  });
-
 export const accessRequestInputSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: optionalTrimmedText(120),
   email: z.string().trim().toLowerCase().pipe(z.email().max(320)),
-  githubLogin: z.preprocess(
-    (value) =>
-      typeof value === "string"
-        ? value.trim().replace(/^@/, "") || undefined
-        : value,
-    githubLoginSchema.optional(),
-  ),
   persona: accessRequestPersonaSchema.optional(),
   building: optionalTrimmedText(500),
   referrer: optionalTrimmedText(200),

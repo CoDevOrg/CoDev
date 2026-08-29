@@ -71,12 +71,12 @@ export default async function HomePage() {
         </h1>
         <p className="lp-lede">
           CoDev is one shared cloud workspace where you, your friends, and a
-          crew of AI agents build the same project at the same time — live, in
+          crew of AI agents build the same project at the same time, live, in
           the same room, and never on top of each other.
         </p>
         <div className="lp-hero-actions">
           <a className="lp-cta lp-cta-primary" href="#request">
-            Request access <span aria-hidden="true">↗</span>
+            Request access
           </a>
           <Link className="lp-cta lp-cta-ghost" href="/sign-in">
             I have an invite
@@ -84,8 +84,8 @@ export default async function HomePage() {
         </div>
         <ul className="lp-hero-stats">
           <li>
-            <strong>3 agents</strong>
-            <span>running in parallel</span>
+            <strong>People + agents</strong>
+            <span>in one workspace</span>
           </li>
           <li>
             <strong>0 conflicts</strong>
@@ -129,7 +129,7 @@ export default async function HomePage() {
           </h2>
           <p>
             CoDev isn&apos;t finished yet, so we&apos;re opening it to a small
-            group of builders at a time — friends shipping a side project,
+            group of builders at a time: friends shipping a side project,
             students, and tiny startup teams.
           </p>
           <ol className="lp-steps">

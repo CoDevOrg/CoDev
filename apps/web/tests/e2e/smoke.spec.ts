@@ -69,7 +69,7 @@ test("the access request form rejects an incomplete submission", async ({
 
   expect(response.status()).toBe(400);
   await expect(response.json()).resolves.toEqual({
-    error: "Add your name and a valid email address.",
+    error: "Add a valid email address.",
   });
 });
 

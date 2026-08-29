@@ -36,12 +36,12 @@ export async function POST(request: Request) {
   );
   if (!parsed.success) {
     return Response.json(
-      { error: "Add your name and a valid email address." },
+      { error: "Add a valid email address." },
       { status: 400 },
     );
   }
 
-  const { name, email, githubLogin, persona, building, referrer } = parsed.data;
+  const { name, email, persona, building, referrer } = parsed.data;
   const database = getDatabase();
   const ipHash = hashCallerAddress(request);
 
@@ -72,8 +72,7 @@ export async function POST(request: Request) {
     .insert(schema.accessRequests)
     .values({
       email,
-      name,
-      githubLogin: githubLogin ?? null,
+      name: name ?? "",
       persona: persona ?? null,
       building: building ?? null,
       referrer: referrer ?? null,
@@ -82,10 +81,9 @@ export async function POST(request: Request) {
     .onConflictDoUpdate({
       target: schema.accessRequests.email,
       set: {
-        name,
-        githubLogin: githubLogin ?? null,
-        persona: persona ?? null,
-        building: building ?? null,
+        name: sql`coalesce(nullif(excluded.name, ''), ${schema.accessRequests.name})`,
+        persona: sql`coalesce(excluded.persona, ${schema.accessRequests.persona})`,
+        building: sql`coalesce(excluded.building, ${schema.accessRequests.building})`,
         updatedAt: new Date(),
       },
     })
@@ -111,7 +109,6 @@ export async function POST(request: Request) {
       await notifyTeamOfAccessRequest({
         email,
         name,
-        githubLogin,
         persona,
         building,
       });
@@ -126,7 +123,6 @@ export async function POST(request: Request) {
   logEvent("info", "access_request.submitted", {
     accessRequestId: record.id,
     persona: persona ?? null,
-    hasGithub: Boolean(githubLogin),
     isNew,
   });
 

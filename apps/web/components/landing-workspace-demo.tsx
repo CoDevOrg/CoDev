@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * The landing page's centrepiece: a running miniature of a CoDev workspace.
- * It is a scripted simulation, not live data — the real workspace lives behind
- * sign-in — so everything here is deterministic on first render and only starts
+ * It is a scripted simulation, not live data. The real workspace lives behind
+ * sign-in, so everything here is deterministic on first render and only starts
  * moving in an effect, which keeps server and client markup identical.
  */
 
@@ -33,13 +33,13 @@ const SCENES: {
     key: "merge",
     tab: "Clean merges",
     title: "Separate worktrees. One clean merge.",
-    copy: "Everyone works in isolation, but the room shares one picture of the truth — so the branches come back together without a conflict pile-up.",
+    copy: "Everyone works in isolation, but the room shares one picture of the truth, so the branches come back together without a conflict pile-up.",
   },
   {
     key: "share",
     tab: "Sharing",
     title: "Share it like a doc.",
-    copy: "Send one link. They land in the same repo, the same runtime, the same agent history — already caught up.",
+    copy: "Send one link. They land in the same repo, the same runtime, the same agent history, already caught up.",
   },
 ];
 
@@ -53,7 +53,7 @@ const AGENTS = [
     worktree: "agent/checkout-race",
     steps: [
       "Reading src/checkout/reserve.ts",
-      "Tracing reservation → payment",
+      "Tracing reservation to payment",
       "Writing a failing test",
       "Making reservation idempotent",
       "42 tests passed",
@@ -94,7 +94,7 @@ const AGENTS = [
 const CLAIM_LOG = [
   { tone: "lime", text: "Nova claimed src/checkout/**" },
   { tone: "orange", text: "Atlas planned an edit to src/checkout/reserve.ts" },
-  { tone: "warn", text: "Overlap detected — same file, two worktrees" },
+  { tone: "warn", text: "Overlap detected: same file, two worktrees" },
   { tone: "orange", text: "Atlas rerouted to src/webhooks/**" },
   { tone: "ok", text: "0 conflicts · both agents still running" },
 ] as const;
@@ -112,6 +112,10 @@ const BRANCHES = [
   { name: "agent/webhook-retries", tone: "orange", files: 4 },
   { name: "yousef/copy-tweaks", tone: "sky", files: 1 },
 ] as const;
+
+/** Branch row geometry, shared by the merge graph's SVG and its CSS. */
+const MERGE_ROW = 56;
+const MERGE_GAP = 34;
 
 const GUESTS = [
   { initials: "AK", name: "Alex", tone: "orange" },
@@ -237,7 +241,7 @@ function LiveScene({ tick }: { tick: number }) {
     <div className="lp-scene lp-scene-live">
       <div className="lp-scene-head">
         <span className="lp-live-pill">
-          <i />3 agents running
+          <i />Agents running
         </span>
         <span className="lp-scene-meta">Everyone sees this same feed</span>
       </div>
@@ -324,28 +328,39 @@ function MergeScene({ tick }: { tick: number }) {
             key={branch.name}
           >
             <code>{branch.name}</code>
-            <small>{branch.files} files changed</small>
+            <small>
+              {branch.files} {branch.files === 1 ? "file" : "files"} changed
+            </small>
           </div>
         ))}
       </div>
-      <div className="lp-merge-graph" aria-hidden="true">
-        {/* `pathLength` normalises each curve to 1 unit so the draw-on dash
-            maths stays correct however wide the column renders. */}
-        <svg viewBox="0 0 200 200" preserveAspectRatio="none">
-          {BRANCHES.map((branch, index) => (
-            <path
-              key={branch.name}
-              pathLength={1}
-              className={`lp-merge-path lp-stroke-${branch.tone}${merged ? " is-merged" : ""}`}
-              style={{ transitionDelay: `${index * 0.18}s` }}
-              d={`M0 ${34 + index * 66} H70 Q110 ${34 + index * 66} 110 100 H200`}
-            />
-          ))}
+      {/* The viewBox height matches the branch column's pixel height 1:1 and
+          only the x axis is allowed to stretch, so each curve always leaves
+          its own branch card at the right height and lands on `main`. */}
+      <div
+        className={merged ? "lp-merge-graph is-merged" : "lp-merge-graph"}
+        aria-hidden="true"
+      >
+        <svg
+          viewBox={`0 0 200 ${MERGE_ROW * 3 + MERGE_GAP * 2}`}
+          preserveAspectRatio="none"
+        >
+          {BRANCHES.map((branch, index) => {
+            const y = MERGE_ROW / 2 + index * (MERGE_ROW + MERGE_GAP);
+            const centre = MERGE_ROW * 1.5 + MERGE_GAP;
+            return (
+              <path
+                key={branch.name}
+                className={`lp-merge-path lp-stroke-${branch.tone}`}
+                d={`M0 ${y} H70 Q120 ${y} 120 ${centre} H200`}
+              />
+            );
+          })}
         </svg>
       </div>
       <div className={merged ? "lp-merge-target is-merged" : "lp-merge-target"}>
         <strong>main</strong>
-        <span>{merged ? "✓ merged · 0 conflicts" : "waiting on review"}</span>
+        <span>{merged ? "merged, 0 conflicts" : "waiting on review"}</span>
       </div>
     </div>
   );
@@ -364,7 +379,7 @@ function ShareScene({ tick }: { tick: number }) {
           </button>
         </div>
         <p className="lp-share-note">
-          Anyone with the link joins the running workspace — repo, terminal,
+          Anyone with the link joins the running workspace: repo, terminal,
           agents, and history included.
         </p>
         <div className="lp-share-people">

@@ -58,6 +58,13 @@ describe("CoDev product theme", () => {
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
     expect(landing).toContain("--lp-bg: #050504;");
+    expect(landing).toContain(".lp-hero h1 em {");
+    expect(landing).toContain("var(--lp-lime)");
+    expect(landing).toContain("var(--lp-sky)");
+    expect(landing).toContain("var(--lp-orange)");
+    expect(landing).toContain("animation: lp-sheen 6s linear infinite;");
+    expect(landing).not.toContain("10, 36, 25");
+    expect(landing).not.toContain("4, 18, 14");
     for (const rule of landing.split("\n")) {
       if (!rule.endsWith("{") || rule.startsWith(" ") || rule.startsWith("@")) {
         continue;
@@ -85,5 +92,24 @@ describe("CoDev product theme", () => {
   it("stops every landing animation for readers who ask for reduced motion", () => {
     expect(landing).toContain("@media (prefers-reduced-motion: reduce) {");
     expect(landing).toContain("animation-iteration-count: 1 !important;");
+  });
+
+  it("keeps landing copy free of arrows, checkmarks, and em dashes", () => {
+    const landingCopy = [
+      readFileSync(resolve(process.cwd(), "app/page.tsx"), "utf8"),
+      readFileSync(
+        resolve(process.cwd(), "components/request-access-form.tsx"),
+        "utf8",
+      ),
+      readFileSync(
+        resolve(process.cwd(), "components/landing-workspace-demo.tsx"),
+        "utf8",
+      ),
+    ].join("\n");
+
+    expect(landingCopy).not.toContain("↗");
+    expect(landingCopy).not.toContain("→");
+    expect(landingCopy).not.toContain("✓");
+    expect(landingCopy).not.toContain("—");
   });
 });
