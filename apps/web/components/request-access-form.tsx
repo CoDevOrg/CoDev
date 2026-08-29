@@ -1,15 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useState } from "react";
-
-const PERSONAS = [
-  { value: "friends", label: "Building with friends" },
-  { value: "startup", label: "Working on a startup" },
-  { value: "class", label: "A class or school project" },
-  { value: "open_source", label: "Open source" },
-  { value: "solo", label: "Solo, for now" },
-] as const;
 
 type Status = "idle" | "sending" | "done" | "error";
 
@@ -17,7 +8,6 @@ export function RequestAccessForm() {
   const ids = useId();
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
-  const [persona, setPersona] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,9 +21,8 @@ export function RequestAccessForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: String(data.get("name") ?? ""),
           email: String(data.get("email") ?? ""),
-          ...(persona ? { persona } : {}),
+          building: String(data.get("building") ?? ""),
           ...(typeof document !== "undefined" && document.referrer
             ? { referrer: document.referrer.slice(0, 200) }
             : {}),
@@ -65,13 +54,10 @@ export function RequestAccessForm() {
       <div className="lp-form lp-form-done" role="status">
         <h3>You&apos;re on the list.</h3>
         <p>
-          Check your inbox. We just sent a confirmation. When your invite is
-          ready, it lands at that same address.
+          Check your inbox for confirmation. We&apos;ll send your invite to the
+          same address when it&apos;s ready.
         </p>
         {message ? <small>{message}</small> : null}
-        <p className="lp-form-alt">
-          Already have an invite? <Link href="/sign-in">Sign in</Link>
-        </p>
       </div>
     );
   }
@@ -93,37 +79,17 @@ export function RequestAccessForm() {
       </div>
 
       <div className="lp-field">
-        <label htmlFor={`${ids}-name`}>Name (optional)</label>
-        <input
-          id={`${ids}-name`}
-          name="name"
-          type="text"
-          autoComplete="name"
-          maxLength={120}
-          placeholder="Ada Lovelace"
+        <label htmlFor={`${ids}-building`}>
+          What will you use CoDev for? <span>Optional</span>
+        </label>
+        <textarea
+          id={`${ids}-building`}
+          name="building"
+          maxLength={500}
+          rows={3}
+          placeholder="A side project with friends, a startup, open source…"
         />
       </div>
-
-      <fieldset className="lp-field lp-personas">
-        <legend>What are you building? (optional)</legend>
-        <div>
-          {PERSONAS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={persona === option.value}
-              className={persona === option.value ? "is-active" : undefined}
-              onClick={() =>
-                setPersona((current) =>
-                  current === option.value ? null : option.value,
-                )
-              }
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
 
       {status === "error" ? (
         <p className="lp-form-error" role="alert">
@@ -131,18 +97,13 @@ export function RequestAccessForm() {
         </p>
       ) : null}
 
-      <div className="lp-form-actions">
-        <button
-          className="lp-cta lp-cta-primary"
-          type="submit"
-          disabled={status === "sending"}
-        >
-          {status === "sending" ? "Sending…" : "Request access"}
-        </button>
-        <p>
-          Already have an invite? <Link href="/sign-in">Sign in</Link>
-        </p>
-      </div>
+      <button
+        className="lp-cta lp-cta-primary lp-form-submit"
+        type="submit"
+        disabled={status === "sending"}
+      >
+        {status === "sending" ? "Joining…" : "Join the waitlist"}
+      </button>
     </form>
   );
 }

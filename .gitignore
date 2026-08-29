@@ -7,8 +7,10 @@ playwright-report/
 **/artifacts/verification/
 test-results/
 .testsprite/
+.env
 .env.local
 .env.*.local
+!.env.example
 .vercel/
 .DS_Store
 services/orchestrator/bin/

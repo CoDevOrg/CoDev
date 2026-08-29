@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 
 import { LandingMotion } from "@/components/landing-motion";
 import { LandingWorkspaceDemo } from "@/components/landing-workspace-demo";
-import { RequestAccessForm } from "@/components/request-access-form";
+import {
+  RequestAccessButton,
+  RequestAccessDialog,
+} from "@/components/request-access-dialog";
 import { getCurrentAppUser } from "@/lib/identity";
 
 import "./landing.css";
@@ -15,12 +18,6 @@ export const metadata: Metadata = {
   description:
     "CoDev is a shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time. Request access to the private beta.",
 };
-
-const steps = [
-  ["Request access", "Tell us who you are and what you're building."],
-  ["We email you", "A confirmation now, an invite when the next group opens."],
-  ["Open a workspace", "Connect a repo and pull everyone in with one link."],
-] as const;
 
 export default async function HomePage() {
   if (await getCurrentAppUser()) {
@@ -54,9 +51,9 @@ export default async function HomePage() {
         <nav aria-label="Primary">
           <a href="#tour">How it works</a>
           <Link href="/sign-in">Sign in</Link>
-          <a className="lp-cta lp-cta-small" href="#request">
-            Request access
-          </a>
+          <RequestAccessButton className="lp-cta lp-cta-small">
+            Get early access
+          </RequestAccessButton>
         </nav>
       </header>
 
@@ -75,9 +72,9 @@ export default async function HomePage() {
           the same room, and never on top of each other.
         </p>
         <div className="lp-hero-actions">
-          <a className="lp-cta lp-cta-primary" href="#request">
-            Request access
-          </a>
+          <RequestAccessButton className="lp-cta lp-cta-primary">
+            Get early access
+          </RequestAccessButton>
           <Link className="lp-cta lp-cta-ghost" href="/sign-in">
             I have an invite
           </Link>
@@ -119,34 +116,12 @@ export default async function HomePage() {
         </article>
       </section>
 
-      <section className="lp-request" id="request" data-reveal>
-        <div className="lp-request-copy">
-          <p className="lp-pill lp-pill-quiet">Private beta</p>
-          <h2>
-            Get your crew
-            <br />
-            <em>an early invite.</em>
-          </h2>
-          <p>
-            CoDev isn&apos;t finished yet, so we&apos;re opening it to a small
-            group of builders at a time: friends shipping a side project,
-            students, and tiny startup teams.
-          </p>
-          <ol className="lp-steps">
-            {steps.map(([title, copy], index) => (
-              <li key={title}>
-                <span>0{index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <p>{copy}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="lp-request-form">
-          <RequestAccessForm />
-        </div>
+      <section className="lp-request" data-reveal>
+        <h2>Ready to build in the same room?</h2>
+        <p>Join the private beta. All we need is your email.</p>
+        <RequestAccessButton className="lp-cta lp-cta-primary">
+          Join the waitlist
+        </RequestAccessButton>
       </section>
 
       <footer className="lp-footer">
@@ -160,6 +135,7 @@ export default async function HomePage() {
           <Link href="/legal/retention">Data retention</Link>
         </nav>
       </footer>
+      <RequestAccessDialog />
     </main>
   );
 }
