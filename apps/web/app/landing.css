@@ -765,7 +765,7 @@
   text-transform: uppercase;
 }
 
-.lp-invite-link {
+.lp-invite-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -777,7 +777,7 @@
   font-style: normal;
 }
 
-.lp-invite-link code {
+.lp-invite-line code {
   overflow: hidden;
   color: var(--lp-muted);
   font-family: var(--font-geist-mono), monospace;
@@ -786,7 +786,7 @@
   white-space: nowrap;
 }
 
-.lp-invite-link em {
+.lp-invite-line em {
   flex: 0 0 auto;
   padding: 3px 8px;
   border-radius: 5px;
@@ -795,9 +795,12 @@
   font-size: 8px;
   font-style: normal;
   font-weight: 750;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
-.lp-invite-link.is-copied em {
+.lp-invite-line.is-done em {
   background: var(--lp-sky);
   color: #0c0e10;
 }
@@ -808,6 +811,69 @@
   font-size: 8.5px;
   font-style: normal;
   font-weight: 550;
+}
+
+/* Guide cursor that walks the viewer through Share -> Copy -> Send. */
+.lp-demo-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9;
+  width: 20px;
+  height: 20px;
+  margin: -2px 0 0 -3px;
+  pointer-events: none;
+  transform: translate(46px, 360px);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: lp-cursor-in 0.3s ease both;
+  will-change: transform;
+}
+
+.lp-demo-cursor svg {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+  transition: transform 0.12s ease;
+}
+
+.lp-demo-cursor.is-tapping svg {
+  transform: scale(0.8);
+}
+
+.lp-demo-cursor.is-tapping::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 2px solid var(--lp-sky);
+  animation: lp-cursor-tap 0.45s ease-out;
+}
+
+.lp-demo-cursor.is-leaving {
+  opacity: 0;
+  animation: none;
+  transition:
+    transform 0.5s ease,
+    opacity 0.45s ease;
+}
+
+@keyframes lp-cursor-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes lp-cursor-tap {
+  from {
+    transform: translate(-40%, -40%) scale(0.4);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(-40%, -40%) scale(4);
+    opacity: 0;
+  }
 }
 
 .lp-workspace-body {

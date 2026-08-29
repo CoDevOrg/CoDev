@@ -3,6 +3,21 @@
 import { Check, Pause, Play, RotateCcw, Share2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+/** Pointer that walks the viewer through the invite steps in the Join phase. */
+function GuideCursor() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        d="M3.5 2 15 8.4l-4.7 1.15L13 15.1l-2.1 1.05-2.7-5.55L4 14.7Z"
+        fill="#f7f4ef"
+        stroke="#0c0e10"
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 type DemoPhase = "join" | "write" | "verify" | "ready";
 type AgentTone = "orange" | "green" | "purple";
 
@@ -31,13 +46,19 @@ const DEMO_DURATION = 17_600;
  * WorkspaceShareDialog and the /invites/[token] accept step.
  */
 const INVITE = {
-  shareOpensAt: 900,
-  linkAt: 1_700,
-  copiedAt: 2_650,
-  guestJoinsAt: 3_300,
-  shareClosesAt: 4_300,
+  /** Cursor reaches Share and clicks; the dialog opens. */
+  shareOpensAt: 850,
+  /** Cursor clicks Copy on the link row. */
+  copyAt: 2_150,
+  /** Cursor clicks Send on the invite row. */
+  sendAt: 3_150,
+  /** The invited teammate lands in the room. */
+  guestJoinsAt: 3_600,
+  /** Dialog closes, cursor leaves. */
+  shareClosesAt: 4_550,
   role: "Co-steer",
   link: "codev.dev/w/acme-storefront/j/7f3a91",
+  invitee: "casey@rivera.dev",
 } as const;
 
 type Teammate = {
@@ -72,7 +93,7 @@ const TEAMMATES: Teammate[] = [
     name: "Casey Rivera",
     initials: "CR",
     tone: "purple",
-    detail: "Joined from the link",
+    detail: "Joined from the invite",
     joinsAt: INVITE.guestJoinsAt,
   },
 ];
@@ -277,6 +298,11 @@ function statusForAgent(agent: AgentTrack, elapsed: number) {
 export function LandingWorkspaceDemo() {
   const reducedMotion = usePrefersReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const shareRef = useRef<HTMLSpanElement>(null);
+  const copyRef = useRef<HTMLElement>(null);
+  const sendRef = useRef<HTMLElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
   const elapsedRef = useRef(0);
   const startedRef = useRef(false);
   const [elapsed, setElapsed] = useState(0);
@@ -363,9 +389,58 @@ export function LandingWorkspaceDemo() {
   const sharePanelOpen =
     renderedElapsed >= INVITE.shareOpensAt &&
     renderedElapsed < INVITE.shareClosesAt;
-  const linkReady = renderedElapsed >= INVITE.linkAt;
-  const linkCopied = renderedElapsed >= INVITE.copiedAt;
+  const linkCopied = renderedElapsed >= INVITE.copyAt;
+  const inviteSent = renderedElapsed >= INVITE.sendAt;
   const roster = TEAMMATES.filter((mate) => renderedElapsed >= mate.joinsAt);
+
+  // Guide cursor: which target it is heading for, whether it is shown, and
+  // whether it is mid-tap. It leads each action by ~600ms so it has landed by
+  // the time the button reacts.
+  const cursorTarget: "share" | "copy" | "send" | "exit" =
+    renderedElapsed < INVITE.copyAt - 600
+      ? "share"
+      : renderedElapsed < INVITE.sendAt - 600
+        ? "copy"
+        : renderedElapsed < INVITE.shareClosesAt - 250
+          ? "send"
+          : "exit";
+  const showCursor =
+    !reducedMotion &&
+    joining &&
+    renderedElapsed >= 250 &&
+    renderedElapsed < INVITE.shareClosesAt + 200;
+  const cursorTapping = [
+    INVITE.shareOpensAt,
+    INVITE.copyAt,
+    INVITE.sendAt,
+  ].some((at) => renderedElapsed >= at && renderedElapsed < at + 220);
+
+  useEffect(() => {
+    if (!showCursor) return;
+    const workspace = workspaceRef.current;
+    const cursor = cursorRef.current;
+    if (!workspace || !cursor) return;
+    const frame = window.requestAnimationFrame(() => {
+      const wsRect = workspace.getBoundingClientRect();
+      let x = wsRect.width * 0.17;
+      let y = wsRect.height * 0.82;
+      const anchor =
+        cursorTarget === "share"
+          ? shareRef.current
+          : cursorTarget === "copy"
+            ? copyRef.current
+            : cursorTarget === "send"
+              ? sendRef.current
+              : null;
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        x = rect.left - wsRect.left + rect.width / 2;
+        y = rect.top - wsRect.top + rect.height / 2;
+      }
+      cursor.style.transform = `translate(${x}px, ${y}px)`;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [cursorTarget, showCursor]);
 
   function setTimeline(next: number) {
     elapsedRef.current = next;
@@ -443,7 +518,7 @@ export function LandingWorkspaceDemo() {
         </div>
       </div>
 
-      <div className="lp-workspace" data-phase={phase}>
+      <div className="lp-workspace" data-phase={phase} ref={workspaceRef}>
         <header className="lp-workspace-topbar">
           <span className="lp-workspace-mark" aria-hidden="true">
             C
@@ -465,6 +540,7 @@ export function LandingWorkspaceDemo() {
             ))}
           </span>
           <span
+            ref={shareRef}
             className={`lp-workspace-share${sharePanelOpen ? " is-open" : ""}`}
           >
             <Share2 aria-hidden size={13} /> Share
@@ -487,14 +563,34 @@ export function LandingWorkspaceDemo() {
                 <em>Role</em>
                 {INVITE.role}
               </i>
-              <i className={`lp-invite-link${linkCopied ? " is-copied" : ""}`}>
-                <code>{linkReady ? INVITE.link : "Creating link…"}</code>
-                <em>{linkCopied ? "Copied" : "Copy"}</em>
+              <i className={`lp-invite-line${linkCopied ? " is-done" : ""}`}>
+                <code>{INVITE.link}</code>
+                <em ref={copyRef}>{linkCopied ? "Copied" : "Copy"}</em>
+              </i>
+              <i className={`lp-invite-line${inviteSent ? " is-done" : ""}`}>
+                <code>{INVITE.invitee}</code>
+                <em ref={sendRef}>{inviteSent ? "Sent" : "Send"}</em>
               </i>
               <i className="lp-invite-status">
-                {linkCopied ? "Link copied — Casey opened it" : " "}
+                {inviteSent
+                  ? "Sent. Casey opened the link."
+                  : linkCopied
+                    ? "Link copied."
+                    : " "}
               </i>
             </div>
+          </div>
+        ) : null}
+
+        {showCursor ? (
+          <div
+            ref={cursorRef}
+            className={`lp-demo-cursor${cursorTapping ? " is-tapping" : ""}${
+              cursorTarget === "exit" ? " is-leaving" : ""
+            }`}
+            aria-hidden="true"
+          >
+            <GuideCursor />
           </div>
         ) : null}
 
