@@ -2941,10 +2941,10 @@ index 0000000..7965918
 +}
 diff --git a/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
 new file mode 100644
-index 0000000..e436c46
+index 0000000..bc9edcc
 --- /dev/null
 +++ b/src/renderer/src/components/right-sidebar/CodevLiveAgentsPanel.tsx
-@@ -0,0 +1,276 @@
+@@ -0,0 +1,306 @@
 +import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 +import { useShallow } from 'zustand/react/shallow'
 +import { toast } from 'sonner'
@@ -3024,6 +3024,21 @@ index 0000000..e436c46
 +  return raw.charAt(0).toUpperCase() + raw.slice(1)
 +}
 +
++/**
++ * Orca's `terminalTitle` is whatever the PTY last set: sometimes the prompt
++ * summary we want ("Repository overview"), but often the raw shell prompt
++ * (`orca-ws-…@ip-10-…:/srv/codev/…`) or the bare CLI name. Take it only when
++ * it reads like a task, not a shell line.
++ */
++function usableTaskTitle(raw: string | undefined, providerName: string): string | null {
++  const value = raw?.replace(/^[\s✳✶✻*•]+/, '').trim()
++  if (!value) return null
++  if (/@|\/srv\/|~[/$]|\$\s*$|^orca-ws-/i.test(value)) return null
++  if (value.toLowerCase() === providerName.toLowerCase()) return null
++  if (/^(claude code|codex cli|cursor)$/i.test(value)) return null
++  return value
++}
++
 +export function CodevLiveAgentsPanel(): JSX.Element | null {
 +  const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
 +  const [now, setNow] = useState(() => Date.now())
@@ -3047,17 +3062,32 @@ index 0000000..e436c46
 +  )
 +
 +  const local = useMemo<MissionControlAgent[]>(() => {
-+    return Object.entries(statuses ?? {})
++    const entries = Object.entries(statuses ?? {})
 +      // A status row with no agent identity is a plain terminal pane or a
 +      // half-torn-down entry, not an agent.
 +      .filter(([, entry]) => isLiveState(entry.state) && Boolean(entry.agentType))
++      .sort(([, a], [, b]) => b.updatedAt - a.updatedAt)
++
++    // One agent per worktree in the chat-tab model. A reload can leave a
++    // superseded status row behind (old tab + its replacement), so keep only
++    // the most-recently-updated entry for each worktree; unattributed rows
++    // (no worktreeId) are always kept.
++    const seenWorktrees = new Set<string>()
++    return entries
++      .filter(([, entry]) => {
++        if (!entry.worktreeId) return true
++        if (seenWorktrees.has(entry.worktreeId)) return false
++        seenWorktrees.add(entry.worktreeId)
++        return true
++      })
 +      .map(([paneKey, entry]) => {
 +        const label = providerLabel(String(entry.agentType ?? ''))
 +        const phase = missionControlPhaseFromState(entry.state)
 +        // The prompt is often blank for a native-chat turn, so fall back to the
 +        // agent tab's own title (Orca derives it from the first prompt) before
 +        // the generic label.
-+        const title = entry.prompt?.trim() || entry.terminalTitle?.trim() || `${label} session`
++        const title =
++          entry.prompt?.trim() || usableTaskTitle(entry.terminalTitle, label) || `${label} session`
 +        // What it is doing *right now*: a live question, then the current tool
 +        // call, then its last message, then the prompt, then a state default.
 +        const toolLine = entry.toolName
