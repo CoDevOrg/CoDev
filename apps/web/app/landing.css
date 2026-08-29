@@ -20,6 +20,7 @@
   --lp-lime: #f2604a;
   --lp-orange: #ff7c63;
   --lp-sky: #5b9bd5;
+  --lp-review-blue: #62c3dc;
   --lp-warn: #e8b44a;
   --lp-shell: min(1200px, calc(100% - 48px));
   --lp-px: 0;
@@ -674,6 +675,7 @@
 }
 
 .lp-workspace-share {
+  position: relative;
   display: inline-flex;
   height: 28px;
   padding: 0 9px;
@@ -689,7 +691,7 @@
   color: var(--lp-ink);
 }
 
-/* A high-fidelity share interaction, intentionally shown only during Join. */
+/* Large share dialog shown during the Join phase. */
 .lp-share-overlay {
   position: absolute;
   z-index: 8;
@@ -880,17 +882,32 @@
   background: #3fbf7a;
 }
 
+@keyframes lp-share-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes lp-share-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+/* Guide cursor that walks the viewer through Share -> Copy link -> Done. */
 .lp-demo-cursor {
   position: absolute;
-  z-index: 9;
   top: 0;
   left: 0;
+  z-index: 9;
   width: 20px;
   height: 20px;
   margin: -2px 0 0 -3px;
   pointer-events: none;
   transform: translate(46px, 360px);
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: lp-cursor-in 0.3s ease both;
   will-change: transform;
 }
 
@@ -905,46 +922,39 @@
 }
 
 .lp-demo-cursor.is-tapping::after {
+  content: "";
   position: absolute;
   top: 4px;
   left: 3px;
   width: 6px;
   height: 6px;
-  border: 2px solid #ff7c63;
   border-radius: 50%;
+  border: 2px solid #ff7c63;
   animation: lp-cursor-tap 0.45s ease-out;
-  content: "";
 }
 
 .lp-demo-cursor.is-leaving {
   opacity: 0;
+  animation: none;
   transition:
     transform 0.5s ease,
     opacity 0.45s ease;
 }
 
-@keyframes lp-share-scrim-in {
+@keyframes lp-cursor-in {
   from {
     opacity: 0;
-  }
-}
-
-@keyframes lp-share-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
   }
 }
 
 @keyframes lp-cursor-tap {
   from {
-    opacity: 0.9;
     transform: translate(-40%, -40%) scale(0.4);
+    opacity: 0.9;
   }
-
   to {
-    opacity: 0;
     transform: translate(-40%, -40%) scale(4);
+    opacity: 0;
   }
 }
 
@@ -1052,6 +1062,29 @@
   font-size: 9px;
 }
 
+.lp-team-person.is-joining {
+  animation: lp-person-in 0.42s ease both;
+}
+
+@keyframes lp-person-in {
+  from {
+    opacity: 0;
+    transform: translateX(-9px);
+  }
+}
+
+.lp-join-tag {
+  margin-left: auto;
+  padding: 2px 7px;
+  align-self: center;
+  border-radius: 999px;
+  background: rgba(91, 155, 213, 0.18);
+  color: var(--lp-sky);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
+}
+
 .lp-team-note {
   margin-top: auto;
   padding: 10px;
@@ -1118,6 +1151,23 @@
   align-items: center;
 }
 
+/* Multi-tab editor header: one tab per agent, tighter to fit three. */
+.lp-editor-tabs-multi > span {
+  padding: 0 9px;
+  gap: 5px;
+}
+
+.lp-editor-tabs-multi > span.is-open {
+  box-shadow: inset 0 -2px 0 rgba(237, 238, 240, 0.35);
+}
+
+.lp-tab-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
 .lp-agent-dot {
   width: 7px;
   height: 7px;
@@ -1131,7 +1181,7 @@
 }
 
 .lp-dot-green {
-  background: var(--lp-lime);
+  background: var(--lp-review-blue);
 }
 
 .lp-dot-purple {
@@ -1139,10 +1189,21 @@
 }
 
 .lp-editor-breadcrumb {
+  display: flex;
   height: 28px;
   padding: 7px 14px 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   color: var(--lp-faint);
   font-size: 9px;
+}
+
+.lp-editor-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lp-editor-breadcrumb b {
@@ -1159,6 +1220,23 @@
   font-size: clamp(9px, 0.9vw, 11px);
   line-height: 1.75;
   tab-size: 2;
+}
+
+/* Extra room so the coordination log never overlaps the last written line. */
+.lp-code.has-coord {
+  padding-bottom: 136px;
+}
+
+/* Fades the pane in each time the editor follows an agent to a new tab. */
+.lp-code-swap {
+  animation: lp-code-swap 240ms ease both;
+}
+
+@keyframes lp-code-swap {
+  from {
+    opacity: 0.25;
+    transform: translateX(7px);
+  }
 }
 
 .lp-code-row {
@@ -1192,8 +1270,8 @@
 }
 
 .lp-code-green {
-  --cursor: var(--lp-lime);
-  --cursor-soft: rgba(242, 96, 74, 0.11);
+  --cursor: var(--lp-review-blue);
+  --cursor-soft: rgba(98, 195, 220, 0.11);
 }
 
 .lp-code-purple {
@@ -1220,9 +1298,9 @@
   position: absolute;
   z-index: 2;
   bottom: calc(100% + 2px);
-  left: 0;
+  right: 0;
   padding: 2px 5px;
-  border-radius: 3px 6px 6px 0;
+  border-radius: 6px 3px 0 6px;
   background: var(--cursor);
   color: #0c0e10;
   font-family: var(--font-geist-sans), Arial, sans-serif;
@@ -1231,6 +1309,61 @@
   font-weight: 650;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.lp-active-typist {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--typist-color);
+  font-size: 8px;
+  font-weight: 650;
+  animation: lp-active-typist-in 180ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+.lp-active-typists {
+  display: flex;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  overflow: visible;
+}
+
+.lp-active-typist i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: lp-live-pulse 1.2s ease-in-out infinite;
+}
+
+.lp-active-typist b {
+  width: 1px;
+  height: 9px;
+  margin: 0;
+  background: currentColor;
+  animation: lp-caret 720ms step-end infinite;
+}
+
+.lp-active-typist-orange {
+  --typist-color: var(--lp-orange);
+}
+
+.lp-active-typist-green {
+  --typist-color: var(--lp-review-blue);
+}
+
+.lp-active-typist-purple {
+  --typist-color: var(--lp-sky);
+}
+
+@keyframes lp-active-typist-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
 }
 
 .lp-terminal {
@@ -1294,6 +1427,73 @@
 
 .lp-terminal p small {
   color: var(--lp-faint);
+}
+
+/* Workspace-brain coordination log (Write phase) */
+.lp-coord-log {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 91px;
+  padding: 9px 14px 12px;
+  border-top: 1px solid rgba(237, 238, 240, 0.09);
+  background: #0a0c0e;
+  color: var(--lp-muted);
+  animation: lp-coord-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lp-coord-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.lp-coord-log header {
+  display: flex;
+  padding-bottom: 8px;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid rgba(237, 238, 240, 0.07);
+  color: var(--lp-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lp-coord-log .lp-brain-mark {
+  color: var(--lp-sky);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.lp-coord-log ul {
+  display: grid;
+  margin: 7px 0 0;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+
+.lp-coord-log li {
+  color: var(--lp-muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  line-height: 1.4;
+  animation: lp-coord-line 260ms ease both;
+}
+
+.lp-coord-log li:last-child {
+  color: var(--lp-sky);
+}
+
+@keyframes lp-coord-line {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
 }
 
 /* Live agent rail */
@@ -1372,9 +1572,20 @@
 }
 
 .lp-agent-card > div > b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--agent-color);
   font-size: 8px;
   font-weight: 650;
+}
+
+.lp-agent-card > div > b > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: lp-live-pulse 1.2s ease-in-out infinite;
 }
 
 .lp-agent-card p {
@@ -1399,7 +1610,7 @@
 }
 
 .lp-agent-green {
-  --agent-color: var(--lp-lime);
+  --agent-color: var(--lp-review-blue);
 }
 
 .lp-agent-purple {
@@ -1407,15 +1618,15 @@
 }
 
 .lp-agent-orange > div > i {
-  background: #5b9bd5;
+  background: var(--lp-orange);
 }
 
 .lp-agent-green > div > i {
-  background: #8b7cd8;
+  background: var(--lp-review-blue);
 }
 
 .lp-agent-purple > div > i {
-  background: #e8b44a;
+  background: var(--lp-sky);
 }
 
 .lp-review-ready {
@@ -1941,7 +2152,27 @@
     display: none;
   }
 
-  .lp-editor-tabs > span:nth-child(2) {
+  .lp-share-overlay {
+    padding: 8px;
+  }
+
+  .lp-editor-path {
+    display: none;
+  }
+
+  .lp-editor-breadcrumb {
+    justify-content: flex-end;
+  }
+
+  .lp-active-typists {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  /* On a phone, show only the tab the editor is currently following. */
+  .lp-editor-tabs-multi > span:not(.is-open) {
     display: none;
   }
 

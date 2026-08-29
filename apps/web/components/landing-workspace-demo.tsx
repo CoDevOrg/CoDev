@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+/** Pointer that walks the viewer through the invite steps in the Join phase. */
 function GuideCursor() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
@@ -45,17 +46,74 @@ type AgentTrack = {
   initials: string;
   tone: AgentTone;
   task: string;
-  segments: TypingSegment[];
+  /** Each agent runs in its own isolated worktree on its own branch. */
+  branch: string;
+  /** ms it starts editing its own file. */
+  editsFrom: number;
+  /** ms it finishes and moves to review. */
+  editsTo: number;
 };
 
 const DEMO_DURATION = 17_600;
 
-const SHARE_DEMO = {
-  opensAt: 850,
+/**
+ * Beats inside the Join phase that walk through the real invite flow: the
+ * owner opens Share, a single-use link is created and copied, and the invited
+ * teammate lands straight in the running workspace. Mirrors
+ * WorkspaceShareDialog and the /invites/[token] accept step.
+ */
+const INVITE = {
+  /** Cursor reaches Share and clicks; the dialog opens. */
+  shareOpensAt: 850,
+  /** Cursor clicks Copy on the link row. */
   copyAt: 2_150,
-  doneAt: 3_250,
-  closesAt: 4_550,
+  /** Cursor clicks Done after the link is copied. */
+  sendAt: 3_150,
+  /** The invited teammate lands in the room. */
+  guestJoinsAt: 3_600,
+  /** Dialog closes, cursor leaves. */
+  shareClosesAt: 4_550,
+  role: "Co-steer",
+  link: "codev.dev/w/acme-storefront/j/7f3a91",
+  invitee: "casey@rivera.dev",
 } as const;
+
+type Teammate = {
+  id: string;
+  name: string;
+  initials: string;
+  tone: AgentTone;
+  detail: string;
+  /** ms into the timeline this person is first in the room (0 = from the start). */
+  joinsAt: number;
+};
+
+const TEAMMATES: Teammate[] = [
+  {
+    id: "alex",
+    name: "Alex Morgan",
+    initials: "AM",
+    tone: "orange",
+    detail: "Opened the workspace",
+    joinsAt: 0,
+  },
+  {
+    id: "jordan",
+    name: "Jordan Lee",
+    initials: "JL",
+    tone: "green",
+    detail: "Connected acme/storefront",
+    joinsAt: 0,
+  },
+  {
+    id: "casey",
+    name: "Casey Rivera",
+    initials: "CR",
+    tone: "purple",
+    detail: "Joined from the invite",
+    joinsAt: INVITE.guestJoinsAt,
+  },
+];
 
 const PHASES: {
   key: DemoPhase;
@@ -68,14 +126,14 @@ const PHASES: {
     label: "Join",
     endpoint: 4_750,
     summary:
-      "Share one workspace link, choose its access, and bring the whole crew in.",
+      "Copy one invite link, pick a role, and your crew is in the running workspace.",
   },
   {
     key: "write",
     label: "Write",
     endpoint: 12_950,
     summary:
-      "Codex, Claude, and Review edit separate regions of the file together.",
+      "Three agents, three branches. They hand off through the workspace brain, never the same file.",
   },
   {
     key: "verify",
@@ -88,7 +146,7 @@ const PHASES: {
     key: "ready",
     label: "Ready",
     endpoint: DEMO_DURATION,
-    summary: "The shared file is tested and ready for a person to review.",
+    summary: "The merged change is tested and ready for a person to review.",
   },
 ];
 
@@ -98,77 +156,174 @@ const AGENTS: AgentTrack[] = [
     name: "Codex",
     model: "OpenAI",
     initials: "CX",
-    tone: "orange",
+    tone: "purple",
     task: "Validate checkout input",
-    segments: [
-      {
-        line: 7,
-        start: 5_050,
-        text: "  const cart = checkoutSchema.parse(input);",
-      },
-      {
-        line: 12,
-        start: 9_850,
-        text: '  await audit.record("checkout.reserved", order.id);',
-      },
-    ],
+    branch: "agent/checkout-race",
+    editsFrom: 4_750,
+    editsTo: 11_200,
   },
   {
     id: "claude",
     name: "Claude",
     model: "Anthropic",
     initials: "CL",
-    tone: "green",
+    tone: "orange",
     task: "Make reservations idempotent",
-    segments: [
-      {
-        line: 8,
-        start: 5_600,
-        text: "  const lock = await claim(`checkout:${cart.id}`);",
-      },
-      {
-        line: 11,
-        start: 9_350,
-        text: "  const order = await commit(cart, lock);",
-      },
-    ],
+    branch: "agent/idempotency",
+    editsFrom: 5_000,
+    editsTo: 12_100,
   },
   {
     id: "review",
     name: "Review",
     model: "CoDev",
     initials: "RV",
-    tone: "purple",
-    task: "Guard retries and review",
-    segments: [
-      {
-        line: 9,
-        start: 6_200,
-        text: "  if (!lock) return retryLater(cart);",
-      },
-      { line: 13, start: 10_400, text: "  return order;" },
-    ],
+    tone: "green",
+    task: "Guard retries, then review",
+    branch: "agent/retry-guard",
+    editsFrom: 5_250,
+    editsTo: 12_950,
   },
 ];
 
-const STATIC_LINES = new Map<number, string>([
-  [1, 'import { audit } from "@/lib/audit";'],
-  [2, 'import { checkoutSchema } from "@/lib/checkout";'],
-  [3, 'import { claim, commit } from "@/lib/reservations";'],
-  [4, ""],
-  [5, "type CheckoutResult = Promise<Order | Retry>;"],
-  [6, "export async function reserve(input: unknown): CheckoutResult {"],
-  [10, ""],
-  [14, "}"],
-]);
+type EditorFile = {
+  id: string;
+  tab: string;
+  branch: string;
+  path: string;
+  lines: number;
+  agent: { name: string; tone: AgentTone };
+  /** Skeleton lines that are there before anyone types. */
+  base: [number, string][];
+  /** Lines this file's agent types in, with per-line start times. */
+  segments: TypingSegment[];
+  /** [start, end] ms the editor shows this tab. */
+  focus: [number, number];
+};
 
-const FINAL_CODE = Array.from({ length: 14 }, (_, index) => {
-  const line = index + 1;
-  const segment = AGENTS.flatMap((agent) => agent.segments).find(
-    (candidate) => candidate.line === line,
-  );
-  return segment?.text ?? STATIC_LINES.get(line) ?? "";
-}).join("\n");
+/** One tab per agent. The editor follows whichever agent is writing. */
+const FILES: EditorFile[] = [
+  {
+    id: "reserve",
+    tab: "reserve.ts",
+    branch: "agent/checkout-race",
+    path: "src/checkout/reserve.ts",
+    lines: 13,
+    agent: { name: "Codex", tone: "purple" },
+    base: [
+      [1, 'import { audit } from "@/lib/audit";'],
+      [2, 'import { checkoutSchema } from "@/lib/checkout";'],
+      [3, 'import { claim, commit } from "@/lib/reservations";'],
+      [4, ""],
+      [5, "export const reserveSchema = checkoutSchema;"],
+      [6, ""],
+      [7, "export async function reserve(input: unknown) {"],
+      [11, ""],
+      [13, "}"],
+    ],
+    segments: [
+      {
+        line: 8,
+        start: 5_100,
+        text: "  const cart = reserveSchema.parse(input);",
+      },
+      {
+        line: 9,
+        start: 6_200,
+        text: "  const lock = await claim(`checkout:${cart.id}`);",
+      },
+      {
+        line: 10,
+        start: 7_200,
+        text: "  const order = await commit(cart, lock);",
+      },
+      {
+        line: 12,
+        start: 7_900,
+        text: '  audit.record("checkout.reserved", order.id);',
+      },
+    ],
+    focus: [4_750, 8_400],
+  },
+  {
+    id: "session",
+    tab: "session.ts",
+    branch: "agent/idempotency",
+    path: "src/checkout/session.ts",
+    lines: 12,
+    agent: { name: "Claude", tone: "orange" },
+    base: [
+      [1, 'import { redis } from "@/lib/redis";'],
+      [2, 'import { reserveSchema } from "./reserve";'],
+      [3, ""],
+      [4, "export async function sessionFor(cartId: string) {"],
+      [5, "  const key = `sess:${cartId}`;"],
+      [8, ""],
+      [11, "  return session;"],
+      [12, "}"],
+    ],
+    segments: [
+      { line: 6, start: 8_500, text: "  const held = await redis.get(key);" },
+      { line: 7, start: 9_200, text: "  if (held) return JSON.parse(held);" },
+      {
+        line: 9,
+        start: 9_800,
+        text: "  const session = reserveSchema.session(cartId);",
+      },
+      {
+        line: 10,
+        start: 10_300,
+        text: "  await redis.set(key, session, { ex: 900 });",
+      },
+    ],
+    focus: [8_400, 10_800],
+  },
+  {
+    id: "retry",
+    tab: "retry.ts",
+    branch: "agent/retry-guard",
+    path: "src/lib/retry.ts",
+    lines: 9,
+    agent: { name: "Review", tone: "green" },
+    base: [
+      [1, "type Task<T> = () => Promise<T>;"],
+      [2, ""],
+      [3, "export async function retryLater<T>(task: Task<T>, tries = 3) {"],
+      [7, "  }"],
+      [8, '  throw new Error("checkout: retries exhausted");'],
+      [9, "}"],
+    ],
+    segments: [
+      { line: 4, start: 10_850, text: "  for (let i = 0; i < tries; i++) {" },
+      { line: 5, start: 11_450, text: "    try { return await task(); }" },
+      {
+        line: 6,
+        start: 12_050,
+        text: "    catch (err) { return backoff(i, err); }",
+      },
+    ],
+    focus: [10_800, 12_950],
+  },
+];
+
+/** Workspace-brain events shown during Write: claims, hand-offs, no conflicts. */
+const COORD_EVENTS: { at: number; text: string }[] = [
+  { at: 5_200, text: "Codex claimed reserve.ts" },
+  { at: 7_600, text: "Claude is waiting on reserveSchema from Codex" },
+  { at: 8_500, text: "Codex pushed it, Claude picked up session.ts" },
+  { at: 11_200, text: "Review diffing all 3 branches, 0 file conflicts" },
+];
+
+function finalCodeFor(file: EditorFile) {
+  const seg = new Map(file.segments.map((s) => [s.line, s.text]));
+  const base = new Map(file.base);
+  return Array.from(
+    { length: file.lines },
+    (_, index) => seg.get(index + 1) ?? base.get(index + 1) ?? "",
+  ).join("\n");
+}
+
+const RESERVE_FINAL = finalCodeFor(FILES[0]!);
 
 function characterDelay(character: string, index: number) {
   if (character === " ") return 24;
@@ -176,34 +331,52 @@ function characterDelay(character: string, index: number) {
   return 39 + ((character.charCodeAt(0) + index * 7) % 23);
 }
 
-function typingCheckpoints(text: string) {
+function typingCheckpoints(text: string, maxDuration: number) {
   let total = 0;
-  return Array.from(text, (character, index) => {
+  const checkpoints = Array.from(text, (character, index) => {
     total += characterDelay(character, index);
     return total;
   });
+  const scale = total > maxDuration ? maxDuration / total : 1;
+  return checkpoints.map((checkpoint) => Math.round(checkpoint * scale));
 }
 
 const SEGMENT_TIMINGS = new Map(
-  AGENTS.flatMap((agent) =>
-    agent.segments.map(
-      (segment) =>
-        [
-          `${agent.id}-${segment.line}`,
-          typingCheckpoints(segment.text),
-        ] as const,
-    ),
+  FILES.flatMap((file) =>
+    file.segments.map((segment, index) => {
+      const nextStart = file.segments[index + 1]?.start ?? file.focus[1];
+      // Leave a short settled beat before the cursor moves to the next line or
+      // agent. This keeps every agent legible even when its code is longer.
+      const availableDuration = Math.max(160, nextStart - segment.start - 140);
+      return [
+        `${file.id}-${segment.line}`,
+        typingCheckpoints(segment.text, availableDuration),
+      ] as const;
+    }),
   ),
 );
 
+export function activeFileForElapsed(elapsed: number) {
+  return (
+    FILES.find((file) => elapsed >= file.focus[0] && elapsed < file.focus[1]) ??
+    FILES[0]!
+  );
+}
+
+export function activeAgentsForElapsed(elapsed: number) {
+  return AGENTS.filter(
+    (agent) => elapsed >= agent.editsFrom && elapsed < agent.editsTo,
+  );
+}
+
 function visibleCharacterCount(
-  agentId: string,
+  fileId: string,
   segment: TypingSegment,
   elapsed: number,
 ) {
   const localElapsed = elapsed - segment.start;
   if (localElapsed <= 0) return 0;
-  const checkpoints = SEGMENT_TIMINGS.get(`${agentId}-${segment.line}`) ?? [];
+  const checkpoints = SEGMENT_TIMINGS.get(`${fileId}-${segment.line}`) ?? [];
   let low = 0;
   let high = checkpoints.length;
   while (low < high) {
@@ -236,21 +409,11 @@ function phaseForElapsed(elapsed: number): DemoPhase {
 }
 
 function statusForAgent(agent: AgentTrack, elapsed: number) {
-  const counts = agent.segments.map((segment) =>
-    visibleCharacterCount(agent.id, segment, elapsed),
-  );
-  const hasStarted = counts.some((count) => count > 0);
-  const isTyping = agent.segments.some(
-    (segment, index) =>
-      counts[index]! > 0 && counts[index]! < segment.text.length,
-  );
-  const isComplete = agent.segments.every(
-    (segment, index) => counts[index]! >= segment.text.length,
-  );
-
   if (elapsed >= PHASES[2]!.endpoint) return "Ready";
-  if (elapsed >= PHASES[1]!.endpoint || isComplete) return "Reviewing";
-  if (isTyping || hasStarted) return "Editing";
+  if (elapsed >= agent.editsTo || elapsed >= PHASES[1]!.endpoint)
+    return "Reviewing";
+  if (elapsed >= agent.editsFrom) return "Typing";
+  if (elapsed >= PHASES[0]!.endpoint) return "Queued";
   return "Joining";
 }
 
@@ -265,7 +428,7 @@ export function LandingWorkspaceDemo({
   const workspaceRef = useRef<HTMLDivElement>(null);
   const shareRef = useRef<HTMLSpanElement>(null);
   const copyRef = useRef<HTMLSpanElement>(null);
-  const doneRef = useRef<HTMLSpanElement>(null);
+  const sendRef = useRef<HTMLSpanElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const elapsedRef = useRef(initialElapsed);
   const startedRef = useRef(false);
@@ -339,38 +502,45 @@ export function LandingWorkspaceDemo({
   const phase = phaseForElapsed(renderedElapsed);
   const phaseDefinition =
     PHASES.find((item) => item.key === phase) ?? PHASES[0]!;
-  const lineSegments = useMemo(
+
+  const activeFile = activeFileForElapsed(renderedElapsed);
+  const activeAgents = activeAgentsForElapsed(renderedElapsed);
+  const activeLineSegments = useMemo(
     () =>
-      new Map(
-        AGENTS.flatMap((agent) =>
-          agent.segments.map((segment) => [segment.line, { agent, segment }]),
-        ),
-      ),
-    [],
+      new Map(activeFile.segments.map((segment) => [segment.line, segment])),
+    [activeFile],
   );
-  const isJoinPhase = phase === "join";
+  const activeBase = useMemo(() => new Map(activeFile.base), [activeFile]);
+
+  const joining = phase === "join";
   const sharePanelOpen =
-    renderedElapsed >= SHARE_DEMO.opensAt &&
-    renderedElapsed < SHARE_DEMO.closesAt;
-  const linkCopied = renderedElapsed >= SHARE_DEMO.copyAt;
-  const shareComplete = renderedElapsed >= SHARE_DEMO.doneAt;
-  const cursorTarget: "share" | "copy" | "done" | "exit" =
-    renderedElapsed < SHARE_DEMO.copyAt - 600
+    renderedElapsed >= INVITE.shareOpensAt &&
+    renderedElapsed < INVITE.shareClosesAt;
+  const linkCopied = renderedElapsed >= INVITE.copyAt;
+  const inviteSent = renderedElapsed >= INVITE.sendAt;
+  const roster = TEAMMATES.filter((mate) => renderedElapsed >= mate.joinsAt);
+  const coordEvents = COORD_EVENTS.filter((ev) => renderedElapsed >= ev.at);
+
+  // Guide cursor: which target it is heading for, whether it is shown, and
+  // whether it is mid-tap. It leads each action by ~600ms so it has landed by
+  // the time the button reacts.
+  const cursorTarget: "share" | "copy" | "send" | "exit" =
+    renderedElapsed < INVITE.copyAt - 600
       ? "share"
-      : renderedElapsed < SHARE_DEMO.doneAt - 600
+      : renderedElapsed < INVITE.sendAt - 600
         ? "copy"
-        : renderedElapsed < SHARE_DEMO.closesAt - 250
-          ? "done"
+        : renderedElapsed < INVITE.shareClosesAt - 250
+          ? "send"
           : "exit";
   const showCursor =
     !reducedMotion &&
-    isJoinPhase &&
+    joining &&
     renderedElapsed >= 250 &&
-    renderedElapsed < SHARE_DEMO.closesAt + 200;
+    renderedElapsed < INVITE.shareClosesAt + 200;
   const cursorTapping = [
-    SHARE_DEMO.opensAt,
-    SHARE_DEMO.copyAt,
-    SHARE_DEMO.doneAt,
+    INVITE.shareOpensAt,
+    INVITE.copyAt,
+    INVITE.sendAt,
   ].some((at) => renderedElapsed >= at && renderedElapsed < at + 220);
 
   useEffect(() => {
@@ -379,25 +549,22 @@ export function LandingWorkspaceDemo({
     const cursor = cursorRef.current;
     if (!workspace || !cursor) return;
     const frame = window.requestAnimationFrame(() => {
-      const workspaceBounds = workspace.getBoundingClientRect();
+      const wsRect = workspace.getBoundingClientRect();
+      let x = wsRect.width * 0.17;
+      let y = wsRect.height * 0.82;
       const anchor =
         cursorTarget === "share"
           ? shareRef.current
           : cursorTarget === "copy"
             ? copyRef.current
-            : cursorTarget === "done"
-              ? doneRef.current
+            : cursorTarget === "send"
+              ? sendRef.current
               : null;
-      const x = anchor
-        ? anchor.getBoundingClientRect().left -
-          workspaceBounds.left +
-          anchor.getBoundingClientRect().width / 2
-        : workspaceBounds.width * 0.17;
-      const y = anchor
-        ? anchor.getBoundingClientRect().top -
-          workspaceBounds.top +
-          anchor.getBoundingClientRect().height / 2
-        : workspaceBounds.height * 0.82;
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        x = rect.left - wsRect.left + rect.width / 2;
+        y = rect.top - wsRect.top + rect.height / 2;
+      }
       cursor.style.transform = `translate(${x}px, ${y}px)`;
     });
     return () => window.cancelAnimationFrame(frame);
@@ -412,6 +579,9 @@ export function LandingWorkspaceDemo({
     const definition = PHASES.find((item) => item.key === nextPhase);
     if (!definition) return;
     startedRef.current = true;
+    // Join is a choreographed sequence (open Share -> create link -> copy ->
+    // the teammate lands in the room), so replay it from the top rather than
+    // snapping to the end of the phase like the deterministic later phases.
     if (nextPhase === "join") {
       setTimeline(0);
       setPlaying(!reducedMotion);
@@ -486,19 +656,20 @@ export function LandingWorkspaceDemo({
             <code>main</code>
           </span>
           <span className="lp-workspace-live">
-            <i aria-hidden="true" /> 3 agents live
+            <i aria-hidden="true" />{" "}
+            {joining ? "Inviting the crew" : "3 agents live"}
           </span>
           <span
             className="lp-workspace-people"
-            aria-label="Three people present"
+            aria-label={`${roster.length} people in the workspace`}
           >
-            <i>AM</i>
-            <i>JL</i>
-            <i>CR</i>
+            {roster.map((mate) => (
+              <i key={mate.id}>{mate.initials}</i>
+            ))}
           </span>
           <span
-            className={`lp-workspace-share${sharePanelOpen ? " is-open" : ""}`}
             ref={shareRef}
+            className={`lp-workspace-share${sharePanelOpen ? " is-open" : ""}`}
           >
             <Share2 aria-hidden size={13} /> Share
           </span>
@@ -512,7 +683,7 @@ export function LandingWorkspaceDemo({
           >
             <section className="lp-share-panel">
               <header className="lp-share-heading">
-                <h3>Share ‘acme/storefront’</h3>
+                <h3>Share &apos;acme/storefront&apos;</h3>
                 <span aria-hidden="true">
                   <HelpCircle size={16} />
                   <Settings size={16} />
@@ -555,8 +726,8 @@ export function LandingWorkspaceDemo({
                   {linkCopied ? "Link copied" : "Copy link"}
                 </span>
                 <span
-                  className={shareComplete ? "is-done" : undefined}
-                  ref={doneRef}
+                  className={inviteSent ? "is-done" : undefined}
+                  ref={sendRef}
                 >
                   Done
                 </span>
@@ -567,11 +738,11 @@ export function LandingWorkspaceDemo({
 
         {showCursor ? (
           <div
-            aria-hidden="true"
+            ref={cursorRef}
             className={`lp-demo-cursor${cursorTapping ? " is-tapping" : ""}${
               cursorTarget === "exit" ? " is-leaving" : ""
             }`}
-            ref={cursorRef}
+            aria-hidden="true"
           >
             <GuideCursor />
           </div>
@@ -582,93 +753,116 @@ export function LandingWorkspaceDemo({
             <div className="lp-rail-heading">
               <span>Team room</span>
               <strong>
-                <Users aria-hidden size={13} /> 3 online
+                <Users aria-hidden size={13} /> {roster.length} online
               </strong>
             </div>
-            <div className="lp-team-person is-active">
-              <i className="lp-person-orange">AM</i>
-              <span>
-                <strong>Alex Morgan</strong>
-                <small>Watching reserve.ts</small>
-              </span>
-            </div>
-            <div className="lp-team-person">
-              <i className="lp-person-green">JL</i>
-              <span>
-                <strong>Jordan Lee</strong>
-                <small>Steering Claude</small>
-              </span>
-            </div>
-            <div className="lp-team-person">
-              <i className="lp-person-purple">CR</i>
-              <span>
-                <strong>Casey Rivera</strong>
-                <small>Reviewing changes</small>
-              </span>
-            </div>
+            {roster.map((mate) => {
+              const fresh =
+                mate.joinsAt > 0 && renderedElapsed < mate.joinsAt + 1_500;
+              return (
+                <div
+                  key={mate.id}
+                  className={`lp-team-person${
+                    mate.id === "alex" ? " is-active" : ""
+                  }${fresh ? " is-joining" : ""}`}
+                >
+                  <i className={`lp-person-${mate.tone}`}>{mate.initials}</i>
+                  <span>
+                    <strong>{mate.name}</strong>
+                    <small>{mate.detail}</small>
+                  </span>
+                  {fresh ? <em className="lp-join-tag">joined</em> : null}
+                </div>
+              );
+            })}
             <div className="lp-team-note">
               <span>Shared context</span>
-              <p>Everyone sees the same file, cursors, and agent state.</p>
+              <p>Everyone sees every branch, cursor, and agent, live.</p>
             </div>
           </aside>
 
-          <section className="lp-editor" aria-label="Shared code editor">
-            <header className="lp-editor-tabs">
-              <span className="is-open">
-                <i aria-hidden="true">TS</i> reserve.ts
-              </span>
-              <span>checkout.test.ts</span>
-              <b aria-label="Three agents editing this file">
-                <i className="lp-agent-dot lp-dot-orange" />
-                <i className="lp-agent-dot lp-dot-green" />
-                <i className="lp-agent-dot lp-dot-purple" />
-              </b>
+          <section className="lp-editor" aria-label="Code editor">
+            <header className="lp-editor-tabs lp-editor-tabs-multi">
+              {FILES.map((file) => (
+                <span
+                  key={file.id}
+                  className={file.id === activeFile.id ? "is-open" : undefined}
+                >
+                  <i
+                    className={`lp-tab-dot lp-dot-${file.agent.tone}`}
+                    aria-hidden="true"
+                  />
+                  {file.tab}
+                </span>
+              ))}
             </header>
             <div className="lp-editor-breadcrumb">
-              src <b>›</b> checkout <b>›</b> reserve.ts
+              <span className="lp-editor-path">
+                {activeFile.branch} <b>›</b> {activeFile.path}
+              </span>
+              {phase === "write" && activeAgents.length > 0 ? (
+                <span
+                  className="lp-active-typists"
+                  aria-label={`${activeAgents.map((agent) => agent.name).join(", ")} typing simultaneously`}
+                >
+                  {activeAgents.map((agent) => (
+                    <strong
+                      key={agent.id}
+                      className={`lp-active-typist lp-active-typist-${agent.tone}`}
+                    >
+                      <i aria-hidden="true" /> {agent.name}
+                      <b aria-hidden="true" />
+                    </strong>
+                  ))}
+                </span>
+              ) : null}
             </div>
-            <pre className="lp-code" aria-hidden="true">
+            <pre
+              key={activeFile.id}
+              className={`lp-code lp-code-swap${phase === "write" ? " has-coord" : ""}`}
+              aria-hidden="true"
+            >
               <code>
-                {Array.from({ length: 14 }, (_, index) => {
+                {Array.from({ length: activeFile.lines }, (_, index) => {
                   const line = index + 1;
-                  const authored = lineSegments.get(line);
-                  if (!authored) {
+                  const segment = activeLineSegments.get(line);
+                  if (!segment) {
                     return (
                       <span className="lp-code-row" key={line}>
                         <i>{line}</i>
-                        <span>{STATIC_LINES.get(line) || " "}</span>
+                        <span>{activeBase.get(line) || " "}</span>
                       </span>
                     );
                   }
 
                   const count = visibleCharacterCount(
-                    authored.agent.id,
-                    authored.segment,
+                    activeFile.id,
+                    segment,
                     renderedElapsed,
                   );
-                  const text = authored.segment.text.slice(0, count);
-                  const hasStarted = renderedElapsed >= authored.segment.start;
-                  const complete = count >= authored.segment.text.length;
-                  const laterSegmentStarted = authored.agent.segments.some(
-                    (segment) =>
-                      segment.start > authored.segment.start &&
-                      renderedElapsed >= segment.start,
+                  const text = segment.text.slice(0, count);
+                  const hasStarted = renderedElapsed >= segment.start;
+                  const complete = count >= segment.text.length;
+                  const laterSegmentStarted = activeFile.segments.some(
+                    (later) =>
+                      later.start > segment.start &&
+                      renderedElapsed >= later.start,
                   );
-                  const showCursor = hasStarted && !laterSegmentStarted;
+                  const showEditorCursor = hasStarted && !laterSegmentStarted;
 
                   return (
                     <span
-                      className={`lp-code-row lp-code-${authored.agent.tone}${hasStarted ? " is-authored" : ""}`}
+                      className={`lp-code-row lp-code-${activeFile.agent.tone}${hasStarted ? " is-authored" : ""}`}
                       key={line}
                     >
                       <i>{line}</i>
                       <span>
                         {text || " "}
-                        {showCursor ? (
+                        {showEditorCursor ? (
                           <b
                             className={`lp-agent-cursor${complete ? " is-settled" : " is-typing"}`}
                           >
-                            <em>{authored.agent.name}</em>
+                            <em>{activeFile.agent.name}</em>
                           </b>
                         ) : null}
                       </span>
@@ -677,9 +871,24 @@ export function LandingWorkspaceDemo({
                 })}
               </code>
             </pre>
-            <pre className="lp-sr-only" aria-label="Completed shared file">
-              {FINAL_CODE}
+            <pre className="lp-sr-only" aria-label="Completed file">
+              {RESERVE_FINAL}
             </pre>
+            {phase === "write" ? (
+              <div className="lp-coord-log" aria-label="Workspace brain">
+                <header>
+                  <i className="lp-brain-mark" aria-hidden="true">
+                    {"◈"}
+                  </i>
+                  Workspace brain
+                </header>
+                <ul>
+                  {coordEvents.map((ev) => (
+                    <li key={ev.at}>{ev.text}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div
               className={`lp-terminal${renderedElapsed >= PHASES[1]!.endpoint ? " is-visible" : ""}`}
             >
@@ -707,7 +916,7 @@ export function LandingWorkspaceDemo({
                 const status = statusForAgent(agent, renderedElapsed);
                 return (
                   <li
-                    className={`lp-agent-card lp-agent-${agent.tone}`}
+                    className={`lp-agent-card lp-agent-${agent.tone}${status === "Typing" ? " is-typing" : ""}`}
                     key={agent.id}
                   >
                     <div>
@@ -716,10 +925,13 @@ export function LandingWorkspaceDemo({
                         <strong>{agent.name}</strong>
                         <small>{agent.model}</small>
                       </span>
-                      <b>{status}</b>
+                      <b>
+                        {status === "Typing" ? <i aria-hidden="true" /> : null}
+                        {status}
+                      </b>
                     </div>
                     <p>{agent.task}</p>
-                    <code>src/checkout/reserve.ts</code>
+                    <code>{agent.branch}</code>
                   </li>
                 );
               })}
@@ -730,7 +942,7 @@ export function LandingWorkspaceDemo({
               <Check aria-hidden size={14} />
               <span>
                 <strong>Ready for review</strong>
-                <small>1 file · 42 tests passed</small>
+                <small>3 branches merged, 42 tests passed</small>
               </span>
             </div>
           </aside>
