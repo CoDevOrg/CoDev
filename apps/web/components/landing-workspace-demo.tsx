@@ -36,8 +36,6 @@ type AgentTrack = {
   task: string;
   /** Each agent runs in its own isolated worktree on its own branch. */
   branch: string;
-  /** The one file this agent touches. No two agents share a file. */
-  file: string;
   /** ms it starts editing its own file. */
   editsFrom: number;
   /** ms it finishes and moves to review. */
@@ -123,7 +121,7 @@ const PHASES: {
     label: "Write",
     endpoint: 12_950,
     summary:
-      "Each agent gets its own branch. The workspace brain keeps them off the same files.",
+      "Three agents, three branches. They hand off through the workspace brain, never the same file.",
   },
   {
     key: "verify",
@@ -149,9 +147,8 @@ const AGENTS: AgentTrack[] = [
     tone: "orange",
     task: "Validate checkout input",
     branch: "agent/checkout-race",
-    file: "src/checkout/reserve.ts",
-    editsFrom: 5_050,
-    editsTo: 11_400,
+    editsFrom: 4_750,
+    editsTo: 8_400,
   },
   {
     id: "claude",
@@ -161,9 +158,8 @@ const AGENTS: AgentTrack[] = [
     tone: "green",
     task: "Make reservations idempotent",
     branch: "agent/idempotency",
-    file: "src/checkout/session.ts",
-    editsFrom: 8_600,
-    editsTo: 12_400,
+    editsFrom: 8_400,
+    editsTo: 10_800,
   },
   {
     id: "review",
@@ -173,67 +169,149 @@ const AGENTS: AgentTrack[] = [
     tone: "purple",
     task: "Guard retries, then review",
     branch: "agent/retry-guard",
-    file: "src/lib/retry.ts",
-    editsFrom: 6_400,
-    editsTo: 12_600,
+    editsFrom: 10_800,
+    editsTo: 12_950,
   },
 ];
 
-/** The one branch whose file is shown in the editor pane (Codex's worktree). */
-const EDITOR_AGENT = {
-  name: "Codex",
-  tone: "orange" as AgentTone,
-  branch: "agent/checkout-race",
-  segments: [
-    {
-      line: 7,
-      start: 5_050,
-      text: "  const cart = checkoutSchema.parse(input);",
-    },
-    {
-      line: 8,
-      start: 6_500,
-      text: "  const lock = await claim(`checkout:${cart.id}`);",
-    },
-    { line: 9, start: 7_800, text: "  if (!lock) return retryLater(cart);" },
-    {
-      line: 11,
-      start: 9_100,
-      text: "  const order = await commit(cart, lock);",
-    },
-    {
-      line: 12,
-      start: 10_200,
-      text: '  await audit.record("checkout.reserved", order.id);',
-    },
-    { line: 13, start: 11_300, text: "  return order;" },
-  ] as TypingSegment[],
+type EditorFile = {
+  id: string;
+  tab: string;
+  branch: string;
+  path: string;
+  lines: number;
+  agent: { name: string; tone: AgentTone };
+  /** Skeleton lines that are there before anyone types. */
+  base: [number, string][];
+  /** Lines this file's agent types in, with per-line start times. */
+  segments: TypingSegment[];
+  /** [start, end] ms the editor shows this tab. */
+  focus: [number, number];
 };
 
-/** Workspace-brain events shown during Write: agents routed off each other. */
-const COORD_EVENTS: { at: number; text: string }[] = [
-  { at: 5_200, text: "Codex claimed src/checkout/reserve.ts" },
-  { at: 7_600, text: "Claude reached for reserve.ts, already Codex's" },
-  { at: 8_900, text: "Claude rerouted to src/checkout/session.ts" },
-  { at: 10_900, text: "3 branches, 0 overlapping files" },
+/** One tab per agent. The editor follows whichever agent is writing. */
+const FILES: EditorFile[] = [
+  {
+    id: "reserve",
+    tab: "reserve.ts",
+    branch: "agent/checkout-race",
+    path: "src/checkout/reserve.ts",
+    lines: 13,
+    agent: { name: "Codex", tone: "orange" },
+    base: [
+      [1, 'import { audit } from "@/lib/audit";'],
+      [2, 'import { checkoutSchema } from "@/lib/checkout";'],
+      [3, 'import { claim, commit } from "@/lib/reservations";'],
+      [4, ""],
+      [5, "export const reserveSchema = checkoutSchema;"],
+      [6, ""],
+      [7, "export async function reserve(input: unknown) {"],
+      [11, ""],
+      [13, "}"],
+    ],
+    segments: [
+      {
+        line: 8,
+        start: 5_100,
+        text: "  const cart = reserveSchema.parse(input);",
+      },
+      {
+        line: 9,
+        start: 6_200,
+        text: "  const lock = await claim(`checkout:${cart.id}`);",
+      },
+      {
+        line: 10,
+        start: 7_200,
+        text: "  const order = await commit(cart, lock);",
+      },
+      {
+        line: 12,
+        start: 7_900,
+        text: '  audit.record("checkout.reserved", order.id);',
+      },
+    ],
+    focus: [4_750, 8_400],
+  },
+  {
+    id: "session",
+    tab: "session.ts",
+    branch: "agent/idempotency",
+    path: "src/checkout/session.ts",
+    lines: 12,
+    agent: { name: "Claude", tone: "green" },
+    base: [
+      [1, 'import { redis } from "@/lib/redis";'],
+      [2, 'import { reserveSchema } from "./reserve";'],
+      [3, ""],
+      [4, "export async function sessionFor(cartId: string) {"],
+      [5, "  const key = `sess:${cartId}`;"],
+      [8, ""],
+      [11, "  return session;"],
+      [12, "}"],
+    ],
+    segments: [
+      { line: 6, start: 8_500, text: "  const held = await redis.get(key);" },
+      { line: 7, start: 9_200, text: "  if (held) return JSON.parse(held);" },
+      {
+        line: 9,
+        start: 9_800,
+        text: "  const session = reserveSchema.session(cartId);",
+      },
+      {
+        line: 10,
+        start: 10_300,
+        text: "  await redis.set(key, session, { ex: 900 });",
+      },
+    ],
+    focus: [8_400, 10_800],
+  },
+  {
+    id: "retry",
+    tab: "retry.ts",
+    branch: "agent/retry-guard",
+    path: "src/lib/retry.ts",
+    lines: 9,
+    agent: { name: "Review", tone: "purple" },
+    base: [
+      [1, "type Task<T> = () => Promise<T>;"],
+      [2, ""],
+      [3, "export async function retryLater<T>(task: Task<T>, tries = 3) {"],
+      [7, "  }"],
+      [8, '  throw new Error("checkout: retries exhausted");'],
+      [9, "}"],
+    ],
+    segments: [
+      { line: 4, start: 10_850, text: "  for (let i = 0; i < tries; i++) {" },
+      { line: 5, start: 11_450, text: "    try { return await task(); }" },
+      {
+        line: 6,
+        start: 12_050,
+        text: "    catch (err) { return backoff(i, err); }",
+      },
+    ],
+    focus: [10_800, 12_950],
+  },
 ];
 
-const STATIC_LINES = new Map<number, string>([
-  [1, 'import { audit } from "@/lib/audit";'],
-  [2, 'import { checkoutSchema } from "@/lib/checkout";'],
-  [3, 'import { claim, commit } from "@/lib/reservations";'],
-  [4, ""],
-  [5, "type CheckoutResult = Promise<Order | Retry>;"],
-  [6, "export async function reserve(input: unknown): CheckoutResult {"],
-  [10, ""],
-  [14, "}"],
-]);
+/** Workspace-brain events shown during Write: claims, hand-offs, no conflicts. */
+const COORD_EVENTS: { at: number; text: string }[] = [
+  { at: 5_200, text: "Codex claimed reserve.ts" },
+  { at: 7_600, text: "Claude is waiting on reserveSchema from Codex" },
+  { at: 8_500, text: "Codex pushed it, Claude picked up session.ts" },
+  { at: 11_200, text: "Review diffing all 3 branches, 0 file conflicts" },
+];
 
-const FINAL_CODE = Array.from({ length: 14 }, (_, index) => {
-  const line = index + 1;
-  const segment = EDITOR_AGENT.segments.find((s) => s.line === line);
-  return segment?.text ?? STATIC_LINES.get(line) ?? "";
-}).join("\n");
+function finalCodeFor(file: EditorFile) {
+  const seg = new Map(file.segments.map((s) => [s.line, s.text]));
+  const base = new Map(file.base);
+  return Array.from(
+    { length: file.lines },
+    (_, index) => seg.get(index + 1) ?? base.get(index + 1) ?? "",
+  ).join("\n");
+}
+
+const RESERVE_FINAL = finalCodeFor(FILES[0]!);
 
 function characterDelay(character: string, index: number) {
   if (character === " ") return 24;
@@ -250,15 +328,25 @@ function typingCheckpoints(text: string) {
 }
 
 const SEGMENT_TIMINGS = new Map(
-  EDITOR_AGENT.segments.map(
-    (segment) => [segment.line, typingCheckpoints(segment.text)] as const,
+  FILES.flatMap((file) =>
+    file.segments.map(
+      (segment) =>
+        [
+          `${file.id}-${segment.line}`,
+          typingCheckpoints(segment.text),
+        ] as const,
+    ),
   ),
 );
 
-function visibleCharacterCount(segment: TypingSegment, elapsed: number) {
+function visibleCharacterCount(
+  fileId: string,
+  segment: TypingSegment,
+  elapsed: number,
+) {
   const localElapsed = elapsed - segment.start;
   if (localElapsed <= 0) return 0;
-  const checkpoints = SEGMENT_TIMINGS.get(segment.line) ?? [];
+  const checkpoints = SEGMENT_TIMINGS.get(`${fileId}-${segment.line}`) ?? [];
   let low = 0;
   let high = checkpoints.length;
   while (low < high) {
@@ -295,6 +383,7 @@ function statusForAgent(agent: AgentTrack, elapsed: number) {
   if (elapsed >= agent.editsTo || elapsed >= PHASES[1]!.endpoint)
     return "Reviewing";
   if (elapsed >= agent.editsFrom) return "Editing";
+  if (elapsed >= PHASES[0]!.endpoint) return "Queued";
   return "Joining";
 }
 
@@ -378,11 +467,18 @@ export function LandingWorkspaceDemo() {
   const phase = phaseForElapsed(renderedElapsed);
   const phaseDefinition =
     PHASES.find((item) => item.key === phase) ?? PHASES[0]!;
-  const lineSegments = useMemo(
+
+  const activeFile =
+    FILES.find(
+      (file) =>
+        renderedElapsed >= file.focus[0] && renderedElapsed < file.focus[1],
+    ) ?? FILES[0]!;
+  const activeLineSegments = useMemo(
     () =>
-      new Map(EDITOR_AGENT.segments.map((segment) => [segment.line, segment])),
-    [],
+      new Map(activeFile.segments.map((segment) => [segment.line, segment])),
+    [activeFile],
   );
+  const activeBase = useMemo(() => new Map(activeFile.base), [activeFile]);
 
   const joining = phase === "join";
   const sharePanelOpen =
@@ -628,40 +724,50 @@ export function LandingWorkspaceDemo() {
           </aside>
 
           <section className="lp-editor" aria-label="Code editor">
-            <header className="lp-editor-tabs">
-              <span className="is-open">
-                <i aria-hidden="true">TS</i> reserve.ts
-              </span>
-              <span>session.ts</span>
-              <span className="lp-editor-branch">
-                <i aria-hidden="true" /> agent/checkout-race
-              </span>
+            <header className="lp-editor-tabs lp-editor-tabs-multi">
+              {FILES.map((file) => (
+                <span
+                  key={file.id}
+                  className={file.id === activeFile.id ? "is-open" : undefined}
+                >
+                  <i
+                    className={`lp-tab-dot lp-dot-${file.agent.tone}`}
+                    aria-hidden="true"
+                  />
+                  {file.tab}
+                </span>
+              ))}
             </header>
             <div className="lp-editor-breadcrumb">
-              src <b>›</b> checkout <b>›</b> reserve.ts
+              {activeFile.branch} <b>›</b> {activeFile.path}
             </div>
             <pre
-              className={`lp-code${phase === "write" ? " has-coord" : ""}`}
+              key={activeFile.id}
+              className={`lp-code lp-code-swap${phase === "write" ? " has-coord" : ""}`}
               aria-hidden="true"
             >
               <code>
-                {Array.from({ length: 14 }, (_, index) => {
+                {Array.from({ length: activeFile.lines }, (_, index) => {
                   const line = index + 1;
-                  const segment = lineSegments.get(line);
+                  const segment = activeLineSegments.get(line);
                   if (!segment) {
                     return (
                       <span className="lp-code-row" key={line}>
                         <i>{line}</i>
-                        <span>{STATIC_LINES.get(line) || " "}</span>
+                        <span>{activeBase.get(line) || " "}</span>
                       </span>
                     );
                   }
 
-                  const count = visibleCharacterCount(segment, renderedElapsed);
+                  const count = visibleCharacterCount(
+                    activeFile.id,
+                    segment,
+                    renderedElapsed,
+                  );
                   const text = segment.text.slice(0, count);
                   const hasStarted = renderedElapsed >= segment.start;
                   const complete = count >= segment.text.length;
-                  const laterSegmentStarted = EDITOR_AGENT.segments.some(
+                  const laterSegmentStarted = activeFile.segments.some(
                     (later) =>
                       later.start > segment.start &&
                       renderedElapsed >= later.start,
@@ -670,7 +776,7 @@ export function LandingWorkspaceDemo() {
 
                   return (
                     <span
-                      className={`lp-code-row lp-code-${EDITOR_AGENT.tone}${hasStarted ? " is-authored" : ""}`}
+                      className={`lp-code-row lp-code-${activeFile.agent.tone}${hasStarted ? " is-authored" : ""}`}
                       key={line}
                     >
                       <i>{line}</i>
@@ -680,7 +786,7 @@ export function LandingWorkspaceDemo() {
                           <b
                             className={`lp-agent-cursor${complete ? " is-settled" : " is-typing"}`}
                           >
-                            <em>{EDITOR_AGENT.name}</em>
+                            <em>{activeFile.agent.name}</em>
                           </b>
                         ) : null}
                       </span>
@@ -690,7 +796,7 @@ export function LandingWorkspaceDemo() {
               </code>
             </pre>
             <pre className="lp-sr-only" aria-label="Completed file">
-              {FINAL_CODE}
+              {RESERVE_FINAL}
             </pre>
             {phase === "write" ? (
               <div className="lp-coord-log" aria-label="Workspace brain">

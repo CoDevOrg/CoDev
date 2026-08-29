@@ -1069,19 +1069,21 @@
   align-items: center;
 }
 
-.lp-editor-tabs > span.lp-editor-branch {
-  margin-left: auto;
-  border-right: 0;
-  color: var(--lp-faint);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
+/* Multi-tab editor header: one tab per agent, tighter to fit three. */
+.lp-editor-tabs-multi > span {
+  padding: 0 9px;
+  gap: 5px;
 }
 
-.lp-editor-tabs > span.lp-editor-branch i {
+.lp-editor-tabs-multi > span.is-open {
+  box-shadow: inset 0 -2px 0 rgba(237, 238, 240, 0.35);
+}
+
+.lp-tab-dot {
   width: 6px;
   height: 6px;
+  flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--lp-orange);
 }
 
 .lp-agent-dot {
@@ -1130,6 +1132,18 @@
 /* Extra room so the coordination log never overlaps the last written line. */
 .lp-code.has-coord {
   padding-bottom: 136px;
+}
+
+/* Fades the pane in each time the editor follows an agent to a new tab. */
+.lp-code-swap {
+  animation: lp-code-swap 240ms ease both;
+}
+
+@keyframes lp-code-swap {
+  from {
+    opacity: 0.25;
+    transform: translateX(7px);
+  }
 }
 
 .lp-code-row {
@@ -1979,7 +1993,8 @@
     display: none;
   }
 
-  .lp-editor-tabs > span:nth-child(2) {
+  /* On a phone, show only the tab the editor is currently following. */
+  .lp-editor-tabs-multi > span:not(.is-open) {
     display: none;
   }
 

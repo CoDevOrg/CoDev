@@ -45,11 +45,11 @@ describe("LandingWorkspaceDemo", () => {
       "step",
     );
     expect(
-      screen.getByText(/workspace brain keeps them off the same files/i),
+      screen.getByText(/hand off through the workspace brain/i),
     ).toBeVisible();
-    expect(container).toHaveTextContent("checkoutSchema.parse(input)");
+    expect(container).toHaveTextContent("reserveSchema.parse(input)");
     expect(container).toHaveTextContent(
-      "Claude rerouted to src/checkout/session.ts",
+      "Codex pushed it, Claude picked up session.ts",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Ready" }));
