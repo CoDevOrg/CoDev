@@ -41,7 +41,7 @@ test("landing page explains CoDev and offers a clear start", async ({
   expect(consoleErrors).toEqual([]);
 });
 
-test("the workspace demo shows three agents editing one file", async ({
+test("the workspace demo shows three agents working across isolated files", async ({
   page,
 }) => {
   await page.goto("/");
@@ -57,10 +57,10 @@ test("the workspace demo shows three agents editing one file", async ({
   await expect(page.getByRole("button", { name: "Pause demo" })).toBeVisible();
   await page.getByRole("button", { name: "Write" }).click();
   await expect(
-    page.getByText(/edit separate regions of the file together/),
+    page.getByText(/hand off through the workspace brain/i),
   ).toBeVisible();
-  await expect(page.getByLabel("Completed shared file")).toContainText(
-    "checkoutSchema.parse(input)",
+  await expect(page.getByLabel("Completed file")).toContainText(
+    "reserveSchema.parse(input)",
   );
 
   await page.getByRole("button", { name: "Ready" }).click();
