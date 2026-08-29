@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LandingWorkspaceDemo } from "./landing-workspace-demo";
+import {
+  activeAgentsForElapsed,
+  activeFileForElapsed,
+  LandingWorkspaceDemo,
+} from "./landing-workspace-demo";
 
 function mockReducedMotion(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -51,6 +55,7 @@ describe("LandingWorkspaceDemo", () => {
     expect(container).toHaveTextContent(
       "Codex pushed it, Claude picked up session.ts",
     );
+    expect(screen.getByLabelText("Review typing simultaneously")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Ready" }));
     expect(screen.getByRole("button", { name: "Ready" })).toHaveAttribute(
@@ -63,6 +68,22 @@ describe("LandingWorkspaceDemo", () => {
     expect(screen.getByLabelText("Completed file")).toHaveTextContent(
       "audit.record",
     );
+  });
+
+  it("gives every agent a deterministic typing turn", () => {
+    expect(activeFileForElapsed(5_200).agent.name).toBe("Codex");
+    expect(activeFileForElapsed(8_700).agent.name).toBe("Claude");
+    expect(activeFileForElapsed(11_200).agent.name).toBe("Review");
+  });
+
+  it("shows all three agents typing concurrently during Write", () => {
+    expect(
+      activeAgentsForElapsed(5_500).map(({ name, tone }) => ({ name, tone })),
+    ).toEqual([
+      { name: "Codex", tone: "purple" },
+      { name: "Claude", tone: "orange" },
+      { name: "Review", tone: "green" },
+    ]);
   });
 
   it("renders the completed state without timed motion when requested", async () => {

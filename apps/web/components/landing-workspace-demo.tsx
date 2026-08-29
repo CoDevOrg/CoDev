@@ -144,32 +144,32 @@ const AGENTS: AgentTrack[] = [
     name: "Codex",
     model: "OpenAI",
     initials: "CX",
-    tone: "orange",
+    tone: "purple",
     task: "Validate checkout input",
     branch: "agent/checkout-race",
     editsFrom: 4_750,
-    editsTo: 8_400,
+    editsTo: 11_200,
   },
   {
     id: "claude",
     name: "Claude",
     model: "Anthropic",
     initials: "CL",
-    tone: "green",
+    tone: "orange",
     task: "Make reservations idempotent",
     branch: "agent/idempotency",
-    editsFrom: 8_400,
-    editsTo: 10_800,
+    editsFrom: 5_000,
+    editsTo: 12_100,
   },
   {
     id: "review",
     name: "Review",
     model: "CoDev",
     initials: "RV",
-    tone: "purple",
+    tone: "green",
     task: "Guard retries, then review",
     branch: "agent/retry-guard",
-    editsFrom: 10_800,
+    editsFrom: 5_250,
     editsTo: 12_950,
   },
 ];
@@ -197,7 +197,7 @@ const FILES: EditorFile[] = [
     branch: "agent/checkout-race",
     path: "src/checkout/reserve.ts",
     lines: 13,
-    agent: { name: "Codex", tone: "orange" },
+    agent: { name: "Codex", tone: "purple" },
     base: [
       [1, 'import { audit } from "@/lib/audit";'],
       [2, 'import { checkoutSchema } from "@/lib/checkout";'],
@@ -239,7 +239,7 @@ const FILES: EditorFile[] = [
     branch: "agent/idempotency",
     path: "src/checkout/session.ts",
     lines: 12,
-    agent: { name: "Claude", tone: "green" },
+    agent: { name: "Claude", tone: "orange" },
     base: [
       [1, 'import { redis } from "@/lib/redis";'],
       [2, 'import { reserveSchema } from "./reserve";'],
@@ -272,7 +272,7 @@ const FILES: EditorFile[] = [
     branch: "agent/retry-guard",
     path: "src/lib/retry.ts",
     lines: 9,
-    agent: { name: "Review", tone: "purple" },
+    agent: { name: "Review", tone: "green" },
     base: [
       [1, "type Task<T> = () => Promise<T>;"],
       [2, ""],
@@ -319,25 +319,43 @@ function characterDelay(character: string, index: number) {
   return 39 + ((character.charCodeAt(0) + index * 7) % 23);
 }
 
-function typingCheckpoints(text: string) {
+function typingCheckpoints(text: string, maxDuration: number) {
   let total = 0;
-  return Array.from(text, (character, index) => {
+  const checkpoints = Array.from(text, (character, index) => {
     total += characterDelay(character, index);
     return total;
   });
+  const scale = total > maxDuration ? maxDuration / total : 1;
+  return checkpoints.map((checkpoint) => Math.round(checkpoint * scale));
 }
 
 const SEGMENT_TIMINGS = new Map(
   FILES.flatMap((file) =>
-    file.segments.map(
-      (segment) =>
-        [
-          `${file.id}-${segment.line}`,
-          typingCheckpoints(segment.text),
-        ] as const,
-    ),
+    file.segments.map((segment, index) => {
+      const nextStart = file.segments[index + 1]?.start ?? file.focus[1];
+      // Leave a short settled beat before the cursor moves to the next line or
+      // agent. This keeps every agent legible even when its code is longer.
+      const availableDuration = Math.max(160, nextStart - segment.start - 140);
+      return [
+        `${file.id}-${segment.line}`,
+        typingCheckpoints(segment.text, availableDuration),
+      ] as const;
+    }),
   ),
 );
+
+export function activeFileForElapsed(elapsed: number) {
+  return (
+    FILES.find((file) => elapsed >= file.focus[0] && elapsed < file.focus[1]) ??
+    FILES[0]!
+  );
+}
+
+export function activeAgentsForElapsed(elapsed: number) {
+  return AGENTS.filter(
+    (agent) => elapsed >= agent.editsFrom && elapsed < agent.editsTo,
+  );
+}
 
 function visibleCharacterCount(
   fileId: string,
@@ -382,7 +400,7 @@ function statusForAgent(agent: AgentTrack, elapsed: number) {
   if (elapsed >= PHASES[2]!.endpoint) return "Ready";
   if (elapsed >= agent.editsTo || elapsed >= PHASES[1]!.endpoint)
     return "Reviewing";
-  if (elapsed >= agent.editsFrom) return "Editing";
+  if (elapsed >= agent.editsFrom) return "Typing";
   if (elapsed >= PHASES[0]!.endpoint) return "Queued";
   return "Joining";
 }
@@ -468,11 +486,8 @@ export function LandingWorkspaceDemo() {
   const phaseDefinition =
     PHASES.find((item) => item.key === phase) ?? PHASES[0]!;
 
-  const activeFile =
-    FILES.find(
-      (file) =>
-        renderedElapsed >= file.focus[0] && renderedElapsed < file.focus[1],
-    ) ?? FILES[0]!;
+  const activeFile = activeFileForElapsed(renderedElapsed);
+  const activeAgents = activeAgentsForElapsed(renderedElapsed);
   const activeLineSegments = useMemo(
     () =>
       new Map(activeFile.segments.map((segment) => [segment.line, segment])),
@@ -739,7 +754,25 @@ export function LandingWorkspaceDemo() {
               ))}
             </header>
             <div className="lp-editor-breadcrumb">
-              {activeFile.branch} <b>›</b> {activeFile.path}
+              <span className="lp-editor-path">
+                {activeFile.branch} <b>›</b> {activeFile.path}
+              </span>
+              {phase === "write" && activeAgents.length > 0 ? (
+                <span
+                  className="lp-active-typists"
+                  aria-label={`${activeAgents.map((agent) => agent.name).join(", ")} typing simultaneously`}
+                >
+                  {activeAgents.map((agent) => (
+                    <strong
+                      key={agent.id}
+                      className={`lp-active-typist lp-active-typist-${agent.tone}`}
+                    >
+                      <i aria-hidden="true" /> {agent.name}
+                      <b aria-hidden="true" />
+                    </strong>
+                  ))}
+                </span>
+              ) : null}
             </div>
             <pre
               key={activeFile.id}
@@ -840,7 +873,7 @@ export function LandingWorkspaceDemo() {
                 const status = statusForAgent(agent, renderedElapsed);
                 return (
                   <li
-                    className={`lp-agent-card lp-agent-${agent.tone}`}
+                    className={`lp-agent-card lp-agent-${agent.tone}${status === "Typing" ? " is-typing" : ""}`}
                     key={agent.id}
                   >
                     <div>
@@ -849,7 +882,10 @@ export function LandingWorkspaceDemo() {
                         <strong>{agent.name}</strong>
                         <small>{agent.model}</small>
                       </span>
-                      <b>{status}</b>
+                      <b>
+                        {status === "Typing" ? <i aria-hidden="true" /> : null}
+                        {status}
+                      </b>
                     </div>
                     <p>{agent.task}</p>
                     <code>{agent.branch}</code>
