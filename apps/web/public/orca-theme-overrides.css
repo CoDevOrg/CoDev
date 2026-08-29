@@ -12,14 +12,14 @@
  */
 
 :root {
-  --codev-workspace-surface: #0a0908;
-  --codev-workspace-surface-2: #131210;
-  --codev-workspace-surface-3: #1c1b18;
-  --codev-workspace-ink: #f3efe6;
-  --codev-workspace-muted: #a39b8c;
-  --codev-accent: #c9a66b;
-  --codev-accent-soft: rgba(201, 166, 107, 0.16);
-  --codev-secondary: #7a7368;
+  --codev-workspace-surface: #121417;
+  --codev-workspace-surface-2: #1a1d21;
+  --codev-workspace-surface-3: #20242a;
+  --codev-workspace-ink: #edeef0;
+  --codev-workspace-muted: #9ba1ab;
+  --codev-accent: #f2604a;
+  --codev-accent-soft: rgba(242, 96, 74, 0.16);
+  --codev-secondary: #8b7cd8;
 }
 
 /*
@@ -42,10 +42,10 @@ html.dark {
   --orca-security-secondary-foreground: var(--codev-workspace-ink);
   --orca-security-muted: var(--codev-workspace-surface-3);
   --orca-security-muted-foreground: var(--codev-workspace-muted);
-  --orca-security-accent: #27261f;
+  --orca-security-accent: #2c3138;
   --orca-security-accent-foreground: var(--codev-workspace-ink);
-  --orca-security-border: rgba(242, 237, 224, 0.1);
-  --orca-security-input: rgba(242, 237, 224, 0.2);
+  --orca-security-border: rgba(237, 238, 240, 0.1);
+  --orca-security-input: rgba(237, 238, 240, 0.2);
   --orca-security-ring: var(--codev-accent);
 
   --background: var(--codev-workspace-surface);
@@ -60,25 +60,25 @@ html.dark {
   --secondary-foreground: var(--codev-workspace-ink);
   --muted: var(--codev-workspace-surface-3);
   --muted-foreground: var(--codev-workspace-muted);
-  --accent: #27261f;
+  --accent: #2c3138;
   --accent-foreground: var(--codev-workspace-ink);
-  --border: rgba(242, 237, 224, 0.1);
-  --input: rgba(242, 237, 224, 0.2);
+  --border: rgba(237, 238, 240, 0.1);
+  --input: rgba(237, 238, 240, 0.2);
   --ring: var(--codev-accent);
 
   --worktree-sidebar: var(--codev-workspace-surface-2);
   --worktree-sidebar-foreground: var(--codev-workspace-ink);
-  --worktree-sidebar-accent: #27261f;
+  --worktree-sidebar-accent: #2c3138;
   --worktree-sidebar-accent-foreground: var(--codev-workspace-ink);
-  --worktree-sidebar-border: rgba(242, 237, 224, 0.1);
+  --worktree-sidebar-border: rgba(237, 238, 240, 0.1);
   --worktree-sidebar-ring: var(--codev-accent);
   --sidebar: var(--codev-workspace-surface-2);
   --sidebar-foreground: var(--codev-workspace-ink);
   --sidebar-primary: var(--codev-accent);
   --sidebar-primary-foreground: var(--codev-workspace-ink);
-  --sidebar-accent: #27261f;
+  --sidebar-accent: #2c3138;
   --sidebar-accent-foreground: var(--codev-workspace-ink);
-  --sidebar-border: rgba(242, 237, 224, 0.1);
+  --sidebar-border: rgba(237, 238, 240, 0.1);
   --sidebar-ring: var(--codev-accent);
 }
 
@@ -105,8 +105,8 @@ body,
   width: 64px !important;
   height: 64px !important;
   object-fit: contain;
-  filter: brightness(0) saturate(100%) invert(76%) sepia(22%) saturate(748%)
-    hue-rotate(7deg) brightness(92%) contrast(86%);
+  filter: brightness(0) saturate(100%) invert(45%) sepia(51%) saturate(2559%)
+    hue-rotate(334deg) brightness(99%) contrast(91%);
 }
 
 /* Background retints for common Orca zinc / near-black surfaces. */
@@ -134,7 +134,7 @@ body,
 [class*="border-zinc-"],
 [class*="border-neutral-"],
 [class*="border-white/"] {
-  border-color: rgba(242, 237, 224, 0.1) !important;
+  border-color: rgba(237, 238, 240, 0.1) !important;
 }
 
 /* Text retints for muted chrome copy. */
@@ -296,13 +296,13 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 [data-native-chat-root] [data-codev-chat-row="assistant"] :not(pre) > code {
   padding: 0.12em 0.36em;
   border-radius: 4px;
-  background: rgba(242, 237, 224, 0.09);
+  background: rgba(237, 238, 240, 0.09);
   font-size: 0.88em;
 }
 
 [data-native-chat-root] [data-codev-chat-row="assistant"] pre {
   border-radius: 10px;
-  border: 1px solid rgba(242, 237, 224, 0.09);
+  border: 1px solid rgba(237, 238, 240, 0.09);
 }
 
 /* The user's own turn: present, but not a saturated pill hard against the
@@ -311,8 +311,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   max-width: 90%;
   padding: 0.7rem 0.95rem;
   border-radius: 12px;
-  background: rgba(242, 237, 224, 0.07);
-  border: 1px solid rgba(242, 237, 224, 0.07);
+  background: rgba(237, 238, 240, 0.07);
+  border: 1px solid rgba(237, 238, 240, 0.07);
   font-size: 0.93rem;
   line-height: 1.6;
 }
@@ -324,7 +324,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   font-size: 0.895rem;
   line-height: 1.66;
   border-left-width: 2px;
-  border-left-color: rgba(201, 166, 107, 0.34);
+  border-left-color: rgba(242, 96, 74, 0.34);
   padding-left: 0.9rem;
   opacity: 0.82;
 }
@@ -333,7 +333,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   background:
     radial-gradient(
       circle at 50% -10%,
-      rgba(122, 115, 104, 0.11),
+      rgba(139, 124, 216, 0.11),
       transparent 36rem
     ),
     var(--codev-workspace-surface);
@@ -342,10 +342,10 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 [data-native-chat-root] [data-codev-chat-row="assistant"] {
   background: linear-gradient(
     145deg,
-    rgba(242, 237, 224, 0.055),
-    rgba(242, 237, 224, 0.025)
+    rgba(237, 238, 240, 0.055),
+    rgba(237, 238, 240, 0.025)
   );
-  border-color: rgba(242, 237, 224, 0.095);
+  border-color: rgba(237, 238, 240, 0.095);
   box-shadow:
     0 14px 40px rgba(0, 0, 0, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.025);
@@ -353,7 +353,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 [data-native-chat-root] [data-codev-chat-assistant-header] {
   padding-bottom: 0.7rem;
-  border-bottom: 1px solid rgba(242, 237, 224, 0.07);
+  border-bottom: 1px solid rgba(237, 238, 240, 0.07);
 }
 
 [data-native-chat-root] [data-codev-chat-author] {
@@ -367,21 +367,21 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 [data-native-chat-root] [data-codev-chat-presence] {
   width: calc(100% - 2rem);
   margin-bottom: 0.3rem;
-  border: 1px solid rgba(242, 237, 224, 0.08);
+  border: 1px solid rgba(237, 238, 240, 0.08);
   border-radius: 999px;
-  background: rgba(19, 18, 16, 0.76);
+  background: rgba(26, 29, 33, 0.76);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
   backdrop-filter: blur(18px) saturate(135%);
   -webkit-backdrop-filter: blur(18px) saturate(135%);
 }
 
 [data-native-chat-root] [data-codev-chat-composer] {
-  border-color: rgba(242, 237, 224, 0.13);
+  border-color: rgba(237, 238, 240, 0.13);
   border-radius: 18px;
   background: linear-gradient(
     155deg,
-    rgba(39, 38, 31, 0.92),
-    rgba(19, 18, 16, 0.96)
+    rgba(44, 49, 56, 0.92),
+    rgba(26, 29, 33, 0.96)
   );
   box-shadow:
     0 18px 54px rgba(0, 0, 0, 0.26),
@@ -391,10 +391,10 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 [data-native-chat-root] [data-codev-chat-composer]:focus-within {
-  border-color: rgba(201, 166, 107, 0.52);
+  border-color: rgba(242, 96, 74, 0.52);
   box-shadow:
     0 20px 58px rgba(0, 0, 0, 0.3),
-    0 0 0 3px rgba(201, 166, 107, 0.1);
+    0 0 0 3px rgba(242, 96, 74, 0.1);
 }
 
 [data-native-chat-root] textarea {
@@ -434,7 +434,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   font-weight: 650;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--codev-gold-500, #c9a66b);
+  color: var(--codev-gold-500, #f2604a);
 }
 
 .codev-agents-dot {
@@ -487,29 +487,29 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-agent-card {
   border-radius: 11px;
-  border: 1px solid rgba(242, 237, 224, 0.09);
-  background: rgba(242, 237, 224, 0.035);
+  border: 1px solid rgba(237, 238, 240, 0.09);
+  background: rgba(237, 238, 240, 0.035);
   transition: border-color 150ms ease;
 }
 
 .codev-agent-card.is-working {
-  border-color: rgba(201, 166, 107, 0.32);
+  border-color: rgba(242, 96, 74, 0.32);
 }
 
 .codev-agent-card.is-waiting {
-  border-color: rgba(163, 155, 140, 0.22);
+  border-color: rgba(155, 161, 171, 0.22);
 }
 
 .codev-agent-card.is-done {
-  border-color: rgba(78, 168, 122, 0.32);
+  border-color: rgba(63, 191, 122, 0.32);
 }
 
 .codev-agent-card.is-blocked {
-  border-color: rgba(217, 166, 44, 0.34);
+  border-color: rgba(232, 180, 74, 0.34);
 }
 
 .codev-agent-card.is-ready {
-  border-color: rgba(78, 168, 122, 0.32);
+  border-color: rgba(63, 191, 122, 0.32);
 }
 
 .codev-agent-summary {
@@ -530,7 +530,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-summary:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #c9a66b);
+  outline: 2px solid var(--codev-gold-500, #f2604a);
   outline-offset: -2px;
   border-radius: 11px;
 }
@@ -551,7 +551,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 5px solid rgba(242, 237, 224, 0.55);
+  border-top: 5px solid rgba(237, 238, 240, 0.55);
   transition: transform 150ms ease;
 }
 
@@ -575,7 +575,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-agents-page-toggle {
   padding: 3px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(201, 166, 107, 0.34);
+  border: 1px solid rgba(242, 96, 74, 0.34);
   background: transparent;
   color: #e8d5a8;
   font-size: 10px;
@@ -584,8 +584,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agents-page-toggle:hover {
-  background: var(--codev-gold-500, #c9a66b);
-  color: #0a0908;
+  background: var(--codev-gold-500, #f2604a);
+  color: #121417;
 }
 
 .codev-agents-panel.is-expanded {
@@ -615,8 +615,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   gap: 0.4rem;
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
-  border: 1px solid rgba(242, 237, 224, 0.12);
-  background: rgba(242, 237, 224, 0.05);
+  border: 1px solid rgba(237, 238, 240, 0.12);
+  background: rgba(237, 238, 240, 0.05);
   color: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -624,7 +624,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agents-create-btn:hover:not(:disabled) {
-  border-color: rgba(201, 166, 107, 0.4);
+  border-color: rgba(242, 96, 74, 0.4);
   background: var(--codev-accent-soft);
 }
 
@@ -649,8 +649,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   row-gap: 0.2rem;
   padding: 0.55rem 0.65rem;
   border-radius: 11px;
-  border: 1px solid rgba(242, 237, 224, 0.08);
-  background: rgba(242, 237, 224, 0.03);
+  border: 1px solid rgba(237, 238, 240, 0.08);
+  background: rgba(237, 238, 240, 0.03);
 }
 
 .codev-agents-history-row .codev-agent-preview {
@@ -671,7 +671,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: rgba(242, 237, 224, 0.08);
+  background: rgba(237, 238, 240, 0.08);
   overflow: hidden;
 }
 
@@ -694,7 +694,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   border-radius: 50%;
   border: 1px solid var(--codev-workspace-surface-2);
   object-fit: cover;
-  background: #27261f;
+  background: #2c3138;
 }
 
 .codev-agent-face.is-initials {
@@ -751,7 +751,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-agent-status.is-working {
   color: #e0c48a;
-  background: rgba(201, 166, 107, 0.16);
+  background: rgba(242, 96, 74, 0.16);
 }
 
 .codev-agent-status.is-working i {
@@ -760,23 +760,23 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-agent-status.is-blocked {
   color: #e3c98a;
-  background: rgba(217, 166, 44, 0.16);
+  background: rgba(232, 180, 74, 0.16);
 }
 
 .codev-agent-status.is-ready {
   color: #7fc4a3;
-  background: rgba(78, 168, 122, 0.16);
+  background: rgba(63, 191, 122, 0.16);
 }
 
 .codev-agent-status.is-idle,
 .codev-agent-status.is-waiting {
   opacity: 0.75;
-  background: rgba(242, 237, 224, 0.08);
+  background: rgba(237, 238, 240, 0.08);
 }
 
 .codev-agent-status.is-done {
   color: #7fc4a3;
-  background: rgba(78, 168, 122, 0.16);
+  background: rgba(63, 191, 122, 0.16);
 }
 
 .codev-agent-assignment {
@@ -822,19 +822,19 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex: 1;
   min-width: 8px;
   border-radius: 999px;
-  background: rgba(242, 237, 224, 0.12);
+  background: rgba(237, 238, 240, 0.12);
 }
 
 .codev-agent-progress .is-working {
-  background: #c9a66b;
+  background: #f2604a;
 }
 
 .codev-agent-progress .is-blocked {
-  background: #d9a62c;
+  background: #e8b44a;
 }
 
 .codev-agent-progress .is-done {
-  background: #4ea87a;
+  background: #3fbf7a;
 }
 
 .codev-agent-progress-label {
@@ -851,8 +851,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   margin: 0;
   padding: 0.38rem 0.5rem;
   list-style: none;
-  border-left: 1px solid rgba(242, 237, 224, 0.14);
-  background: rgba(242, 237, 224, 0.025);
+  border-left: 1px solid rgba(237, 238, 240, 0.14);
+  background: rgba(237, 238, 240, 0.025);
   font-size: 10px;
   line-height: 1.35;
 }
@@ -875,21 +875,21 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   height: 5px;
   flex: none;
   border-radius: 50%;
-  background: rgba(242, 237, 224, 0.36);
+  background: rgba(237, 238, 240, 0.36);
 }
 
 .codev-agent-subagents i.is-working {
-  background: #c9a66b;
+  background: #f2604a;
 }
 .codev-agent-subagents i.is-blocked {
-  background: #d9a62c;
+  background: #e8b44a;
 }
 
 .codev-agent-caret {
   flex: none;
   width: 5px;
   height: 9px;
-  background: var(--codev-gold-500, #c9a66b);
+  background: var(--codev-gold-500, #f2604a);
   animation: codev-agents-caret 1s steps(2) infinite;
 }
 
@@ -916,7 +916,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   margin-left: auto;
   padding: 3px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(201, 166, 107, 0.34);
+  border: 1px solid rgba(242, 96, 74, 0.34);
   background: transparent;
   color: #e8d5a8;
   font-size: 10px;
@@ -925,8 +925,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-open:hover {
-  background: var(--codev-gold-500, #c9a66b);
-  color: #0a0908;
+  background: var(--codev-gold-500, #f2604a);
+  color: #121417;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1004,8 +1004,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-card {
   border-radius: 12px;
-  border: 1px solid rgba(242, 237, 224, 0.1);
-  background: rgba(242, 237, 224, 0.038);
+  border: 1px solid rgba(237, 238, 240, 0.1);
+  background: rgba(237, 238, 240, 0.038);
   overflow: hidden;
   transition:
     border-color 150ms ease,
@@ -1013,7 +1013,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card.is-working {
-  border-color: rgba(201, 166, 107, 0.36);
+  border-color: rgba(242, 96, 74, 0.36);
 }
 .codev-mc-card.is-testing {
   border-color: rgba(120, 170, 255, 0.32);
@@ -1026,7 +1026,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   background: rgba(224, 128, 92, 0.08);
 }
 .codev-mc-card.is-waiting {
-  border-color: rgba(163, 155, 140, 0.24);
+  border-color: rgba(155, 161, 171, 0.24);
 }
 .codev-mc-card.is-done {
   border-color: rgba(120, 200, 150, 0.3);
@@ -1041,7 +1041,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card-open:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #c9a66b);
+  outline: 2px solid var(--codev-gold-500, #f2604a);
   outline-offset: -2px;
 }
 
@@ -1087,8 +1087,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  background: rgba(242, 237, 224, 0.08);
-  color: rgba(242, 237, 224, 0.8);
+  background: rgba(237, 238, 240, 0.08);
+  color: rgba(237, 238, 240, 0.8);
 }
 
 .codev-mc-phase i {
@@ -1100,7 +1100,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-phase.is-working {
   color: #e0c48a;
-  background: rgba(201, 166, 107, 0.16);
+  background: rgba(242, 96, 74, 0.16);
 }
 .codev-mc-phase.is-working i {
   animation: codev-agents-pulse 1.6s ease-in-out infinite;
@@ -1174,14 +1174,14 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-tag {
   padding: 1px 6px;
   border-radius: 5px;
-  background: rgba(242, 237, 224, 0.07);
+  background: rgba(237, 238, 240, 0.07);
   opacity: 0.62;
   letter-spacing: 0.04em;
 }
 
 .codev-mc-card-actions {
   display: flex;
-  border-top: 1px solid rgba(242, 237, 224, 0.07);
+  border-top: 1px solid rgba(237, 238, 240, 0.07);
 }
 
 .codev-mc-card-actions button {
@@ -1189,7 +1189,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   padding: 6px 8px;
   background: transparent;
   border: 0;
-  border-right: 1px solid rgba(242, 237, 224, 0.07);
+  border-right: 1px solid rgba(237, 238, 240, 0.07);
   color: inherit;
   font-size: 10.5px;
   font-weight: 650;
@@ -1203,7 +1203,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card-actions button:hover:not(:disabled) {
-  background: rgba(201, 166, 107, 0.16);
+  background: rgba(242, 96, 74, 0.16);
   color: #e8d5a8;
   opacity: 1;
 }
@@ -1234,8 +1234,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex-direction: column;
   gap: 0.7rem;
   padding: 1rem 1rem 1.1rem;
-  background: #131210;
-  border-left: 1px solid rgba(242, 237, 224, 0.2);
+  background: #1a1d21;
+  border-left: 1px solid rgba(237, 238, 240, 0.2);
   box-shadow: -26px 0 64px rgba(0, 0, 0, 0.62);
   overflow-y: auto;
   animation: codev-mc-slide 150ms ease;
@@ -1282,7 +1282,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  border: 1px solid rgba(242, 237, 224, 0.14);
+  border: 1px solid rgba(237, 238, 240, 0.14);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -1302,7 +1302,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-chip {
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(242, 237, 224, 0.08);
+  background: rgba(237, 238, 240, 0.08);
   font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1315,7 +1315,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   margin: 0;
   padding: 0.6rem 0.65rem;
   border-radius: 9px;
-  background: rgba(242, 237, 224, 0.045);
+  background: rgba(237, 238, 240, 0.045);
   font-size: 11.5px;
   line-height: 1.5;
 }
@@ -1329,7 +1329,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex: 1;
   padding: 7px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(242, 237, 224, 0.16);
+  border: 1px solid rgba(237, 238, 240, 0.16);
   background: transparent;
   color: inherit;
   font-size: 11px;
@@ -1339,7 +1339,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-ghost:hover:not(:disabled) {
-  background: rgba(242, 237, 224, 0.06);
+  background: rgba(237, 238, 240, 0.06);
   opacity: 1;
 }
 
@@ -1354,7 +1354,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex-direction: column;
   gap: 0.5rem;
   padding-top: 0.7rem;
-  border-top: 1px solid rgba(242, 237, 224, 0.1);
+  border-top: 1px solid rgba(237, 238, 240, 0.1);
 }
 
 .codev-mc-quick {
@@ -1366,7 +1366,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-quick-chip {
   padding: 4px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(242, 237, 224, 0.16);
+  border: 1px solid rgba(237, 238, 240, 0.16);
   background: transparent;
   color: inherit;
   font-size: 10.5px;
@@ -1375,8 +1375,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-quick-chip:hover:not(:disabled) {
-  background: rgba(201, 166, 107, 0.16);
-  border-color: rgba(201, 166, 107, 0.4);
+  background: rgba(242, 96, 74, 0.16);
+  border-color: rgba(242, 96, 74, 0.4);
   color: #e8d5a8;
   opacity: 1;
 }
@@ -1396,14 +1396,14 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   min-width: 0;
   padding: 7px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(242, 237, 224, 0.18);
+  border: 1px solid rgba(237, 238, 240, 0.18);
   background: rgba(0, 0, 0, 0.25);
   color: inherit;
   font-size: 11.5px;
 }
 
 .codev-mc-steer-input:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #c9a66b);
+  outline: 2px solid var(--codev-gold-500, #f2604a);
   outline-offset: 0;
 }
 
@@ -1412,8 +1412,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   padding: 7px 14px;
   border-radius: 8px;
   border: 0;
-  background: var(--codev-gold-500, #c9a66b);
-  color: #0a0908;
+  background: var(--codev-gold-500, #f2604a);
+  color: #121417;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
