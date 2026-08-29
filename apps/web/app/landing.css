@@ -1069,6 +1069,21 @@
   align-items: center;
 }
 
+.lp-editor-tabs > span.lp-editor-branch {
+  margin-left: auto;
+  border-right: 0;
+  color: var(--lp-faint);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+}
+
+.lp-editor-tabs > span.lp-editor-branch i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lp-orange);
+}
+
 .lp-agent-dot {
   width: 7px;
   height: 7px;
@@ -1110,6 +1125,11 @@
   font-size: clamp(9px, 0.9vw, 11px);
   line-height: 1.75;
   tab-size: 2;
+}
+
+/* Extra room so the coordination log never overlaps the last written line. */
+.lp-code.has-coord {
+  padding-bottom: 136px;
 }
 
 .lp-code-row {
@@ -1245,6 +1265,73 @@
 
 .lp-terminal p small {
   color: var(--lp-faint);
+}
+
+/* Workspace-brain coordination log (Write phase) */
+.lp-coord-log {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 91px;
+  padding: 9px 14px 12px;
+  border-top: 1px solid rgba(237, 238, 240, 0.09);
+  background: #0a0c0e;
+  color: var(--lp-muted);
+  animation: lp-coord-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lp-coord-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.lp-coord-log header {
+  display: flex;
+  padding-bottom: 8px;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 1px solid rgba(237, 238, 240, 0.07);
+  color: var(--lp-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lp-coord-log .lp-brain-mark {
+  color: var(--lp-sky);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.lp-coord-log ul {
+  display: grid;
+  margin: 7px 0 0;
+  padding: 0;
+  gap: 4px;
+  list-style: none;
+}
+
+.lp-coord-log li {
+  color: var(--lp-muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  line-height: 1.4;
+  animation: lp-coord-line 260ms ease both;
+}
+
+.lp-coord-log li:last-child {
+  color: var(--lp-sky);
+}
+
+@keyframes lp-coord-line {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
 }
 
 /* Live agent rail */

@@ -34,7 +34,14 @@ type AgentTrack = {
   initials: string;
   tone: AgentTone;
   task: string;
-  segments: TypingSegment[];
+  /** Each agent runs in its own isolated worktree on its own branch. */
+  branch: string;
+  /** The one file this agent touches. No two agents share a file. */
+  file: string;
+  /** ms it starts editing its own file. */
+  editsFrom: number;
+  /** ms it finishes and moves to review. */
+  editsTo: number;
 };
 
 const DEMO_DURATION = 17_600;
@@ -116,7 +123,7 @@ const PHASES: {
     label: "Write",
     endpoint: 12_950,
     summary:
-      "Codex, Claude, and Review edit separate regions of the file together.",
+      "Each agent gets its own branch. The workspace brain keeps them off the same files.",
   },
   {
     key: "verify",
@@ -129,7 +136,7 @@ const PHASES: {
     key: "ready",
     label: "Ready",
     endpoint: DEMO_DURATION,
-    summary: "The shared file is tested and ready for a person to review.",
+    summary: "The merged change is tested and ready for a person to review.",
   },
 ];
 
@@ -141,18 +148,10 @@ const AGENTS: AgentTrack[] = [
     initials: "CX",
     tone: "orange",
     task: "Validate checkout input",
-    segments: [
-      {
-        line: 7,
-        start: 5_050,
-        text: "  const cart = checkoutSchema.parse(input);",
-      },
-      {
-        line: 12,
-        start: 9_850,
-        text: '  await audit.record("checkout.reserved", order.id);',
-      },
-    ],
+    branch: "agent/checkout-race",
+    file: "src/checkout/reserve.ts",
+    editsFrom: 5_050,
+    editsTo: 11_400,
   },
   {
     id: "claude",
@@ -161,18 +160,10 @@ const AGENTS: AgentTrack[] = [
     initials: "CL",
     tone: "green",
     task: "Make reservations idempotent",
-    segments: [
-      {
-        line: 8,
-        start: 5_600,
-        text: "  const lock = await claim(`checkout:${cart.id}`);",
-      },
-      {
-        line: 11,
-        start: 9_350,
-        text: "  const order = await commit(cart, lock);",
-      },
-    ],
+    branch: "agent/idempotency",
+    file: "src/checkout/session.ts",
+    editsFrom: 8_600,
+    editsTo: 12_400,
   },
   {
     id: "review",
@@ -180,16 +171,51 @@ const AGENTS: AgentTrack[] = [
     model: "CoDev",
     initials: "RV",
     tone: "purple",
-    task: "Guard retries and review",
-    segments: [
-      {
-        line: 9,
-        start: 6_200,
-        text: "  if (!lock) return retryLater(cart);",
-      },
-      { line: 13, start: 10_400, text: "  return order;" },
-    ],
+    task: "Guard retries, then review",
+    branch: "agent/retry-guard",
+    file: "src/lib/retry.ts",
+    editsFrom: 6_400,
+    editsTo: 12_600,
   },
+];
+
+/** The one branch whose file is shown in the editor pane (Codex's worktree). */
+const EDITOR_AGENT = {
+  name: "Codex",
+  tone: "orange" as AgentTone,
+  branch: "agent/checkout-race",
+  segments: [
+    {
+      line: 7,
+      start: 5_050,
+      text: "  const cart = checkoutSchema.parse(input);",
+    },
+    {
+      line: 8,
+      start: 6_500,
+      text: "  const lock = await claim(`checkout:${cart.id}`);",
+    },
+    { line: 9, start: 7_800, text: "  if (!lock) return retryLater(cart);" },
+    {
+      line: 11,
+      start: 9_100,
+      text: "  const order = await commit(cart, lock);",
+    },
+    {
+      line: 12,
+      start: 10_200,
+      text: '  await audit.record("checkout.reserved", order.id);',
+    },
+    { line: 13, start: 11_300, text: "  return order;" },
+  ] as TypingSegment[],
+};
+
+/** Workspace-brain events shown during Write: agents routed off each other. */
+const COORD_EVENTS: { at: number; text: string }[] = [
+  { at: 5_200, text: "Codex claimed src/checkout/reserve.ts" },
+  { at: 7_600, text: "Claude reached for reserve.ts, already Codex's" },
+  { at: 8_900, text: "Claude rerouted to src/checkout/session.ts" },
+  { at: 10_900, text: "3 branches, 0 overlapping files" },
 ];
 
 const STATIC_LINES = new Map<number, string>([
@@ -205,9 +231,7 @@ const STATIC_LINES = new Map<number, string>([
 
 const FINAL_CODE = Array.from({ length: 14 }, (_, index) => {
   const line = index + 1;
-  const segment = AGENTS.flatMap((agent) => agent.segments).find(
-    (candidate) => candidate.line === line,
-  );
+  const segment = EDITOR_AGENT.segments.find((s) => s.line === line);
   return segment?.text ?? STATIC_LINES.get(line) ?? "";
 }).join("\n");
 
@@ -226,25 +250,15 @@ function typingCheckpoints(text: string) {
 }
 
 const SEGMENT_TIMINGS = new Map(
-  AGENTS.flatMap((agent) =>
-    agent.segments.map(
-      (segment) =>
-        [
-          `${agent.id}-${segment.line}`,
-          typingCheckpoints(segment.text),
-        ] as const,
-    ),
+  EDITOR_AGENT.segments.map(
+    (segment) => [segment.line, typingCheckpoints(segment.text)] as const,
   ),
 );
 
-function visibleCharacterCount(
-  agentId: string,
-  segment: TypingSegment,
-  elapsed: number,
-) {
+function visibleCharacterCount(segment: TypingSegment, elapsed: number) {
   const localElapsed = elapsed - segment.start;
   if (localElapsed <= 0) return 0;
-  const checkpoints = SEGMENT_TIMINGS.get(`${agentId}-${segment.line}`) ?? [];
+  const checkpoints = SEGMENT_TIMINGS.get(segment.line) ?? [];
   let low = 0;
   let high = checkpoints.length;
   while (low < high) {
@@ -277,21 +291,10 @@ function phaseForElapsed(elapsed: number): DemoPhase {
 }
 
 function statusForAgent(agent: AgentTrack, elapsed: number) {
-  const counts = agent.segments.map((segment) =>
-    visibleCharacterCount(agent.id, segment, elapsed),
-  );
-  const hasStarted = counts.some((count) => count > 0);
-  const isTyping = agent.segments.some(
-    (segment, index) =>
-      counts[index]! > 0 && counts[index]! < segment.text.length,
-  );
-  const isComplete = agent.segments.every(
-    (segment, index) => counts[index]! >= segment.text.length,
-  );
-
   if (elapsed >= PHASES[2]!.endpoint) return "Ready";
-  if (elapsed >= PHASES[1]!.endpoint || isComplete) return "Reviewing";
-  if (isTyping || hasStarted) return "Editing";
+  if (elapsed >= agent.editsTo || elapsed >= PHASES[1]!.endpoint)
+    return "Reviewing";
+  if (elapsed >= agent.editsFrom) return "Editing";
   return "Joining";
 }
 
@@ -377,11 +380,7 @@ export function LandingWorkspaceDemo() {
     PHASES.find((item) => item.key === phase) ?? PHASES[0]!;
   const lineSegments = useMemo(
     () =>
-      new Map(
-        AGENTS.flatMap((agent) =>
-          agent.segments.map((segment) => [segment.line, { agent, segment }]),
-        ),
-      ),
+      new Map(EDITOR_AGENT.segments.map((segment) => [segment.line, segment])),
     [],
   );
 
@@ -392,6 +391,7 @@ export function LandingWorkspaceDemo() {
   const linkCopied = renderedElapsed >= INVITE.copyAt;
   const inviteSent = renderedElapsed >= INVITE.sendAt;
   const roster = TEAMMATES.filter((mate) => renderedElapsed >= mate.joinsAt);
+  const coordEvents = COORD_EVENTS.filter((ev) => renderedElapsed >= ev.at);
 
   // Guide cursor: which target it is heading for, whether it is shown, and
   // whether it is mid-tap. It leads each action by ~600ms so it has landed by
@@ -576,7 +576,7 @@ export function LandingWorkspaceDemo() {
                   ? "Sent. Casey opened the link."
                   : linkCopied
                     ? "Link copied."
-                    : " "}
+                    : " "}
               </i>
             </div>
           </div>
@@ -623,31 +623,32 @@ export function LandingWorkspaceDemo() {
             })}
             <div className="lp-team-note">
               <span>Shared context</span>
-              <p>Everyone sees the same file, cursors, and agent state.</p>
+              <p>Everyone sees every branch, cursor, and agent, live.</p>
             </div>
           </aside>
 
-          <section className="lp-editor" aria-label="Shared code editor">
+          <section className="lp-editor" aria-label="Code editor">
             <header className="lp-editor-tabs">
               <span className="is-open">
                 <i aria-hidden="true">TS</i> reserve.ts
               </span>
-              <span>checkout.test.ts</span>
-              <b aria-label="Three agents editing this file">
-                <i className="lp-agent-dot lp-dot-orange" />
-                <i className="lp-agent-dot lp-dot-green" />
-                <i className="lp-agent-dot lp-dot-purple" />
-              </b>
+              <span>session.ts</span>
+              <span className="lp-editor-branch">
+                <i aria-hidden="true" /> agent/checkout-race
+              </span>
             </header>
             <div className="lp-editor-breadcrumb">
               src <b>›</b> checkout <b>›</b> reserve.ts
             </div>
-            <pre className="lp-code" aria-hidden="true">
+            <pre
+              className={`lp-code${phase === "write" ? " has-coord" : ""}`}
+              aria-hidden="true"
+            >
               <code>
                 {Array.from({ length: 14 }, (_, index) => {
                   const line = index + 1;
-                  const authored = lineSegments.get(line);
-                  if (!authored) {
+                  const segment = lineSegments.get(line);
+                  if (!segment) {
                     return (
                       <span className="lp-code-row" key={line}>
                         <i>{line}</i>
@@ -656,34 +657,30 @@ export function LandingWorkspaceDemo() {
                     );
                   }
 
-                  const count = visibleCharacterCount(
-                    authored.agent.id,
-                    authored.segment,
-                    renderedElapsed,
+                  const count = visibleCharacterCount(segment, renderedElapsed);
+                  const text = segment.text.slice(0, count);
+                  const hasStarted = renderedElapsed >= segment.start;
+                  const complete = count >= segment.text.length;
+                  const laterSegmentStarted = EDITOR_AGENT.segments.some(
+                    (later) =>
+                      later.start > segment.start &&
+                      renderedElapsed >= later.start,
                   );
-                  const text = authored.segment.text.slice(0, count);
-                  const hasStarted = renderedElapsed >= authored.segment.start;
-                  const complete = count >= authored.segment.text.length;
-                  const laterSegmentStarted = authored.agent.segments.some(
-                    (segment) =>
-                      segment.start > authored.segment.start &&
-                      renderedElapsed >= segment.start,
-                  );
-                  const showCursor = hasStarted && !laterSegmentStarted;
+                  const showEditorCursor = hasStarted && !laterSegmentStarted;
 
                   return (
                     <span
-                      className={`lp-code-row lp-code-${authored.agent.tone}${hasStarted ? " is-authored" : ""}`}
+                      className={`lp-code-row lp-code-${EDITOR_AGENT.tone}${hasStarted ? " is-authored" : ""}`}
                       key={line}
                     >
                       <i>{line}</i>
                       <span>
                         {text || " "}
-                        {showCursor ? (
+                        {showEditorCursor ? (
                           <b
                             className={`lp-agent-cursor${complete ? " is-settled" : " is-typing"}`}
                           >
-                            <em>{authored.agent.name}</em>
+                            <em>{EDITOR_AGENT.name}</em>
                           </b>
                         ) : null}
                       </span>
@@ -692,9 +689,24 @@ export function LandingWorkspaceDemo() {
                 })}
               </code>
             </pre>
-            <pre className="lp-sr-only" aria-label="Completed shared file">
+            <pre className="lp-sr-only" aria-label="Completed file">
               {FINAL_CODE}
             </pre>
+            {phase === "write" ? (
+              <div className="lp-coord-log" aria-label="Workspace brain">
+                <header>
+                  <i className="lp-brain-mark" aria-hidden="true">
+                    {"◈"}
+                  </i>
+                  Workspace brain
+                </header>
+                <ul>
+                  {coordEvents.map((ev) => (
+                    <li key={ev.at}>{ev.text}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div
               className={`lp-terminal${renderedElapsed >= PHASES[1]!.endpoint ? " is-visible" : ""}`}
             >
@@ -734,7 +746,7 @@ export function LandingWorkspaceDemo() {
                       <b>{status}</b>
                     </div>
                     <p>{agent.task}</p>
-                    <code>src/checkout/reserve.ts</code>
+                    <code>{agent.branch}</code>
                   </li>
                 );
               })}
@@ -745,7 +757,7 @@ export function LandingWorkspaceDemo() {
               <Check aria-hidden size={14} />
               <span>
                 <strong>Ready for review</strong>
-                <small>1 file · 42 tests passed</small>
+                <small>3 branches merged, 42 tests passed</small>
               </span>
             </div>
           </aside>

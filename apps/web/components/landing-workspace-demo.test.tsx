@@ -45,9 +45,12 @@ describe("LandingWorkspaceDemo", () => {
       "step",
     );
     expect(
-      screen.getByText(/Codex, Claude, and Review edit separate regions/),
+      screen.getByText(/workspace brain keeps them off the same files/i),
     ).toBeVisible();
     expect(container).toHaveTextContent("checkoutSchema.parse(input)");
+    expect(container).toHaveTextContent(
+      "Claude rerouted to src/checkout/session.ts",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Ready" }));
     expect(screen.getByRole("button", { name: "Ready" })).toHaveAttribute(
@@ -57,7 +60,7 @@ describe("LandingWorkspaceDemo", () => {
     expect(screen.getByLabelText("Live agents")).toHaveTextContent(
       "Ready for review",
     );
-    expect(screen.getByLabelText("Completed shared file")).toHaveTextContent(
+    expect(screen.getByLabelText("Completed file")).toHaveTextContent(
       "audit.record",
     );
   });
