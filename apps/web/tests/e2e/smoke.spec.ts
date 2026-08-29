@@ -46,7 +46,7 @@ test("the workspace demo shows three agents editing one file", async ({
 }) => {
   await page.goto("/");
 
-  const demo = page.getByRole("region", { name: "Shared code editor" });
+  const demo = page.getByRole("region", { name: "Code editor" });
   const agents = page.getByLabel("Live agents");
   await expect(demo).toBeVisible();
   await expect(agents.getByText("Codex")).toBeVisible();
