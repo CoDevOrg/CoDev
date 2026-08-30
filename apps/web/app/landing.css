@@ -2101,42 +2101,41 @@
    rather than opening the modal, and three agent-coloured ghost cursors trail
    the visitor's pointer while the section is on screen. */
 
-/* The button stays centred under the heading; the form panel unfurls into the
-   empty space to its right without shifting anything else. Below 900px there is
-   no room beside it, so it drops back to unfurling downward. */
+/* The button and the form panel sit side by side, and the pair stays centred:
+   opening the form widens the row, so the button eases left and the panel
+   fills the space to its right. The section grows to hold it. Below 900px
+   there is no room beside the button, so it unfurls downward instead. */
 .lp-waitlist {
-  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-width: 100%;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .lp-waitlist-toggle {
-  position: relative;
-  z-index: 1;
+  flex: none;
 }
 
 .lp-waitlist-drawer {
-  position: absolute;
-  top: 0;
-  left: 100%;
+  min-width: 0;
+  min-height: 0;
   max-width: 0;
   overflow: hidden;
   opacity: 0;
   transition:
     max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
     margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.35s ease;
+    opacity 0.3s ease;
 }
 
 .lp-waitlist-drawer.is-open {
-  max-width: 480px;
-  margin-left: 20px;
+  max-width: 420px;
+  margin-left: 18px;
   opacity: 1;
 }
 
 .lp-waitlist-drawer-inner {
-  width: min(380px, 74vw);
+  width: min(380px, 76vw);
   padding: 20px;
   border: 1px solid var(--lp-line-strong);
   border-radius: 14px;
@@ -2152,14 +2151,18 @@
 }
 
 @media (max-width: 900px) {
+  .lp-waitlist {
+    flex-direction: column;
+    align-items: center;
+  }
+
   .lp-waitlist-drawer {
-    position: static;
     max-width: none;
     max-height: 0;
     transition:
       max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1),
       margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.35s ease;
+      opacity 0.3s ease;
   }
 
   .lp-waitlist-drawer.is-open {
@@ -2170,7 +2173,7 @@
   }
 
   .lp-waitlist-drawer-inner {
-    width: min(400px, 82vw);
+    width: min(400px, 84vw);
     transform: translateY(-14px);
   }
 
