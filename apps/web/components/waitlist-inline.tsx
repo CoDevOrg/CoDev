@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { RequestAccessForm } from "@/components/request-access-form";
+import {
+  REQUEST_ACCESS_EVENT,
+  REQUEST_ACCESS_TARGET_ID,
+} from "@/components/request-access-button";
 
 /**
  * Three agent-coloured "ghost" cursors that trail the visitor's pointer near
@@ -132,6 +136,33 @@ export function WaitlistInline() {
     return () => observer.disconnect();
   }, []);
 
+  // The hero and nav "Get early access" buttons open this form from far up the
+  // page: expand it, bring it into view, and drop the caret in the email field.
+  useEffect(() => {
+    const onRequest = () => {
+      setOpen(true);
+      const node = wrapRef.current;
+      if (!node) return;
+      const reduced = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      node.scrollIntoView({
+        behavior: reduced ? "auto" : "smooth",
+        block: "center",
+      });
+      window.setTimeout(
+        () => {
+          node
+            .querySelector<HTMLInputElement>('input[name="email"]')
+            ?.focus({ preventScroll: true });
+        },
+        reduced ? 0 : 460,
+      );
+    };
+    window.addEventListener(REQUEST_ACCESS_EVENT, onRequest);
+    return () => window.removeEventListener(REQUEST_ACCESS_EVENT, onRequest);
+  }, []);
+
   // Animate the drawer between 0 and its measured content height, then release
   // to `auto` so the form can grow (validation messages) without clipping.
   useEffect(() => {
@@ -174,7 +205,7 @@ export function WaitlistInline() {
   }, [open]);
 
   return (
-    <div className="lp-waitlist" ref={wrapRef}>
+    <div className="lp-waitlist" id={REQUEST_ACCESS_TARGET_ID} ref={wrapRef}>
       <button
         type="button"
         className="lp-cta lp-cta-primary lp-waitlist-toggle"

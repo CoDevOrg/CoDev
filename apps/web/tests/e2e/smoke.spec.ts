@@ -27,14 +27,20 @@ test("landing page explains CoDev and offers a clear start", async ({
     page.getByText(/one shared cloud workspace where you, your friends/),
   ).toBeVisible();
 
-  // The private beta funnel opens a focused, email-first modal.
-  await page.getByRole("button", { name: "Get early access" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Get early access." });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Email")).toBeFocused();
-  await expect(dialog.getByLabel(/What will you use CoDev for?/)).toBeVisible();
-  await expect(dialog.getByLabel(/Name/i)).toHaveCount(0);
-  await expect(dialog.getByText(/Sign in/i)).toHaveCount(0);
+  // "Get early access" scrolls to the inline waitlist form and opens it in
+  // place: no modal, no new tab.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("link", { name: "Get early access" }).first().click();
+
+  const form = page.locator("#get-access");
+  await expect(form.getByLabel("Email")).toBeVisible();
+  await expect(form.getByLabel("Email")).toBeFocused();
+  await expect(form.getByLabel(/^Name/)).toBeVisible();
+  const useCase = form.getByLabel(/What will you use CoDev for?/);
+  await expect(useCase).toBeVisible();
+  await expect(useCase.getByRole("option", { name: "Other" })).toHaveCount(1);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
   await expect(
     page.getByRole("link", { name: "I have an invite" }),
   ).toHaveAttribute("href", "/sign-in");

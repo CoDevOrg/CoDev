@@ -4,6 +4,16 @@ import { useId, useState } from "react";
 
 type Status = "idle" | "sending" | "done" | "error";
 
+/** Answers for "What will you use CoDev for?": optional, "Other" included. */
+const USE_CASES = [
+  "A side project",
+  "A startup or product",
+  "Client or freelance work",
+  "Learning or school",
+  "Hackathon or game jam",
+  "Other",
+] as const;
+
 export function RequestAccessForm() {
   const ids = useId();
   const [status, setStatus] = useState<Status>("idle");
@@ -22,6 +32,7 @@ export function RequestAccessForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: String(data.get("email") ?? ""),
+          name: String(data.get("name") ?? ""),
           building: String(data.get("building") ?? ""),
           ...(typeof document !== "undefined" && document.referrer
             ? { referrer: document.referrer.slice(0, 200) }
@@ -79,16 +90,33 @@ export function RequestAccessForm() {
       </div>
 
       <div className="lp-field">
+        <label htmlFor={`${ids}-name`}>
+          Name <span>Optional</span>
+        </label>
+        <input
+          id={`${ids}-name`}
+          name="name"
+          type="text"
+          autoComplete="name"
+          maxLength={120}
+          placeholder="What should we call you?"
+        />
+      </div>
+
+      <div className="lp-field">
         <label htmlFor={`${ids}-building`}>
           What will you use CoDev for? <span>Optional</span>
         </label>
-        <textarea
-          id={`${ids}-building`}
-          name="building"
-          maxLength={500}
-          rows={3}
-          placeholder="A side project with friends, a startup, open source…"
-        />
+        <select id={`${ids}-building`} name="building" defaultValue="">
+          <option value="" disabled>
+            Pick the closest fit
+          </option>
+          {USE_CASES.map((useCase) => (
+            <option key={useCase} value={useCase}>
+              {useCase}
+            </option>
+          ))}
+        </select>
       </div>
 
       {status === "error" ? (

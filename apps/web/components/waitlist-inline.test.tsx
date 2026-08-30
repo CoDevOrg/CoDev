@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { REQUEST_ACCESS_EVENT } from "./request-access-button";
 import { WaitlistInline } from "./waitlist-inline";
 
 function mockMatchMedia(matches: boolean) {
@@ -68,6 +69,31 @@ describe("WaitlistInline", () => {
     expect(container.querySelector(".lp-waitlist-drawer")).not.toHaveClass(
       "is-open",
     );
+  });
+
+  it("opens and reveals the form when a Get early access button fires", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    const { container } = render(<WaitlistInline />);
+    expect(container.querySelector(".lp-waitlist-drawer")).not.toHaveClass(
+      "is-open",
+    );
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(REQUEST_ACCESS_EVENT));
+    });
+
+    expect(container.querySelector(".lp-waitlist-drawer")).toHaveClass(
+      "is-open",
+    );
+    expect(container.querySelector(".lp-waitlist-toggle")).toHaveTextContent(
+      "Not now",
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 
   it("keeps the ghost cursors off when a fine pointer is absent", () => {

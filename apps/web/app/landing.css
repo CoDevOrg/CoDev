@@ -2171,82 +2171,6 @@
   display: block;
 }
 
-/* Waitlist dialog --------------------------------------------------------- */
-
-.lp-waitlist-dialog {
-  width: min(500px, calc(100% - 32px));
-  max-height: calc(100dvh - 32px);
-  margin: auto;
-  padding: 0;
-  overflow: auto;
-  border: 0;
-  border-radius: 16px;
-  background: var(--lp-bg-2);
-  color: var(--lp-ink);
-  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.65);
-}
-
-.lp-waitlist-dialog::backdrop {
-  background: rgba(12, 14, 16, 0.78);
-  backdrop-filter: blur(6px);
-}
-
-.lp-waitlist-dialog[open] {
-  animation: lp-dialog-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.lp-waitlist-dialog[open]::backdrop {
-  animation: lp-dialog-backdrop-in 180ms ease-out both;
-}
-
-.lp-waitlist-panel {
-  padding: clamp(24px, 5vw, 34px);
-}
-
-.lp-waitlist-panel > header {
-  display: flex;
-  margin-bottom: 26px;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.lp-waitlist-panel h2 {
-  margin: 0;
-  font-weight: 610;
-  font-size: clamp(28px, 6vw, 36px);
-  line-height: 1.05;
-  letter-spacing: -0.035em;
-}
-
-.lp-waitlist-panel header p {
-  margin: 9px 0 0;
-  color: var(--lp-muted);
-  font-size: 14px;
-}
-
-.lp-dialog-close {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: none;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  background: var(--lp-panel-2);
-  color: var(--lp-muted);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    color 160ms ease;
-}
-
-.lp-dialog-close:hover {
-  background: var(--lp-line-strong);
-  color: var(--lp-ink);
-}
-
 .lp-form {
   display: grid;
   gap: 18px;
@@ -2275,7 +2199,8 @@
 }
 
 .lp-field input,
-.lp-field textarea {
+.lp-field textarea,
+.lp-field select {
   width: 100%;
   padding: 11px 13px;
   border: 1px solid var(--lp-line);
@@ -2292,13 +2217,28 @@
   resize: vertical;
 }
 
+.lp-field select {
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23edeef0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5l5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.lp-field select:invalid,
+.lp-field option[value=""] {
+  color: rgba(237, 238, 240, 0.5);
+}
+
 .lp-field input::placeholder,
 .lp-field textarea::placeholder {
   color: rgba(237, 238, 240, 0.5);
 }
 
 .lp-field input:hover,
-.lp-field textarea:hover {
+.lp-field textarea:hover,
+.lp-field select:hover {
   border-color: var(--lp-line-strong);
 }
 
@@ -2348,26 +2288,6 @@
 .lp-form-done small {
   color: var(--lp-lime);
   font-size: 12.5px;
-}
-
-@keyframes lp-dialog-in {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes lp-dialog-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 /* --------------------------------------------------------------------------

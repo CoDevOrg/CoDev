@@ -8,19 +8,37 @@ describe("RequestAccessForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("asks only for email and an optional use case", () => {
+  it("requires only email; name and use case are optional", () => {
     render(<RequestAccessForm />);
 
     expect(screen.getByLabelText("Email")).toBeRequired();
+    expect(screen.getByLabelText(/^Name/)).not.toBeRequired();
     expect(
       screen.getByLabelText(/What will you use CoDev for?/),
     ).not.toBeRequired();
-    expect(screen.queryByLabelText(/Name/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
     expect(screen.queryByText(/Sign in/i)).not.toBeInTheDocument();
   });
 
-  it("submits the email and optional use case", async () => {
+  it("offers six use-case choices including Other", () => {
+    render(<RequestAccessForm />);
+
+    const select = screen.getByLabelText(/What will you use CoDev for?/);
+    const values = [...select.querySelectorAll("option")]
+      .map((option) => option.textContent)
+      .filter((label) => label && label !== "Pick the closest fit");
+
+    expect(values).toEqual([
+      "A side project",
+      "A startup or product",
+      "Client or freelance work",
+      "Learning or school",
+      "Hackathon or game jam",
+      "Other",
+    ]);
+  });
+
+  it("submits the email, optional name, and optional use case", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -32,8 +50,11 @@ describe("RequestAccessForm", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "builder@example.com" },
     });
+    fireEvent.change(screen.getByLabelText(/^Name/), {
+      target: { value: "Ada" },
+    });
     fireEvent.change(screen.getByLabelText(/What will you use CoDev for?/), {
-      target: { value: "A side project with friends" },
+      target: { value: "A side project" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Join the waitlist" }));
 
@@ -41,7 +62,8 @@ describe("RequestAccessForm", () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(String(request.body))).toMatchObject({
       email: "builder@example.com",
-      building: "A side project with friends",
+      name: "Ada",
+      building: "A side project",
     });
     expect(await screen.findByText("You're on the list.")).toBeInTheDocument();
   });

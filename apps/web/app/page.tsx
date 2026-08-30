@@ -5,10 +5,7 @@ import { redirect } from "next/navigation";
 
 import { LandingMotion } from "@/components/landing-motion";
 import { LandingWorkspaceDemo } from "@/components/landing-workspace-demo";
-import {
-  RequestAccessButton,
-  RequestAccessDialog,
-} from "@/components/request-access-dialog";
+import { RequestAccessButton } from "@/components/request-access-button";
 import { WaitlistInline } from "@/components/waitlist-inline";
 import { getCurrentAppUser } from "@/lib/identity";
 
@@ -134,7 +131,6 @@ export default async function HomePage() {
           <Link href="/legal/retention">Data retention</Link>
         </nav>
       </footer>
-      <RequestAccessDialog />
     </main>
   );
 }
