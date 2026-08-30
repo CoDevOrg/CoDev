@@ -1761,11 +1761,9 @@ button {
 }
 
 .auth-provider-stack {
+  display: grid;
+  gap: 16px;
   margin-top: 28px;
-}
-
-.auth-provider-stack form + .auth-divider {
-  margin-top: 16px;
 }
 
 .auth-divider {

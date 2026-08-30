@@ -15,6 +15,10 @@ const credentialsSignInForm = readFileSync(
   resolve(process.cwd(), "components/credentials-sign-in-form.tsx"),
   "utf8",
 );
+const globalsCss = readFileSync(
+  resolve(process.cwd(), "app/globals.css"),
+  "utf8",
+);
 
 describe("sign-in provider layout", () => {
   it("places OAuth providers before the email form and omits setup messaging", () => {
@@ -26,11 +30,20 @@ describe("sign-in provider layout", () => {
     expect(signInPage).not.toContain("OAuth setup pending");
   });
 
+  it("keeps space between OAuth buttons and the email divider", () => {
+    expect(globalsCss).toMatch(
+      /\.auth-provider-stack\s*\{[^}]*gap:\s*16px/s,
+    );
+    expect(globalsCss).not.toContain(
+      ".auth-provider-stack form + .auth-divider",
+    );
+  });
+
   it("keeps a recoverable sign-in experience and a separate create-account path", () => {
     expect(signInPage).toContain('dynamic = "force-dynamic"');
     expect(signInPage).toContain("sessionCheckUnavailable");
-    expect(signInPage).toContain(
-      "You can still sign in or\n            create an account below.",
+    expect(signInPage).toMatch(
+      /You can still sign in or\r?\n\s*create an account below\./,
     );
     expect(signInPage).toContain("CredentialsSignin");
     expect(signInPage).toContain("CredentialsSignInForm");

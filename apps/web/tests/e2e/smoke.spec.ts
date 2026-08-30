@@ -51,13 +51,13 @@ test("the workspace demo shows three agents working across isolated files", asyn
   await expect(demo).toBeVisible();
   await expect(agents.getByText("Codex")).toBeVisible();
   await expect(agents.getByText("Claude")).toBeVisible();
-  await expect(agents.getByText("Review", { exact: true })).toBeVisible();
+  await expect(agents.getByText("Cursor", { exact: true })).toBeVisible();
 
   await demo.scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Pause demo" })).toBeVisible();
   await page.getByRole("button", { name: "Write" }).click();
   await expect(
-    page.getByText(/hand off through the workspace brain/i),
+    page.getByText(/sorted it out between themselves/i),
   ).toBeVisible();
   await expect(page.getByLabel("Completed file")).toContainText(
     "reserveSchema.parse(input)",
