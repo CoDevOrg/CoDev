@@ -42,7 +42,13 @@ export type CodevBridgeMethod =
   | "connections.list"
   | "connections.put"
   | "connections.revoke"
-  | "profile.get";
+  | "profile.get"
+  | "team.roster"
+  | "team.channels"
+  | "team.messages"
+  | "team.send"
+  | "team.createChannel"
+  | "team.saveStatus";
 
 export type CodevBridgeRequestMessage = {
   type: "codev:bridge-request";
@@ -100,6 +106,12 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.put",
   "connections.revoke",
   "profile.get",
+  "team.roster",
+  "team.channels",
+  "team.messages",
+  "team.send",
+  "team.createChannel",
+  "team.saveStatus",
 ]);
 const CREDENTIAL_KEYS = new Set([
   "token",
@@ -856,6 +868,106 @@ export async function executeCodevBridgeRequest(
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(jsonError(payload, "CoDev could not update this member."));
+      }
+      return succeed(payload);
+    }
+
+    // Team rail (people, status, channels), folded into Orca's own sidebar.
+    // Each call is a thin proxy to the same workspace-scoped endpoint the
+    // first-party rail used; the parent owns the workspace id so the embedded
+    // panel never has to.
+    if (request.method === "team.roster") {
+      const response = await fetcher(`/api/workspaces/${workspaceId}/team`, {
+        cache: "no-store",
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load the team."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "team.saveStatus") {
+      const headline = request.params?.headline;
+      const emoji = request.params?.emoji;
+      if (headline !== null && typeof headline !== "string") {
+        return fail("A status headline must be text or null.");
+      }
+      if (emoji !== null && typeof emoji !== "string") {
+        return fail("A status emoji must be text or null.");
+      }
+      const response = await fetcher(`/api/workspaces/${workspaceId}/team`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ headline, emoji }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not save your status."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "team.channels") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/channels`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not load channels."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "team.createChannel") {
+      const slug = request.params?.slug;
+      if (typeof slug !== "string" || !/^[a-z0-9][a-z0-9-]{0,47}$/.test(slug)) {
+        return fail(
+          "Channel names use lowercase letters, numbers and hyphens.",
+        );
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/channels`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ slug }),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not create this channel."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "team.messages" || request.method === "team.send") {
+      const channelId = request.params?.channelId;
+      if (typeof channelId !== "string" || !INVITE_ID.test(channelId)) {
+        return fail("A valid channel is required.");
+      }
+      const messagesUrl = `/api/workspaces/${workspaceId}/channels/${channelId}/messages`;
+      if (request.method === "team.messages") {
+        const response = await fetcher(messagesUrl, { cache: "no-store" });
+        const payload = await readJson(response);
+        if (!response.ok) {
+          return fail(jsonError(payload, "CoDev could not load messages."));
+        }
+        return succeed(payload);
+      }
+      const body = request.params?.body;
+      if (typeof body !== "string" || !body.trim()) {
+        return fail("A message body is required.");
+      }
+      const response = await fetcher(messagesUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "The message was not sent."));
       }
       return succeed(payload);
     }

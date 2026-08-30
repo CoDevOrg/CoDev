@@ -1141,4 +1141,117 @@ describe("codev parent bridge", () => {
       cache: "no-store",
     });
   });
+
+  it("proxies the team rail (roster, channels, messages, send) for the folded-in sidebar", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const channelId = "11111111-1111-4111-8111-111111111111";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ viewerId: "u1", members: [] }))
+      .mockResolvedValueOnce(Response.json({ channels: [{ id: channelId }] }))
+      .mockResolvedValueOnce(Response.json({ messages: [{ id: "m1" }] }))
+      .mockResolvedValueOnce(
+        Response.json({ message: { id: "m2" }, agentDispatch: null }),
+      );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-roster",
+          method: "team.roster",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: { viewerId: "u1" } });
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-channels",
+          method: "team.channels",
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { channels: [{ id: channelId }] },
+    });
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-messages",
+          method: "team.messages",
+          params: { channelId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { messages: [{ id: "m1" }] },
+    });
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-send",
+          method: "team.send",
+          params: { channelId, body: "hello team" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true, result: { message: { id: "m2" } } });
+
+    expect(fetcher).toHaveBeenLastCalledWith(
+      `/api/workspaces/workspace-1/channels/${channelId}/messages`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: "hello team" }),
+      },
+    );
+  });
+
+  it("rejects team message calls without a valid channel id", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-bad-channel",
+          method: "team.messages",
+          params: { channelId: "not-a-uuid" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

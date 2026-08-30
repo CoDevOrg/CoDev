@@ -22,7 +22,6 @@ import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { watchOrcaProjectTree } from "@/components/orca-project-tree";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
-import { WorkspaceTeamPanel } from "@/components/workspace-team-panel";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -674,13 +673,11 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
-  canCreateChannel,
   children,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
-  canCreateChannel: boolean;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -693,20 +690,12 @@ function WorkspaceChrome({
         repository={repository}
         workspaceId={workspaceId}
       />
-      {/* One right sidebar, not two: live agents now live inside the IDE's own
-          right sidebar (CodevLiveAgentsPanel) rather than a second rail beside
-          it. The live count stays in the top bar so it is visible from the
-          parent page too. */}
-      <div className="workspace-body">
-        {/* Team chat is parent-page chrome on purpose. It replaces the IDE's
-            project tree (one workspace is one project here), and living
-            outside the iframe keeps it working across Orca re-vendoring. */}
-        <WorkspaceTeamPanel
-          canCreateChannel={canCreateChannel}
-          workspaceId={workspaceId}
-        />
-        {children}
-      </div>
+      {/* The workspace's team rail (people, status, channels) and its live
+          agents both live inside the embedded IDE's own sidebars now — the
+          team rail folded into Orca's left sidebar, live agents in its right
+          one — so the parent page is just the top bar plus the IDE. The live
+          count stays in the top bar so it is visible from here too. */}
+      <div className="workspace-body">{children}</div>
     </div>
   );
 }
@@ -720,14 +709,11 @@ export function OrcaWorkspace({
   workspaceId,
   repository,
   canInvite,
-  canCreateChannel = false,
   defaultAgent,
 }: {
   workspaceId: string;
   repository: string | null;
   canInvite: boolean;
-  /** Viewers can read and post in channels but not add new ones. */
-  canCreateChannel?: boolean;
   defaultAgent?: OrcaDefaultAgent;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
@@ -992,7 +978,6 @@ export function OrcaWorkspace({
   if (connection.phase === "ready") {
     return (
       <WorkspaceChrome
-        canCreateChannel={canCreateChannel}
         canInvite={canInvite}
         repository={repository}
         workspaceId={workspaceId}
@@ -1029,7 +1014,6 @@ export function OrcaWorkspace({
 
   return (
     <WorkspaceChrome
-      canCreateChannel={canCreateChannel}
       canInvite={canInvite}
       repository={repository}
       workspaceId={workspaceId}
