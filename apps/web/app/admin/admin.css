@@ -229,3 +229,87 @@ table.admin-table {
   font-size: 0.8rem;
   white-space: nowrap;
 }
+
+/* --- Waitlist --- */
+
+.admin-waitlist-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.admin-filter {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.admin-filter:hover {
+  color: var(--ink);
+}
+
+.admin-filter.is-active {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--gold-soft);
+}
+
+.admin-actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.admin-btn {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--ink);
+  cursor: pointer;
+  margin-left: 0.4rem;
+}
+
+.admin-btn:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.admin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-btn.primary {
+  background: var(--gold);
+  color: var(--codev-on-gold, #121417);
+  border-color: transparent;
+  font-weight: 560;
+}
+
+.admin-badge.status-pending {
+  color: var(--muted);
+}
+
+.admin-badge.status-invited {
+  color: var(--gold-bright);
+  border-color: var(--line-strong);
+  background: var(--gold-soft);
+}
+
+.admin-badge.status-accepted {
+  color: #46c771;
+  border-color: rgba(70, 199, 113, 0.35);
+  background: rgba(70, 199, 113, 0.12);
+}
+
+.admin-badge.status-declined,
+.admin-badge.is-expired {
+  color: var(--muted-2, #6b7280);
+}

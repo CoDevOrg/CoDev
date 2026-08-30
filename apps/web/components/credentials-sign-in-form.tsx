@@ -9,11 +9,13 @@ import { getNewAccountPasswordRequirements } from "@/lib/password-policy";
 type CredentialsSignInFormProps = Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   initialMode?: CredentialsIntent;
+  defaultEmail?: string | undefined;
 }>;
 
 export function CredentialsSignInForm({
   action,
   initialMode = "sign-in",
+  defaultEmail,
 }: CredentialsSignInFormProps) {
   const [mode, setMode] = useState<CredentialsIntent>(initialMode);
   const [password, setPassword] = useState("");
@@ -42,6 +44,7 @@ export function CredentialsSignInForm({
           type="email"
           autoComplete="email"
           placeholder="you@example.com"
+          defaultValue={defaultEmail}
           required
         />
       </label>

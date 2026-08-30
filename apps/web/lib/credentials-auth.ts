@@ -63,17 +63,31 @@ export type CredentialsUser = {
   avatarUrl: string | null;
 };
 
+export type CredentialsSignInHooks = {
+  /**
+   * Called with the normalized email just before a NEW account would be
+   * created. Return `false` (or throw) to block registration. Existing-user
+   * sign-in never invokes this.
+   */
+  guardRegistration?: (email: string) => Promise<boolean> | boolean;
+  /** Called after a new account is successfully created. */
+  onRegistered?: (user: CredentialsUser) => Promise<void> | void;
+};
+
 /**
  * Shared by NextAuth's Credentials `authorize()` (web) and the mobile
  * email sign-in route — the only two entry points for password-based
  * login, so identity/lookup/creation logic lives here once.
  */
-export async function resolveCredentialsSignIn(credentials: {
-  intent?: unknown;
-  name?: unknown;
-  email?: unknown;
-  password?: unknown;
-}): Promise<CredentialsUser | null> {
+export async function resolveCredentialsSignIn(
+  credentials: {
+    intent?: unknown;
+    name?: unknown;
+    email?: unknown;
+    password?: unknown;
+  },
+  hooks: CredentialsSignInHooks = {},
+): Promise<CredentialsUser | null> {
   const { intent, name, email, password } = parseCredentialsFields(credentials);
   if (!email || !password) return null;
 
@@ -99,6 +113,16 @@ export async function resolveCredentialsSignIn(credentials: {
   });
 
   if (step === "reject") return null;
+
+  if (step === "create-account" && hooks.guardRegistration) {
+    let permitted = false;
+    try {
+      permitted = await hooks.guardRegistration(email);
+    } catch {
+      permitted = false;
+    }
+    if (!permitted) return null;
+  }
 
   if (step === "verify-existing") {
     if (
@@ -130,12 +154,14 @@ export async function resolveCredentialsSignIn(credentials: {
       avatarUrl: schema.users.avatarUrl,
     });
 
-  return localUser
-    ? {
-        id: localUser.id,
-        name: localUser.name,
-        email: localUser.email,
-        avatarUrl: localUser.avatarUrl,
-      }
-    : null;
+  if (!localUser) return null;
+
+  const created: CredentialsUser = {
+    id: localUser.id,
+    name: localUser.name,
+    email: localUser.email,
+    avatarUrl: localUser.avatarUrl,
+  };
+  await hooks.onRegistered?.(created);
+  return created;
 }

@@ -13,7 +13,40 @@ import { encryptSecret } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
 import { resolveGithubConnection } from "@/lib/github";
+import {
+  assertCanRegister,
+  clearInviteGrantCookie,
+  consumeInvite,
+  evaluateRegistration,
+  RegistrationError,
+} from "@/lib/registration";
 import { mergeUserIntoCanonical } from "@/lib/user-merge";
+
+/**
+ * Invite gate for a brand-new account (OAuth paths). Returns `ok: false` when
+ * the address is not cleared to register; on success `finalize()` retires the
+ * invitation once the `users` row exists.
+ */
+async function gateNewAccount(
+  email: string | null | undefined,
+): Promise<{ ok: false } | { ok: true; finalize: () => Promise<void> }> {
+  try {
+    await assertCanRegister({ email });
+  } catch (error) {
+    if (error instanceof RegistrationError) return { ok: false };
+    throw error;
+  }
+  return {
+    ok: true,
+    finalize: async () => {
+      const decision = await evaluateRegistration({ email });
+      if (decision.allowed && decision.via === "invite") {
+        await consumeInvite(decision.requestId);
+      }
+      await clearInviteGrantCookie();
+    },
+  };
+}
 
 interface GitHubProfile {
   id: number;
@@ -75,12 +108,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const user = await resolveCredentialsSignIn({
-          intent: credentials?.intent,
-          name: credentials?.name,
-          email: credentials?.email,
-          password: credentials?.password,
-        });
+        const user = await resolveCredentialsSignIn(
+          {
+            intent: credentials?.intent,
+            name: credentials?.name,
+            email: credentials?.email,
+            password: credentials?.password,
+          },
+          {
+            guardRegistration: async (email) => {
+              const gate = await gateNewAccount(email);
+              return gate.ok;
+            },
+            onRegistered: async (created) => {
+              const decision = await evaluateRegistration({
+                email: created.email,
+              });
+              if (decision.allowed && decision.via === "invite") {
+                await consumeInvite(decision.requestId);
+              }
+              await clearInviteGrantCookie();
+            },
+          },
+        );
         return user
           ? {
               id: user.id,
@@ -136,30 +186,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               .where(eq(schema.users.email, googleProfile.email))
               .limit(1);
         const existingId = existingByGoogle?.id ?? existingByEmail?.id;
-        const [localUser] = existingId
-          ? await database
-              .update(schema.users)
-              .set({
-                googleUserId,
-                name: googleProfile.name ?? null,
-                email: googleProfile.email,
-                avatarUrl: googleProfile.picture ?? null,
-                updatedAt: now,
-              })
-              .where(eq(schema.users.id, existingId))
-              .returning({ id: schema.users.id })
-          : await database
-              .insert(schema.users)
-              .values({
-                login: `google-${googleProfile.sub ?? googleProfile.id ?? "user"}`,
-                googleUserId,
-                name: googleProfile.name ?? null,
-                email: googleProfile.email,
-                avatarUrl: googleProfile.picture ?? null,
-              })
-              .returning({ id: schema.users.id });
 
-        return Boolean(localUser);
+        if (existingId) {
+          const [localUser] = await database
+            .update(schema.users)
+            .set({
+              googleUserId,
+              name: googleProfile.name ?? null,
+              email: googleProfile.email,
+              avatarUrl: googleProfile.picture ?? null,
+              updatedAt: now,
+            })
+            .where(eq(schema.users.id, existingId))
+            .returning({ id: schema.users.id });
+          return Boolean(localUser);
+        }
+
+        const gate = await gateNewAccount(googleProfile.email);
+        if (!gate.ok) return false;
+
+        const [localUser] = await database
+          .insert(schema.users)
+          .values({
+            login: `google-${googleProfile.sub ?? googleProfile.id ?? "user"}`,
+            googleUserId,
+            name: googleProfile.name ?? null,
+            email: googleProfile.email,
+            avatarUrl: googleProfile.picture ?? null,
+          })
+          .returning({ id: schema.users.id });
+
+        if (!localUser) return false;
+        await gate.finalize();
+        return true;
       }
 
       if (
@@ -242,35 +301,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               .where(eq(schema.users.email, githubProfile.email))
               .limit(1)
           : [];
-        [localUser] =
-          existingByGithub?.id || existingByEmail?.id
-            ? await database
-                .update(schema.users)
-                .set({
-                  githubUserId,
-                  login: githubProfile.login,
-                  name: githubProfile.name,
-                  email: githubProfile.email,
-                  avatarUrl: githubProfile.avatar_url,
-                  updatedAt: now,
-                })
-                .where(
-                  eq(
-                    schema.users.id,
-                    existingByGithub?.id ?? existingByEmail!.id,
-                  ),
-                )
-                .returning({ id: schema.users.id })
-            : await database
-                .insert(schema.users)
-                .values({
-                  githubUserId,
-                  login: githubProfile.login,
-                  name: githubProfile.name,
-                  email: githubProfile.email,
-                  avatarUrl: githubProfile.avatar_url,
-                })
-                .returning({ id: schema.users.id });
+        const existingId = existingByGithub?.id ?? existingByEmail?.id;
+
+        if (existingId) {
+          [localUser] = await database
+            .update(schema.users)
+            .set({
+              githubUserId,
+              login: githubProfile.login,
+              name: githubProfile.name,
+              email: githubProfile.email,
+              avatarUrl: githubProfile.avatar_url,
+              updatedAt: now,
+            })
+            .where(eq(schema.users.id, existingId))
+            .returning({ id: schema.users.id });
+        } else {
+          const gate = await gateNewAccount(githubProfile.email);
+          if (!gate.ok) return false;
+
+          [localUser] = await database
+            .insert(schema.users)
+            .values({
+              githubUserId,
+              login: githubProfile.login,
+              name: githubProfile.name,
+              email: githubProfile.email,
+              avatarUrl: githubProfile.avatar_url,
+            })
+            .returning({ id: schema.users.id });
+
+          if (localUser) await gate.finalize();
+        }
       }
 
       if (!localUser) {

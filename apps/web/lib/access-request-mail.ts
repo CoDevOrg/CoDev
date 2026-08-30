@@ -69,6 +69,30 @@ export async function sendAccessRequestReceipt(request: {
   });
 }
 
+/** Tells an approved requester they're in, with the single-use accept link. */
+export async function sendAccessRequestInvite(invite: {
+  email: string;
+  name?: string | null | undefined;
+  acceptUrl: string;
+}) {
+  const firstName = invite.name?.split(/\s+/)[0];
+  await send({
+    to: invite.email,
+    subject: "Your CoDev invite is ready",
+    text: [
+      firstName ? `Hi ${firstName},` : "Hi,",
+      "",
+      "You're in. Use the link below to create your CoDev account — it works once and expires in 14 days:",
+      "",
+      invite.acceptUrl,
+      "",
+      "Open it on the device you want to build from. You can sign up with Google, GitHub, or an email and password.",
+      "",
+      "— The CoDev team",
+    ].join("\n"),
+  });
+}
+
 /**
  * Optional internal ping so a new request is visible without watching the
  * table. Silently does nothing when the notify address is unset.

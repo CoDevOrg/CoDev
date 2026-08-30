@@ -33,6 +33,9 @@ export const serverEnvironmentSchema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   AUTH_EMAIL_FROM: z.string().min(3).optional(),
   ACCESS_REQUEST_NOTIFY_EMAIL: z.string().min(3).optional(),
+  // Comma-separated addresses that may create an account without a waitlist
+  // invitation (the founding team). Everyone else needs an invite link.
+  SIGNUP_ALLOWLIST: z.string().optional(),
   GITHUB_APP_SLUG: z.string().min(1).optional(),
   FEEDBACK_GITHUB_TOKEN: z.string().min(1).optional(),
   FEEDBACK_GITHUB_REPO: z

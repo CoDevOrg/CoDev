@@ -3,7 +3,9 @@ import Image from "next/image";
 
 import "./admin.css";
 
+import { AdminWaitlist } from "@/components/admin-waitlist";
 import { AppChrome } from "@/components/app-chrome";
+import { listAccessRequests } from "@/lib/access-requests";
 import { requireAdmin } from "@/lib/admin";
 import {
   getAdminSummary,
@@ -42,15 +44,19 @@ function formatRelative(iso: string | null): string {
 export default async function AdminPage() {
   const user = await requireAdmin();
 
-  const [summary, directory, recentVisits, topPaths, daily] = await Promise.all(
-    [
+  const [summary, directory, recentVisits, topPaths, daily, waitlist] =
+    await Promise.all([
       getAdminSummary(),
       getUserDirectory(),
       getRecentVisits(60),
       getTopPaths(30, 15),
       getDailyTraffic(30),
-    ],
-  );
+      listAccessRequests(),
+    ]);
+
+  const waitlistPending = waitlist.filter(
+    (row) => row.status === "pending",
+  ).length;
 
   const maxDaily = Math.max(1, ...daily.map((point) => point.views));
 
@@ -137,6 +143,25 @@ export default async function AdminPage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section className="admin-section">
+          <h2>
+            Waitlist ({waitlist.length})
+            {waitlistPending ? (
+              <span
+                className="admin-badge status-pending"
+                style={{ marginLeft: "0.5rem" }}
+              >
+                {waitlistPending} pending
+              </span>
+            ) : null}
+          </h2>
+          <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
+            Account creation is invite-only. &ldquo;Invite&rdquo; emails a
+            single-use link that lets that person sign up with any provider.
+          </p>
+          <AdminWaitlist rows={waitlist} />
         </section>
 
         <section className="admin-section">

@@ -11,6 +11,30 @@ import { Brand } from "@/components/app-chrome";
 import { ClerkSignIn } from "@/components/clerk-sign-in";
 import { CredentialsSignInForm } from "@/components/credentials-sign-in-form";
 import { clerkAuthConfigured } from "@/lib/identity";
+import {
+  assertCanRegister,
+  readInviteGrant,
+  RegistrationError,
+} from "@/lib/registration";
+
+const INVITE_ONLY_MESSAGE =
+  "CoDev is invite-only right now. Join the waitlist and we'll email you a link when you're in.";
+
+function inviteErrorMessage(error: string | undefined): string | null {
+  switch (error) {
+    case "InviteOnly":
+    case "AccessDenied":
+      return INVITE_ONLY_MESSAGE;
+    case "InviteInvalid":
+      return "That invite link isn't valid. Ask us for a fresh one, or join the waitlist.";
+    case "InviteExpired":
+      return "That invite link has expired. Reply to your invite email and we'll send a new one.";
+    case "InviteUsed":
+      return "That invitation has already been used. Sign in with the account you created.";
+    default:
+      return null;
+  }
+}
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -88,6 +112,10 @@ export default async function SignInPage({
       ? callbackUrl
       : "/dashboard";
 
+  const inviteGrant = await readInviteGrant();
+  const inviteMessage = inviteErrorMessage(error);
+  const startInSignUp = mode === "sign-up" || Boolean(inviteGrant);
+
   return (
     <main className="auth-page">
       <div className="auth-nav">
@@ -98,13 +126,20 @@ export default async function SignInPage({
         <p className="eyebrow">Sign in</p>
         <h1>Welcome to CoDev.</h1>
         <p>
-          Continue with Google or GitHub, or sign in with the email you already
-          use. New to CoDev? Create an account below.
+          {inviteGrant
+            ? "Your invitation checks out. Create your account with Google, GitHub, or an email and password."
+            : "Continue with Google or GitHub, or sign in with the email you already use. CoDev is invite-only — request access from the home page."}
         </p>
 
         {reset ? (
           <div className="inline-alert" role="status">
             Your password was updated. Sign in with your new password.
+          </div>
+        ) : null}
+
+        {inviteGrant ? (
+          <div className="inline-alert" role="status">
+            Invited as <strong>{inviteGrant.email}</strong>.
           </div>
         ) : null}
 
@@ -115,10 +150,14 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {error ? (
+        {inviteMessage ? (
+          <div className="inline-alert error" role="alert">
+            {inviteMessage} <Link href="/">Join the waitlist</Link>.
+          </div>
+        ) : error ? (
           <div className="inline-alert error" role="alert">
             That email or password did not work. Sign in with your existing
-            account, or create a new one below.
+            account.
           </div>
         ) : null}
 
@@ -165,15 +204,29 @@ export default async function SignInPage({
             </div>
 
             <CredentialsSignInForm
-              initialMode={mode === "sign-up" ? "sign-up" : "sign-in"}
+              initialMode={startInSignUp ? "sign-up" : "sign-in"}
+              defaultEmail={inviteGrant?.email}
               action={async (formData) => {
                 "use server";
                 const intent = String(formData.get("intent") ?? "sign-in");
+                const email = String(formData.get("email") ?? "");
+                if (intent === "sign-up") {
+                  try {
+                    await assertCanRegister({ email });
+                  } catch (guardError) {
+                    if (guardError instanceof RegistrationError) {
+                      redirect(
+                        `/sign-in?error=${guardError.code === "invite_expired" ? "InviteExpired" : guardError.code === "invite_used" ? "InviteUsed" : "InviteOnly"}&mode=sign-up`,
+                      );
+                    }
+                    throw guardError;
+                  }
+                }
                 try {
                   await signIn("credentials", {
                     intent,
                     name: String(formData.get("name") ?? ""),
-                    email: String(formData.get("email") ?? ""),
+                    email,
                     password: String(formData.get("password") ?? ""),
                     redirectTo: safeCallback,
                   });

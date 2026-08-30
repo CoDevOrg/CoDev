@@ -178,6 +178,15 @@ export const accessRequests = pgTable(
     ipHash: text("ip_hash"),
     status: accessRequestStatus("status").default("pending").notNull(),
     invitedAt: timestamp("invited_at", { withTimezone: true }),
+    // Set when an admin issues an invitation. `inviteTokenHash` is the SHA-256
+    // of the single-use token carried by the invite email's accept link; the
+    // raw token is never stored. `acceptedAt` is stamped the moment the invited
+    // person creates their account, which permanently retires the token.
+    inviteTokenHash: text("invite_token_hash"),
+    inviteTokenExpiresAt: timestamp("invite_token_expires_at", {
+      withTimezone: true,
+    }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -187,6 +196,9 @@ export const accessRequests = pgTable(
       table.createdAt,
     ),
     index("access_requests_ip_created_idx").on(table.ipHash, table.createdAt),
+    uniqueIndex("access_requests_invite_token_hash_idx").on(
+      table.inviteTokenHash,
+    ),
   ],
 );
 

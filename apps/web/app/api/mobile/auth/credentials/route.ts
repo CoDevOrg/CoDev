@@ -2,6 +2,7 @@ import { mintCliAccessToken } from "@/lib/cli-auth";
 import { apiError } from "@/lib/api";
 import { resolveCredentialsSignIn } from "@/lib/credentials-auth";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { isEmailAllowlisted } from "@/lib/registration";
 
 export const runtime = "nodejs";
 
@@ -36,10 +37,17 @@ export async function POST(request: Request) {
     return apiError(new Error("Invalid request body."), 400);
   }
 
-  const user = await resolveCredentialsSignIn(body);
+  // The invite flow needs a browser (it drops a signed grant cookie), so the
+  // mobile app can only create an account for an allow-listed address. Invited
+  // users do their first sign-up on the web, then sign in here.
+  const user = await resolveCredentialsSignIn(body, {
+    guardRegistration: (email) => isEmailAllowlisted(email),
+  });
   if (!user) {
     return apiError(
-      new Error("Invalid email/password, or that email is already in use."),
+      new Error(
+        "Invalid email/password, that email is already in use, or you need a web invite first.",
+      ),
       401,
     );
   }
