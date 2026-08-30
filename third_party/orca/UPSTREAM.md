@@ -270,6 +270,21 @@ Symbols` `@font-face` family name in the CSS bundle (renaming that alone
      react to a settings change made outside its own Zustand store — which
      is why this lives here instead. This is a default, not a hard block,
      since CoDev's own mobile pairing UX is deferred to a later milestone.
+  3. Makes Orca's one-time feature education — the "Tip" cards (e.g. the
+     Cmd-J worktree-jump palette) and the contextual tour overlays — appear
+     exactly once per browser, for good. Upstream keeps the "already seen"
+     ids (`featureTipsSeenIds`, `contextualToursSeenIds`) in UI state, but
+     every CoDev workspace is a separate `orca serve` runtime: on entry the
+     client hydrates its UI state from that workspace's own (usually empty)
+     host store, and `hydratePersistedUI()` _replaces_ those id arrays with
+     whatever the host carried — so a tip dismissed in one workspace comes
+     back in the next, and again on every re-entry. The preload trap wraps
+     `window.api.ui.get`/`set`/`onStateChanged` so a browser-global,
+     authoritative record (`codev.featureEducationSeen.v1` in localStorage)
+     is unioned back onto every payload the app hydrates from, new
+     dismissals coming through `ui.set()` are captured into it, and any ids
+     the host itself already knew are learned. Union-only, so a card the
+     member has genuinely never seen still shows the first time.
 
 ## Matching server runtime
 
