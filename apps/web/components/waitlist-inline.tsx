@@ -113,9 +113,6 @@ export function WaitlistInline() {
   const [open, setOpen] = useState(false);
   const [showCrew, setShowCrew] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const mountedRef = useRef(false);
 
   // Show the ghost cursors only while the closing CTA is on screen, and only
   // where a real pointer and motion are welcome.
@@ -163,47 +160,6 @@ export function WaitlistInline() {
     return () => window.removeEventListener(REQUEST_ACCESS_EVENT, onRequest);
   }, []);
 
-  // Animate the drawer between 0 and its measured content height, then release
-  // to `auto` so the form can grow (validation messages) without clipping.
-  useEffect(() => {
-    const drawer = drawerRef.current;
-    const inner = innerRef.current;
-    if (!drawer || !inner) return;
-
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
-    // On first render just settle into the resting state. Never animate the
-    // drawer shut as the page loads.
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      drawer.style.height = open ? "auto" : "0px";
-      return;
-    }
-
-    if (reduced) {
-      drawer.style.height = open ? "auto" : "0px";
-      return;
-    }
-
-    if (open) {
-      drawer.style.height = `${inner.offsetHeight}px`;
-      const done = (event: TransitionEvent) => {
-        if (event.propertyName !== "height") return;
-        drawer.style.height = "auto";
-        drawer.removeEventListener("transitionend", done);
-      };
-      drawer.addEventListener("transitionend", done);
-      return () => drawer.removeEventListener("transitionend", done);
-    }
-
-    drawer.style.height = `${inner.offsetHeight}px`;
-    // Force a reflow so the browser registers the explicit start height.
-    void drawer.offsetHeight;
-    drawer.style.height = "0px";
-  }, [open]);
-
   return (
     <div className="lp-waitlist" id={REQUEST_ACCESS_TARGET_ID} ref={wrapRef}>
       <button
@@ -215,11 +171,8 @@ export function WaitlistInline() {
         {open ? "Not now" : "Join the waitlist"}
       </button>
 
-      <div
-        className={`lp-waitlist-drawer${open ? " is-open" : ""}`}
-        ref={drawerRef}
-      >
-        <div className="lp-waitlist-drawer-inner" ref={innerRef} inert={!open}>
+      <div className={`lp-waitlist-drawer${open ? " is-open" : ""}`}>
+        <div className="lp-waitlist-drawer-inner" inert={!open}>
           <RequestAccessForm />
         </div>
       </div>

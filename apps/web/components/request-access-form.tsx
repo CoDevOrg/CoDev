@@ -103,21 +103,19 @@ export function RequestAccessForm() {
         />
       </div>
 
-      <div className="lp-field">
-        <label htmlFor={`${ids}-building`}>
+      <fieldset className="lp-field lp-field-choices">
+        <legend>
           What will you use CoDev for? <span>Optional</span>
-        </label>
-        <select id={`${ids}-building`} name="building" defaultValue="">
-          <option value="" disabled>
-            Pick the closest fit
-          </option>
+        </legend>
+        <div className="lp-choices">
           {USE_CASES.map((useCase) => (
-            <option key={useCase} value={useCase}>
-              {useCase}
-            </option>
+            <label key={useCase} className="lp-choice">
+              <input type="radio" name="building" value={useCase} />
+              <span>{useCase}</span>
+            </label>
           ))}
-        </select>
-      </div>
+        </div>
+      </fieldset>
 
       {status === "error" ? (
         <p className="lp-form-error" role="alert">

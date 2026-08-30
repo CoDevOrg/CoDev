@@ -2101,9 +2101,12 @@
    rather than opening the modal, and three agent-coloured ghost cursors trail
    the visitor's pointer while the section is on screen. */
 
+/* The button stays centred under the heading; the form panel unfurls into the
+   empty space to its right without shifting anything else. Below 900px there is
+   no room beside it, so it drops back to unfurling downward. */
 .lp-waitlist {
+  position: relative;
   display: flex;
-  width: min(440px, 100%);
   flex-direction: column;
   align-items: center;
 }
@@ -2114,35 +2117,66 @@
 }
 
 .lp-waitlist-drawer {
-  width: 100%;
-  height: 0;
-  margin-top: 0;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  max-width: 0;
   overflow: hidden;
   opacity: 0;
   transition:
-    height 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-    margin-top 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.35s ease;
 }
 
 .lp-waitlist-drawer.is-open {
-  margin-top: 18px;
+  max-width: 480px;
+  margin-left: 20px;
   opacity: 1;
 }
 
 .lp-waitlist-drawer-inner {
+  width: min(380px, 74vw);
   padding: 20px;
   border: 1px solid var(--lp-line-strong);
   border-radius: 14px;
   background: var(--lp-bg-2);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
   text-align: left;
-  transform: translateY(-10px);
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateX(-16px);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lp-waitlist-drawer.is-open .lp-waitlist-drawer-inner {
-  transform: translateY(0);
+  transform: translateX(0);
+}
+
+@media (max-width: 900px) {
+  .lp-waitlist-drawer {
+    position: static;
+    max-width: none;
+    max-height: 0;
+    transition:
+      max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.35s ease;
+  }
+
+  .lp-waitlist-drawer.is-open {
+    max-width: none;
+    max-height: 820px;
+    margin-left: 0;
+    margin-top: 18px;
+  }
+
+  .lp-waitlist-drawer-inner {
+    width: min(400px, 82vw);
+    transform: translateY(-14px);
+  }
+
+  .lp-waitlist-drawer.is-open .lp-waitlist-drawer-inner {
+    transform: translateY(0);
+  }
 }
 
 .lp-ghost-crew {
@@ -2199,8 +2233,7 @@
 }
 
 .lp-field input,
-.lp-field textarea,
-.lp-field select {
+.lp-field textarea {
   width: 100%;
   padding: 11px 13px;
   border: 1px solid var(--lp-line);
@@ -2217,29 +2250,72 @@
   resize: vertical;
 }
 
-.lp-field select {
-  padding-right: 38px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23edeef0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5l5-5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 13px center;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.lp-field select:invalid,
-.lp-field option[value=""] {
-  color: rgba(237, 238, 240, 0.5);
-}
-
 .lp-field input::placeholder,
 .lp-field textarea::placeholder {
   color: rgba(237, 238, 240, 0.5);
 }
 
 .lp-field input:hover,
-.lp-field textarea:hover,
-.lp-field select:hover {
+.lp-field textarea:hover {
   border-color: var(--lp-line-strong);
+}
+
+/* "What will you use CoDev for?": a single-choice chip group. */
+.lp-field-choices {
+  gap: 10px;
+}
+
+.lp-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lp-choice {
+  position: relative;
+  cursor: pointer;
+}
+
+.lp-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lp-choice span {
+  display: inline-block;
+  padding: 8px 13px;
+  border: 1px solid var(--lp-line);
+  border-radius: 999px;
+  background: rgba(12, 14, 16, 0.72);
+  color: var(--lp-muted);
+  font-size: 13px;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.lp-choice:hover span {
+  border-color: var(--lp-line-strong);
+  color: var(--lp-ink);
+}
+
+.lp-choice input:checked + span {
+  border-color: var(--lp-orange);
+  background: rgba(242, 96, 74, 0.14);
+  color: var(--lp-ink);
+}
+
+.lp-choice input:focus-visible + span {
+  outline: 2px solid var(--lp-orange);
+  outline-offset: 2px;
 }
 
 .lp-field > small {

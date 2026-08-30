@@ -13,22 +13,23 @@ describe("RequestAccessForm", () => {
 
     expect(screen.getByLabelText("Email")).toBeRequired();
     expect(screen.getByLabelText(/^Name/)).not.toBeRequired();
-    expect(
-      screen.getByLabelText(/What will you use CoDev for?/),
-    ).not.toBeRequired();
-    expect(screen.queryByRole("group")).not.toBeInTheDocument();
+
+    const choices = screen.getByRole("group", {
+      name: /What will you use CoDev for\?/,
+    });
+    expect(choices).toBeInTheDocument();
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio).not.toBeRequired();
+    }
     expect(screen.queryByText(/Sign in/i)).not.toBeInTheDocument();
   });
 
   it("offers six use-case choices including Other", () => {
     render(<RequestAccessForm />);
 
-    const select = screen.getByLabelText(/What will you use CoDev for?/);
-    const values = [...select.querySelectorAll("option")]
-      .map((option) => option.textContent)
-      .filter((label) => label && label !== "Pick the closest fit");
-
-    expect(values).toEqual([
+    expect(
+      screen.getAllByRole("radio").map((radio) => radio.getAttribute("value")),
+    ).toEqual([
       "A side project",
       "A startup or product",
       "Client or freelance work",
@@ -38,7 +39,7 @@ describe("RequestAccessForm", () => {
     ]);
   });
 
-  it("submits the email, optional name, and optional use case", async () => {
+  it("submits the email, optional name, and the chosen use case", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -53,9 +54,7 @@ describe("RequestAccessForm", () => {
     fireEvent.change(screen.getByLabelText(/^Name/), {
       target: { value: "Ada" },
     });
-    fireEvent.change(screen.getByLabelText(/What will you use CoDev for?/), {
-      target: { value: "A side project" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "A side project" }));
     fireEvent.click(screen.getByRole("button", { name: "Join the waitlist" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());

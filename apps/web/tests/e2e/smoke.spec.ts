@@ -36,9 +36,11 @@ test("landing page explains CoDev and offers a clear start", async ({
   await expect(form.getByLabel("Email")).toBeVisible();
   await expect(form.getByLabel("Email")).toBeFocused();
   await expect(form.getByLabel(/^Name/)).toBeVisible();
-  const useCase = form.getByLabel(/What will you use CoDev for?/);
+  const useCase = form.getByRole("group", {
+    name: /What will you use CoDev for\?/,
+  });
   await expect(useCase).toBeVisible();
-  await expect(useCase.getByRole("option", { name: "Other" })).toHaveCount(1);
+  await expect(useCase.getByRole("radio", { name: "Other" })).toHaveCount(1);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect(

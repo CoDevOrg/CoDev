@@ -101,12 +101,6 @@ describe("WaitlistInline", () => {
     expect(container.querySelector(".lp-ghost-crew")).not.toBeInTheDocument();
   });
 
-  it("settles the drawer height without animating on first render", () => {
-    const { container } = render(<WaitlistInline />);
-    const drawer = container.querySelector<HTMLElement>(".lp-waitlist-drawer")!;
-    expect(drawer.style.height).toBe("0px");
-  });
-
   it("still lets the email form submit from the expanded drawer", async () => {
     const fetchMock = vi
       .fn()
