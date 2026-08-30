@@ -109,7 +109,7 @@ describe('ensureHooksConfirmed', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
     // The dialog uses this flag to tell the user we're re-prompting *because*
-    // orca.yaml changed, not because they've never approved this hook.
+    // codev.yaml changed, not because they've never approved this hook.
     expect(pending[0].data.previouslyApproved).toBe(true)
 
     pending[0].resolve('run')
@@ -286,7 +286,7 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('does not prompt for orca.yaml when the repo uses local commands only', async () => {
+  it('does not prompt for codev.yaml when the repo uses local commands only', async () => {
     const { state, pending } = createTestState({
       repos: [
         {
@@ -313,7 +313,7 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('does not prompt for orca.yaml when local commands are the implicit default', async () => {
+  it('does not prompt for codev.yaml when local commands are the implicit default', async () => {
     const { state, pending } = createTestState({
       repos: [
         {

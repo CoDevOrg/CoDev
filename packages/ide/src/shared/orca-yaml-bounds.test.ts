@@ -22,7 +22,7 @@ function returnYamlRoot(root: unknown): void {
   })
 }
 
-describe('orca.yaml parse bounds', () => {
+describe('codev.yaml parse bounds', () => {
   beforeEach(() => {
     parseDocumentMock.mockReset()
     returnYamlRoot({ scripts: { setup: 'pnpm install' } })

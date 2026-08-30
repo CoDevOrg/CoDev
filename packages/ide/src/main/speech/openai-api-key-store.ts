@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { codevHomeConfigDir } from '../../shared/codev-config-dir'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -11,7 +11,7 @@ const OPENAI_SPEECH_TOKEN_FILE = 'openai-speech-token.enc'
 let cachedOpenAiSpeechApiKey: string | null = null
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return codevHomeConfigDir()
 }
 
 function ensureOrcaDir(): void {

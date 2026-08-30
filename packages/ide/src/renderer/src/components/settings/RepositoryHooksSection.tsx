@@ -190,7 +190,7 @@ function getCommandSourcePolicyOptions(): PolicyOption<HookCommandSourcePolicy>[
       policy: 'shared-only',
       label: translate(
         'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
-        'orca.yaml only'
+        'codev.yaml only'
       ),
       description: translate(
         'auto.components.settings.RepositoryHooksSection.29397e8bbc',
@@ -202,7 +202,7 @@ function getCommandSourcePolicyOptions(): PolicyOption<HookCommandSourcePolicy>[
       label: translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only'),
       description: translate(
         'auto.components.settings.RepositoryHooksSection.0e8b2a520d',
-        'Ignore orca.yaml; run only your local commands.'
+        'Ignore codev.yaml; run only your local commands.'
       )
     },
     {
@@ -210,7 +210,7 @@ function getCommandSourcePolicyOptions(): PolicyOption<HookCommandSourcePolicy>[
       label: translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both'),
       description: translate(
         'auto.components.settings.RepositoryHooksSection.8561b0665f',
-        'orca.yaml first, then your local commands.'
+        'codev.yaml first, then your local commands.'
       )
     }
   ]
@@ -221,7 +221,7 @@ function getCommandSourceLabel(policy: HookCommandSourcePolicy): string {
     case 'shared-only':
       return translate(
         'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
-        'orca.yaml only'
+        'codev.yaml only'
       )
     case 'local-only':
       return translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only')
@@ -297,7 +297,7 @@ function getYamlStateCopy(yamlState: string): { heading: string; description: st
       return {
         heading: translate(
           'auto.components.settings.RepositoryHooksSection.56f9a4a1d0',
-          'Using `orca.yaml`'
+          'Using `codev.yaml`'
         ),
         description: translate(
           'auto.components.settings.RepositoryHooksSection.ca424ff135',
@@ -308,7 +308,7 @@ function getYamlStateCopy(yamlState: string): { heading: string; description: st
       return {
         heading: translate(
           'auto.components.settings.RepositoryHooksSection.623e0c9f31',
-          '`orca.yaml` could not be parsed'
+          '`codev.yaml` could not be parsed'
         ),
         description: translate(
           'auto.components.settings.RepositoryHooksSection.aba825233f',
@@ -319,7 +319,7 @@ function getYamlStateCopy(yamlState: string): { heading: string; description: st
       return {
         heading: translate(
           'auto.components.settings.RepositoryHooksSection.623e0c9f31',
-          '`orca.yaml` could not be parsed'
+          '`codev.yaml` could not be parsed'
         ),
         description: translate(
           'auto.components.settings.RepositoryHooksSection.0cc712b823',
@@ -330,11 +330,11 @@ function getYamlStateCopy(yamlState: string): { heading: string; description: st
       return {
         heading: translate(
           'auto.components.settings.RepositoryHooksSection.5a67e4793d',
-          'No `orca.yaml` detected'
+          'No `codev.yaml` detected'
         ),
         description: translate(
           'auto.components.settings.RepositoryHooksSection.b20c5df6ca',
-          'Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
+          'Add an `codev.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
         )
       }
   }
@@ -443,7 +443,7 @@ function ExampleTemplateCard({
       <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
         {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}{' '}
         <code className="rounded bg-muted px-1 py-0.5">
-          {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
+          {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'codev.yaml')}
         </code>{' '}
         {translate('auto.components.settings.RepositoryHooksSection.95a0411b3e', 'template')}
       </p>
@@ -558,11 +558,11 @@ function LocalCommandSourceNotice({
             {isChecking
               ? translate(
                   'auto.components.settings.RepositoryHooksSection.7f78e5eea6',
-                  'Local scripts are saved. Orca is still checking orca.yaml before it can recommend which script source to use.'
+                  'Local scripts are saved. Orca is still checking codev.yaml before it can recommend which script source to use.'
                 )
               : translate(
                   'auto.components.settings.RepositoryHooksSection.0ce113fd7b',
-                  'Local scripts are saved, but Script Source is set to orca.yaml only.'
+                  'Local scripts are saved, but Script Source is set to codev.yaml only.'
                 )}
           </p>
         </div>
@@ -656,7 +656,7 @@ function ScriptEditor({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-              {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
+              {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'codev.yaml')}
               <span className="font-normal text-emerald-700/80 dark:text-emerald-300/80">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.f828e1de19',
@@ -669,7 +669,7 @@ function ScriptEditor({
               <code className="rounded bg-muted px-1 py-0.5">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.39da2ae12f',
-                  'orca.yaml'
+                  'codev.yaml'
                 )}
               </code>{' '}
               {translate(
@@ -990,12 +990,12 @@ export function RepositoryHooksSection({
       title: translate('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced'),
       description: translate(
         'auto.components.settings.RepositoryHooksSection.610d90fdbd',
-        'Command source and orca.yaml details.'
+        'Command source and codev.yaml details.'
       ),
       keywords: [
         translate('auto.components.settings.RepositoryHooksSection.c5a55a2d2e', 'advanced'),
         translate('auto.components.settings.RepositoryHooksSection.4611b78617', 'command source'),
-        translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml'),
+        translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'codev.yaml'),
         translate('auto.components.settings.RepositoryHooksSection.d2b3016c20', 'shared'),
         translate('auto.components.settings.RepositoryHooksSection.2d03a514db', 'local'),
         translate('auto.components.settings.RepositoryHooksSection.0518758f38', 'both'),
@@ -1016,7 +1016,7 @@ export function RepositoryHooksSection({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.RepositoryHooksSection.8567127a40',
-            'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
+            'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `codev.yaml` scripts are shared with your team.'
           )}
         </p>
       </div>
@@ -1037,8 +1037,8 @@ export function RepositoryHooksSection({
           'command',
           'local',
           'local settings scripts',
-          'orca.yaml',
-          'orca.yaml hooks',
+          'codev.yaml',
+          'codev.yaml hooks',
           'hook'
         ]}
       >
@@ -1138,8 +1138,8 @@ export function RepositoryHooksSection({
           'command',
           'local',
           'local settings scripts',
-          'orca.yaml',
-          'orca.yaml hooks',
+          'codev.yaml',
+          'codev.yaml hooks',
           'hook'
         ]}
       >
@@ -1224,7 +1224,7 @@ export function RepositoryHooksSection({
               'Leave blank to use the repo default from'
             )}{' '}
             <code className="rounded bg-muted px-1 py-0.5">
-              {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
+              {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'codev.yaml')}
             </code>
             {hasSharedIssueCommand
               ? '.'
@@ -1243,13 +1243,13 @@ export function RepositoryHooksSection({
         title={translate('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
         description={translate(
           'auto.components.settings.RepositoryHooksSection.610d90fdbd',
-          'Command source and orca.yaml details.'
+          'Command source and codev.yaml details.'
         )}
         forceVisible={forceVisible}
         keywords={[
           'advanced',
           'command source',
-          'orca.yaml',
+          'codev.yaml',
           'shared',
           'local',
           'both',
@@ -1286,7 +1286,7 @@ export function RepositoryHooksSection({
               <span className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.bbbd6e0bc4',
-                  'Command source & orca.yaml'
+                  'Command source & codev.yaml'
                 )}
               </span>
             </div>
@@ -1312,7 +1312,7 @@ export function RepositoryHooksSection({
                   <code className="rounded bg-muted px-1 py-0.5">
                     {translate(
                       'auto.components.settings.RepositoryHooksSection.39da2ae12f',
-                      'orca.yaml'
+                      'codev.yaml'
                     )}
                   </code>{' '}
                   {translate(

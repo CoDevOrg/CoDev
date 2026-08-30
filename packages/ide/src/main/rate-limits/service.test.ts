@@ -1436,7 +1436,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
-    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.codev\\codex-accounts\\host\\home'
     const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
     service.setCodexHomePathResolver(resolver)
 
@@ -1579,7 +1579,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
-    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.codev\\codex-accounts\\host\\home'
     const resolver = vi.fn((target) => (target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome))
     service.setCodexHomePathResolver(resolver)
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
@@ -1730,7 +1730,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
-    const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+    const hostCodexHome = 'C:\\Users\\jin\\.codev\\codex-accounts\\host\\home'
     service.setCodexHomePathResolver((target) =>
       target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     )

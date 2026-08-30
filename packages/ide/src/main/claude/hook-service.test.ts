@@ -140,7 +140,7 @@ describe('ClaudeHookService.install', () => {
                 hooks: [
                   {
                     type: 'command',
-                    command: '/Users/old/.orca/agent-hooks/claude-hook.sh'
+                    command: '/Users/old/.codev/agent-hooks/claude-hook.sh'
                   }
                 ]
               }
@@ -170,12 +170,12 @@ describe('ClaudeHookService.install', () => {
       expect(legacyCommands.some((command: string) => isClaudeManagedCommand(command))).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
-          command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
+          command.includes('/Users/old/.codev/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
       expect(isClaudeManagedCommand(legacy.hooks.StopFailure[0].hooks[0].command)).toBe(true)
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+        readFileSync(join(tmpHome, '.codev', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
     } finally {
       vi.unstubAllEnvs()
@@ -197,7 +197,7 @@ describe('ClaudeHookService.install', () => {
       expect(settings.statusLine?.command).toContain('claude-statusline')
 
       const script = readFileSync(
-        join(tmpHome, '.orca', 'agent-hooks', STATUSLINE_SCRIPT_FILE_NAME),
+        join(tmpHome, '.codev', 'agent-hooks', STATUSLINE_SCRIPT_FILE_NAME),
         'utf-8'
       )
       expect(script).toContain('/statusline/claude')
@@ -347,7 +347,7 @@ describe('ClaudeHookService.install', () => {
       try {
         expect(new ClaudeHookService().install().state).toBe('installed')
         const script = readFileSync(
-          join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+          join(tmpHome, '.codev', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
           'utf-8'
         )
         expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
@@ -394,11 +394,11 @@ describe('ClaudeHookService.installRemote', () => {
     ]) {
       expect(parsed.hooks[event]).toBeTruthy()
       const cmd = parsed.hooks[event][0].hooks[0].command as string
-      expect(cmd).toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
+      expect(cmd).toContain('/home/dev/.codev/agent-hooks/claude-hook.sh')
       expect(cmd).toMatch(/^if \[ -f /)
     }
     // Managed script body
-    const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    const script = fs.files.get('/home/dev/.codev/agent-hooks/claude-hook.sh')
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
     // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -407,11 +407,11 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('printf \'%s\' "$payload" | curl')
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
+    expect(fs.modes.get('/home/dev/.codev/agent-hooks/claude-hook.sh')).toBe(0o755)
     // Why: no remote statusLine — this path serves SSH remotes and WSL guests, whose relay
     // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.
     expect(parsed.statusLine).toBeUndefined()
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
+    expect(fs.files.get('/home/dev/.codev/agent-hooks/claude-statusline.sh')).toBeUndefined()
   })
 
   it('reports parse error when remote settings.json cannot be parsed', async () => {
@@ -440,7 +440,7 @@ describe('ClaudeHookService.installRemote', () => {
                 {
                   type: 'command',
                   command:
-                    'if [ -x /home/dev/.orca/agent-hooks/claude-hook.sh ]; then /bin/sh /home/dev/.orca/agent-hooks/claude-hook.sh; fi'
+                    'if [ -x /home/dev/.codev/agent-hooks/claude-hook.sh ]; then /bin/sh /home/dev/.codev/agent-hooks/claude-hook.sh; fi'
                 }
               ]
             }
@@ -492,10 +492,10 @@ describe('OpenClaudeHookService-compatible install', () => {
         }
       }
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+        readFileSync(join(tmpHome, '.codev', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('/hook/claude')
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+        readFileSync(join(tmpHome, '.codev', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).not.toContain('DEVIN_PROJECT_DIR')
       // Why: the statusline usage feed is Claude-only; OpenClaude installs must not set statusLine.
       expect(parsed.statusLine).toBeUndefined()
@@ -518,7 +518,7 @@ describe('OpenClaudeHookService-compatible install', () => {
     })
     const parsed = JSON.parse(fs.files.get('/home/dev/.openclaude/settings.json')!)
     const command = parsed.hooks.StopFailure[0].hooks[0].command as string
-    expect(command).toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
+    expect(command).toContain('/home/dev/.codev/agent-hooks/openclaude-hook.sh')
+    expect(fs.files.get('/home/dev/.codev/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
   })
 })

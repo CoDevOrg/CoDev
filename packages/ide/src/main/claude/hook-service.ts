@@ -2,6 +2,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  getRemoteManagedScriptPath,
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
@@ -230,7 +231,7 @@ export class ClaudeHookService {
     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = getRemoteManagedScriptPath(remoteHome, remoteScriptFileName)
     // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)

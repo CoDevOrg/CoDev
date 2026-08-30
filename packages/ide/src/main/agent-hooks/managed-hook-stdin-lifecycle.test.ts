@@ -211,7 +211,7 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
     const status = await entry.install(memory.sftp)
     expect(status.state, `${entry.agent} install status`).toBe('installed')
     const generated = [...memory.fs.files.entries()].filter(
-      ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
+      ([path]) => path.includes('/.codev/agent-hooks/') && path.endsWith('.sh')
     )
     // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
     expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
@@ -248,7 +248,7 @@ describe('Windows managed hook stdin structure', () => {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
       })
-      const hooksDir = join(home, '.orca', 'agent-hooks')
+      const hooksDir = join(home, '.codev', 'agent-hooks')
       const fileNames = readdirSync(hooksDir)
       const mainBatchScripts = fileNames.filter(
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
@@ -309,7 +309,7 @@ describe('Windows managed hook stdin structure', () => {
         for (const entry of LOCAL_INSTALLERS) {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
-        const hooksDir = join(home, '.orca', 'agent-hooks')
+        const hooksDir = join(home, '.codev', 'agent-hooks')
         const mainScripts = readdirSync(hooksDir).filter(
           (name) =>
             name === 'antigravity-hook.cmd' ||

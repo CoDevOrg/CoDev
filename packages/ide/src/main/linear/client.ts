@@ -4,8 +4,8 @@
 import { safeStorage } from 'electron'
 import type { LinearClient } from '@linear/sdk'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { codevHomeConfigDir } from '../../shared/codev-config-dir'
 import { loadLinearSdk } from './linear-sdk'
 import {
   CredentialDecryptionError,
@@ -76,7 +76,7 @@ let cachedWorkspaceFile: LinearWorkspaceFile | null = null
 let workspaceFileLoadedFromDisk = false
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return codevHomeConfigDir()
 }
 
 function getLegacyTokenPath(): string {

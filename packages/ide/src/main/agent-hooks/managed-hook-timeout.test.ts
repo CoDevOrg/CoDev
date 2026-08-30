@@ -111,7 +111,7 @@ const JSON_INSTALLERS = [
   }
 ] as const
 
-const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+const MANAGED_HOOKS_DIR_NEEDLE = '/.codev/agent-hooks/'
 // Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
 const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
@@ -184,7 +184,7 @@ describe('managed agent hook timeouts', () => {
     // One timeout line per managed [[hooks]] event entry.
     const timeoutLines = config.match(new RegExp(`timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`, 'g'))
     expect(timeoutLines?.length ?? 0).toBeGreaterThan(0)
-    expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
+    expect(config).toContain('/home/dev/.codev/agent-hooks/kimi-hook.sh')
   })
 
   it('writes a config-level timeout on local-only Droid hooks', () => {
@@ -225,7 +225,7 @@ describe('managed agent hook timeouts', () => {
     }
     const kimi = createFakeSftp()
     await new KimiHookService().installRemote(kimi.sftp, REMOTE_HOME)
-    const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/kimi-hook.sh`)!
+    const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.codev/agent-hooks/kimi-hook.sh`)!
     expect(kimiWrapper, 'kimi wrapper missing --connect-timeout').toContain('--connect-timeout')
     expect(kimiWrapper, 'kimi wrapper missing --max-time').toContain('--max-time')
     curlWrappersChecked += 1
@@ -296,7 +296,7 @@ describe('managed agent hook timeouts', () => {
         // Reuse a real generated POSIX wrapper rather than re-deriving the script.
         const { sftp, fs } = createFakeSftp()
         await new CodexHookService().installRemote(sftp, REMOTE_HOME)
-        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/codex-hook.sh`)!
+        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.codev/agent-hooks/codex-hook.sh`)!
 
         tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-timeout-'))
         const scriptPath = join(tempDir, 'codex-hook.sh')

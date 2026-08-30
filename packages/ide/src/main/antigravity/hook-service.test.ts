@@ -84,7 +84,7 @@ describe('AntigravityHookService', () => {
     }
 
     const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
+      join(homeDir, '.codev', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
       'utf8'
     )
     expect(script).toContain('/hook/antigravity')
@@ -112,7 +112,7 @@ describe('AntigravityHookService', () => {
       const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
       const staleScriptPath = join(
         homeDir,
-        '.orca',
+        '.codev',
         'agent-hooks',
         'antigravity-hook.cmd'
       ).replaceAll('/', '\\')
@@ -171,13 +171,13 @@ describe('AntigravityHookService', () => {
         expect(command).not.toContain('cmd /d /s /c')
         expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
 
-        const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
+        const wrapper = readFileSync(join(homeDir, '.codev', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
         expect(wrapper).toContain('call "%ORCA_ANTIGRAVITY_CORE%"')
       }
 
       const script = readFileSync(
-        join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.cmd'),
+        join(homeDir, '.codev', 'agent-hooks', 'antigravity-hook.cmd'),
         'utf8'
       )
       expect(script).toContain('/hook/antigravity')
@@ -260,7 +260,7 @@ describe('AntigravityHookService', () => {
     )
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
+      join(homeDir, '.codev', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
     )
   })
 })

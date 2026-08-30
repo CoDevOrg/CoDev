@@ -15,6 +15,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
+import { CONFIG_DIR_NAME } from '../../shared/codev-identifiers'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -279,7 +280,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         }
       }
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
-      const destDir = `${worktreePath}/.orca/drops`
+      const destDir = `${worktreePath}/${CONFIG_DIR_NAME}/drops`
       const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
         ensureDir: true,
         assertCurrent: () =>

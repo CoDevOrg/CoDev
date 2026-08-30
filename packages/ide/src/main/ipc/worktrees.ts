@@ -3,6 +3,11 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import {
+  CONFIG_DIR_NAME,
+  LEGACY_CONFIG_DIR_NAME,
+  PROJECT_CONFIG_FILENAMES
+} from '../../shared/codev-identifiers'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import {
@@ -111,6 +116,7 @@ import {
 } from './worktree-logic'
 import { dedupeWorktreesByPath } from './worktree-path-comparison'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { readFirstProjectConfig } from './remote-project-config'
 import {
   createLocalWorktree,
   createRemoteWorktree,
@@ -463,7 +469,7 @@ async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> 
   }
 
   try {
-    const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+    const result = await readFirstProjectConfig(fsProvider, repo.path)
     const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
     return getEffectiveHooksFromConfig(repo, yamlHooks)
   } catch {
@@ -3247,7 +3253,7 @@ export function registerWorktreeHandlers(
           return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
         try {
-          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+          const result = await readFirstProjectConfig(fsProvider, repo.path)
           return {
             status: 'ok',
             hasHooks: !result.isBinary,
@@ -3374,7 +3380,12 @@ export function registerWorktreeHandlers(
         }
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        // Why: a remote worktree can't be stat'd locally, so try the CoDev name
+        // and fall back to the legacy one only when it is the one present.
+        const issueCommandCandidates = [CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME].map((dir) =>
+          joinWorktreeRelativePath(repo.path, `${dir}/issue-command`)
+        )
+        let issueCommandPath = issueCommandCandidates[0]
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           return {
@@ -3390,22 +3401,33 @@ export function registerWorktreeHandlers(
         let status: 'ok' | 'error' = 'ok'
         let localContent: string | null = null
         let sharedContent: string | null = null
-        try {
-          const result = await fsProvider.readFile(issueCommandPath)
-          localContent = result.isBinary ? null : result.content.trim() || null
-        } catch (error) {
-          if (!isENOENT(error)) {
-            status = 'error'
+        for (const candidate of issueCommandCandidates) {
+          try {
+            const result = await fsProvider.readFile(candidate)
+            localContent = result.isBinary ? null : result.content.trim() || null
+            issueCommandPath = candidate
+            break
+          } catch (error) {
+            if (!isENOENT(error)) {
+              status = 'error'
+              break
+            }
           }
         }
-        try {
-          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-          sharedContent = result.isBinary
-            ? null
-            : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-        } catch (error) {
-          if (!isENOENT(error)) {
-            status = 'error'
+        for (const filename of PROJECT_CONFIG_FILENAMES) {
+          try {
+            const result = await fsProvider.readFile(
+              joinWorktreeRelativePath(repo.path, filename)
+            )
+            sharedContent = result.isBinary
+              ? null
+              : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+            break
+          } catch (error) {
+            if (!isENOENT(error)) {
+              status = 'error'
+              break
+            }
           }
         }
         const effectiveContent = localContent ?? sharedContent
@@ -3434,7 +3456,10 @@ export function registerWorktreeHandlers(
         return
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const issueCommandPath = joinWorktreeRelativePath(
+          repo.path,
+          `${CONFIG_DIR_NAME}/issue-command`
+        )
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           throw new Error(
@@ -3443,26 +3468,35 @@ export function registerWorktreeHandlers(
         }
         const trimmed = args.content.trim()
         if (!trimmed) {
-          await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
-            if (!isENOENT(error)) {
-              throw error
-            }
-          })
+          // Clear whichever directory holds it, so a legacy override can be removed.
+          for (const dir of [CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME]) {
+            await fsProvider
+              .deletePath(joinWorktreeRelativePath(repo.path, `${dir}/issue-command`), false)
+              .catch((error: unknown) => {
+                if (!isENOENT(error)) {
+                  throw error
+                }
+              })
+          }
           return
         }
-        await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+        await fsProvider.createDir(joinWorktreeRelativePath(repo.path, CONFIG_DIR_NAME))
         const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
+        const ignoreEntry = new RegExp(`^${CONFIG_DIR_NAME.replace('.', '\\.')}/?$`, 'm')
         try {
           const result = await fsProvider.readFile(gitignorePath)
-          if (!result.isBinary && !/^\.orca\/?$/m.test(result.content)) {
+          if (!result.isBinary && !ignoreEntry.test(result.content)) {
             const separator = result.content.endsWith('\n') ? '' : '\n'
-            await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+            await fsProvider.writeFile(
+              gitignorePath,
+              `${result.content}${separator}${CONFIG_DIR_NAME}\n`
+            )
           }
         } catch (error) {
           if (!isENOENT(error)) {
             throw error
           }
-          await fsProvider.writeFile(gitignorePath, '.orca\n')
+          await fsProvider.writeFile(gitignorePath, `${CONFIG_DIR_NAME}\n`)
         }
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return

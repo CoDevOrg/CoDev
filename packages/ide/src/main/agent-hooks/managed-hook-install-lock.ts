@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { codevHomeConfigDir } from '../../shared/codev-config-dir'
 import { removeManagedHookLock } from './managed-hook-lock-claims'
 import {
   cleanupManagedHookLockFiles,
@@ -48,7 +49,7 @@ async function acquireInstallLock(
   signal?: AbortSignal,
   suppliedHostIdentity?: string
 ): Promise<() => Promise<void>> {
-  const lockParent = join(home, '.orca')
+  const lockParent = codevHomeConfigDir(home)
   const lockPath = join(lockParent, 'managed-hook-install.lock')
   await mkdir(lockParent, { recursive: true })
   const hostIdentity = suppliedHostIdentity ?? (await readManagedHookHostIdentity())

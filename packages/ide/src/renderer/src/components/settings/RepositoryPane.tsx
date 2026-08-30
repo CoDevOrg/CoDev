@@ -142,7 +142,7 @@ export function RepositoryPane({
   }
 
   const handleCopyTemplate = async () => {
-    // Why: the missing-`orca.yaml` state is a migration aid, so copying the shared-template
+    // Why: the missing-`codev.yaml` state is a migration aid, so copying the shared-template
     // snippet should be one click rather than forcing users to reconstruct the expected shape.
     await window.api.ui.writeClipboardText(`scripts:
   setup: |

@@ -728,7 +728,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       effectiveContent: 'echo {{issue}}',
       localContent: 'echo {{issue}}',
       sharedContent: null,
-      localFilePath: '/repo/.orca/issue-command',
+      localFilePath: '/repo/.codev/issue-command',
       source: 'local'
     })
     // Why: the setup confirmHooks call resolves 'skip', which mirrors the
@@ -766,7 +766,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       effectiveContent: 'echo {{issue}}',
       localContent: 'echo {{issue}}',
       sharedContent: null,
-      localFilePath: '/repo/.orca/issue-command',
+      localFilePath: '/repo/.codev/issue-command',
       source: 'local'
     })
 
@@ -851,7 +851,7 @@ describe('createGitHubWorkItemWorkspaceInBackground', () => {
       effectiveContent: 'echo {{issue}}',
       localContent: 'echo {{issue}}',
       sharedContent: null,
-      localFilePath: '/repo/.orca/issue-command',
+      localFilePath: '/repo/.codev/issue-command',
       source: 'local'
     })
 

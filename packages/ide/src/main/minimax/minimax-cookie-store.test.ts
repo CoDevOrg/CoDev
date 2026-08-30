@@ -39,7 +39,7 @@ vi.mock('../../shared/secure-file', () => ({
   writeSecureFile: writeSecureFileMock
 }))
 
-const storePath = '/home/test/.orca/minimax-session-cookie.enc'
+const storePath = '/home/test/.codev/minimax-session-cookie.enc'
 const envelope = (kind: 'encrypted' | 'plaintext', value: string): string =>
   `orca-minimax-cookie:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
 
@@ -196,7 +196,9 @@ describe('minimax-cookie-store', () => {
   })
 
   it('clears the cached cookie and removes the file', async () => {
-    existsSyncMock.mockReturnValueOnce(true)
+    // First probe is codevHomeConfigDir() resolving ~/.codev; the second is the
+    // store's own check for the cookie file.
+    existsSyncMock.mockReturnValueOnce(true).mockReturnValueOnce(true)
     readFileSyncMock.mockReturnValueOnce(Buffer.from(envelope('encrypted', 'encrypted-payload')))
     safeStorageMock.decryptString.mockReturnValueOnce('_token=preclear')
     const store = await loadStore()

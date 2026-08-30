@@ -2194,7 +2194,7 @@ describe('orca cli worktree awareness', () => {
       chmodSync(startScript, 0o755)
       chmodSync(cleanupScript, 0o755)
       writeFileSync(
-        path.join(repoPath, 'orca.yaml'),
+        path.join(repoPath, 'codev.yaml'),
         [
           'environmentRecipes:',
           '  - id: cloud-sandbox',
@@ -2235,7 +2235,7 @@ describe('orca cli worktree awareness', () => {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.sh'), '#!/bin/sh\n')
       writeFileSync(
-        path.join(repoPath, 'orca.yaml'),
+        path.join(repoPath, 'codev.yaml'),
         [
           'environmentRecipes:',
           '  - id: manual-sandbox',
@@ -2297,7 +2297,7 @@ describe('orca cli worktree awareness', () => {
         ].join('\n')
       )
       writeFileSync(
-        path.join(repoPath, 'orca.yaml'),
+        path.join(repoPath, 'codev.yaml'),
         [
           'environmentRecipes:',
           '  - id: cloud-sandbox',
@@ -2396,7 +2396,7 @@ describe('orca cli worktree awareness', () => {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.js'), 'process.exit(0)')
       writeFileSync(
-        path.join(repoPath, 'orca.yaml'),
+        path.join(repoPath, 'codev.yaml'),
         [
           'environmentRecipes:',
           '  - id: cloud-sandbox',

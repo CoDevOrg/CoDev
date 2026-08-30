@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  getRemoteManagedScriptPath,
   buildManagedCommandHook,
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
@@ -198,7 +199,7 @@ export class GeminiHookService {
   // POSIX-only remote install mirroring ClaudeHookService.installRemote. See docs/design/agent-status-over-ssh.md §8.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`
+    const remoteScriptPath = getRemoteManagedScriptPath(remoteHome, 'gemini-hook.sh')
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

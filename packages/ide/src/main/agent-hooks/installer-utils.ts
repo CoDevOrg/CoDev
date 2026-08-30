@@ -8,10 +8,11 @@ import {
   renameSync,
   unlinkSync
 } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { codevHomeConfigDir } from '../../shared/codev-config-dir'
+import { CONFIG_DIR_NAME } from '../../shared/codev-identifiers'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
@@ -101,7 +102,13 @@ function decodePowerShellEncodedCommand(command: string): string | null {
 
 // Why: prod/dev/parallel Orca instances must write the same managed entry, not race between per-userData script paths.
 export function getSharedManagedScriptPath(scriptFileName: string): string {
-  return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
+  return join(codevHomeConfigDir(), 'agent-hooks', scriptFileName)
+}
+
+// Why: a remote home can't be stat'd from here, so always install CoDev-native;
+// createManagedCommandMatcher sweeps any legacy ~/.orca entry by script name.
+export function getRemoteManagedScriptPath(remoteHome: string, scriptFileName: string): string {
+  return `${remoteHome.replace(/\/$/, '')}/${CONFIG_DIR_NAME}/agent-hooks/${scriptFileName}`
 }
 
 function quotePosixShellString(value: string): string {

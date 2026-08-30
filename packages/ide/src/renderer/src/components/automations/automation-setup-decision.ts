@@ -81,7 +81,7 @@ export function resolveAutomationSetupDecisionForSave(args: {
   }
 
   if (args.yamlHooks === undefined) {
-    // Why: automations cannot pause later for an orca.yaml trust prompt; when
+    // Why: automations cannot pause later for an codev.yaml trust prompt; when
     // hook inspection is unavailable, fail closed instead of inheriting setup.
     return 'skip'
   }

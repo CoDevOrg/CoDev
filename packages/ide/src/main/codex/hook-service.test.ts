@@ -291,7 +291,7 @@ describe('CodexHookService', () => {
       // Why: the temp home is normally cmd-safe; guard so a runner whose tmpdir
       // holds an exotic character still asserts the correct (fallback) branch.
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(tmpHome, '.orca', 'agent-hooks'))
+      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(tmpHome, '.codev', 'agent-hooks'))
       if (cmdSafe) {
         expect(command).not.toMatch(/powershell/i)
         expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
@@ -308,7 +308,7 @@ describe('CodexHookService', () => {
     'posts hook payloads via the curl-based managed script preserving UTF-8 and spaced metadata',
     async () => {
       new CodexHookService().install()
-      const scriptPath = join(homedir(), '.orca', 'agent-hooks', 'codex-hook.cmd')
+      const scriptPath = join(homedir(), '.codev', 'agent-hooks', 'codex-hook.cmd')
       expect(existsSync(scriptPath)).toBe(true)
 
       // Why: resolve when the listener has fully read the hook POST. spawnSync
@@ -905,7 +905,7 @@ describe('CodexHookService', () => {
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     const legacyScriptPath = join(
       tmpHome,
-      '.orca',
+      '.codev',
       'agent-hooks',
       process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
     )
@@ -975,7 +975,7 @@ describe('CodexHookService', () => {
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     const legacyScriptPath = join(
       tmpHome,
-      '.orca',
+      '.codev',
       'agent-hooks',
       process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
     )
@@ -1072,7 +1072,7 @@ describe('CodexHookService', () => {
     const profilePath = join(systemCodexHome, 'orca-agent-status.config.toml')
     const legacyScriptPath = join(
       tmpHome,
-      '.orca',
+      '.codev',
       'agent-hooks',
       process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
     )
@@ -1164,7 +1164,7 @@ describe('CodexHookService', () => {
     const legacyProfilePath = join(systemCodexHome, 'orca-agent-status.config.toml')
     const legacyScriptPath = join(
       tmpHome,
-      '.orca',
+      '.codev',
       'agent-hooks',
       process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
     )

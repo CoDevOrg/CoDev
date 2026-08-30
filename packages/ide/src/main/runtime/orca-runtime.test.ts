@@ -6090,7 +6090,7 @@ describe('OrcaRuntimeService', () => {
       unregisterSshFilesystemProvider('ssh-1')
     }
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\codev.yaml')
     expect(hasHooksFile).not.toHaveBeenCalled()
     expect(getEffectiveHooks).not.toHaveBeenCalled()
   })
@@ -6144,7 +6144,7 @@ describe('OrcaRuntimeService', () => {
     }
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => ({
-        content: filePath.endsWith('orca.yaml')
+        content: filePath.endsWith('codev.yaml')
           ? 'scripts:\n  setup: pnpm install\n'
           : filePath.endsWith('.gitignore')
             ? 'node_modules\n'
@@ -6166,7 +6166,7 @@ describe('OrcaRuntimeService', () => {
       await expect(runtime.readRepoIssueCommand('id:repo-1')).resolves.toMatchObject({
         localContent: 'Fix it',
         effectiveContent: 'Fix it',
-        localFilePath: 'C:\\remote\\repo\\.orca\\issue-command'
+        localFilePath: 'C:\\remote\\repo\\.codev\\issue-command'
       })
       await expect(runtime.writeRepoIssueCommand('id:repo-1', 'Ship it')).resolves.toEqual({
         ok: true
@@ -6175,16 +6175,16 @@ describe('OrcaRuntimeService', () => {
       unregisterSshFilesystemProvider('ssh-1')
     }
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\orca.yaml')
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\.orca\\issue-command')
-    expect(fsProvider.createDir).toHaveBeenCalledWith('C:\\remote\\repo\\.orca')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\codev.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\.codev\\issue-command')
+    expect(fsProvider.createDir).toHaveBeenCalledWith('C:\\remote\\repo\\.codev')
     expect(fsProvider.writeFile).toHaveBeenCalledWith(
-      'C:\\remote\\repo\\.orca\\issue-command',
+      'C:\\remote\\repo\\.codev\\issue-command',
       'Ship it\n'
     )
     expect(fsProvider.writeFile).toHaveBeenCalledWith(
       'C:\\remote\\repo\\.gitignore',
-      'node_modules\n.orca\n'
+      'node_modules\n.codev\n'
     )
   })
 
@@ -6214,18 +6214,22 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
-    it('reports ok for a missing remote orca.yaml and error for any other read failure', async () => {
+    it('reports ok for a missing project config and error for any other read failure', async () => {
       const readFile = vi.fn()
       registerSshFilesystemProvider('ssh-1', { readFile } as never)
       const runtime = new OrcaRuntimeService(remoteStore as never)
 
       try {
-        readFile.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+        // Both candidates are probed: codev.yaml, then the legacy orca.yaml.
+        readFile
+          .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+          .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
         await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
           status: 'ok',
           hasHooks: false
         })
 
+        // A non-ENOENT failure stops at the first candidate.
         readFile.mockRejectedValueOnce(Object.assign(new Error('down'), { code: 'ECONNRESET' }))
         await expect(runtime.checkRepoHooks('id:repo-1')).resolves.toMatchObject({
           status: 'error',
@@ -6263,10 +6267,10 @@ describe('OrcaRuntimeService', () => {
     })
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('.orca/issue-command')) {
+        if (filePath.endsWith('.codev/issue-command')) {
           throw Object.assign(new Error('missing'), { code: 'ENOENT' })
         }
-        if (filePath.endsWith('orca.yaml')) {
+        if (filePath.endsWith('codev.yaml')) {
           return { content: 'issueCommand: claude -p "Fix #{{issue}}"', isBinary: false }
         }
         return { content: '', isBinary: false }
@@ -6283,7 +6287,7 @@ describe('OrcaRuntimeService', () => {
         localContent: null,
         sharedContent: 'claude -p "Fix #{{issue}}"',
         effectiveContent: 'claude -p "Fix #{{issue}}"',
-        localFilePath: '/remote/repo/.orca/issue-command',
+        localFilePath: '/remote/repo/.codev/issue-command',
         source: 'shared'
       })
       await expect(runtime.writeRepoIssueCommand('id:repo-1', '   ')).resolves.toEqual({
@@ -6293,10 +6297,10 @@ describe('OrcaRuntimeService', () => {
       unregisterSshFilesystemProvider('ssh-1')
     }
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
-    expect(fsProvider.deletePath).toHaveBeenCalledWith('/remote/repo/.orca/issue-command', false)
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/codev.yaml')
+    expect(fsProvider.deletePath).toHaveBeenCalledWith('/remote/repo/.codev/issue-command', false)
     expect(fsProvider.writeFile).not.toHaveBeenCalledWith(
-      '/remote/repo/.orca/issue-command',
+      '/remote/repo/.codev/issue-command',
       expect.anything()
     )
   })
@@ -37401,8 +37405,8 @@ describe('OrcaRuntimeService', () => {
         })
       ).rejects.toThrow('Worktree instance identity was unavailable')
 
-      await expect(lstat(join(childPath, '.orca'))).rejects.toThrow()
-      await expect(lstat(join(parentPath, '.orca'))).rejects.toThrow()
+      await expect(lstat(join(childPath, '.codev'))).rejects.toThrow()
+      await expect(lstat(join(parentPath, '.codev'))).rejects.toThrow()
       expect(setWorktreeLineage).not.toHaveBeenCalled()
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
@@ -44462,7 +44466,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
     expect(result.warning).toBe(
-      `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
+      `codev.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
   })
 
@@ -44872,7 +44876,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' },
-        warning: `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
+        warning: `codev.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
       })
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
         cwd: TEST_REPO_PATH

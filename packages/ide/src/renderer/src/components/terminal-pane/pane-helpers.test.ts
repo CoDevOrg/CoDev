@@ -42,8 +42,8 @@ describe('shellEscapePath', () => {
   it('uses POSIX escaping for SSH drops regardless of client OS', () => {
     // A Windows client dropping into a Linux SSH worktree must produce POSIX
     // quoting, not Windows double-quotes (see docs/terminal-drop-ssh.md).
-    expect(shellEscapePath("/home/u/wt/.orca/drops/my file's $draft.txt", 'posix')).toBe(
-      "'/home/u/wt/.orca/drops/my file'\\''s $draft.txt'"
+    expect(shellEscapePath("/home/u/wt/.codev/drops/my file's $draft.txt", 'posix')).toBe(
+      "'/home/u/wt/.codev/drops/my file'\\''s $draft.txt'"
     )
   })
 })

@@ -45,7 +45,7 @@ describe('managed-hook local filesystem', () => {
     expect(warm.filter((result) => result.state === 'error')).toEqual([])
     const files = await listFiles(home)
     expect(files.filter((path) => path.endsWith('.tmp'))).toEqual([])
-    const scripts = files.filter((path) => path.includes(join('.orca', 'agent-hooks')))
+    const scripts = files.filter((path) => path.includes(join('.codev', 'agent-hooks')))
     expect(scripts.length).toBeGreaterThanOrEqual(10)
     if (process.platform !== 'win32') {
       for (const script of scripts) {
