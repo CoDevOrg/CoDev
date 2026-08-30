@@ -1,0 +1,231 @@
+.admin-console {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 4rem;
+  color: var(--ink);
+}
+
+.admin-console-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.admin-console-head h1 {
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.admin-console-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 2.5rem;
+}
+
+.admin-stat {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: var(--surface-2);
+}
+
+.admin-stat-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.admin-stat-value {
+  font-size: 1.9rem;
+  font-weight: 640;
+  line-height: 1.15;
+  margin-top: 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-stat-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.admin-section {
+  margin-bottom: 2.75rem;
+}
+
+.admin-section > h2 {
+  font-size: 1.05rem;
+  font-weight: 620;
+  margin-bottom: 0.9rem;
+}
+
+.admin-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.9rem 1rem 0.75rem;
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+
+.admin-chart-bar {
+  flex: 1 0 8px;
+  min-width: 8px;
+  border-radius: 3px 3px 0 0;
+  background: var(--gold);
+  opacity: 0.85;
+}
+
+.admin-chart-bar.is-empty {
+  background: var(--line);
+  opacity: 1;
+}
+
+.admin-chart-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.5rem;
+}
+
+.admin-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1.75rem;
+}
+
+@media (max-width: 880px) {
+  .admin-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.admin-table-scroll {
+  overflow-x: auto;
+}
+
+table.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.admin-table th {
+  text-align: left;
+  font-weight: 580;
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.admin-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-3);
+  flex: none;
+}
+
+.admin-user-name {
+  font-weight: 560;
+}
+
+.admin-user-login {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.admin-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  margin-left: 0.3rem;
+}
+
+.admin-badge.is-admin {
+  color: var(--gold-bright);
+  border-color: var(--line-strong);
+  background: var(--gold-soft);
+}
+
+.admin-providers {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.admin-chip {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.admin-muted {
+  color: var(--muted);
+}
+
+.admin-path {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.admin-time {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
@@ -8,6 +9,7 @@ import "./team-chat.css";
 
 import { clerkAuthConfigured } from "@/lib/identity";
 import { AppClerkProvider } from "@/components/clerk-provider";
+import { VisitTracker } from "@/components/visit-tracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +40,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
         <Analytics />
+        <Suspense fallback={null}>
+          <VisitTracker />
+        </Suspense>
       </body>
     </html>
   );

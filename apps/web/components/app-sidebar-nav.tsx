@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Settings } from "lucide-react";
+import { LayoutGrid, Settings, ShieldCheck } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export function AppSidebarNav() {
+export function AppSidebarNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
+  const items = showAdmin
+    ? [...navItems, { href: "/admin", icon: ShieldCheck, label: "Admin" }]
+    : navItems;
   return (
     <nav className="app-sidebar-nav" aria-label="Application navigation">
-      {navItems.map(({ href, icon: Icon, label }) => {
+      {items.map(({ href, icon: Icon, label }) => {
         const active = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link

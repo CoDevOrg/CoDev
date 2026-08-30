@@ -6,6 +6,7 @@ import { isGitHubAuthConfigured } from "@codev/config";
 import { AppSidebarNav } from "@/components/app-sidebar-nav";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { ProfileMenu } from "@/components/profile-menu";
+import { isUserAdmin } from "@/lib/admin";
 import { clerkAuthConfigured } from "@/lib/identity";
 
 export function Brand() {
@@ -24,12 +25,13 @@ export function Brand() {
 }
 
 type AppChromeUser = {
+  id?: string;
   name?: string | null;
   githubLogin?: string;
   image?: string | null;
 };
 
-export function AppChrome({
+export async function AppChrome({
   user,
   children,
   sidebar = false,
@@ -40,6 +42,7 @@ export function AppChrome({
 }) {
   const showConnectGitHub = !user.githubLogin && isGitHubAuthConfigured();
   const useClerkAuth = clerkAuthConfigured();
+  const showAdmin = user.id ? await isUserAdmin(user.id) : false;
 
   if (sidebar) {
     return (
@@ -48,7 +51,7 @@ export function AppChrome({
           <div className="app-sidebar-header">
             <Brand />
           </div>
-          <AppSidebarNav />
+          <AppSidebarNav showAdmin={showAdmin} />
           <div className="app-sidebar-footer">
             <ProfileMenu
               user={user}

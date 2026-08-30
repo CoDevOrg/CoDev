@@ -239,6 +239,13 @@
       "when": 1787933135599,
       "tag": "0033_access_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788068302743,
+      "tag": "0034_admin_role_and_page_views",
+      "breakpoints": true
     }
   ]
 }

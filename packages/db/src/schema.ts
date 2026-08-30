@@ -202,6 +202,9 @@ export const users = pgTable(
     email: text("email"),
     passwordHash: text("password_hash"),
     avatarUrl: text("avatar_url"),
+    // Application-wide administrator. Gates the internal `/admin` console
+    // (user directory and site analytics); unrelated to per-workspace roles.
+    isAdmin: boolean("is_admin").default(false).notNull(),
     ...timestamps,
   },
   (table) => [
@@ -209,6 +212,35 @@ export const users = pgTable(
     uniqueIndex("users_google_user_id_idx").on(table.googleUserId),
     uniqueIndex("users_clerk_user_id_idx").on(table.clerkUserId),
     uniqueIndex("users_login_idx").on(table.login),
+  ],
+);
+
+/**
+ * One row per page load across the whole site — marketing pages included, so
+ * anonymous visits are kept with a null `userId`. `ipHash` is a salted SHA-256
+ * digest of the caller's address (never the raw address), used only to
+ * distinguish unique anonymous visitors in aggregate. Written best-effort from
+ * a client beacon; never on the request's critical path.
+ */
+export const pageViews = pgTable(
+  "page_views",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    path: text("path").notNull(),
+    referrer: text("referrer"),
+    userAgent: text("user_agent"),
+    ipHash: text("ip_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("page_views_created_idx").on(table.createdAt),
+    index("page_views_user_created_idx").on(table.userId, table.createdAt),
+    index("page_views_path_created_idx").on(table.path, table.createdAt),
   ],
 );
 
