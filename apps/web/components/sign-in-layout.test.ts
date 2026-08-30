@@ -45,7 +45,12 @@ describe("sign-in provider layout", () => {
     );
     expect(signInPage).toContain("CredentialsSignin");
     expect(signInPage).toContain("CredentialsSignInForm");
-    expect(signInPage).toContain('initialMode={mode === "sign-up"');
+    // The ?mode=sign-up param still selects sign-up; the page routes it through
+    // startInSignUp so an invite grant opens that tab too.
+    expect(signInPage).toContain('const startInSignUp = mode === "sign-up"');
+    expect(signInPage).toContain(
+      'initialMode={startInSignUp ? "sign-up" : "sign-in"}',
+    );
     expect(credentialsSignInForm).toContain('name="intent"');
     expect(credentialsSignInForm).toContain("Create an account");
     expect(credentialsSignInForm).toContain("Sign in with email");
