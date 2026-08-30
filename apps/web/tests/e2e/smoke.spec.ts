@@ -51,7 +51,9 @@ test("the workspace demo shows three agents working across isolated files", asyn
   await expect(demo).toBeVisible();
   await expect(agents.getByText("Codex")).toBeVisible();
   await expect(agents.getByText("Claude")).toBeVisible();
-  await expect(agents.getByText("Cursor", { exact: true })).toBeVisible();
+  await expect(
+    agents.locator("strong").getByText("Cursor", { exact: true }),
+  ).toBeVisible();
 
   await demo.scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Pause demo" })).toBeVisible();

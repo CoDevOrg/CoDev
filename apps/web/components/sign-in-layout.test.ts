@@ -31,9 +31,7 @@ describe("sign-in provider layout", () => {
   });
 
   it("keeps space between OAuth buttons and the email divider", () => {
-    expect(globalsCss).toMatch(
-      /\.auth-provider-stack\s*\{[^}]*gap:\s*16px/s,
-    );
+    expect(globalsCss).toMatch(/\.auth-provider-stack\s*\{[^}]*gap:\s*16px/s);
     expect(globalsCss).not.toContain(
       ".auth-provider-stack form + .auth-divider",
     );
