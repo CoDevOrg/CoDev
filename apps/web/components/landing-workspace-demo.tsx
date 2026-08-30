@@ -30,7 +30,7 @@ function GuideCursor() {
   );
 }
 
-type DemoPhase = "join" | "write" | "verify" | "ready";
+type DemoPhase = "join" | "write" | "coord" | "merge";
 type AgentTone = "orange" | "green" | "purple";
 
 type TypingSegment = {
@@ -54,7 +54,7 @@ type AgentTrack = {
   editsTo: number;
 };
 
-const DEMO_DURATION = 34_000;
+const DEMO_DURATION = 34_500;
 
 /**
  * Beats inside the Join phase that walk through the real invite flow: the
@@ -126,27 +126,28 @@ const PHASES: {
     label: "Join",
     endpoint: 4_750,
     summary:
-      "Copy one invite link, pick a role, and your crew is in the running workspace.",
+      "Copy one link, pick a role, and your whole crew is inside the running workspace.",
   },
   {
     key: "write",
     label: "Write",
-    endpoint: 27_000,
+    endpoint: 12_000,
     summary:
-      "Two agents caught the same bug. They sorted it out between themselves, with no orchestrator, and split the work.",
+      "Codex, Claude and Cursor each take a feature and edit in parallel, on their own branch and their own files.",
   },
   {
-    key: "verify",
-    label: "Verify",
-    endpoint: 30_500,
+    key: "coord",
+    label: "Coordination",
+    endpoint: 26_000,
     summary:
-      "The agents run the checkout tests and review the combined change.",
+      "Two agents caught the same bug, sorted it out between themselves with no orchestrator, and split the work.",
   },
   {
-    key: "ready",
-    label: "Ready",
+    key: "merge",
+    label: "Merge",
     endpoint: DEMO_DURATION,
-    summary: "The merged change is tested and ready for a person to review.",
+    summary:
+      "Every branch was its own worktree, so all three fast-forward into main with zero conflicts, ready for review.",
   },
 ];
 
@@ -165,7 +166,7 @@ const AGENTS: AgentTrack[] = [
     task: "Harden checkout validation",
     branch: "agent/checkout-guard",
     editsFrom: 4_900,
-    editsTo: 27_000,
+    editsTo: 26_000,
   },
   {
     id: "claude",
@@ -176,7 +177,7 @@ const AGENTS: AgentTrack[] = [
     task: "Idempotent reservations",
     branch: "agent/idempotency",
     editsFrom: 5_200,
-    editsTo: 27_000,
+    editsTo: 26_000,
   },
   {
     id: "cursor",
@@ -187,7 +188,7 @@ const AGENTS: AgentTrack[] = [
     task: "Retry with backoff",
     branch: "agent/retry-backoff",
     editsFrom: 5_400,
-    editsTo: 27_000,
+    editsTo: 26_000,
   },
 ];
 
@@ -229,26 +230,26 @@ const FILES: EditorFile[] = [
     segments: [
       {
         line: 8,
-        start: 5_400,
+        start: 5_000,
         text: "  const cart = reserveSchema.parse(input);",
       },
       {
         line: 9,
-        start: 7_400,
+        start: 5_800,
         text: "  const lock = await claim(`checkout:${cart.id}`);",
       },
       {
         line: 10,
-        start: 9_600,
+        start: 6_300,
         text: "  const order = await commit(cart, lock);",
       },
       {
         line: 12,
-        start: 11_400,
+        start: 6_800,
         text: '  audit.record("checkout.reserved", order.id);',
       },
     ],
-    focus: [4_750, 12_400],
+    focus: [4_750, 7_300],
   },
   {
     id: "session",
@@ -268,20 +269,20 @@ const FILES: EditorFile[] = [
       [12, "}"],
     ],
     segments: [
-      { line: 6, start: 12_800, text: "  const held = await redis.get(key);" },
-      { line: 7, start: 14_600, text: "  if (held) return JSON.parse(held);" },
+      { line: 6, start: 7_500, text: "  const held = await redis.get(key);" },
+      { line: 7, start: 8_200, text: "  if (held) return JSON.parse(held);" },
       {
         line: 9,
-        start: 16_400,
+        start: 8_700,
         text: "  const session = reserveSchema.session(cartId);",
       },
       {
         line: 10,
-        start: 18_200,
+        start: 9_200,
         text: "  await redis.set(key, session, { ex: 900 });",
       },
     ],
-    focus: [12_400, 19_400],
+    focus: [7_300, 9_700],
   },
   {
     id: "retry",
@@ -299,15 +300,15 @@ const FILES: EditorFile[] = [
       [9, "}"],
     ],
     segments: [
-      { line: 4, start: 19_800, text: "  for (let i = 0; i < tries; i++) {" },
-      { line: 5, start: 21_800, text: "    try { return await task(); }" },
+      { line: 4, start: 9_900, text: "  for (let i = 0; i < tries; i++) {" },
+      { line: 5, start: 10_600, text: "    try { return await task(); }" },
       {
         line: 6,
-        start: 23_800,
+        start: 11_300,
         text: "    catch (err) { return backoff(i, err); }",
       },
     ],
-    focus: [19_400, 27_000],
+    focus: [9_700, 12_000],
   },
 ];
 
@@ -321,16 +322,17 @@ const FILES: EditorFile[] = [
  */
 const SYNC = {
   bugPath: "src/lib/money.ts",
-  detectedAt: 9_000,
-  msg1At: 13_500,
-  msg2At: 17_000,
-  splitAt: 20_500,
+  detectedAt: 13_500,
+  msg1At: 17_000,
+  msg2At: 20_500,
+  splitAt: 23_500,
 } as const;
 
 /**
- * Guided pop-outs layered over the Write phase. They do not exist in the real
- * product; they are here so a first-time viewer can follow what the agents
- * are doing. One shows at a time, each held long enough to read.
+ * Guided pop-outs layered over the Write, Coordination and Merge phases. They
+ * do not exist in the real product. They are here so a first-time viewer can
+ * follow what the agents are doing. One shows at a time, each held long enough
+ * to read.
  */
 const POPS: {
   from: number;
@@ -338,36 +340,79 @@ const POPS: {
   step: string;
   title: string;
   body: string;
+  /** Which part of the workspace the pop-out points at. Default: the board. */
+  anchor?: "board" | "agents";
 }[] = [
   {
-    from: 5_600,
-    to: 8_800,
-    step: "1 / 4",
-    title: "Three agents, working at once",
-    body: "Codex, Claude and Cursor each pick up a feature and start editing in parallel, on their own branch, their own files.",
+    from: 5_400,
+    to: 11_600,
+    step: "Write",
+    title: "Three agents, three features",
+    body: "Codex, Claude and Cursor each take a feature and edit in parallel, on their own branch and their own files.",
+    anchor: "agents",
   },
   {
-    from: 9_400,
-    to: 13_300,
-    step: "2 / 4",
+    from: 12_800,
+    to: 16_600,
+    step: "Coordination · 1 / 3",
     title: "Two of them hit the same bug",
     body: "Codex and Cursor both trip over the same rounding bug in money.ts. Left alone they would each fix it: duplicated work, and a merge conflict later.",
   },
   {
-    from: 13_900,
-    to: 20_200,
-    step: "3 / 4",
+    from: 17_400,
+    to: 22_800,
+    step: "Coordination · 2 / 3",
     title: "They sort it out themselves",
     body: "The agents see each other's changes live and message each other directly. No orchestrator model, no human in the loop. The agents decide.",
   },
   {
-    from: 21_200,
-    to: 26_400,
-    step: "4 / 4",
+    from: 24_000,
+    to: 25_800,
+    step: "Coordination · 3 / 3",
     title: "One fix, done once",
     body: "Cursor takes the fix. Codex drops it and stays on its feature. Zero duplicated work, zero conflicts to merge.",
   },
+  {
+    from: 26_400,
+    to: 29_600,
+    step: "Merge · 1 / 2",
+    title: "Every branch was its own worktree",
+    body: "Each branch is a real, isolated git worktree: its own checkout, its own files. Nothing was shared while they built.",
+  },
+  {
+    from: 30_200,
+    to: 33_600,
+    step: "Merge · 2 / 2",
+    title: "So the merges are clean",
+    body: "Because no two agents touched the same file, every branch fast-forwards into main. Zero conflicts, nothing to resolve by hand.",
+  },
 ];
+
+type MergeBranch = {
+  id: string;
+  branch: string;
+  tone: AgentTone;
+  /** ms the merge into main starts. */
+  at: number;
+};
+
+/** The Merge phase: three isolated worktrees fast-forward into main. */
+const MERGES: MergeBranch[] = [
+  { id: "codex", branch: "agent/checkout-guard", tone: "orange", at: 27_400 },
+  { id: "claude", branch: "agent/idempotency", tone: "green", at: 29_000 },
+  { id: "cursor", branch: "agent/retry-backoff", tone: "purple", at: 30_600 },
+];
+const MERGE_STEP_MS = 700;
+/** All branches merged; the "main is N ahead" line shows. */
+const MERGE_SETTLED_AT = 31_800;
+/** The terminal and "ready for review" card slide in. */
+const MERGE_DONE_AT = 32_400;
+
+function mergeStateFor(branch: MergeBranch, elapsed: number) {
+  if (elapsed >= branch.at + MERGE_STEP_MS) return "merged";
+  if (elapsed >= branch.at) return "merging";
+  return "queued";
+}
 
 /** 0 features · 1 both flag the bug · 2 Cursor to Codex · 3 Codex to Cursor · 4 split */
 function syncStep(elapsed: number) {
@@ -468,16 +513,14 @@ function usePrefersReducedMotion() {
 function phaseForElapsed(elapsed: number): DemoPhase {
   if (elapsed < PHASES[0]!.endpoint) return "join";
   if (elapsed < PHASES[1]!.endpoint) return "write";
-  if (elapsed < PHASES[2]!.endpoint) return "verify";
-  return "ready";
+  if (elapsed < PHASES[2]!.endpoint) return "coord";
+  return "merge";
 }
 
-function statusForAgent(agent: AgentTrack, elapsed: number) {
-  if (elapsed >= PHASES[2]!.endpoint) return "Ready";
-  if (elapsed >= agent.editsTo || elapsed >= PHASES[1]!.endpoint)
-    return "Reviewing";
-  if (elapsed >= agent.editsFrom) return "Typing";
-  if (elapsed >= PHASES[0]!.endpoint) return "Queued";
+function statusForAgent(_agent: AgentTrack, elapsed: number) {
+  if (elapsed >= MERGE_SETTLED_AT) return "Merged";
+  if (elapsed >= PHASES[2]!.endpoint) return "Merging";
+  if (elapsed >= PHASES[0]!.endpoint) return "Typing";
   return "Joining";
 }
 
@@ -622,11 +665,17 @@ export function LandingWorkspaceDemo({
     },
   ];
   const activePop =
-    phase === "write" && !reducedMotion
+    !reducedMotion && phase !== "join"
       ? (POPS.find(
           (pop) => renderedElapsed >= pop.from && renderedElapsed < pop.to,
         ) ?? null)
       : null;
+
+  const mergeRows = MERGES.map((branch) => ({
+    ...branch,
+    state: mergeStateFor(branch, renderedElapsed),
+  }));
+  const mergedCount = mergeRows.filter((row) => row.state === "merged").length;
 
   // Guide cursor: which target it is heading for, whether it is shown, and
   // whether it is mid-tap. It leads each action by ~600ms so it has landed by
@@ -696,7 +745,7 @@ export function LandingWorkspaceDemo({
     }
     setPlaying(false);
     setTimeline(
-      definition.key === "ready"
+      definition.key === "merge"
         ? definition.endpoint
         : definition.endpoint - 1,
     );
@@ -751,6 +800,11 @@ export function LandingWorkspaceDemo({
             Replay
           </button>
         </div>
+      </div>
+
+      <div className="lp-demo-status" aria-live="polite" id="lp-demo-status">
+        <span>{phaseDefinition.label}</span>
+        <p>{phaseDefinition.summary}</p>
       </div>
 
       <div className="lp-workspace" data-phase={phase} ref={workspaceRef}>
@@ -914,7 +968,8 @@ export function LandingWorkspaceDemo({
               <span className="lp-editor-path">
                 {activeFile.branch} <b>›</b> {activeFile.path}
               </span>
-              {phase === "write" && activeAgents.length > 0 ? (
+              {(phase === "write" || phase === "coord") &&
+              activeAgents.length > 0 ? (
                 <span
                   className="lp-active-typists"
                   aria-label={`${activeAgents.map((agent) => agent.name).join(", ")} typing simultaneously`}
@@ -933,7 +988,7 @@ export function LandingWorkspaceDemo({
             </div>
             <pre
               key={activeFile.id}
-              className={`lp-code lp-code-swap${phase === "write" ? " has-coord" : ""}`}
+              className={`lp-code lp-code-swap${phase === "coord" || phase === "merge" ? " has-coord" : ""}`}
               aria-hidden="true"
             >
               <code>
@@ -988,7 +1043,7 @@ export function LandingWorkspaceDemo({
             <pre className="lp-sr-only" aria-label="Completed file">
               {RESERVE_FINAL}
             </pre>
-            {phase === "write" ? (
+            {phase === "coord" ? (
               <div className="lp-sync" aria-label="Agents coordinating">
                 <div className="lp-sync-head">
                   <span className="lp-sync-title">
@@ -1054,9 +1109,72 @@ export function LandingWorkspaceDemo({
                       <p className="lp-sync-done">
                         <Check size={11} aria-hidden="true" />
                         The agents split it themselves. Cursor fixes it once,
-                        Codex keeps building. No rework, no conflict.
+                        Codex keeps building, with no rework and no conflict.
                       </p>
                     ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {phase === "merge" ? (
+              <div
+                className="lp-sync lp-merge"
+                aria-label="Merging worktrees into main"
+              >
+                <div className="lp-sync-head">
+                  <span className="lp-sync-title">
+                    <i aria-hidden="true">{"◆"}</i>
+                    Merging worktrees
+                    <em>three isolated branches &rarr; main</em>
+                  </span>
+                  <span className="lp-sync-metric">
+                    <strong>{mergedCount}</strong> / 3 merged
+                    <b aria-hidden="true">·</b>
+                    <strong>0</strong> conflicts
+                  </span>
+                </div>
+
+                <ul className="lp-sync-lanes">
+                  {mergeRows.map((row) => (
+                    <li
+                      key={row.id}
+                      className={`lp-sync-lane lp-tone-${row.tone} is-${row.state}`}
+                    >
+                      <i
+                        className={`lp-sync-dot lp-dot-${row.tone}`}
+                        aria-hidden="true"
+                      />
+                      <b>{row.branch}</b>
+                      <span className="lp-sync-arrow" aria-hidden="true">
+                        &rarr;
+                      </span>
+                      <code>main</code>
+                      <em
+                        className={`lp-sync-tag ${
+                          row.state === "merged"
+                            ? "is-ok"
+                            : row.state === "merging"
+                              ? "is-warn"
+                              : "is-calm"
+                        }`}
+                      >
+                        {row.state === "merged"
+                          ? "fast-forward"
+                          : row.state === "merging"
+                            ? "merging"
+                            : "queued"}
+                      </em>
+                    </li>
+                  ))}
+                </ul>
+
+                {renderedElapsed >= MERGE_SETTLED_AT ? (
+                  <div className="lp-sync-thread is-resolved">
+                    <p className="lp-sync-done">
+                      <Check size={11} aria-hidden="true" />
+                      main is 3 features ahead. Every branch fast-forwarded, 42
+                      tests green, nothing to resolve by hand.
+                    </p>
                   </div>
                 ) : null}
               </div>
@@ -1064,7 +1182,7 @@ export function LandingWorkspaceDemo({
             {activePop ? (
               <aside
                 key={activePop.step}
-                className="lp-pop"
+                className={`lp-pop lp-pop-${activePop.anchor ?? "board"}`}
                 aria-label={`Explainer ${activePop.step}: ${activePop.title}`}
               >
                 <span className="lp-pop-step">{activePop.step}</span>
@@ -1073,16 +1191,16 @@ export function LandingWorkspaceDemo({
               </aside>
             ) : null}
             <div
-              className={`lp-terminal${renderedElapsed >= PHASES[1]!.endpoint ? " is-visible" : ""}`}
+              className={`lp-terminal${renderedElapsed >= MERGE_DONE_AT ? " is-visible" : ""}`}
             >
               <header>
                 <span>TERMINAL</span>
-                <code>pnpm test checkout</code>
+                <code>codev merge --all</code>
               </header>
               <p>
-                <Check aria-hidden size={12} /> checkout/reserve.test.ts{" "}
-                <strong>42 passed</strong>
-                <small>1.8s</small>
+                <Check aria-hidden size={12} /> 3 branches merged to main{" "}
+                <strong>0 conflicts</strong>
+                <small>42 tests green</small>
               </p>
             </div>
           </section>
@@ -1120,7 +1238,7 @@ export function LandingWorkspaceDemo({
               })}
             </ul>
             <div
-              className={`lp-review-ready${phase === "ready" ? " is-visible" : ""}`}
+              className={`lp-review-ready${renderedElapsed >= MERGE_DONE_AT ? " is-visible" : ""}`}
             >
               <Check aria-hidden size={14} />
               <span>
@@ -1130,11 +1248,6 @@ export function LandingWorkspaceDemo({
             </div>
           </aside>
         </div>
-      </div>
-
-      <div className="lp-demo-status" aria-live="polite" id="lp-demo-status">
-        <span>{phaseDefinition.label}</span>
-        <p>{phaseDefinition.summary}</p>
       </div>
     </div>
   );

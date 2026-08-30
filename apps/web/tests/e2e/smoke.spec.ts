@@ -57,15 +57,20 @@ test("the workspace demo shows three agents working across isolated files", asyn
 
   await demo.scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Pause demo" })).toBeVisible();
+
   await page.getByRole("button", { name: "Write" }).click();
-  await expect(
-    page.getByText(/sorted it out between themselves/i),
-  ).toBeVisible();
   await expect(page.getByLabel("Completed file")).toContainText(
     "reserveSchema.parse(input)",
   );
 
-  await page.getByRole("button", { name: "Ready" }).click();
+  await page.getByRole("button", { name: "Coordination" }).click();
+  await expect(
+    page.getByText(/sorted it out between themselves/i),
+  ).toBeVisible();
+  await expect(page.getByLabel("Agents coordinating")).toBeVisible();
+
+  await page.getByRole("button", { name: "Merge" }).click();
+  await expect(page.getByLabel("Merging worktrees into main")).toBeVisible();
   await expect(agents.getByText("Ready for review")).toBeVisible();
   await expect(agents).toContainText("42 tests passed");
 });

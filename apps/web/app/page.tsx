@@ -9,6 +9,7 @@ import {
   RequestAccessButton,
   RequestAccessDialog,
 } from "@/components/request-access-dialog";
+import { WaitlistInline } from "@/components/waitlist-inline";
 import { getCurrentAppUser } from "@/lib/identity";
 
 import "./landing.css";
@@ -119,9 +120,7 @@ export default async function HomePage() {
       <section className="lp-request" data-reveal>
         <h2>Ready to build in the same room?</h2>
         <p>Join the private beta. All we need is your email.</p>
-        <RequestAccessButton className="lp-cta lp-cta-primary">
-          Join the waitlist
-        </RequestAccessButton>
+        <WaitlistInline />
       </section>
 
       <footer className="lp-footer">
