@@ -17,12 +17,20 @@ import type { AppUser } from "./identity";
  */
 export async function isUserAdmin(userId: string): Promise<boolean> {
   if (!userId) return false;
-  const [row] = await getDatabase()
-    .select({ isAdmin: schema.users.isAdmin })
-    .from(schema.users)
-    .where(eq(schema.users.id, userId))
-    .limit(1);
-  return Boolean(row?.isAdmin);
+  try {
+    const [row] = await getDatabase()
+      .select({ isAdmin: schema.users.isAdmin })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+    return Boolean(row?.isAdmin);
+  } catch (error) {
+    // AppChrome calls this on every authenticated page. If the lookup fails
+    // (e.g. the `is_admin` migration has not run yet on this environment),
+    // degrade to "not an admin" rather than taking down the whole app shell.
+    console.error("isUserAdmin lookup failed", error);
+    return false;
+  }
 }
 
 /**
