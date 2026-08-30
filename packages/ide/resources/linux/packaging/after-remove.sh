@@ -1,15 +1,16 @@
 #!/bin/bash
 # Why: remove the PATH symlink that after-install.sh created, but only if it
-# still points into an Orca install dir — never delete an unrelated
-# /usr/bin/orca-ide a user or other package may own.
+# still points into our own install dir — never delete an unrelated
+# /usr/bin/codev a user or other package may own. Pre-rename install dirs stay
+# listed so upgrading from an older package still cleans up.
 set -e
 
-link="/usr/bin/orca-ide"
+link="/usr/bin/codev"
 
 if [ -L "$link" ]; then
   target="$(readlink "$link" || true)"
   case "$target" in
-    /opt/Orca/*|/opt/orca-ide/*|/opt/orca/*)
+    /opt/CoDev/*|/opt/codev/*|/opt/Orca/*|/opt/orca-ide/*|/opt/orca/*)
       rm -f "$link"
       ;;
   esac

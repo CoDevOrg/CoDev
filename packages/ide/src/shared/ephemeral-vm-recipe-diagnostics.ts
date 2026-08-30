@@ -39,7 +39,7 @@ export function redactEphemeralVmRecipeDiagnosticText(text: string): string {
     return text
   }
   return text
-    .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'orca://pair?code=[redacted]')
+    .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'codev://pair?code=[redacted]')
     .replace(
       /("(?:pairingCode|deviceToken|publicKeyB64|token|secret|password|apiKey|accessToken|identityFile|identityAgent|proxyCommand)"\s*:\s*)"[^"]*"/gi,
       '$1"[redacted]"'
@@ -59,14 +59,14 @@ export function redactEphemeralVmRecipeResultForDiagnostics(
   }
   return {
     ...result,
-    pairingCode: 'orca://pair?code=[redacted]',
+    pairingCode: 'codev://pair?code=[redacted]',
     ...(userData ? { userData } : {})
   }
 }
 
 function redactConnection(connection: EphemeralVmRecipeConnection): EphemeralVmRecipeConnection {
   if (connection.type === 'orca-server') {
-    return { ...connection, pairingCode: 'orca://pair?code=[redacted]' }
+    return { ...connection, pairingCode: 'codev://pair?code=[redacted]' }
   }
   return {
     ...connection,

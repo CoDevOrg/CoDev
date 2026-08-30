@@ -136,5 +136,5 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
 export function encodePairingFixturePayload(payload: unknown): string {
   const json = JSON.stringify(payload)
   const code = Buffer.from(json, 'utf8').toString('base64url')
-  return `orca://pair?code=${code}`
+  return `codev://pair?code=${code}`
 }

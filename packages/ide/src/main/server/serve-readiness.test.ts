@@ -12,7 +12,7 @@ const ready: ServeReadiness = {
   managedWslCliReconciliation: 'settled',
   pairing: {
     available: true,
-    url: 'orca://pair?code=secret',
+    url: 'codev://pair?code=secret',
     endpoint: 'wss://orca.example.test/runtime',
     deviceId: 'device-1',
     webClientUrl: 'https://orca.example.test/runtime/web-index.html#pairing=secret',
@@ -35,7 +35,7 @@ describe('ServeReadinessPublisher', () => {
       )
     )
     expect(write).toHaveBeenCalledWith(
-      expect.stringContaining('Pairing URL: orca://pair?code=secret\n')
+      expect.stringContaining('Pairing URL: codev://pair?code=secret\n')
     )
   })
 
@@ -72,7 +72,7 @@ describe('ServeReadinessPublisher', () => {
 
   it('preserves the recipe JSON contract', () => {
     expect(renderServeReadiness(ready, { mode: 'recipe-json', projectRoot: '/workspace' })).toBe(
-      '{"schemaVersion":1,"pairingCode":"orca://pair?code=secret","projectRoot":"/workspace"}'
+      '{"schemaVersion":1,"pairingCode":"codev://pair?code=secret","projectRoot":"/workspace"}'
     )
   })
 

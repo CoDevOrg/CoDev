@@ -36,7 +36,7 @@ function manifest(options: { main?: string; capabilities?: PluginManifest['capab
 async function pluginRoot(pluginManifest = manifest()): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-reconcile-'))
   roots.push(root)
-  await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(pluginManifest))
+  await writeFile(join(root, 'codev-plugin.json'), JSON.stringify(pluginManifest))
   await writeFile(join(root, 'worker.js'), 'export default async function () {}')
   await writeFile(join(root, 'worker-v2.js'), 'export default async function () {}')
   await writeFile(join(root, 'panel.html'), '<h1>Panel</h1>')
@@ -288,7 +288,7 @@ describe('PluginService worker reconciliation', () => {
     const harness = createHarness(root)
     await activate(harness.service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'codev-plugin.json'),
       JSON.stringify(manifest({ capabilities: [{ kind: 'storage' }] }))
     )
 
@@ -305,7 +305,7 @@ describe('PluginService worker reconciliation', () => {
     const harness = createHarness(root)
     await activate(harness.service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'codev-plugin.json'),
       JSON.stringify(manifest({ main: 'worker-v2.js' }))
     )
 
@@ -346,7 +346,7 @@ describe('PluginService worker reconciliation', () => {
     services.push(service)
     await activate(service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'codev-plugin.json'),
       JSON.stringify(manifest({ main: 'worker-v2.js' }))
     )
 

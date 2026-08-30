@@ -20,6 +20,18 @@ describe('tui agent detection commands', () => {
       },
       {
         id: 'claude-agent-teams',
+        cmd: 'codev',
+        requiredCommands: ['claude'],
+        unsupportedRuntimes: ['win32', 'wsl']
+      },
+      {
+        id: 'claude-agent-teams',
+        cmd: 'codev-dev',
+        requiredCommands: ['claude'],
+        unsupportedRuntimes: ['win32', 'wsl']
+      },
+      {
+        id: 'claude-agent-teams',
         cmd: 'orca-dev',
         requiredCommands: ['claude'],
         unsupportedRuntimes: ['win32', 'wsl']
@@ -31,9 +43,12 @@ describe('tui agent detection commands', () => {
         unsupportedRuntimes: ['win32', 'wsl']
       }
     ])
+    // Pre-rename aliases stay probed so an older install is still detected.
     expect(getTuiAgentDetectionProbeCommands(commands, 'linux')).toEqual([
       'orca',
       'claude',
+      'codev',
+      'codev-dev',
       'orca-dev',
       'orca-ide'
     ])
@@ -44,6 +59,6 @@ describe('tui agent detection commands', () => {
     expect(getTuiAgentDetectionProbeCommands(commands, 'win32')).toEqual([])
     expect(resolveDetectedTuiAgentIds(commands, new Set(['orca', 'claude']), 'win32')).toEqual([])
     expect(getTuiAgentDetectionProbeCommands(commands, 'wsl')).toEqual([])
-    expect(resolveDetectedTuiAgentIds(commands, new Set(['orca-ide', 'claude']), 'wsl')).toEqual([])
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['codev', 'claude']), 'wsl')).toEqual([])
   })
 })

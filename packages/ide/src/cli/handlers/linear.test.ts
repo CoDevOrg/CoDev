@@ -141,7 +141,7 @@ describe('orca linear CLI handlers', () => {
   it('passes verified current-context hints without resolving cwd for remote runtimes', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_123'
     process.env.ORCA_WORKTREE_ID = 'repo::/srv/app'
-    process.env.ORCA_PAIRING_CODE = 'orca://pair?payload=bad'
+    process.env.ORCA_PAIRING_CODE = 'codev://pair?payload=bad'
     queueFixtures(callMock, okFixture('req_linear', issueResult()))
 
     await main(['linear', 'issue', '--current', '--comments', '--json'], '/client/repo')

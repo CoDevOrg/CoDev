@@ -98,13 +98,13 @@ describe('AppImage CLI redirect', () => {
       platform: 'linux',
       isPackaged: true,
       resourcesPath: root,
-      execPath: '/opt/orca/orca-ide',
+      execPath: '/opt/orca/codev',
       commandNames,
       spawn: spawn as never
     })
 
     expect(result).toEqual({ redirected: true, status: 0 })
-    expect(spawn).toHaveBeenCalledWith('/opt/orca/orca-ide', [cliEntryPath, 'status', '--json'], {
+    expect(spawn).toHaveBeenCalledWith('/opt/orca/codev', [cliEntryPath, 'status', '--json'], {
       env: expect.objectContaining({
         APPIMAGE: '/opt/orca/orca-linux.AppImage',
         ELECTRON_RUN_AS_NODE: '1',
@@ -131,13 +131,13 @@ describe('AppImage CLI redirect', () => {
       platform: 'linux',
       isPackaged: true,
       resourcesPath: root,
-      execPath: '/opt/orca/orca-ide',
+      execPath: '/opt/orca/codev',
       commandNames,
       spawn: spawn as never
     })
 
     expect(spawn).toHaveBeenCalledWith(
-      '/opt/orca/orca-ide',
+      '/opt/orca/codev',
       [cliEntryPath, 'serve'],
       expect.objectContaining({
         env: expect.objectContaining({ ORCA_APPIMAGE_NO_SANDBOX: '1' })

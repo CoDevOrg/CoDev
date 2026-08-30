@@ -43,7 +43,13 @@ export interface OrcaPairing {
 }
 
 /**
- * Extract the base64url pairing code from an `orca://pair?code=...` deep link.
+ * Accepted pairing deep-link schemes. The IDE mints `codev://`; `orca://` is
+ * still accepted so a runtime built before the rename keeps pairing.
+ */
+const PAIRING_PROTOCOLS = new Set(["codev:", "orca:"]);
+
+/**
+ * Extract the base64url pairing code from a `codev://pair?code=...` deep link.
  */
 export function extractPairingCode(pairingUrl: string): string | null {
   let parsed: URL;
@@ -52,7 +58,7 @@ export function extractPairingCode(pairingUrl: string): string | null {
   } catch {
     return null;
   }
-  if (parsed.protocol !== "orca:" || parsed.hostname !== "pair") {
+  if (!PAIRING_PROTOCOLS.has(parsed.protocol) || parsed.hostname !== "pair") {
     return null;
   }
   const code = parsed.searchParams.get("code");

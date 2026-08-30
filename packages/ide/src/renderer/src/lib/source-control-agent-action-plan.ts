@@ -41,7 +41,7 @@ export function planSourceControlAgentActionLaunch(args: {
   platform?: NodeJS.Platform
   terminalWindowsShell?: string | null
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-   * `orca-ide` rename must not be applied for remote launches. */
+   * `codev` rename must not be applied for remote launches. */
   isRemote?: boolean
 }): SourceControlLaunchPlanResult {
   const agent = args.agent

@@ -20,7 +20,7 @@ async function tempRoot(prefix: string): Promise<string> {
 
 async function writePlugin(root: string, publisher: string, id: string): Promise<void> {
   await writeFile(
-    join(root, 'orca-plugin.json'),
+    join(root, 'codev-plugin.json'),
     JSON.stringify({
       manifestVersion: 1,
       id,

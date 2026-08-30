@@ -52,7 +52,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         updatedAt: 1,
         recipeResult: {
           schemaVersion: 1,
-          pairingCode: 'orca://pair?code=test',
+          pairingCode: 'codev://pair?code=test',
           projectRoot: '/workspace/repo'
         }
       }
@@ -199,7 +199,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         updatedAt: 1,
         recipeResult: {
           schemaVersion: 1,
-          pairingCode: 'orca://pair?code=test',
+          pairingCode: 'codev://pair?code=test',
           projectRoot: '/workspace/repo'
         }
       }
@@ -283,7 +283,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         updatedAt: 1,
         recipeResult: {
           schemaVersion: 1,
-          pairingCode: 'orca://pair?code=test',
+          pairingCode: 'codev://pair?code=test',
           projectRoot: '/workspace/repo'
         }
       }
@@ -335,7 +335,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         updatedAt: 1,
         recipeResult: {
           schemaVersion: 1,
-          pairingCode: 'orca://pair?code=test',
+          pairingCode: 'codev://pair?code=test',
           projectRoot: '/workspace/not-a-repo'
         }
       }

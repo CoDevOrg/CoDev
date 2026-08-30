@@ -8,7 +8,7 @@ describe('hello Orca plugin fixture', () => {
   it('uses an ESM entry that remains loadable outside a type-module package', async () => {
     const root = join(process.cwd(), 'examples', 'plugins', 'hello-orca')
     const manifest = pluginManifestSchema.parse(
-      JSON.parse(await readFile(join(root, 'orca-plugin.json'), 'utf8'))
+      JSON.parse(await readFile(join(root, 'codev-plugin.json'), 'utf8'))
     )
 
     expect(manifest.main).toBe('main.mjs')

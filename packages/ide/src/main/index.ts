@@ -2898,7 +2898,7 @@ void app.whenReady().then(async () => {
         )
       }
     }
-    // Why: Linux CLI installs as `orca-ide`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
+    // Why: Linux CLI installs as `codev`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
     if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
       try {
         const dispatcher = await installLinuxBareOrcaDispatcher({

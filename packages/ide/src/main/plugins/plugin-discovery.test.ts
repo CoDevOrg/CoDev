@@ -26,7 +26,7 @@ describe('installed plugin discovery identity', () => {
     await mkdir(versionDir, { recursive: true })
     await writeFile(join(pluginsDir, installedKey, 'current'), hash)
     await writeFile(
-      join(versionDir, 'orca-plugin.json'),
+      join(versionDir, 'codev-plugin.json'),
       JSON.stringify({
         manifestVersion: 1,
         id: 'different',
@@ -80,7 +80,7 @@ describe('instructional plugin discovery identity', () => {
     const devRoot = await tempPluginsDir()
     await mkdir(join(devRoot, 'recipes'))
     await writeFile(
-      join(devRoot, 'orca-plugin.json'),
+      join(devRoot, 'codev-plugin.json'),
       JSON.stringify({
         manifestVersion: 1,
         id: 'recipes',

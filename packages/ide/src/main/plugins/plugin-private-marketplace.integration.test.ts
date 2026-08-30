@@ -75,7 +75,7 @@ describe('private Git marketplace integration', () => {
     const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
     const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
     const pluginRepository = await createGitRepository(root, 'locale-source', {
-      'orca-plugin.json': JSON.stringify({
+      'codev-plugin.json': JSON.stringify({
         manifestVersion: 1,
         id: 'private-locale',
         publisher: 'private',

@@ -524,8 +524,8 @@ describe('serveOrcaApp', () => {
     const secrets = ['UPPER-SECRET', 'SLASH-SECRET', 'LEGACY-SECRET', 'PRIVATE-SECRET']
     const untrustedLines = [
       'ORCA://pair?code=UPPER-SECRET',
-      'orca://pair/?code=SLASH-SECRET',
-      'orca://pair#LEGACY-SECRET',
+      'codev://pair/?code=SLASH-SECRET',
+      'codev://pair#LEGACY-SECRET',
       '"embedded privateKey PRIVATE-SECRET"',
       '{privateKey:"PRIVATE-SECRET"}'
     ].join('\n')

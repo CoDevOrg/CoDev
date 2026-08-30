@@ -111,7 +111,7 @@ describe('declared plugin artifacts', () => {
         events: []
       }
     })
-    await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(pluginManifest))
+    await writeFile(join(root, 'codev-plugin.json'), JSON.stringify(pluginManifest))
 
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toMatchObject({
       ok: false

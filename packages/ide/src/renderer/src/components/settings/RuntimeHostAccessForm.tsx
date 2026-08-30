@@ -134,7 +134,7 @@ export function RuntimeHostAccessForm({
             }}
             placeholder={translate(
               'auto.components.settings.RuntimeHostAccessForm.accessLinkPlaceholder',
-              'orca://pair?code=...'
+              'codev://pair?code=...'
             )}
             className="min-w-0 font-mono"
           />

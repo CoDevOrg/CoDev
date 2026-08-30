@@ -1,3 +1,8 @@
+import {
+  LEGACY_PAIRING_URL_SCHEME,
+  PAIRING_URL_PREFIXES,
+  PAIRING_URL_SCHEME
+} from '../../../shared/codev-identifiers'
 import type { DeviceScope } from '../../../shared/runtime-types'
 
 const PAIRING_OFFER_VERSION = 2
@@ -22,7 +27,8 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 
   try {
-    if (trimmed.toLowerCase().startsWith('orca://')) {
+    const lowered = trimmed.toLowerCase()
+    if (PAIRING_URL_PREFIXES.some((prefix) => lowered.startsWith(prefix))) {
       const code = extractPairingCodeFromUrl(trimmed)
       return code ? decodePairingPayload(code) : null
     }
@@ -45,7 +51,7 @@ export function readPairingInputFromLocation(location: Location): string | null 
   if (!hash) {
     return null
   }
-  if (hash.startsWith('orca://pair')) {
+  if (PAIRING_URL_PREFIXES.some((prefix) => hash.startsWith(`${prefix}pair`))) {
     return hash
   }
   const hashParams = new URLSearchParams(hash)
@@ -119,9 +125,11 @@ function extractPairingCodeFromUrl(url: string): string | null {
   } catch {
     return null
   }
-  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
-  // pairing deep-link host may carry runtime auth material.
-  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+  // Why: prefix checks accepted routes like `codev://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material. Both schemes are
+  // accepted so a link minted by a pre-rename build still pairs.
+  const schemes = new Set([`${PAIRING_URL_SCHEME}:`, `${LEGACY_PAIRING_URL_SCHEME}:`])
+  if (!schemes.has(parsed.protocol) || parsed.hostname !== 'pair') {
     return null
   }
   if (parsed.pathname !== '' && parsed.pathname !== '/') {

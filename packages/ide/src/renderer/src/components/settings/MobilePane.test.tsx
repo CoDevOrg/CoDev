@@ -175,7 +175,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair',
+      pairingUrl: 'codev://pair',
       endpoint: 'ws://host',
       connectionMode: 'automatic'
     })
@@ -260,7 +260,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'codev://pair#local',
       endpoint: 'ws://host',
       connectionMode: 'local-only'
     })
@@ -285,7 +285,7 @@ describe('MobilePane pairing connection mode', () => {
       available: true,
       qrDataUrl: null,
       qrError: 'encoding_failed',
-      pairingUrl: 'orca://pair?code=copy-fallback',
+      pairingUrl: 'codev://pair?code=copy-fallback',
       endpoint: 'wss://host.example/large',
       connectionMode: 'automatic'
     })
@@ -340,7 +340,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveRetry?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'codev://relay',
       endpoint: 'ws://relay',
       connectionMode: 'automatic'
     })
@@ -377,7 +377,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValueOnce({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://local',
+      pairingUrl: 'codev://local',
       endpoint: 'ws://10.0.0.2',
       connectionMode: 'local-only'
     })
@@ -395,7 +395,7 @@ describe('MobilePane pairing connection mode', () => {
       resolveRetry?.({
         available: true,
         qrDataUrl: 'data:image/png;base64,stale-relay',
-        pairingUrl: 'orca://stale-relay',
+        pairingUrl: 'codev://stale-relay',
         endpoint: 'ws://relay',
         connectionMode: 'automatic'
       })
@@ -635,7 +635,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'codev://relay',
       endpoint: 'ws://relay'
     })
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -667,7 +667,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'codev://relay',
       endpoint: 'ws://relay'
     })
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -728,7 +728,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'codev://pair#local',
       endpoint: 'ws://host',
       connectionMode: 'local-only'
     })
@@ -737,13 +737,13 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'codev://relay',
       endpoint: 'ws://relay',
       connectionMode: 'automatic'
     })
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     await waitFor(() =>
-      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('orca://relay')
+      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('codev://relay')
     )
   })
 })
@@ -785,7 +785,7 @@ describe('MobilePane', () => {
     mocks.getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair',
+      pairingUrl: 'codev://pair',
       endpoint: 'ws://host'
     })
     mocks.listDevices.mockReset()

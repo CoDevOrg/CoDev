@@ -49,7 +49,7 @@ function marketplace(): PluginMarketplace {
 async function writeCurrentPlugin(destination: string): Promise<void> {
   await mkdir(destination, { recursive: true })
   await writeFile(
-    join(destination, 'orca-plugin.json'),
+    join(destination, 'codev-plugin.json'),
     JSON.stringify({
       manifestVersion: 1,
       id: git.id,

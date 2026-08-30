@@ -143,7 +143,13 @@ export {
   pluginCommandIdSchema
 } from './plugin-manifest-fields'
 
-export const PLUGIN_MANIFEST_FILENAME = 'orca-plugin.json'
+export const PLUGIN_MANIFEST_FILENAME = 'codev-plugin.json'
+/** Plugins authored before the rename still ship the upstream manifest name. */
+export const LEGACY_PLUGIN_MANIFEST_FILENAME = 'orca-plugin.json'
+export const PLUGIN_MANIFEST_FILENAMES = [
+  PLUGIN_MANIFEST_FILENAME,
+  LEGACY_PLUGIN_MANIFEST_FILENAME
+] as const
 
 /** Canonical install identity: `<publisher>.<id>` (also the install dir name). */
 export function qualifiedPluginKey(manifest: Pick<PluginManifest, 'publisher' | 'id'>): string {
