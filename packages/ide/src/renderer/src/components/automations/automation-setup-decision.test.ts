@@ -121,7 +121,7 @@ describe('automation setup decision defaults', () => {
     ).toBe('skip')
   })
 
-  it('shows setup choice for shared orca.yaml setup and default tabs', () => {
+  it('shows setup choice for shared codev.yaml setup and default tabs', () => {
     expect(
       getVisibleAutomationSetupDecision({
         createTarget: 'orca',

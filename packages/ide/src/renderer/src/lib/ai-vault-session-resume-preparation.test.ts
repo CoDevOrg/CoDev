@@ -72,7 +72,7 @@ describe('prepareAiVaultSessionForResume', () => {
     const prepareSessionResume = vi.fn()
     stubPreparation(prepareSessionResume)
     const current = session({
-      codexHome: '/home/user/.orca/codex-accounts/account-1/home',
+      codexHome: '/home/user/.codev/codex-accounts/account-1/home',
       executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']
     })
 

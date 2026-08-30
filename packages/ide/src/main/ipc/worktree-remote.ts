@@ -112,8 +112,8 @@ import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
+import { readFirstProjectConfig } from './remote-project-config'
 import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
@@ -1139,7 +1139,7 @@ async function readRemoteOrcaYaml(
   hooksRootPath: string
 ): Promise<ReturnType<typeof parseOrcaYaml>> {
   try {
-    const result = await fsProvider.readFile(joinWorktreeRelativePath(hooksRootPath, 'orca.yaml'))
+    const result = await readFirstProjectConfig(fsProvider, hooksRootPath)
     return result.isBinary ? null : parseOrcaYaml(result.content)
   } catch {
     return null

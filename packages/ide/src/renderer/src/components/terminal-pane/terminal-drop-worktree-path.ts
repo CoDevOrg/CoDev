@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { CONFIG_DIR_NAME } from '../../../../shared/codev-identifiers'
 import { isTerminalDropWindowsPathLike } from './terminal-drop-shell'
 
 export function resolveTerminalDropWorktreePath(
@@ -13,7 +14,7 @@ export function resolveTerminalDropWorktreePath(
 
 export function joinRuntimeTerminalDropDir(worktreePath: string): string {
   if (isTerminalDropWindowsPathLike(worktreePath)) {
-    return `${worktreePath.replace(/[\\/]+$/, '').replace(/\//g, '\\')}\\.orca\\drops`
+    return `${worktreePath.replace(/[\\/]+$/, '').replace(/\//g, '\\')}\\${CONFIG_DIR_NAME}\\drops`
   }
-  return `${worktreePath.replace(/[\\/]+$/, '')}/.orca/drops`
+  return `${worktreePath.replace(/[\\/]+$/, '')}/${CONFIG_DIR_NAME}/drops`
 }

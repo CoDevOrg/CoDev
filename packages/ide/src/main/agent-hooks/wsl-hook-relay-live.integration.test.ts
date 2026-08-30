@@ -129,7 +129,7 @@ describe.skipIf(process.platform === 'win32')(
       })
       expect(existsSync(join(fakeHome, '.claude', 'settings.json'))).toBe(true)
       const claudeScript = readFileSync(
-        join(fakeHome, '.orca', 'agent-hooks', 'claude-hook.sh'),
+        join(fakeHome, '.codev', 'agent-hooks', 'claude-hook.sh'),
         'utf8'
       )
       expect(claudeScript).toContain('/hook/claude')

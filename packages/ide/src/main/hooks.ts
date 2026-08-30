@@ -1,7 +1,13 @@
 /* eslint-disable max-lines -- Why: hook parsing, layered issue-command resolution, and cross-platform runner setup share one execution surface, so keeping them together avoids subtle drift across create/read/write paths. */
 import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { exec, execFile } from 'node:child_process'
+import {
+  CONFIG_DIR_NAME,
+  LEGACY_CONFIG_DIR_NAME,
+  PROJECT_CONFIG_FILENAMES,
+  preferExistingName
+} from '../shared/codev-identifiers'
 import { getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
@@ -50,11 +56,19 @@ function getHookShell(): string | undefined {
 
 export { parseOrcaYaml }
 
+/** Path to a repo's project config, preferring codev.yaml over a legacy orca.yaml. */
+export function getProjectConfigPath(repoPath: string): string {
+  return join(
+    repoPath,
+    preferExistingName(PROJECT_CONFIG_FILENAMES, (name) => existsSync(join(repoPath, name)))
+  )
+}
+
 /**
- * Load hooks from orca.yaml in the given repo root.
+ * Load hooks from codev.yaml (or a legacy orca.yaml) in the given repo root.
  */
 export function loadHooks(repoPath: string): OrcaHooks | null {
-  const yamlPath = join(repoPath, 'orca.yaml')
+  const yamlPath = getProjectConfigPath(repoPath)
   if (!existsSync(yamlPath)) {
     return null
   }
@@ -68,10 +82,10 @@ export function loadHooks(repoPath: string): OrcaHooks | null {
 }
 
 /**
- * Check whether an orca.yaml exists for a repo.
+ * Check whether a project config exists for a repo.
  */
 export function hasHooksFile(repoPath: string): boolean {
-  return existsSync(join(repoPath, 'orca.yaml'))
+  return existsSync(getProjectConfigPath(repoPath))
 }
 
 // Why: detect unrecognised keys so the UI can suggest an update instead of showing a "could not be parsed" error.
@@ -83,10 +97,10 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
   'worktree'
 ])
 
-/** True when `orca.yaml` has a top-level key this version of Orca does not handle. */
+/** True when the project config has a top-level key this version does not handle. */
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
-    const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
+    const content = readFileSync(getProjectConfigPath(repoPath), 'utf-8')
     for (const line of iterateLfScriptLines(content)) {
       // Why: match bare `key:` at end-of-line too, since a mapping with a block value on the next line is valid YAML.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
@@ -101,13 +115,15 @@ export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
 }
 
 // ─── Issue command files ────────────────────────────────────────────────
-// Why: `.orca/issue-command` is the per-user override; `orca.yaml` is the tracked project default.
+// Why: `.codev/issue-command` is the per-user override; `codev.yaml` is the tracked project default.
 
-const ORCA_DIR = '.orca'
 const ISSUE_COMMAND_FILENAME = 'issue-command'
 
 export function getIssueCommandFilePath(repoPath: string): string {
-  return join(repoPath, ORCA_DIR, ISSUE_COMMAND_FILENAME)
+  const dir = preferExistingName([CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME], (name) =>
+    existsSync(join(repoPath, name, ISSUE_COMMAND_FILENAME))
+  )
+  return join(repoPath, dir, ISSUE_COMMAND_FILENAME)
 }
 
 export function getSharedIssueCommand(repoPath: string): string | null {
@@ -164,11 +180,11 @@ export function writeIssueCommand(repoPath: string, content: string): void {
       return
     }
 
-    const orcaDir = join(repoPath, ORCA_DIR)
-    if (!existsSync(orcaDir)) {
-      mkdirSync(orcaDir, { recursive: true })
+    const configDir = dirname(filePath)
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true })
     }
-    ensureOrcaDirIgnored(repoPath)
+    ensureOrcaDirIgnored(repoPath, basename(configDir))
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
     console.error('[hooks] Failed to write issue command:', err)
@@ -177,22 +193,23 @@ export function writeIssueCommand(repoPath: string, content: string): void {
   }
 }
 
-/** Ensure `.orca` is in `.gitignore` so the per-user directory is never committed. */
-function ensureOrcaDirIgnored(repoPath: string): void {
+/** Ensure the per-user config directory is in `.gitignore` so it is never committed. */
+function ensureOrcaDirIgnored(repoPath: string, dirName: string): void {
   const gitignorePath = join(repoPath, '.gitignore')
+  const ignoreEntry = new RegExp(`^${dirName.replace('.', '\\.')}/?$`, 'm')
   try {
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf-8')
-      if (/^\.orca\/?$/m.test(content)) {
+      if (ignoreEntry.test(content)) {
         return
       }
       const separator = content.endsWith('\n') ? '' : '\n'
-      writeFileSync(gitignorePath, `${content}${separator}.orca\n`, 'utf-8')
+      writeFileSync(gitignorePath, `${content}${separator}${dirName}\n`, 'utf-8')
     } else {
-      writeFileSync(gitignorePath, '.orca\n', 'utf-8')
+      writeFileSync(gitignorePath, `${dirName}\n`, 'utf-8')
     }
   } catch {
-    console.warn('[hooks] Could not update .gitignore to exclude .orca')
+    console.warn(`[hooks] Could not update .gitignore to exclude ${dirName}`)
   }
 }
 

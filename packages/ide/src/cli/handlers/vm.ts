@@ -2,6 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
+import {
+  PROJECT_CONFIG_FILENAME,
+  PROJECT_CONFIG_FILENAMES,
+  preferExistingName
+} from '../../shared/codev-identifiers'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import {
   getEphemeralVmRecipeResultProjectRoot,
@@ -44,7 +49,7 @@ export const VM_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
-  const yamlPath = join(repoPath, 'orca.yaml')
+  const yamlPath = projectConfigPath(repoPath)
   if (!existsSync(yamlPath)) {
     return {
       recipeId,
@@ -54,8 +59,8 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
         {
           id: 'orca_yaml.exists',
           status: 'fail',
-          message: `No orca.yaml found at ${yamlPath}`,
-          remediation: 'Add environmentRecipes to the repo orca.yaml.'
+          message: `No ${PROJECT_CONFIG_FILENAME} found at ${yamlPath}`,
+          remediation: `Add environmentRecipes to the repo ${PROJECT_CONFIG_FILENAME}.`
         }
       ]
     }
@@ -260,8 +265,16 @@ function buildProvisionFailureRemediation(stderr: string, stdout: string): strin
     : 'Check recipe stderr and ensure stdout contains the VM recipe result JSON.'
 }
 
+/** Repo's project config path, preferring codev.yaml over a legacy orca.yaml. */
+function projectConfigPath(repoPath: string): string {
+  return join(
+    repoPath,
+    preferExistingName(PROJECT_CONFIG_FILENAMES, (name) => existsSync(join(repoPath, name)))
+  )
+}
+
 function loadRecipe(repoPath: string, recipeId: string): OrcaVmRecipe | null {
-  const hooks = parseOrcaYaml(readTextFile(join(repoPath, 'orca.yaml')))
+  const hooks = parseOrcaYaml(readTextFile(projectConfigPath(repoPath)))
   return hooks?.environmentRecipes?.find((entry) => entry.id === recipeId) ?? null
 }
 

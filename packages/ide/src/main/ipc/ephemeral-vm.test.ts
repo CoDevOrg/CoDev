@@ -138,10 +138,10 @@ describe('registerEphemeralVmHandlers', () => {
     }
   })
 
-  it('lists recipes from local repo orca.yaml', async () => {
+  it('lists recipes from local repo codev.yaml', async () => {
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -176,7 +176,7 @@ describe('registerEphemeralVmHandlers', () => {
   it('lists the recipe catalog across local git repos', async () => {
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -211,7 +211,7 @@ describe('registerEphemeralVmHandlers', () => {
   it('merges approved plugin recipes while repository recipes shadow matching ids', async () => {
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: shared',
@@ -352,7 +352,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -441,7 +441,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -527,7 +527,7 @@ describe('registerEphemeralVmHandlers', () => {
     // SSH target must still be torn down so it never orphans (see Fix D).
     writeFileSync(destroyPath, 'process.exit(1)')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -600,7 +600,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -676,7 +676,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
     writeFileSync(cleanupPath, 'process.stdin.resume()\n')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -724,7 +724,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -775,7 +775,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'codev.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',

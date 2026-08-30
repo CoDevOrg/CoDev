@@ -12,6 +12,7 @@ import { dirname, join, posix as pathPosix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { CONFIG_DIR_NAME } from '../../shared/codev-identifiers'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -196,9 +197,11 @@ export class KimiHookService {
   // managed script body is already platform-independent.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
+    // Remote home can't be stat'd from here, so always install CoDev-native;
+    // createManagedCommandMatcher sweeps any legacy ~/.orca entry by script name.
     const remoteScriptPath = pathPosix.join(
       remoteHome,
-      '.orca',
+      CONFIG_DIR_NAME,
       'agent-hooks',
       MANAGED_SCRIPT_FILE_NAME
     )

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseOrcaYaml } from './orca-yaml'
 
-describe('orca.yaml alias expansion', () => {
+describe('codev.yaml alias expansion', () => {
   it('preserves an ordinary shared scalar', () => {
     expect(
       parseOrcaYaml(`

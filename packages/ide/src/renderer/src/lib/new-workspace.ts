@@ -69,7 +69,7 @@ export function canUseIssueCommandForLinkedItemProvider(
   return provider === 'github' || provider === 'gitlab'
 }
 
-// Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
+// Why: when a repo has no `codev.yaml` issueCommand and no per-user override,
 // we still want the composer to send a useful default prompt whenever the user
 // attaches a linked work item without typing anything else. "Complete <url>"
 // is the minimum viable instruction that always produces a coherent agent task.
@@ -111,7 +111,7 @@ function getSetupConfigKind(
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
  * and keeps `{{issue}}` working silently for repos that have not migrated
- * their `orca.yaml` / `.orca/issue-command` yet.
+ * their `codev.yaml` / `.orca/issue-command` yet.
  */
 export function renderIssueCommandTemplate(
   template: string,

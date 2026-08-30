@@ -5,9 +5,10 @@ import {
   readRuntimeFileContent,
   runtimePathExists
 } from '@/runtime/runtime-file-client'
+import { CONFIG_DIR_NAME } from '../../../shared/codev-identifiers'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
-const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
+const MARKDOWN_TEMPLATE_ROOT = `${CONFIG_DIR_NAME}/templates`
 const MARKDOWN_TEMPLATE_MAX_DEPTH = 8
 const MARKDOWN_TEMPLATE_MAX_COUNT = 100
 

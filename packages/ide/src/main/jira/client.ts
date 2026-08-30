@@ -3,7 +3,6 @@ request plumbing share one boundary so encrypted token lifecycle and
 multi-site selection cannot drift between task operations. */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { net, safeStorage, session } from 'electron'
 import {
@@ -11,6 +10,7 @@ import {
   credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
+import { codevHomeConfigDir } from '../../shared/codev-config-dir'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { withSpan } from '../observability/tracer'
 import type {
@@ -124,7 +124,7 @@ const cachedTokens = new Map<string, string>()
 const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return codevHomeConfigDir()
 }
 
 function getSiteFilePath(): string {

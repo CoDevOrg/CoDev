@@ -37,9 +37,9 @@ vi.mock('./git/runner', async () => ({
 
 const TEST_REPO_PATH = join('/test/repo')
 const TEST_WORKTREE_PATH = join('/test/worktree')
-const TEST_REPO_ORCA_YAML_PATH = join(TEST_REPO_PATH, 'orca.yaml')
-const TEST_WORKTREE_ORCA_YAML_PATH = join(TEST_WORKTREE_PATH, 'orca.yaml')
-const TEST_ISSUE_COMMAND_PATH = join(TEST_REPO_PATH, '.orca', 'issue-command')
+const TEST_REPO_CONFIG_PATH = join(TEST_REPO_PATH, 'codev.yaml')
+const TEST_WORKTREE_CONFIG_PATH = join(TEST_WORKTREE_PATH, 'codev.yaml')
+const TEST_ISSUE_COMMAND_PATH = join(TEST_REPO_PATH, '.codev', 'issue-command')
 const TEST_GITIGNORE_PATH = join(TEST_REPO_PATH, '.gitignore')
 
 describe('parseOrcaYaml', () => {
@@ -158,7 +158,7 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('parses default terminal tabs from orca.yaml', () => {
+  it('parses default terminal tabs from codev.yaml', () => {
     const yaml = [
       'defaultTabs:',
       '  - title: Claude',
@@ -196,7 +196,7 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('parses environmentRecipes from orca.yaml', () => {
+  it('parses environmentRecipes from codev.yaml', () => {
     const yaml = [
       'environmentRecipes:',
       '  - id: cloud-sandbox',
@@ -293,7 +293,7 @@ describe('parseOrcaYaml', () => {
     })
   })
 
-  it('parses worktree.sharedDirectories from orca.yaml', () => {
+  it('parses worktree.sharedDirectories from codev.yaml', () => {
     const result = parseOrcaYaml(
       ['worktree:', '  sharedDirectories:', '    - node_modules', '    - .cache'].join('\n')
     )
@@ -354,7 +354,7 @@ describe('parseOrcaYaml', () => {
     expect(parseOrcaYaml('worktree:\n  sharedDirectories: node_modules\n')).toBeNull()
   })
 
-  it('keeps sharedDirectories alongside other orca.yaml keys', () => {
+  it('keeps sharedDirectories alongside other codev.yaml keys', () => {
     const result = parseOrcaYaml(
       [
         'scripts:',
@@ -442,16 +442,16 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
 })
 
 describe('readIssueCommand', () => {
-  it('prefers the local override over the shared orca.yaml command', async () => {
+  it('prefers the local override over the shared codev.yaml command', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === TEST_ISSUE_COMMAND_PATH || path === TEST_REPO_ORCA_YAML_PATH
+      (path) => path === TEST_ISSUE_COMMAND_PATH || path === TEST_REPO_CONFIG_PATH
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
       if (path === TEST_ISSUE_COMMAND_PATH) {
         return 'local command\n'
       }
-      if (path === TEST_REPO_ORCA_YAML_PATH) {
+      if (path === TEST_REPO_CONFIG_PATH) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
@@ -467,11 +467,11 @@ describe('readIssueCommand', () => {
     })
   })
 
-  it('falls back to the shared orca.yaml command when no local override exists', async () => {
+  it('falls back to the shared codev.yaml command when no local override exists', async () => {
     const fs = await import('node:fs')
-    vi.mocked(fs.existsSync).mockImplementation((path) => path === TEST_REPO_ORCA_YAML_PATH)
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === TEST_REPO_CONFIG_PATH)
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === TEST_REPO_ORCA_YAML_PATH) {
+      if (path === TEST_REPO_CONFIG_PATH) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
@@ -489,10 +489,10 @@ describe('readIssueCommand', () => {
 })
 
 describe('writeIssueCommand', () => {
-  it('writes only the local override file and keeps .orca ignored locally', async () => {
+  it('writes only the local override file and keeps .codev ignored locally', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === TEST_GITIGNORE_PATH || path === join(TEST_REPO_PATH, '.orca')
+      (path) => path === TEST_GITIGNORE_PATH || path === join(TEST_REPO_PATH, '.codev')
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
       if (path === TEST_GITIGNORE_PATH) {
@@ -506,7 +506,7 @@ describe('writeIssueCommand', () => {
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       TEST_GITIGNORE_PATH,
-      'node_modules/\n.orca\n',
+      'node_modules/\n.codev\n',
       'utf-8'
     )
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
@@ -596,7 +596,7 @@ describe('getEffectiveHooks', () => {
       hookSettings
     }) as unknown as Repo
 
-  it('uses hooks from orca.yaml when present', async () => {
+  it('uses hooks from codev.yaml when present', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
@@ -613,16 +613,16 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
+  it("loads setup hooks from the target worktree's codev.yaml when a worktree path is provided", async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === TEST_REPO_ORCA_YAML_PATH || path === TEST_WORKTREE_ORCA_YAML_PATH
+      (path) => path === TEST_REPO_CONFIG_PATH || path === TEST_WORKTREE_CONFIG_PATH
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === TEST_REPO_ORCA_YAML_PATH) {
+      if (path === TEST_REPO_CONFIG_PATH) {
         return 'scripts:\n  setup: |\n    echo old-version\n'
       }
-      if (path === TEST_WORKTREE_ORCA_YAML_PATH) {
+      if (path === TEST_WORKTREE_CONFIG_PATH) {
         return 'scripts:\n  setup: |\n    echo new-version\n'
       }
       return ''
@@ -732,7 +732,7 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it('uses local settings by default even when orca.yaml defines only one command', async () => {
+  it('uses local settings by default even when codev.yaml defines only one command', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
@@ -794,7 +794,7 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it('treats legacy shared-first policy as orca.yaml only', async () => {
+  it('treats legacy shared-first policy as codev.yaml only', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
