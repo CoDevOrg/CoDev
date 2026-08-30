@@ -133,7 +133,7 @@ const PHASES: {
     label: "Write",
     endpoint: 27_000,
     summary:
-      "Two agents caught the same bug. They sorted it out between themselves — no orchestrator — and split the work.",
+      "Two agents caught the same bug. They sorted it out between themselves, with no orchestrator, and split the work.",
   },
   {
     key: "verify",
@@ -152,7 +152,7 @@ const PHASES: {
 
 /**
  * The crew. Each agent has ONE colour (tone) that is used everywhere it
- * appears — live-agents panel, editor cursor, tabs, and the coordination
+ * appears: live-agents panel, editor cursor, tabs, and the coordination
  * board. Codex = orange, Claude = violet, Cursor = blue.
  */
 const AGENTS: AgentTrack[] = [
@@ -329,7 +329,7 @@ const SYNC = {
 
 /**
  * Guided pop-outs layered over the Write phase. They do not exist in the real
- * product — they are here so a first-time viewer can follow what the agents
+ * product; they are here so a first-time viewer can follow what the agents
  * are doing. One shows at a time, each held long enough to read.
  */
 const POPS: {
@@ -344,21 +344,21 @@ const POPS: {
     to: 8_800,
     step: "1 / 4",
     title: "Three agents, working at once",
-    body: "Codex, Claude and Cursor each pick up a feature and start editing in parallel — their own branch, their own files.",
+    body: "Codex, Claude and Cursor each pick up a feature and start editing in parallel, on their own branch, their own files.",
   },
   {
     from: 9_400,
     to: 13_300,
     step: "2 / 4",
     title: "Two of them hit the same bug",
-    body: "Codex and Cursor both trip over the same rounding bug in money.ts. Left alone they would each fix it — duplicated work, and a merge conflict later.",
+    body: "Codex and Cursor both trip over the same rounding bug in money.ts. Left alone they would each fix it: duplicated work, and a merge conflict later.",
   },
   {
     from: 13_900,
     to: 20_200,
     step: "3 / 4",
     title: "They sort it out themselves",
-    body: "The agents see each other's changes live and message each other directly. No orchestrator model, no human in the loop — the agents decide.",
+    body: "The agents see each other's changes live and message each other directly. No orchestrator model, no human in the loop. The agents decide.",
   },
   {
     from: 21_200,
@@ -369,7 +369,7 @@ const POPS: {
   },
 ];
 
-/** 0 features · 1 both flag the bug · 2 Cursor→Codex · 3 Codex→Cursor · 4 split */
+/** 0 features · 1 both flag the bug · 2 Cursor to Codex · 3 Codex to Cursor · 4 split */
 function syncStep(elapsed: number) {
   if (elapsed < SYNC.detectedAt) return 0;
   if (elapsed < SYNC.msg1At) return 1;
@@ -994,7 +994,7 @@ export function LandingWorkspaceDemo({
                   <span className="lp-sync-title">
                     <i aria-hidden="true">{"◆"}</i>
                     Agents coordinating
-                    <em>peer to peer — no orchestrator</em>
+                    <em>peer to peer, no orchestrator</em>
                   </span>
                   <span className="lp-sync-metric">
                     <strong>0</strong> conflicts
@@ -1015,7 +1015,7 @@ export function LandingWorkspaceDemo({
                       />
                       <b>{lane.name}</b>
                       <span className="lp-sync-arrow" aria-hidden="true">
-                        →
+                        &rarr;
                       </span>
                       <code>{lane.doing}</code>
                       {lane.tag ? (
@@ -1035,7 +1035,7 @@ export function LandingWorkspaceDemo({
                       <p className="lp-sync-alert">
                         <span aria-hidden="true">{"⚡"}</span>
                         Codex and Cursor both landed on{" "}
-                        <code>{SYNC.bugPath}</code> — the same rounding bug
+                        <code>{SYNC.bugPath}</code>, the same rounding bug
                       </p>
                     ) : null}
                     {step === 2 || step === 3 ? (
@@ -1046,7 +1046,7 @@ export function LandingWorkspaceDemo({
                     ) : null}
                     {step === 3 ? (
                       <p className="lp-sync-msg lp-tone-orange">
-                        <b>Codex &rarr; Cursor</b> all yours — I&apos;ll stay on
+                        <b>Codex &rarr; Cursor</b> all yours. I&apos;ll stay on
                         checkout validation
                       </p>
                     ) : null}
@@ -1054,7 +1054,7 @@ export function LandingWorkspaceDemo({
                       <p className="lp-sync-done">
                         <Check size={11} aria-hidden="true" />
                         The agents split it themselves. Cursor fixes it once,
-                        Codex keeps building — no rework, no conflict.
+                        Codex keeps building. No rework, no conflict.
                       </p>
                     ) : null}
                   </div>
