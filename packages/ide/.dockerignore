@@ -1,0 +1,14 @@
+# This directory is the build context for infra/aws/orca-build/Containerfile,
+# which builds `orca serve`. Keep locally-generated trees out of the transfer:
+# they are large, and a host's macOS/arm64 install of Electron and native
+# modules must never end up inside the Linux image, which rebuilds its own.
+node_modules
+out
+dist
+.turbo
+*.log
+
+# Test and benchmark output.
+test-results
+playwright-report
+tests/tools/benchmarks/results

@@ -6,7 +6,8 @@ import { z } from "zod";
  * `orca_server_ready` JSON line at startup; `codev-orchestrator` captures it
  * and returns it verbatim as `IdeSession.ready` from
  * `POST/GET /v1/sandboxes/{workspaceId}/ide` (see
- * `services/orchestrator/src/backend/orca.rs`). See third_party/orca/UPSTREAM.md.
+ * `services/orchestrator/src/backend/orca.rs`). See
+ * packages/ide/CODEV-INTEGRATION.md.
  */
 
 export const orcaReadySchema = z.object({

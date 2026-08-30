@@ -449,11 +449,11 @@ async function waitFor<T>(
  *
  * This drives the real, unmodified UI a person would click through (host
  * picker -> Browse folder -> navigate to the directory -> Select folder)
- * rather than reaching for Orca's internal store/RPC calls, which aren't
- * reachable from outside the vendored bundle. Any missing/renamed selector
+ * rather than reaching for the IDE's internal store/RPC calls, which aren't
+ * reachable from outside the built bundle. Any missing/renamed selector
  * just aborts silently and leaves the manual "Add Project" flow as the
- * fallback. Re-check selectors after any Orca version bump (see
- * third_party/orca/UPSTREAM.md).
+ * fallback. Re-check these selectors after UI changes in `packages/ide`
+ * (see packages/ide/CODEV-INTEGRATION.md).
  *
  * The dialog's path field is a *filter* over the current directory's
  * listing, not an absolute-path navigator — typing the full cloned path
