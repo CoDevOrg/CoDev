@@ -55,15 +55,21 @@ recovered from upstream at the pinned tag.
 
 ## Naming
 
-The fork kept upstream's internal identifiers on purpose, so this move stayed a
-pure relocation with no behavioral change: the package is still named `orca`,
-the CLI binary is `orca`, and `orca.yaml`, `~/.orca`, `orca://`, and
-`orca-plugin.json` are unchanged. User-visible `Orca` strings in the built
-bundle are still rewritten to `CoDev` after the fact by
-`infra/aws/orca-build/brand-web.mjs`.
+The config and CLI identifiers are CoDev's: `codev.yaml`, `~/.codev`,
+`codev-plugin.json`, `codev://pair`, and a `codev` command. Every reader still
+accepts the Orca name it replaced, so existing config, plugins, and pairing
+links keep working — see the table in
+[`CODEV-INTEGRATION.md`](CODEV-INTEGRATION.md).
 
-Renaming these in the source — and retiring that post-build rewrite — is
-follow-up work, tracked in [`CODEV-INTEGRATION.md`](CODEV-INTEGRATION.md).
+Package and app identity is deliberately unchanged (`productName`, the Electron
+`name`, the `com.stablyai.orca` bundle id, deb/rpm package and artifact names):
+those are tied to code signing, TCC grants, update channels, and the userData
+directory, so renaming them would orphan user data rather than rename a command.
+
+What is left is display copy, not identifiers: `Orca` strings in the built
+bundle are still rewritten to `CoDev` after the fact by
+`infra/aws/orca-build/brand-web.mjs`, and the non-English locale bundles are
+untouched. Folding that into the source is the remaining work.
 
 ## How CoDev uses it
 

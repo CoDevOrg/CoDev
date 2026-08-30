@@ -207,15 +207,39 @@ longer exist; `watchOrcaProjectTree` is now a no-op and should be deleted.
 
 ## Follow-up: the source rename
 
-Now that this is first-party, the post-build branding rewrite can be retired in
-favor of renaming in the source. Two tiers, in order:
+The config and CLI identifiers are **done**. Each reader accepts the old name so
+nothing has to migrate and no deploy has to be coordinated; only what is written
+and displayed uses the CoDev name. `src/shared/codev-identifiers.ts` holds both.
 
-1. **User-visible copy.** Fold `brand-web.mjs`'s replacements into the source
-   strings, and cover what it currently misses: the non-English locale bundles
-   (`es`/`ja`/`ko`/`zh`, ~600 `Orca` occurrences each, deliberately skipped) and
-   lowercase UI mentions.
-2. **Identifiers.** Rename the package, the `orca` CLI binary, `orca.yaml`,
-   `~/.orca`, `orca://`, and `orca-plugin.json`. These are a coordinated change
-   across this tree *and* the orchestrator, which spawns `orca serve` and reads
-   these paths — and they are a migration for anyone with existing config, so
-   they need a compatibility window rather than a rename in place.
+| Was | Now | Legacy still accepted |
+| --- | --- | --- |
+| `~/.orca` | `~/.codev` | an existing `~/.orca` keeps being used |
+| `<repo>/.orca/` | `<repo>/.codev/` | read, and cleared on delete |
+| `orca.yaml` | `codev.yaml` | read |
+| `orca-plugin.json` | `codev-plugin.json` | read |
+| `orca://pair` | `codev://pair` | parsed (IDE, web, renderer) |
+| `orca` / `orca-ide` | `codev` | kept as bin aliases; still probed and detected |
+
+Two rules constrain anything further here, both covered by tests:
+
+- **Remote launches keep the pre-rename shim name.** The relay deploys the CLI
+  as plain `orca`, so `getTuiAgentLaunchCommand` routes remote launches through
+  `remoteLaunchCmdByPlatform`. Local launches use `codev` everywhere.
+- **`source: 'orca.yaml'`** in `orca-runtime.ts` is a host→client wire
+  discriminant and stays (see remote-wire-compatibility in `AGENTS.md`).
+
+Deliberately still Orca, because they are package and app identity rather than
+anything a person types — renaming them orphans user data, breaks code signing
+and TCC grants, or changes update channels: `productName`, the npm/Electron
+`name`, the `com.stablyai.orca` bundle id, the deb/rpm `packageName` and
+artifact names, and the AppImage/mac/windows artifact names.
+
+## Follow-up: user-visible copy
+
+The remaining work is the branding rewrite, not identifiers. Fold
+`brand-web.mjs`'s replacements into the source strings and cover what it
+currently misses: the non-English locale bundles (`es`/`ja`/`ko`/`zh`, ~600
+`Orca` occurrences each, deliberately skipped) and lowercase UI mentions.
+
+Not verified in this repo: Linux deb/rpm packaging output, which needs an
+electron-builder run. The packaging config's own contract test does pass.
