@@ -50,9 +50,31 @@ test("builds and bootstraps architecture-specific runtime artifacts", () => {
     /firecracker-\$\{firecracker_version\}-\$\{firecracker_arch\}/,
   );
   assert.match(buildOrca, /TARGET_ARCH=\$\{electron_arch\}/);
-  assert.match(buildOrcaWeb, /apply --check/);
   assert.match(buildOrcaWeb, /corepack pnpm@10\.24\.0/);
   assert.match(buildOrcaWeb, /rsync -a --delete/);
+});
+
+// The IDE is first-party (packages/ide), not a vendored upstream checkout, so
+// both artifacts must build from the tree. A reintroduced clone would mean the
+// shipped IDE no longer matches the source under review — and would silently
+// drop every CoDev change, since there is no patch to re-apply any more.
+test("IDE artifacts build from packages/ide, never from an upstream clone", () => {
+  // Comments legitimately mention the retired clone (explaining what replaced
+  // it), so assert against executable lines only.
+  const code = (source) =>
+    source
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+
+  const containerfile = read("./orca-build/Containerfile");
+  for (const source of [buildOrca, buildOrcaWeb, containerfile]) {
+    assert.doesNotMatch(code(source), /git clone/);
+    assert.doesNotMatch(code(source), /stablyai\/orca/);
+  }
+  assert.match(buildOrcaWeb, /source_dir="\$\{repo_root\}\/packages\/ide"/);
+  assert.match(buildOrca, /build_context="\$\{repo_root\}\/packages\/ide"/);
+  assert.match(containerfile, /^COPY \. \/build$/m);
 });
 
 test("deployment shell scripts parse", () => {

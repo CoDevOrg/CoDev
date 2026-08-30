@@ -12,6 +12,12 @@ apps/web/app/.well-known/workflow
 apps/web/.swc
 apps/web/public/orca
 
+# CoDev's IDE (packages/ide) carries its own formatter (oxfmt, see its
+# .oxfmtrc.json) and lints itself with oxlint. Running the root Prettier over
+# its ~11k sources would rewrite the entire IDE to a different style and turn
+# `format:check` red, so it formats itself and is checked by its own tooling.
+packages/ide
+
 # Vendored verbatim from stablyai/orca — kept byte-identical to upstream so
 # re-vendoring is a clean copy (see third_party/orca-mobile/UPSTREAM.md).
 apps/mobile/src/vendor/orca

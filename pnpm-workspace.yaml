@@ -1,6 +1,14 @@
 packages:
   - apps/*
   - packages/*
+  # packages/ide is CoDev's IDE (forked from stablyai/orca, now first-party).
+  # It is a self-contained project with its own pnpm-workspace.yaml, lockfile,
+  # patchedDependencies, and an Electron native-rebuild postinstall, so it
+  # installs and builds on its own rather than joining this package graph —
+  # exactly the carve-out its own workspace file already declares. Keeping it
+  # out also stops the root's recursive `build`/`lint`/`typecheck`/`test`
+  # scripts from sweeping ~11k IDE sources into every CI run.
+  - "!packages/ide"
 blockExoticSubdeps: false
 allowBuilds:
   "@clerk/shared": true

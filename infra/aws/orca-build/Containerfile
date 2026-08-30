@@ -1,14 +1,14 @@
-# Builds `orca serve` (Orca's Electron main process / IDE backend) from its
-# real MIT source at a pinned tag, instead of trusting a prebuilt
-# upstream AppImage release asset. See
-# infra/aws/scripts/build-orca-serve.sh, which builds this image with Apple's
-# `container` tool and copies the
-# resulting artifact out. Keep ORCA_REF/ORCA_COMMIT_PREFIX in sync with
-# third_party/orca/UPSTREAM.md when bumping the vendored web client.
+# Builds `orca serve` (the Electron main process / IDE backend) from CoDev's own
+# first-party IDE source in packages/ide, which is this image's build context.
+# See infra/aws/scripts/build-orca-serve.sh, which builds the image with Apple's
+# `container` tool and copies the resulting artifact out.
+#
+# There is no upstream clone and no patch step any more: the IDE is forked into
+# this monorepo (see packages/ide/README.md), so what builds here is exactly the
+# source in the tree — the same source `pnpm orca:web` builds the browser client
+# from, which is what keeps the two halves on one version by construction.
 FROM ubuntu:24.04
 
-ARG ORCA_REF=v1.4.176
-ARG ORCA_COMMIT_PREFIX=02cea8a
 ARG TARGET_ARCH=arm64
 ARG ARTIFACT_ARCH=arm64
 ENV DEBIAN_FRONTEND=noninteractive
@@ -32,18 +32,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-COPY codev-web.patch /tmp/codev-web.patch
-
-# Pin to a specific commit, not just the mutable tag, so a compromised or
-# force-moved upstream tag can't silently swap in different source.
-RUN git clone --branch "${ORCA_REF}" --depth 1 https://github.com/stablyai/orca.git . \
-    && actual_commit="$(git rev-parse --short=12 HEAD)" \
-    && case "${actual_commit}" in \
-         ${ORCA_COMMIT_PREFIX}*) ;; \
-         *) echo "orca commit mismatch at tag ${ORCA_REF}: expected ${ORCA_COMMIT_PREFIX}*, got ${actual_commit}" >&2; exit 1 ;; \
-       esac \
-    && git apply --check /tmp/codev-web.patch \
-    && git apply /tmp/codev-web.patch
+# The build context is packages/ide (set by build-orca-serve.sh). Its
+# .dockerignore keeps node_modules/, out/, and dist/ out of the transfer, so a
+# developer's local IDE install never leaks into the image.
+COPY . /build
 
 RUN pnpm install --frozen-lockfile
 
@@ -53,7 +45,7 @@ RUN pnpm install --frozen-lockfile
 RUN if [ "${TARGET_ARCH}" = arm64 ]; then export ORCA_LINUX_ARM64_RELEASE=1; fi; \
     pnpm run build:linux -- --"${TARGET_ARCH}"
 
-# `orca serve` is what CoDev's orchestrator (services/orchestrator/src/backend/orca.rs)
+# `orca serve` is what the orchestrator (services/orchestrator/src/backend/orca.rs)
 # spawns per workspace. `--appimage-extract` unpacks the AppImage into a plain
 # squashfs-root/ directory with no FUSE mount required, which is exactly the
 # layout production already runs `AppRun` out of, so the orchestrator needs no

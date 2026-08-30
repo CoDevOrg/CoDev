@@ -1,8 +1,11 @@
 # Orca Mobile (vendored transport + terminal source)
 
 - Upstream: https://github.com/stablyai/orca
-- Version: v1.4.176 (tag `v1.4.176`, commit `02cea8a`) — kept in lockstep
-  with `third_party/orca/UPSTREAM.md`'s web client pin
+- Version: v1.4.176 (tag `v1.4.176`, commit `02cea8a`) — the same upstream
+  point `packages/ide` was forked from (see `packages/ide/README.md`). This
+  subset is still vendored verbatim; the IDE itself no longer is, so the two
+  are only coincidentally on the same revision now and nothing keeps them in
+  lockstep automatically.
 - License: MIT (see `LICENSE` in this directory)
 
 ## What is vendored

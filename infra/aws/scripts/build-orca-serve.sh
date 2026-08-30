@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds `orca serve` from stablyai/orca's real MIT source into a CoDev-owned
-# architecture-specific artifact rather than downloading an upstream
-# prebuilt AppImage release asset. Runs the build inside a matching Linux
-# container via Apple's `container` tool
+# Builds `orca serve` — the IDE backend the orchestrator runs per workspace —
+# from CoDev's own first-party IDE source in packages/ide. Runs the build inside
+# a matching Linux container via Apple's `container` tool
 # (https://github.com/apple/container) so the packaged AppImage can be
 # self-extracted natively (see infra/aws/orca-build/Containerfile) regardless
 # of the build host's own OS/arch.
@@ -14,7 +13,10 @@ set -euo pipefail
 # deploy.sh the same way it already consumes the orchestrator/guestd binaries.
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-readonly build_context="${repo_root}/infra/aws/orca-build"
+readonly containerfile="${repo_root}/infra/aws/orca-build/Containerfile"
+# The IDE source *is* the build context now that it lives in this repo — the
+# Containerfile copies it in rather than cloning it.
+readonly build_context="${repo_root}/packages/ide"
 readonly output_dir="${1:?usage: build-orca-serve.sh <output-dir> [x86_64|aarch64]}"
 readonly host_arch="${2:-aarch64}"
 readonly image_tag="codev-orca-build:$(date +%s)"
@@ -75,12 +77,12 @@ ensure_builder_capacity() {
 
 ensure_builder_capacity
 
-echo "Building orca serve from source (stablyai/orca) for ${host_arch}..."
+echo "Building orca serve from packages/ide for ${host_arch}..."
 container build \
   --arch "${container_arch}" \
   --build-arg "TARGET_ARCH=${electron_arch}" \
   --build-arg "ARTIFACT_ARCH=${artifact_arch}" \
-  -f "${build_context}/Containerfile" \
+  -f "${containerfile}" \
   -t "${image_tag}" \
   "${build_context}"
 

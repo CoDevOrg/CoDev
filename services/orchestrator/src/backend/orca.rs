@@ -640,9 +640,9 @@ fn member_id_pattern() -> &'static Regex {
 /// A workspace runs a single `orca serve` as a single Linux user, so the
 /// credential cannot be an environment variable on that shared process (it
 /// would be whichever member started the session, for everybody). Instead each
-/// member gets a directory here, and the patched Orca main process merges the
+/// member gets a directory here, and the IDE's main process merges the
 /// launching member's `env.json` into that agent's PTY spawn — see
-/// `third_party/orca/UPSTREAM.md`. The control plane sends only a member id
+/// `packages/ide/CODEV-INTEGRATION.md`. The control plane sends only a member id
 /// through the browser; the secret itself never leaves the host.
 ///
 /// This is per-member *attribution*, not a security boundary: members share
