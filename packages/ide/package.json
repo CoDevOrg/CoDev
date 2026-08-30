@@ -5,6 +5,8 @@
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
   "bin": {
+    "codev": "./out/cli/index.js",
+    "codev-dev": "./config/scripts/orca-dev.mjs",
     "orca": "./out/cli/index.js",
     "orca-dev": "./config/scripts/orca-dev.mjs"
   },

@@ -17,7 +17,7 @@ export type LinuxTerminalOrcaCliShimOptions = {
   appImagePath?: string | null
 }
 
-// Why: on Linux the CLI installs as `orca-ide` so it never shadows the GNOME
+// Why: on Linux the CLI installs as `codev` so it never shadows the GNOME
 // Orca screen reader at /usr/bin/orca — but agent-facing surfaces (skills,
 // dispatch preambles, CLI hints) all invoke bare `orca`, so on stock Ubuntu an
 // agent inside an Orca terminal would launch the screen reader instead

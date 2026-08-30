@@ -10,7 +10,7 @@ import { getBundledLauncherPath } from './cli-installer'
 const DISPATCHER_MARKER = '# orca-serve-bare-orca-dispatcher'
 
 export type LinuxBareOrcaDispatcherOptions = {
-  /** Packaged app resources root; the bundled `orca-ide` launcher lives under it. */
+  /** Packaged app resources root; the bundled `codev` launcher lives under it. */
   resourcesPath: string
   /** Test seam — defaults to the real home directory. */
   homePath?: string
@@ -26,11 +26,11 @@ export type LinuxBareOrcaDispatcherState =
 export type LinuxBareOrcaDispatcherResult = {
   state: LinuxBareOrcaDispatcherState
   dispatcherPath: string
-  /** What the dispatcher execs: the stable AppImage, or the bundled orca-ide. */
+  /** What the dispatcher execs: the stable AppImage, or the bundled codev. */
   target: string | null
 }
 
-// Why: on Linux the CLI installs as `orca-ide`, not bare `orca`, to avoid
+// Why: on Linux the CLI installs as `codev`, not bare `orca`, to avoid
 // shadowing GNOME Orca's /usr/bin/orca. But the Claude Team launcher typed into
 // the initial managed terminal invokes the literal `orca claude-teams`, so a
 // headless serve box needs a bare-`orca` dispatcher on the managed-terminal PATH
@@ -61,7 +61,7 @@ export async function installLinuxBareOrcaDispatcher(
 }
 
 /** Bare-`orca` script that execs the Orca CLI: the stable AppImage when running
- *  from one, otherwise the bundled `orca-ide` launcher. Shared by the serve
+ *  from one, otherwise the bundled `codev` launcher. Shared by the serve
  *  dispatcher and the managed-terminal PATH shim. */
 export function buildBareOrcaCliScript(
   resourcesPath: string,

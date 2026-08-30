@@ -189,7 +189,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
   // desktop, so startup shell quoting must use the runtime platform.
   const platform = resolveGitHubWorkItemLaunchPlatform(store, repo)
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-  // `orca-ide` rename must not be applied for remote launches.
+  // `codev` rename must not be applied for remote launches.
   const isRemote = repoIsRemote(repo)
   const shell = resolveLocalWindowsAgentStartupShell({
     platform,

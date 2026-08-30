@@ -17,7 +17,7 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
 }
-const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
+const linuxLauncherAsset = new URL('../../../resources/linux/bin/codev', import.meta.url)
 
 describe('packaged CLI assets', () => {
   it('ships embedded skill guides with the CLI instead of source Markdown', () => {
@@ -69,8 +69,8 @@ describe('packaged CLI assets', () => {
         const resourcesDir = join(appDir, 'resources')
         const launcherDir = join(resourcesDir, 'bin')
         const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-        const launcherPath = join(launcherDir, 'orca-ide')
-        const electronPath = join(appDir, 'orca-ide')
+        const launcherPath = join(launcherDir, 'codev')
+        const electronPath = join(appDir, 'codev')
         const cliPath = join(cliDir, 'index.js')
 
         await mkdir(launcherDir, { recursive: true })
@@ -96,7 +96,7 @@ printf 'arg=%s\\n' "$@"
 
         const homeDir = join(root, 'home')
         const commandDir = join(homeDir, '.local', 'bin')
-        const commandPath = join(commandDir, 'orca-ide')
+        const commandPath = join(commandDir, 'codev')
         await mkdir(commandDir, { recursive: true })
         await mkdir(join(homeDir, 'orca'), { recursive: true })
         await symlink(launcherPath, commandPath)
@@ -121,7 +121,7 @@ printf 'arg=%s\\n' "$@"
       const cliDir = join(appDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
       const cliPath = join(cliDir, 'index.js')
       const appImagePath = join(root, "Orca's AppImage.AppImage")
-      const commandPath = join(root, 'orca-ide')
+      const commandPath = join(root, 'codev')
       await mkdir(cliDir, { recursive: true })
       await writeFile(
         cliPath,

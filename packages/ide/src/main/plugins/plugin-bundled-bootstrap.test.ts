@@ -19,7 +19,7 @@ async function writeBundle(root: string, name = 'Skills'): Promise<{ path: strin
   const pluginRoot = join(root, path)
   await mkdir(pluginRoot, { recursive: true })
   await writeFile(
-    join(pluginRoot, 'orca-plugin.json'),
+    join(pluginRoot, 'codev-plugin.json'),
     JSON.stringify({
       manifestVersion: 1,
       id: 'orca-skills',
@@ -90,7 +90,7 @@ describe('bundled plugin bootstrap', () => {
     await writeIndex(root, bundle.path, bundle.hash)
     await bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })
     const versionDir = join(userDataPath, 'plugins', 'stablyai.orca-skills', bundle.hash)
-    await writeFile(join(versionDir, 'orca-plugin.json'), '{}')
+    await writeFile(join(versionDir, 'codev-plugin.json'), '{}')
 
     await expect(
       bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })

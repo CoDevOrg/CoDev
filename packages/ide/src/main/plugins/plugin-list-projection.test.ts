@@ -115,7 +115,7 @@ describe('buildPluginList consent identity', () => {
   it('does not expose an invalid development plugin absolute path as identity', async () => {
     const invalid: InvalidDiscoveredPlugin = {
       rootDir: join(tmpdir(), 'private', 'secret-plugin-path'),
-      error: 'missing orca-plugin.json',
+      error: 'missing codev-plugin.json',
       isDev: true
     }
     const service = {

@@ -13,7 +13,7 @@ export type PreambleParams = {
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
+  // Why: packaged WSL panes install the scoped launcher as `codev`;
   // other execution hosts keep their existing bare `orca` bridge.
   cliCommand?: OrchestrationCliCommand
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only

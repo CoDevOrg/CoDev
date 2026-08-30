@@ -37,7 +37,7 @@ async function pluginRoot(): Promise<string> {
   roots.push(root)
   await Promise.all([mkdir(join(root, 'locales')), mkdir(join(root, 'recipes'))])
   await Promise.all([
-    writeFile(join(root, 'orca-plugin.json'), JSON.stringify(contentManifest())),
+    writeFile(join(root, 'codev-plugin.json'), JSON.stringify(contentManifest())),
     writeFile(join(root, 'locales', 'es.json'), JSON.stringify({ settings: 'Ajustes' })),
     writeFile(
       join(root, 'recipes', 'vm.json'),

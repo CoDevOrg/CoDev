@@ -84,7 +84,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#lan',
+      pairingUrl: 'codev://pair#lan',
       endpoint: 'ws://192.168.50.238:6768',
       deviceId: 'mobile-lan',
       connectionMode: 'automatic'
@@ -193,7 +193,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#mobile',
+      pairingUrl: 'codev://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
       connectionMode: 'automatic'
@@ -204,7 +204,7 @@ describe('registerMobileHandlers', () => {
 
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
-      pairingUrl: 'orca://pair#mobile',
+      pairingUrl: 'codev://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
       connectionMode: 'automatic'
@@ -250,7 +250,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'codev://pair#local',
       endpoint: 'ws://192.168.1.24:6768',
       deviceId: 'mobile-local',
       connectionMode: 'local-only'
@@ -267,7 +267,7 @@ describe('registerMobileHandlers', () => {
   it('preserves a copyable pairing URL when QR encoding fails', async () => {
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair?code=copy-me',
+      pairingUrl: 'codev://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',
       deviceId: 'mobile-large',
       connectionMode: 'local-only'
@@ -283,7 +283,7 @@ describe('registerMobileHandlers', () => {
       available: true,
       qrDataUrl: null,
       qrError: 'encoding_failed',
-      pairingUrl: 'orca://pair?code=copy-me',
+      pairingUrl: 'codev://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',
       deviceId: 'mobile-large',
       connectionMode: 'local-only'
@@ -336,7 +336,7 @@ describe('registerMobileHandlers', () => {
   it('generates runtime-scoped pairing urls for web and desktop clients', async () => {
     const createPairingOffer = vi.fn().mockReturnValue({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'codev://pair#runtime',
       webClientUrl: 'http://100.64.1.20:6768/web-index.html?pairing=runtime',
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
@@ -353,7 +353,7 @@ describe('registerMobileHandlers', () => {
       })
     ).resolves.toEqual({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'codev://pair#runtime',
       webClientUrl: 'http://100.64.1.20:6768/web-index.html?pairing=runtime',
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
@@ -380,7 +380,7 @@ describe('registerMobileHandlers', () => {
   ): { createPairingOffer: Mock; ensureNetworkExposure: Mock } => ({
     createPairingOffer: vi.fn().mockReturnValue({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'codev://pair#runtime',
       webClientUrl: `http://${address}/web-index.html?pairing=runtime`,
       endpoint: `ws://${address}`,
       deviceId: 'runtime-local'

@@ -42,7 +42,7 @@ async function writePluginSource(
 ): Promise<void> {
   const panelEntry = options.panelEntry ?? 'panel.html'
   await writeFile(
-    join(root, 'orca-plugin.json'),
+    join(root, 'codev-plugin.json'),
     JSON.stringify({
       manifestVersion: 1,
       id: options.id ?? 'demo',
@@ -110,13 +110,13 @@ describe('installPluginFromLocalPath', () => {
     const sourcePath = await tempRoot('orca-plugin-source-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
-    const firstManifest = await readFile(join(sourcePath, 'orca-plugin.json'), 'utf8')
+    const firstManifest = await readFile(join(sourcePath, 'codev-plugin.json'), 'utf8')
     const changedManifest = {
       ...(JSON.parse(firstManifest) as Record<string, unknown>),
       name: 'Changed During Staging',
       version: '2.0.0'
     }
-    await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(changedManifest))
+    await writeFile(join(sourcePath, 'codev-plugin.json'), JSON.stringify(changedManifest))
     const manifestRead = vi
       .spyOn(manifestFile, 'readPluginManifestText')
       .mockResolvedValueOnce(firstManifest)
@@ -354,7 +354,7 @@ describe('installPluginFromLocalPath', () => {
   it('rejects an oversized manifest without reading an unbounded JSON payload', async () => {
     const sourcePath = await tempRoot('orca-plugin-source-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const manifestPath = join(sourcePath, 'orca-plugin.json')
+    const manifestPath = join(sourcePath, 'codev-plugin.json')
     await writeFile(manifestPath, '')
     await truncate(manifestPath, PLUGIN_MANIFEST_MAX_BYTES + 1)
 

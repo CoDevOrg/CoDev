@@ -7,7 +7,10 @@ import {
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
-import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
+import {
+  getLegacyOrcaCliCommandNamesForPlatform,
+  getOrcaCliCommandNameForPlatform
+} from '../../shared/orca-cli-command-name'
 import { codevHomeConfigDir } from '../../shared/codev-config-dir'
 
 export type ClaudeAgentTeamsLaunchPlan = {
@@ -61,11 +64,20 @@ export function resolveClaudeAgentTeamsShimBin(
   if (bundled && isExecutableFile(bundled)) {
     return bundled
   }
-  return (
-    findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', env.PATH) ??
-    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), env.PATH) ??
-    getOrcaCliCommandNameForPlatform(process.platform)
-  )
+  const devNames =
+    process.platform === 'win32' ? ['codev-dev.cmd', 'orca-dev.cmd'] : ['codev-dev', 'orca-dev']
+  const candidates = [
+    ...devNames,
+    getOrcaCliCommandNameForPlatform(process.platform),
+    ...getLegacyOrcaCliCommandNamesForPlatform(process.platform)
+  ]
+  for (const candidate of candidates) {
+    const found = findExecutableOnPath(candidate, env.PATH)
+    if (found) {
+      return found
+    }
+  }
+  return getOrcaCliCommandNameForPlatform(process.platform)
 }
 
 function defaultShimRoot(): string {
@@ -76,14 +88,21 @@ function bundledLauncherPath(): string | null {
   if (!process.resourcesPath) {
     return null
   }
-  if (process.platform === 'darwin') {
-    return join(process.resourcesPath, 'bin', 'orca')
-  }
-  if (process.platform === 'linux') {
-    return join(process.resourcesPath, 'bin', 'orca-ide')
-  }
-  if (process.platform === 'win32') {
-    return join(process.resourcesPath, 'bin', 'orca.exe')
+  // Why: extraResources ships the launcher under both names during the rename,
+  // so prefer the CoDev one and fall back to what an older bundle laid down.
+  const names =
+    process.platform === 'darwin'
+      ? ['codev', 'orca']
+      : process.platform === 'linux'
+        ? ['codev', 'orca-ide']
+        : process.platform === 'win32'
+          ? ['codev.exe', 'orca.exe']
+          : []
+  for (const name of names) {
+    const candidate = join(process.resourcesPath, 'bin', name)
+    if (isExecutableFile(candidate)) {
+      return candidate
+    }
   }
   return null
 }

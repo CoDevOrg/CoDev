@@ -7,6 +7,11 @@ import {
   PAIRING_CODE_MAX_CHARACTERS,
   PAIRING_INPUT_MAX_CHARACTERS
 } from './mobile-pairing-protocol-limits'
+import {
+  LEGACY_PAIRING_URL_SCHEME,
+  PAIRING_URL_PREFIXES,
+  PAIRING_URL_SCHEME
+} from './codev-identifiers'
 
 export { PAIRING_OFFER_VERSION, PairingOfferSchema }
 export type { PairingOffer }
@@ -23,7 +28,7 @@ export function encodePairingOffer(offer: PairingOffer): string {
   }
   // Why: Android camera intents and Expo Router preserve query params more
   // reliably than URL fragments when launching a custom-scheme app.
-  return `orca://pair?code=${base64url}`
+  return `${PAIRING_URL_SCHEME}://pair?code=${base64url}`
 }
 
 export function decodePairingOffer(url: string): PairingOffer {
@@ -32,7 +37,9 @@ export function decodePairingOffer(url: string): PairingOffer {
   }
   const code = extractPairingCodeFromUrl(url)
   if (!code) {
-    throw new Error('Invalid pairing URL: must start with orca://pair and include a pairing code')
+    throw new Error(
+      `Invalid pairing URL: must start with ${PAIRING_URL_SCHEME}://pair and include a pairing code`
+    )
   }
   return decodePairingBase64(code)
 }
@@ -44,9 +51,11 @@ function extractPairingCodeFromUrl(url: string): string | null {
   } catch {
     return null
   }
-  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
-  // pairing deep-link host may carry runtime auth material.
-  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+  // Why: prefix checks accepted routes like `codev://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material. Both schemes are
+  // accepted so a link minted by an older desktop build still pairs.
+  const schemes = new Set([`${PAIRING_URL_SCHEME}:`, `${LEGACY_PAIRING_URL_SCHEME}:`])
+  if (!schemes.has(parsed.protocol) || parsed.hostname !== 'pair') {
     return null
   }
   if (parsed.pathname !== '' && parsed.pathname !== '/') {
@@ -59,9 +68,9 @@ function extractPairingCodeFromUrl(url: string): string | null {
   return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
-// Why: accept either an `orca://pair?...` URL or the bare base64
-// string so the mobile paste-pair flow can take whichever the user
-// actually copied from desktop.
+// Why: accept either a `codev://pair?...` URL (or a legacy `orca://` one) or
+// the bare base64 string so the mobile paste-pair flow can take whichever the
+// user actually copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
   if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
     return null
@@ -71,7 +80,8 @@ export function parsePairingCode(input: string): PairingOffer | null {
     return null
   }
   try {
-    if (trimmed.toLowerCase().startsWith('orca://')) {
+    const lowered = trimmed.toLowerCase()
+    if (PAIRING_URL_PREFIXES.some((prefix) => lowered.startsWith(prefix))) {
       return decodePairingOffer(trimmed)
     }
     return decodePairingBase64(trimmed)

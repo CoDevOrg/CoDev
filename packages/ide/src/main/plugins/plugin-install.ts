@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   PLUGIN_MANIFEST_FILENAME,
+  PLUGIN_MANIFEST_FILENAMES,
   isQualifiedPluginKey
 } from '../../shared/plugins/plugin-manifest'
 import {
@@ -72,7 +73,7 @@ export async function installPluginFromLocalPath(input: {
   blockedPluginReason?: (pluginKey: string) => string | null
 }): Promise<PluginInstallResult> {
   return serializePluginMutation(input.pluginsDir, async () => {
-    if (!existsSync(join(input.sourcePath, PLUGIN_MANIFEST_FILENAME))) {
+    if (!PLUGIN_MANIFEST_FILENAMES.some((name) => existsSync(join(input.sourcePath, name)))) {
       return { ok: false, error: `no ${PLUGIN_MANIFEST_FILENAME} found in ${input.sourcePath}` }
     }
     return installStagedPluginTree({
