@@ -2095,91 +2095,26 @@
   line-height: 1.6;
 }
 
-/* Waitlist inline drawer ----------------------------------------------------
+/* Waitlist form ------------------------------------------------------------
 
-   In the closing CTA the "Join the waitlist" button expands a panel in place
-   rather than opening the modal, and three agent-coloured ghost cursors trail
-   the visitor's pointer while the section is on screen. */
+   The signup form lives here permanently, in a card below the closing pitch.
+   The "Get early access" buttons up the page just scroll to it. Three
+   agent-coloured ghost cursors trail the pointer while it is on screen. */
 
-/* The button and the form panel sit side by side, and the pair stays centred:
-   opening the form widens the row, so the button eases left and the panel
-   fills the space to its right. The section grows to hold it. Below 900px
-   there is no room beside the button, so it unfurls downward instead. */
 .lp-waitlist {
   display: flex;
-  max-width: 100%;
-  align-items: flex-start;
   justify-content: center;
+  width: 100%;
 }
 
-.lp-waitlist-toggle {
-  flex: none;
-}
-
-.lp-waitlist-drawer {
-  min-width: 0;
-  min-height: 0;
-  max-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition:
-    max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.3s ease;
-}
-
-.lp-waitlist-drawer.is-open {
-  max-width: 420px;
-  margin-left: 18px;
-  opacity: 1;
-}
-
-.lp-waitlist-drawer-inner {
-  width: min(380px, 76vw);
-  padding: 20px;
+.lp-waitlist-card {
+  width: min(420px, 100%);
+  padding: 24px;
   border: 1px solid var(--lp-line-strong);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--lp-bg-2);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
   text-align: left;
-  transform: translateX(-16px);
-  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.lp-waitlist-drawer.is-open .lp-waitlist-drawer-inner {
-  transform: translateX(0);
-}
-
-@media (max-width: 900px) {
-  .lp-waitlist {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .lp-waitlist-drawer {
-    max-width: none;
-    max-height: 0;
-    transition:
-      max-height 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-      margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.3s ease;
-  }
-
-  .lp-waitlist-drawer.is-open {
-    max-width: none;
-    max-height: 820px;
-    margin-left: 0;
-    margin-top: 18px;
-  }
-
-  .lp-waitlist-drawer-inner {
-    width: min(400px, 84vw);
-    transform: translateY(-14px);
-  }
-
-  .lp-waitlist-drawer.is-open .lp-waitlist-drawer-inner {
-    transform: translateY(0);
-  }
 }
 
 .lp-ghost-crew {

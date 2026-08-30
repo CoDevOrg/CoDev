@@ -27,13 +27,13 @@ test("landing page explains CoDev and offers a clear start", async ({
     page.getByText(/one shared cloud workspace where you, your friends/),
   ).toBeVisible();
 
-  // "Get early access" scrolls to the inline waitlist form and opens it in
-  // place: no modal, no new tab.
+  // The signup form always sits at the foot of the page; "Get early access"
+  // just scrolls to it and focuses the email field. No modal, no new tab.
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("link", { name: "Get early access" }).first().click();
-
   const form = page.locator("#get-access");
   await expect(form.getByLabel("Email")).toBeVisible();
+
+  await page.getByRole("link", { name: "Get early access" }).first().click();
   await expect(form.getByLabel("Email")).toBeFocused();
   await expect(form.getByLabel(/^Name/)).toBeVisible();
   const useCase = form.getByRole("group", {

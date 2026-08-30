@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { RequestAccessForm } from "@/components/request-access-form";
 import {
   REQUEST_ACCESS_EVENT,
   REQUEST_ACCESS_TARGET_ID,
 } from "@/components/request-access-button";
+import { RequestAccessForm } from "@/components/request-access-form";
 
 /**
  * Three agent-coloured "ghost" cursors that trail the visitor's pointer near
@@ -22,7 +22,6 @@ const CREW = [
 // Distance from the real pointer to each ghost. Close enough to read as a
 // little cluster, wide enough that the three arrows never overlap.
 const REST_RADIUS = 40;
-const HUDDLE_RADIUS = 26;
 
 function GhostArrow({ color }: { color: string }) {
   return (
@@ -38,15 +37,10 @@ function GhostArrow({ color }: { color: string }) {
   );
 }
 
-function GhostCrew({ huddle }: { huddle: boolean }) {
+function GhostCrew() {
   const nodesRef = useRef<Array<HTMLDivElement | null>>([]);
   const target = useRef({ x: 0, y: 0 });
   const positions = useRef(CREW.map(() => ({ x: 0, y: 0 })));
-  const huddleRef = useRef(huddle);
-
-  useEffect(() => {
-    huddleRef.current = huddle;
-  }, [huddle]);
 
   useEffect(() => {
     target.current = {
@@ -64,22 +58,16 @@ function GhostCrew({ huddle }: { huddle: boolean }) {
     window.addEventListener("pointermove", onMove, { passive: true });
 
     let raf = 0;
-    let frame = 0;
     const tick = () => {
-      frame += 1;
-      const close = huddleRef.current;
       CREW.forEach((agent, index) => {
         const el = nodesRef.current[index];
         const pos = positions.current[index];
         if (!el || !pos) return;
         const rad = (agent.angle * Math.PI) / 180;
-        const radius = close ? HUDDLE_RADIUS : REST_RADIUS;
-        const bob = close ? Math.sin(frame / 16 + index * 2) * 4 : 0;
-        const toX = target.current.x + Math.cos(rad) * radius;
-        const toY = target.current.y + Math.sin(rad) * radius + bob;
-        const ease = close ? Math.min(agent.lag + 0.15, 0.4) : agent.lag;
-        pos.x += (toX - pos.x) * ease;
-        pos.y += (toY - pos.y) * ease;
+        const toX = target.current.x + Math.cos(rad) * REST_RADIUS;
+        const toY = target.current.y + Math.sin(rad) * REST_RADIUS;
+        pos.x += (toX - pos.x) * agent.lag;
+        pos.y += (toY - pos.y) * agent.lag;
         el.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
       });
       raf = window.requestAnimationFrame(tick);
@@ -110,12 +98,11 @@ function GhostCrew({ huddle }: { huddle: boolean }) {
 }
 
 export function WaitlistInline() {
-  const [open, setOpen] = useState(false);
   const [showCrew, setShowCrew] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Show the ghost cursors only while the closing CTA is on screen, and only
-  // where a real pointer and motion are welcome.
+  // Show the ghost cursors only while the form is on screen, and only where a
+  // real pointer and motion are welcome.
   useEffect(() => {
     const node = wrapRef.current;
     if (!node) return;
@@ -133,11 +120,10 @@ export function WaitlistInline() {
     return () => observer.disconnect();
   }, []);
 
-  // The hero and nav "Get early access" buttons open this form from far up the
-  // page: expand it, bring it into view, and drop the caret in the email field.
+  // The hero and nav "Get early access" buttons scroll the page down to this
+  // form and drop the caret in the email field.
   useEffect(() => {
     const onRequest = () => {
-      setOpen(true);
       const node = wrapRef.current;
       if (!node) return;
       const reduced = window.matchMedia(
@@ -162,22 +148,11 @@ export function WaitlistInline() {
 
   return (
     <div className="lp-waitlist" id={REQUEST_ACCESS_TARGET_ID} ref={wrapRef}>
-      <button
-        type="button"
-        className="lp-cta lp-cta-primary lp-waitlist-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {open ? "Not now" : "Join the waitlist"}
-      </button>
-
-      <div className={`lp-waitlist-drawer${open ? " is-open" : ""}`}>
-        <div className="lp-waitlist-drawer-inner" inert={!open}>
-          <RequestAccessForm />
-        </div>
+      <div className="lp-waitlist-card">
+        <RequestAccessForm />
       </div>
 
-      {showCrew ? <GhostCrew huddle={open} /> : null}
+      {showCrew ? <GhostCrew /> : null}
     </div>
   );
 }

@@ -27,72 +27,31 @@ describe("WaitlistInline", () => {
     mockMatchMedia(false);
   });
 
-  it("starts collapsed with the signup form held inert", () => {
+  it("shows the signup form directly, with no toggle button", () => {
     const { container } = render(<WaitlistInline />);
 
-    const toggle = container.querySelector(".lp-waitlist-toggle")!;
-    expect(toggle).toHaveTextContent("Join the waitlist");
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    expect(container.querySelector(".lp-waitlist-drawer")).not.toHaveClass(
-      "is-open",
-    );
-    expect(
-      container.querySelector(".lp-waitlist-drawer-inner"),
-    ).toHaveAttribute("inert");
+    expect(screen.getByLabelText("Email")).toBeVisible();
+    // The only button is the form's own submit; nothing expands/collapses.
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute("type", "submit");
+    expect(buttons[0]).not.toHaveAttribute("aria-expanded");
+    expect(container.querySelector("[inert]")).not.toBeInTheDocument();
   });
 
-  it("expands the drawer in place instead of opening the modal", () => {
-    const showModal = vi.fn();
-    HTMLDialogElement.prototype.showModal = showModal;
-
-    const { container } = render(<WaitlistInline />);
-    const toggle = container.querySelector(".lp-waitlist-toggle")!;
-
-    fireEvent.click(toggle);
-
-    expect(toggle).toHaveTextContent("Not now");
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(container.querySelector(".lp-waitlist-drawer")).toHaveClass(
-      "is-open",
-    );
-
-    const drawer = container.querySelector<HTMLElement>(
-      ".lp-waitlist-drawer-inner",
-    )!;
-    expect(drawer).not.toHaveAttribute("inert");
-    expect(within(drawer).getByLabelText("Email")).toBeInTheDocument();
-    expect(showModal).not.toHaveBeenCalled();
-
-    fireEvent.click(toggle);
-    expect(toggle).toHaveTextContent("Join the waitlist");
-    expect(container.querySelector(".lp-waitlist-drawer")).not.toHaveClass(
-      "is-open",
-    );
-  });
-
-  it("opens and reveals the form when a Get early access button fires", () => {
+  it("scrolls to the form and focuses email when a CTA fires", () => {
     const scrollIntoView = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: scrollIntoView,
     });
 
-    const { container } = render(<WaitlistInline />);
-    expect(container.querySelector(".lp-waitlist-drawer")).not.toHaveClass(
-      "is-open",
-    );
+    render(<WaitlistInline />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent(REQUEST_ACCESS_EVENT));
     });
 
-    expect(container.querySelector(".lp-waitlist-drawer")).toHaveClass(
-      "is-open",
-    );
-    expect(container.querySelector(".lp-waitlist-toggle")).toHaveTextContent(
-      "Not now",
-    );
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
@@ -101,7 +60,7 @@ describe("WaitlistInline", () => {
     expect(container.querySelector(".lp-ghost-crew")).not.toBeInTheDocument();
   });
 
-  it("still lets the email form submit from the expanded drawer", async () => {
+  it("submits the email form", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -110,16 +69,13 @@ describe("WaitlistInline", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { container } = render(<WaitlistInline />);
-    fireEvent.click(container.querySelector(".lp-waitlist-toggle")!);
+    const card = container.querySelector<HTMLElement>(".lp-waitlist-card")!;
 
-    const drawer = container.querySelector<HTMLElement>(
-      ".lp-waitlist-drawer-inner",
-    )!;
-    fireEvent.change(within(drawer).getByLabelText("Email"), {
+    fireEvent.change(within(card).getByLabelText("Email"), {
       target: { value: "builder@example.com" },
     });
     fireEvent.click(
-      within(drawer).getByRole("button", { name: "Join the waitlist" }),
+      within(card).getByRole("button", { name: "Join the waitlist" }),
     );
 
     await screen.findByText("You're on the list.");
