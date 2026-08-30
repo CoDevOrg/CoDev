@@ -166,6 +166,504 @@ index 0000000..6e17476
 +    return rest
 +  }
 +}
+diff --git a/src/main/native-chat/session-file-resolver.test.ts b/src/main/native-chat/session-file-resolver.test.ts
+index 85cd653..6ebf53f 100644
+--- a/src/main/native-chat/session-file-resolver.test.ts
++++ b/src/main/native-chat/session-file-resolver.test.ts
+@@ -97,6 +97,38 @@ describe('resolveSessionFilePath', () => {
+     ).resolves.toBeNull()
+   })
+ 
++  it('resolves a Cursor transcript at projects/<slug>/agent-transcripts/<id>/<id>.jsonl', async () => {
++    const root = await makeRoot('orca-native-chat-resolve-cursor-')
++    const cursorProjectsDir = join(root, 'cursor-projects')
++    const id = 'a1b2c3d4-0000-4000-8000-000000000001'
++    const sessionDir = join(
++      cursorProjectsDir,
++      'srv-codev-workspaces-ws-1',
++      'agent-transcripts',
++      id
++    )
++    await mkdir(sessionDir, { recursive: true })
++    const target = join(sessionDir, `${id}.jsonl`)
++    await writeFile(target, '{"type":"turn_ended","status":"success"}\n')
++
++    await expect(
++      resolveSessionFilePath('cursor', id, { cursorProjectsDir })
++    ).resolves.toBe(target)
++  })
++
++  it('ignores a Cursor <id>.jsonl that is not under its id-named agent-transcripts dir', async () => {
++    const root = await makeRoot('orca-native-chat-resolve-cursor-decoy-')
++    const cursorProjectsDir = join(root, 'cursor-projects')
++    const id = 'a1b2c3d4-0000-4000-8000-000000000002'
++    const decoy = join(cursorProjectsDir, 'proj', 'notes', `${id}.jsonl`)
++    await mkdir(dirname(decoy), { recursive: true })
++    await writeFile(decoy, '{}\n')
++
++    await expect(
++      resolveSessionFilePath('cursor', id, { cursorProjectsDir })
++    ).resolves.toBeNull()
++  })
++
+   it('rejects unsafe Grok session ids before filesystem discovery', async () => {
+     const root = await makeRoot('orca-native-chat-resolve-grok-invalid-')
+     const grokSessionsDir = join(root, 'grok-sessions')
+diff --git a/src/main/native-chat/session-file-resolver.ts b/src/main/native-chat/session-file-resolver.ts
+index 33cf8c2..b0c61f7 100644
+--- a/src/main/native-chat/session-file-resolver.ts
++++ b/src/main/native-chat/session-file-resolver.ts
+@@ -19,6 +19,14 @@ function claudeProjectsDir(): string {
+   return join(homedir(), '.claude', 'projects')
+ }
+ 
++// Why: `cursor-agent` nests each session's transcript under a per-project slug
++// (`~/.cursor/projects/<encoded-cwd>/agent-transcripts/<id>/<id>.jsonl`). The
++// slug is not derivable here without the launch cwd, but the session id is a
++// UUID, so a glob for `<id>/<id>.jsonl` across every project dir is unambiguous.
++function cursorProjectsDir(): string {
++  return join(homedir(), '.cursor', 'projects')
++}
++
+ // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
+ // runtime home, so Orca-started Codex rollout files land under
+ // `<managed home>/sessions`, NOT `~/.codex/sessions`. Search the managed home
+@@ -45,6 +53,8 @@ export type ResolveSessionFileOptions = {
+   codexSessionsDirs?: string[]
+   /** Override the Grok sessions root (`~/.grok/sessions`). */
+   grokSessionsDir?: string
++  /** Override the Cursor projects root (`~/.cursor/projects`). */
++  cursorProjectsDir?: string
+   /** Authoritative transcript path reported by the agent hook
+    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
+    *  directly — recent Claude Code names the transcript with a UUID that differs
+@@ -94,9 +104,28 @@ export async function resolveSessionFilePath(
+   if (transcriptAgent === 'grok') {
+     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
+   }
++  if (transcriptAgent === 'cursor') {
++    return resolveCursorSessionFile(trimmedId, options.cursorProjectsDir ?? cursorProjectsDir())
++  }
+   return null
+ }
+ 
++async function resolveCursorSessionFile(
++  sessionId: string,
++  projectsDir: string
++): Promise<string | null> {
++  const targetName = `${sessionId}.jsonl`
++  const files = await walkSessionFiles(projectsDir, 'cursor', [], {
++    extensions: new Set(['.jsonl']),
++    // The transcript lives at `<project>/agent-transcripts/<id>/<id>.jsonl`;
++    // match both the file name and the id-named parent so an unrelated
++    // `<id>.jsonl` elsewhere in the tree cannot shadow it.
++    filePredicate: (path) =>
++      basename(path) === targetName && basename(join(path, '..')) === sessionId
++  })
++  return files[0] ?? null
++}
++
+ async function resolveClaudeSessionFile(
+   sessionId: string,
+   projectsDir: string
+diff --git a/src/main/native-chat/transcript-line-decoders-cursor.ts b/src/main/native-chat/transcript-line-decoders-cursor.ts
+new file mode 100644
+index 0000000..97ca74d
+--- /dev/null
++++ b/src/main/native-chat/transcript-line-decoders-cursor.ts
+@@ -0,0 +1,138 @@
++// Cursor Agent CLI transcript line → NativeChatMessage decoder.
++//
++// `cursor-agent` writes one JSONL file per session at
++// `~/.cursor/projects/<encoded-cwd>/agent-transcripts/<id>/<id>.jsonl`. Unlike
++// Claude/Codex it carries no per-line id or timestamp; the discriminator is a
++// top-level `role`, and turn boundaries are separate `{"type":"turn_ended"}`
++// records (handled by the lifecycle decoder, skipped here).
++//
++// Observed line shapes:
++//   {"role":"user","message":{"content":[{"type":"text",
++//     "text":"<timestamp>…</timestamp>\n<user_query>\n…\n</user_query>"}]}}
++//   {"role":"assistant","message":{"content":[
++//     {"type":"text","text":"…"},
++//     {"type":"tool_use","name":"Shell","input":{"command":"…"}}]}}
++//   {"type":"turn_ended","status":"success"}
++
++import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
++import {
++  asRecord,
++  extractString,
++  parseJsonObject,
++  timestampMs
++} from '../ai-vault/session-scanner-values'
++
++/** Cursor wraps the user's prompt with an injected time header and query tags. */
++const USER_QUERY_RE = /<user_query>\n?([\s\S]*?)\n?<\/user_query>/
++const TIMESTAMP_TAG_RE = /<timestamp>([\s\S]*?)<\/timestamp>/
++
++/** `cursor-agent --print` splices bare `[REDACTED]` markers where it withholds a
++ *  reasoning trace. They are noise in the rendered bubble, not content. */
++function stripCursorRedaction(text: string): string {
++  return text
++    .replace(/(^|\n)\s*\[REDACTED\]\s*(?=\n|$)/g, '$1')
++    .replace(/\s*\[REDACTED\]\s*$/g, '')
++    .replace(/^\s*\[REDACTED\]\s*/g, '')
++    .trimEnd()
++}
++
++function unwrapUserPrompt(raw: string): { text: string; timestamp: number | null } {
++  const timestampMatch = raw.match(TIMESTAMP_TAG_RE)
++  const parsed = timestampMatch ? Date.parse(timestampMatch[1]!.trim()) : NaN
++  const queryMatch = raw.match(USER_QUERY_RE)
++  const body = (queryMatch ? queryMatch[1]! : raw).trim()
++  return { text: body, timestamp: Number.isFinite(parsed) ? parsed : null }
++}
++
++function cursorContentBlocks(content: unknown): NativeChatBlock[] {
++  if (typeof content === 'string') {
++    const text = stripCursorRedaction(content)
++    return text ? [{ type: 'text', text }] : []
++  }
++  if (!Array.isArray(content)) {
++    return []
++  }
++  const blocks: NativeChatBlock[] = []
++  for (const item of content) {
++    const record = asRecord(item)
++    if (!record) {
++      continue
++    }
++    switch (record.type) {
++      case 'text': {
++        const text = stripCursorRedaction(extractString(record.text) ?? '')
++        if (text) {
++          blocks.push({ type: 'text', text })
++        }
++        break
++      }
++      case 'tool_use':
++      case 'tool_call': {
++        const name = extractString(record.name) ?? 'tool'
++        blocks.push({ type: 'tool-call', name, input: record.input ?? record.args ?? null })
++        break
++      }
++      case 'tool_result': {
++        const output = extractString(record.content) ?? extractString(record.output) ?? ''
++        blocks.push({
++          type: 'tool-result',
++          output,
++          ...(record.is_error === true ? { isError: true } : {})
++        })
++        break
++      }
++      default:
++        break
++    }
++  }
++  return blocks
++}
++
++export function decodeCursorTranscriptLine(
++  line: string,
++  fallbackId: string
++): NativeChatMessage | null {
++  const record = parseJsonObject(line)
++  if (!record) {
++    return null
++  }
++  const role = record.role
++  if (role !== 'user' && role !== 'assistant') {
++    // `turn_ended` and any other non-message record is lifecycle, not content.
++    return null
++  }
++  const message = asRecord(record.message)
++  const rawBlocks = cursorContentBlocks(message?.content)
++
++  if (role === 'user') {
++    const rawText = rawBlocks.find((block) => block.type === 'text')
++    const source = rawText && rawText.type === 'text' ? rawText.text : ''
++    const { text, timestamp } = unwrapUserPrompt(source)
++    if (!text) {
++      return null
++    }
++    return {
++      id: fallbackId,
++      role: 'user',
++      blocks: [{ type: 'text', text }],
++      timestamp,
++      source: 'transcript'
++    }
++  }
++
++  if (rawBlocks.length === 0) {
++    return null
++  }
++  return {
++    id: fallbackId,
++    role: 'assistant',
++    blocks: rawBlocks,
++    timestamp: parseTimestamp(record.timestamp),
++    source: 'transcript'
++  }
++}
++
++function parseTimestamp(value: unknown): number | null {
++  const parsed = timestampMs(value)
++  return Number.isFinite(parsed) ? parsed : null
++}
+diff --git a/src/main/native-chat/transcript-line-decoders.cursor.test.ts b/src/main/native-chat/transcript-line-decoders.cursor.test.ts
+new file mode 100644
+index 0000000..e7bc848
+--- /dev/null
++++ b/src/main/native-chat/transcript-line-decoders.cursor.test.ts
+@@ -0,0 +1,88 @@
++import { describe, expect, it } from 'vitest'
++import { decodeCursorTranscriptLine } from './transcript-line-decoders'
++
++describe('decodeCursorTranscriptLine', () => {
++  it('unwraps the <timestamp>/<user_query> envelope on a user line', () => {
++    const line = JSON.stringify({
++      role: 'user',
++      message: {
++        content: [
++          {
++            type: 'text',
++            text:
++              '<timestamp>Saturday, Aug 29, 2026, 11:50 PM (UTC)</timestamp>\n' +
++              '<user_query>\nRun the tests\n</user_query>'
++          }
++        ]
++      }
++    })
++    expect(decodeCursorTranscriptLine(line, 'off-1')).toEqual({
++      id: 'off-1',
++      role: 'user',
++      blocks: [{ type: 'text', text: 'Run the tests' }],
++      timestamp: Date.parse('Saturday, Aug 29, 2026, 11:50 PM (UTC)'),
++      source: 'transcript'
++    })
++  })
++
++  it('keeps a bare user prompt when there is no envelope', () => {
++    const line = JSON.stringify({
++      role: 'user',
++      message: { content: [{ type: 'text', text: 'hello there' }] }
++    })
++    expect(decodeCursorTranscriptLine(line, 'off-2')).toMatchObject({
++      role: 'user',
++      blocks: [{ type: 'text', text: 'hello there' }],
++      timestamp: null
++    })
++  })
++
++  it('decodes assistant text and a Shell tool_use, dropping [REDACTED] markers', () => {
++    const line = JSON.stringify({
++      role: 'assistant',
++      message: {
++        content: [
++          { type: 'text', text: ' [REDACTED]' },
++          {
++            type: 'tool_use',
++            name: 'Shell',
++            input: { command: 'echo hi && git branch --show-current' }
++          },
++          { type: 'text', text: '`hi`\n\nCurrent branch: **main**\n\n[REDACTED]' }
++        ]
++      }
++    })
++    expect(decodeCursorTranscriptLine(line, 'off-3')).toEqual({
++      id: 'off-3',
++      role: 'assistant',
++      blocks: [
++        {
++          type: 'tool-call',
++          name: 'Shell',
++          input: { command: 'echo hi && git branch --show-current' }
++        },
++        { type: 'text', text: '`hi`\n\nCurrent branch: **main**' }
++      ],
++      timestamp: null,
++      source: 'transcript'
++    })
++  })
++
++  it('skips a turn_ended lifecycle record', () => {
++    expect(
++      decodeCursorTranscriptLine(JSON.stringify({ type: 'turn_ended', status: 'success' }), 'off-4')
++    ).toBeNull()
++  })
++
++  it('skips an assistant row that is only redaction noise', () => {
++    const line = JSON.stringify({
++      role: 'assistant',
++      message: { content: [{ type: 'text', text: '[REDACTED]' }] }
++    })
++    expect(decodeCursorTranscriptLine(line, 'off-5')).toBeNull()
++  })
++
++  it('returns null for malformed JSON', () => {
++    expect(decodeCursorTranscriptLine('{not json', 'off-6')).toBeNull()
++  })
++})
+diff --git a/src/main/native-chat/transcript-line-decoders.ts b/src/main/native-chat/transcript-line-decoders.ts
+index 67b1aaf..7cfbb39 100644
+--- a/src/main/native-chat/transcript-line-decoders.ts
++++ b/src/main/native-chat/transcript-line-decoders.ts
+@@ -12,3 +12,4 @@
+ export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
+ export { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+ export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
++export { decodeCursorTranscriptLine } from './transcript-line-decoders-cursor'
+diff --git a/src/main/native-chat/transcript-reader.ts b/src/main/native-chat/transcript-reader.ts
+index 8635360..f2dfdb3 100644
+--- a/src/main/native-chat/transcript-reader.ts
++++ b/src/main/native-chat/transcript-reader.ts
+@@ -10,6 +10,7 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
+ import {
+   decodeClaudeTranscriptLine,
+   decodeCodexTranscriptLine,
++  decodeCursorTranscriptLine,
+   decodeGrokTranscriptLine
+ } from './transcript-line-decoders'
+ import { decodeTranscriptStream } from './transcript-stream-lines'
+@@ -55,6 +56,9 @@ export async function readNativeChatTranscript(
+     if (transcriptAgent === 'grok') {
+       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+     }
++    if (transcriptAgent === 'cursor') {
++      return { messages: await readTranscript(filePath, decodeCursorTranscriptLine) }
++    }
+     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
+   } catch (err) {
+     // Why: ENOENT after a successful resolve is the same first-flush/rotation
+diff --git a/src/main/native-chat/transcript-tail-reader.ts b/src/main/native-chat/transcript-tail-reader.ts
+index 9fb6670..25b31bf 100644
+--- a/src/main/native-chat/transcript-tail-reader.ts
++++ b/src/main/native-chat/transcript-tail-reader.ts
+@@ -9,6 +9,7 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
+ import {
+   decodeClaudeTranscriptLine,
+   decodeCodexTranscriptLine,
++  decodeCursorTranscriptLine,
+   decodeGrokTranscriptLine
+ } from './transcript-line-decoders'
+ import { transcriptFallbackId } from './transcript-fallback-id'
+@@ -33,6 +34,9 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
+   if (transcriptAgent === 'grok') {
+     return decodeGrokTranscriptLine
+   }
++  if (transcriptAgent === 'cursor') {
++    return decodeCursorTranscriptLine
++  }
+   return null
+ }
+ 
+diff --git a/src/main/native-chat/transcript-turn-lifecycle.test.ts b/src/main/native-chat/transcript-turn-lifecycle.test.ts
+index e46fcde..181c435 100644
+--- a/src/main/native-chat/transcript-turn-lifecycle.test.ts
++++ b/src/main/native-chat/transcript-turn-lifecycle.test.ts
+@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
+ import {
+   decodeClaudeTurnLifecycle,
+   decodeCodexTurnLifecycle,
++  decodeCursorTurnLifecycle,
+   nativeChatTurnLifecycleDecoderForAgent
+ } from './transcript-turn-lifecycle'
+ 
+@@ -10,9 +11,37 @@ describe('native chat transcript turn lifecycle', () => {
+     expect(nativeChatTurnLifecycleDecoderForAgent('claude')).not.toBeNull()
+     expect(nativeChatTurnLifecycleDecoderForAgent('openclaude')).not.toBeNull()
+     expect(nativeChatTurnLifecycleDecoderForAgent('codex')).not.toBeNull()
++    expect(nativeChatTurnLifecycleDecoderForAgent('cursor')).not.toBeNull()
+     expect(nativeChatTurnLifecycleDecoderForAgent('grok')).toBeNull()
+   })
+ 
++  it('decodes Cursor turn boundaries from user rows and turn_ended records', () => {
++    expect(
++      decodeCursorTurnLifecycle(
++        JSON.stringify({
++          role: 'user',
++          message: { content: [{ type: 'text', text: '<user_query>\ngo\n</user_query>' }] }
++        }),
++        'off-100'
++      )
++    ).toEqual({ state: 'working', turnId: 'off-100', timestamp: null })
++    expect(
++      decodeCursorTurnLifecycle(JSON.stringify({ type: 'turn_ended', status: 'success' }), 'off-200')
++    ).toEqual({ state: 'completed', turnId: 'off-200', timestamp: null })
++    expect(
++      decodeCursorTurnLifecycle(
++        JSON.stringify({ type: 'turn_ended', status: 'aborted' }),
++        'off-300'
++      )
++    ).toEqual({ state: 'interrupted', turnId: 'off-300', timestamp: null })
++    expect(
++      decodeCursorTurnLifecycle(
++        JSON.stringify({ role: 'assistant', message: { content: [{ type: 'text', text: 'ok' }] } }),
++        'off-400'
++      )
++    ).toBeNull()
++  })
++
+   it('decodes Codex task boundaries with the provider turn id', () => {
+     expect(
+       decodeCodexTurnLifecycle(
+diff --git a/src/main/native-chat/transcript-turn-lifecycle.ts b/src/main/native-chat/transcript-turn-lifecycle.ts
+index b91e4fa..688b56b 100644
+--- a/src/main/native-chat/transcript-turn-lifecycle.ts
++++ b/src/main/native-chat/transcript-turn-lifecycle.ts
+@@ -8,6 +8,7 @@ import {
+   timestampMs
+ } from '../ai-vault/session-scanner-values'
+ import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
++import { decodeCursorTranscriptLine } from './transcript-line-decoders-cursor'
+ import {
+   claudeInterruptedMessageId,
+   CODEX_EVENT_TURN_ABORTED,
+@@ -30,9 +31,44 @@ export function nativeChatTurnLifecycleDecoderForAgent(
+   if (transcriptAgent === 'claude') {
+     return decodeClaudeTurnLifecycle
+   }
++  if (transcriptAgent === 'cursor') {
++    return decodeCursorTurnLifecycle
++  }
+   return null
+ }
+ 
++/**
++ * Cursor marks turn boundaries with standalone records: a `user` line opens a
++ * generation, and `{"type":"turn_ended","status":…}` closes it. There is no
++ * per-line id, so the turn is keyed by `fallbackId` (the caller supplies the
++ * record's byte offset).
++ */
++export function decodeCursorTurnLifecycle(
++  line: string,
++  fallbackId: string
++): NativeChatTurnLifecycle | null {
++  const record = parseJsonObject(line)
++  if (!record) {
++    return null
++  }
++  if (record.type === 'turn_ended') {
++    const status = extractString(record.status)
++    return {
++      state: status && status !== 'success' ? 'interrupted' : 'completed',
++      turnId: fallbackId,
++      timestamp: lifecycleTimestamp(record.timestamp)
++    }
++  }
++  if (record.role !== 'user') {
++    return null
++  }
++  const decoded = decodeCursorTranscriptLine(line, fallbackId)
++  if (decoded?.role !== 'user') {
++    return null
++  }
++  return { state: 'working', turnId: decoded.id, timestamp: decoded.timestamp }
++}
++
+ export function decodeCodexTurnLifecycle(
+   line: string,
+   fallbackId: string
 diff --git a/src/main/persistence-right-sidebar-tab.test.ts b/src/main/persistence-right-sidebar-tab.test.ts
 index fcaf48a..52dd600 100644
 --- a/src/main/persistence-right-sidebar-tab.test.ts
@@ -11659,6 +12157,62 @@ index 0464fd1..693c796 100644
 -  unknownModelOptions: [codexEffort(true)]
 +  unknownModelOptions: [codexEffort('xhigh')]
  }
+diff --git a/src/shared/native-chat-agent-support.test.ts b/src/shared/native-chat-agent-support.test.ts
+index d32764d..88f2741 100644
+--- a/src/shared/native-chat-agent-support.test.ts
++++ b/src/shared/native-chat-agent-support.test.ts
+@@ -11,10 +11,11 @@ describe('resolveNativeChatTranscriptAgent', () => {
+     expect(resolveNativeChatTranscriptAgent('claude')).toBe('claude')
+   })
+ 
+-  it('passes codex and grok through and rejects everything else', () => {
++  it('passes codex, grok and cursor through and rejects everything else', () => {
+     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
+     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
+-    expect(resolveNativeChatTranscriptAgent('cursor')).toBeNull()
++    expect(resolveNativeChatTranscriptAgent('cursor')).toBe('cursor')
++    expect(resolveNativeChatTranscriptAgent('gemini')).toBeNull()
+     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
+     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()
+   })
+@@ -24,7 +25,8 @@ describe('isNativeChatSupportedAgent', () => {
+   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
+     expect(isNativeChatSupportedAgent('claude')).toBe(true)
+     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
+-    expect(isNativeChatSupportedAgent('cursor')).toBe(false)
++    expect(isNativeChatSupportedAgent('cursor')).toBe(true)
++    expect(isNativeChatSupportedAgent('gemini')).toBe(false)
+     expect(isNativeChatSupportedAgent(null)).toBe(false)
+     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
+   })
+diff --git a/src/shared/native-chat-agent-support.ts b/src/shared/native-chat-agent-support.ts
+index 2e063d6..367a2bf 100644
+--- a/src/shared/native-chat-agent-support.ts
++++ b/src/shared/native-chat-agent-support.ts
+@@ -1,11 +1,12 @@
+-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok'
++export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'cursor'
+ 
+ /** Agents whose transcripts the native chat view can parse and render. */
+ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
+   'claude',
+   'openclaude',
+   'codex',
+-  'grok'
++  'grok',
++  'cursor'
+ ])
+ 
+ export function isNativeChatSupportedAgent(agent: string | null | undefined): boolean {
+@@ -30,7 +31,7 @@ export function resolveNativeChatTranscriptAgent(
+   if (agent === 'claude' || agent === 'openclaude') {
+     return 'claude'
+   }
+-  if (agent === 'codex' || agent === 'grok') {
++  if (agent === 'codex' || agent === 'grok' || agent === 'cursor') {
+     return agent
+   }
+   return null
 diff --git a/src/shared/types.ts b/src/shared/types.ts
 index cfa041d..2d00765 100644
 --- a/src/shared/types.ts
