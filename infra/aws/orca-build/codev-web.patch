@@ -12157,6 +12157,60 @@ index 0464fd1..693c796 100644
 -  unknownModelOptions: [codexEffort(true)]
 +  unknownModelOptions: [codexEffort('xhigh')]
  }
+diff --git a/src/shared/agent-session-resume.test.ts b/src/shared/agent-session-resume.test.ts
+index 839cb77..0815da8 100644
+--- a/src/shared/agent-session-resume.test.ts
++++ b/src/shared/agent-session-resume.test.ts
+@@ -60,8 +60,20 @@ describe('agent session resume metadata', () => {
+     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
+   })
+ 
++  it('captures the Cursor conversation id from its hook payload', () => {
++    expect(
++      extractAgentProviderSession('cursor', { conversation_id: 'c3395695-abcd' })
++    ).toEqual({ key: 'session_id', id: 'c3395695-abcd' })
++    expect(extractAgentProviderSession('cursor', { session_id: 'cursor-session' })).toEqual({
++      key: 'session_id',
++      id: 'cursor-session'
++    })
++    expect(extractAgentProviderSession('cursor', {})).toBeNull()
++    expect(extractAgentProviderSession('cursor', { conversation_id: '--last' })).toBeNull()
++  })
++
+   it('rejects unsupported sources and unsafe ids', () => {
+-    expect(extractAgentProviderSession('cursor', { session_id: 'cursor-session' })).toBeNull()
++    expect(extractAgentProviderSession('amp', { session_id: 'amp-session' })).toBeNull()
+     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'bad\nid' })).toBeNull()
+     expect(normalizeAgentProviderSession({ key: 'session_id', id: '--last' })).toBeNull()
+     expect(extractAgentProviderSession('codex', { session_id: '--last' })).toBeNull()
+diff --git a/src/shared/agent-session-resume.ts b/src/shared/agent-session-resume.ts
+index e263a4f..bba9913 100644
+--- a/src/shared/agent-session-resume.ts
++++ b/src/shared/agent-session-resume.ts
+@@ -228,8 +228,22 @@ export function extractAgentProviderSession(
+       const id = readSessionId(payload, ['session_id'])
+       return id ? { key: 'session_id', id } : null
+     }
++    case 'cursor': {
++      // `cursor-agent` hooks carry the chat/conversation id, and its interactive
++      // transcript is written to `~/.cursor/projects/<slug>/agent-transcripts/
++      // <id>/<id>.jsonl` — so this id is exactly what the native-chat resolver
++      // globs for. Accept every spelling the CLI's hook events have used.
++      const id = readSessionId(payload, [
++        'conversation_id',
++        'conversationId',
++        'chat_id',
++        'chatId',
++        'session_id',
++        'sessionId'
++      ])
++      return id ? { key: 'session_id', id } : null
++    }
+     case 'amp':
+-    case 'cursor':
+     case 'command-code':
+     case 'copilot':
+     case 'hermes':
 diff --git a/src/shared/native-chat-agent-support.test.ts b/src/shared/native-chat-agent-support.test.ts
 index d32764d..88f2741 100644
 --- a/src/shared/native-chat-agent-support.test.ts
