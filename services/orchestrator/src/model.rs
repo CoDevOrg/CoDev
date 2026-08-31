@@ -398,6 +398,15 @@ pub struct IdeStartRequest {
     /// which fall back to the legacy workspace-wide materialization.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub member_id: Option<String>,
+    /// Coordination MCP endpoint for this workspace and a workspace-scoped
+    /// bearer token. When both are present the host seeds an `mcpServers`
+    /// entry into the per-workspace `~/.claude.json`, so every Claude Code
+    /// agent the workspace launches can reach the workspace brain and
+    /// path-claim system. Both or neither.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_mcp_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordination_mcp_token: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

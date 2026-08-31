@@ -114,6 +114,72 @@ export function openCoordinationToken(
 /** Bearer prefix the MCP server strips before verifying. */
 export const COORDINATION_BEARER_PREFIX = "Bearer ";
 
+const WORKSPACE_TOKEN_DOMAIN = "codev-coordination-workspace-v1";
+const WORKSPACE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type WorkspaceCoordinationToken = {
+  workspaceId: string;
+  expiresAt: number;
+  nonce: string;
+};
+
+function workspaceSignatureFor(payload: string): string {
+  return createHmac("sha256", getAuthSecret())
+    .update(`${WORKSPACE_TOKEN_DOMAIN}.${payload}`)
+    .digest("base64url");
+}
+
+/**
+ * A long-lived, workspace-scoped coordination token. Seeded into the
+ * workspace's `~/.claude.json` MCP config by the orchestrator, so every agent
+ * CLI in the workspace shares it; the agent identifies its own worktree by
+ * passing `branch` on each tool call.
+ */
+export function mintWorkspaceCoordinationToken(workspaceId: string): string {
+  const token: WorkspaceCoordinationToken = {
+    workspaceId,
+    expiresAt: Date.now() + WORKSPACE_TOKEN_TTL_MS,
+    nonce: randomBytes(12).toString("hex"),
+  };
+  const payload = encode(JSON.stringify(token));
+  return `${payload}.${workspaceSignatureFor(payload)}`;
+}
+
+export function openWorkspaceCoordinationToken(
+  value: string | undefined | null,
+): WorkspaceCoordinationToken | null {
+  if (!value) {
+    return null;
+  }
+  const parts = value.trim().split(".");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const [payload, providedSignature] = parts;
+  if (!payload || !providedSignature) {
+    return null;
+  }
+  const expected = Buffer.from(workspaceSignatureFor(payload), "base64url");
+  const provided = Buffer.from(providedSignature, "base64url");
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    return null;
+  }
+  try {
+    const token = JSON.parse(decode(payload)) as Partial<WorkspaceCoordinationToken>;
+    if (
+      typeof token.workspaceId !== "string" ||
+      typeof token.expiresAt !== "number" ||
+      token.expiresAt <= Date.now() ||
+      typeof token.nonce !== "string"
+    ) {
+      return null;
+    }
+    return token as WorkspaceCoordinationToken;
+  } catch {
+    return null;
+  }
+}
+
 function providerForAgentKind(agentKind: string): {
   provider: string;
   model: string;
@@ -226,5 +292,96 @@ export async function registerCliAgentSession(
       .returning({ id: schema.agentSessions.id });
 
     return { sessionId: session!.id };
+  });
+}
+
+/**
+ * Resolve — creating if needed — the `cli` agent session for one branch in a
+ * workspace, given only the branch name. This is the path the coordination MCP
+ * server takes on a workspace-scoped token: the agent passes its own branch on
+ * each tool call and the session is upserted here, attributed to the workspace
+ * owner (the shared `~/.claude.json` token is not per-member).
+ */
+export async function resolveCliAgentSessionForBranch(input: {
+  workspaceId: string;
+  branch: string;
+  agentKind?: string;
+}): Promise<{ sessionId: string; ownerId: string }> {
+  const branch = input.branch.trim();
+  if (!branch) {
+    throw new Error("A branch is required to resolve a coordination session.");
+  }
+  const worktreeName = branch.slice(0, 255);
+  const database = getDatabase();
+
+  return database.transaction(async (transaction) => {
+    const [owner] = await transaction
+      .select({ ownerId: schema.workspaces.ownerId })
+      .from(schema.workspaces)
+      .where(eq(schema.workspaces.id, input.workspaceId))
+      .limit(1);
+    if (!owner) {
+      throw new Error("Workspace not found.");
+    }
+
+    const [existingSession] = await transaction
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .innerJoin(
+        schema.worktrees,
+        eq(schema.agentSessions.worktreeId, schema.worktrees.id),
+      )
+      .where(
+        and(
+          eq(schema.agentSessions.workspaceId, input.workspaceId),
+          eq(schema.agentSessions.kind, "cli"),
+          eq(schema.worktrees.name, worktreeName),
+        ),
+      )
+      .limit(1);
+    if (existingSession) {
+      return { sessionId: existingSession.id, ownerId: owner.ownerId };
+    }
+
+    const [existingWorktree] = await transaction
+      .select({ id: schema.worktrees.id })
+      .from(schema.worktrees)
+      .where(
+        and(
+          eq(schema.worktrees.workspaceId, input.workspaceId),
+          eq(schema.worktrees.name, worktreeName),
+        ),
+      )
+      .limit(1);
+    const worktreeId =
+      existingWorktree?.id ??
+      (
+        await transaction
+          .insert(schema.worktrees)
+          .values({
+            workspaceId: input.workspaceId,
+            kind: "agent",
+            name: worktreeName,
+            headSha: "unknown",
+            status: "active",
+          })
+          .returning({ id: schema.worktrees.id })
+      )[0]!.id;
+
+    const { provider, model } = providerForAgentKind(input.agentKind ?? "cli");
+    const [session] = await transaction
+      .insert(schema.agentSessions)
+      .values({
+        workspaceId: input.workspaceId,
+        worktreeId,
+        createdBy: owner.ownerId,
+        kind: "cli",
+        name: `${input.agentKind?.trim() || "agent"} · ${branch}`.slice(0, 200),
+        provider,
+        model,
+        status: "running",
+      })
+      .returning({ id: schema.agentSessions.id });
+    return { sessionId: session!.id, ownerId: owner.ownerId };
   });
 }

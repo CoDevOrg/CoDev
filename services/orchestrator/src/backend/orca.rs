@@ -219,7 +219,13 @@ impl OrcaBackend {
         if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
             write_codex_credential(&linux_user, codex_auth_cache_json).await?;
         }
-        seed_claude_config(&linux_user, &expected_root).await?;
+        seed_claude_config(
+            &linux_user,
+            &expected_root,
+            request.coordination_mcp_url.as_deref(),
+            request.coordination_mcp_token.as_deref(),
+        )
+        .await?;
         // Also file them per-member, so the member who starts the session gets
         // the same per-subscription treatment as everyone who joins later.
         if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
@@ -823,14 +829,22 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
 /// chat surface cannot answer. The workspace is precisely the isolated
 /// container the CLI's own warning asks for: a dedicated Linux user, in a
 /// per-workspace clone, on a disposable cloud host.
-async fn seed_claude_config(user: &str, project_root: &Path) -> Result<()> {
+async fn seed_claude_config(
+    user: &str,
+    project_root: &Path,
+    coordination_mcp_url: Option<&str>,
+    coordination_mcp_token: Option<&str>,
+) -> Result<()> {
     let home = PathBuf::from(format!("/home/{user}"));
 
     let config_path = home.join(".claude.json");
-    let config = claude_config_with_onboarding_skipped(
+    let mut config = claude_config_with_onboarding_skipped(
         read_optional_json_object(&config_path).await?,
         project_root,
     );
+    if let (Some(url), Some(token)) = (coordination_mcp_url, coordination_mcp_token) {
+        merge_coordination_mcp_server(&mut config, url, token);
+    }
     write_private_json(&config_path, &config, user).await?;
 
     let settings_dir = home.join(".claude");
@@ -897,6 +911,30 @@ fn claude_config_with_onboarding_skipped(existing: Option<Value>, project_root: 
     }
 
     config
+}
+
+/// Adds (or refreshes) the `codev-coordination` HTTP MCP server under
+/// `mcpServers` so every Claude Code agent the workspace launches can reach the
+/// workspace brain and path-claim system. The entry is forced — the URL and
+/// bearer token are issued fresh by the control plane on every IDE start — but
+/// any other `mcpServers` a member configured are left untouched.
+fn merge_coordination_mcp_server(config: &mut Value, url: &str, token: &str) {
+    let Some(root) = config.as_object_mut() else {
+        return;
+    };
+    let servers = root
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(servers) = servers.as_object_mut() {
+        servers.insert(
+            "codev-coordination".to_string(),
+            serde_json::json!({
+                "type": "http",
+                "url": url,
+                "headers": { "Authorization": format!("Bearer {token}") },
+            }),
+        );
+    }
 }
 
 /// Merges CoDev's default theme onto an existing `~/.claude/settings.json`.
@@ -1154,8 +1192,9 @@ mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
         claude_settings_with_theme, linux_user_for, linux_user_process_command, member_agent_dir,
-        member_agent_env_map, member_id_pattern, orca_serve_command_line, orca_serve_sudo_command,
-        repository_pattern, shell_quote, token_pattern,
+        member_agent_env_map, member_id_pattern, merge_coordination_mcp_server,
+        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, shell_quote,
+        token_pattern,
     };
     use crate::model::IdeStartRequest;
     use serde_json::json;
@@ -1291,6 +1330,33 @@ mod tests {
         assert_eq!(config["bypassPermissionsModeAccepted"], json!(true));
         // The theme lives in ~/.claude/settings.json, not here.
         assert!(config.get("theme").is_none());
+    }
+
+    #[test]
+    fn adds_the_coordination_mcp_server_without_touching_other_servers() {
+        let mut config = json!({
+            "mcpServers": { "member-thing": { "type": "stdio", "command": "x" } }
+        });
+        merge_coordination_mcp_server(
+            &mut config,
+            "https://www.trycodev.com/api/workspaces/w/mcp/coordination",
+            "tok.sig",
+        );
+        assert_eq!(config["mcpServers"]["member-thing"]["command"], json!("x"));
+        let server = &config["mcpServers"]["codev-coordination"];
+        assert_eq!(server["type"], json!("http"));
+        assert_eq!(
+            server["url"],
+            json!("https://www.trycodev.com/api/workspaces/w/mcp/coordination")
+        );
+        assert_eq!(server["headers"]["Authorization"], json!("Bearer tok.sig"));
+    }
+
+    #[test]
+    fn coordination_mcp_server_is_a_no_op_on_a_non_object_config() {
+        let mut config = json!("not an object");
+        merge_coordination_mcp_server(&mut config, "https://x", "y");
+        assert_eq!(config, json!("not an object"));
     }
 
     #[test]

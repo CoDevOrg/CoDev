@@ -54,7 +54,13 @@ const CLAIM_PATH_PROPERTY = {
   description: "Repo-relative POSIX path or a `dir/**` glob.",
 } as const;
 
-export const COORDINATION_TOOLS: readonly CoordinationToolDefinition[] = [
+const BRANCH_PROPERTY = {
+  type: "string",
+  description:
+    "Your current git branch (`git branch --show-current`). Required when this coordination server is shared by the whole workspace, so your session can be identified.",
+} as const;
+
+const RAW_COORDINATION_TOOLS: readonly CoordinationToolDefinition[] = [
   {
     name: "situational_awareness",
     description:
@@ -192,6 +198,28 @@ export const COORDINATION_TOOLS: readonly CoordinationToolDefinition[] = [
     inputSchema: { type: "object", properties: {} },
   },
 ];
+
+/**
+ * Every tool also accepts `branch` (and `agentKind`). The MCP route consumes
+ * them before dispatch on a workspace-scoped token — where the server is shared
+ * by every agent CLI — and ignores them on a session-scoped token. Injected
+ * here so the schemas stay in one place.
+ */
+export const COORDINATION_TOOLS: readonly CoordinationToolDefinition[] =
+  RAW_COORDINATION_TOOLS.map((tool) => ({
+    ...tool,
+    inputSchema: {
+      ...tool.inputSchema,
+      properties: {
+        ...((tool.inputSchema.properties as JsonObject | undefined) ?? {}),
+        branch: BRANCH_PROPERTY,
+        agentKind: {
+          type: "string",
+          description: "`claude`, `codex`, … — only needed on your first call.",
+        },
+      },
+    },
+  }));
 
 function ok(text: string): CoordinationToolResult {
   return { text, isError: false };

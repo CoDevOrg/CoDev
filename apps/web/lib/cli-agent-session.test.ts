@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   mintCoordinationToken,
+  mintWorkspaceCoordinationToken,
   openCoordinationToken,
+  openWorkspaceCoordinationToken,
 } from "./cli-agent-session";
 
 const INPUT = {
@@ -65,5 +67,41 @@ describe("coordination token", () => {
     expect(openCoordinationToken("")).toBeNull();
     expect(openCoordinationToken("no-dot")).toBeNull();
     expect(openCoordinationToken("a.b.c")).toBeNull();
+  });
+});
+
+describe("workspace coordination token", () => {
+  beforeEach(() => {
+    process.env.AUTH_SECRET = "test-secret-value";
+  });
+  afterEach(() => {
+    delete process.env.AUTH_SECRET;
+  });
+
+  it("round-trips and carries only the workspace id", () => {
+    const opened = openWorkspaceCoordinationToken(
+      mintWorkspaceCoordinationToken(INPUT.workspaceId),
+    );
+    expect(opened?.workspaceId).toBe(INPUT.workspaceId);
+    expect(opened?.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it("does not accept a session token, and vice versa", () => {
+    // Different domain separators, so the signatures never cross-validate.
+    expect(
+      openWorkspaceCoordinationToken(mintCoordinationToken(INPUT)),
+    ).toBeNull();
+    expect(
+      openCoordinationToken(mintWorkspaceCoordinationToken(INPUT.workspaceId)),
+    ).toBeNull();
+  });
+
+  it("rejects a tampered workspace id", () => {
+    const [, signature] = mintWorkspaceCoordinationToken(INPUT.workspaceId).split(".");
+    const forged = Buffer.from(
+      JSON.stringify({ workspaceId: "other", expiresAt: Date.now() + 1000, nonce: "x" }),
+      "utf8",
+    ).toString("base64url");
+    expect(openWorkspaceCoordinationToken(`${forged}.${signature}`)).toBeNull();
   });
 });

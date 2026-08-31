@@ -1,6 +1,8 @@
 import "server-only";
 
+import { mintWorkspaceCoordinationToken } from "./cli-agent-session";
 import { openOrcaInterval } from "./compute-credits";
+import { getPublicAppOrigin } from "./password-reset";
 import { resolveAgentCredential, resolveCursorCliAuth } from "./credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
@@ -316,10 +318,17 @@ export async function ensureOrcaSession(
     resolveClaudeEnvForIde(userId, workspace.id),
   ]);
 
+  const coordinationMcpUrl = new URL(
+    `/api/workspaces/${workspace.id}/mcp/coordination`,
+    getPublicAppOrigin(),
+  ).toString();
+
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
       projectRoot: workspacePath,
       memberId: userId,
+      coordinationMcpUrl,
+      coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
       ...(clone ? { clone } : {}),
       ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
       ...(cursorAuthJson ? { cursorAuthJson } : {}),
