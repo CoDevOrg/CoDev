@@ -1688,7 +1688,15 @@ export async function listAgentSessions(workspaceId: string) {
       eq(schema.agentSessions.id, schema.githubIssueAssignments.sessionId),
     )
     .leftJoin(schema.users, eq(schema.agentSessions.createdBy, schema.users.id))
-    .where(eq(schema.agentSessions.workspaceId, workspaceId))
+    // Only managed workflow sessions: `cli` sessions stand in for agent CLIs in
+    // the embedded IDE and take part in coordination only, not turns/reviews/
+    // workboard, and must not consume a managed parallel-agent slot.
+    .where(
+      and(
+        eq(schema.agentSessions.workspaceId, workspaceId),
+        eq(schema.agentSessions.kind, "managed"),
+      ),
+    )
     .orderBy(asc(schema.agentSessions.createdAt));
   return Promise.all(
     sessions.map(async (session) => {

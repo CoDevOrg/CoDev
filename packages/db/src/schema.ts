@@ -67,6 +67,12 @@ export const agentSessionStatus = pgEnum("agent_session_status", [
   "interrupted",
   "failed",
 ]);
+// "managed" = a CoDev workflow agent session (counts against the parallel-slot
+// cap, shows in Mission Control's managed list). "cli" = a session standing in
+// for an agent CLI running inside the embedded IDE (Claude Code / Codex), so it
+// can take part in coordination — briefs, path claims, overlap detection —
+// without consuming a managed slot.
+export const agentSessionKind = pgEnum("agent_session_kind", ["managed", "cli"]);
 export const agentTurnStatus = pgEnum("agent_turn_status", [
   "queued",
   "running",
@@ -646,6 +652,7 @@ export const agentSessions = pgTable(
     name: text("name").notNull().default("Agent"),
     model: text("model").notNull().default("gpt-5"),
     provider: text("provider").notNull().default("openai"),
+    kind: agentSessionKind("kind").default("managed").notNull(),
     status: agentSessionStatus("status").default("idle").notNull(),
     workflowRunId: text("workflow_run_id"),
     lastError: text("last_error"),

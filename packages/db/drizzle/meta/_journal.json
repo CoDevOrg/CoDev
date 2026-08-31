@@ -253,6 +253,13 @@
       "when": 1788115314690,
       "tag": "0035_access_request_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788216356099,
+      "tag": "0036_strong_alice",
+      "breakpoints": true
     }
   ]
 }
