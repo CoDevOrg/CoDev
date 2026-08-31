@@ -140,9 +140,14 @@ describe("ensureOrcaSession", () => {
 
     await ensureOrcaSession(workspace, userId);
 
-    const [, input] = mocks.startIde.mock.calls[0];
-    expect(input.openaiApiKey).toBeUndefined();
-    expect(input.codexAuthCacheJson).toBe('{"tokens":{}}');
+    expect(mocks.startIde).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ codexAuthCacheJson: '{"tokens":{}}' }),
+    );
+    const input = mocks.startIde.mock.calls.at(0)?.at(1) as
+      | Record<string, unknown>
+      | undefined;
+    expect(input?.openaiApiKey).toBeUndefined();
   });
 
   it("stops the stale IDE record and retries once after a crashed launch", async () => {

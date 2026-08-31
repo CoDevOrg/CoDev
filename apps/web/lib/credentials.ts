@@ -355,6 +355,35 @@ export async function resolveAgentCredential(
   throw byokRequiredError(normalizedProvider);
 }
 
+/**
+ * The Cursor CLI login token pair, for materializing `cursor-agent`'s own
+ * `auth.json` on a workspace host. Personal scope wins over workspace scope,
+ * matching resolveAgentCredential. Returns null when no Cursor login is
+ * connected — callers fall back to a pasted `CURSOR_API_KEY`.
+ */
+export async function resolveCursorCliAuth(
+  userId: string,
+  workspaceId: string,
+): Promise<{ accessToken: string; refreshToken: string } | null> {
+  const credential =
+    (await findCredential("USER", userId, "cursor")) ??
+    (await findCredential("WORKSPACE", workspaceId, "cursor"));
+  if (
+    !credential ||
+    credential.credentialType !== "OAUTH_TOKEN" ||
+    !credential.encryptedAccessToken ||
+    !credential.encryptedRefreshToken
+  ) {
+    return null;
+  }
+  return {
+    accessToken: await decryptCredentialSecret(credential.encryptedAccessToken),
+    refreshToken: await decryptCredentialSecret(
+      credential.encryptedRefreshToken,
+    ),
+  };
+}
+
 export async function saveProviderCredential(input: {
   scopeType: ScopeType;
   scopeId: string;

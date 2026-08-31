@@ -343,7 +343,12 @@ export interface StartIdeInput {
   codexAuthCacheJson?: string;
   anthropicApiKey?: string;
   claudeCodeOauthToken?: string;
-  /** A linked Cursor API key, filed for the interactive `cursor-agent` CLI. */
+  /**
+   * The Cursor CLI login token pair as `auth.json` contents, filed per member
+   * with `XDG_CONFIG_HOME` pointed at it. Preferred over `cursorApiKey`.
+   */
+  cursorAuthJson?: string;
+  /** A pasted Cursor API key, filed as `CURSOR_API_KEY` when no login exists. */
   cursorApiKey?: string;
   /** A plain OpenAI API key, the API-key fallback for the interactive Codex CLI. */
   openaiApiKey?: string;

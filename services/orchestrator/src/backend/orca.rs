@@ -642,9 +642,15 @@ fn member_id_pattern() -> &'static Regex {
 /// `codex_home` is `Some` once the caller has materialized a hosted Codex
 /// subscription's config dir; its presence also suppresses the plain
 /// `OPENAI_API_KEY` fallback so the two never fight over the Codex CLI.
+///
+/// `cursor_xdg_config_home` is `Some` once the caller has written the member's
+/// Cursor login to `<dir>/cursor/auth.json`; `cursor-agent` resolves its
+/// credentials from `$XDG_CONFIG_HOME/cursor/auth.json`, so this points there.
+/// Its presence suppresses the pasted-`CURSOR_API_KEY` fallback.
 fn member_agent_env_map(
     request: &IdeStartRequest,
     codex_home: Option<&Path>,
+    cursor_xdg_config_home: Option<&Path>,
 ) -> serde_json::Map<String, Value> {
     let mut env = serde_json::Map::new();
 
@@ -669,9 +675,14 @@ fn member_agent_env_map(
         );
     }
 
-    // The Cursor CLI has no config directory to seed the way Codex does; it
-    // reads its key straight from the environment.
-    if let Some(cursor_api_key) = &request.cursor_api_key {
+    // Cursor's browser login is filed as an auth.json under a per-member
+    // XDG config home; a pasted API key is the fallback when there is none.
+    if let Some(cursor_xdg_config_home) = cursor_xdg_config_home {
+        env.insert(
+            "XDG_CONFIG_HOME".to_string(),
+            Value::String(cursor_xdg_config_home.to_string_lossy().into_owned()),
+        );
+    } else if let Some(cursor_api_key) = &request.cursor_api_key {
         env.insert(
             "CURSOR_API_KEY".to_string(),
             Value::String(cursor_api_key.clone()),
@@ -740,7 +751,25 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
         codex_home = Some(home);
     }
 
-    let env = member_agent_env_map(request, codex_home.as_deref());
+    // Cursor's CLI reads `$XDG_CONFIG_HOME/cursor/auth.json`. File the
+    // member's login there and point XDG_CONFIG_HOME at the member dir.
+    let mut cursor_xdg_config_home: Option<&Path> = None;
+    if let Some(cursor_auth_json) = &request.cursor_auth_json {
+        let cursor_dir = member_dir.join("cursor");
+        fs::create_dir_all(&cursor_dir)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let auth_path = cursor_dir.join("auth.json");
+        fs::write(&auth_path, cursor_auth_json)
+            .await
+            .map_err(RuntimeError::internal)?;
+        fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
+            .await
+            .map_err(RuntimeError::internal)?;
+        cursor_xdg_config_home = Some(&member_dir);
+    }
+
+    let env = member_agent_env_map(request, codex_home.as_deref(), cursor_xdg_config_home);
 
     let env_path = member_dir.join("env.json");
     if env.is_empty() {
@@ -1322,12 +1351,26 @@ mod tests {
     }
 
     #[test]
-    fn files_a_linked_cursor_key_so_the_cli_starts_authenticated() {
+    fn files_a_pasted_cursor_key_when_there_is_no_browser_login() {
         // The interactive `cursor-agent` had no credential written for it at
         // all, so the native-chat Cursor agent always stranded on sign-in.
         let request = ide_start_request(json!({ "cursorApiKey": "key_cursor_abc123" }));
-        let env = member_agent_env_map(&request, None);
+        let env = member_agent_env_map(&request, None, None);
         assert_eq!(env["CURSOR_API_KEY"], json!("key_cursor_abc123"));
+    }
+
+    #[test]
+    fn prefers_the_cursor_browser_login_over_a_pasted_key() {
+        // With a filed auth.json, XDG_CONFIG_HOME points cursor-agent at it and
+        // the pasted key is not also set so the two can't disagree.
+        let request = ide_start_request(json!({
+            "cursorApiKey": "key_cursor_abc123",
+            "cursorAuthJson": "{\"accessToken\":\"a\",\"refreshToken\":\"r\"}",
+        }));
+        let member_dir = Path::new("/home/u/.codev/agents/m");
+        let env = member_agent_env_map(&request, None, Some(member_dir));
+        assert_eq!(env["XDG_CONFIG_HOME"], json!("/home/u/.codev/agents/m"));
+        assert!(!env.contains_key("CURSOR_API_KEY"));
     }
 
     #[test]
@@ -1335,13 +1378,16 @@ mod tests {
         let request = ide_start_request(json!({ "openaiApiKey": "sk-openai-xyz" }));
 
         // No hosted subscription: the plain key is the Codex CLI's auth.
-        let env = member_agent_env_map(&request, None);
+        let env = member_agent_env_map(&request, None, None);
         assert_eq!(env["OPENAI_API_KEY"], json!("sk-openai-xyz"));
 
         // Hosted subscription present: CODEX_HOME wins, the plain key is not
         // also set so the two can't disagree about which account Codex uses.
-        let with_home =
-            member_agent_env_map(&request, Some(Path::new("/home/u/.codev/agents/m/codex")));
+        let with_home = member_agent_env_map(
+            &request,
+            Some(Path::new("/home/u/.codev/agents/m/codex")),
+            None,
+        );
         assert_eq!(
             with_home["CODEX_HOME"],
             json!("/home/u/.codev/agents/m/codex")
@@ -1351,7 +1397,7 @@ mod tests {
 
     #[test]
     fn nothing_linked_yields_an_empty_bundle_that_clears_a_stale_one() {
-        assert!(member_agent_env_map(&ide_start_request(json!({})), None).is_empty());
+        assert!(member_agent_env_map(&ide_start_request(json!({})), None, None).is_empty());
     }
 
     #[test]

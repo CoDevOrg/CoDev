@@ -4,6 +4,7 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomUUID,
   timingSafeEqual,
 } from "node:crypto";
 
@@ -11,8 +12,23 @@ import type { AuthProvider, ScopeType } from "@codev/shared-types";
 
 import { saveProviderCredential } from "./credentials";
 
-export type OAuthProvider = "claude" | "codex";
-export type OAuthFlowMode = "app_callback" | "manual_code" | "device_code";
+export type OAuthProvider = "claude" | "codex" | "cursor";
+export type OAuthFlowMode =
+  | "app_callback"
+  | "manual_code"
+  | "device_code"
+  | "cursor_deeplink";
+
+/**
+ * Cursor's CLI login, reproduced from `cursor-agent`'s own bundle
+ * (`cursor-config/dist/auth/login.js`). It is not a standard OAuth token
+ * endpoint: the browser opens `${CURSOR_LOGIN_URL}?challenge=…&uuid=…` and the
+ * caller polls `${CURSOR_API_BASE_URL}/auth/poll?uuid=…&verifier=…` until it
+ * returns `{ accessToken, refreshToken }`. Every URL is env-overridable so a
+ * change on Cursor's side is a config fix, not a redeploy.
+ */
+export const CURSOR_LOGIN_URL_DEFAULT = "https://cursor.com/loginDeepControl";
+export const CURSOR_API_BASE_URL_DEFAULT = "https://api2.cursor.sh";
 
 /** Public Claude Code PKCE client used by the official CLI. */
 export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
@@ -54,6 +70,9 @@ export type OAuthState = {
   scopeType: ScopeType;
   scopeId: string;
   returnTo: string;
+  /** Cursor deeplink flow only: the poll id and PKCE verifier it minted. */
+  cursorUuid?: string;
+  cursorVerifier?: string;
 };
 
 type OAuthConfiguration = {
@@ -159,7 +178,9 @@ function envOptional(name: string) {
 function clientIdEnvName(provider: OAuthProvider) {
   return provider === "claude"
     ? "CLAUDE_OAUTH_CLIENT_ID"
-    : "CODEX_OAUTH_CLIENT_ID";
+    : provider === "codex"
+      ? "CODEX_OAUTH_CLIENT_ID"
+      : "CURSOR_OAUTH_CLIENT_ID";
 }
 
 export function resolveOAuthClientId(provider: OAuthProvider) {
@@ -167,6 +188,12 @@ export function resolveOAuthClientId(provider: OAuthProvider) {
     return (
       envOptional("CLAUDE_OAUTH_CLIENT_ID") ?? DEFAULT_CLAUDE_OAUTH_CLIENT_ID
     );
+  }
+  if (provider === "cursor") {
+    // Cursor's CLI login uses no client id; the poll id + PKCE verifier are
+    // the only secrets. Report a stable non-empty value so the "configured"
+    // status check passes without an env var.
+    return envOptional("CURSOR_OAUTH_CLIENT_ID") ?? "cursor-cli";
   }
   return envOptional("CODEX_OAUTH_CLIENT_ID") ?? DEFAULT_CODEX_OAUTH_CLIENT_ID;
 }
@@ -177,9 +204,23 @@ export function getOAuthFlowMode(provider: OAuthProvider): OAuthFlowMode {
       ? "app_callback"
       : "manual_code";
   }
+  if (provider === "cursor") {
+    return "cursor_deeplink";
+  }
   return envOptional("CODEX_OAUTH_REDIRECT_URI")
     ? "app_callback"
     : "device_code";
+}
+
+export function cursorLoginBaseUrl() {
+  return envUrl("CURSOR_LOGIN_URL", CURSOR_LOGIN_URL_DEFAULT);
+}
+
+export function cursorApiBaseUrl() {
+  return envUrl("CURSOR_API_BASE_URL", CURSOR_API_BASE_URL_DEFAULT).replace(
+    /\/+$/,
+    "",
+  );
 }
 
 export function getOAuthConfigurationStatus(provider: OAuthProvider) {
@@ -223,6 +264,19 @@ export function getOAuthConfiguration(
           : `${origin}${oauthCallbackPath(provider)}`,
       ),
       flowMode,
+    };
+  }
+
+  if (provider === "cursor") {
+    return {
+      provider: "cursor",
+      clientId: resolveOAuthClientId(provider),
+      clientSecret: undefined,
+      authorizeUrl: cursorLoginBaseUrl(),
+      tokenUrl: `${cursorApiBaseUrl()}/auth/poll`,
+      scope: "",
+      redirectUri: "",
+      flowMode: "cursor_deeplink",
     };
   }
 
@@ -432,6 +486,93 @@ export async function pollCodexDeviceCode(input: {
     authorizationCode: payload.authorization_code,
     codeVerifier: payload.code_verifier,
   };
+}
+
+export type CursorLoginStart = {
+  loginUrl: string;
+  uuid: string;
+  verifier: string;
+};
+
+/**
+ * Mint the PKCE material for Cursor's CLI login and the browser URL the user
+ * opens. `challenge = base64url(sha256(verifier))`, exactly as
+ * `cursor-agent login` computes it.
+ */
+export function startCursorLogin(origin?: string): CursorLoginStart {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const uuid = randomUUID();
+  const url = new URL(cursorLoginBaseUrl());
+  url.searchParams.set("challenge", challenge);
+  url.searchParams.set("uuid", uuid);
+  url.searchParams.set("mode", "login");
+  // `cli` is the only redirect target Cursor's own CLI uses; the flow is
+  // pure polling, so the browser never has to return to `origin`.
+  url.searchParams.set("redirectTarget", "cli");
+  void origin;
+  return { loginUrl: url.toString(), uuid, verifier };
+}
+
+export type CursorLoginPollResult =
+  | { status: "pending" }
+  | { status: "denied" }
+  | { status: "ready"; accessToken: string; refreshToken: string };
+
+/**
+ * One poll of `${CURSOR_API_BASE_URL}/auth/poll?uuid=…&verifier=…`. Cursor
+ * answers 404 while the browser side is still open, 200 with the token pair
+ * once the user approves, and 403 when the attempt is rejected.
+ */
+export async function pollCursorLogin(input: {
+  uuid: string;
+  verifier: string;
+}): Promise<CursorLoginPollResult> {
+  const url = new URL(`${cursorApiBaseUrl()}/auth/poll`);
+  url.searchParams.set("uuid", input.uuid);
+  url.searchParams.set("verifier", input.verifier);
+  const response = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (response.status === 404) return { status: "pending" };
+  if (response.status === 403) return { status: "denied" };
+  if (!response.ok) {
+    throw new Error(`Cursor login poll failed with status ${response.status}.`);
+  }
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const accessToken =
+    payload && typeof payload.accessToken === "string"
+      ? payload.accessToken
+      : undefined;
+  const refreshToken =
+    payload && typeof payload.refreshToken === "string"
+      ? payload.refreshToken
+      : undefined;
+  if (!accessToken || !refreshToken) {
+    throw new Error("Cursor login poll returned an incomplete token pair.");
+  }
+  return { status: "ready", accessToken, refreshToken };
+}
+
+export async function persistCursorTokens(
+  state: OAuthState,
+  tokens: { accessToken: string; refreshToken: string },
+) {
+  await saveProviderCredential({
+    scopeType: state.scopeType,
+    scopeId: state.scopeId,
+    provider: "cursor",
+    credentialType: "OAUTH_TOKEN",
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    // Cursor's poll response carries no expiry and `cursor-agent` refreshes
+    // its own tokens from the copy CoDev files on the workspace host, so no
+    // control-plane refresh is scheduled.
+  });
 }
 
 export async function persistOAuthTokens(

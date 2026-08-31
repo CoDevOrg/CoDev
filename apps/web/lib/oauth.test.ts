@@ -14,7 +14,9 @@ import {
   openOAuthState,
   parseManualAuthorizationCode,
   pkceChallenge,
+  pollCursorLogin,
   sealOAuthState,
+  startCursorLogin,
 } from "./oauth";
 
 afterEach(() => {
@@ -176,5 +178,59 @@ describe("provider OAuth", () => {
     expect(tokens.refreshToken).toBe("refresh-token");
     expect(tokens.expiresAt).toBeInstanceOf(Date);
     expect(tokens).not.toHaveProperty("clientSecret");
+  });
+});
+
+describe("Cursor browser login", () => {
+  it("is a deeplink flow with an env-overridable login URL", () => {
+    vi.stubEnv("CURSOR_LOGIN_URL", "");
+    expect(getOAuthFlowMode("cursor")).toBe("cursor_deeplink");
+    expect(getOAuthConfigurationStatus("cursor")).toMatchObject({
+      configured: true,
+      flowMode: "cursor_deeplink",
+    });
+    expect(
+      getOAuthConfiguration("cursor", "https://app.example.com").tokenUrl,
+    ).toBe("https://api2.cursor.sh/auth/poll");
+
+    vi.stubEnv("CURSOR_LOGIN_URL", "https://staging.example/deep");
+    const start = startCursorLogin();
+    expect(start.loginUrl.startsWith("https://staging.example/deep?")).toBe(
+      true,
+    );
+    const url = new URL(start.loginUrl);
+    expect(url.searchParams.get("uuid")).toBe(start.uuid);
+    expect(url.searchParams.get("mode")).toBe("login");
+    expect(url.searchParams.get("redirectTarget")).toBe("cli");
+    // challenge = base64url(sha256(verifier))
+    expect(url.searchParams.get("challenge")).toBe(
+      pkceChallenge(start.verifier),
+    );
+  });
+
+  it("maps the poll responses: 404 pending, 403 denied, 200 tokens", async () => {
+    const responses = [
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 403 }),
+      new Response(
+        JSON.stringify({ accessToken: "cur_at", refreshToken: "cur_rt" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => responses.shift() ?? new Response(null, { status: 500 }),
+      ),
+    );
+
+    const input = { uuid: "u", verifier: "v" };
+    expect(await pollCursorLogin(input)).toEqual({ status: "pending" });
+    expect(await pollCursorLogin(input)).toEqual({ status: "denied" });
+    expect(await pollCursorLogin(input)).toEqual({
+      status: "ready",
+      accessToken: "cur_at",
+      refreshToken: "cur_rt",
+    });
   });
 });

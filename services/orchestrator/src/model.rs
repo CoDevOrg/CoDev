@@ -370,11 +370,17 @@ pub struct IdeStartRequest {
     pub anthropic_api_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code_oauth_token: Option<String>,
-    /// Present when the requesting member has a linked Cursor credential.
-    /// Filed into their per-member `env.json` as `CURSOR_API_KEY` so the
-    /// `cursor-agent` CLI Orca launches interactively is authenticated instead
-    /// of stranding on its own sign-in prompt. Unlike Codex there is no
-    /// host-side config directory to seed — the CLI reads the env var.
+    /// Present when the requesting member connected Cursor through its browser
+    /// login: the `{accessToken, refreshToken}` pair formatted as
+    /// `cursor-agent`'s own `auth.json`. Written to `<member>/cursor/auth.json`
+    /// with `XDG_CONFIG_HOME` pointed at `<member>` so the interactive CLI is
+    /// authenticated and refreshes its own tokens from that copy. Preferred
+    /// over `cursor_api_key`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_auth_json: Option<String>,
+    /// Present when the requesting member pasted a Cursor API key instead.
+    /// Filed into their per-member `env.json` as `CURSOR_API_KEY`. Ignored
+    /// when `cursor_auth_json` is also present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor_api_key: Option<String>,
     /// Present when the requesting member linked a plain OpenAI API key rather

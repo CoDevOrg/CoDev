@@ -18,10 +18,13 @@ import {
   OAuthConfigurationError,
   openOAuthState,
   parseManualAuthorizationCode,
+  persistCursorTokens,
   persistOAuthTokens,
   pollCodexDeviceCode,
+  pollCursorLogin,
   requestCodexDeviceCode,
   sealOAuthState,
+  startCursorLogin,
   type OAuthProvider,
   type OAuthState,
 } from "./oauth";
@@ -128,6 +131,20 @@ async function authorizeScope(input: {
       scopeId,
       returnTo,
     });
+
+    if (configuration.flowMode === "cursor_deeplink") {
+      const login = startCursorLogin(new URL(request.url).origin);
+      return setOAuthCookie(
+        NextResponse.json({
+          mode: configuration.flowMode,
+          provider,
+          loginUrl: login.loginUrl,
+          intervalSeconds: 2,
+        }),
+        provider,
+        { ...state, cursorUuid: login.uuid, cursorVerifier: login.verifier },
+      );
+    }
 
     if (configuration.flowMode === "device_code") {
       const device = await requestCodexDeviceCode(configuration.clientId);
@@ -367,9 +384,9 @@ export async function pollDeviceOAuth(
   request: Request,
   provider: OAuthProvider,
 ) {
-  if (provider !== "codex") {
+  if (provider !== "codex" && provider !== "cursor") {
     return NextResponse.json(
-      { error: "Device code completion is only supported for Codex." },
+      { error: "Polled completion is only supported for Codex and Cursor." },
       { status: 400 },
     );
   }
@@ -382,18 +399,6 @@ export async function pollDeviceOAuth(
     );
   }
 
-  const parsed = sessionBodySchema.safeParse(
-    await request.json().catch(() => ({})),
-  );
-  const deviceAuthId = parsed.success ? (parsed.data.deviceAuthId ?? "") : "";
-  const userCode = parsed.success ? (parsed.data.userCode ?? "") : "";
-  if (!deviceAuthId || !userCode) {
-    return NextResponse.json(
-      { error: "Device authorization details are required." },
-      { status: 400 },
-    );
-  }
-
   try {
     const user = await getApiUser();
     if (!user || user.id !== state.userId) {
@@ -401,6 +406,45 @@ export async function pollDeviceOAuth(
     }
     if (state.scopeType === "WORKSPACE") {
       await requireOrganizationSettingsWrite(user.id, state.scopeId);
+    }
+
+    if (provider === "cursor") {
+      if (!state.cursorUuid || !state.cursorVerifier) {
+        throw new Error("Cursor login session is incomplete.");
+      }
+      const poll = await pollCursorLogin({
+        uuid: state.cursorUuid,
+        verifier: state.cursorVerifier,
+      });
+      if (poll.status === "pending") {
+        return NextResponse.json({ status: "pending" });
+      }
+      if (poll.status === "denied") {
+        return clearOAuthCookie(
+          NextResponse.json({ status: "denied", provider }),
+          provider,
+        );
+      }
+      await persistCursorTokens(state, {
+        accessToken: poll.accessToken,
+        refreshToken: poll.refreshToken,
+      });
+      return clearOAuthCookie(
+        NextResponse.json({ status: "connected", provider }),
+        provider,
+      );
+    }
+
+    const parsed = sessionBodySchema.safeParse(
+      await request.json().catch(() => ({})),
+    );
+    const deviceAuthId = parsed.success ? (parsed.data.deviceAuthId ?? "") : "";
+    const userCode = parsed.success ? (parsed.data.userCode ?? "") : "";
+    if (!deviceAuthId || !userCode) {
+      return NextResponse.json(
+        { error: "Device authorization details are required." },
+        { status: 400 },
+      );
     }
 
     const poll = await pollCodexDeviceCode({ deviceAuthId, userCode });

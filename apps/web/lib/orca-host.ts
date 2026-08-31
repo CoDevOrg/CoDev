@@ -1,7 +1,7 @@
 import "server-only";
 
 import { openOrcaInterval } from "./compute-credits";
-import { resolveAgentCredential } from "./credentials";
+import { resolveAgentCredential, resolveCursorCliAuth } from "./credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import {
@@ -114,11 +114,37 @@ async function resolveCodexAuthCacheForIde(
 /**
  * The Cursor CLI (`cursor-agent`) the IDE launches interactively has never
  * had a credential written for it, so it always stranded on its own sign-in
- * prompt even for a member with a linked Cursor key — the whole native-chat
- * Cursor agent produced nothing. Resolve the linked key so it rides the
- * member's env.json to the PTY. Best-effort: no link just means the CLI
- * prompts sign-in itself, exactly as before, and never blocks the IDE.
+ * prompt. Two ways to authenticate it, in order of preference:
+ *
+ *  - `cursorAuthJson`: the `{accessToken, refreshToken}` pair from Cursor's
+ *    browser login (Settings → "Connect Cursor"), formatted as the CLI's own
+ *    `~/.config/cursor/auth.json`. The orchestrator files it per member and
+ *    points `XDG_CONFIG_HOME` at it; `cursor-agent` then refreshes its own
+ *    tokens from that copy.
+ *  - `cursorApiKey`: a pasted `key_…` API key, handed through as
+ *    `CURSOR_API_KEY`.
+ *
+ * Best-effort throughout: nothing linked just means the CLI prompts sign-in
+ * itself, exactly as before, and never blocks the IDE from starting.
  */
+async function resolveCursorAuthJsonForIde(
+  userId: string,
+  workspaceId: string,
+): Promise<string | undefined> {
+  try {
+    const auth = await resolveCursorCliAuth(userId, workspaceId);
+    if (!auth) return undefined;
+    return JSON.stringify({
+      accessToken: auth.accessToken,
+      refreshToken: auth.refreshToken,
+      apiKey: null,
+      bedrockCredentials: null,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 async function resolveCursorApiKeyForIde(
   userId: string,
   workspaceId: string,
@@ -129,7 +155,9 @@ async function resolveCursorApiKeyForIde(
       workspaceId,
       "cursor",
     );
-    return credential.apiKeyOrToken?.trim() || undefined;
+    return credential.authType === "API_KEY"
+      ? credential.apiKeyOrToken?.trim() || undefined
+      : undefined;
   } catch {
     return undefined;
   }
@@ -274,13 +302,19 @@ export async function ensureOrcaSession(
           ...(token ? { token } : {}),
         }
       : undefined;
-  const [codexAuthCacheJson, cursorApiKey, openaiApiKey, claudeEnv] =
-    await Promise.all([
-      resolveCodexAuthCacheForIde(userId, workspace.id),
-      resolveCursorApiKeyForIde(userId, workspace.id),
-      resolveOpenAiApiKeyForIde(userId, workspace.id),
-      resolveClaudeEnvForIde(userId, workspace.id),
-    ]);
+  const [
+    codexAuthCacheJson,
+    cursorAuthJson,
+    cursorApiKey,
+    openaiApiKey,
+    claudeEnv,
+  ] = await Promise.all([
+    resolveCodexAuthCacheForIde(userId, workspace.id),
+    resolveCursorAuthJsonForIde(userId, workspace.id),
+    resolveCursorApiKeyForIde(userId, workspace.id),
+    resolveOpenAiApiKeyForIde(userId, workspace.id),
+    resolveClaudeEnvForIde(userId, workspace.id),
+  ]);
 
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
@@ -288,6 +322,7 @@ export async function ensureOrcaSession(
       memberId: userId,
       ...(clone ? { clone } : {}),
       ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+      ...(cursorAuthJson ? { cursorAuthJson } : {}),
       ...(cursorApiKey ? { cursorApiKey } : {}),
       ...(openaiApiKey ? { openaiApiKey } : {}),
       ...claudeEnv,

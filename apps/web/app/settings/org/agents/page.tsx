@@ -1,5 +1,6 @@
 import { BedrockRoleForm } from "@/components/bedrock-role-form";
 import { ClaudeCliSubscriptionCard } from "@/components/claude-cli-subscription-card";
+import { CursorConnectCard } from "@/components/cursor-connect-card";
 import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
 import {
   OrganizationSettingsCard,
@@ -89,7 +90,16 @@ export default async function OrganizationAgentsPage({
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
-          <SettingsCard title="Cursor">
+          <SettingsCard
+            description="Sign in through Cursor, or paste a personal API key as a fallback."
+            title="Cursor"
+          >
+            <CursorConnectCard
+              connected={cursor?.credentialType === "OAUTH_TOKEN"}
+              returnTo="/settings/org/agents"
+              scopeType="WORKSPACE"
+              workspaceId={context.workspace.id}
+            />
             <WorkspaceCredentialForm
               currentLastFour={cursor?.lastFour}
               provider="cursor"
