@@ -1,19 +1,28 @@
-import { MessageSquare, TriangleAlert } from 'lucide-react'
+import { History, MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../shared/native-chat-empty-state'
+import {
+  NATIVE_CHAT_EMPTY_STATE_COPY,
+  NATIVE_CHAT_REOPEN_PREVIOUS_CONVERSATION_LABEL
+} from '../../../../shared/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 
 export function NativeChatEmptyState({
   kind,
   message,
-  agent
+  agent,
+  onReopenPreviousConversation
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
   message?: string
   agent?: NativeChatSession['agent']
+  /** When set, the empty and error states offer a one-click path to Agent
+   *  Session History so a member can resume a chat that did not restore. */
+  onReopenPreviousConversation?: () => void
 }): React.JSX.Element {
   const copy = emptyStateCopy(kind, message, agent)
+  const showReopen =
+    Boolean(onReopenPreviousConversation) && (kind === 'empty' || kind === 'error')
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -32,6 +41,19 @@ export function NativeChatEmptyState({
       <p className="text-sm font-medium text-foreground">{copy.title}</p>
       {copy.subtitle ? (
         <p className="max-w-sm text-balance text-xs text-muted-foreground">{copy.subtitle}</p>
+      ) : null}
+      {showReopen ? (
+        <button
+          type="button"
+          onClick={onReopenPreviousConversation}
+          className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+        >
+          <History className="size-3.5" />
+          {translate(
+            'components.native-chat.state.reopenPreviousConversation',
+            NATIVE_CHAT_REOPEN_PREVIOUS_CONVERSATION_LABEL
+          )}
+        </button>
       ) : null}
     </div>
   )

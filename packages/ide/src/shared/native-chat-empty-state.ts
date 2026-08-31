@@ -25,6 +25,11 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
   }
 } as const satisfies Record<string, NativeChatEmptyStateCopy>
 
+/** Label for the action that opens Agent Session History so a member can pick a
+ *  past conversation to resume — offered on the empty and error states so a chat
+ *  that did not restore is one click from being recovered. */
+export const NATIVE_CHAT_REOPEN_PREVIOUS_CONVERSATION_LABEL = 'Reopen a previous conversation'
+
 /** Resolve the empty-state copy with the agent label substituted for `{{value0}}`.
  *  For platforms without an i18n layer (mobile). */
 export function formatNativeChatEmptyStateCopy(

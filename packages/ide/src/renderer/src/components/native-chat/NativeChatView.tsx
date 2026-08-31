@@ -11,6 +11,7 @@ import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -213,6 +214,19 @@ function NativeChatResolvedView({
     composerRef,
     questionAnswerInputRef
   })
+  // CoDev: when a chat is empty or failed to restore, one click jumps to Agent
+  // Session History so the member can resume the conversation they left.
+  const reopenPreviousConversation = useMemo(
+    () =>
+      isCodevEmbedded()
+        ? (): void => {
+            const store = useAppStore.getState()
+            store.setRightSidebarTab('vault')
+            store.setRightSidebarOpen(true)
+          }
+        : undefined,
+    []
+  )
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     onSwitchToTerminal,
@@ -452,9 +466,17 @@ function NativeChatResolvedView({
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
         ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState kind="error" message={viewState.message} />
+          <NativeChatEmptyState
+            kind="error"
+            message={viewState.message}
+            onReopenPreviousConversation={reopenPreviousConversation}
+          />
         ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={agent} />
+          <NativeChatEmptyState
+            kind="empty"
+            agent={agent}
+            onReopenPreviousConversation={reopenPreviousConversation}
+          />
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}
