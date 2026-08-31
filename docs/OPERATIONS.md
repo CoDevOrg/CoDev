@@ -13,6 +13,13 @@
   100%.
 - Workspace audit events retain for 90 days.
 
+## Domain email
+
+`trycodev.com` is registered with Vercel. Product mail is sent with Resend from
+`noreply@trycodev.com`. Operator mail (`yousef@trycodev.com` and a catch-all) is
+free ImprovMX forwarding, not a hosted mailbox. Full DNS, env, and setup notes
+are in [EMAIL.md](./EMAIL.md).
+
 ## Deployment
 
 1. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,

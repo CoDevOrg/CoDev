@@ -61,4 +61,4 @@ The long-term goal is a permission-aware intelligence layer across tasks, reposi
 
 Read the full [enterprise feature vision](./ENTERPRISE_FEATURES.md).
 
-CoDev is hosted on the web at **[trycodev.com](https://trycodev.com)**.
+CoDev is hosted on the web at **[trycodev.com](https://trycodev.com)**. Domain email setup (Resend sending and ImprovMX receiving) is documented in [docs/EMAIL.md](./docs/EMAIL.md).
