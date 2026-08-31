@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { CodevDefaultChatAgent } from './codev-bootstrap'
 import { isCodevEmbedded } from './codev-embedded'
+import { launchCodevAgentInOwnWorktree } from './codev-launch-agent-worktree'
 
 function worktreeIdForTerminalTab(tabId: string): string | null {
   const { tabsByWorktree } = useAppStore.getState()
@@ -58,12 +59,26 @@ export function switchCodevChatProvider(args: {
     return
   }
 
-  launchAgentInNewTab({
-    agent: nextAgent,
-    worktreeId,
-    promptDelivery: 'draft',
-    launchSource: 'new_workspace_composer'
-  })
+  // Every CoDev agent gets its own worktree, so switching provider starts the
+  // new provider in a fresh worktree off the workspace's current checkout, not
+  // in this agent's tree. The previous tab (and, once empty, its worktree) is
+  // retired by the existing close path below.
+  const createdInOwnWorktree = isCodevEmbedded()
+    ? launchCodevAgentInOwnWorktree({
+        agent: nextAgent,
+        baseWorktreeId: worktreeId,
+        launchSource: 'new_workspace_composer'
+      })
+    : null
+
+  if (!createdInOwnWorktree) {
+    launchAgentInNewTab({
+      agent: nextAgent,
+      worktreeId,
+      promptDelivery: 'draft',
+      launchSource: 'new_workspace_composer'
+    })
+  }
 
   setTimeout(() => {
     const state = useAppStore.getState()

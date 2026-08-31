@@ -41,6 +41,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { maybeLaunchCodevAgentInOwnWorktree } from '@/web/codev-launch-agent-worktree'
 import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -589,6 +590,18 @@ function TabBarInner({
   }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
+    // CoDev-embedded: isolate the agent in its own worktree; the host creates
+    // the tab and focus follows the next session-tabs snapshot.
+    if (
+      maybeLaunchCodevAgentInOwnWorktree({
+        agent,
+        baseWorktreeId: worktreeId,
+        launchSource: 'tab_bar_quick_launch'
+      })
+    ) {
+      queueNewActiveTerminalFocusAfterNewTabMenuClose()
+      return
+    }
     const result = launchAgentInNewTab({
       agent,
       worktreeId,
