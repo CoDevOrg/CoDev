@@ -2,11 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   CodevMissionControlView,
+  distinctLocalAgentEntries,
   mergeMissionControlAgents,
   missionControlPhaseFromStatus,
   sortMissionControlAgents,
   type MissionControlAgent
 } from './CodevMissionControlView'
+
+const LEAF_A = '11111111-1111-4111-8111-111111111111'
+const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
   return {
@@ -50,14 +54,53 @@ describe('sortMissionControlAgents', () => {
   })
 })
 
+describe('distinctLocalAgentEntries', () => {
+  it('keeps two agents in one worktree — a tab is an agent, provider does not matter', () => {
+    const kept = distinctLocalAgentEntries([
+      [`tab-one:${LEAF_A}`, { worktreeId: 'w1' }],
+      [`tab-two:${LEAF_B}`, { worktreeId: 'w1' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual([`tab-one:${LEAF_A}`, `tab-two:${LEAF_B}`])
+  })
+
+  it('collapses a superseded row left behind by a reload of the same tab', () => {
+    // entries arrive newest-first; the fresh leaf for tab-one wins.
+    const kept = distinctLocalAgentEntries([
+      [`tab-one:${LEAF_B}`, { worktreeId: 'w1' }],
+      [`tab-one:${LEAF_A}`, { worktreeId: 'w1' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual([`tab-one:${LEAF_B}`])
+  })
+
+  it('falls back to worktree, then paneKey, for rows with no derivable tab', () => {
+    const kept = distinctLocalAgentEntries([
+      ['not-a-pane-key', { worktreeId: 'w1' }],
+      ['also-not', { worktreeId: 'w1' }],
+      ['anon', {}]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual(['not-a-pane-key', 'anon'])
+  })
+})
+
 describe('mergeMissionControlAgents', () => {
-  it('drops a local entry that a managed session already covers for the same worktree', () => {
+  it('drops a lone local entry that a managed session already covers for the same worktree', () => {
     const merged = mergeMissionControlAgents(
       [agent({ key: 'managed:s1', worktreeId: 'w1' })],
       [agent({ key: 'local:p1', origin: 'you', sessionId: null, worktreeId: 'w1' })]
     )
     expect(merged).toHaveLength(1)
     expect(merged[0]!.key).toBe('managed:s1')
+  })
+
+  it('keeps every local agent when several share a worktree a managed session also covers', () => {
+    const merged = mergeMissionControlAgents(
+      [agent({ key: 'managed:s1', worktreeId: 'w1' })],
+      [
+        agent({ key: 'local:p1', origin: 'you', sessionId: null, worktreeId: 'w1' }),
+        agent({ key: 'local:p2', origin: 'you', sessionId: null, worktreeId: 'w1' })
+      ]
+    )
+    expect(merged.map((entry) => entry.key).sort()).toEqual(['local:p1', 'local:p2', 'managed:s1'])
   })
 
   it('keeps a local agent that has no managed twin', () => {

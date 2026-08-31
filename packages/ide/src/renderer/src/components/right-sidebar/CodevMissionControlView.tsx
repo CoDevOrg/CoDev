@@ -1,4 +1,5 @@
 import { useEffect, useState, type JSX, type KeyboardEvent } from 'react'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 /**
  * Mission Control — the workspace's live agent view.
@@ -103,9 +104,35 @@ export function sortMissionControlAgents(agents: MissionControlAgent[]): Mission
 }
 
 /**
- * Managed sessions win over a local entry for the same worktree: a teammate's
- * co-steered session and this tab's mirror of it are one agent, and the
- * managed record carries the real owner and session id.
+ * Distinct local agents = distinct tabs. An agent is identified by the tab it
+ * runs in, never by its worktree or provider: two chat tabs are two agents
+ * even in one worktree and even both on Claude. `entries` must be newest-first
+ * so the first row seen for each tab is the live one and a superseded row left
+ * behind by a reload is dropped. A row with no derivable tab (a retained
+ * orchestration worker that reported before its tab existed) falls back to
+ * worktree, then paneKey, so it is never merged onto a real tab.
+ */
+export function distinctLocalAgentEntries<T extends { worktreeId?: string }>(
+  entries: [string, T][]
+): [string, T][] {
+  const seen = new Set<string>()
+  return entries.filter(([paneKey, entry]) => {
+    const identity = parsePaneKey(paneKey)?.tabId ?? entry.worktreeId ?? paneKey
+    if (seen.has(identity)) {
+      return false
+    }
+    seen.add(identity)
+    return true
+  })
+}
+
+/**
+ * Managed sessions win over a local entry for the same worktree — but only
+ * when the match is unambiguous. Viewing a managed agent's own worktree makes
+ * its hooks report locally too, so one local row in a worktree a managed
+ * session covers is that session's mirror. Several local rows in one worktree
+ * were started deliberately (two chat-tab agents against the repo): keep every
+ * one rather than letting an unrelated managed session erase them.
  */
 export function mergeMissionControlAgents(
   managed: MissionControlAgent[],
@@ -114,7 +141,18 @@ export function mergeMissionControlAgents(
   const claimed = new Set(
     managed.map((agent) => agent.worktreeId).filter((id): id is string => Boolean(id))
   )
-  const keptLocal = local.filter((agent) => !agent.worktreeId || !claimed.has(agent.worktreeId))
+  const localPerWorktree = new Map<string, number>()
+  for (const agent of local) {
+    if (agent.worktreeId) {
+      localPerWorktree.set(agent.worktreeId, (localPerWorktree.get(agent.worktreeId) ?? 0) + 1)
+    }
+  }
+  const keptLocal = local.filter(
+    (agent) =>
+      !agent.worktreeId ||
+      !claimed.has(agent.worktreeId) ||
+      (localPerWorktree.get(agent.worktreeId) ?? 0) > 1
+  )
   return sortMissionControlAgents([...managed, ...keptLocal])
 }
 

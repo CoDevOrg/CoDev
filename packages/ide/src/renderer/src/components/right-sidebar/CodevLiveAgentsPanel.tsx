@@ -11,6 +11,7 @@ import {
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import {
   CodevMissionControlView,
+  distinctLocalAgentEntries,
   mergeMissionControlAgents,
   missionControlPhaseFromState,
   missionControlPhaseFromStatus,
@@ -121,18 +122,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       .filter(([, entry]) => isLiveState(entry.state) && Boolean(entry.agentType))
       .sort(([, a], [, b]) => b.updatedAt - a.updatedAt)
 
-    // One agent per worktree in the chat-tab model. A reload can leave a
-    // superseded status row behind (old tab + its replacement), so keep only
-    // the most-recently-updated entry for each worktree; unattributed rows
-    // (no worktreeId) are always kept.
-    const seenWorktrees = new Set<string>()
-    return entries
-      .filter(([, entry]) => {
-        if (!entry.worktreeId) return true
-        if (seenWorktrees.has(entry.worktreeId)) return false
-        seenWorktrees.add(entry.worktreeId)
-        return true
-      })
+    // One row per tab, not per worktree: every agent the user started is its
+    // own agent even when several run the same provider in one worktree.
+    return distinctLocalAgentEntries(entries)
       .map(([paneKey, entry]) => {
         const label = providerLabel(String(entry.agentType ?? ''))
         const phase = missionControlPhaseFromState(entry.state)
