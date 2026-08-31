@@ -67,6 +67,7 @@ import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { monacoFindOptions } from './monaco-find-options'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 import { useCodevCursorDecorations } from './codev-cursor-decorations'
+import { useCodevAgentEditDecorations } from './codev-agent-edit-decorations'
 
 type MonacoEditorProps = {
   fileId: string
@@ -120,6 +121,7 @@ export default function MonacoEditor({
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   useCodevCursorDecorations({ editor: mountedEditor, relativePath })
+  useCodevAgentEditDecorations({ editor: mountedEditor, relativePath, worktreeId })
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)

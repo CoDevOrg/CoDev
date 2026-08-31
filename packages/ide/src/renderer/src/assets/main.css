@@ -2184,6 +2184,26 @@ html.native-shell .app-layout {
   vertical-align: text-bottom;
 }
 
+/* CoDev agent-edit awareness: which agent is writing in this file right now.
+   Per-agent colour is injected at runtime keyed by `.codev-agent-edit--<kind>`
+   (see codev-agent-edit-decorations.ts); these rules carry shape only. The
+   label span is Monaco's injected `after` content, styled directly. */
+.monaco-editor .codev-agent-edit-glyph {
+  width: 3px;
+  margin-left: 2px;
+  border-radius: 2px;
+}
+
+.monaco-editor .codev-agent-edit-label {
+  margin-left: 8px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-style: normal;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
 .codev-conflict-merge {
   display: grid;
   gap: 4px;
