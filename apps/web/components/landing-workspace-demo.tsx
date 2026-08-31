@@ -154,7 +154,7 @@ const PHASES: {
 /**
  * The crew. Each agent has ONE colour (tone) that is used everywhere it
  * appears: live-agents panel, editor cursor, tabs, and the coordination
- * board. Codex = orange, Claude = violet, Cursor = blue.
+ * board. Codex = orange, Claude = green, Cursor = purple.
  */
 const AGENTS: AgentTrack[] = [
   {
