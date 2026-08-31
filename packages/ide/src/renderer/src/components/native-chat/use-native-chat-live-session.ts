@@ -24,6 +24,14 @@ import {
   nextNativeChatLimit
 } from './native-chat-pagination'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
+import {
+  NOTFOUND_RETRY_FIXED_DELAY_MS,
+  NOTFOUND_RETRY_WINDOW_MS,
+  NOTFOUND_SLOW_POLL_WINDOW_MS,
+  notFoundRetryDelayMs,
+  TRANSPORT_ERROR_RETRY_WINDOW_MS,
+  transportErrorRetryDelayMs
+} from './native-chat-seed-retry'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 
@@ -77,19 +85,6 @@ function nextSubscriptionId(): string {
   return `native-chat-${subscriptionCounter}-${Date.now()}`
 }
 
-// Why: a new session's transcript can take minutes to appear on disk (#8401); a `notFound` miss retries with backoff until the window below elapses.
-const NOTFOUND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
-const NOTFOUND_RETRY_FIXED_DELAY_MS = 10_000
-const NOTFOUND_RETRY_WINDOW_MS = 60_000
-// After the fast window, a still-missing transcript for a brand-new session is
-// an empty conversation, not a failure — show the empty state but keep polling
-// slowly this much longer so a late first flush (cold CoDev VM, first-run
-// `claude`) still upgrades the pane to the real transcript.
-const NOTFOUND_SLOW_POLL_WINDOW_MS = 10 * 60_000
-
-function notFoundRetryDelayMs(attempt: number): number {
-  return NOTFOUND_RETRY_DELAYS_MS[attempt] ?? NOTFOUND_RETRY_FIXED_DELAY_MS
-}
 
 export type ReadState =
   | { phase: 'loading' }
@@ -174,6 +169,13 @@ export function useNativeChatLiveSession(
     setAppended([])
     setHasMore(false)
 
+    const scheduleSeedRetry = (nextAttempt: number, delayMs: number): void => {
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        loadSession(nextAttempt)
+      }, delayMs)
+    }
+
     // Independent initial seed in case subscribe never delivers a snapshot; applied only until an authoritative frame lands so a live snapshot wins.
     function loadSession(attempt: number): void {
       if (frameArrived) {
@@ -190,10 +192,7 @@ export function useNativeChatLiveSession(
               const elapsed = Date.now() - retryStartedAt
               // Fast window: hold 'loading' and retry on a short backoff (#8401).
               if (elapsed < NOTFOUND_RETRY_WINDOW_MS) {
-                retryTimer = setTimeout(() => {
-                  retryTimer = null
-                  loadSession(attempt + 1)
-                }, notFoundRetryDelayMs(attempt))
+                scheduleSeedRetry(attempt + 1, notFoundRetryDelayMs(attempt))
                 return
               }
               // After it: a missing transcript for a never-run session is an
@@ -205,10 +204,7 @@ export function useNativeChatLiveSession(
                 setRead({ phase: 'ready', messages: [] })
               }
               if (elapsed < NOTFOUND_SLOW_POLL_WINDOW_MS) {
-                retryTimer = setTimeout(() => {
-                  retryTimer = null
-                  loadSession(attempt + 1)
-                }, NOTFOUND_RETRY_FIXED_DELAY_MS)
+                scheduleSeedRetry(attempt + 1, NOTFOUND_RETRY_FIXED_DELAY_MS)
               }
               return
             }
@@ -221,9 +217,18 @@ export function useNativeChatLiveSession(
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
         })
         .catch((err: unknown) => {
-          if (!cancelled && !frameArrived) {
-            setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
+          if (cancelled || frameArrived) {
+            return
           }
+          // A throw is an RPC timeout or socket blip against a slow/cold paired
+          // host — usually transient. Hold 'loading' and retry within the window
+          // so the pane recovers once the host catches up, rather than surfacing
+          // a hard error the user has to toggle away from.
+          if (Date.now() - retryStartedAt < TRANSPORT_ERROR_RETRY_WINDOW_MS) {
+            scheduleSeedRetry(attempt + 1, transportErrorRetryDelayMs(attempt))
+            return
+          }
+          setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
         })
     }
 

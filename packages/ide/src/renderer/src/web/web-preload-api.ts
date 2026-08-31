@@ -1187,16 +1187,25 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 }
 
 // Why: web has no IPC for native-chat transcripts, so route readSession/subscribe through runtime RPC (as mobile does).
+// Bound both calls the same way the desktop runtime transport does (15s): a
+// paired host that is slow or unresponsive must surface the chat error state —
+// "toggle back to the terminal" — not strand the view on "Loading conversation…".
+const WEB_NATIVE_CHAT_RPC_TIMEOUT_MS = 15_000
+
 function createNativeChatApi(): NativeChatApi {
   return {
     readSession: async (agent, sessionId, limit, transcriptPath) =>
       parseRuntimeNativeChatReadSessionResult(
-        await callRuntimeResult<unknown>('nativeChat.readSession', {
-          agent,
-          sessionId,
-          limit,
-          transcriptPath
-        })
+        await callRuntimeResult<unknown>(
+          'nativeChat.readSession',
+          {
+            agent,
+            sessionId,
+            limit,
+            transcriptPath
+          },
+          WEB_NATIVE_CHAT_RPC_TIMEOUT_MS
+        )
       ),
     subscribe: (args, onFrame) => {
       // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
@@ -1305,7 +1314,10 @@ function createNativeChatApi(): NativeChatApi {
           {
             // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
             buildUnsubscribe: () =>
-              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
+              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId),
+            // Why: bound the initial subscribe so a stuck host rejects into the
+            // catch below (error frame) instead of hanging the view on 'loading'.
+            timeoutMs: WEB_NATIVE_CHAT_RPC_TIMEOUT_MS
           }
         )
         .then((h) => {
