@@ -5,6 +5,10 @@ import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
 import type { CodevDefaultChatAgent } from './codev-bootstrap'
 import { isCodevEmbedded } from './codev-embedded'
+import {
+  isCodevAgentWorktree,
+  launchCodevAgentInOwnWorktree
+} from './codev-launch-agent-worktree'
 
 /**
  * The agent CoDev opens a workspace's default chat tab with when the pairing
@@ -147,37 +151,56 @@ function ensureAgentTabsRenderAsChat(worktreeId: string): void {
 export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }): void {
   const agent = codevDefaultChatAgent()
   if (!agent) return
+
+  const store = useAppStore.getState()
+  const base = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+
+  // Every CoDev agent runs in its own worktree so two agents never edit the
+  // same tree. `startupWorktreeRefreshCompleted` gates this call in App.tsx, so
+  // a prior session's agent worktrees are already mirrored into the store — on
+  // reload, re-assert their chat view and retire stray shells rather than
+  // spawning another.
+  if (base?.repoId) {
+    const existingAgentWorktrees = (store.worktreesByRepo[base.repoId] ?? []).filter((entry) =>
+      isCodevAgentWorktree(entry)
+    )
+    if (existingAgentWorktrees.length > 0) {
+      for (const wt of existingAgentWorktrees) {
+        ensureAgentTabsRenderAsChat(wt.id)
+        retireStockTerminalTabs(wt.id)
+      }
+      retireStockTerminalTabs(worktreeId)
+      return
+    }
+
+    const creationId = launchCodevAgentInOwnWorktree({
+      agent,
+      baseWorktreeId: worktreeId,
+      launchSource: 'new_workspace_composer'
+    })
+    // The main checkout stays a plain tree; drop the shell the host opened it
+    // with so it isn't a stray idle terminal.
+    retireStockTerminalTabs(worktreeId)
+    if (creationId) {
+      return
+    }
+    // The worktree create could not be started — fall through to an in-place
+    // launch so a workspace never opens with zero agents.
+  }
+
   if (worktreeHasAgentTab(worktreeId)) {
-    // Already has an agent. Still make sure it is not showing as a raw TUI,
-    // and still retire any shell the host re-created alongside it — a reload
-    // takes this path, and skipping the sweep is how a second idle terminal
-    // came back every time.
     ensureAgentTabsRenderAsChat(worktreeId)
     retireStockTerminalTabs(worktreeId)
     return
   }
-  // No agent tab in the store yet. That is the case both for a brand-new
-  // workspace and for a return visit where the host simply has not mirrored
-  // its existing chat tabs. Wait for the mirror to report *something* for this
-  // worktree before opening a default, then re-check.
   waitForHostWorktreeTabs(worktreeId, () => {
     if (worktreeHasAgentTab(worktreeId)) {
       ensureAgentTabsRenderAsChat(worktreeId)
       retireStockTerminalTabs(worktreeId)
       return
     }
-    launchAgentInNewTab({
-      agent,
-      worktreeId,
-      // Deliberately no promptDelivery: `'draft'` means "there is unsent text to
-      // mirror into the composer", and `decideInitialAgentTabViewMode` refuses
-      // chat when that text is empty (canMirrorLaunchDraftToNativeChat('') is
-      // false) — which silently opened this tab as a terminal. There is no
-      // prompt here at all, so the default is both correct and opens in chat.
-      launchSource: 'new_workspace_composer'
-    })
+    launchAgentInNewTab({ agent, worktreeId, launchSource: 'new_workspace_composer' })
     retireStockTerminalTabs(worktreeId)
-    // The host mirrors tabs late, so re-assert once they land.
     setTimeout(() => ensureAgentTabsRenderAsChat(worktreeId), RETIRE_STOCK_TABS_INTERVAL_MS * 2)
   })
 }
