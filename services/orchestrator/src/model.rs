@@ -370,6 +370,20 @@ pub struct IdeStartRequest {
     pub anthropic_api_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code_oauth_token: Option<String>,
+    /// Present when the requesting member has a linked Cursor credential.
+    /// Filed into their per-member `env.json` as `CURSOR_API_KEY` so the
+    /// `cursor-agent` CLI Orca launches interactively is authenticated instead
+    /// of stranding on its own sign-in prompt. Unlike Codex there is no
+    /// host-side config directory to seed — the CLI reads the env var.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_api_key: Option<String>,
+    /// Present when the requesting member linked a plain OpenAI API key rather
+    /// than a hosted Codex subscription. Filed into their per-member
+    /// `env.json` as `OPENAI_API_KEY` so the interactive Codex CLI can use
+    /// API-key auth. `codex_auth_cache_json` (the hosted subscription) wins
+    /// when both are somehow present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openai_api_key: Option<String>,
     /// The CoDev member this request is on behalf of. A workspace is shared,
     /// but a linked coding subscription is personal: the credentials above are
     /// this member's, and are filed under their id so an agent they launch

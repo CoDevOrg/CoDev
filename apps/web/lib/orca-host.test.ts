@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     stopIde: vi.fn().mockResolvedValue(undefined),
     assertWorkspaceCreditQuota: vi.fn().mockResolvedValue(undefined),
     openOrcaInterval: vi.fn().mockResolvedValue(undefined),
+    resolveAgentCredential: vi.fn(),
   };
 });
 
@@ -28,6 +29,9 @@ vi.mock("./host", () => ({
   requestHostWake: mocks.requestHostWake,
 }));
 vi.mock("./github", () => ({ getGitHubUserToken: vi.fn() }));
+vi.mock("./credentials", () => ({
+  resolveAgentCredential: mocks.resolveAgentCredential,
+}));
 vi.mock("./orchestrator", () => ({
   OrchestratorError: mocks.OrchestratorError,
   startIde: mocks.startIde,
@@ -81,6 +85,64 @@ describe("ensureOrcaSession", () => {
     mocks.getHostState.mockResolvedValue("running");
     mocks.waitForOrchestrator.mockResolvedValue(undefined);
     mocks.stopIde.mockResolvedValue(undefined);
+    // Default: nothing linked, so a resolution throws exactly as the real
+    // lookup does without a database.
+    mocks.resolveAgentCredential.mockRejectedValue(new Error("no credential"));
+  });
+
+  it("forwards a member's linked Cursor and plain OpenAI keys to the host", async () => {
+    mocks.resolveAgentCredential.mockImplementation(
+      async (_userId: string, _workspaceId: string, provider: string) => {
+        if (provider === "cursor") {
+          return {
+            provider,
+            authType: "API_KEY",
+            apiKeyOrToken: "key_cursor_abc",
+          };
+        }
+        if (provider === "openai") {
+          return {
+            provider,
+            authType: "API_KEY",
+            apiKeyOrToken: "sk-openai-xyz",
+          };
+        }
+        throw new Error("no credential");
+      },
+    );
+    mocks.startIde.mockResolvedValueOnce(session);
+
+    await ensureOrcaSession(workspace, userId);
+
+    expect(mocks.startIde).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({
+        cursorApiKey: "key_cursor_abc",
+        openaiApiKey: "sk-openai-xyz",
+      }),
+    );
+  });
+
+  it("omits the plain OpenAI key when the member has a hosted Codex subscription", async () => {
+    mocks.resolveAgentCredential.mockImplementation(
+      async (_userId: string, _workspaceId: string, provider: string) => {
+        if (provider === "openai") {
+          return {
+            provider,
+            authType: "HOSTED_CODEX_SUBSCRIPTION",
+            codexAuthCacheJson: '{"tokens":{}}',
+          };
+        }
+        throw new Error("no credential");
+      },
+    );
+    mocks.startIde.mockResolvedValueOnce(session);
+
+    await ensureOrcaSession(workspace, userId);
+
+    const [, input] = mocks.startIde.mock.calls[0];
+    expect(input.openaiApiKey).toBeUndefined();
+    expect(input.codexAuthCacheJson).toBe('{"tokens":{}}');
   });
 
   it("stops the stale IDE record and retries once after a crashed launch", async () => {

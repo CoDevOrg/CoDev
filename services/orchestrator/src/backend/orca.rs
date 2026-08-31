@@ -633,6 +633,65 @@ fn member_id_pattern() -> &'static Regex {
     })
 }
 
+/// The environment every CLI agent this member launches is spawned with,
+/// serialized to their `env.json`. Each key is the sign-in the matching CLI
+/// would otherwise prompt for interactively — a prompt the native-chat
+/// surface cannot answer, so a missing key there is the whole "agent produces
+/// nothing" failure.
+///
+/// `codex_home` is `Some` once the caller has materialized a hosted Codex
+/// subscription's config dir; its presence also suppresses the plain
+/// `OPENAI_API_KEY` fallback so the two never fight over the Codex CLI.
+fn member_agent_env_map(
+    request: &IdeStartRequest,
+    codex_home: Option<&Path>,
+) -> serde_json::Map<String, Value> {
+    let mut env = serde_json::Map::new();
+
+    if let Some(codex_home) = codex_home {
+        env.insert(
+            "CODEX_HOME".to_string(),
+            Value::String(codex_home.to_string_lossy().into_owned()),
+        );
+    }
+
+    // Claude Code takes its credential from the environment rather than a
+    // config file. At most one of the two forms is ever present.
+    if let Some(api_key) = &request.anthropic_api_key {
+        env.insert(
+            "ANTHROPIC_API_KEY".to_string(),
+            Value::String(api_key.clone()),
+        );
+    } else if let Some(token) = &request.claude_code_oauth_token {
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(token.clone()),
+        );
+    }
+
+    // The Cursor CLI has no config directory to seed the way Codex does; it
+    // reads its key straight from the environment.
+    if let Some(cursor_api_key) = &request.cursor_api_key {
+        env.insert(
+            "CURSOR_API_KEY".to_string(),
+            Value::String(cursor_api_key.clone()),
+        );
+    }
+
+    // A plain OpenAI API key is the API-key fallback for the Codex CLI when
+    // the member has no hosted Codex subscription.
+    if codex_home.is_none()
+        && let Some(openai_api_key) = &request.openai_api_key
+    {
+        env.insert(
+            "OPENAI_API_KEY".to_string(),
+            Value::String(openai_api_key.clone()),
+        );
+    }
+
+    env
+}
+
 /// Files one member's linked coding-subscription credentials under their own
 /// id, so an agent they launch in a shared workspace runs on *their*
 /// subscription.
@@ -662,40 +721,26 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
         .await
         .map_err(RuntimeError::internal)?;
 
-    // Codex reads its whole config directory from CODEX_HOME, so give this
-    // member their own and point the agent launch at it.
-    let mut env = serde_json::Map::new();
+    // Codex reads its whole config directory from CODEX_HOME, so a linked
+    // hosted subscription gets its own materialized here; every other agent
+    // takes its credential straight from env.json.
+    let mut codex_home: Option<PathBuf> = None;
     if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
-        let codex_home = member_dir.join("codex");
-        fs::create_dir_all(&codex_home)
+        let home = member_dir.join("codex");
+        fs::create_dir_all(&home)
             .await
             .map_err(RuntimeError::internal)?;
-        let auth_path = codex_home.join("auth.json");
+        let auth_path = home.join("auth.json");
         fs::write(&auth_path, codex_auth_cache_json)
             .await
             .map_err(RuntimeError::internal)?;
         fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(RuntimeError::internal)?;
-        env.insert(
-            "CODEX_HOME".to_string(),
-            Value::String(codex_home.to_string_lossy().into_owned()),
-        );
+        codex_home = Some(home);
     }
 
-    // Claude Code takes its credential from the environment, so it rides in
-    // env.json rather than a config file of its own.
-    if let Some(api_key) = &request.anthropic_api_key {
-        env.insert(
-            "ANTHROPIC_API_KEY".to_string(),
-            Value::String(api_key.clone()),
-        );
-    } else if let Some(token) = &request.claude_code_oauth_token {
-        env.insert(
-            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
-            Value::String(token.clone()),
-        );
-    }
+    let env = member_agent_env_map(request, codex_home.as_deref());
 
     let env_path = member_dir.join("env.json");
     if env.is_empty() {
@@ -1080,10 +1125,22 @@ mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
         claude_settings_with_theme, linux_user_for, linux_user_process_command, member_agent_dir,
-        member_id_pattern, orca_serve_command_line, orca_serve_sudo_command, repository_pattern,
-        shell_quote, token_pattern,
+        member_agent_env_map, member_id_pattern, orca_serve_command_line, orca_serve_sudo_command,
+        repository_pattern, shell_quote, token_pattern,
     };
+    use crate::model::IdeStartRequest;
     use serde_json::json;
+
+    fn ide_start_request(extra: serde_json::Value) -> IdeStartRequest {
+        let mut body = json!({
+            "projectRoot": "/srv/codev/workspaces/w",
+            "memberId": "11111111-1111-4111-8111-111111111111",
+        });
+        body.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(body).expect("valid IdeStartRequest")
+    }
     use std::path::Path;
 
     #[test]
@@ -1262,6 +1319,39 @@ mod tests {
                 "should reject {hostile}"
             );
         }
+    }
+
+    #[test]
+    fn files_a_linked_cursor_key_so_the_cli_starts_authenticated() {
+        // The interactive `cursor-agent` had no credential written for it at
+        // all, so the native-chat Cursor agent always stranded on sign-in.
+        let request = ide_start_request(json!({ "cursorApiKey": "key_cursor_abc123" }));
+        let env = member_agent_env_map(&request, None);
+        assert_eq!(env["CURSOR_API_KEY"], json!("key_cursor_abc123"));
+    }
+
+    #[test]
+    fn falls_back_to_a_plain_openai_key_only_without_a_hosted_codex_home() {
+        let request = ide_start_request(json!({ "openaiApiKey": "sk-openai-xyz" }));
+
+        // No hosted subscription: the plain key is the Codex CLI's auth.
+        let env = member_agent_env_map(&request, None);
+        assert_eq!(env["OPENAI_API_KEY"], json!("sk-openai-xyz"));
+
+        // Hosted subscription present: CODEX_HOME wins, the plain key is not
+        // also set so the two can't disagree about which account Codex uses.
+        let with_home =
+            member_agent_env_map(&request, Some(Path::new("/home/u/.codev/agents/m/codex")));
+        assert_eq!(
+            with_home["CODEX_HOME"],
+            json!("/home/u/.codev/agents/m/codex")
+        );
+        assert!(!with_home.contains_key("OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn nothing_linked_yields_an_empty_bundle_that_clears_a_stale_one() {
+        assert!(member_agent_env_map(&ide_start_request(json!({})), None).is_empty());
     }
 
     #[test]

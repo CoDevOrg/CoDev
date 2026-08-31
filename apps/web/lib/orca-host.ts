@@ -112,6 +112,55 @@ async function resolveCodexAuthCacheForIde(
 }
 
 /**
+ * The Cursor CLI (`cursor-agent`) the IDE launches interactively has never
+ * had a credential written for it, so it always stranded on its own sign-in
+ * prompt even for a member with a linked Cursor key — the whole native-chat
+ * Cursor agent produced nothing. Resolve the linked key so it rides the
+ * member's env.json to the PTY. Best-effort: no link just means the CLI
+ * prompts sign-in itself, exactly as before, and never blocks the IDE.
+ */
+async function resolveCursorApiKeyForIde(
+  userId: string,
+  workspaceId: string,
+): Promise<string | undefined> {
+  try {
+    const credential = await resolveAgentCredential(
+      userId,
+      workspaceId,
+      "cursor",
+    );
+    return credential.apiKeyOrToken?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The API-key fallback for the interactive Codex CLI: when a member linked a
+ * plain OpenAI key rather than a hosted Codex subscription,
+ * resolveCodexAuthCacheForIde returns nothing and the CLI stranded on
+ * sign-in. Hand the key through as OPENAI_API_KEY. A hosted subscription,
+ * when present, is materialized as CODEX_HOME instead and takes precedence.
+ */
+async function resolveOpenAiApiKeyForIde(
+  userId: string,
+  workspaceId: string,
+): Promise<string | undefined> {
+  try {
+    const credential = await resolveAgentCredential(
+      userId,
+      workspaceId,
+      "openai",
+    );
+    return credential.authType === "API_KEY"
+      ? credential.apiKeyOrToken?.trim() || undefined
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Same idea as resolveCodexAuthCacheForIde, for a linked Anthropic
  * credential. Both the BYOK API key and the OAuth token from `claude
  * setup-token`/browser login resolve through the same generic lookup,
@@ -225,11 +274,13 @@ export async function ensureOrcaSession(
           ...(token ? { token } : {}),
         }
       : undefined;
-  const codexAuthCacheJson = await resolveCodexAuthCacheForIde(
-    userId,
-    workspace.id,
-  );
-  const claudeEnv = await resolveClaudeEnvForIde(userId, workspace.id);
+  const [codexAuthCacheJson, cursorApiKey, openaiApiKey, claudeEnv] =
+    await Promise.all([
+      resolveCodexAuthCacheForIde(userId, workspace.id),
+      resolveCursorApiKeyForIde(userId, workspace.id),
+      resolveOpenAiApiKeyForIde(userId, workspace.id),
+      resolveClaudeEnvForIde(userId, workspace.id),
+    ]);
 
   try {
     const session = await startIdeRecoveringStaleProcess(workspace.id, {
@@ -237,6 +288,8 @@ export async function ensureOrcaSession(
       memberId: userId,
       ...(clone ? { clone } : {}),
       ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+      ...(cursorApiKey ? { cursorApiKey } : {}),
+      ...(openaiApiKey ? { openaiApiKey } : {}),
       ...claudeEnv,
     });
     const pairing = parseOrcaReady(session.ready, workspace.id);

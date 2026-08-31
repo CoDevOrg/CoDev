@@ -343,6 +343,10 @@ export interface StartIdeInput {
   codexAuthCacheJson?: string;
   anthropicApiKey?: string;
   claudeCodeOauthToken?: string;
+  /** A linked Cursor API key, filed for the interactive `cursor-agent` CLI. */
+  cursorApiKey?: string;
+  /** A plain OpenAI API key, the API-key fallback for the interactive Codex CLI. */
+  openaiApiKey?: string;
   /**
    * The member the credentials above belong to. A workspace is shared but a
    * linked subscription is personal, so the host files them under this id and
