@@ -19,6 +19,13 @@ export const CODEV_DEFAULT_CHAT_AGENT: CodevDefaultChatAgent = 'claude'
 const RETIRE_STOCK_TABS_INTERVAL_MS = 1_500
 const RETIRE_STOCK_TABS_ATTEMPTS = 12
 
+/** On a return visit the paired host mirrors this worktree's existing tabs
+ *  asynchronously. Wait this long for the mirror to produce *something* before
+ *  opening a fresh default chat, so a member who left a conversation running
+ *  comes back to it rather than to an empty chat stacked on top of it. */
+const HOST_TAB_MIRROR_INTERVAL_MS = 750
+const HOST_TAB_MIRROR_ATTEMPTS = 10
+
 /**
  * Resolve the agent for the workspace's default chat tab. Returns `null`
  * outside CoDev-embedded mode so the caller stays a no-op for stock Orca.
@@ -149,17 +156,60 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
     retireStockTerminalTabs(worktreeId)
     return
   }
-  launchAgentInNewTab({
-    agent,
-    worktreeId,
-    // Deliberately no promptDelivery: `'draft'` means "there is unsent text to
-    // mirror into the composer", and `decideInitialAgentTabViewMode` refuses
-    // chat when that text is empty (canMirrorLaunchDraftToNativeChat('') is
-    // false) — which silently opened this tab as a terminal. There is no
-    // prompt here at all, so the default is both correct and opens in chat.
-    launchSource: 'new_workspace_composer'
+  // No agent tab in the store yet. That is the case both for a brand-new
+  // workspace and for a return visit where the host simply has not mirrored
+  // its existing chat tabs. Wait for the mirror to report *something* for this
+  // worktree before opening a default, then re-check.
+  waitForHostWorktreeTabs(worktreeId, () => {
+    if (worktreeHasAgentTab(worktreeId)) {
+      ensureAgentTabsRenderAsChat(worktreeId)
+      retireStockTerminalTabs(worktreeId)
+      return
+    }
+    launchAgentInNewTab({
+      agent,
+      worktreeId,
+      // Deliberately no promptDelivery: `'draft'` means "there is unsent text to
+      // mirror into the composer", and `decideInitialAgentTabViewMode` refuses
+      // chat when that text is empty (canMirrorLaunchDraftToNativeChat('') is
+      // false) — which silently opened this tab as a terminal. There is no
+      // prompt here at all, so the default is both correct and opens in chat.
+      launchSource: 'new_workspace_composer'
+    })
+    retireStockTerminalTabs(worktreeId)
+    // The host mirrors tabs late, so re-assert once they land.
+    setTimeout(() => ensureAgentTabsRenderAsChat(worktreeId), RETIRE_STOCK_TABS_INTERVAL_MS * 2)
   })
-  retireStockTerminalTabs(worktreeId)
-  // The host mirrors tabs late, so re-assert once they land.
-  setTimeout(() => ensureAgentTabsRenderAsChat(worktreeId), RETIRE_STOCK_TABS_INTERVAL_MS * 2)
+}
+
+/**
+ * Run `done` once the paired host has mirrored this worktree's tab set — i.e.
+ * an agent tab has appeared (a running chat was restored), or any tab at all
+ * has (the mirror landed and the worktree is genuinely without a chat), or the
+ * bounded window elapsed (host is slow or the worktree really is empty). Keeps
+ * `launchCodevDefaultChatTab` from stacking a fresh chat on a conversation the
+ * host is still in the middle of mirroring back.
+ */
+function waitForHostWorktreeTabs(worktreeId: string, done: () => void): void {
+  const mirrorReported = (): boolean => {
+    const state = useAppStore.getState()
+    if (worktreeHasAgentTab(worktreeId)) {
+      return true
+    }
+    const legacy = state.tabsByWorktree[worktreeId] ?? []
+    const unified = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+    return legacy.length > 0 || unified.length > 0
+  }
+  if (mirrorReported()) {
+    done()
+    return
+  }
+  let attempt = 0
+  const timer = setInterval(() => {
+    attempt += 1
+    if (mirrorReported() || attempt >= HOST_TAB_MIRROR_ATTEMPTS) {
+      clearInterval(timer)
+      done()
+    }
+  }, HOST_TAB_MIRROR_INTERVAL_MS)
 }

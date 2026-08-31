@@ -91,6 +91,8 @@ describe('launchCodevDefaultChatTab', () => {
     })
 
     launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+    // The host mirrored no tabs at all: after the bounded wait, open the default.
+    vi.advanceTimersByTime(10_000)
 
     // promptDelivery: 'draft' means "mirror this unsent text into the
     // composer"; with no text decideInitialAgentTabViewMode refuses chat and
@@ -101,6 +103,26 @@ describe('launchCodevDefaultChatTab', () => {
       worktreeId: 'wt-1',
       launchSource: 'new_workspace_composer'
     })
+  })
+
+  it('waits for the host tab mirror before opening a default, so a restored chat wins', () => {
+    setWindow({ __CODEV_EMBEDDED__: true })
+    // Nothing mirrored yet at launch, then the host reports the chat the member
+    // left running on their previous visit.
+    getState
+      .mockReturnValueOnce({ tabsByWorktree: {}, unifiedTabsByWorktree: {}, closeTab: vi.fn() })
+      .mockReturnValueOnce({ tabsByWorktree: {}, unifiedTabsByWorktree: {}, closeTab: vi.fn() })
+      .mockReturnValue({
+        tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
+        unifiedTabsByWorktree: {},
+        closeTab: vi.fn(),
+        setTabViewMode: vi.fn()
+      })
+
+    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+    vi.advanceTimersByTime(10_000)
+
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
   it('retires the stock terminal once the host has mirrored the chat tab', () => {
