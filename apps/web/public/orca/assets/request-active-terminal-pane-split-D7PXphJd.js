@@ -1,0 +1,1 @@
+import{a as e}from"./terminal-CzTf3HcT.js";function t(t){window.dispatchEvent(new CustomEvent(e,{detail:t}))}export{t};
