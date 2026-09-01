@@ -353,42 +353,67 @@ impl GuestClient {
                     .as_ref()
                     .and_then(|value| value.get("error")?.as_str().map(str::to_owned))
                     .unwrap_or_else(|| format!("guest daemon returned HTTP {status}"));
-                return Err(match status {
-                    409 => {
-                        if message.contains("capacity exceeded") {
-                            RuntimeError::CapacityExceeded
-                        } else {
-                            let conflict_paths = payload
-                                .as_ref()
-                                .and_then(|value| value.get("conflictPaths"))
-                                .and_then(|value| value.as_array())
-                                .map(|paths| {
-                                    paths
-                                        .iter()
-                                        .filter_map(|path| path.as_str().map(str::to_owned))
-                                        .collect::<Vec<_>>()
-                                })
-                                .unwrap_or_default();
-                            if conflict_paths.is_empty() {
-                                RuntimeError::Conflict(message)
-                            } else {
-                                RuntimeError::GitConflict {
-                                    message,
-                                    conflict_paths,
-                                }
-                            }
-                        }
-                    }
-                    408 => RuntimeError::Timeout(message),
-                    _ if message.contains("capacity exceeded") => RuntimeError::CapacityExceeded,
-                    _ => RuntimeError::GuestUnavailable(message),
-                });
+                return Err(guest_error(status, payload.as_ref(), message));
             }
             serde_json::from_slice(&response_body)
                 .map_err(|error| RuntimeError::GuestUnavailable(error.to_string()))
         })
         .await
         .map_err(|_| RuntimeError::GuestUnavailable("guest request timed out".into()))?
+    }
+}
+
+/// Translates a non-2xx response the guest daemon *answered with* into the
+/// runtime error the guest itself raised.
+///
+/// `GuestUnavailable` is reserved for "the guest could not be reached or did
+/// not answer" — an infrastructure fault, which every transport-level failure
+/// in `request_with_timeout` already reports. A status the guest replied with
+/// means the daemon is alive and rejected the call for a reason of its own,
+/// and that reason has to keep its identity: this previously collapsed every
+/// status outside 409/408 into `GuestUnavailable`, so an ordinary 400 (a
+/// write whose parent directory does not exist, say) surfaced to the caller
+/// as "sandbox guest unavailable" and read exactly like a host outage. That
+/// made a caller-side bug indistinguishable from real infrastructure trouble.
+/// Unknown statuses still fall through to `GuestUnavailable`, since nothing
+/// more specific can be said about them.
+fn guest_error(status: u16, payload: Option<&serde_json::Value>, message: String) -> RuntimeError {
+    match status {
+        // `serve_connection` rejects a malformed or over-large request body
+        // with these before any handler runs.
+        400 | 413 => RuntimeError::BadRequest(message),
+        408 => RuntimeError::Timeout(message),
+        409 => {
+            if message.contains("capacity exceeded") {
+                return RuntimeError::CapacityExceeded;
+            }
+            let conflict_paths = payload
+                .and_then(|value| value.get("conflictPaths"))
+                .and_then(|value| value.as_array())
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .filter_map(|path| path.as_str().map(str::to_owned))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            if conflict_paths.is_empty() {
+                RuntimeError::Conflict(message)
+            } else {
+                RuntimeError::GitConflict {
+                    message,
+                    conflict_paths,
+                }
+            }
+        }
+        503 => RuntimeError::Unavailable(message),
+        _ if message.contains("capacity exceeded") => RuntimeError::CapacityExceeded,
+        // 404 is a route this guest build does not know (an orchestrator
+        // newer than the daemon in the rootfs), and 500 is a guest-side
+        // fault. Neither is correctable by the caller, but both came from a
+        // daemon that answered, so neither is a connectivity failure.
+        404 | 500 => RuntimeError::Internal(message),
+        _ => RuntimeError::GuestUnavailable(message),
     }
 }
 
@@ -436,4 +461,65 @@ async fn read_until_sequence(
     Err(RuntimeError::GuestUnavailable(
         "guest HTTP headers exceeded limit".into(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::guest_error;
+    use crate::model::RuntimeError;
+
+    /// The regression this whole helper exists for: a guest that *answered*
+    /// with an ordinary rejection must not look like a guest that could not be
+    /// reached. Before this, a write whose parent directory did not exist came
+    /// back as "sandbox guest unavailable" and read as an infrastructure
+    /// outage.
+    #[test]
+    fn keeps_a_guest_side_rejection_distinguishable_from_an_outage() {
+        assert!(matches!(
+            guest_error(400, None, "parent directory does not exist".into()),
+            RuntimeError::BadRequest(message) if message.contains("parent directory")
+        ));
+        assert!(matches!(
+            guest_error(413, None, "too large".into()),
+            RuntimeError::BadRequest(_)
+        ));
+        assert!(matches!(
+            guest_error(503, None, "workspace disk is unavailable".into()),
+            RuntimeError::Unavailable(_)
+        ));
+        assert!(matches!(
+            guest_error(500, None, "io error".into()),
+            RuntimeError::Internal(_)
+        ));
+        assert!(matches!(
+            guest_error(404, None, "route not found".into()),
+            RuntimeError::Internal(_)
+        ));
+        // Nothing specific can be said about a status the guest never emits.
+        assert!(matches!(
+            guest_error(418, None, "surprise".into()),
+            RuntimeError::GuestUnavailable(_)
+        ));
+    }
+
+    #[test]
+    fn preserves_conflict_timeout_and_capacity_handling() {
+        assert!(matches!(
+            guest_error(408, None, "timed out".into()),
+            RuntimeError::Timeout(_)
+        ));
+        assert!(matches!(
+            guest_error(409, None, "capacity exceeded".into()),
+            RuntimeError::CapacityExceeded
+        ));
+        assert!(matches!(
+            guest_error(409, None, "revision mismatch".into()),
+            RuntimeError::Conflict(_)
+        ));
+        let payload = serde_json::json!({ "conflictPaths": ["a.txt", "b.txt"] });
+        assert!(matches!(
+            guest_error(409, Some(&payload), "merge conflict".into()),
+            RuntimeError::GitConflict { conflict_paths, .. } if conflict_paths == ["a.txt", "b.txt"]
+        ));
+    }
 }

@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { z } from "zod";
 
 import { requireWorkspacePermission } from "@/lib/access";
@@ -9,38 +7,40 @@ import {
   codexRolloutSessionPath,
   parseCodexRolloutHeader,
 } from "@/lib/codex-session-import";
-import { executeInSandbox, writeSandboxFile } from "@/lib/orchestrator";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { OrcaHostError, ensureOrcaSession } from "@/lib/orca-host";
+import { writeIdeFile } from "@/lib/orchestrator";
+import { getWorkspaceForMember } from "@/lib/workspaces";
 
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  contents: z.string().min(1).max(2 * 1_024 * 1_024),
+  contents: z
+    .string()
+    .min(1)
+    .max(2 * 1_024 * 1_024),
 });
 
 /**
  * Lands an uploaded local Codex session (a `~/.codex/sessions/**\/*.jsonl`
- * rollout the member exported from their own machine) inside this
- * workspace's sandbox so `codex resume <id>` can find it there.
+ * rollout the member exported from their own machine) inside this workspace's
+ * IDE session, so `codex resume <id>` typed into a terminal tab finds it.
  *
- * The sandbox's file-write API is deliberately jailed to the workspace/
- * worktree root (see the orchestrator's `resolve_for_write`), so the upload
- * lands there first, staged under a throwaway per-request name, then a short
- * `cp` via the sandbox's exec endpoint relocates it into the real Codex
- * session store. `sessionId` and the directory/filename below come only from
- * `codexRolloutSessionPath`, which builds them from a value already
- * validated against a strict UUID regex and digits pulled from a parsed
- * `Date`, never from unvalidated request text, so interpolating them into
- * the shell command is not an injection risk.
+ * This deliberately targets the IDE session's own host filesystem
+ * (`writeIdeFile`) rather than the sandbox (`writeSandboxFile`). The two are
+ * different machines: the sandbox write path reaches a guest daemon running
+ * as root inside a Firecracker microVM against its own `/workspace` disk,
+ * while the terminal the member actually types into runs on the host as
+ * `orca-ws-<id>`. An earlier version of this route used the sandbox path, and
+ * every import silently succeeded while placing the file somewhere no Codex
+ * CLI would ever look.
  *
- * `writeSandboxFile` requires its target's parent directory to already
- * exist -- `resolve_for_write` canonicalizes it and fails otherwise -- it
- * does not `mkdir -p` on the write's behalf. The staging directory has no
- * other reason to exist in a fresh workspace, so this creates it via exec
- * first. (Confirmed live: a workspace that had never used this import path
- * failed the write with an ENOENT on the staging directory, which the
- * orchestrator's generic non-2xx handling then relabeled "sandbox guest
- * unavailable" -- a real bug in this route, not an infrastructure outage.)
+ * The rollout is filed into both Codex homes a member's CLI can be pointed
+ * at: the per-workspace user's default `~/.codex`, and the per-member home
+ * under `~/.codev/agents/<memberId>` that `CODEX_HOME` is set to for a member
+ * with a linked hosted Codex subscription. Which one applies depends on that
+ * member's provider links and can change after the import, so writing both is
+ * what actually keeps `codex resume` working, and the two stores are separate
+ * trees where a spare copy costs nothing.
  */
 export async function POST(
   request: Request,
@@ -62,49 +62,31 @@ export async function POST(
   try {
     const { contents } = bodySchema.parse(await request.json());
     const rollout = parseCodexRolloutHeader(contents);
-    const { directory, filename } = codexRolloutSessionPath(rollout);
+    const { relativePath } = codexRolloutSessionPath(rollout);
 
-    await ensureWorkspaceRuntimeReady(workspaceId, user.id);
-
-    const mkdirStaging = await executeInSandbox(workspaceId, {
-      command: ["mkdir", "-p", ".codev-import/codex-sessions"],
-      timeoutSeconds: 30,
-    });
-    if (mkdirStaging.exitCode !== 0) {
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) {
+      return apiError(new Error("Workspace not found."), 404);
+    }
+    const session = await ensureOrcaSession(workspace, user.id);
+    if (session.state !== "ready") {
       return apiError(
         new Error(
-          `Could not prepare the workspace host for the upload: ${mkdirStaging.output.slice(0, 500)}`,
+          "This workspace is still starting up. Try the import again in a moment.",
         ),
-        502,
+        503,
       );
     }
 
-    // A per-request staging name, not the session id, so a retried or
-    // duplicate upload never collides with an earlier attempt still sitting
-    // in the sandbox's import scratch space.
-    const stagingPath = `.codev-import/codex-sessions/${randomUUID()}.jsonl`;
-    await writeSandboxFile(workspaceId, {
-      path: stagingPath,
-      contents,
-      expectedRevision: "missing",
-    });
-
-    const destination = `~/.codex/sessions/${directory}/${filename}`;
-    const result = await executeInSandbox(workspaceId, {
-      command: [
-        "sh",
-        "-c",
-        `mkdir -p ~/.codex/sessions/${directory} && cp ${stagingPath} ${destination} && rm -f ${stagingPath}`,
-      ],
-      timeoutSeconds: 30,
-    });
-    if (result.exitCode !== 0) {
-      return apiError(
-        new Error(
-          `Could not place the session on the workspace host: ${result.output.slice(0, 500)}`,
-        ),
-        502,
-      );
+    for (const sessionsRoot of [
+      ".codex/sessions",
+      `.codev/agents/${user.id}/sessions`,
+    ]) {
+      await writeIdeFile(workspaceId, {
+        path: `${sessionsRoot}/${relativePath}`,
+        contents,
+        root: "home",
+      });
     }
 
     return Response.json({
@@ -114,6 +96,9 @@ export async function POST(
   } catch (error) {
     if (error instanceof InvalidCodexRolloutError) {
       return apiError(error, 400);
+    }
+    if (error instanceof OrcaHostError) {
+      return apiError(error, error.status);
     }
     return apiError(error);
   }

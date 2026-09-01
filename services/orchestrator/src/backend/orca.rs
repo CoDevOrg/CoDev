@@ -40,7 +40,11 @@ use tokio::{
 use toml_edit::{DocumentMut, Item, Table, value as toml_value};
 use tracing::{info, warn};
 
-use crate::model::{IdeCloneRequest, IdeSession, IdeStartRequest, Result, RuntimeError};
+use crate::model::{
+    ExecResponse, IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeCloneRequest,
+    IdeExecRequest, IdeRoot, IdeSession, IdeStartRequest, IdeWriteFileRequest, Result,
+    RuntimeError,
+};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
 const USER_PREFIX: &str = "orca-ws-";
@@ -50,6 +54,11 @@ const GIT_ASKPASS_BIN: &str = "/usr/local/libexec/codev-git-askpass";
 /// risk for this host's session count, and keeps the derived name under the
 /// traditional 32-character Linux username limit with `orca-ws-` prepended.
 const USER_SUFFIX_LEN: usize = 20;
+/// Applied when an `IdeExecRequest` names no timeout of its own. The ceiling
+/// beside it lives in `model` so the HTTP layer can reject an over-long
+/// request before it reaches a backend.
+const IDE_EXEC_DEFAULT_TIMEOUT_SECONDS: u64 = 30;
+const MAX_IDE_EXEC_OUTPUT_BYTES: usize = 2 << 20;
 
 pub struct OrcaConfig {
     pub app_run_bin: PathBuf,
@@ -341,6 +350,141 @@ impl OrcaBackend {
         Ok(session.to_model(workspace_id))
     }
 
+    /// Writes a file into this workspace's *host* filesystem, as the
+    /// workspace's own Linux user.
+    ///
+    /// The counterpart to `Backend::write_file`, which reaches the
+    /// Firecracker guest instead. Anything that has to be found later by a
+    /// process the member can actually see — a terminal tab, `codex resume`,
+    /// `git`, any agent CLI — belongs here, because none of those run in the
+    /// guest.
+    ///
+    /// Requires a live session: the per-workspace Linux user and its home
+    /// only exist once `start` has run, and writing into a workspace nobody
+    /// has opened would leave a file owned by a user that may never be
+    /// created. Touches the session, since a write on a member's behalf is
+    /// real activity.
+    pub async fn write_file(&self, workspace_id: &str, request: IdeWriteFileRequest) -> Result<()> {
+        let session = self.running_session(workspace_id).await?;
+        let root = self.root_path(workspace_id, &session.linux_user, request.root);
+        let path = resolve_within(&root, &request.path)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| RuntimeError::BadRequest("path has no parent".into()))?;
+        // Home-root writes are agent state (`~/.codex`, the per-member agent
+        // directories) and stay owner-only, matching how the credential
+        // materialization at session start files them; project files are
+        // ordinary repository content.
+        let (file_mode, directory_mode) = match request.root {
+            IdeRoot::Home => (0o600, 0o700),
+            IdeRoot::Project => (0o644, 0o755),
+        };
+        let created_root = create_dir_all_within(&root, parent, directory_mode).await?;
+        fs::write(&path, request.contents.as_bytes())
+            .await
+            .map_err(RuntimeError::internal)?;
+        fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode))
+            .await
+            .map_err(RuntimeError::internal)?;
+        // Chown from the shallowest directory this write had to create, so
+        // intermediate directories are owned by the workspace user too and
+        // not left as root-owned holes the member's own processes cannot
+        // write into.
+        chown_recursive(
+            created_root.as_deref().unwrap_or(&path),
+            &session.linux_user,
+        )
+        .await?;
+        session.touch();
+        Ok(())
+    }
+
+    /// Runs a command in this workspace's *host* environment as its
+    /// unprivileged Linux user — the same place the member's own terminal
+    /// tabs and agent CLIs run, unlike `Backend::exec`, which runs as root
+    /// inside the microVM.
+    pub async fn exec(&self, workspace_id: &str, request: IdeExecRequest) -> Result<ExecResponse> {
+        let session = self.running_session(workspace_id).await?;
+        let root = self.root_path(workspace_id, &session.linux_user, request.root);
+        if request.command.is_empty() || request.command.len() > IDE_EXEC_MAX_ARGUMENTS {
+            return Err(RuntimeError::BadRequest(
+                "command must contain between 1 and 32 arguments".into(),
+            ));
+        }
+        let timeout_seconds = if request.timeout_seconds == 0 {
+            IDE_EXEC_DEFAULT_TIMEOUT_SECONDS
+        } else {
+            request.timeout_seconds.min(IDE_EXEC_MAX_TIMEOUT_SECONDS)
+        };
+
+        // argv straight through `sudo`, never a shell: there is no quoting or
+        // metacharacter question to get wrong, and `sudo` drops root to the
+        // workspace user, so this is strictly less privileged than the guest
+        // exec path it parallels.
+        let mut command = Command::new("sudo");
+        command
+            .args(["-u", &session.linux_user, "-H", "--"])
+            .args(&request.command)
+            .current_dir(&root)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let child = command.spawn().map_err(RuntimeError::internal)?;
+        let finished = match timeout(
+            Duration::from_secs(timeout_seconds),
+            child.wait_with_output(),
+        )
+        .await
+        {
+            Ok(result) => result.map_err(RuntimeError::internal)?,
+            Err(_) => {
+                return Err(RuntimeError::Timeout(format!(
+                    "command exceeded its {timeout_seconds}s timeout"
+                )));
+            }
+        };
+        session.touch();
+
+        // Cap the raw bytes before the lossy decode: truncating the decoded
+        // `String` would panic on a multi-byte boundary, and `from_utf8_lossy`
+        // turns a sequence cut in half here into a replacement character.
+        let mut bytes = finished.stdout;
+        bytes.extend_from_slice(&finished.stderr);
+        bytes.truncate(MAX_IDE_EXEC_OUTPUT_BYTES);
+        let output = String::from_utf8_lossy(&bytes).into_owned();
+        Ok(ExecResponse {
+            output,
+            exit_code: finished.status.code().unwrap_or(-1),
+            codex_auth_cache_json: None,
+        })
+    }
+
+    /// This workspace's live session, or `SandboxNotFound`. Unlike `status`,
+    /// this does not reload Caddy on a dead session — callers here are
+    /// delivering a file or running a command, not managing routing.
+    async fn running_session(&self, workspace_id: &str) -> Result<Arc<RunningSession>> {
+        let session = self
+            .sessions
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        if !session.is_running().await {
+            self.sessions.write().await.remove(workspace_id);
+            return Err(RuntimeError::SandboxNotFound);
+        }
+        Ok(session)
+    }
+
+    fn root_path(&self, workspace_id: &str, linux_user: &str, root: IdeRoot) -> PathBuf {
+        match root {
+            IdeRoot::Project => self.config.workspaces_root.join(workspace_id),
+            IdeRoot::Home => PathBuf::from(format!("/home/{linux_user}")),
+        }
+    }
+
     pub async fn stop(&self, workspace_id: &str) -> Result<()> {
         let _guard = self.provision.lock().await;
         let session = self
@@ -436,6 +580,80 @@ async fn reap_idle_sessions(backend: Arc<OrcaBackend>) {
             }
         }
     }
+}
+
+/// Joins a caller-supplied relative path onto one of a session's roots,
+/// rejecting anything that could point outside it.
+///
+/// Mirrors the guest daemon's `clean_join`: no absolute paths, no `..`, no
+/// root or prefix components. Symlink escapes are caught separately, by
+/// `create_dir_all_within` canonicalizing the deepest existing ancestor.
+fn resolve_within(root: &Path, relative: &str) -> Result<PathBuf> {
+    let path = Path::new(relative);
+    if relative.is_empty()
+        || path.is_absolute()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return Err(RuntimeError::BadRequest(
+            "path must remain inside the workspace".into(),
+        ));
+    }
+    if path.file_name().is_none() {
+        return Err(RuntimeError::BadRequest("path has no filename".into()));
+    }
+    Ok(root.join(path))
+}
+
+/// `mkdir -p` that can never create a directory outside `root`, returning the
+/// shallowest directory it had to create (so the caller can `chown` from
+/// there) or `None` when everything already existed. Every directory it
+/// creates is given `mode`; directories that already existed keep theirs.
+///
+/// A plain `create_dir_all` would follow an existing symlink out of the
+/// workspace and leave stray directories behind. This walks up to the
+/// deepest ancestor that already exists, canonicalizes *that* — resolving
+/// every symlink on the way — confirms it is still inside `root`, and only
+/// then creates the remaining components beneath it.
+async fn create_dir_all_within(root: &Path, parent: &Path, mode: u32) -> Result<Option<PathBuf>> {
+    let escaped = || RuntimeError::BadRequest("path escapes the workspace".into());
+    let mut missing = Vec::new();
+    let mut existing = parent;
+    while !existing.exists() {
+        missing.push(existing.file_name().ok_or_else(escaped)?.to_owned());
+        existing = existing.parent().ok_or_else(escaped)?;
+    }
+    let canonical_root = fs::canonicalize(root)
+        .await
+        .map_err(RuntimeError::internal)?;
+    let mut cursor = fs::canonicalize(existing)
+        .await
+        .map_err(RuntimeError::internal)?;
+    if !cursor.starts_with(&canonical_root) {
+        return Err(escaped());
+    }
+    let mut created_root = None;
+    for name in missing.into_iter().rev() {
+        cursor.push(name);
+        match fs::create_dir(&cursor).await {
+            Ok(()) => created_root.get_or_insert_with(|| cursor.clone()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(RuntimeError::internal(error)),
+        };
+        // Set explicitly rather than inheriting the orchestrator's umask: a
+        // directory under the home root can hold agent state and must not be
+        // left group- or world-readable.
+        fs::set_permissions(&cursor, std::fs::Permissions::from_mode(mode))
+            .await
+            .map_err(RuntimeError::internal)?;
+    }
+    Ok(created_root)
 }
 
 fn linux_user_for(workspace_id: &str) -> String {
@@ -1321,12 +1539,12 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
-        claude_settings_with_theme, codex_config_with_coordination_mcp, linux_user_for,
-        linux_user_process_command, member_agent_dir, member_agent_env_map, member_id_pattern,
-        merge_coordination_mcp_server, orca_serve_command_line, orca_serve_sudo_command,
-        repository_pattern, shell_quote, token_pattern,
+        claude_settings_with_theme, codex_config_with_coordination_mcp, create_dir_all_within,
+        linux_user_for, linux_user_process_command, member_agent_dir, member_agent_env_map,
+        member_id_pattern, merge_coordination_mcp_server, orca_serve_command_line,
+        orca_serve_sudo_command, repository_pattern, resolve_within, shell_quote, token_pattern,
     };
-    use crate::model::IdeStartRequest;
+    use crate::model::{IdeStartRequest, RuntimeError};
     use serde_json::json;
 
     fn ide_start_request(extra: serde_json::Value) -> IdeStartRequest {
@@ -1340,6 +1558,63 @@ mod tests {
         serde_json::from_value(body).expect("valid IdeStartRequest")
     }
     use std::path::Path;
+
+    #[test]
+    fn ide_writes_stay_inside_their_root() {
+        let root = Path::new("/home/orca-ws-abc");
+        assert_eq!(
+            resolve_within(root, ".codex/sessions/2026/09/r.jsonl").expect("in-tree path"),
+            root.join(".codex/sessions/2026/09/r.jsonl")
+        );
+        for escape in [
+            "",
+            "/etc/passwd",
+            "../../etc/passwd",
+            ".codex/../../escape",
+            "..",
+        ] {
+            assert!(
+                resolve_within(root, escape).is_err(),
+                "{escape} should be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn creates_missing_parents_and_reports_the_shallowest_one() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let root = directory.path();
+        let created = create_dir_all_within(root, &root.join("a/b/c"), 0o700)
+            .await
+            .expect("created");
+        assert_eq!(created.as_deref(), Some(root.join("a").as_path()));
+        assert!(root.join("a/b/c").is_dir());
+
+        // Nothing new to create the second time, so there is nothing to chown.
+        let repeated = create_dir_all_within(root, &root.join("a/b/c"), 0o700)
+            .await
+            .expect("already present");
+        assert_eq!(repeated, None);
+    }
+
+    #[tokio::test]
+    async fn refuses_to_create_directories_through_a_symlink_out_of_the_root() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let root = directory.path().join("root");
+        let outside = directory.path().join("outside");
+        std::fs::create_dir_all(&root).expect("root");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::os::unix::fs::symlink(&outside, root.join("escape")).expect("symlink");
+
+        // `create_dir_all` would happily follow this and leave a directory
+        // behind outside the workspace; the containment check must reject it
+        // before anything is created.
+        let error = create_dir_all_within(&root, &root.join("escape/loot"), 0o700)
+            .await
+            .expect_err("symlinked parent must be rejected");
+        assert!(matches!(error, RuntimeError::BadRequest(_)), "{error:?}");
+        assert!(!outside.join("loot").exists());
+    }
 
     #[test]
     fn derives_a_stable_short_linux_username() {

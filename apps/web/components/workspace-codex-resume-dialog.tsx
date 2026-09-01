@@ -163,7 +163,7 @@ export function WorkspaceCodexResumeDialog({
         {state === "done" && result && !launched ? (
           <div className="picker-grid">
             <p className="panel-status">
-              Imported, but the IDE isn't connected yet. Open a terminal tab
+              Imported, but the IDE isn&apos;t connected yet. Open a terminal tab
               and run:
             </p>
             <div className="workspace-create-blank" style={{ cursor: "text" }}>

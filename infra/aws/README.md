@@ -130,6 +130,38 @@ path-routes to every active session. `CODEV_MAX_IDE_SESSIONS` and
 `CODEV_IDE_IDLE_TIMEOUT` cap concurrency and idle lifetime, mirroring
 `CODEV_MAX_SANDBOXES`/`CODEV_IDLE_TIMEOUT` for Firecracker sandboxes.
 
+### Two runtimes, two filesystems
+
+A workspace has two independent execution contexts on this host, and they do
+not share a filesystem. Reaching for the wrong one is the single easiest
+mistake to make against this API, because the wrong one still reports success.
+
+|                  | Firecracker sandbox                                      | Orca IDE session                                  |
+| ---------------- | -------------------------------------------------------- | ------------------------------------------------- |
+| Process          | `codev-guestd`, inside the microVM                       | `orca serve`, on the host                         |
+| Runs as          | `root`                                                   | `orca-ws-<id>`                                    |
+| Filesystem root  | `/workspace` (the `/dev/vdb` mount **inside the guest**) | `/srv/codev/workspaces/<workspaceId>`             |
+| Backend type     | `Backend::Firecracker` (vsock)                           | `IdeBackend::Orca`                                |
+| File/exec routes | `/v1/sandboxes/{id}/files/write`, `/pty/exec`            | `/v1/sandboxes/{id}/ide/files/write`, `/ide/exec` |
+
+These are different machines, so no bind mount or symlink can join them: the
+guest's root is a block device attached to the VM, and the host path does not
+exist inside it (nor the reverse). The two lifecycles are also independent —
+a workspace opened straight into its IDE never provisions a sandbox at all.
+
+**Everything a member can see runs in the IDE session.** Interactive terminal
+tabs, `codex`, `claude`, `git`, and every agent CLI they launch run on the
+host as `orca-ws-<id>`. So anything whose purpose is to be _found later by a
+process the member interacts with_ — importing a Codex rollout so
+`codex resume` can pick it up, seeding a config file an agent CLI reads — has
+to go through the `/ide` file and exec routes. A write through the sandbox
+routes lands in the microVM, where none of those processes will ever look,
+and the call still returns 200.
+
+The sandbox routes remain correct for CoDev's own backend-driven work: the
+`start_codex_exec` turns, worktree operations, and publication exports that
+run entirely inside the guest.
+
 The public hostname is a `nip.io` name derived from the host's current
 public IPv4 at boot (no real domain/DNS record needed); Caddy obtains its
 own Let's Encrypt certificate for it. Vercel's `apps/web/lib/orca-host.ts`

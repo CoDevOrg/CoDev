@@ -135,6 +135,14 @@ pub struct WriteFileRequest {
     pub expected_revision: String,
     #[serde(default)]
     pub worktree_id: Option<String>,
+    /// `mkdir -p` the write's parent directory first. Off by default, so an
+    /// editor save of a path that should already exist still fails loudly
+    /// rather than silently materializing a mistyped directory; callers
+    /// delivering a file to a location that legitimately may not exist yet
+    /// (an import staging area, a per-agent config directory) opt in instead
+    /// of pairing every write with a separate `exec` to create the parent.
+    #[serde(default)]
+    pub create_parents: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -420,6 +428,72 @@ pub struct IdeCloneRequest {
     /// only; the orchestrator drops it from the persisted `origin` remote
     /// immediately after cloning, mirroring the SSM script it replaces.
     pub token: Option<String>,
+}
+
+/// Ceilings for an `IdeExecRequest`. These calls are control-plane
+/// housekeeping — relocating an imported file, checking a path — rather than
+/// agent work, so the ceiling is deliberately far below the guest exec
+/// path's 900s Codex allowance.
+pub const IDE_EXEC_MAX_TIMEOUT_SECONDS: u64 = 60;
+pub const IDE_EXEC_MAX_ARGUMENTS: usize = 32;
+/// Matches the guest write path's own body limit.
+pub const MAX_IDE_FILE_BYTES: usize = 2 << 20;
+
+/// Which of an IDE session's two writable roots a path is relative to.
+///
+/// Both live on the *host*, inside the per-workspace Linux user's world —
+/// deliberately not the Firecracker guest's `/workspace`, which is a
+/// different machine entirely (see `IdeWriteFileRequest`).
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum IdeRoot {
+    /// The workspace clone, `<workspaces root>/<workspace id>` — what
+    /// `orca serve --project-root` opens and what a terminal tab starts in.
+    #[default]
+    Project,
+    /// The per-workspace Linux user's home, `/home/orca-ws-<id>`, where the
+    /// agent CLIs keep their own state: `~/.codex/sessions`, `~/.claude.json`,
+    /// and the per-member credential directories.
+    Home,
+}
+
+/// Writes a file into a running IDE session's own filesystem.
+///
+/// This is deliberately *not* `WriteFileRequest`. That one reaches the
+/// Firecracker guest daemon, which runs as root inside a microVM against its
+/// own `/workspace` disk. An interactive terminal, `codex`, `git`, or any
+/// agent CLI a member launches runs somewhere else entirely: on the host, as
+/// `orca-ws-<id>`, under this workspace's clone directory. A file written
+/// through the guest path is invisible to all of them, so anything whose
+/// point is to be *found later by a process the member can see* has to come
+/// through here instead.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeWriteFileRequest {
+    /// Relative to `root`. Absolute paths and any `..` component are
+    /// rejected, and the resolved parent must still sit inside `root` after
+    /// symlinks are followed.
+    pub path: String,
+    pub contents: String,
+    #[serde(default)]
+    pub root: IdeRoot,
+}
+
+/// Runs a command inside a running IDE session's own environment, as the
+/// workspace's unprivileged Linux user. Same reasoning as
+/// `IdeWriteFileRequest`: `ExecRequest` runs in the microVM, this runs where
+/// the member's own terminals do.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdeExecRequest {
+    /// Passed as argv, never through a shell, so callers never have to reason
+    /// about quoting or metacharacters.
+    pub command: Vec<String>,
+    /// Working directory for the command.
+    #[serde(default)]
+    pub root: IdeRoot,
+    #[serde(default)]
+    pub timeout_seconds: u64,
 }
 
 /// A running per-workspace Orca IDE process. `ready` is the verbatim

@@ -20,10 +20,12 @@ use tracing::info;
 use crate::{
     backend::{IdeBackend, SharedBackend},
     model::{
-        CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest, IdeStartRequest,
-        PublicationExportRequest, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest,
+        IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdeStartRequest,
+        IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result, RuntimeError,
+        TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -63,6 +65,11 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             post(start_ide).get(get_ide).delete(stop_ide),
         )
         .route("/v1/sandboxes/{workspace_id}/ide/activity", post(touch_ide))
+        .route(
+            "/v1/sandboxes/{workspace_id}/ide/files/write",
+            post(write_ide_file),
+        )
+        .route("/v1/sandboxes/{workspace_id}/ide/exec", post(exec_ide))
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
@@ -627,6 +634,52 @@ async fn stop_ide(
     validate_workspace_id(&workspace_id)?;
     ide.stop(&workspace_id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Writes a file into the workspace's IDE session — the host filesystem the
+/// member's own terminals and agent CLIs run in.
+///
+/// The sibling of `write_file`, which targets the Firecracker guest. The two
+/// are genuinely different machines, so a caller that needs a later
+/// interactive process to *find* the file has to use this one.
+async fn write_ide_file(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<IdeWriteFileRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    if request.path.is_empty() || request.path.len() > 4_096 {
+        return Err(RuntimeError::BadRequest("invalid path".into()));
+    }
+    if request.contents.len() > MAX_IDE_FILE_BYTES {
+        return Err(RuntimeError::BadRequest(
+            "file exceeds the two MiB limit".into(),
+        ));
+    }
+    ide.write_file(&workspace_id, request).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Runs a command inside the workspace's IDE session, as its unprivileged
+/// Linux user. The sibling of `exec_pty`, which runs as root in the guest.
+async fn exec_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<IdeExecRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    if request.command.is_empty() || request.command.len() > IDE_EXEC_MAX_ARGUMENTS {
+        return Err(RuntimeError::BadRequest(
+            "command must contain between 1 and 32 arguments".into(),
+        ));
+    }
+    if request.timeout_seconds > IDE_EXEC_MAX_TIMEOUT_SECONDS {
+        return Err(RuntimeError::BadRequest(
+            "command timeout exceeds the allowed limit".into(),
+        ));
+    }
+    let result = ide.exec(&workspace_id, request).await?;
+    Ok(Json(serde_json::json!({ "result": result })))
 }
 
 fn validate_create(request: &CreateRequest) -> Result<()> {

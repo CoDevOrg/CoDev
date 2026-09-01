@@ -261,7 +261,7 @@ impl GuestService {
             ));
         }
         let root = self.target_root(request.worktree_id.as_deref())?;
-        let path = self.resolve_for_write(&root, &request.path)?;
+        let path = self.resolve_for_write(&root, &request.path, request.create_parents)?;
         let current = match fs::read(&path) {
             Ok(contents) => revision(&contents),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => "missing".into(),
@@ -1492,11 +1492,19 @@ impl GuestService {
         Ok(resolved)
     }
 
-    fn resolve_for_write(&self, root: &Path, relative: &str) -> crate::model::Result<PathBuf> {
+    fn resolve_for_write(
+        &self,
+        root: &Path,
+        relative: &str,
+        create_parents: bool,
+    ) -> crate::model::Result<PathBuf> {
         let candidate = self.clean_join(root, relative)?;
         let parent = candidate
             .parent()
             .ok_or_else(|| RuntimeError::BadRequest("path has no parent".into()))?;
+        if create_parents {
+            Self::create_parents_within(root, parent)?;
+        }
         let parent = fs::canonicalize(parent).map_err(RuntimeError::internal)?;
         if !parent.starts_with(root) {
             return Err(RuntimeError::BadRequest(
@@ -1507,6 +1515,40 @@ impl GuestService {
             .file_name()
             .ok_or_else(|| RuntimeError::BadRequest("path has no filename".into()))?;
         Ok(parent.join(name))
+    }
+
+    /// `mkdir -p` for a write's parent directory that can never create a
+    /// directory outside the workspace.
+    ///
+    /// A plain `create_dir_all` would happily follow an existing symlink out
+    /// of the workspace and leave stray directories behind before
+    /// `resolve_for_write`'s containment check could reject the write. This
+    /// instead walks up to the deepest ancestor that already exists,
+    /// canonicalizes *that* (resolving every symlink on the way), confirms it
+    /// is still inside the workspace, and only then creates the remaining
+    /// components beneath it. `root` itself always exists, so the walk
+    /// terminates.
+    fn create_parents_within(root: &Path, parent: &Path) -> crate::model::Result<()> {
+        let escaped = || RuntimeError::BadRequest("path escapes the workspace".into());
+        let mut missing = Vec::new();
+        let mut existing = parent;
+        while !existing.exists() {
+            missing.push(existing.file_name().ok_or_else(escaped)?.to_owned());
+            existing = existing.parent().ok_or_else(escaped)?;
+        }
+        let mut cursor = fs::canonicalize(existing).map_err(RuntimeError::internal)?;
+        if !cursor.starts_with(root) {
+            return Err(escaped());
+        }
+        for name in missing.into_iter().rev() {
+            cursor.push(name);
+            match fs::create_dir(&cursor) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(RuntimeError::internal(error)),
+            }
+        }
+        Ok(())
     }
 
     fn clean_join(&self, root: &Path, relative: &str) -> crate::model::Result<PathBuf> {
@@ -1785,6 +1827,7 @@ mod tests {
                 contents: "updated".into(),
                 expected_revision: file.revision,
                 worktree_id: None,
+                create_parents: false,
             })
             .expect("request")
             .as_bytes(),
@@ -1817,6 +1860,71 @@ mod tests {
         let result: ExecResponse = serde_json::from_slice(&response.body).expect("exec");
         assert_eq!(result.exit_code, 127);
         assert!(result.output.contains("Unable to spawn"));
+    }
+
+    #[test]
+    fn write_creates_parents_only_when_asked_and_never_outside_the_workspace() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+
+        // Without the flag a missing parent is still a plain rejection, so an
+        // editor save of a path that should already exist fails loudly rather
+        // than materializing a mistyped directory.
+        let missing_parent = service.handle(
+            "POST",
+            "/v1/files/write",
+            serde_json::to_string(&WriteFileRequest {
+                path: "staging/import/session.jsonl".into(),
+                contents: "{}".into(),
+                expected_revision: "missing".into(),
+                worktree_id: None,
+                create_parents: false,
+            })
+            .expect("request")
+            .as_bytes(),
+        );
+        assert_eq!(missing_parent.status, 500);
+
+        let created = service.handle(
+            "POST",
+            "/v1/files/write",
+            serde_json::to_string(&WriteFileRequest {
+                path: "staging/import/session.jsonl".into(),
+                contents: "{}".into(),
+                expected_revision: "missing".into(),
+                worktree_id: None,
+                create_parents: true,
+            })
+            .expect("request")
+            .as_bytes(),
+        );
+        assert_eq!(created.status, 200);
+        assert_eq!(
+            fs::read_to_string(directory.path().join("staging/import/session.jsonl"))
+                .expect("written file"),
+            "{}"
+        );
+
+        // A symlink out of the workspace must not become a way to create
+        // directories elsewhere on the host.
+        let outside = tempdir().expect("outside tempdir");
+        std::os::unix::fs::symlink(outside.path(), directory.path().join("escape"))
+            .expect("symlink");
+        let escaped = service.handle(
+            "POST",
+            "/v1/files/write",
+            serde_json::to_string(&WriteFileRequest {
+                path: "escape/loot/file.txt".into(),
+                contents: "{}".into(),
+                expected_revision: "missing".into(),
+                worktree_id: None,
+                create_parents: true,
+            })
+            .expect("request")
+            .as_bytes(),
+        );
+        assert_eq!(escaped.status, 400);
+        assert!(!outside.path().join("loot").exists());
     }
 
     #[test]
@@ -1938,6 +2046,7 @@ mod tests {
                 contents: "agent edit".into(),
                 expected_revision: file.revision,
                 worktree_id: Some("agent-one".into()),
+                create_parents: false,
             })
             .expect("request")
             .as_bytes(),

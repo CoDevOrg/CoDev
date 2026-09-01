@@ -411,6 +411,66 @@ export async function touchIde(workspaceId: string): Promise<IdeSession> {
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
 
+/**
+ * Write a file into the workspace's IDE session, on the host filesystem the
+ * member's own terminals and agent CLIs actually run in.
+ *
+ * Not interchangeable with `writeSandboxFile`. That one reaches the
+ * Firecracker guest daemon, which runs as root in a microVM against its own
+ * `/workspace` disk; an interactive terminal tab, `codex`, `git`, or any
+ * agent CLI runs somewhere else entirely - on the host, as `orca-ws-<id>`,
+ * under `/srv/codev/workspaces/<id>`. A file written through the sandbox path
+ * is invisible to every one of them, and the write still reports success. Use
+ * this whenever the whole point is that some later interactive process finds
+ * the file.
+ *
+ * `root` picks which of the session's two writable trees `path` is relative
+ * to: the workspace clone (`"project"`, the default) or the workspace user's
+ * home (`"home"`, where the agent CLIs keep `~/.codex`, `~/.claude.json`, and
+ * the rest of their state). Parent directories are created as needed.
+ */
+export async function writeIdeFile(
+  workspaceId: string,
+  input: { path: string; contents: string; root?: "project" | "home" },
+) {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/files/write`,
+    input,
+  );
+}
+
+/**
+ * Run a command inside the workspace's IDE session, as its unprivileged
+ * Linux user - the same environment the member's own terminals run in.
+ *
+ * The IDE-session counterpart to `executeInSandbox`, which runs as root
+ * inside the microVM instead. `command` is passed as argv and never through a
+ * shell, so there is no quoting to get right.
+ */
+export async function executeInIde(
+  workspaceId: string,
+  input: {
+    command: string[];
+    root?: "project" | "home";
+    timeoutSeconds?: number;
+  },
+) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/exec`,
+    input,
+  );
+  return z
+    .object({
+      result: z.object({
+        output: z.string(),
+        exitCode: z.number().int(),
+      }),
+    })
+    .parse(await response.json()).result;
+}
+
 export async function stopIde(workspaceId: string) {
   try {
     await orchestratorRequest("DELETE", `/v1/sandboxes/${workspaceId}/ide`);

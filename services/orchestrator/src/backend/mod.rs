@@ -7,11 +7,12 @@ use chrono::{Duration, Utc};
 
 use crate::model::{
     CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest, ExecRequest,
-    ExecResponse, FileResponse, IdeSession, IdeStartRequest, Instance, PublicationExportRequest,
-    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    ExecResponse, FileResponse, IdeExecRequest, IdeSession, IdeStartRequest, IdeWriteFileRequest,
+    Instance, PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
+    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -86,6 +87,35 @@ impl IdeBackend {
             #[cfg(target_os = "linux")]
             Self::Orca(backend) => backend.stop(workspace_id).await,
             Self::Disabled => Err(RuntimeError::SandboxNotFound),
+        }
+    }
+
+    /// Deliver a file into the session's own host filesystem — where the
+    /// member's terminals and agent CLIs actually run, as opposed to
+    /// `Backend::write_file`, which reaches the Firecracker guest.
+    pub async fn write_file(&self, workspace_id: &str, request: IdeWriteFileRequest) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = (&workspace_id, &request);
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.write_file(workspace_id, request).await,
+            Self::Disabled => Err(RuntimeError::Unavailable(
+                "the Orca IDE backend is not configured on this host".into(),
+            )),
+        }
+    }
+
+    /// Run a command in the session's own host environment, as the
+    /// workspace's unprivileged Linux user.
+    pub async fn exec(&self, workspace_id: &str, request: IdeExecRequest) -> Result<ExecResponse> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = (&workspace_id, &request);
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.exec(workspace_id, request).await,
+            Self::Disabled => Err(RuntimeError::Unavailable(
+                "the Orca IDE backend is not configured on this host".into(),
+            )),
         }
     }
 }
