@@ -132,7 +132,5 @@ export async function handleMcpHttpRequest(
   }
 
   const response = await handleOne(config, body as JsonRpcRequest);
-  return response === null
-    ? { status: 202 }
-    : { status: 200, json: response };
+  return response === null ? { status: 202 } : { status: 200, json: response };
 }

@@ -10,14 +10,14 @@ forwarding. Sending product mail does not use ImprovMX.
 
 ## What is live
 
-| Address | Role |
-| --- | --- |
-| `noreply@trycodev.com` | Product From address (password resets, waitlist receipts, invites) via Resend |
-| `yousef@trycodev.com` | Operator inbox. ImprovMX forwards it to the Gmail configured in the ImprovMX dashboard |
-| `*@trycodev.com` | Catch-all. Same ImprovMX destination as `yousef@` |
+| Address                | Role                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `noreply@trycodev.com` | Product From address (password resets, waitlist receipts, invites) via Resend          |
+| `yousef@trycodev.com`  | Operator inbox. ImprovMX forwards it to the Gmail configured in the ImprovMX dashboard |
+| `*@trycodev.com`       | Catch-all. Same ImprovMX destination as `yousef@`                                      |
 
 ImprovMX is on the free plan. Do not upgrade to Premium unless you need SMTP
-to *send* from `yousef@trycodev.com`. Receiving does not require it.
+to _send_ from `yousef@trycodev.com`. Receiving does not require it.
 
 ## Outbound (Resend)
 
@@ -29,11 +29,11 @@ The website sends mail with `RESEND_API_KEY` through `https://api.resend.com/ema
 Resend is verified on `trycodev.com`. Its DNS lives on the `send` subdomain and
 `resend._domainkey`, so it does not conflict with apex MX used for receiving.
 
-| Name | Type | Value |
-| --- | --- | --- |
-| `resend._domainkey` | TXT | Resend DKIM public key |
-| `send` | TXT | `v=spf1 include:amazonses.com ~all` |
-| `send` | MX | `10 feedback-smtp.us-east-1.amazonses.com.` |
+| Name                | Type | Value                                       |
+| ------------------- | ---- | ------------------------------------------- |
+| `resend._domainkey` | TXT  | Resend DKIM public key                      |
+| `send`              | TXT  | `v=spf1 include:amazonses.com ~all`         |
+| `send`              | MX   | `10 feedback-smtp.us-east-1.amazonses.com.` |
 
 Keep the From address on `@trycodev.com`. Changing it to an unrelated domain
 will fail Resend domain checks.
@@ -62,11 +62,11 @@ vercel dns add trycodev.com @ MX mx2.improvmx.com 20
 vercel dns add trycodev.com @ TXT "v=spf1 include:spf.improvmx.com ~all"
 ```
 
-| Name | Type | Value |
-| --- | --- | --- |
-| `@` | MX | `10 mx1.improvmx.com.` |
-| `@` | MX | `20 mx2.improvmx.com.` |
-| `@` | TXT | `v=spf1 include:spf.improvmx.com ~all` |
+| Name | Type | Value                                  |
+| ---- | ---- | -------------------------------------- |
+| `@`  | MX   | `10 mx1.improvmx.com.`                 |
+| `@`  | MX   | `20 mx2.improvmx.com.`                 |
+| `@`  | TXT  | `v=spf1 include:spf.improvmx.com ~all` |
 
 There must be only one apex SPF TXT record. If another sender later needs apex
 SPF (Gmail “Send mail as”, Google Workspace, and so on), merge the `include:`
@@ -80,13 +80,13 @@ Vercel also has an **ImprovMX** DNS preset that writes the same MX/SPF records.
 Documented in `.env.example`. Local values live in `.env.local` and
 `apps/web/.env.local` (gitignored).
 
-| Variable | Purpose |
-| --- | --- |
-| `RESEND_API_KEY` | Required in production to actually send mail |
-| `RESEND_EMAIL_DOMAIN` | Present on the Vercel project; unused by app code |
-| `AUTH_EMAIL_FROM` | Optional From header. Default `CoDev <noreply@trycodev.com>` |
-| `ACCESS_REQUEST_NOTIFY_EMAIL` | Optional. Waitlist requests are forwarded here |
-| `SIGNUP_ALLOWLIST` | Optional comma-separated emails that may register without an invite |
+| Variable                      | Purpose                                                             |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `RESEND_API_KEY`              | Required in production to actually send mail                        |
+| `RESEND_EMAIL_DOMAIN`         | Present on the Vercel project; unused by app code                   |
+| `AUTH_EMAIL_FROM`             | Optional From header. Default `CoDev <noreply@trycodev.com>`        |
+| `ACCESS_REQUEST_NOTIFY_EMAIL` | Optional. Waitlist requests are forwarded here                      |
+| `SIGNUP_ALLOWLIST`            | Optional comma-separated emails that may register without an invite |
 
 `ACCESS_REQUEST_NOTIFY_EMAIL` and `SIGNUP_ALLOWLIST` are set locally to
 `yousef@trycodev.com`. Production Vercel still needs the same keys if waitlist

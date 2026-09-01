@@ -72,7 +72,10 @@ export const agentSessionStatus = pgEnum("agent_session_status", [
 // for an agent CLI running inside the embedded IDE (Claude Code / Codex), so it
 // can take part in coordination — briefs, path claims, overlap detection —
 // without consuming a managed slot.
-export const agentSessionKind = pgEnum("agent_session_kind", ["managed", "cli"]);
+export const agentSessionKind = pgEnum("agent_session_kind", [
+  "managed",
+  "cli",
+]);
 export const agentTurnStatus = pgEnum("agent_turn_status", [
   "queued",
   "running",

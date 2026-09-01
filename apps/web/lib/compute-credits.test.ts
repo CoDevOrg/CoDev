@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSelect = vi.hoisted(() => vi.fn());
 const mockListWorkspaceMembers = vi.hoisted(() => vi.fn());
@@ -35,6 +35,17 @@ describe("getWorkspaceCreditStatus", () => {
   beforeEach(() => {
     mockSelect.mockReset();
     mockListWorkspaceMembers.mockReset();
+    // Usage is clamped to the current calendar month, so these cases are only
+    // meaningful when enough of the month has elapsed to hold the intervals
+    // they set up. Pin the clock mid-month; on the 1st the "exceeds the
+    // allotment" case cannot be constructed at all and the suite fails on a
+    // date rather than on a behaviour.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("pools the allotment across every workspace member", async () => {

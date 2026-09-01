@@ -32,7 +32,10 @@ describe("coordination token", () => {
   it("rejects a tampered payload", () => {
     const [payload, signature] = mintCoordinationToken(INPUT).split(".");
     const forged = Buffer.from(
-      JSON.stringify({ ...INPUT, sessionId: "44444444-4444-4444-8444-444444444444" }),
+      JSON.stringify({
+        ...INPUT,
+        sessionId: "44444444-4444-4444-8444-444444444444",
+      }),
       "utf8",
     ).toString("base64url");
     expect(openCoordinationToken(`${forged}.${signature}`)).toBeNull();
@@ -97,9 +100,15 @@ describe("workspace coordination token", () => {
   });
 
   it("rejects a tampered workspace id", () => {
-    const [, signature] = mintWorkspaceCoordinationToken(INPUT.workspaceId).split(".");
+    const [, signature] = mintWorkspaceCoordinationToken(
+      INPUT.workspaceId,
+    ).split(".");
     const forged = Buffer.from(
-      JSON.stringify({ workspaceId: "other", expiresAt: Date.now() + 1000, nonce: "x" }),
+      JSON.stringify({
+        workspaceId: "other",
+        expiresAt: Date.now() + 1000,
+        nonce: "x",
+      }),
       "utf8",
     ).toString("base64url");
     expect(openWorkspaceCoordinationToken(`${forged}.${signature}`)).toBeNull();

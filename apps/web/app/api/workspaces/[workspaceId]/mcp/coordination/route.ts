@@ -44,7 +44,9 @@ export async function POST(
     : header;
 
   const sessionClaims = openCoordinationToken(token);
-  const workspaceClaims = sessionClaims ? null : openWorkspaceCoordinationToken(token);
+  const workspaceClaims = sessionClaims
+    ? null
+    : openWorkspaceCoordinationToken(token);
 
   const scopedWorkspaceId =
     sessionClaims?.workspaceId ?? workspaceClaims?.workspaceId ?? null;
@@ -57,7 +59,11 @@ export async function POST(
     body = await request.json();
   } catch {
     return Response.json(
-      { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error." } },
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "Parse error." },
+      },
       { status: 200 },
     );
   }
@@ -92,7 +98,9 @@ export async function POST(
     const { sessionId, ownerId } = await resolveCliAgentSessionForBranch({
       workspaceId,
       branch,
-      ...(typeof args.agentKind === "string" ? { agentKind: args.agentKind } : {}),
+      ...(typeof args.agentKind === "string"
+        ? { agentKind: args.agentKind }
+        : {}),
     });
     const toolArgs = { ...args };
     delete toolArgs.branch;

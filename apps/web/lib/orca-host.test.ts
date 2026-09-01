@@ -82,6 +82,10 @@ const session = {
 describe("ensureOrcaSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `ensureOrcaSession` mints the workspace's coordination MCP token, which
+    // is HMAC-signed with AUTH_SECRET — without one, every case here throws
+    // before it reaches what it is actually asserting.
+    vi.stubEnv("AUTH_SECRET", "o".repeat(40));
     mocks.getHostState.mockResolvedValue("running");
     mocks.waitForOrchestrator.mockResolvedValue(undefined);
     mocks.stopIde.mockResolvedValue(undefined);

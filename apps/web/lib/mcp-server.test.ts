@@ -14,7 +14,10 @@ function config(overrides: Partial<McpServerConfig> = {}): McpServerConfig {
       {
         name: "echo",
         description: "echo it back",
-        inputSchema: { type: "object", properties: { value: { type: "string" } } },
+        inputSchema: {
+          type: "object",
+          properties: { value: { type: "string" } },
+        },
       },
     ],
     callTool: vi.fn(async (name: string, args: unknown) => ({
