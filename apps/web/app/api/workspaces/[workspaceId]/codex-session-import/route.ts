@@ -66,19 +66,6 @@ export async function POST(
 
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
 
-    // TEMP DIAGNOSTIC -- remove before merging. Reports exactly what
-    // environment this route's own executeInSandbox calls run in, to settle
-    // whether it shares a filesystem view with the interactive PTY terminal.
-    const diag = await executeInSandbox(workspaceId, {
-      command: [
-        "sh",
-        "-c",
-        "echo PWD=$(pwd) && echo WHOAMI=$(whoami) && echo HOME=$HOME && echo LS_ROOT=$(ls -la / 2>&1 | tr '\\n' '|') && echo FIND_IMPORT=$(find .codev-import -type f 2>&1 | tr '\\n' '|')",
-      ],
-      timeoutSeconds: 30,
-    });
-    return Response.json({ diag: diag.output, exitCode: diag.exitCode });
-
     const mkdirStaging = await executeInSandbox(workspaceId, {
       command: ["mkdir", "-p", ".codev-import/codex-sessions"],
       timeoutSeconds: 30,
