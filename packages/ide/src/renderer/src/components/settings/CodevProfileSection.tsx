@@ -5,7 +5,7 @@ import {
   requestCodevBridge,
   subscribeCodevBridge,
   type CodevBridgeSnapshot
-} from '@/web/codev-bridge'
+} from '@/web/codev-bridge-singleton'
 
 export type CodevProfileSnapshot = {
   name: string | null

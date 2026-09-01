@@ -12,10 +12,12 @@ import { Share2 } from "lucide-react";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  buildCodevBridgeCommandMessage,
   executeCodevBridgeRequest,
   isCodevBridgeClientMessage,
   isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
+  type CodevBridgeCommand,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
 import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
@@ -612,11 +614,16 @@ export function WorkspaceTopBar({
   workspaceId,
   canInvite,
   liveAgentCount = null,
+  onResumeCommand,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
   liveAgentCount?: number | null;
+  /** Sends a command into the embedded IDE. Returns false (no throw) before
+   *  the iframe and its bridge handshake are ready; the dialog falls back
+   *  to the manual copy-paste command in that case. */
+  onResumeCommand: (command: CodevBridgeCommand) => boolean;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [codexResumeOpen, setCodexResumeOpen] = useState(false);
@@ -683,6 +690,7 @@ export function WorkspaceTopBar({
       />
       <WorkspaceCodexResumeDialog
         onClose={() => setCodexResumeOpen(false)}
+        onResumeCommand={onResumeCommand}
         open={codexResumeOpen}
         workspaceId={workspaceId}
       />
@@ -694,11 +702,13 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
+  onResumeCommand,
   children,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  onResumeCommand: (command: CodevBridgeCommand) => boolean;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -708,6 +718,7 @@ function WorkspaceChrome({
       <WorkspaceTopBar
         canInvite={canInvite}
         liveAgentCount={activity?.occupied ?? null}
+        onResumeCommand={onResumeCommand}
         repository={repository}
         workspaceId={workspaceId}
       />
@@ -756,6 +767,23 @@ export function OrcaWorkspace({
   const codevBridgeSessionRef = useRef<CodevParentBridgeSession>(
     EMPTY_CODEV_PARENT_BRIDGE_SESSION,
   );
+
+  // Sends a parent-initiated command into the embedded IDE over the same
+  // bridge the iframe uses to request things from the parent, just in the
+  // other direction. Returns false (never throws) when there is no iframe
+  // yet or the bridge hasn't completed its hello/ack handshake, so callers
+  // can fall back to a manual instruction instead of failing silently.
+  const sendCodevBridgeCommand = useCallback((command: CodevBridgeCommand) => {
+    const message = buildCodevBridgeCommandMessage(
+      codevBridgeSessionRef.current,
+      command,
+    );
+    if (!message || !iframeRef.current?.contentWindow) {
+      return false;
+    }
+    iframeRef.current.contentWindow.postMessage(message, window.location.origin);
+    return true;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1005,6 +1033,7 @@ export function OrcaWorkspace({
     return (
       <WorkspaceChrome
         canInvite={canInvite}
+        onResumeCommand={sendCodevBridgeCommand}
         repository={repository}
         workspaceId={workspaceId}
       >
@@ -1041,6 +1070,7 @@ export function OrcaWorkspace({
   return (
     <WorkspaceChrome
       canInvite={canInvite}
+      onResumeCommand={sendCodevBridgeCommand}
       repository={repository}
       workspaceId={workspaceId}
     >

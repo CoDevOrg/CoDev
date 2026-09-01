@@ -7,7 +7,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '../../web/codev-bridge'
+} from '../../web/codev-bridge-singleton'
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import {
   attachMissionControlHolds,

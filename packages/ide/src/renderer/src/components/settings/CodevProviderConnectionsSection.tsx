@@ -6,7 +6,7 @@ import {
   requestCodevBridge,
   subscribeCodevBridge,
   type CodevBridgeSnapshot
-} from '@/web/codev-bridge'
+} from '@/web/codev-bridge-singleton'
 
 export type CodevProviderConnection = {
   provider: 'openai' | 'anthropic'

@@ -150,4 +150,84 @@ describe('createCodevBridge', () => {
     })
     bridge.dispose()
   })
+
+  it('delivers a parent-initiated command to subscribers once connected', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const received: unknown[] = []
+    const unsubscribe = bridge.subscribeCommand((command) => received.push(command))
+
+    respond({
+      type: 'codev:bridge-command',
+      generation: 1,
+      command: { kind: 'terminal-run', command: 'codex resume abc-123' }
+    })
+
+    expect(received).toEqual([{ kind: 'terminal-run', command: 'codex resume abc-123' }])
+    unsubscribe()
+    bridge.dispose()
+  })
+
+  it('ignores a command from a stale generation', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const received: unknown[] = []
+    bridge.subscribeCommand((command) => received.push(command))
+
+    respond({
+      type: 'codev:bridge-command',
+      generation: 999,
+      command: { kind: 'terminal-run', command: 'codex resume abc-123' }
+    })
+
+    expect(received).toEqual([])
+    bridge.dispose()
+  })
+
+  it('ignores a malformed command payload', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const received: unknown[] = []
+    bridge.subscribeCommand((command) => received.push(command))
+
+    respond({ type: 'codev:bridge-command', generation: 1, command: { kind: 'terminal-run' } })
+    respond({
+      type: 'codev:bridge-command',
+      generation: 1,
+      command: { kind: 'something-else', command: 'rm -rf /' }
+    })
+    respond({ type: 'codev:bridge-command', generation: 1, command: 'codex resume abc-123' })
+
+    expect(received).toEqual([])
+    bridge.dispose()
+  })
+
+  it('stops delivering commands to an unsubscribed listener', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const received: unknown[] = []
+    const unsubscribe = bridge.subscribeCommand((command) => received.push(command))
+    unsubscribe()
+
+    respond({
+      type: 'codev:bridge-command',
+      generation: 1,
+      command: { kind: 'terminal-run', command: 'codex resume abc-123' }
+    })
+
+    expect(received).toEqual([])
+    bridge.dispose()
+  })
 })

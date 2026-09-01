@@ -1,63 +1,14 @@
-export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
+import {
+  isParentMessage,
+  type CodevBridgeCommand,
+  type CodevBridgeRequestMethod,
+  type CodevBridgeSnapshot,
+  type CodevBridgeStatus
+} from './codev-bridge-protocol'
 
-export type CodevBridgeSnapshot = {
-  status: CodevBridgeStatus
-  label: string
-  detail: string
-}
+export type { CodevBridgeCommand, CodevBridgeRequestMethod, CodevBridgeSnapshot, CodevBridgeStatus }
 
-type CodevBridgeParentMessage =
-  | { type: 'codev:bridge-hello-ack'; generation: number; workspaceBound: true }
-  | { type: 'codev:bridge-pong'; generation: number }
-  | {
-      type: 'codev:bridge-response'
-      generation: number
-      requestId: string
-      ok: boolean
-      result?: unknown
-      error?: string
-    }
-
-export type CodevBridgeRequestMethod =
-  | 'invites.list'
-  | 'invites.create'
-  | 'invites.revoke'
-  | 'members.update'
-  | 'presence.list'
-  | 'presence.update'
-  | 'presence.cursor.update'
-  | 'conflicts.list'
-  | 'conflicts.report'
-  | 'conflicts.resolve'
-  | 'agents.list'
-  | 'agents.enqueue'
-  | 'agents.interrupt'
-  | 'agents.startControlled'
-  | 'agents.selectProvider'
-  | 'workboard.list'
-  | 'workboard.create'
-  | 'claims.list'
-  | 'coordination.list'
-  | 'claims.create'
-  | 'claims.reassign'
-  | 'claims.cancel'
-  | 'review.list'
-  | 'review.prepare'
-  | 'review.advance'
-  | 'review.merge'
-  | 'activity.list'
-  | 'connections.list'
-  | 'connections.put'
-  | 'connections.revoke'
-  | 'profile.get'
-  | 'team.roster'
-  | 'team.channels'
-  | 'team.messages'
-  | 'team.send'
-  | 'team.createChannel'
-  | 'team.saveStatus'
-
-type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
+export type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
   __CODEV_EMBEDDED__?: boolean
   location: { origin: string }
   parent: { postMessage: (data: unknown, origin: string) => void }
@@ -85,32 +36,10 @@ function snapshotFor(status: CodevBridgeStatus): CodevBridgeSnapshot {
   return SNAPSHOTS[status]
 }
 
-function isParentMessage(data: unknown, generation: number): data is CodevBridgeParentMessage {
-  if (!data || typeof data !== 'object' || !('type' in data)) {
-    return false
-  }
-  const message = data as {
-    type?: unknown
-    generation?: unknown
-    workspaceBound?: unknown
-    requestId?: unknown
-    ok?: unknown
-  }
-  if (message.generation !== generation) {
-    return false
-  }
-  if (message.type === 'codev:bridge-hello-ack') {
-    return message.workspaceBound === true
-  }
-  if (message.type === 'codev:bridge-response') {
-    return typeof message.requestId === 'string' && typeof message.ok === 'boolean'
-  }
-  return message.type === 'codev:bridge-pong'
-}
-
 export function createCodevBridge(host: CodevBridgeHost): {
   getSnapshot: () => CodevBridgeSnapshot
   subscribe: (listener: () => void) => () => void
+  subscribeCommand: (listener: (command: CodevBridgeCommand) => void) => () => void
   start: () => void
   request: (method: CodevBridgeRequestMethod, params?: Record<string, unknown>) => Promise<unknown>
   interrupt: () => void
@@ -124,6 +53,7 @@ export function createCodevBridge(host: CodevBridgeHost): {
   let helloTimer: ReturnType<typeof setTimeout> | null = null
   let started = false
   const listeners = new Set<() => void>()
+  const commandListeners = new Set<(command: CodevBridgeCommand) => void>()
   const pending = new Map<
     string,
     {
@@ -245,6 +175,12 @@ export function createCodevBridge(host: CodevBridgeHost): {
       )
       return
     }
+    if (message.data.type === 'codev:bridge-command') {
+      for (const listener of commandListeners) {
+        listener(message.data.command)
+      }
+      return
+    }
     if (pongTimer) {
       clearTimeout(pongTimer)
       pongTimer = null
@@ -257,6 +193,12 @@ export function createCodevBridge(host: CodevBridgeHost): {
       listeners.add(listener)
       return () => {
         listeners.delete(listener)
+      }
+    },
+    subscribeCommand(listener) {
+      commandListeners.add(listener)
+      return () => {
+        commandListeners.delete(listener)
       }
     },
     start() {
@@ -326,45 +268,3 @@ export function createCodevBridge(host: CodevBridgeHost): {
   }
 }
 
-let singleton: ReturnType<typeof createCodevBridge> | null = null
-
-function ensureCodevBridge(
-  host: CodevBridgeHost = window as CodevBridgeHost
-): ReturnType<typeof createCodevBridge> {
-  if (!singleton) {
-    singleton = createCodevBridge(host)
-  }
-  return singleton
-}
-
-export function startCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): void {
-  ensureCodevBridge(host).start()
-}
-
-export function getCodevBridgeSnapshot(): CodevBridgeSnapshot {
-  return ensureCodevBridge().getSnapshot()
-}
-
-export function subscribeCodevBridge(listener: () => void): () => void {
-  return ensureCodevBridge().subscribe(listener)
-}
-
-export function interruptCodevBridge(): void {
-  singleton?.interrupt()
-}
-
-export function reconnectCodevBridge(): void {
-  singleton?.reconnect()
-}
-
-export function requestCodevBridge<T = unknown>(
-  method: CodevBridgeRequestMethod,
-  params?: Record<string, unknown>
-): Promise<T> {
-  return ensureCodevBridge().request(method, params) as Promise<T>
-}
-
-export function resetCodevBridgeForTests(): void {
-  singleton?.dispose()
-  singleton = null
-}

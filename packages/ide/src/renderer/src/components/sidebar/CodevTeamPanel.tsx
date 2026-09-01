@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { Check, Hash, Lock, Send, Sparkles, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { requestCodevBridge } from '@/web/codev-bridge'
+import { requestCodevBridge } from '@/web/codev-bridge-singleton'
 
 /**
  * CoDev team rail, folded into Orca's left sidebar.

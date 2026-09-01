@@ -6,7 +6,7 @@ import {
   requestCodevBridge,
   subscribeCodevBridge,
   type CodevBridgeSnapshot
-} from '@/web/codev-bridge'
+} from '@/web/codev-bridge-singleton'
 
 type CodevMemberRole = 'viewer' | 'reviewer' | 'co_steer'
 

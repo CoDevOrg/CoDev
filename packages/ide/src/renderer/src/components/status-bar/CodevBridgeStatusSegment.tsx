@@ -11,8 +11,10 @@ import {
   reconnectCodevBridge,
   startCodevBridge,
   subscribeCodevBridge,
+  subscribeCodevBridgeCommand,
   type CodevBridgeSnapshot
-} from '@/web/codev-bridge'
+} from '@/web/codev-bridge-singleton'
+import { runCodevBridgeCommand } from '@/web/codev-bridge-command-handler'
 
 function statusDotClass(status: CodevBridgeSnapshot['status']): string {
   if (status === 'connected') {
@@ -120,9 +122,11 @@ export function CodevBridgeStatusSegment({
     getCodevBridgeSnapshot
   )
   useEffect(() => {
-    if (embedded) {
-      startCodevBridge()
+    if (!embedded) {
+      return
     }
+    startCodevBridge()
+    return subscribeCodevBridgeCommand(runCodevBridgeCommand)
   }, [embedded])
   if (!embedded) {
     return null

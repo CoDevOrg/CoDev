@@ -9,7 +9,7 @@ import {
 } from './codev-external-file-conflict'
 
 const requestCodevBridge = vi.hoisted(() => vi.fn())
-vi.mock('@/web/codev-bridge', () => ({
+vi.mock('@/web/codev-bridge-singleton', () => ({
   requestCodevBridge
 }))
 

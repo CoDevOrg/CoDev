@@ -3,6 +3,8 @@
 import { useState, type ChangeEvent } from "react";
 import { X } from "lucide-react";
 
+import type { CodevBridgeCommand } from "@/components/codev-parent-bridge";
+
 type ImportState = "idle" | "reading" | "error" | "done";
 
 type ImportResult = {
@@ -21,14 +23,20 @@ export function WorkspaceCodexResumeDialog({
   open,
   onClose,
   workspaceId,
+  onResumeCommand,
 }: {
   open: boolean;
   onClose: () => void;
   workspaceId: string;
+  /** Sends the resume command into the embedded IDE's own terminal. Returns
+   *  false when the IDE isn't connected yet, in which case the dialog falls
+   *  back to a manual copy-paste command instead. */
+  onResumeCommand: (command: CodevBridgeCommand) => boolean;
 }) {
   const [state, setState] = useState<ImportState>("idle");
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [launched, setLaunched] = useState(false);
   const [copied, setCopied] = useState(false);
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -39,6 +47,7 @@ export function WorkspaceCodexResumeDialog({
     setState("reading");
     setMessage("");
     setResult(null);
+    setLaunched(false);
     setCopied(false);
     try {
       const contents = await file.text();
@@ -57,6 +66,13 @@ export function WorkspaceCodexResumeDialog({
       }
       const payload = (await response.json()) as ImportResult;
       setResult(payload);
+      setLaunched(
+        onResumeCommand({
+          kind: "terminal-run",
+          command: payload.resumeCommand,
+          label: "Resume Codex session",
+        }),
+      );
       setState("done");
     } catch {
       setMessage("Could not read or upload that file.");
@@ -68,6 +84,7 @@ export function WorkspaceCodexResumeDialog({
     setState("idle");
     setMessage("");
     setResult(null);
+    setLaunched(false);
     setCopied(false);
   }
 
@@ -135,10 +152,19 @@ export function WorkspaceCodexResumeDialog({
           <p className="panel-status error-copy">{message}</p>
         ) : null}
 
-        {state === "done" && result ? (
+        {state === "done" && result && launched ? (
           <div className="picker-grid">
             <p className="panel-status">
-              Imported. Open a terminal tab in the IDE and run:
+              Imported. Opening the resumed chat in a new terminal tab…
+            </p>
+          </div>
+        ) : null}
+
+        {state === "done" && result && !launched ? (
+          <div className="picker-grid">
+            <p className="panel-status">
+              Imported, but the IDE isn't connected yet. Open a terminal tab
+              and run:
             </p>
             <div className="workspace-create-blank" style={{ cursor: "text" }}>
               <code>{result.resumeCommand}</code>
@@ -154,10 +180,6 @@ export function WorkspaceCodexResumeDialog({
             >
               {copied ? "Copied" : "Copy command"}
             </button>
-            <p className="panel-status">
-              Opening the resumed chat in its own tab automatically isn't
-              wired up yet, so this is the manual step for now.
-            </p>
           </div>
         ) : null}
       </section>

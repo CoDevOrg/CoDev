@@ -3,7 +3,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '../../web/codev-bridge'
+} from '../../web/codev-bridge-singleton'
 import {
   CodevSharedSessionViewPanel,
   type CodevSharedSessionSnapshot,

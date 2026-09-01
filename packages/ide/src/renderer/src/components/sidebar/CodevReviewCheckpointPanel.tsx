@@ -6,7 +6,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '../../web/codev-bridge'
+} from '../../web/codev-bridge-singleton'
 import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
 import {
   CodevReviewCheckpointViewPanel,

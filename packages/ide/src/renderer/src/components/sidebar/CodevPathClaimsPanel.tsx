@@ -4,7 +4,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '../../web/codev-bridge'
+} from '../../web/codev-bridge-singleton'
 import { publishCodevPathClaims } from './codev-path-claims-store'
 import {
   CodevPathClaimsViewPanel,

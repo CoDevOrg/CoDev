@@ -1,7 +1,7 @@
 import { useSyncExternalStore, type JSX } from 'react'
 import type { Worktree } from '../../../../shared/types'
 import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
-import { requestCodevBridge } from '../../web/codev-bridge'
+import { requestCodevBridge } from '../../web/codev-bridge-singleton'
 import { Button } from '@/components/ui/button'
 import {
   targetPathClaimGroup,

@@ -8,9 +8,29 @@ export type CodevBridgeClientMessage =
   | { type: "codev:bridge-ping"; generation: number }
   | { type: "codev:bridge-interrupt"; generation: number };
 
+/**
+ * A parent-initiated action, distinct from `CodevBridgeMethod` (iframe-
+ * initiated requests this side replies to). `terminal-run` opens a plain
+ * terminal tab in the embedded IDE and queues `command` as its startup
+ * text, bypassing agent/session-option composition so the exact text sent
+ * is what runs.
+ */
+export type CodevBridgeCommand = {
+  kind: "terminal-run";
+  command: string;
+  label?: string;
+};
+
+export type CodevBridgeCommandMessage = {
+  type: "codev:bridge-command";
+  generation: number;
+  command: CodevBridgeCommand;
+};
+
 export type CodevBridgeParentMessage =
   | { type: "codev:bridge-hello-ack"; generation: number; workspaceBound: true }
-  | { type: "codev:bridge-pong"; generation: number };
+  | { type: "codev:bridge-pong"; generation: number }
+  | CodevBridgeCommandMessage;
 
 export type CodevBridgeMethod =
   | "invites.list"
@@ -72,6 +92,22 @@ export const EMPTY_CODEV_PARENT_BRIDGE_SESSION: CodevParentBridgeSession = {
   open: false,
   generation: null,
 };
+
+/**
+ * Builds the message to post into the embedded IDE's iframe to run `command`
+ * there, or null when the bridge hasn't completed its hello/ack handshake
+ * yet (no generation to stamp the message with, and the IDE's own
+ * `isParentMessage` would reject a mismatched or missing one anyway).
+ */
+export function buildCodevBridgeCommandMessage(
+  session: CodevParentBridgeSession,
+  command: CodevBridgeCommand,
+): CodevBridgeCommandMessage | null {
+  if (!session.open || session.generation === null) {
+    return null;
+  }
+  return { type: "codev:bridge-command", generation: session.generation, command };
+}
 
 const INVITE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

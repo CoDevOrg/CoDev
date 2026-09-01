@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  buildCodevBridgeCommandMessage,
   executeCodevBridgeRequest,
   executePersonalCodevBridgeRequest,
   isCodevBridgeClientMessage,
@@ -1253,5 +1254,39 @@ describe("codev parent bridge", () => {
       ),
     ).resolves.toMatchObject({ ok: false });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  describe("buildCodevBridgeCommandMessage", () => {
+    it("returns null before the bridge has completed its hello handshake", () => {
+      expect(
+        buildCodevBridgeCommandMessage(EMPTY_CODEV_PARENT_BRIDGE_SESSION, {
+          kind: "terminal-run",
+          command: "codex resume abc-123",
+        }),
+      ).toBeNull();
+    });
+
+    it("stamps the command with the session's current generation once connected", () => {
+      const connected = replyToCodevBridgeMessage(
+        EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+        { type: "codev:bridge-hello", generation: 3 },
+      ).session;
+
+      expect(
+        buildCodevBridgeCommandMessage(connected, {
+          kind: "terminal-run",
+          command: "codex resume abc-123",
+          label: "Resume Codex session",
+        }),
+      ).toEqual({
+        type: "codev:bridge-command",
+        generation: 3,
+        command: {
+          kind: "terminal-run",
+          command: "codex resume abc-123",
+          label: "Resume Codex session",
+        },
+      });
+    });
   });
 });

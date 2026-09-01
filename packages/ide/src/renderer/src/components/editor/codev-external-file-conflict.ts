@@ -1,4 +1,4 @@
-import { requestCodevBridge } from '@/web/codev-bridge'
+import { requestCodevBridge } from '@/web/codev-bridge-singleton'
 
 export const CODEV_EXTERNAL_FILE_CONFLICT_LABEL = 'External file conflict'
 export const CODEV_EXTERNAL_FILE_CONFLICT_BANNER =

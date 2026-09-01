@@ -133,6 +133,7 @@ describe("WorkspaceTopBar", () => {
         repository: "yousef20920/CoDev",
         workspaceId: "workspace-1",
         canInvite: true,
+        onResumeCommand: () => false,
       }),
     );
 
@@ -148,6 +149,7 @@ describe("WorkspaceTopBar", () => {
         workspaceId: "workspace-1",
         canInvite: true,
         liveAgentCount: 2,
+        onResumeCommand: () => false,
       }),
     );
 

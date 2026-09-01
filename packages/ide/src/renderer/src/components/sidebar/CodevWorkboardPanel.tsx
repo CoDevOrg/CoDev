@@ -7,7 +7,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '../../web/codev-bridge'
+} from '../../web/codev-bridge-singleton'
 import { openCodevManagedProposalWorktree } from '../../web/codev-proposal-discard'
 import { publishCodevWorkboard, setCodevWorkboardStartSession } from './codev-workboard-store'
 import { publishCodevPathClaims } from './codev-path-claims-store'

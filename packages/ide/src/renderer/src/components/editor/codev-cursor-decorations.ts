@@ -4,7 +4,7 @@ import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
-} from '@/web/codev-bridge'
+} from '@/web/codev-bridge-singleton'
 
 export type CodevCursorMember = {
   user: { id: string; login: string; name: string | null }
