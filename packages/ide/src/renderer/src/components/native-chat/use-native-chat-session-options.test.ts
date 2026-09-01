@@ -18,7 +18,11 @@ vi.mock('../../store', () => ({
   })
 }))
 
-import { useNativeChatSessionOptions } from './use-native-chat-session-options'
+import {
+  codexEffortPickerInput,
+  codexModelPickerInput,
+  useNativeChatSessionOptions
+} from './use-native-chat-session-options'
 
 // A 1M-context Opus session: the frame names the resolved model while the
 // host's discovered catalog names the alias.
@@ -214,5 +218,39 @@ describe('useNativeChatSessionOptions pre-PTY draft surface', () => {
 
     expect(result.current.surface).not.toBeNull()
     expect(modelDescriptor(result.current.snapshot).choices.length).toBeGreaterThan(0)
+  })
+})
+
+describe('codexEffortPickerInput', () => {
+  it('navigates to each effort level from the top of the list', () => {
+    expect(codexEffortPickerInput('low')).toBe('\u001b[H\r')
+    expect(codexEffortPickerInput('medium')).toBe('\u001b[H\u001b[B\r')
+    expect(codexEffortPickerInput('high')).toBe('\u001b[H\u001b[B\u001b[B\r')
+    expect(codexEffortPickerInput('xhigh')).toBe('\u001b[H\u001b[B\u001b[B\u001b[B\r')
+    expect(codexEffortPickerInput('max')).toBe('\u001b[H\u001b[B\u001b[B\u001b[B\u001b[B\r')
+    expect(codexEffortPickerInput('ultra')).toBe(
+      '\u001b[H\u001b[B\u001b[B\u001b[B\u001b[B\u001b[B\r'
+    )
+  })
+
+  it('rejects a value Codex has no picker position for', () => {
+    expect(() => codexEffortPickerInput('extreme')).toThrow(
+      'Codex does not support reasoning effort extreme here.'
+    )
+  })
+})
+
+describe('codexModelPickerInput', () => {
+  const models = [{ id: 'gpt-5.6-sol' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.5' }]
+
+  it('navigates to the current model\'s position in the picker list', () => {
+    expect(codexModelPickerInput('gpt-5.6-sol', models)).toBe('\u001b[H\r')
+    expect(codexModelPickerInput('gpt-5.6-luna', models)).toBe('\u001b[H\u001b[B\r')
+    expect(codexModelPickerInput('gpt-5.5', models)).toBe('\u001b[H\u001b[B\u001b[B\r')
+  })
+
+  it('returns null when the current model is unknown, so the caller can fall back', () => {
+    expect(codexModelPickerInput(null, models)).toBeNull()
+    expect(codexModelPickerInput('not-in-the-list', models)).toBeNull()
   })
 })

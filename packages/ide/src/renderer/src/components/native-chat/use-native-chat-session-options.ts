@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { getAgentSessionOptionCatalog, type CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
 import type {
@@ -59,6 +60,27 @@ export function codexEffortPickerInput(value: SessionOptionValue): string {
   return `\u001b[H${'\u001b[B'.repeat(index)}\r`
 }
 
+/**
+ * Navigation input to land Codex's `/model` picker back on `modelId` before
+ * touching the effort sub-screen, so setting effort alone can't silently also
+ * switch the model. Returns null when the current model isn't known or isn't
+ * in the picker's list; callers fall back to a plain Enter for that one
+ * case, same as before this model-preserving navigation existed.
+ */
+export function codexModelPickerInput(
+  modelId: string | null,
+  models: readonly Pick<CatalogModel, 'id'>[]
+): string | null {
+  if (!modelId) {
+    return null
+  }
+  const index = models.findIndex((model) => model.id === modelId)
+  if (index < 0) {
+    return null
+  }
+  return `\u001b[H${'\u001b[B'.repeat(index)}\r`
+}
+
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
   terminalTabId: string
@@ -102,16 +124,38 @@ export function useNativeChatSessionOptions(args: {
           )
         : null
     let settingsWrite = Promise.resolve()
+    const codexModels =
+      agent === 'codex'
+        ? (discoveredModels ?? getAgentSessionOptionCatalog('codex')?.models ?? [])
+        : []
     const applyAgentPickerChoice =
       agent === 'codex' && targetPtyId
-        ? async ({ optionId, value }: { optionId: string; value: SessionOptionValue }) => {
+        ? async ({
+            optionId,
+            value,
+            modelId
+          }: {
+            optionId: string
+            value: SessionOptionValue
+            modelId: string | null
+          }) => {
             if (optionId !== 'effort') {
               throw new Error('This Codex option is not available in chat.')
             }
             await dispatchCommand('/model')
             await waitForTerminalText(readTerminalScreen, 'Select Model and Effort')
             const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-            sendRuntimePtyInput(settings, targetPtyId, '\r')
+            // Navigate back to the model this effort applies to instead of
+            // blindly accepting the picker's default highlight -- an
+            // unconditional Enter here could silently also switch the model if
+            // the CLI doesn't default the cursor to the currently active one.
+            // Falls back to a plain Enter only when the current model isn't
+            // known, matching the prior behavior for that one case.
+            sendRuntimePtyInput(
+              settings,
+              targetPtyId,
+              codexModelPickerInput(modelId, codexModels) ?? '\r'
+            )
             await waitForTerminalText(readTerminalScreen, 'Select Reasoning Level')
             sendRuntimePtyInput(settings, targetPtyId, codexEffortPickerInput(value))
           }
