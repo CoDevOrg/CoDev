@@ -1,1 +1,0 @@
-function e(e){return!!e&&!e?.dismissed}function t(e){return!!e&&!e?.dismissed&&!e?.restartRequested}export{e as n,t};
