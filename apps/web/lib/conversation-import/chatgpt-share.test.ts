@@ -35,6 +35,8 @@ function message(
   content: Record<string, unknown>,
   createdAt: number,
   metadata?: Record<string, unknown>,
+  channel?: string,
+  recipient?: string,
 ) {
   return {
     id,
@@ -44,6 +46,8 @@ function message(
       content,
       create_time: createdAt,
       metadata: metadata ?? {},
+      ...(channel ? { channel } : {}),
+      ...(recipient ? { recipient } : {}),
     },
   };
 }
@@ -179,6 +183,15 @@ describe("ChatGPT shared conversation normalization", () => {
       model: { slug: "gpt-5" },
       linear_conversation: [
         message(
+          "custom-instructions-placeholder",
+          "user",
+          {
+            content_type: "text",
+            parts: ["Original custom instructions no longer available"],
+          },
+          1_725_000_000.25,
+        ),
+        message(
           "user-1",
           "user",
           { content_type: "text", parts: ["Design this );"] },
@@ -192,6 +205,37 @@ describe("ChatGPT shared conversation normalization", () => {
             content: "Internal reasoning summary",
           },
           1_725_000_001.5,
+        ),
+        message(
+          "assistant-commentary",
+          "assistant",
+          {
+            content_type: "text",
+            parts: ["I will search for current prices."],
+          },
+          1_725_000_001.75,
+          {},
+          "commentary",
+        ),
+        message(
+          "assistant-tool-call",
+          "assistant",
+          {
+            content_type: "code",
+            language: "unknown",
+            text: "fast|current prices|10",
+          },
+          1_725_000_001.77,
+          {},
+          undefined,
+          "web.run",
+        ),
+        message(
+          "visually-hidden",
+          "user",
+          { content_type: "text", parts: ["Hidden platform context"] },
+          1_725_000_001.8,
+          { is_visually_hidden_from_conversation: true },
         ),
         message(
           "assistant-code",
@@ -240,7 +284,6 @@ describe("ChatGPT shared conversation normalization", () => {
       "user",
       "assistant",
       "user",
-      "tool",
     ]);
     expect(imported.messages[1]).toMatchObject({
       text: "```ts\nconst ready = true;\n```",
@@ -255,6 +298,16 @@ describe("ChatGPT shared conversation normalization", () => {
         downloadable: true,
       },
     ]);
+
+    const importedWithTools = importChatGptShareHtml(
+      modernShareHtml(data, "share-modern"),
+      "https://chatgpt.com/share/share-modern",
+      { includeToolOutput: true },
+    );
+    expect(importedWithTools.messages.at(-1)).toMatchObject({
+      role: "tool",
+      text: "Tool result",
+    });
   });
 
   it("parses legacy mapping trees and preserves file metadata", () => {

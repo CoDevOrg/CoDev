@@ -372,6 +372,19 @@ function authorNameFor(
         : "Assistant";
 }
 
+function isNonTranscriptPlaceholder(
+  role: ParsedChatGptMessage["role"],
+  text: string,
+) {
+  const normalized = text.trim().toLowerCase();
+  return (
+    (role === "user" &&
+      normalized === "original custom instructions no longer available") ||
+    (role === "tool" &&
+      normalized === "the output of this plugin was redacted.")
+  );
+}
+
 function walkMapping(mapping: Record<string, Json>) {
   const rootId = Object.keys(mapping).find((id) => {
     const node = mapping[id];
@@ -430,10 +443,23 @@ function buildMessages(
     const message = node.message;
     const author = isRecord(message.author) ? message.author : {};
     const role = roleFor(author.role);
+    const metadata = isRecord(message.metadata) ? message.metadata : {};
+    const channel =
+      typeof message.channel === "string"
+        ? message.channel
+        : typeof metadata.channel === "string"
+          ? metadata.channel
+          : null;
+    const recipient =
+      typeof message.recipient === "string" ? message.recipient : null;
+    if (metadata.is_visually_hidden_from_conversation === true) continue;
     if (role === "system" && !options.includeSystem) continue;
     if (role === "tool" && !options.includeToolOutput) continue;
+    if (role === "assistant" && channel && channel !== "final") continue;
+    if (role === "assistant" && recipient && recipient !== "all") continue;
     const flattened = flattenContent(message, options);
     if (!flattened.text && flattened.artifacts.length === 0) continue;
+    if (isNonTranscriptPlaceholder(role, flattened.text)) continue;
     messages.push({
       role,
       authorName: authorNameFor(author, role),
@@ -485,7 +511,7 @@ export function parseChatGptShareHtml(
   const resolvedOptions: Required<ChatGptParseOptions> = {
     includeReasoning: options.includeReasoning ?? false,
     includeSystem: options.includeSystem ?? false,
-    includeToolOutput: options.includeToolOutput ?? true,
+    includeToolOutput: options.includeToolOutput ?? false,
   };
   const warnings: string[] = [];
   let data: Record<string, Json> | undefined;
