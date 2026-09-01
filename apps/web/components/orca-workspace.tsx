@@ -20,6 +20,7 @@ import {
 } from "@/components/codev-parent-bridge";
 import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { watchOrcaProjectTree } from "@/components/orca-project-tree";
+import { WorkspaceCodexResumeDialog } from "@/components/workspace-codex-resume-dialog";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
@@ -618,6 +619,7 @@ export function WorkspaceTopBar({
   liveAgentCount?: number | null;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
+  const [codexResumeOpen, setCodexResumeOpen] = useState(false);
   const liveLabel =
     liveAgentCount == null
       ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
@@ -660,6 +662,13 @@ export function WorkspaceTopBar({
         <button
           className="workspace-topbar-share"
           type="button"
+          onClick={() => setCodexResumeOpen(true)}
+        >
+          Resume Codex session
+        </button>
+        <button
+          className="workspace-topbar-share"
+          type="button"
           onClick={() => setShareOpen(true)}
         >
           <Share2 aria-hidden size={13} />
@@ -670,6 +679,11 @@ export function WorkspaceTopBar({
         canInvite={canInvite}
         onClose={() => setShareOpen(false)}
         open={shareOpen}
+        workspaceId={workspaceId}
+      />
+      <WorkspaceCodexResumeDialog
+        onClose={() => setCodexResumeOpen(false)}
+        open={codexResumeOpen}
         workspaceId={workspaceId}
       />
     </header>
