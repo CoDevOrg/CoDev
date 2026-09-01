@@ -90,7 +90,10 @@ export function openCoordinationToken(
   }
   const expected = Buffer.from(signatureFor(payload), "base64url");
   const provided = Buffer.from(providedSignature, "base64url");
-  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+  if (
+    provided.length !== expected.length ||
+    !timingSafeEqual(provided, expected)
+  ) {
     return null;
   }
   try {
@@ -161,11 +164,16 @@ export function openWorkspaceCoordinationToken(
   }
   const expected = Buffer.from(workspaceSignatureFor(payload), "base64url");
   const provided = Buffer.from(providedSignature, "base64url");
-  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+  if (
+    provided.length !== expected.length ||
+    !timingSafeEqual(provided, expected)
+  ) {
     return null;
   }
   try {
-    const token = JSON.parse(decode(payload)) as Partial<WorkspaceCoordinationToken>;
+    const token = JSON.parse(
+      decode(payload),
+    ) as Partial<WorkspaceCoordinationToken>;
     if (
       typeof token.workspaceId !== "string" ||
       typeof token.expiresAt !== "number" ||
@@ -218,10 +226,8 @@ export async function registerCliAgentSession(
 ): Promise<{ sessionId: string }> {
   const database = getDatabase();
   const { provider, model } = providerForAgentKind(input.agentKind);
-  const displayName = `${input.agentKind.trim() || "agent"} · ${input.branch}`.slice(
-    0,
-    200,
-  );
+  const displayName =
+    `${input.agentKind.trim() || "agent"} · ${input.branch}`.slice(0, 200);
 
   return database.transaction(async (transaction) => {
     const [existingWorktree] = await transaction
@@ -253,7 +259,11 @@ export async function registerCliAgentSession(
     if (existingWorktree) {
       await transaction
         .update(schema.worktrees)
-        .set({ headSha: input.headSha, status: "active", updatedAt: new Date() })
+        .set({
+          headSha: input.headSha,
+          status: "active",
+          updatedAt: new Date(),
+        })
         .where(eq(schema.worktrees.id, worktreeId));
     }
 
@@ -384,4 +394,33 @@ export async function resolveCliAgentSessionForBranch(input: {
       .returning({ id: schema.agentSessions.id });
     return { sessionId: session!.id, ownerId: owner.ownerId };
   });
+}
+
+/**
+ * How one agent session signs a team-chat post. The session row's own name is
+ * already the descriptive form the IDE gave it (`claude · codev/fix-auth-1a2b`),
+ * so humans reading the channel can tell two agents apart; the provider is the
+ * fallback for a session created before it had a name.
+ */
+export async function agentSessionChatLabel(
+  workspaceId: string,
+  sessionId: string,
+): Promise<string> {
+  const [session] = await getDatabase()
+    .select({
+      name: schema.agentSessions.name,
+      provider: schema.agentSessions.provider,
+    })
+    .from(schema.agentSessions)
+    .where(
+      and(
+        eq(schema.agentSessions.id, sessionId),
+        eq(schema.agentSessions.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  const name = session?.name?.trim();
+  if (name) return `Agent · ${name}`;
+  const provider = session?.provider?.trim();
+  return provider ? `Agent · ${provider}` : "Agent";
 }

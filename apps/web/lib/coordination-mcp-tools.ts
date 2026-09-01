@@ -2,11 +2,19 @@ import "server-only";
 
 import {
   CoordinationConflictError,
+  createCoordinationMessage,
   createPathClaim,
   listCoordinationMessages,
   listWorkspacePathClaims,
   releasePathClaim,
+  updateCoordinationMessageStatus,
 } from "./agent-coordination";
+import { agentSessionChatLabel } from "./cli-agent-session";
+import {
+  findChannelBySlug,
+  postChannelMessage,
+  readTeamChatContext,
+} from "./team-chat";
 import {
   buildAgentBriefing,
   recordBrainEntry,
@@ -20,11 +28,16 @@ import {
  * (`/api/workspaces/[id]/mcp/coordination`). This is the "core loop": declare
  * what you're about to do, see what everyone else is doing and where you'd
  * collide, claim the files you need, and leave findings behind. Every tool is a
- * thin pass to an existing `workspace-brain` / `agent-coordination` function,
- * scoped to the caller's `sessionId` from its bearer token.
+ * thin pass to an existing `workspace-brain` / `agent-coordination` /
+ * `team-chat` function, scoped to the caller's `sessionId` from its bearer
+ * token.
  *
- * Peer-to-peer claim negotiation (`request_claim_coordination` /
- * `respond_to_claim`) and team-chat tools are a deliberate follow-up.
+ * The toolset deliberately matches what the managed runtime already hands its
+ * own agents (`agent-runtime.ts`). It shipped first without peer negotiation
+ * or team chat, which left a live contradiction: the brain's own overlap
+ * warning tells an agent to "use request_claim_coordination, post_team_chat",
+ * tools a CLI agent did not have. An agent must never be pointed at a tool it
+ * cannot call, so the two sets are kept in step.
  */
 
 export type CoordinationToolContext = {
@@ -194,8 +207,124 @@ const RAW_COORDINATION_TOOLS: readonly CoordinationToolDefinition[] = [
   {
     name: "list_coordination",
     description:
-      "Coordination messages addressed to or from your session (claim requests and responses from other agents).",
+      "Coordination messages addressed to or from your session (claim requests and responses from other agents). Read this to find the `id`, `correlationId` and `fromSessionId` you need to answer with respond_to_claim.",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "request_claim_coordination",
+    description:
+      "Ask the agent you are colliding with to negotiate, instead of overwriting them. Send this about a claim you hold, naming the session you want to reach — `situational_awareness` prints the session id of every agent you overlap with, and `list_claims` gives the session id behind any live claim.",
+    inputSchema: {
+      type: "object",
+      required: ["toSessionId", "claimId", "path", "intent"],
+      properties: {
+        toSessionId: {
+          type: "string",
+          description: "The other agent's session id.",
+        },
+        claimId: {
+          type: "string",
+          description:
+            "One of *your own* live claims (from claim_path / contest_path / list_claims).",
+        },
+        path: {
+          type: "string",
+          description: "The path that claim covers — must match it exactly.",
+        },
+        intent: {
+          type: "string",
+          description:
+            "What you want to happen — one line the other agent will read.",
+        },
+      },
+    },
+  },
+  {
+    name: "respond_to_claim",
+    description:
+      "Answer a claim request another agent sent you: accept (they take it), reject (you keep it), or counter (propose a split). Take `responseToId`, `correlationId` and the sender from list_coordination.",
+    inputSchema: {
+      type: "object",
+      required: [
+        "toSessionId",
+        "responseToId",
+        "correlationId",
+        "claimId",
+        "decision",
+      ],
+      properties: {
+        toSessionId: {
+          type: "string",
+          description: "`fromSessionId` of the request you are answering.",
+        },
+        responseToId: {
+          type: "string",
+          description: "`id` of the request you are answering.",
+        },
+        correlationId: {
+          type: "string",
+          description: "`correlationId` of the request you are answering.",
+        },
+        claimId: { type: "string", description: "The claim under discussion." },
+        decision: {
+          type: "string",
+          enum: ["accept", "reject", "counter"],
+        },
+        reason: {
+          type: "string",
+          description: "Why — one line. Required for reject and counter.",
+        },
+        proposedPath: {
+          type: "string",
+          description:
+            "With `counter`: the narrower path or `dir/**` you are proposing they take instead.",
+        },
+      },
+    },
+  },
+  {
+    name: "resolve_coordination",
+    description:
+      "Mark a coordination message sent to you as delivered or resolved, so a settled negotiation stops coming back from list_coordination.",
+    inputSchema: {
+      type: "object",
+      required: ["messageId", "status"],
+      properties: {
+        messageId: { type: "string" },
+        status: { type: "string", enum: ["delivered", "resolved"] },
+      },
+    },
+  },
+  {
+    name: "read_team_chat",
+    description:
+      "Read what the humans on this workspace are saying to each other in their team channels. Use it for intent, decisions, and priorities that are not in the repository.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channel: {
+          type: "string",
+          description:
+            "Channel name without the leading `#`. Omit to read every channel open to agents.",
+        },
+      },
+    },
+  },
+  {
+    name: "post_team_chat",
+    description:
+      "Post into a team channel so the humans see it — answer a mention, report a blocking finding, or say what you decided. Channels the team has closed to agents will refuse the post.",
+    inputSchema: {
+      type: "object",
+      required: ["channel", "body"],
+      properties: {
+        channel: {
+          type: "string",
+          description: "Channel name, with or without the leading `#`.",
+        },
+        body: { type: "string" },
+      },
+    },
   },
 ];
 
@@ -237,6 +366,11 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Channel names reach us with or without the leading `#`. */
+function channelSlug(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/^#/, "") : "";
+}
+
 export async function callCoordinationTool(
   context: CoordinationToolContext,
   name: string,
@@ -253,7 +387,11 @@ export async function callCoordinationTool(
           typeof args.intent === "string" && args.intent.trim()
             ? args.intent.trim()
             : "";
-        const briefing = await buildAgentBriefing(workspaceId, sessionId, intent);
+        const briefing = await buildAgentBriefing(
+          workspaceId,
+          sessionId,
+          intent,
+        );
         if (!briefing) {
           return ok(
             "Nothing else is happening in this workspace right now — no other agent briefs, overlaps, or prior attempts.",
@@ -317,7 +455,7 @@ export async function callCoordinationTool(
             return ok(
               `Blocked: another live agent holds an overlapping claim${
                 error.claimId ? ` (${error.claimId})` : ""
-              }. Check their brief with situational_awareness, then wait, choose a different path, or contest_path if it's the same work.`,
+              }. Check their brief with situational_awareness or list_claims, then either wait, take a different path, ask them to negotiate with request_claim_coordination, or contest_path if their claim is stale or it is genuinely the same work.`,
             );
           }
           throw error;
@@ -351,7 +489,9 @@ export async function callCoordinationTool(
       case "list_claims": {
         const claims = await listWorkspacePathClaims(workspaceId, sessionId);
         return ok(
-          claims.length ? pretty(claims) : "No live path claims in this workspace.",
+          claims.length
+            ? pretty(claims)
+            : "No live path claims in this workspace.",
         );
       }
 
@@ -389,6 +529,141 @@ export async function callCoordinationTool(
         return ok(
           messages.length ? pretty(messages) : "No coordination messages.",
         );
+      }
+
+      case "request_claim_coordination": {
+        for (const key of ["toSessionId", "claimId", "path", "intent"]) {
+          if (typeof args[key] !== "string" || !(args[key] as string).trim()) {
+            return fail(
+              "request_claim_coordination requires toSessionId, claimId, path and intent. Get the other agent's session id from situational_awareness or list_claims, and use one of your own live claims.",
+            );
+          }
+        }
+        const message = await createCoordinationMessage(
+          workspaceId,
+          sessionId,
+          {
+            toSessionId: args.toSessionId,
+            kind: "claim_request",
+            payload: {
+              claimId: args.claimId,
+              path: args.path,
+              intent: args.intent,
+            },
+          },
+        );
+        return ok(
+          `Coordination requested. They see it on their next list_coordination; watch for their answer there.\n${pretty(message)}`,
+        );
+      }
+
+      case "respond_to_claim": {
+        const decision = args.decision;
+        if (
+          decision !== "accept" &&
+          decision !== "reject" &&
+          decision !== "counter"
+        ) {
+          return fail(
+            "respond_to_claim needs decision to be accept, reject or counter.",
+          );
+        }
+        for (const key of [
+          "toSessionId",
+          "responseToId",
+          "correlationId",
+          "claimId",
+        ]) {
+          if (typeof args[key] !== "string" || !(args[key] as string).trim()) {
+            return fail(
+              "respond_to_claim requires toSessionId, responseToId, correlationId and claimId — all four come from the request as list_coordination printed it.",
+            );
+          }
+        }
+        const reason =
+          typeof args.reason === "string" ? args.reason.trim() : "";
+        if (!reason && decision !== "accept") {
+          return fail(
+            `A ${decision} needs a reason — the other agent has to act on it.`,
+          );
+        }
+        const message = await createCoordinationMessage(
+          workspaceId,
+          sessionId,
+          {
+            toSessionId: args.toSessionId,
+            kind: "claim_response",
+            correlationId: args.correlationId,
+            responseToId: args.responseToId,
+            payload: {
+              claimId: args.claimId,
+              decision,
+              // Both are optional in the contract and rejected when empty, so
+              // send them only when there is something to send.
+              ...(reason ? { reason } : {}),
+              ...(typeof args.proposedPath === "string" &&
+              args.proposedPath.trim()
+                ? { proposedPath: args.proposedPath.trim() }
+                : {}),
+            },
+          },
+        );
+        return ok(`Answered with ${decision}.\n${pretty(message)}`);
+      }
+
+      case "resolve_coordination": {
+        if (typeof args.messageId !== "string" || !args.messageId.trim()) {
+          return fail("resolve_coordination requires a messageId.");
+        }
+        if (args.status !== "delivered" && args.status !== "resolved") {
+          return fail(
+            "resolve_coordination needs status to be delivered or resolved.",
+          );
+        }
+        const message = await updateCoordinationMessageStatus(
+          workspaceId,
+          sessionId,
+          args.messageId,
+          args.status,
+        );
+        return ok(`Marked ${args.status}.\n${pretty(message)}`);
+      }
+
+      case "read_team_chat": {
+        const slug = channelSlug(args.channel);
+        const context = await readTeamChatContext(
+          workspaceId,
+          slug ? { channelSlug: slug } : {},
+        );
+        return ok(pretty(context));
+      }
+
+      case "post_team_chat": {
+        const slug = channelSlug(args.channel);
+        if (!slug) {
+          return fail("post_team_chat requires a channel name.");
+        }
+        if (typeof args.body !== "string" || !args.body.trim()) {
+          return fail("post_team_chat requires a message body.");
+        }
+        const channel = await findChannelBySlug(workspaceId, slug);
+        if (!channel) {
+          return fail(`No channel named #${slug}.`);
+        }
+        // `postChannelMessage` refuses an agent author on a channel the team
+        // has closed to agents; surface that as an answer the model can act
+        // on rather than an exception.
+        const { message } = await postChannelMessage({
+          workspaceId,
+          channelId: channel.id,
+          body: args.body.trim(),
+          author: {
+            kind: "agent",
+            label: await agentSessionChatLabel(workspaceId, sessionId),
+            agentSessionId: sessionId,
+          },
+        });
+        return ok(`Posted to #${slug} (${message.id}).`);
       }
 
       default:

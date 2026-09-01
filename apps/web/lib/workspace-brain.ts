@@ -941,7 +941,7 @@ export async function buildAgentBriefing(
       const goal = brief.goal.trim() || "(no goal posted yet)";
       const step = brief.currentStep.trim();
       lines.push(
-        `- ${brief.ownerName}'s agent on \`${brief.worktreeName}\` [${brief.status}] — ${goal}${
+        `- ${brief.ownerName}'s agent on \`${brief.worktreeName}\` [${brief.status}] (session ${brief.sessionId}) — ${goal}${
           step ? ` · currently: ${step}` : ""
         }${
           brief.filesLikelyToTouch.length
@@ -963,11 +963,14 @@ export async function buildAgentBriefing(
           ? overlap.rightSessionId
           : overlap.leftSessionId;
       lines.push(
-        `- vs ${nameBySession.get(otherId) ?? "another agent"} (${overlap.kind.replace(/_/g, " ")}, score ${overlap.score}): ${overlap.rationale}`,
+        `- vs ${nameBySession.get(otherId) ?? "another agent"} (session ${otherId}) (${overlap.kind.replace(/_/g, " ")}, score ${overlap.score}): ${overlap.rationale}`,
       );
     }
+    // The session ids above are what makes this instruction followable:
+    // `request_claim_coordination` has to be addressed to one, and an agent
+    // reading only this briefing has no other way to learn it.
     lines.push(
-      "Coordinate before you proceed: use request_claim_coordination, post_team_chat, or narrow your scope. This is a warning, not a block.",
+      "Coordinate before you proceed: request_claim_coordination addressed to the session id above, post_team_chat, or narrow your scope. This is a warning, not a block.",
     );
   }
 
