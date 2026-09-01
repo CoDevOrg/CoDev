@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "fluid": true,
+  "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-ignore-build.sh\"",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 300
