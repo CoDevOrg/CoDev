@@ -399,9 +399,11 @@ pub struct IdeStartRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub member_id: Option<String>,
     /// Coordination MCP endpoint for this workspace and a workspace-scoped
-    /// bearer token. When both are present the host seeds an `mcpServers`
-    /// entry into the per-workspace `~/.claude.json`, so every Claude Code
-    /// agent the workspace launches can reach the workspace brain and
+    /// bearer token. When both are present the host registers the server with
+    /// every agent CLI the workspace can launch — an `mcpServers` entry in
+    /// `~/.claude.json` for Claude Code, and an
+    /// `[mcp_servers.codev-coordination]` table in each Codex home's
+    /// `config.toml` — so every agent reaches the same workspace brain and
     /// path-claim system. Both or neither.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coordination_mcp_url: Option<String>,

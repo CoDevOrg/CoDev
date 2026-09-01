@@ -37,6 +37,7 @@ use tokio::{
     sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock},
     time::timeout,
 };
+use toml_edit::{DocumentMut, Item, Table, value as toml_value};
 use tracing::{info, warn};
 
 use crate::model::{IdeCloneRequest, IdeSession, IdeStartRequest, Result, RuntimeError};
@@ -226,6 +227,18 @@ impl OrcaBackend {
             request.coordination_mcp_token.as_deref(),
         )
         .await?;
+        // The Codex CLI's default home, used by every member who has not
+        // linked a hosted Codex subscription of their own.
+        if let Some(url) = request.coordination_mcp_url.as_deref()
+            && request.coordination_mcp_token.is_some()
+        {
+            seed_codex_coordination_mcp(
+                &PathBuf::from(format!("/home/{linux_user}/.codex")),
+                url,
+                &linux_user,
+            )
+            .await?;
+        }
         // Also file them per-member, so the member who starts the session gets
         // the same per-subscription treatment as everyone who joins later.
         if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
@@ -640,10 +653,12 @@ fn member_id_pattern() -> &'static Regex {
 }
 
 /// The environment every CLI agent this member launches is spawned with,
-/// serialized to their `env.json`. Each key is the sign-in the matching CLI
+/// serialized to their `env.json`. Most keys are the sign-in the matching CLI
 /// would otherwise prompt for interactively — a prompt the native-chat
 /// surface cannot answer, so a missing key there is the whole "agent produces
-/// nothing" failure.
+/// nothing" failure. `CODEV_COORDINATION_TOKEN` is the exception: it is not a
+/// sign-in but the bearer token the Codex CLI's seeded MCP entry points at by
+/// name.
 ///
 /// `codex_home` is `Some` once the caller has materialized a hosted Codex
 /// subscription's config dir; its presence also suppresses the plain
@@ -706,6 +721,17 @@ fn member_agent_env_map(
         );
     }
 
+    // The Codex CLI's `config.toml` names this variable rather than holding
+    // the token, so the seeded `[mcp_servers.codev-coordination]` entry is
+    // inert until the value arrives here. It is workspace-scoped, not a
+    // personal credential, so every member's agents get the same one.
+    if let Some(token) = &request.coordination_mcp_token {
+        env.insert(
+            CODEX_COORDINATION_TOKEN_ENV.to_string(),
+            Value::String(token.clone()),
+        );
+    }
+
     env
 }
 
@@ -754,6 +780,13 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
         fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(RuntimeError::internal)?;
+        // This member's agents run with CODEX_HOME pointed here, so the
+        // per-workspace `~/.codex/config.toml` is never read for them.
+        if let Some(url) = request.coordination_mcp_url.as_deref()
+            && request.coordination_mcp_token.is_some()
+        {
+            seed_codex_coordination_mcp(&home, url, linux_user).await?;
+        }
         codex_home = Some(home);
     }
 
@@ -779,9 +812,12 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
 
     let env_path = member_dir.join("env.json");
     if env.is_empty() {
-        // This member has nothing linked. Remove any bundle from a previous
-        // link so a revoked credential stops being handed to their agents,
-        // rather than leaving the last one that worked in place.
+        // This member has nothing linked and the workspace has no
+        // coordination token. Remove any bundle from a previous link so a
+        // revoked credential stops being handed to their agents, rather than
+        // leaving the last one that worked in place. (A revoked credential is
+        // dropped by the rewrite below too — the map is rebuilt from the
+        // request every start, never merged onto the old file.)
         match fs::remove_file(&env_path).await {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -913,6 +949,19 @@ fn claude_config_with_onboarding_skipped(existing: Option<Value>, project_root: 
     config
 }
 
+/// Name the coordination MCP server is registered under in every agent CLI's
+/// own config. Shared so the Claude and Codex spellings can never drift.
+const COORDINATION_MCP_SERVER: &str = "codev-coordination";
+
+/// Environment variable the Codex CLI reads the coordination MCP bearer token
+/// from. Unlike Claude Code — whose `~/.claude.json` holds the literal
+/// `Authorization` header — a Codex streamable-HTTP MCP server takes
+/// `bearer_token_env_var`, the *name* of a variable, never the token itself
+/// (verified against `codex mcp add --url --bearer-token-env-var` on the
+/// pinned CLI). So the token travels to the agent through the launching
+/// member's `env.json` instead, and `config.toml` only names it.
+const CODEX_COORDINATION_TOKEN_ENV: &str = "CODEV_COORDINATION_TOKEN";
+
 /// Adds (or refreshes) the `codev-coordination` HTTP MCP server under
 /// `mcpServers` so every Claude Code agent the workspace launches can reach the
 /// workspace brain and path-claim system. The entry is forced — the URL and
@@ -927,7 +976,7 @@ fn merge_coordination_mcp_server(config: &mut Value, url: &str, token: &str) {
         .or_insert_with(|| serde_json::json!({}));
     if let Some(servers) = servers.as_object_mut() {
         servers.insert(
-            "codev-coordination".to_string(),
+            COORDINATION_MCP_SERVER.to_string(),
             serde_json::json!({
                 "type": "http",
                 "url": url,
@@ -935,6 +984,77 @@ fn merge_coordination_mcp_server(config: &mut Value, url: &str, token: &str) {
             }),
         );
     }
+}
+
+/// The Codex counterpart of `merge_coordination_mcp_server`: renders a
+/// `config.toml` carrying `[mcp_servers.codev-coordination]` as a
+/// streamable-HTTP server, merged onto whatever the member already had.
+///
+/// Without this a Codex agent is the only agent in the workspace that cannot
+/// see the brain or the path claims — it would keep editing files other agents
+/// have claimed, silently, while every Claude agent coordinates around it.
+///
+/// `existing` that does not parse as TOML is treated as "nothing to merge
+/// onto" rather than an error, matching `read_optional_json_object`: a config
+/// a member has corrupted must not stop the workspace from starting. Only our
+/// own entry is written; every other server, key, and comment survives.
+fn codex_config_with_coordination_mcp(existing: Option<&str>, url: &str) -> String {
+    let mut doc = existing
+        .and_then(|text| text.parse::<DocumentMut>().ok())
+        .unwrap_or_default();
+
+    let servers = doc
+        .entry("mcp_servers")
+        .or_insert_with(|| Item::Table(Table::new()));
+    let Some(servers) = servers.as_table_mut() else {
+        return doc.to_string();
+    };
+    // `[mcp_servers]` itself carries no keys of its own once every entry is a
+    // server table, so leave the header out and let each server render as
+    // `[mcp_servers.<name>]` — the shape the Codex CLI writes itself. A
+    // member who put a bare key directly under `[mcp_servers]` keeps their
+    // header, since dropping it would strip that key out of the table.
+    if servers.iter().all(|(_, item)| item.is_table_like()) {
+        servers.set_implicit(true);
+    }
+
+    // Forced whole, not merged key-by-key: the entry is ours, the URL and
+    // token are reissued on every IDE start, and a leftover `command` from an
+    // earlier stdio-shaped entry alongside a `url` is not a valid server.
+    let mut server = Table::new();
+    server.insert("url", toml_value(url));
+    server.insert(
+        "bearer_token_env_var",
+        toml_value(CODEX_COORDINATION_TOKEN_ENV),
+    );
+    servers.insert(COORDINATION_MCP_SERVER, Item::Table(server));
+
+    doc.to_string()
+}
+
+/// Seeds `config.toml` in one Codex home so the CLI launched from it reaches
+/// the workspace's coordination MCP. Called for both homes Codex can resolve:
+/// the per-workspace `~/.codex` (the default) and a member's own
+/// `CODEX_HOME` under `~/.codev/agents/<id>/codex` (a linked hosted
+/// subscription), since only one of the two is ever read for a given agent.
+async fn seed_codex_coordination_mcp(codex_home: &Path, url: &str, user: &str) -> Result<()> {
+    fs::create_dir_all(codex_home)
+        .await
+        .map_err(RuntimeError::internal)?;
+    let config_path = codex_home.join("config.toml");
+    let existing = match fs::read_to_string(&config_path).await {
+        Ok(text) => Some(text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(RuntimeError::internal(error)),
+    };
+    let rendered = codex_config_with_coordination_mcp(existing.as_deref(), url);
+    fs::write(&config_path, rendered)
+        .await
+        .map_err(RuntimeError::internal)?;
+    fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(&config_path, user).await
 }
 
 /// Merges CoDev's default theme onto an existing `~/.claude/settings.json`.
@@ -1191,10 +1311,10 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
-        claude_settings_with_theme, linux_user_for, linux_user_process_command, member_agent_dir,
-        member_agent_env_map, member_id_pattern, merge_coordination_mcp_server,
-        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, shell_quote,
-        token_pattern,
+        claude_settings_with_theme, codex_config_with_coordination_mcp, linux_user_for,
+        linux_user_process_command, member_agent_dir, member_agent_env_map, member_id_pattern,
+        merge_coordination_mcp_server, orca_serve_command_line, orca_serve_sudo_command,
+        repository_pattern, shell_quote, token_pattern,
     };
     use crate::model::IdeStartRequest;
     use serde_json::json;
@@ -1357,6 +1477,86 @@ mod tests {
         let mut config = json!("not an object");
         merge_coordination_mcp_server(&mut config, "https://x", "y");
         assert_eq!(config, json!("not an object"));
+    }
+
+    /// The exact TOML the pinned Codex CLI writes for a streamable-HTTP MCP
+    /// server (captured from `codex mcp add <name> --url <url>
+    /// --bearer-token-env-var <var>`). Codex has no way to hold a literal
+    /// bearer token, so the entry names an env var and nothing else.
+    #[test]
+    fn seeds_a_codex_coordination_mcp_entry_when_there_is_no_config() {
+        let rendered = codex_config_with_coordination_mcp(
+            None,
+            "https://www.trycodev.com/api/workspaces/w/mcp/coordination",
+        );
+        assert_eq!(
+            rendered,
+            "[mcp_servers.codev-coordination]\n\
+             url = \"https://www.trycodev.com/api/workspaces/w/mcp/coordination\"\n\
+             bearer_token_env_var = \"CODEV_COORDINATION_TOKEN\"\n"
+        );
+    }
+
+    #[test]
+    fn keeps_a_members_own_codex_config_and_other_mcp_servers() {
+        let existing = "model = \"gpt-5\"\n\
+                        \n\
+                        # the member's own server\n\
+                        [mcp_servers.member-thing]\n\
+                        command = \"x\"\n";
+        let rendered = codex_config_with_coordination_mcp(Some(existing), "https://x/mcp");
+
+        assert!(rendered.contains("model = \"gpt-5\""));
+        assert!(rendered.contains("[mcp_servers.member-thing]"));
+        assert!(rendered.contains("command = \"x\""));
+        // toml_edit keeps comments, so a member's own file is not flattened.
+        assert!(rendered.contains("# the member's own server"));
+        assert!(rendered.contains("[mcp_servers.codev-coordination]"));
+        assert!(rendered.contains("url = \"https://x/mcp\""));
+    }
+
+    /// The URL and token are reissued on every IDE start, so a stale entry —
+    /// including one left in the older stdio shape — is replaced outright
+    /// rather than merged key-by-key. A `command` surviving next to a `url`
+    /// would not be a valid server at all.
+    #[test]
+    fn replaces_a_stale_codex_coordination_entry_whole() {
+        let existing = "[mcp_servers.codev-coordination]\n\
+                        command = \"old-stdio-binary\"\n\
+                        url = \"https://old/mcp\"\n";
+        let rendered = codex_config_with_coordination_mcp(Some(existing), "https://new/mcp");
+
+        assert!(!rendered.contains("old-stdio-binary"));
+        assert!(!rendered.contains("https://old/mcp"));
+        assert!(rendered.contains("url = \"https://new/mcp\""));
+    }
+
+    /// A config the member has corrupted must not stop the workspace opening,
+    /// exactly like `read_optional_json_object` for `~/.claude.json`.
+    #[test]
+    fn treats_an_unparseable_codex_config_as_nothing_to_merge_onto() {
+        let rendered =
+            codex_config_with_coordination_mcp(Some("this is not = = toml"), "https://x");
+        assert!(rendered.contains("[mcp_servers.codev-coordination]"));
+        assert!(!rendered.contains("this is not"));
+    }
+
+    /// Codex reads the token from the environment, never from `config.toml`,
+    /// so the seeded entry is inert until this key reaches the agent's PTY.
+    #[test]
+    fn carries_the_coordination_token_in_the_member_agent_env() {
+        let request = ide_start_request(json!({
+            "coordinationMcpUrl": "https://www.trycodev.com/api/workspaces/w/mcp/coordination",
+            "coordinationMcpToken": "tok.sig",
+        }));
+        let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["CODEV_COORDINATION_TOKEN"], json!("tok.sig"));
+
+        // A workspace with no coordination token seeds no entry either, so
+        // the variable must not be invented.
+        let request = ide_start_request(json!({}));
+        let env = member_agent_env_map(&request, None, None);
+        assert!(!env.contains_key("CODEV_COORDINATION_TOKEN"));
     }
 
     #[test]

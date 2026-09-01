@@ -360,8 +360,10 @@ export interface StartIdeInput {
   memberId?: string;
   /**
    * Coordination MCP endpoint + a workspace-scoped bearer token. The host
-   * seeds them into the workspace's `~/.claude.json` so every agent CLI can
-   * reach the workspace brain / path-claim system. Both or neither.
+   * seeds them into every agent CLI's own config — `~/.claude.json` for
+   * Claude Code, `config.toml` for Codex — so whichever agent a member
+   * launches reaches the same workspace brain / path-claim system. Both or
+   * neither.
    */
   coordinationMcpUrl?: string;
   coordinationMcpToken?: string;
