@@ -452,10 +452,15 @@ export async function callCoordinationTool(
           return ok(`Claim granted.\n${pretty(claim)}`);
         } catch (error) {
           if (error instanceof CoordinationConflictError) {
+            // Order matters, and it is not cosmetic: `request_claim_coordination`
+            // has to reference a claim *you* own, and this call created none —
+            // it threw before inserting. An agent told to negotiate first would
+            // have no claim id to negotiate with. Taking the claim via
+            // `contest_path` is what makes negotiating possible at all.
             return ok(
               `Blocked: another live agent holds an overlapping claim${
                 error.claimId ? ` (${error.claimId})` : ""
-              }. Check their brief with situational_awareness or list_claims, then either wait, take a different path, ask them to negotiate with request_claim_coordination, or contest_path if their claim is stale or it is genuinely the same work.`,
+              }. Check their brief with situational_awareness or list_claims, then either wait or take a different path. If it is genuinely the same work or their claim is stale, contest_path takes it and marks it contested — and only then can you request_claim_coordination to negotiate, since that names a claim you hold.`,
             );
           }
           throw error;
@@ -535,7 +540,7 @@ export async function callCoordinationTool(
         for (const key of ["toSessionId", "claimId", "path", "intent"]) {
           if (typeof args[key] !== "string" || !(args[key] as string).trim()) {
             return fail(
-              "request_claim_coordination requires toSessionId, claimId, path and intent. Get the other agent's session id from situational_awareness or list_claims, and use one of your own live claims.",
+              "request_claim_coordination requires toSessionId, claimId, path and intent. Get the other agent's session id from situational_awareness or list_claims. `claimId` must be a claim you hold: if claim_path just blocked you, you do not have one yet — contest_path first, then negotiate about the claim it gives you.",
             );
           }
         }

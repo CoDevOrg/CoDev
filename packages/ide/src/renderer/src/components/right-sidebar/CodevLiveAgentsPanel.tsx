@@ -222,7 +222,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       const snapshot = await requestCodevBridge<MissionControlCoordination>('coordination.list')
       setCoordination({
         claims: snapshot?.claims ?? [],
-        contests: snapshot?.contests ?? []
+        contests: snapshot?.contests ?? [],
+        overlaps: snapshot?.overlaps ?? []
       })
     } catch {
       // Keep the last snapshot rather than blanking the holds on one bad poll;

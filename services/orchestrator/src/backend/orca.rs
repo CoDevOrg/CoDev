@@ -1054,7 +1054,17 @@ async fn seed_codex_coordination_mcp(codex_home: &Path, url: &str, user: &str) -
     fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600))
         .await
         .map_err(RuntimeError::internal)?;
-    chown_recursive(&config_path, user).await
+    // The *directory*, not just the file. The orchestrator runs as root, so a
+    // `~/.codex` this call created is root-owned 0755 until it is handed over,
+    // and Codex — running as the workspace user — would read `config.toml`
+    // fine but fail every write it makes beside it (`history.jsonl`,
+    // `sessions/`, `log/`). `write_codex_credential` already does this for the
+    // subscription case; without it here, the case with no linked
+    // subscription creates the directory and never hands it over.
+    fs::set_permissions(codex_home, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(codex_home, user).await
 }
 
 /// Merges CoDev's default theme onto an existing `~/.claude/settings.json`.

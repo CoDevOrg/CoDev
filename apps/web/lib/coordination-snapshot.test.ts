@@ -73,6 +73,125 @@ describe("toCoordinationSnapshot", () => {
     expect(snapshot.contests).toEqual([]);
   });
 
+  /**
+   * The write path marks claims contested with `claimPatternsOverlap`, so a
+   * `dir/**` glob and a file inside it are a real, recorded collision. Grouping
+   * contests by exact path string hid exactly those.
+   */
+  it("reports a glob colliding with a file beneath it", () => {
+    const snapshot = toCoordinationSnapshot({
+      sessions: [
+        session({ id: "s1", name: "alice-agent" }),
+        session({ id: "s2", name: "bob-agent" }),
+      ],
+      claims: [
+        {
+          id: "c1",
+          sessionId: "s1",
+          pathGlob: "apps/web/**",
+          intent: "sweeping refactor",
+          status: "contested",
+          expiresAt: EXPIRES,
+        },
+        {
+          id: "c2",
+          sessionId: "s2",
+          pathGlob: "apps/web/lib/auth.ts",
+          intent: "one file",
+          status: "contested",
+          expiresAt: EXPIRES,
+        },
+      ],
+      overlaps: [],
+    });
+
+    expect(snapshot.contests).toHaveLength(1);
+    expect(snapshot.contests[0]?.paths).toEqual([
+      "apps/web/**",
+      "apps/web/lib/auth.ts",
+    ]);
+    expect(
+      snapshot.contests[0]?.holders.map((holder) => [
+        holder.agentLabel,
+        holder.paths,
+      ]),
+    ).toEqual([
+      ["alice-agent", ["apps/web/**"]],
+      ["bob-agent", ["apps/web/lib/auth.ts"]],
+    ]);
+  });
+
+  /** A glob pulls in two files that do not overlap each other; all three
+   *  sessions are one collision, not two. */
+  it("groups a collision transitively through the widest claim", () => {
+    const snapshot = toCoordinationSnapshot({
+      sessions: [
+        session({ id: "s1", name: "a" }),
+        session({ id: "s2", name: "b" }),
+        session({ id: "s3", name: "c" }),
+      ],
+      claims: [
+        {
+          id: "c1",
+          sessionId: "s1",
+          pathGlob: "apps/**",
+          intent: "wide",
+          status: "contested",
+          expiresAt: EXPIRES,
+        },
+        {
+          id: "c2",
+          sessionId: "s2",
+          pathGlob: "apps/web/a.ts",
+          intent: "narrow",
+          status: "contested",
+          expiresAt: EXPIRES,
+        },
+        {
+          id: "c3",
+          sessionId: "s3",
+          pathGlob: "apps/web/b.ts",
+          intent: "narrow",
+          status: "contested",
+          expiresAt: EXPIRES,
+        },
+      ],
+      overlaps: [],
+    });
+
+    expect(snapshot.contests).toHaveLength(1);
+    expect(snapshot.contests[0]?.holders).toHaveLength(3);
+  });
+
+  it("leaves unrelated claims out of each other's collisions", () => {
+    const snapshot = toCoordinationSnapshot({
+      sessions: [
+        session({ id: "s1", name: "a" }),
+        session({ id: "s2", name: "b" }),
+      ],
+      claims: [
+        {
+          id: "c1",
+          sessionId: "s1",
+          pathGlob: "apps/web/**",
+          intent: "web",
+          status: "active",
+          expiresAt: EXPIRES,
+        },
+        {
+          id: "c2",
+          sessionId: "s2",
+          pathGlob: "services/orchestrator/src/main.rs",
+          intent: "rust",
+          status: "active",
+          expiresAt: EXPIRES,
+        },
+      ],
+      overlaps: [],
+    });
+    expect(snapshot.contests).toEqual([]);
+  });
+
   it("reports a contest only when two different sessions hold one path", () => {
     const snapshot = toCoordinationSnapshot({
       sessions: [
@@ -102,9 +221,19 @@ describe("toCoordinationSnapshot", () => {
 
     expect(snapshot.contests).toEqual([
       {
-        path: "apps/web/lib/auth.ts",
-        sessionIds: ["s1", "s2"],
-        agentLabels: ["claude · codev/alice", "codex · codev/bob"],
+        paths: ["apps/web/lib/auth.ts"],
+        holders: [
+          {
+            sessionId: "s1",
+            agentLabel: "claude · codev/alice",
+            paths: ["apps/web/lib/auth.ts"],
+          },
+          {
+            sessionId: "s2",
+            agentLabel: "codex · codev/bob",
+            paths: ["apps/web/lib/auth.ts"],
+          },
+        ],
       },
     ]);
   });

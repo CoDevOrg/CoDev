@@ -6,6 +6,7 @@ import {
   distinctLocalAgentEntries,
   mergeMissionControlAgents,
   missionControlContestNotice,
+  missionControlOverlapNotice,
   missionControlPhaseFromStatus,
   sortMissionControlAgents,
   type MissionControlAgent,
@@ -196,7 +197,11 @@ describe('CodevMissionControlView', () => {
 function coordination(
   overrides: Partial<MissionControlCoordination> = {}
 ): MissionControlCoordination {
-  return { claims: [], contests: [], ...overrides }
+  return { claims: [], contests: [], overlaps: [], ...overrides }
+}
+
+function holder(agentLabel: string, ...paths: string[]) {
+  return { sessionId: agentLabel, agentLabel, paths }
 }
 
 describe('attachMissionControlHolds', () => {
@@ -280,15 +285,86 @@ describe('missionControlContestNotice', () => {
       coordination({
         contests: [
           {
-            path: 'apps/web/lib/auth.ts',
-            sessionIds: ['a', 'b'],
-            agentLabels: ['claude · codev/alice', 'codex · codev/bob']
+            paths: ['apps/web/lib/auth.ts'],
+            holders: [
+              holder('claude · codev/alice', 'apps/web/lib/auth.ts'),
+              holder('codex · codev/bob', 'apps/web/lib/auth.ts')
+            ]
           }
         ]
       })
     )
     expect(notice).toContain('claude · codev/alice and codex · codev/bob')
     expect(notice).toContain('apps/web/lib/auth.ts')
+  })
+
+  /**
+   * A claim can be a `dir/**` glob, so the two sides of a collision are often
+   * different strings. Naming only one of them would describe a collision the
+   * reader cannot locate.
+   */
+  it('names both patterns when a glob collides with a file inside it', () => {
+    const notice = missionControlContestNotice(
+      coordination({
+        contests: [
+          {
+            paths: ['apps/web/**', 'apps/web/lib/auth.ts'],
+            holders: [
+              holder('alice-agent', 'apps/web/**'),
+              holder('bob-agent', 'apps/web/lib/auth.ts')
+            ]
+          }
+        ]
+      })
+    )
+    expect(notice).toContain('alice-agent holds apps/web/**')
+    expect(notice).toContain('bob-agent holds apps/web/lib/auth.ts')
+    expect(notice).not.toContain('both hold')
+  })
+
+  it('does not say "both" when three agents hold the path', () => {
+    const notice = missionControlContestNotice(
+      coordination({
+        contests: [
+          {
+            paths: ['a.ts'],
+            holders: [holder('one', 'a.ts'), holder('two', 'a.ts'), holder('three', 'a.ts')]
+          }
+        ]
+      })
+    )
+    expect(notice).toContain('3 agents')
+    expect(notice).not.toContain('both')
+  })
+})
+
+describe('missionControlOverlapNotice', () => {
+  it('says nothing when the brain has flagged no overlap', () => {
+    expect(missionControlOverlapNotice(coordination())).toBeNull()
+  })
+
+  /**
+   * The overlap warning fires before anyone claims a file. It used to be
+   * fetched every poll and thrown away, so a converging pair produced no
+   * banner, no chip, and no sign at all.
+   */
+  it('surfaces a converging pair the brain has flagged', () => {
+    const notice = missionControlOverlapNotice(
+      coordination({
+        overlaps: [
+          {
+            id: 'o1',
+            sessionIds: ['a', 'b'],
+            agentLabels: ['alice-agent', 'bob-agent'],
+            kind: 'same_files',
+            score: 82,
+            rationale: 'Both briefs name apps/web/lib/auth.ts.'
+          }
+        ]
+      })
+    )
+    expect(notice).toContain('alice-agent and bob-agent')
+    expect(notice).toContain('Both briefs name apps/web/lib/auth.ts.')
   })
 })
 
@@ -331,9 +407,11 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         coordination={coordination({
           contests: [
             {
-              path: 'apps/web/lib/auth.ts',
-              sessionIds: ['a', 'b'],
-              agentLabels: ['Alice agent', 'Bob agent']
+              paths: ['apps/web/lib/auth.ts'],
+              holders: [
+                holder('Alice agent', 'apps/web/lib/auth.ts'),
+                holder('Bob agent', 'apps/web/lib/auth.ts')
+              ]
             }
           ]
         })}

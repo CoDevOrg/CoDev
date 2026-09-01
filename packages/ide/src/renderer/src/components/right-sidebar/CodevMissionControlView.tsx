@@ -124,12 +124,29 @@ export type MissionControlCoordination = {
     path: string
     status: 'active' | 'contested'
   }[]
-  contests: { path: string; sessionIds: string[]; agentLabels: string[] }[]
+  /** Agents whose live claims cover the same files. Not keyed on one path: a
+   *  claim can be a `dir/**` glob, and `apps/web/**` collides with
+   *  `apps/web/lib/auth.ts`. */
+  contests: {
+    paths: string[]
+    holders: { sessionId: string; agentLabel: string; paths: string[] }[]
+  }[]
+  /** The brain's *pre*-collision warning: two agents whose posted plans are
+   *  converging, before either has claimed anything. */
+  overlaps: {
+    id: string
+    sessionIds: string[]
+    agentLabels: string[]
+    kind: string
+    score: number
+    rationale: string
+  }[]
 }
 
 export const EMPTY_MISSION_CONTROL_COORDINATION: MissionControlCoordination = {
   claims: [],
-  contests: []
+  contests: [],
+  overlaps: []
 }
 
 /**
@@ -165,19 +182,51 @@ export function attachMissionControlHolds(
 
 /**
  * The one line the panel is entitled to print about collisions. A contest is
- * two different live sessions holding the same path — a fact in `path_claims`,
- * not an inference from an agent's status text.
+ * two or more live sessions whose claims cover the same files — a fact in
+ * `path_claims`, not an inference from an agent's status text.
+ *
+ * Every branch counts what it is about to describe rather than assuming two.
+ * Saying "both" over three agents, or naming one path when the two claims are
+ * a glob and a file inside it, is the same unsupported assertion this banner
+ * was built to remove.
  */
 export function missionControlContestNotice(
   coordination: MissionControlCoordination
 ): string | null {
   const [first, ...rest] = coordination.contests
   if (!first) return null
-  const who = first.agentLabels.slice(0, 2).join(' and ')
-  if (rest.length === 0) {
-    return `${who} both hold ${first.path}. CoDev has the claim on record — the second write is contested, not silently overwritten.`
+  if (rest.length > 0) {
+    return `${coordination.contests.length} groups of agents hold overlapping claims, starting with ${first.paths.join(' / ')}.`
   }
-  return `${coordination.contests.length} paths are held by more than one agent, starting with ${first.path}.`
+  if (first.holders.length > 2) {
+    return `${first.holders.length} agents hold overlapping claims on ${first.paths.join(' / ')}. CoDev has every one on record — none of these writes overwrites another silently.`
+  }
+  const [one, other] = first.holders
+  if (!one || !other) return null
+  if (first.paths.length === 1) {
+    return `${one.agentLabel} and ${other.agentLabel} both hold ${first.paths[0]}. CoDev has the claim on record — the second write is contested, not silently overwritten.`
+  }
+  return `${one.agentLabel} holds ${one.paths.join(', ')} and ${other.agentLabel} holds ${other.paths.join(', ')}, which cover the same files. CoDev has both claims on record — neither write overwrites the other silently.`
+}
+
+/**
+ * The brain's overlap warning, which fires *before* anyone claims a file: two
+ * agents whose posted briefs are converging on the same work. It is a different
+ * fact from a contest — nothing is held yet — so it gets its own quieter line
+ * rather than being folded into the collision banner, and it is why
+ * `coordination.list` carries overlaps at all.
+ */
+export function missionControlOverlapNotice(
+  coordination: MissionControlCoordination
+): string | null {
+  const [first, ...rest] = coordination.overlaps
+  if (!first) return null
+  const who =
+    first.agentLabels.length >= 2
+      ? `${first.agentLabels[0]} and ${first.agentLabels[1]}`
+      : (first.agentLabels[0] ?? 'Two agents')
+  const more = rest.length > 0 ? ` (+${rest.length} more)` : ''
+  return `Heads up — ${who} look like they are converging on the same work: ${first.rationale}${more}`
 }
 
 export function sortMissionControlAgents(agents: MissionControlAgent[]): MissionControlAgent[] {
@@ -561,9 +610,9 @@ export function CodevMissionControlView({
   onPause: (key: string) => void
 }): JSX.Element {
   const open = agents.find((agent) => agent.key === openKey) ?? null
-  const contestNotice = missionControlContestNotice(
-    coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
-  )
+  const live = coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
+  const contestNotice = missionControlContestNotice(live)
+  const overlapNotice = missionControlOverlapNotice(live)
   const working = agents.filter((agent) => agent.phase === 'working').length
   const blocked = agents.filter((agent) => agent.phase === 'blocked').length
   const owners: Array<{ name: string; hue: number }> = []
@@ -612,7 +661,15 @@ export function CodevMissionControlView({
         <p className="codev-mc-alert" role="status">
           {contestNotice}
         </p>
-      ) : blocked > 0 ? (
+      ) : null}
+
+      {overlapNotice ? (
+        <p className="codev-mc-alert is-soft" role="status">
+          {overlapNotice}
+        </p>
+      ) : null}
+
+      {!contestNotice && !overlapNotice && blocked > 0 ? (
         <p className="codev-mc-alert is-soft" role="status">
           {blocked === 1 ? 'One agent is waiting on you.' : `${blocked} agents are waiting on you.`}
         </p>

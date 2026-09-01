@@ -10,6 +10,7 @@ import {
 import { schema } from "@codev/db";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 
+import { claimPatternsOverlap } from "./claim-patterns";
 import { getDatabase } from "./database";
 
 type Database = ReturnType<typeof getDatabase>;
@@ -28,23 +29,9 @@ export class CoordinationConflictError extends Error {
   }
 }
 
-export function claimPatternsOverlap(left: string, right: string) {
-  const leftDirectory = left.endsWith("/**");
-  const rightDirectory = right.endsWith("/**");
-  const leftPath = leftDirectory ? left.slice(0, -3) : left;
-  const rightPath = rightDirectory ? right.slice(0, -3) : right;
-  if (!leftDirectory && !rightDirectory) return leftPath === rightPath;
-  if (leftDirectory && rightDirectory) {
-    return (
-      leftPath === rightPath ||
-      leftPath.startsWith(`${rightPath}/`) ||
-      rightPath.startsWith(`${leftPath}/`)
-    );
-  }
-  const directory = leftDirectory ? leftPath : rightPath;
-  const exact = leftDirectory ? rightPath : leftPath;
-  return exact.startsWith(`${directory}/`);
-}
+// Re-exported so the existing callers here keep their import; the definition
+// moved to a database-free module the read path can share.
+export { claimPatternsOverlap };
 
 export function claimCoversPath(pattern: string, path: string) {
   return pattern.endsWith("/**")

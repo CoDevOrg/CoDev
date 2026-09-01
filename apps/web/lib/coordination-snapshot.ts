@@ -11,6 +11,8 @@
  * fixtures.
  */
 
+import { claimPatternsOverlap } from "./claim-patterns";
+
 export type CoordinationClaimSource = {
   id: string;
   sessionId: string;
@@ -65,12 +67,22 @@ export type CoordinationOverlap = {
   rationale: string;
 };
 
-/** One path more than one live agent is holding. This is the real collision,
- *  and the only thing the panel is entitled to call one. */
+/** Two or more live agents holding claims that cover the same files. This is
+ *  the real collision, and the only thing the panel is entitled to call one.
+ *
+ *  Not one path: a claim is an exact path *or* a `dir/**` glob, and the write
+ *  path marks `apps/web/**` and `apps/web/lib/auth.ts` contested against each
+ *  other. Keying a contest on a single path string would have hidden exactly
+ *  those. `holders` says who holds what, so the reader can name both sides. */
 export type CoordinationContest = {
-  path: string;
-  sessionIds: string[];
-  agentLabels: string[];
+  /** Every distinct pattern in the colliding group, in claim order. */
+  paths: string[];
+  holders: {
+    sessionId: string;
+    agentLabel: string;
+    /** The patterns this session holds inside this contest. */
+    paths: string[];
+  }[];
 };
 
 export type CoordinationSnapshot = {
@@ -106,6 +118,74 @@ export function coordinationAgentLabel(
   return provider ? `${provider} agent` : "An agent";
 }
 
+/**
+ * Group live claims into collisions, using the same `claimPatternsOverlap`
+ * predicate the write path uses to decide a claim is contested — so a pair the
+ * database recorded as contested can never read as uncontested here.
+ *
+ * Claims are only joined across *different* sessions: one session holding a
+ * path twice is not colliding with anybody. The grouping is transitive, so
+ * `apps/**` held by A pulls in both `apps/web/a.ts` (B) and `apps/web/b.ts`
+ * (C), which do not overlap each other but are all one collision around A.
+ */
+export function toCoordinationContests(
+  claims: CoordinationClaim[],
+): CoordinationContest[] {
+  const group = claims.map((_, index) => index);
+  const rootOf = (index: number): number => {
+    let current = index;
+    while (group[current] !== current) {
+      group[current] = group[group[current]!]!;
+      current = group[current]!;
+    }
+    return current;
+  };
+  for (let left = 0; left < claims.length; left += 1) {
+    for (let right = left + 1; right < claims.length; right += 1) {
+      const one = claims[left]!;
+      const other = claims[right]!;
+      if (one.sessionId === other.sessionId) continue;
+      if (!claimPatternsOverlap(one.path, other.path)) continue;
+      const rootLeft = rootOf(left);
+      const rootRight = rootOf(right);
+      if (rootLeft !== rootRight) group[rootRight] = rootLeft;
+    }
+  }
+
+  const grouped = new Map<number, CoordinationClaim[]>();
+  for (let index = 0; index < claims.length; index += 1) {
+    const root = rootOf(index);
+    grouped.set(root, [...(grouped.get(root) ?? []), claims[index]!]);
+  }
+
+  const contests: CoordinationContest[] = [];
+  for (const members of grouped.values()) {
+    const holders = new Map<string, { agentLabel: string; paths: string[] }>();
+    for (const claim of members) {
+      const holder = holders.get(claim.sessionId) ?? {
+        agentLabel: claim.agentLabel,
+        paths: [],
+      };
+      if (!holder.paths.includes(claim.path)) holder.paths.push(claim.path);
+      holders.set(claim.sessionId, holder);
+    }
+    // A single session's claims are a group of one holder — not a collision.
+    if (holders.size < 2) continue;
+    const paths: string[] = [];
+    for (const claim of members) {
+      if (!paths.includes(claim.path)) paths.push(claim.path);
+    }
+    contests.push({
+      paths,
+      holders: [...holders].map(([sessionId, holder]) => ({
+        sessionId,
+        ...holder,
+      })),
+    });
+  }
+  return contests;
+}
+
 export function toCoordinationSnapshot(input: {
   claims: CoordinationClaimSource[];
   sessions: CoordinationSessionSource[];
@@ -136,24 +216,7 @@ export function toCoordinationSnapshot(input: {
       };
     });
 
-  // A contest is two or more *different* sessions holding the same path. One
-  // session with two claims on a path is not colliding with anybody.
-  const byPath = new Map<string, CoordinationClaim[]>();
-  for (const claim of claims) {
-    byPath.set(claim.path, [...(byPath.get(claim.path) ?? []), claim]);
-  }
-  const contests: CoordinationContest[] = [];
-  for (const [path, group] of byPath) {
-    const sessionIds = [...new Set(group.map((claim) => claim.sessionId))];
-    if (sessionIds.length < 2) continue;
-    contests.push({
-      path,
-      sessionIds,
-      agentLabels: sessionIds.map((sessionId) =>
-        coordinationAgentLabel(bySession.get(sessionId)),
-      ),
-    });
-  }
+  const contests = toCoordinationContests(claims);
 
   const overlaps: CoordinationOverlap[] = input.overlaps.map((overlap) => ({
     id: overlap.id,
