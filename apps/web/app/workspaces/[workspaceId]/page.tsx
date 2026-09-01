@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { WorkspaceHome } from "@/components/workspace-home";
 import { permissionsForRole } from "@/lib/access";
+import { hasLinkedCursorCredential } from "@/lib/credentials";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember } from "@/lib/workspaces";
@@ -16,9 +17,10 @@ export default async function WorkspacePage({
 }) {
   const user = await requireUser();
   const { workspaceId } = await params;
-  const [workspace, providerSnapshot] = await Promise.all([
+  const [workspace, providerSnapshot, cursorAvailable] = await Promise.all([
     getWorkspaceForMember(workspaceId, user.id),
     loadProviderConnectionSnapshot(user),
+    hasLinkedCursorCredential(user.id, workspaceId),
   ]);
   if (!workspace) {
     notFound();
@@ -43,9 +45,7 @@ export default async function WorkspacePage({
     <WorkspaceHome
       availableProviders={availableProviders}
       canInvite={permissionsForRole(workspace.accessRole).invite}
-      hasRepository={Boolean(
-        workspace.repository && workspace.githubRepositoryId,
-      )}
+      cursorAvailable={cursorAvailable}
       repository={workspace.repository}
       workspaceId={workspace.id}
     />

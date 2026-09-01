@@ -32,6 +32,7 @@ function WebRoot(): React.JSX.Element {
   window.__CODEV_DEFAULT_AGENT__ = codevBootstrap?.defaultAgent
   window.__CODEV_MEMBER_ID__ = codevBootstrap?.memberId
   window.__CODEV_SETTINGS_ONLY__ = codevBootstrap?.settingsOnly === true
+  window.__CODEV_CURSOR_AVAILABLE__ = codevBootstrap?.cursorAvailable === true
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
   // the instant save path; mobile/legacy-unknown offers must be shown/probed.

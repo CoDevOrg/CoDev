@@ -15,6 +15,7 @@ vi.mock('@/store', () => ({
 }))
 
 import {
+  codevChatProviders,
   isCodevChatProvider,
   otherCodevChatProvider,
   switchCodevChatProvider
@@ -34,15 +35,23 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('isCodevChatProvider / otherCodevChatProvider', () => {
-  it('recognizes exactly claude and codex', () => {
-    expect(isCodevChatProvider('claude')).toBe(true)
-    expect(isCodevChatProvider('codex')).toBe(true)
-    expect(isCodevChatProvider('gemini')).toBe(false)
-    expect(isCodevChatProvider(null)).toBe(false)
+describe('codevChatProviders / isCodevChatProvider / otherCodevChatProvider', () => {
+  it('offers only claude and codex when no Cursor credential is linked', () => {
+    expect(codevChatProviders({})).toEqual(['claude', 'codex'])
+    expect(isCodevChatProvider('claude', {})).toBe(true)
+    expect(isCodevChatProvider('codex', {})).toBe(true)
+    expect(isCodevChatProvider('cursor', {})).toBe(false)
+    expect(isCodevChatProvider('gemini', {})).toBe(false)
+    expect(isCodevChatProvider(null, {})).toBe(false)
   })
 
-  it('toggles between the two providers', () => {
+  it('adds cursor once the member has a linked Cursor credential', () => {
+    const win = { __CODEV_CURSOR_AVAILABLE__: true }
+    expect(codevChatProviders(win)).toEqual(['claude', 'codex', 'cursor'])
+    expect(isCodevChatProvider('cursor', win)).toBe(true)
+  })
+
+  it('toggles between the two hosted providers', () => {
     expect(otherCodevChatProvider('claude')).toBe('codex')
     expect(otherCodevChatProvider('codex')).toBe('claude')
   })

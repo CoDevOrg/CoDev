@@ -11,7 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import {
-  CODEV_CHAT_PROVIDERS,
+  codevChatProviders,
   codevChatProviderSwitchEnabled,
   isCodevChatProvider,
   switchCodevChatProvider
@@ -71,7 +71,7 @@ function CodevChatProviderPickerInner({
             }
           }}
         >
-          {CODEV_CHAT_PROVIDERS.map((provider) => (
+          {codevChatProviders().map((provider) => (
             <DropdownMenuRadioItem key={provider} value={provider} disabled={isWorking}>
               {formatAgentTypeLabel(provider)}
             </DropdownMenuRadioItem>

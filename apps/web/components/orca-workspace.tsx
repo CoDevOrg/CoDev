@@ -237,6 +237,7 @@ export function buildOrcaIframeSource({
   defaultAgent,
   memberId,
   settingsOnly,
+  cursorAvailable,
 }: {
   webClientPath: string;
   pairingCode: string;
@@ -253,6 +254,9 @@ export function buildOrcaIframeSource({
   memberId?: string;
   /** Render the personal settings surface instead of the workspace IDE. */
   settingsOnly?: boolean;
+  /** Whether this member has a linked Cursor credential — gates offering it
+   *  in the IDE's in-chat provider switcher. */
+  cursorAvailable?: boolean;
 }) {
   const fragment = new URLSearchParams({
     pairing: pairingCode,
@@ -271,6 +275,9 @@ export function buildOrcaIframeSource({
   }
   if (settingsOnly) {
     fragment.set("codevSettingsOnly", "1");
+  }
+  if (cursorAvailable) {
+    fragment.set("codevCursorAvailable", "1");
   }
   return `${webClientPath}#${fragment.toString()}`;
 }
@@ -710,11 +717,15 @@ export function OrcaWorkspace({
   repository,
   canInvite,
   defaultAgent,
+  cursorAvailable,
 }: {
   workspaceId: string;
   repository: string | null;
   canInvite: boolean;
   defaultAgent?: OrcaDefaultAgent;
+  /** Whether this member has a linked Cursor credential — gates offering it
+   *  in the IDE's in-chat provider switcher. */
+  cursorAvailable?: boolean;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
     phase: "connecting",
@@ -956,6 +967,7 @@ export function OrcaWorkspace({
             ...(repository ? { projectName: repository } : {}),
             ...(defaultAgent ? { defaultAgent } : {}),
             ...(payload.memberId ? { memberId: payload.memberId } : {}),
+            ...(cursorAvailable ? { cursorAvailable } : {}),
           }),
           workspacePath,
         });
@@ -973,7 +985,7 @@ export function OrcaWorkspace({
         clearTimeout(retryTimer);
       }
     };
-  }, [workspaceId, repository, attempt, defaultAgent]);
+  }, [workspaceId, repository, attempt, defaultAgent, cursorAvailable]);
 
   if (connection.phase === "ready") {
     return (

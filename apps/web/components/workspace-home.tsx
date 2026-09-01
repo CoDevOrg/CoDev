@@ -1,9 +1,6 @@
 "use client";
 
-import { useState } from "react";
-
 import { OrcaWorkspace } from "@/components/orca-workspace";
-import { WorkspaceAgentChat } from "@/components/workspace-agent-chat";
 
 type ChatProvider = "openai" | "anthropic";
 
@@ -27,38 +24,30 @@ function defaultAgentForProviders(
 export function WorkspaceHome({
   workspaceId,
   repository,
-  hasRepository,
   availableProviders,
   canInvite,
+  cursorAvailable,
 }: {
   workspaceId: string;
   repository: string | null;
-  hasRepository: boolean;
   availableProviders: ChatProvider[];
   canInvite: boolean;
+  /** Whether this member has a linked Cursor credential — gates offering it
+   *  in the IDE's in-chat provider switcher. */
+  cursorAvailable: boolean;
 }) {
-  // Codex/Claude chat lives inside the IDE itself (Orca's native agent panes),
-  // so the IDE remains the workspace's primary surface.
-  const [view, setView] = useState<"chat" | "ide">("ide");
-
-  if (view === "ide") {
-    const defaultAgent = defaultAgentForProviders(availableProviders);
-    return (
-      <OrcaWorkspace
-        canInvite={canInvite}
-        repository={repository}
-        workspaceId={workspaceId}
-        {...(defaultAgent ? { defaultAgent } : {})}
-      />
-    );
-  }
-
+  // Codex/Claude/Cursor chat lives inside the IDE itself (Orca's native agent
+  // panes), so the IDE is the workspace's only surface. The old standalone
+  // WorkspaceAgentChat fallback page was retired: nothing has linked to it
+  // since the IDE became the default view.
+  const defaultAgent = defaultAgentForProviders(availableProviders);
   return (
-    <WorkspaceAgentChat
-      availableProviders={availableProviders}
-      hasRepository={hasRepository}
-      onOpenIde={() => setView("ide")}
+    <OrcaWorkspace
+      canInvite={canInvite}
+      cursorAvailable={cursorAvailable}
+      repository={repository}
       workspaceId={workspaceId}
+      {...(defaultAgent ? { defaultAgent } : {})}
     />
   );
 }

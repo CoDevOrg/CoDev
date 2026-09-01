@@ -384,6 +384,25 @@ export async function resolveCursorCliAuth(
   };
 }
 
+/**
+ * Whether this member (or the workspace) has any connected Cursor
+ * credential — an OAuth login or a pasted API key. A presence check only, no
+ * decryption: callers that need the secret itself use `resolveCursorCliAuth`
+ * or `resolveAgentCredential`. Used to decide whether the IDE's in-chat
+ * provider switcher may offer Cursor at all, since unlike Claude/Codex it has
+ * no host-injected fallback and would otherwise strand an unlinked member on
+ * cursor-agent's own sign-in wall.
+ */
+export async function hasLinkedCursorCredential(
+  userId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  const credential =
+    (await findCredential("USER", userId, "cursor")) ??
+    (await findCredential("WORKSPACE", workspaceId, "cursor"));
+  return credential != null;
+}
+
 export async function saveProviderCredential(input: {
   scopeType: ScopeType;
   scopeId: string;
