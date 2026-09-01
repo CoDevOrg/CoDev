@@ -48,7 +48,6 @@ export default async function HomePage() {
         </Link>
         <nav aria-label="Primary">
           <a href="#tour">How it works</a>
-          <Link href="/sign-in">Sign in</Link>
           <RequestAccessButton className="lp-cta lp-cta-small">
             Get early access
           </RequestAccessButton>
@@ -73,9 +72,6 @@ export default async function HomePage() {
           <RequestAccessButton className="lp-cta lp-cta-primary">
             Get early access
           </RequestAccessButton>
-          <Link className="lp-cta lp-cta-ghost" href="/sign-in">
-            I have an invite
-          </Link>
         </div>
         <ul className="lp-hero-stats">
           <li>
@@ -126,7 +122,8 @@ export default async function HomePage() {
           <span>CoDev</span>
         </Link>
         <p>People and agents, building in the same room.</p>
-        <nav aria-label="Legal">
+        <nav aria-label="Footer">
+          <Link href="/sign-in">Sign in</Link>
           <Link href="/legal/privacy">Privacy</Link>
           <Link href="/legal/retention">Data retention</Link>
         </nav>
