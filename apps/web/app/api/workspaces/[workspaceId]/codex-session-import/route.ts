@@ -32,6 +32,15 @@ const bodySchema = z.object({
  * validated against a strict UUID regex and digits pulled from a parsed
  * `Date`, never from unvalidated request text, so interpolating them into
  * the shell command is not an injection risk.
+ *
+ * `writeSandboxFile` requires its target's parent directory to already
+ * exist -- `resolve_for_write` canonicalizes it and fails otherwise -- it
+ * does not `mkdir -p` on the write's behalf. The staging directory has no
+ * other reason to exist in a fresh workspace, so this creates it via exec
+ * first. (Confirmed live: a workspace that had never used this import path
+ * failed the write with an ENOENT on the staging directory, which the
+ * orchestrator's generic non-2xx handling then relabeled "sandbox guest
+ * unavailable" -- a real bug in this route, not an infrastructure outage.)
  */
 export async function POST(
   request: Request,
@@ -56,6 +65,19 @@ export async function POST(
     const { directory, filename } = codexRolloutSessionPath(rollout);
 
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+
+    const mkdirStaging = await executeInSandbox(workspaceId, {
+      command: ["mkdir", "-p", ".codev-import/codex-sessions"],
+      timeoutSeconds: 30,
+    });
+    if (mkdirStaging.exitCode !== 0) {
+      return apiError(
+        new Error(
+          `Could not prepare the workspace host for the upload: ${mkdirStaging.output.slice(0, 500)}`,
+        ),
+        502,
+      );
+    }
 
     // A per-request staging name, not the session id, so a retried or
     // duplicate upload never collides with an earlier attempt still sitting
