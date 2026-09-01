@@ -32,8 +32,13 @@ export type ChatGptParseOptions = {
   includeToolOutput?: boolean;
 };
 
+export type ChatGptShareParseErrorCode = "invalid_page" | "unavailable";
+
 export class ChatGptShareParseError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code: ChatGptShareParseErrorCode = "invalid_page",
+  ) {
     super(message);
     this.name = "ChatGptShareParseError";
   }
@@ -472,7 +477,7 @@ function buildMessages(
   return messages;
 }
 
-function shareIdFromUrl(sourceUrl: string) {
+export function parseChatGptShareUrl(sourceUrl: string) {
   let url: URL;
   try {
     url = new URL(sourceUrl);
@@ -481,11 +486,16 @@ function shareIdFromUrl(sourceUrl: string) {
   }
   const host = url.hostname.toLowerCase();
   const segments = url.pathname.split("/").filter(Boolean);
+  const hasSupportedPath =
+    (segments.length === 2 && segments[0] === "share") ||
+    (segments.length === 3 && segments[0] === "share" && segments[1] === "e");
   if (
     url.protocol !== "https:" ||
+    (url.port !== "" && url.port !== "443") ||
+    url.username !== "" ||
+    url.password !== "" ||
     !["chatgpt.com", "chat.openai.com"].includes(host) ||
-    segments[0] !== "share" ||
-    !segments[1]
+    !hasSupportedPath
   ) {
     throw new ChatGptShareParseError(
       "The URL is not a supported public ChatGPT share link.",
@@ -497,7 +507,7 @@ function shareIdFromUrl(sourceUrl: string) {
       "The URL is not a supported public ChatGPT share link.",
     );
   }
-  return shareId;
+  return { shareId, url };
 }
 
 export function parseChatGptShareHtml(
@@ -507,7 +517,7 @@ export function parseChatGptShareHtml(
 ): ParsedChatGptShare {
   // Validate the caller-controlled URL before doing any potentially expensive
   // parsing, and use only the URL—not page data—as the external identifier.
-  const shareId = shareIdFromUrl(sourceUrl);
+  const { shareId } = parseChatGptShareUrl(sourceUrl);
   const resolvedOptions: Required<ChatGptParseOptions> = {
     includeReasoning: options.includeReasoning ?? false,
     includeSystem: options.includeSystem ?? false,
@@ -536,6 +546,16 @@ export function parseChatGptShareHtml(
   }
 
   if (!data) {
+    if (
+      /conversation (?:has been deleted|is unavailable|not found)|unable to load conversation|share_not_found/i.test(
+        html,
+      )
+    ) {
+      throw new ChatGptShareParseError(
+        "The ChatGPT shared conversation is no longer available.",
+        "unavailable",
+      );
+    }
     throw new ChatGptShareParseError(
       "No conversation payload was found in the ChatGPT share page.",
     );
