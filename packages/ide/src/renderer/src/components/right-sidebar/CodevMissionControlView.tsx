@@ -9,9 +9,13 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
  * the two real sources this stitches together:
  *
  *  - your own agent, from Orca's local `agentStatusByPaneKey`, updated the
- *    instant a token streams; and
+ *    instant a token streams;
  *  - every teammate's managed agent session, polled over the CoDev bridge
- *    (`workboard.list`), so the panel shows the whole room, not just this tab.
+ *    (`workboard.list`), so the panel shows the whole room, not just this tab;
+ *    and
+ *  - the workspace's live path claims and brain overlaps (`coordination.list`),
+ *    which is what the collision banner and the per-agent holds are actually
+ *    made of.
  *
  * Nothing here is simulated. "Step in" reveals the agent's worktree; "Steer"
  * and "Pause" call the same co-steer endpoints the workboard uses.
@@ -26,6 +30,13 @@ export type MissionControlPhase =
   | 'waiting'
   | 'done'
 
+/** One path this agent is holding, straight from `path_claims`. */
+export type MissionControlHold = {
+  claimId: string
+  path: string
+  status: 'active' | 'contested'
+}
+
 export type MissionControlAgent = {
   /** Stable identity: `local:<paneKey>` or `managed:<sessionId>`. */
   key: string
@@ -33,6 +44,10 @@ export type MissionControlAgent = {
   origin: 'you' | 'managed'
   sessionId: string | null
   worktreeId: string | null
+  /** The agent's git branch, when the renderer can resolve one. A CLI agent's
+   *  claims are filed against its branch, so this is how a chat-tab agent —
+   *  which has no CoDev session id here — is matched to what it holds. */
+  branch: string | null
   ownerName: string
   ownerHue: number
   providerLabel: string
@@ -47,6 +62,9 @@ export type MissionControlAgent = {
   /** `MM:SS` from the server, used when `startedAt` is unknown. */
   serverElapsed: string | null
   canSteer: boolean
+  /** Paths this agent currently holds. Empty until the coordination snapshot
+   *  arrives, and empty for an agent that has claimed nothing — never a guess. */
+  holds: MissionControlHold[]
 }
 
 export const MISSION_CONTROL_PHASE_LABEL: Record<MissionControlPhase, string> = {
@@ -93,6 +111,73 @@ export function missionControlPhaseFromStatus(status: string): MissionControlPha
   if (/(done|merged|complete|ready|closed)/.test(value)) return 'done'
   if (/(wait|idle|queued|paused|standby)/.test(value)) return 'waiting'
   return 'working'
+}
+
+/** The slice of `coordination.list` the panel renders. */
+export type MissionControlCoordination = {
+  claims: {
+    id: string
+    sessionId: string
+    worktreeId: string | null
+    branch: string | null
+    agentLabel: string
+    path: string
+    status: 'active' | 'contested'
+  }[]
+  contests: { path: string; sessionIds: string[]; agentLabels: string[] }[]
+}
+
+export const EMPTY_MISSION_CONTROL_COORDINATION: MissionControlCoordination = {
+  claims: [],
+  contests: []
+}
+
+/**
+ * Hang each agent's real claims off its row.
+ *
+ * A managed session is matched on its CoDev session id. A chat-tab agent has no
+ * session id in this panel, so it is matched on its worktree, then on its
+ * branch — which is the identity a CLI agent's `cli` session is keyed on when
+ * the coordination MCP creates it. Nothing is matched by name or guessed: an
+ * agent whose claims cannot be identified shows no holds rather than someone
+ * else's.
+ */
+export function attachMissionControlHolds(
+  agents: MissionControlAgent[],
+  coordination: MissionControlCoordination
+): MissionControlAgent[] {
+  if (coordination.claims.length === 0) return agents
+  return agents.map((agent) => {
+    const holds = coordination.claims
+      .filter((claim) => {
+        if (agent.sessionId && claim.sessionId === agent.sessionId) return true
+        if (agent.worktreeId && claim.worktreeId === agent.worktreeId) return true
+        return Boolean(agent.branch) && claim.branch === agent.branch
+      })
+      .map((claim) => ({
+        claimId: claim.id,
+        path: claim.path,
+        status: claim.status
+      }))
+    return holds.length > 0 ? { ...agent, holds } : agent
+  })
+}
+
+/**
+ * The one line the panel is entitled to print about collisions. A contest is
+ * two different live sessions holding the same path — a fact in `path_claims`,
+ * not an inference from an agent's status text.
+ */
+export function missionControlContestNotice(
+  coordination: MissionControlCoordination
+): string | null {
+  const [first, ...rest] = coordination.contests
+  if (!first) return null
+  const who = first.agentLabels.slice(0, 2).join(' and ')
+  if (rest.length === 0) {
+    return `${who} both hold ${first.path}. CoDev has the claim on record — the second write is contested, not silently overwritten.`
+  }
+  return `${coordination.contests.length} paths are held by more than one agent, starting with ${first.path}.`
 }
 
 export function sortMissionControlAgents(agents: MissionControlAgent[]): MissionControlAgent[] {
@@ -218,13 +303,7 @@ function Face({
   )
 }
 
-function PhasePill({
-  phase,
-  label
-}: {
-  phase: MissionControlPhase
-  label?: string
-}): JSX.Element {
+function PhasePill({ phase, label }: { phase: MissionControlPhase; label?: string }): JSX.Element {
   return (
     <span className={`codev-mc-phase is-${phase}`}>
       <i aria-hidden />
@@ -261,7 +340,11 @@ function AgentCard({
         onKeyDown={activate}
       >
         <div className="codev-mc-card-head">
-          <Face name={agent.ownerName} hue={agent.ownerHue} title={`Started by ${agent.ownerName}`} />
+          <Face
+            name={agent.ownerName}
+            hue={agent.ownerHue}
+            title={`Started by ${agent.ownerName}`}
+          />
           <div className="codev-mc-card-who">
             <span className="codev-mc-owner">{agent.ownerName}</span>
             <span className="codev-mc-sub">
@@ -278,6 +361,25 @@ function AgentCard({
           <i className="codev-mc-caret" aria-hidden />
           <span>{agent.activity}</span>
         </p>
+
+        {agent.holds.length > 0 ? (
+          <ul className="codev-mc-holds" aria-label="Paths this agent has claimed">
+            {agent.holds.map((hold) => (
+              <li
+                key={hold.claimId}
+                className={`codev-mc-hold is-${hold.status}`}
+                title={
+                  hold.status === 'contested'
+                    ? `${hold.path} — another agent is holding this too`
+                    : `${hold.path} — claimed by this agent`
+                }
+              >
+                <i aria-hidden />
+                <span>{hold.path}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <div className="codev-mc-cardfoot">
           <span className="codev-mc-runtime">{runtimeText(agent, now)}</span>
@@ -437,6 +539,7 @@ function AgentDrawer({
 
 export function CodevMissionControlView({
   agents,
+  coordination,
   now,
   openKey,
   steerBusy,
@@ -447,6 +550,7 @@ export function CodevMissionControlView({
   onPause
 }: {
   agents: MissionControlAgent[]
+  coordination?: MissionControlCoordination
   now: number
   openKey: string | null
   steerBusy: boolean
@@ -457,6 +561,9 @@ export function CodevMissionControlView({
   onPause: (key: string) => void
 }): JSX.Element {
   const open = agents.find((agent) => agent.key === openKey) ?? null
+  const contestNotice = missionControlContestNotice(
+    coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
+  )
   const working = agents.filter((agent) => agent.phase === 'working').length
   const blocked = agents.filter((agent) => agent.phase === 'blocked').length
   const owners: Array<{ name: string; hue: number }> = []
@@ -501,11 +608,13 @@ export function CodevMissionControlView({
         </div>
       ) : null}
 
-      {blocked > 0 ? (
+      {contestNotice ? (
         <p className="codev-mc-alert" role="status">
-          {blocked === 1
-            ? 'One agent is blocked on a file claim — CoDev is holding the write so two agents cannot collide.'
-            : `${blocked} agents are blocked on file claims.`}
+          {contestNotice}
+        </p>
+      ) : blocked > 0 ? (
+        <p className="codev-mc-alert is-soft" role="status">
+          {blocked === 1 ? 'One agent is waiting on you.' : `${blocked} agents are waiting on you.`}
         </p>
       ) : null}
 

@@ -37,6 +37,7 @@ export type CodevBridgeRequestMethod =
   | 'workboard.list'
   | 'workboard.create'
   | 'claims.list'
+  | 'coordination.list'
   | 'claims.create'
   | 'claims.reassign'
   | 'claims.cancel'
@@ -239,7 +240,9 @@ export function createCodevBridge(host: CodevBridgeHost): {
         pendingRequest.resolve(message.data.result)
         return
       }
-      pendingRequest.reject(new Error(message.data.error || 'CoDev could not complete this request.'))
+      pendingRequest.reject(
+        new Error(message.data.error || 'CoDev could not complete this request.')
+      )
       return
     }
     if (pongTimer) {
@@ -274,10 +277,15 @@ export function createCodevBridge(host: CodevBridgeHost): {
           : `req-${Date.now()}-${Math.random().toString(16).slice(2)}`
       const currentGeneration = generation
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          pending.delete(requestId)
-          reject(new Error('CoDev request timed out.'))
-        }, method === 'review.prepare' || method === 'review.advance' || method === 'review.merge' ? 60_000 : 15_000)
+        const timer = setTimeout(
+          () => {
+            pending.delete(requestId)
+            reject(new Error('CoDev request timed out.'))
+          },
+          method === 'review.prepare' || method === 'review.advance' || method === 'review.merge'
+            ? 60_000
+            : 15_000
+        )
         pending.set(requestId, { resolve, reject, timer })
         post({
           type: 'codev:bridge-request',
@@ -320,7 +328,9 @@ export function createCodevBridge(host: CodevBridgeHost): {
 
 let singleton: ReturnType<typeof createCodevBridge> | null = null
 
-function ensureCodevBridge(host: CodevBridgeHost = window as CodevBridgeHost): ReturnType<typeof createCodevBridge> {
+function ensureCodevBridge(
+  host: CodevBridgeHost = window as CodevBridgeHost
+): ReturnType<typeof createCodevBridge> {
   if (!singleton) {
     singleton = createCodevBridge(host)
   }

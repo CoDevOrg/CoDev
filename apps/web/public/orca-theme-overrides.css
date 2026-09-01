@@ -993,6 +993,65 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   color: #e8d5a8;
 }
 
+/* "Someone is waiting on you" is a nudge, not a collision. Only a real
+   contested claim gets the warm alert above. */
+.codev-mc-alert.is-soft {
+  border-color: rgba(237, 238, 240, 0.14);
+  background: rgba(237, 238, 240, 0.05);
+  color: rgba(237, 238, 240, 0.72);
+}
+
+/* The paths an agent is actually holding, from `path_claims`. */
+.codev-mc-holds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codev-mc-hold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(237, 238, 240, 0.1);
+  background: rgba(237, 238, 240, 0.05);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.78;
+}
+
+.codev-mc-hold > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.codev-mc-hold > i {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(126, 200, 156, 0.9);
+}
+
+.codev-mc-hold.is-contested {
+  border-color: rgba(224, 128, 92, 0.4);
+  background: rgba(224, 128, 92, 0.12);
+  color: #e8d5a8;
+  opacity: 1;
+}
+
+.codev-mc-hold.is-contested > i {
+  background: rgba(224, 128, 92, 0.95);
+}
+
 .codev-mc-list {
   display: flex;
   flex-direction: column;

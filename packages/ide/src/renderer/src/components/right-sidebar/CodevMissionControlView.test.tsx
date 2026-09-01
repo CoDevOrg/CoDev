@@ -1,12 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  attachMissionControlHolds,
   CodevMissionControlView,
   distinctLocalAgentEntries,
   mergeMissionControlAgents,
+  missionControlContestNotice,
   missionControlPhaseFromStatus,
   sortMissionControlAgents,
-  type MissionControlAgent
+  type MissionControlAgent,
+  type MissionControlCoordination
 } from './CodevMissionControlView'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
@@ -28,6 +31,8 @@ function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
     startedAt: null,
     serverElapsed: '01:20',
     canSteer: true,
+    branch: null,
+    holds: [],
     ...overrides
   }
 }
@@ -185,5 +190,183 @@ describe('CodevMissionControlView', () => {
       />
     )
     expect(html).toContain('No agents are running yet')
+  })
+})
+
+function coordination(
+  overrides: Partial<MissionControlCoordination> = {}
+): MissionControlCoordination {
+  return { claims: [], contests: [], ...overrides }
+}
+
+describe('attachMissionControlHolds', () => {
+  it('matches a managed agent on its session id', () => {
+    const [row] = attachMissionControlHolds(
+      [agent({ sessionId: 's1', worktreeId: 'w1', branch: null })],
+      coordination({
+        claims: [
+          {
+            id: 'c1',
+            sessionId: 's1',
+            worktreeId: null,
+            branch: null,
+            agentLabel: 'Wire the billing webhook',
+            path: 'app/api/webhooks/route.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    expect(row?.holds).toEqual([
+      { claimId: 'c1', path: 'app/api/webhooks/route.ts', status: 'active' }
+    ])
+  })
+
+  /**
+   * A chat-tab agent has no CoDev session id in this panel, so its branch is
+   * the only identity it shares with the `cli` session the coordination MCP
+   * created for it.
+   */
+  it('matches a chat-tab agent on its branch', () => {
+    const [row] = attachMissionControlHolds(
+      [agent({ origin: 'you', sessionId: null, worktreeId: null, branch: 'codev/fix-auth-1a2b' })],
+      coordination({
+        claims: [
+          {
+            id: 'c9',
+            sessionId: 'cli-1',
+            worktreeId: 'codev-worktree-1',
+            branch: 'codev/fix-auth-1a2b',
+            agentLabel: 'claude · codev/fix-auth-1a2b',
+            path: 'apps/web/lib/auth.ts',
+            status: 'contested'
+          }
+        ]
+      })
+    )
+    expect(row?.holds).toEqual([
+      { claimId: 'c9', path: 'apps/web/lib/auth.ts', status: 'contested' }
+    ])
+  })
+
+  it('never hands an agent a claim it cannot be matched to', () => {
+    const [row] = attachMissionControlHolds(
+      [agent({ sessionId: 's1', worktreeId: 'w1', branch: 'mine' })],
+      coordination({
+        claims: [
+          {
+            id: 'c2',
+            sessionId: 'someone-else',
+            worktreeId: 'w2',
+            branch: 'theirs',
+            agentLabel: 'Another agent',
+            path: 'packages/db/src/schema.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    expect(row?.holds).toEqual([])
+  })
+})
+
+describe('missionControlContestNotice', () => {
+  it('says nothing when no path is held twice', () => {
+    expect(missionControlContestNotice(coordination())).toBeNull()
+  })
+
+  it('names the two agents and the path they are both on', () => {
+    const notice = missionControlContestNotice(
+      coordination({
+        contests: [
+          {
+            path: 'apps/web/lib/auth.ts',
+            sessionIds: ['a', 'b'],
+            agentLabels: ['claude · codev/alice', 'codex · codev/bob']
+          }
+        ]
+      })
+    )
+    expect(notice).toContain('claude · codev/alice and codex · codev/bob')
+    expect(notice).toContain('apps/web/lib/auth.ts')
+  })
+})
+
+describe('CodevMissionControlView — collisions are read, not inferred', () => {
+  const noop = (): void => undefined
+
+  /**
+   * The panel used to derive "blocked on a file claim" from a regex over an
+   * agent's status text and then describe the claim mechanism to the user on
+   * that basis. A blocked agent with no claim behind it now gets the plain
+   * truth: it is waiting on a person.
+   */
+  it('does not describe a file claim for an agent that holds nothing', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ phase: 'blocked', holds: [] })]}
+        coordination={coordination()}
+        now={Date.now()}
+        openKey={null}
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+      />
+    )
+    expect(html).not.toContain('file claim')
+    expect(html).toContain('waiting on you')
+  })
+
+  it('reports a real contest from the claim rows', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[
+          agent({
+            holds: [{ claimId: 'c1', path: 'apps/web/lib/auth.ts', status: 'contested' }]
+          })
+        ]}
+        coordination={coordination({
+          contests: [
+            {
+              path: 'apps/web/lib/auth.ts',
+              sessionIds: ['a', 'b'],
+              agentLabels: ['Alice agent', 'Bob agent']
+            }
+          ]
+        })}
+        now={Date.now()}
+        openKey={null}
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+      />
+    )
+    expect(html).toContain('Alice agent and Bob agent')
+    expect(html).toContain('codev-mc-hold is-contested')
+    expect(html).toContain('apps/web/lib/auth.ts')
+  })
+
+  it('renders no holds list for an agent that has claimed nothing', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ holds: [] })]}
+        coordination={coordination()}
+        now={Date.now()}
+        openKey={null}
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+      />
+    )
+    expect(html).not.toContain('codev-mc-holds')
   })
 })

@@ -10,13 +10,17 @@ import {
 } from '../../web/codev-bridge'
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import {
+  attachMissionControlHolds,
   CodevMissionControlView,
   distinctLocalAgentEntries,
+  EMPTY_MISSION_CONTROL_COORDINATION,
   mergeMissionControlAgents,
   missionControlPhaseFromState,
   missionControlPhaseFromStatus,
-  type MissionControlAgent
+  type MissionControlAgent,
+  type MissionControlCoordination
 } from './CodevMissionControlView'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 /**
  * Mission Control container.
@@ -34,6 +38,11 @@ import {
  *  - `workboard.list` over the CoDev bridge — every teammate's managed agent
  *    session, polled on an interval, with real owner attribution and a
  *    session id that "Steer" and "Pause" act on.
+ *  - `coordination.list` over the same bridge — the workspace's live path
+ *    claims and brain overlaps. The panel used to decide an agent was "blocked
+ *    on a file claim" by regex over its status text and then describe the
+ *    claim mechanism to the user on that basis; these are the rows the agents
+ *    actually write.
  */
 
 const REFRESH_MS = 5_000
@@ -57,9 +66,7 @@ type WorkboardSnapshot = {
 }
 
 function isLiveState(value: unknown): boolean {
-  return (
-    typeof value === 'string' && (AGENT_STATUS_STATES as readonly string[]).includes(value)
-  )
+  return typeof value === 'string' && (AGENT_STATUS_STATES as readonly string[]).includes(value)
 }
 
 /** Stable per-name hue so a person keeps one colour across the panel. */
@@ -100,12 +107,16 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     typeof window === 'undefined' ? 'disconnected' : getCodevBridgeSnapshot().status
   )
   const [managed, setManaged] = useState<MissionControlAgent[]>([])
+  const [coordination, setCoordination] = useState<MissionControlCoordination>(
+    EMPTY_MISSION_CONTROL_COORDINATION
+  )
   const [viewerName, setViewerName] = useState('You')
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [steerBusy, setSteerBusy] = useState(false)
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
+  const worktreesByRepo = useAppStore(useShallow((state) => state.worktreesByRepo))
 
   useEffect(
     () =>
@@ -124,48 +135,53 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
 
     // One row per tab, not per worktree: every agent the user started is its
     // own agent even when several run the same provider in one worktree.
-    return distinctLocalAgentEntries(entries)
-      .map(([paneKey, entry]) => {
-        const label = providerLabel(String(entry.agentType ?? ''))
-        const phase = missionControlPhaseFromState(entry.state)
-        // The prompt is often blank for a native-chat turn, so fall back to the
-        // agent tab's own title (Orca derives it from the first prompt) before
-        // the generic label.
-        const title =
-          entry.prompt?.trim() || usableTaskTitle(entry.terminalTitle, label) || `${label} session`
-        // What it is doing *right now*: a live question, then the current tool
-        // call, then its last message, then the prompt, then a state default.
-        const toolLine = entry.toolName
-          ? `${entry.toolName}${entry.toolInput ? ` · ${entry.toolInput}` : ''}`
-          : null
-        const activity =
-          entry.interactivePrompt?.trim() ||
-          (phase === 'working' ? toolLine : null) ||
-          entry.lastAssistantMessage?.trim() ||
-          entry.prompt?.trim() ||
-          (phase === 'done'
-            ? 'Idle — send a message to continue.'
-            : phase === 'blocked'
-              ? 'Waiting on your input.'
-              : 'Waiting for the next instruction.')
-        return {
-          key: `local:${paneKey}`,
-          origin: 'you' as const,
-          sessionId: null,
-          worktreeId: entry.worktreeId ?? null,
-          ownerName: viewerName,
-          ownerHue: hueFor(viewerName || paneKey),
-          providerLabel: label,
-          model: entry.model ?? null,
-          phase,
-          title,
-          activity,
-          startedAt: entry.stateStartedAt,
-          serverElapsed: null,
-          canSteer: false
-        }
-      })
-  }, [statuses, viewerName])
+    return distinctLocalAgentEntries(entries).map(([paneKey, entry]) => {
+      const label = providerLabel(String(entry.agentType ?? ''))
+      const phase = missionControlPhaseFromState(entry.state)
+      // The prompt is often blank for a native-chat turn, so fall back to the
+      // agent tab's own title (Orca derives it from the first prompt) before
+      // the generic label.
+      const title =
+        entry.prompt?.trim() || usableTaskTitle(entry.terminalTitle, label) || `${label} session`
+      // What it is doing *right now*: a live question, then the current tool
+      // call, then its last message, then the prompt, then a state default.
+      const toolLine = entry.toolName
+        ? `${entry.toolName}${entry.toolInput ? ` · ${entry.toolInput}` : ''}`
+        : null
+      const activity =
+        entry.interactivePrompt?.trim() ||
+        (phase === 'working' ? toolLine : null) ||
+        entry.lastAssistantMessage?.trim() ||
+        entry.prompt?.trim() ||
+        (phase === 'done'
+          ? 'Idle — send a message to continue.'
+          : phase === 'blocked'
+            ? 'Waiting on your input.'
+            : 'Waiting for the next instruction.')
+      return {
+        key: `local:${paneKey}`,
+        origin: 'you' as const,
+        sessionId: null,
+        worktreeId: entry.worktreeId ?? null,
+        // A chat-tab agent has no CoDev session id here, so its branch is the
+        // only identity its `cli` coordination session shares with it.
+        branch: entry.worktreeId
+          ? (findWorktreeById(worktreesByRepo, entry.worktreeId)?.branch ?? null)
+          : null,
+        ownerName: viewerName,
+        ownerHue: hueFor(viewerName || paneKey),
+        providerLabel: label,
+        model: entry.model ?? null,
+        phase,
+        title,
+        activity,
+        startedAt: entry.stateStartedAt,
+        serverElapsed: null,
+        canSteer: false,
+        holds: []
+      }
+    })
+  }, [statuses, viewerName, worktreesByRepo])
 
   const refreshManaged = useCallback(async () => {
     if (bridgeStatus !== 'connected') return
@@ -180,6 +196,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           origin: 'managed',
           sessionId: slot.sessionId ?? null,
           worktreeId: slot.worktreeId ?? null,
+          branch: null,
           ownerName: slot.owner?.trim() || 'Teammate',
           ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
           providerLabel: providerLabel(String(slot.provider ?? '')),
@@ -189,7 +206,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           activity: slot.currentTask?.trim() || slot.status?.trim() || 'Working.',
           startedAt: null,
           serverElapsed: slot.elapsed?.trim() || null,
-          canSteer: Boolean(snapshot?.viewer?.canCoSteer)
+          canSteer: Boolean(snapshot?.viewer?.canCoSteer),
+          holds: []
         }))
       setManaged(rows)
     } catch {
@@ -198,16 +216,35 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     }
   }, [bridgeStatus])
 
+  const refreshCoordination = useCallback(async () => {
+    if (bridgeStatus !== 'connected') return
+    try {
+      const snapshot = await requestCodevBridge<MissionControlCoordination>('coordination.list')
+      setCoordination({
+        claims: snapshot?.claims ?? [],
+        contests: snapshot?.contests ?? []
+      })
+    } catch {
+      // Keep the last snapshot rather than blanking the holds on one bad poll;
+      // the interval retries. An older claim set is closer to the truth than
+      // asserting nobody holds anything.
+    }
+  }, [bridgeStatus])
+
   useEffect(() => {
     if (!embedded) return
     void refreshManaged()
-    const timer = setInterval(() => void refreshManaged(), REFRESH_MS)
+    void refreshCoordination()
+    const timer = setInterval(() => {
+      void refreshManaged()
+      void refreshCoordination()
+    }, REFRESH_MS)
     return () => clearInterval(timer)
-  }, [embedded, refreshManaged])
+  }, [embedded, refreshManaged, refreshCoordination])
 
   const agents = useMemo(
-    () => mergeMissionControlAgents(managed, local),
-    [managed, local]
+    () => attachMissionControlHolds(mergeMissionControlAgents(managed, local), coordination),
+    [managed, local, coordination]
   )
 
   const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
@@ -285,6 +322,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       agents={agents.map((agent) =>
         agent.origin === 'managed' ? { ...agent, canSteer: canCoSteer } : agent
       )}
+      coordination={coordination}
       now={now}
       openKey={openKey}
       steerBusy={steerBusy}

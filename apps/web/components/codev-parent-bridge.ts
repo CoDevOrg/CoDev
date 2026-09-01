@@ -31,6 +31,7 @@ export type CodevBridgeMethod =
   | "workboard.list"
   | "workboard.create"
   | "claims.list"
+  | "coordination.list"
   | "claims.create"
   | "claims.reassign"
   | "claims.cancel"
@@ -94,6 +95,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "workboard.list",
   "workboard.create",
   "claims.list",
+  "coordination.list",
   "claims.create",
   "claims.reassign",
   "claims.cancel",
@@ -658,6 +660,20 @@ export async function executeCodevBridgeRequest(
       const payload = await readJson(response);
       if (!response.ok) {
         return fail(jsonError(payload, "CoDev could not load path claims."));
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "coordination.list") {
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/coordination`,
+        { cache: "no-store" },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(
+          jsonError(payload, "CoDev could not load the workspace's claims."),
+        );
       }
       return succeed(payload);
     }
