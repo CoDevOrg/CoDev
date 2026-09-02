@@ -645,7 +645,7 @@ export function CodevTeamPanel(): JSX.Element | null {
   }
 
   return (
-    <div className="flex max-h-[45%] shrink-0 flex-col border-t border-worktree-sidebar-border/60 bg-worktree-sidebar">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-worktree-sidebar-border/60 bg-worktree-sidebar">
       {activeChannel ? (
         <ChannelConversation
           channel={activeChannel}
@@ -659,7 +659,7 @@ export function CodevTeamPanel(): JSX.Element | null {
           onSend={handleSend}
         />
       ) : (
-        <div className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto py-1">
+        <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-y-auto py-1">
           <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5">
             <Users aria-hidden className="size-3 text-worktree-sidebar-foreground/40" />
             <span className="text-xs font-semibold text-worktree-sidebar-foreground/80">

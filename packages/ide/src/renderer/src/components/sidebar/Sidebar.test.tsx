@@ -51,6 +51,10 @@ vi.mock('./WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
 
+vi.mock('./CodevTeamPanel', () => ({
+  CodevTeamPanel: () => <div data-testid="codev-team-panel" />
+}))
+
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
 }))
@@ -131,9 +135,27 @@ beforeEach(() => {
   }
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  delete (window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__
+})
 
 describe('Sidebar', () => {
+  it('renders the worktree list outside the CoDev-embedded client', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const view = render(sidebarElement())
+    expect(view.queryByTestId('worktree-list')).not.toBeNull()
+    expect(view.queryByTestId('codev-team-panel')).not.toBeNull()
+  })
+
+  it('drops the worktree list in the CoDev-embedded client so the team rail fills it', () => {
+    ;(window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__ = true
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const view = render(sidebarElement())
+    expect(view.queryByTestId('worktree-list')).toBeNull()
+    expect(view.queryByTestId('codev-team-panel')).not.toBeNull()
+  })
+
   it('anchors the setup script popup to the bottom toolbar', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())
