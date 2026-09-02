@@ -357,8 +357,13 @@ export function applyCommandMarkerBoundaries(
   }
   // Why: `/clear` mutates the TUI/transcript asynchronously. Hide the current
   // transcript immediately so native chat reflects the command before the agent
-  // writes a replacement session or truncates the file.
-  return messages.filter((message) => message.timestamp !== null && message.timestamp > clearSentAt)
+  // writes a replacement session or truncates the file. A null timestamp (e.g.
+  // Grok) can't be placed relative to the boundary, so it stays visible instead
+  // of being excluded outright -- that would hide every future turn from that
+  // transcript too, since none of them carry a timestamp either.
+  return messages.filter(
+    (message) => message.timestamp === null || message.timestamp > clearSentAt
+  )
 }
 
 /** Render command markers as compact `system` messages. The `system` role draws

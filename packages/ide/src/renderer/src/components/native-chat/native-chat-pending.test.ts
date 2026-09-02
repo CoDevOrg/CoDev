@@ -524,6 +524,19 @@ describe('applyCommandMarkerBoundaries', () => {
       ]).map((message) => message.id)
     ).toEqual(['new'])
   })
+
+  it('keeps untimestamped transcripts (e.g. Grok) visible instead of hiding them forever', () => {
+    const messages = [
+      { ...userMessage('before', 'old prompt'), timestamp: null },
+      { ...assistantMessage('after', 'new answer'), timestamp: null }
+    ]
+
+    // Why: excluding null-timestamp rows outright would hide every future turn
+    // too, since a transcript with no timestamps never gets one after /clear.
+    expect(
+      applyCommandMarkerBoundaries(messages, [{ id: 'c1', command: '/clear', sentAt: 10 }])
+    ).toEqual(messages)
+  })
 })
 
 describe('scope-cache key counts stay bounded (memory-leak regression)', () => {

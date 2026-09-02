@@ -1,0 +1,1 @@
+import{r as e}from"./web-index-CP73PRKO.js";export{e as useAppStore};
