@@ -77,7 +77,9 @@ function extractScripts(html: string) {
   for (const match of html.matchAll(SCRIPT_PATTERN)) {
     const attributes: Record<string, string> = {};
     for (const attribute of (match[1] ?? "").matchAll(ATTRIBUTE_PATTERN)) {
-      attributes[attribute[1].toLowerCase()] =
+      const attributeName = attribute[1];
+      if (!attributeName) continue;
+      attributes[attributeName.toLowerCase()] =
         attribute[2] ?? attribute[3] ?? attribute[4] ?? "";
     }
     scripts.push({ attributes, text: match[2] ?? "" });
@@ -144,8 +146,10 @@ function decodeFlightPool(pool: Json[]) {
     if (typeof value === "number" && Number.isInteger(value)) {
       if (value < 0 || value >= pool.length) return value;
       if (cache.has(value)) return cache.get(value) ?? null;
+      const referenced = pool[value];
+      if (referenced === undefined) return value;
       cache.set(value, null);
-      const decoded = resolve(pool[value]);
+      const decoded = resolve(referenced);
       cache.set(value, decoded);
       return decoded;
     }
@@ -168,7 +172,8 @@ function decodeFlightPool(pool: Json[]) {
   for (let index = 1; index + 1 < pool.length; index += 2) {
     const key = pool[index];
     if (typeof key === "string" && !(key in decoded)) {
-      decoded[key] = resolve(pool[index + 1]);
+      const value = pool[index + 1];
+      if (value !== undefined) decoded[key] = resolve(value);
     }
   }
   return decoded;
@@ -404,10 +409,10 @@ function walkMapping(mapping: Record<string, Json>) {
   let currentId: string | undefined = rootId;
   while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
-    const node: Json = mapping[currentId];
+    const node: Json | undefined = mapping[currentId];
     if (!isRecord(node)) break;
     ordered.push(node);
-    const children: Json = node.children;
+    const children: Json | undefined = node.children;
     const nextChild: Json | undefined = Array.isArray(children)
       ? children.at(-1)
       : undefined;
