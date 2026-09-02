@@ -206,4 +206,33 @@ describe('canToggleNativeChat', () => {
       })
     ).toBe(false)
   })
+
+  it('never offers the toggle inside CoDev, even for an otherwise-eligible tab', () => {
+    expect(
+      canToggleNativeChat(
+        {
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: 'claude'
+        },
+        { __CODEV_EMBEDDED__: true }
+      )
+    ).toBe(false)
+  })
+
+  it('never lets a CoDev chat tab toggle back to terminal either', () => {
+    // Why: outside CoDev this exact input is allowed (see "allows an existing
+    // chat view to toggle back" above) — CoDev must still refuse it.
+    expect(
+      canToggleNativeChat(
+        {
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: null,
+          isChatViewMode: true
+        },
+        { __CODEV_EMBEDDED__: true }
+      )
+    ).toBe(false)
+  })
 })

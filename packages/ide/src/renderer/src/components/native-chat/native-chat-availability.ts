@@ -1,6 +1,7 @@
 import type { Tab, TuiAgent } from '../../../../shared/types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 export { isNativeChatSupportedAgent }
 
@@ -34,8 +35,19 @@ export type NativeChatAvailabilityInput = {
  *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
  *  (Gemini, …) never qualify. Live identity is authoritative when present;
  *  launch metadata is next, and title resolution only fills the pre-hook gap for
- *  manually-started Claude/Codex/Grok sessions. */
-export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
+ *  manually-started Claude/Codex/Grok sessions.
+ *
+ *  CoDev never offers this toggle at all, in either direction: a member must
+ *  never be able to flip a chat-eligible agent tab to the raw TUI (nor back),
+ *  so every toggle affordance built on this predicate — the tab-bar button,
+ *  context-menu items, the keyboard shortcut — disappears there together. */
+export function canToggleNativeChat(
+  input: NativeChatAvailabilityInput,
+  win?: Parameters<typeof isCodevEmbedded>[0]
+): boolean {
+  if (isCodevEmbedded(win)) {
+    return false
+  }
   if (input.experimentalNativeChatEnabled !== true) {
     return false
   }
