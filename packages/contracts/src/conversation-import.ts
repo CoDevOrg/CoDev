@@ -46,7 +46,7 @@ export const importedConversationMessageSchema = z.object({
 export const importedConversationSchema = z.object({
   source: conversationImportSourceSchema,
   title: z.string().trim().min(1).max(300),
-  messages: z.array(importedConversationMessageSchema),
+  messages: z.array(importedConversationMessageSchema).min(1),
   warnings: z.array(z.string()),
 });
 

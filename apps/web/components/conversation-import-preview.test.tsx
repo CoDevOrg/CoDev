@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConversationImportPreview } from "./conversation-import-preview";
 
+const routerPush = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
 const shareUrl = "https://chatgpt.com/share/share-123";
 const conversation = {
   source: {
@@ -47,6 +53,84 @@ const conversation = {
 describe("ConversationImportPreview", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    routerPush.mockReset();
+  });
+
+  it("creates a room from the source URL and opens it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ conversation }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            room: { id: "room-123", href: "/rooms/room-123" },
+            created: true,
+          }),
+          { status: 201 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ConversationImportPreview />);
+
+    fireEvent.change(screen.getByLabelText("Public share link"), {
+      target: { value: shareUrl },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview chat" }));
+    await screen.findByRole("heading", { name: "Architecture discussion" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create collaborative room" }),
+    );
+
+    await waitFor(() =>
+      expect(routerPush).toHaveBeenCalledWith("/rooms/room-123"),
+    );
+    expect(screen.getByRole("link", { name: "Open room" })).toHaveAttribute(
+      "href",
+      "/rooms/room-123",
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/conversation-imports",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ url: shareUrl }),
+      }),
+    );
+  });
+
+  it("keeps the preview visible when room creation fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ conversation }), { status: 200 }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: "Could not save this room." }), {
+            status: 500,
+          }),
+        ),
+    );
+    render(<ConversationImportPreview />);
+
+    fireEvent.change(screen.getByLabelText("Public share link"), {
+      target: { value: shareUrl },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview chat" }));
+    await screen.findByRole("heading", { name: "Architecture discussion" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create collaborative room" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save this room.",
+    );
+    expect(screen.getByText("How should this work?")).toBeInTheDocument();
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it("submits a share URL and renders the read-only transcript", async () => {

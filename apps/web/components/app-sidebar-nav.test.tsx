@@ -22,5 +22,9 @@ describe("AppSidebarNav", () => {
     const link = screen.getByRole("link", { name: "Import chat" });
     expect(link).toHaveAttribute("href", "/import");
     expect(link).toHaveClass("is-active");
+    expect(screen.getByRole("link", { name: "Rooms" })).toHaveAttribute(
+      "href",
+      "/rooms",
+    );
   });
 });

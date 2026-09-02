@@ -260,6 +260,13 @@
       "when": 1788216356099,
       "tag": "0036_strong_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788407036567,
+      "tag": "0037_cold_triathlon",
+      "breakpoints": true
     }
   ]
 }

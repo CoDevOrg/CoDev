@@ -1,7 +1,9 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   ExternalLink,
   Link2,
   LoaderCircle,
@@ -21,6 +23,11 @@ type PreviewResponse = {
   conversation?: ImportedConversation;
   error?: string;
   code?: string;
+};
+
+type CreateRoomResponse = {
+  room?: { id: string; href: string };
+  error?: string;
 };
 
 function messageLabel(message: ImportedConversationMessage) {
@@ -46,12 +53,16 @@ function formatTimestamp(value: string | null) {
 }
 
 export function ConversationImportPreview() {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [conversation, setConversation] = useState<ImportedConversation | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createdRoom, setCreatedRoom] = useState<CreateRoomResponse["room"]>();
 
   async function previewConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,12 +88,46 @@ export function ConversationImportPreview() {
         return;
       }
       setConversation(payload.conversation);
+      setCreateError(null);
+      setCreatedRoom(undefined);
     } catch {
       setError(
         "CoDev could not reach the preview service. Check your connection and try again.",
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createRoom() {
+    if (!conversation || creating) return;
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const response = await fetch("/api/conversation-imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: conversation.source.url }),
+      });
+      const payload = (await response
+        .json()
+        .catch(() => null)) as CreateRoomResponse | null;
+      if (!response.ok || !payload?.room?.href) {
+        setCreateError(
+          payload?.error ??
+            "The collaborative room could not be created. Please try again.",
+        );
+        return;
+      }
+      setCreatedRoom(payload.room);
+      router.push(payload.room.href);
+    } catch {
+      setCreateError(
+        "CoDev could not reach the room service. Check your connection and try again.",
+      );
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -197,6 +242,40 @@ export function ConversationImportPreview() {
               <ExternalLink aria-hidden="true" />
             </a>
           </header>
+
+          <div className={styles.createBar} aria-live="polite">
+            <div>
+              <strong>
+                {createdRoom
+                  ? "Your collaborative room is ready."
+                  : "Ready to make this collaborative?"}
+              </strong>
+              <span>
+                {createdRoom
+                  ? "Open it now, or find it later from Rooms in the sidebar."
+                  : "The cleaned transcript will be saved to a new room."}
+              </span>
+            </div>
+            {createdRoom ? (
+              <a className={styles.openRoomLink} href={createdRoom.href}>
+                Open room
+                <ArrowRight aria-hidden="true" />
+              </a>
+            ) : (
+              <button type="button" disabled={creating} onClick={createRoom}>
+                {creating ? (
+                  <LoaderCircle className={styles.spinner} aria-hidden="true" />
+                ) : null}
+                {creating ? "Creating room…" : "Create collaborative room"}
+                {!creating ? <ArrowRight aria-hidden="true" /> : null}
+              </button>
+            )}
+          </div>
+          {createError ? (
+            <p className={styles.createError} role="alert">
+              {createError}
+            </p>
+          ) : null}
 
           {conversation.warnings.length ? (
             <div className={styles.warnings} role="status">

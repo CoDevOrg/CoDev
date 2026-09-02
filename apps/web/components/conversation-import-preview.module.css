@@ -283,6 +283,76 @@
   height: 14px;
 }
 
+.createBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px clamp(20px, 4vw, 30px);
+  border-bottom: 1px solid var(--line);
+  background: rgba(237, 238, 240, 0.025);
+}
+
+.createBar > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.createBar strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.createBar span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.createBar button,
+.openRoomLink {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.createBar button:hover:not(:disabled),
+.openRoomLink:hover {
+  background: var(--codev-gold-400);
+}
+
+.createBar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.createBar button svg,
+.openRoomLink svg {
+  width: 14px;
+  height: 14px;
+}
+
+.createError {
+  margin: 0;
+  padding: 11px clamp(20px, 4vw, 30px);
+  border-bottom: 1px solid rgba(255, 124, 99, 0.3);
+  background: rgba(242, 96, 74, 0.1);
+  color: #ffad9e;
+  font-size: 12px;
+}
+
 .warnings {
   padding: 12px clamp(20px, 4vw, 30px);
   border-bottom: 1px solid var(--line);
@@ -425,6 +495,16 @@
 
   .previewHeader {
     flex-direction: column;
+  }
+
+  .createBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .createBar button,
+  .openRoomLink {
+    width: 100%;
   }
 
   .message {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid,
+  MessagesSquare,
   MessageSquarePlus,
   Settings,
   ShieldCheck,
@@ -11,6 +12,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
+  { href: "/rooms", icon: MessagesSquare, label: "Rooms" },
   { href: "/import", icon: MessageSquarePlus, label: "Import chat" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];

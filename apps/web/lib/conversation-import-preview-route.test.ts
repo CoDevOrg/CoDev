@@ -33,7 +33,10 @@ vi.mock("@/lib/conversation-import/chatgpt-share-fetch", () => ({
 }));
 
 import { POST } from "@/app/api/conversation-imports/preview/route";
-import { ChatGptShareFetchError } from "@/lib/conversation-import/chatgpt-share-fetch";
+import {
+  ChatGptShareFetchError,
+  type ChatGptShareFetchErrorCode,
+} from "@/lib/conversation-import/chatgpt-share-fetch";
 
 const shareUrl = "https://chatgpt.com/share/share-123";
 const conversation = {
@@ -133,7 +136,7 @@ describe("conversation import preview route", () => {
     expect(mocks.previewChatGptShare).not.toHaveBeenCalled();
   });
 
-  it.each([
+  it.each<[ChatGptShareFetchErrorCode, number]>([
     ["invalid_url", 400],
     ["invalid_conversation", 400],
     ["unavailable", 404],
