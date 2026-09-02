@@ -1288,5 +1288,23 @@ describe("codev parent bridge", () => {
         },
       });
     });
+
+    it("carries the agent tag through so the IDE opens chat view, not a raw terminal", () => {
+      const connected = replyToCodevBridgeMessage(
+        EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+        { type: "codev:bridge-hello", generation: 3 },
+      ).session;
+
+      expect(
+        buildCodevBridgeCommandMessage(connected, {
+          kind: "terminal-run",
+          command: "codex resume abc-123",
+          label: "Resume Codex session",
+          agent: "codex",
+        }),
+      ).toMatchObject({
+        command: expect.objectContaining({ agent: "codex" }),
+      });
+    });
   });
 });

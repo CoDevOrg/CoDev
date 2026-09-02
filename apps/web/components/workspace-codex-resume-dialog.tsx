@@ -71,6 +71,7 @@ export function WorkspaceCodexResumeDialog({
           kind: "terminal-run",
           command: payload.resumeCommand,
           label: "Resume Codex session",
+          agent: "codex",
         }),
       );
       setState("done");

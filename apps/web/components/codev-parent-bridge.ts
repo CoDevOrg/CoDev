@@ -10,15 +10,21 @@ export type CodevBridgeClientMessage =
 
 /**
  * A parent-initiated action, distinct from `CodevBridgeMethod` (iframe-
- * initiated requests this side replies to). `terminal-run` opens a plain
- * terminal tab in the embedded IDE and queues `command` as its startup
- * text, bypassing agent/session-option composition so the exact text sent
- * is what runs.
+ * initiated requests this side replies to). `terminal-run` opens a terminal
+ * tab in the embedded IDE and queues `command` as its startup text,
+ * bypassing agent/session-option composition so the exact text sent is what
+ * runs.
+ *
+ * `agent`, when it names a native-chat-supported agent (claude, codex,
+ * grok, cursor), opens that tab in chat view instead of a plain terminal —
+ * the IDE never wants to hand the member a raw TUI for an agent chat can
+ * render, even for a resume/continue command rather than a normal launch.
  */
 export type CodevBridgeCommand = {
   kind: "terminal-run";
   command: string;
   label?: string;
+  agent?: string;
 };
 
 export type CodevBridgeCommandMessage = {

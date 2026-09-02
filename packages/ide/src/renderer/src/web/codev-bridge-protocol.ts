@@ -9,15 +9,23 @@ export type CodevBridgeSnapshot = {
 /**
  * A parent-initiated action, distinct from `CodevBridgeRequestMethod`
  * (IDE-initiated requests the parent replies to). `terminal-run` opens a
- * plain terminal tab and queues `command` as its startup text, the same
- * primitive `runQuickCommandInNewTab` uses for a stored quick command,
- * bypassing agent/session-option composition entirely so the exact text
- * the parent sent is what runs.
+ * terminal tab and queues `command` as its startup text, the same primitive
+ * `runQuickCommandInNewTab` uses for a stored quick command, bypassing
+ * agent/session-option composition entirely so the exact text the parent
+ * sent is what runs.
+ *
+ * `agent`, when it names a native-chat-supported agent, opens that tab in
+ * chat view (tagged with that launch agent) instead of a plain terminal —
+ * CoDev never wants a raw TUI for an agent chat is capable of rendering, even
+ * when `command` is a resume/continue invocation rather than the agent's
+ * normal launch command. Older hosts that don't know this field simply run
+ * `command` in a plain terminal tab, same as before it existed.
  */
 export type CodevBridgeCommand = {
   kind: 'terminal-run'
   command: string
   label?: string
+  agent?: string
 }
 
 export type CodevBridgeParentMessage =
@@ -106,11 +114,12 @@ function isCodevBridgeCommand(value: unknown): value is CodevBridgeCommand {
   if (!value || typeof value !== 'object') {
     return false
   }
-  const command = value as { kind?: unknown; command?: unknown; label?: unknown }
+  const command = value as { kind?: unknown; command?: unknown; label?: unknown; agent?: unknown }
   return (
     command.kind === 'terminal-run' &&
     typeof command.command === 'string' &&
     command.command.trim().length > 0 &&
-    (command.label === undefined || typeof command.label === 'string')
+    (command.label === undefined || typeof command.label === 'string') &&
+    (command.agent === undefined || typeof command.agent === 'string')
   )
 }

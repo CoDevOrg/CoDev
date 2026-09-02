@@ -1,0 +1,1 @@
+import{Cv as e,Xv as t,ey as n}from"./web-index-BzgrojoR.js";var r=n(t(),1);e();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

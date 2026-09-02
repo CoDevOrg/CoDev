@@ -171,6 +171,27 @@ describe('createCodevBridge', () => {
     bridge.dispose()
   })
 
+  it('delivers the optional agent tag through to subscribers', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const received: unknown[] = []
+    bridge.subscribeCommand((command) => received.push(command))
+
+    respond({
+      type: 'codev:bridge-command',
+      generation: 1,
+      command: { kind: 'terminal-run', command: 'codex resume abc-123', agent: 'codex' }
+    })
+
+    expect(received).toEqual([
+      { kind: 'terminal-run', command: 'codex resume abc-123', agent: 'codex' }
+    ])
+    bridge.dispose()
+  })
+
   it('ignores a command from a stale generation', () => {
     const { host, ack, respond } = createHost()
     const bridge = createCodevBridge(host)
@@ -206,6 +227,11 @@ describe('createCodevBridge', () => {
       command: { kind: 'something-else', command: 'rm -rf /' }
     })
     respond({ type: 'codev:bridge-command', generation: 1, command: 'codex resume abc-123' })
+    respond({
+      type: 'codev:bridge-command',
+      generation: 1,
+      command: { kind: 'terminal-run', command: 'codex resume abc-123', agent: 42 }
+    })
 
     expect(received).toEqual([])
     bridge.dispose()

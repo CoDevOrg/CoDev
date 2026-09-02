@@ -1,0 +1,1 @@
+import{r as e}from"./lib-m8vX9RtE.js";function t(t){e(t,[/\r?\n|\r/g,n])}function n(){return{type:`break`}}function r(){return function(e){t(e)}}export{r as t};
