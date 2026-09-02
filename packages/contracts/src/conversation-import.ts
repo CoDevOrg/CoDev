@@ -2,6 +2,16 @@ import { z } from "zod";
 
 import { timestampSchema } from "./domain";
 
+export const conversationImportPreviewInputSchema = z
+  .object({
+    url: z.url().max(2_048),
+  })
+  .strict();
+
+export type ConversationImportPreviewInput = z.infer<
+  typeof conversationImportPreviewInputSchema
+>;
+
 /**
  * Provider-neutral conversation data produced by an external chat importer.
  * Provider-specific payloads must be validated and converted to this shape
