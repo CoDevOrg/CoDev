@@ -45,6 +45,28 @@ describe('applyNativeChatReportedSessionOptions', () => {
     record.model = { value: 'sonnet', source: 'reported' }
     expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
   })
+
+  it('does not let a stale report clobber a value just dispatched live', () => {
+    const record = claudeRecord()
+    record.model = { value: 'sonnet', source: 'reported' }
+    record.valuesByModel.sonnet = { effort: { value: 'high', source: 'dispatched' } }
+    // Why: the screen text this parsed from was captured before Claude's own
+    // UI caught up to the dispatched /effort high command.
+    expect(
+      applyNativeChatReportedSessionOptions(record, { model: 'sonnet', effort: 'medium' })
+    ).toBe(false)
+    expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'high', source: 'dispatched' })
+  })
+
+  it('still lets an agreeing report promote a dispatched value to confirmed', () => {
+    const record = claudeRecord()
+    record.model = { value: 'sonnet', source: 'reported' }
+    record.valuesByModel.sonnet = { effort: { value: 'high', source: 'dispatched' } }
+    expect(
+      applyNativeChatReportedSessionOptions(record, { model: 'sonnet', effort: 'high' })
+    ).toBe(true)
+    expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'high', source: 'reported' })
+  })
 })
 
 describe('matchNativeChatCatalogModelId', () => {

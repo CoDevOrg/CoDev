@@ -1,0 +1,1 @@
+import{Iv as e}from"./web-index-NPYmP9W-.js";var t=e(`minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};

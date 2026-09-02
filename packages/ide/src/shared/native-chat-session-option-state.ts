@@ -133,6 +133,12 @@ export function applyNativeChatReportedSessionOptions(
       continue
     }
     const current = modelValues[id]
+    // Why: a value just dispatched live is ahead of the screen text this report
+    // was parsed from until the report agrees with it — a disagreeing report is
+    // read from before the CLI's own UI caught up, not a newer ground truth.
+    if (current?.source === 'dispatched' && current.value !== value) {
+      continue
+    }
     if (current?.value !== value || current.source !== 'reported') {
       changed = true
     }
