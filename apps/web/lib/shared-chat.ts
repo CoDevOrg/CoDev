@@ -281,7 +281,10 @@ export async function listSharedChatMessages(
 ) {
   const database = getDatabase();
   const [room] = await database
-    .select({ conversationId: schema.sharedChats.conversationId })
+    .select({
+      conversationId: schema.sharedChats.conversationId,
+      role: schema.sharedChatMembers.role,
+    })
     .from(schema.sharedChats)
     .innerJoin(
       schema.sharedChatMembers,
@@ -293,6 +296,9 @@ export async function listSharedChatMessages(
     .where(eq(schema.sharedChats.id, roomId))
     .limit(1);
   if (!room) throw new SharedChatError("Room not found.", 404);
+  if (!permissionsForSharedChatRole(room.role).read) {
+    throw new SharedChatError("You cannot read messages in this room.", 403);
+  }
 
   const messages = await database
     .select({
@@ -549,6 +555,7 @@ export async function getSharedChatRoom(
     .limit(1);
   if (
     !room ||
+    !permissionsForSharedChatRole(room.viewerRole).read ||
     !room.sourceProvider ||
     !room.sourceExternalId ||
     !room.sourceUrl

@@ -19,11 +19,14 @@ describe("shared chat permissions", () => {
     });
   });
 
-  it("denies unknown roles", () => {
-    expect(permissionsForSharedChatRole("unknown")).toEqual({
-      read: false,
-      post: false,
-      invite: false,
-    });
-  });
+  it.each(["unknown", "viewer", "banned"])(
+    "denies the unrecognized %s role",
+    (role) => {
+      expect(permissionsForSharedChatRole(role)).toEqual({
+        read: false,
+        post: false,
+        invite: false,
+      });
+    },
+  );
 });
