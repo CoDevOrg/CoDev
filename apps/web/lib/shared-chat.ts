@@ -8,13 +8,28 @@ import {
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
+import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
+import {
+  permissionsForSharedChatRole,
+  type SharedChatRole,
+} from "./shared-chat-permissions";
+
+const ROOM_INVITE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 export type SharedChatRoom = {
   id: string;
   ownerId: string;
-  viewerRole: string;
+  viewerRole: SharedChatRole;
   createdAt: string;
+  members: Array<{
+    userId: string;
+    name: string | null;
+    login: string;
+    avatarUrl: string | null;
+    role: SharedChatRole;
+    joinedAt: string;
+  }>;
   conversation: ImportedConversation;
 };
 
@@ -25,6 +40,171 @@ export type SharedChatSummary = {
   messageCount: number;
   updatedAt: Date;
 };
+
+export class SharedChatError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "SharedChatError";
+  }
+}
+
+export async function createSharedChatInvite(roomId: string, userId: string) {
+  const [room] = await getDatabase()
+    .select({ id: schema.sharedChats.id })
+    .from(schema.sharedChats)
+    .innerJoin(
+      schema.sharedChatMembers,
+      and(
+        eq(schema.sharedChatMembers.sharedChatId, schema.sharedChats.id),
+        eq(schema.sharedChatMembers.userId, userId),
+        eq(schema.sharedChatMembers.role, "owner"),
+      ),
+    )
+    .where(eq(schema.sharedChats.id, roomId))
+    .limit(1);
+  if (!room) {
+    throw new SharedChatError(
+      "Room not found or you cannot invite people to it.",
+      404,
+    );
+  }
+
+  const token = createInviteToken();
+  const expiresAt = new Date(Date.now() + ROOM_INVITE_TTL_MS);
+  const [invite] = await getDatabase()
+    .insert(schema.sharedChatInvites)
+    .values({
+      sharedChatId: roomId,
+      createdBy: userId,
+      tokenHash: hashInviteToken(token),
+      expiresAt,
+    })
+    .returning({ id: schema.sharedChatInvites.id });
+  if (!invite) throw new Error("The room invite could not be created.");
+
+  return { id: invite.id, token, expiresAt };
+}
+
+export async function acceptSharedChatInvite(token: string, userId: string) {
+  const tokenHash = hashInviteToken(token);
+
+  return getDatabase().transaction(async (transaction) => {
+    const [invite] = await transaction
+      .select()
+      .from(schema.sharedChatInvites)
+      .where(eq(schema.sharedChatInvites.tokenHash, tokenHash))
+      .limit(1)
+      .for("update");
+    if (
+      !invite ||
+      invite.revokedAt ||
+      invite.acceptedAt ||
+      invite.expiresAt <= new Date()
+    ) {
+      throw new SharedChatError(
+        "This room invitation is invalid, expired, or already used.",
+        400,
+      );
+    }
+
+    await transaction
+      .insert(schema.sharedChatMembers)
+      .values({
+        sharedChatId: invite.sharedChatId,
+        userId,
+        role: "member",
+      })
+      .onConflictDoNothing();
+    await transaction
+      .update(schema.sharedChatInvites)
+      .set({ acceptedAt: new Date(), acceptedBy: userId })
+      .where(eq(schema.sharedChatInvites.id, invite.id));
+
+    return invite.sharedChatId;
+  });
+}
+
+export async function postSharedChatMessage({
+  roomId,
+  userId,
+  authorName,
+  body,
+}: {
+  roomId: string;
+  userId: string;
+  authorName: string;
+  body: string;
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    const [room] = await transaction
+      .select({
+        conversationId: schema.sharedChats.conversationId,
+        role: schema.sharedChatMembers.role,
+      })
+      .from(schema.sharedChats)
+      .innerJoin(
+        schema.sharedChatMembers,
+        and(
+          eq(schema.sharedChatMembers.sharedChatId, schema.sharedChats.id),
+          eq(schema.sharedChatMembers.userId, userId),
+        ),
+      )
+      .where(eq(schema.sharedChats.id, roomId))
+      .limit(1)
+      .for("update");
+
+    if (!room) throw new SharedChatError("Room not found.", 404);
+    if (!permissionsForSharedChatRole(room.role).post) {
+      throw new SharedChatError("You cannot post messages in this room.", 403);
+    }
+
+    const [lastMessage] = await transaction
+      .select({ sequence: schema.conversationMessages.sequence })
+      .from(schema.conversationMessages)
+      .where(
+        eq(schema.conversationMessages.conversationId, room.conversationId),
+      )
+      .orderBy(desc(schema.conversationMessages.sequence))
+      .limit(1);
+    const sequence = (lastMessage?.sequence ?? -1) + 1;
+    const now = new Date();
+    const [message] = await transaction
+      .insert(schema.conversationMessages)
+      .values({
+        conversationId: room.conversationId,
+        sequence,
+        role: "user",
+        authorUserId: userId,
+        authorName,
+        body,
+        sourceContentType: "text",
+        sourceCreatedAt: now,
+      })
+      .returning({
+        id: schema.conversationMessages.id,
+        sequence: schema.conversationMessages.sequence,
+        body: schema.conversationMessages.body,
+        createdAt: schema.conversationMessages.sourceCreatedAt,
+      });
+    if (!message) {
+      throw new Error("The room message could not be created.");
+    }
+
+    await transaction
+      .update(schema.sharedChats)
+      .set({ updatedAt: now })
+      .where(eq(schema.sharedChats.id, roomId));
+
+    return {
+      ...message,
+      authorName,
+      createdAt: message.createdAt?.toISOString() ?? now.toISOString(),
+    };
+  });
+}
 
 export async function listSharedChatsForUser(
   userId: string,
@@ -224,7 +404,7 @@ export async function getSharedChatRoom(
     return null;
   }
 
-  const [messages, artifacts] = await Promise.all([
+  const [messages, artifacts, members] = await Promise.all([
     database
       .select({
         id: schema.conversationMessages.id,
@@ -253,6 +433,22 @@ export async function getSharedChatRoom(
       .where(
         eq(schema.conversationArtifacts.conversationId, room.conversationId),
       ),
+    database
+      .select({
+        userId: schema.sharedChatMembers.userId,
+        name: schema.users.name,
+        login: schema.users.login,
+        avatarUrl: schema.users.avatarUrl,
+        role: schema.sharedChatMembers.role,
+        joinedAt: schema.sharedChatMembers.joinedAt,
+      })
+      .from(schema.sharedChatMembers)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.sharedChatMembers.userId),
+      )
+      .where(eq(schema.sharedChatMembers.sharedChatId, room.id))
+      .orderBy(asc(schema.sharedChatMembers.joinedAt)),
   ]);
   const artifactsByMessage = new Map<string, typeof artifacts>();
   for (const artifact of artifacts) {
@@ -292,8 +488,13 @@ export async function getSharedChatRoom(
   return {
     id: room.id,
     ownerId: room.ownerId,
-    viewerRole: room.viewerRole,
+    viewerRole: room.viewerRole === "owner" ? "owner" : "member",
     createdAt: room.createdAt.toISOString(),
+    members: members.map((member) => ({
+      ...member,
+      role: member.role === "owner" ? "owner" : "member",
+      joinedAt: member.joinedAt.toISOString(),
+    })),
     conversation: persistedConversation,
   };
 }

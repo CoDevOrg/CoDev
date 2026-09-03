@@ -362,6 +362,33 @@ export const sharedChatMembers = pgTable(
   ],
 );
 
+export const sharedChatInvites = pgTable(
+  "shared_chat_invites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sharedChatId: uuid("shared_chat_id")
+      .references(() => sharedChats.id, { onDelete: "cascade" })
+      .notNull(),
+    createdBy: uuid("created_by")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedBy: uuid("accepted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("shared_chat_invites_token_hash_idx").on(table.tokenHash),
+    index("shared_chat_invites_room_idx").on(table.sharedChatId),
+  ],
+);
+
 /**
  * One row per page load across the whole site — marketing pages included, so
  * anonymous visits are kept with a null `userId`. `ipHash` is a salted SHA-256

@@ -85,6 +85,103 @@
   color: var(--ink);
 }
 
+.headerActions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.inviteControl {
+  position: relative;
+}
+
+.inviteControl > button,
+.inviteResult > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(242, 96, 74, 0.28);
+  border-radius: 8px;
+  background: rgba(242, 96, 74, 0.12);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inviteControl button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.inviteControl button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.inviteResult {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  width: min(440px, calc(100vw - 44px));
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+}
+
+.inviteResult > div {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inviteResult strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.inviteResult span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.inviteResult code {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inviteError {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 124, 99, 0.3);
+  border-radius: 8px;
+  background: var(--surface);
+  color: #ffad9e;
+  font-size: 11px;
+}
+
 .roomNote,
 .warnings {
   padding: 12px clamp(20px, 4vw, 30px);
@@ -109,6 +206,94 @@
 
 .warnings p + p {
   margin-top: 5px;
+}
+
+.memberPanel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  padding: 14px clamp(20px, 4vw, 30px);
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: rgba(18, 20, 23, 0.32);
+}
+
+.memberHeading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.memberHeading svg {
+  width: 14px;
+  height: 14px;
+  color: var(--codev-gold-400);
+}
+
+.memberPanel ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memberPanel li {
+  display: grid;
+  grid-template-columns: 28px auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(26, 29, 33, 0.72);
+}
+
+.memberPanel li > img,
+.memberPanel li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(242, 96, 74, 0.14);
+  color: var(--codev-gold-400);
+  font-size: 11px;
+  font-weight: 750;
+  object-fit: cover;
+}
+
+.memberPanel li > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.memberPanel li strong {
+  color: var(--ink);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memberPanel li small {
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.memberPanel li em {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  text-transform: capitalize;
 }
 
 .transcript {
@@ -199,12 +384,121 @@
   text-transform: uppercase;
 }
 
+.composer {
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.composer label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.composer > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 78px;
+  resize: vertical;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.composer textarea:focus {
+  border-color: rgba(255, 124, 99, 0.62);
+  box-shadow: 0 0 0 3px rgba(242, 96, 74, 0.12);
+}
+
+.composer button {
+  display: inline-flex;
+  min-width: 92px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.composer button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composerError {
+  margin: 9px 0 0;
+  color: #ffad9e;
+  font-size: 12px;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
 @media (max-width: 700px) {
   .header {
     flex-direction: column;
   }
 
+  .headerActions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .memberPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .inviteResult {
+    right: auto;
+    left: 0;
+  }
+
   .message {
     width: 94%;
+  }
+
+  .composer > div {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

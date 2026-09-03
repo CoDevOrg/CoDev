@@ -1,9 +1,11 @@
-import { ExternalLink, LockKeyhole, Paperclip } from "lucide-react";
+import { ExternalLink, LockKeyhole, Paperclip, Users } from "lucide-react";
 
 import type { ImportedConversationMessage } from "@codev/contracts";
 
 import type { SharedChatRoom as SharedChatRoomData } from "@/lib/shared-chat";
 
+import { SharedChatComposer } from "./shared-chat-composer";
+import { SharedChatInvite } from "./shared-chat-invite";
 import styles from "./shared-chat-room.module.css";
 
 function messageLabel(message: ImportedConversationMessage) {
@@ -35,26 +37,61 @@ export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
               {conversation.messages.length}{" "}
               {conversation.messages.length === 1 ? "message" : "messages"}
             </span>
+            <span>
+              <Users aria-hidden="true" /> {room.members.length}{" "}
+              {room.members.length === 1 ? "member" : "members"}
+            </span>
             {conversation.source.model ? (
               <span>{conversation.source.model}</span>
             ) : null}
           </div>
         </div>
-        <a
-          href={conversation.source.url}
-          target="_blank"
-          rel="noreferrer"
-          className={styles.sourceLink}
-        >
-          Open original
-          <ExternalLink aria-hidden="true" />
-        </a>
+        <div className={styles.headerActions}>
+          {room.viewerRole === "owner" ? (
+            <SharedChatInvite roomId={room.id} />
+          ) : null}
+          <a
+            href={conversation.source.url}
+            target="_blank"
+            rel="noreferrer"
+            className={styles.sourceLink}
+          >
+            Open original
+            <ExternalLink aria-hidden="true" />
+          </a>
+        </div>
       </header>
 
       <div className={styles.roomNote}>
-        This room is saved and ready for collaboration. Only you can access it
-        until member invitations are added.
+        {room.viewerRole === "owner"
+          ? "Create an invite link to bring another authenticated member into this room."
+          : "You joined this room through an invitation and can contribute to its conversation."}
       </div>
+
+      <section className={styles.memberPanel} aria-label="Room members">
+        <div className={styles.memberHeading}>
+          <Users aria-hidden="true" />
+          <strong>People in this room</strong>
+        </div>
+        <ul>
+          {room.members.map((member) => (
+            <li key={member.userId}>
+              {member.avatarUrl ? (
+                <img src={member.avatarUrl} alt="" />
+              ) : (
+                <span aria-hidden="true">
+                  {(member.name ?? member.login).slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <div>
+                <strong>{member.name ?? member.login}</strong>
+                <small>@{member.login}</small>
+              </div>
+              <em>{member.role}</em>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {conversation.warnings.length ? (
         <div className={styles.warnings}>
@@ -86,6 +123,7 @@ export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
             ) : null}
           </article>
         ))}
+        <SharedChatComposer roomId={room.id} />
       </section>
     </main>
   );

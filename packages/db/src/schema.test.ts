@@ -19,6 +19,7 @@ import {
   cliDeviceAuthorizations,
   sandboxRuntimeIntervals,
   sharedChatMembers,
+  sharedChatInvites,
   sharedChats,
   userComputeUsage,
   userEnvironmentVariables,
@@ -38,6 +39,7 @@ describe("database schema", () => {
     expect(getTableName(conversationArtifacts)).toBe("conversation_artifacts");
     expect(getTableName(sharedChats)).toBe("shared_chats");
     expect(getTableName(sharedChatMembers)).toBe("shared_chat_members");
+    expect(getTableName(sharedChatInvites)).toBe("shared_chat_invites");
     expect(conversationMessages.sourceContentType.name).toBe(
       "source_content_type",
     );

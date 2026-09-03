@@ -1,13 +1,35 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SharedChatRoom } from "./shared-chat-room";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 const room = {
   id: "room-123",
   ownerId: "user-1",
-  viewerRole: "owner",
+  viewerRole: "owner" as const,
   createdAt: "2026-09-02T12:00:00.000Z",
+  members: [
+    {
+      userId: "user-1",
+      name: "Qais",
+      login: "qais",
+      avatarUrl: null,
+      role: "owner" as const,
+      joinedAt: "2026-09-02T12:00:00.000Z",
+    },
+    {
+      userId: "user-2",
+      name: "Jordan",
+      login: "jordan",
+      avatarUrl: null,
+      role: "member" as const,
+      joinedAt: "2026-09-02T12:05:00.000Z",
+    },
+  ],
   conversation: {
     source: {
       provider: "chatgpt",
@@ -62,8 +84,31 @@ describe("SharedChatRoom", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("plan.pdf")).toBeInTheDocument();
     expect(screen.getByText("Private")).toBeInTheDocument();
+    expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("Qais")).toBeInTheDocument();
+    expect(screen.getByText("Jordan")).toBeInTheDocument();
     expect(
-      screen.getByText(/Only you can access it until member invitations/),
+      screen.getByText(/Create an invite link to bring another authenticated/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Invite people" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Add to the conversation"),
+    ).toBeInTheDocument();
+  });
+
+  it("lets members contribute without exposing owner invite controls", () => {
+    render(<SharedChatRoom room={{ ...room, viewerRole: "member" }} />);
+
+    expect(
+      screen.getByLabelText("Add to the conversation"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Invite people" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/can contribute to its conversation/),
     ).toBeInTheDocument();
   });
 });

@@ -12,6 +12,16 @@ export type ConversationImportPreviewInput = z.infer<
   typeof conversationImportPreviewInputSchema
 >;
 
+export const sharedChatMessageInputSchema = z
+  .object({
+    body: z.string().trim().min(1).max(20_000),
+  })
+  .strict();
+
+export type SharedChatMessageInput = z.infer<
+  typeof sharedChatMessageInputSchema
+>;
+
 /**
  * Provider-neutral conversation data produced by an external chat importer.
  * Provider-specific payloads must be validated and converted to this shape
