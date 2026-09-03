@@ -12,6 +12,7 @@ import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { CODEV_FOCUS_CHAT_HISTORY_EVENT } from '@/components/right-sidebar/codev-chat-history-entries'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -214,15 +215,19 @@ function NativeChatResolvedView({
     composerRef,
     questionAnswerInputRef
   })
-  // CoDev: when a chat is empty or failed to restore, one click jumps to Agent
-  // Session History so the member can resume the conversation they left.
+  // CoDev: when a chat is empty or failed to restore, one click jumps to the
+  // Agents tab so the member can pick the conversation they left back up.
+  // The tab used to show only what was running, which could never answer that
+  // question; it now carries this project's chat history, so also scroll that
+  // list into view rather than leaving the member to find it.
   const reopenPreviousConversation = useMemo(
     () =>
       isCodevEmbedded()
         ? (): void => {
             const store = useAppStore.getState()
-            store.setRightSidebarTab('vault')
+            store.setRightSidebarTab('codev-agents')
             store.setRightSidebarOpen(true)
+            window.dispatchEvent(new CustomEvent(CODEV_FOCUS_CHAT_HISTORY_EVENT))
           }
         : undefined,
     []

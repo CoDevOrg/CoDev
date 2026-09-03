@@ -53,6 +53,7 @@ export type CodevBridgeMethod =
   | "agents.enqueue"
   | "agents.interrupt"
   | "agents.startControlled"
+  | "agents.newChat"
   | "agents.selectProvider"
   | "workboard.list"
   | "workboard.create"
@@ -112,7 +113,11 @@ export function buildCodevBridgeCommandMessage(
   if (!session.open || session.generation === null) {
     return null;
   }
-  return { type: "codev:bridge-command", generation: session.generation, command };
+  return {
+    type: "codev:bridge-command",
+    generation: session.generation,
+    command,
+  };
 }
 
 const INVITE_ID =
@@ -133,6 +138,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "agents.enqueue",
   "agents.interrupt",
   "agents.startControlled",
+  "agents.newChat",
   "agents.selectProvider",
   "workboard.list",
   "workboard.create",
@@ -382,6 +388,32 @@ export async function executeCodevBridgeRequest(
         return fail(
           jsonError(payload, "CoDev could not start this controlled turn."),
         );
+      }
+      return succeed(payload);
+    }
+
+    // A fresh chat on the agent already occupying a slot: same worktree, same
+    // branch, empty context. This is what a member reaches for when a thread
+    // has grown too long to steer, so it must not read as a fourth agent.
+    if (request.method === "agents.newChat") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const prompt = request.params?.prompt;
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/chats`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            typeof prompt === "string" && prompt.trim() ? { prompt } : {},
+          ),
+        },
+      );
+      const payload = await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not start a new chat."));
       }
       return succeed(payload);
     }

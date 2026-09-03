@@ -36,9 +36,9 @@ describe("agent worktree capacity", () => {
   it("reserves exactly three slots and counts active or frozen worktrees", () => {
     expect(
       summarizeAgentCapacity([
-        { worktreeStatus: "active" },
-        { worktreeStatus: "frozen" },
-        { worktreeStatus: "discarded" },
+        { worktreeId: "worktree-1", worktreeStatus: "active" },
+        { worktreeId: "worktree-2", worktreeStatus: "frozen" },
+        { worktreeId: "worktree-3", worktreeStatus: "discarded" },
       ]),
     ).toEqual({
       maxActiveSessions: 3,
@@ -50,12 +50,29 @@ describe("agent worktree capacity", () => {
   it("does not expose a negative number of available slots", () => {
     expect(
       summarizeAgentCapacity([
-        { worktreeStatus: "active" },
-        { worktreeStatus: "active" },
-        { worktreeStatus: "active" },
-        { worktreeStatus: "active" },
+        { worktreeId: "worktree-1", worktreeStatus: "active" },
+        { worktreeId: "worktree-2", worktreeStatus: "active" },
+        { worktreeId: "worktree-3", worktreeStatus: "active" },
+        { worktreeId: "worktree-4", worktreeStatus: "active" },
       ]).availableSlots,
     ).toBe(0);
+  });
+
+  it("counts a worktree once however many chat threads share it", () => {
+    // Starting a fresh chat on the same branch is how a member escapes a long
+    // context. It reuses the worktree, so it must not burn a slot.
+    expect(
+      summarizeAgentCapacity([
+        { worktreeId: "worktree-1", worktreeStatus: "active" },
+        { worktreeId: "worktree-1", worktreeStatus: "active" },
+        { worktreeId: "worktree-1", worktreeStatus: "active" },
+        { worktreeId: "worktree-2", worktreeStatus: "active" },
+      ]),
+    ).toEqual({
+      maxActiveSessions: 3,
+      activeSessions: 2,
+      availableSlots: 1,
+    });
   });
 
   it("rejects a fourth session with actionable guidance", () => {

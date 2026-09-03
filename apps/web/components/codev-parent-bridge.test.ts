@@ -417,6 +417,66 @@ describe("codev parent bridge", () => {
     );
   });
 
+  it("starts a fresh chat on a running agent without cutting a new worktree", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const sessionId = "f3100000-0000-4000-8000-000000000009";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ sessionId: "new-session", worktreeId: "worktree-1" }),
+      );
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-new-chat",
+          method: "agents.newChat",
+          params: { sessionId },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(fetcher).toHaveBeenLastCalledWith(
+      `/api/workspaces/workspace-1/agents/${sessionId}/chats`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    );
+  });
+
+  it("rejects a new chat request that names no valid agent session", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-agents-new-chat-invalid",
+          method: "agents.newChat",
+          params: { sessionId: "not-a-session" },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({ ok: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("lists, queues, interrupts, and starts a controlled shared agent turn", async () => {
     const connected = replyToCodevBridgeMessage(
       EMPTY_CODEV_PARENT_BRIDGE_SESSION,
