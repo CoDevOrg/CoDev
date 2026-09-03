@@ -260,6 +260,27 @@
       "when": 1788216356099,
       "tag": "0036_strong_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788407036567,
+      "tag": "0037_cold_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788407115727,
+      "tag": "0038_famous_zarek",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788407157820,
+      "tag": "0039_daffy_screwball",
+      "breakpoints": true
     }
   ]
 }

@@ -136,7 +136,12 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
-vi.mock('lucide-react', () => ({
+// Why importOriginal: an exhaustive icon list breaks the moment any module in
+// TabBar's graph imports an icon it does not name (CircleX, reached via
+// worktree-list-groups, did exactly that). Spread the real module so only the
+// icons this test actually renders are stubbed.
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   FilePlus: function FilePlus() {
     return null
   },

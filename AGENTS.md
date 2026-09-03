@@ -36,7 +36,7 @@ and the budget is small, so keep builds proportional to real change.
 
 - **One commit per change.** When a `packages/ide` source change needs the
   embedded IDE bundle rebuilt, run `pnpm orca:web` and include the regenerated
-  `apps/web/public/orca/**` output in the *same* commit. Do not land a separate
+  `apps/web/public/orca/**` output in the _same_ commit. Do not land a separate
   "regenerate the embedded IDE bundle" follow-up commit — it doubles every
   build for one change.
 - **Do not push trivial commits to `main`** (comment/typo fixes, doc-only

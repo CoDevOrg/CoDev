@@ -47,7 +47,11 @@ export function CodevPresenceView({
   )
 }
 
-export function CodevPresenceSegment({ activePath }: { activePath: string | null }): React.JSX.Element | null {
+export function CodevPresenceSegment({
+  activePath
+}: {
+  activePath: string | null
+}): React.JSX.Element | null {
   const [connected, setConnected] = useState(() => getCodevBridgeSnapshot().status === 'connected')
   const [members, setMembers] = useState<CodevPresenceMember[]>([])
 
@@ -68,7 +72,9 @@ export function CodevPresenceSegment({ activePath }: { activePath: string | null
           if (!disposed) setMembers([])
         })
     }
-    void requestCodevBridge('presence.update', { path: activePath }).then(refresh).catch(() => undefined)
+    void requestCodevBridge('presence.update', { path: activePath })
+      .then(refresh)
+      .catch(() => undefined)
     refresh()
     const timer = window.setInterval(refresh, 5_000)
     return () => {

@@ -906,6 +906,15 @@ function TabBarInner({
   ])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  // The worktree's chat tab, and whether the member is currently looking at
+  // something else. `viewMode` is the signal that survives a paired host's tab
+  // mirror; `launchAgent` comes back unset from it.
+  const codevChatTabId = useMemo(() => {
+    if (!isCodevEmbedded()) return null
+    const chat = unifiedTabs.find((tab) => tab.viewMode === 'chat')
+    return chat?.entityId ?? chat?.id ?? null
+  }, [unifiedTabs])
+  const codevAwayFromChat = activeTabType !== 'terminal' || activeTabId !== codevChatTabId
 
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
@@ -1025,6 +1034,22 @@ function TabBarInner({
       {/* Why: no strategy stops dnd-kit animating siblings, so tabs stay anchored during drag; only the insertion bar moves. */}
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
+        {/* CoDev: with the strip hidden, anything that still opens a tab — the
+            chat's Browser button, a file link in a transcript — would otherwise
+            strand the member on it with no way back short of a page reload.
+            This is that way back, and it appears only when they are away from
+            the chat. */}
+        {codevChatTabId && codevAwayFromChat ? (
+          <button
+            type="button"
+            className="my-auto ml-1.5 flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            onClick={() => onActivate(codevChatTabId)}
+          >
+            <ChevronLeft className="size-3.5" />
+            {translate('components.codev.backToChat', 'Back to chat')}
+          </button>
+        ) : null}
         {/* CoDev: the workspace is one permanent chat, so there is nothing for a
             tab strip to switch between — it only advertises a tab model the
             member cannot use (the chat has no close button and the "+" is

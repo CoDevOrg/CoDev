@@ -126,6 +126,14 @@ export function failedCodevWorktreeCreationError(state: CodevChatTabWaitState): 
  * nothing. Callers that report the project as ready must wait for this instead,
  * or a silent launch failure is announced to the parent page as success and the
  * member is dropped onto an empty workspace.
+ *
+ * Only a *reported* failure resolves false. Running out of patience does not:
+ * the agent's worktree inherits the repo's setup script, so a first create on a
+ * large repo can sit in `pnpm install` for minutes. Returning false there would
+ * make the parent page tear down a perfectly healthy IDE and replace it with
+ * "Could not open the workspace". The in-IDE awaiting cover is the right place
+ * for a slow start — it explains itself and offers a retry without discarding
+ * the session.
  */
 export async function waitForCodevDefaultChatTab({
   worktreeId
@@ -144,7 +152,7 @@ export async function waitForCodevDefaultChatTab({
     }
     await new Promise((resolve) => window.setTimeout(resolve, CHAT_TAB_WAIT_INTERVAL_MS))
   }
-  return codevWorkspaceHasChatTabInState(useAppStore.getState(), worktreeId)
+  return true
 }
 
 /**

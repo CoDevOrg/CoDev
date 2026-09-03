@@ -43,9 +43,12 @@ test("landing page explains CoDev and offers a clear start", async ({
   await expect(useCase.getByRole("radio", { name: "Other" })).toHaveCount(1);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await expect(
-    page.getByRole("link", { name: "I have an invite" }),
-  ).toHaveAttribute("href", "/sign-in");
+  // Registration is closed until invites go out, so the only route to
+  // /sign-in is the low-key "Sign in" link in the footer.
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+    "href",
+    "/sign-in",
+  );
   expect(consoleErrors).toEqual([]);
 });
 

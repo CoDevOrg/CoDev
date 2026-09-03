@@ -13,7 +13,7 @@ and the budget is small.
 
 - **One commit per change.** When a `packages/ide` source change needs the
   embedded IDE bundle rebuilt, run `pnpm orca:web` and commit the regenerated
-  `apps/web/public/orca/**` output *together with* the source change. Never
+  `apps/web/public/orca/**` output _together with_ the source change. Never
   land a standalone "regenerate the embedded IDE bundle" follow-up commit — it
   doubles the build cost of a single change.
 - **Keep trivial changes off `main`** as their own pushes (comment fixes,
