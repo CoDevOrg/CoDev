@@ -8,6 +8,24 @@ describe("SharedChatInvite", () => {
     vi.unstubAllGlobals();
   });
 
+  it("labels a recovered active invite as the saved room link", async () => {
+    const inviteUrl = "https://codev.test/room-invites/saved-token";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ inviteUrl, reused: true }), {
+          status: 201,
+        }),
+      ),
+    );
+    render(<SharedChatInvite roomId="room-123" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Invite people" }));
+
+    expect(await screen.findByText("Saved invite link")).toBeInTheDocument();
+    expect(screen.getByText(inviteUrl)).toBeInTheDocument();
+  });
+
   it("creates and copies a room invite link", async () => {
     const inviteUrl = "https://codev.test/room-invites/invite-token";
     vi.stubGlobal(

@@ -1,0 +1,1 @@
+ALTER TABLE "shared_chat_invites" ADD COLUMN "encrypted_token" text;

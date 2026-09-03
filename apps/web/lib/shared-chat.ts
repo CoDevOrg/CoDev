@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import {
   importedConversationSchema,
@@ -9,7 +9,12 @@ import {
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
-import { createInviteToken, hashInviteToken } from "./crypto";
+import {
+  createInviteToken,
+  decryptSecret,
+  encryptSecret,
+  hashInviteToken,
+} from "./crypto";
 import { getDatabase } from "./database";
 import {
   permissionsForSharedChatRole,
@@ -17,6 +22,10 @@ import {
 } from "./shared-chat-permissions";
 
 const ROOM_INVITE_TTL_MS = 24 * 60 * 60 * 1_000;
+
+function roomInviteEncryptionContext(roomId: string) {
+  return { purpose: "shared-chat-invite", sharedChatId: roomId };
+}
 
 export type SharedChatRoom = {
   id: string;
@@ -53,40 +62,94 @@ export class SharedChatError extends Error {
 }
 
 export async function createSharedChatInvite(roomId: string, userId: string) {
-  const [room] = await getDatabase()
-    .select({ id: schema.sharedChats.id })
-    .from(schema.sharedChats)
-    .innerJoin(
-      schema.sharedChatMembers,
-      and(
-        eq(schema.sharedChatMembers.sharedChatId, schema.sharedChats.id),
-        eq(schema.sharedChatMembers.userId, userId),
-        eq(schema.sharedChatMembers.role, "owner"),
-      ),
-    )
-    .where(eq(schema.sharedChats.id, roomId))
-    .limit(1);
-  if (!room) {
-    throw new SharedChatError(
-      "Room not found or you cannot invite people to it.",
-      404,
+  return getDatabase().transaction(async (transaction) => {
+    const [room] = await transaction
+      .select({ id: schema.sharedChats.id })
+      .from(schema.sharedChats)
+      .innerJoin(
+        schema.sharedChatMembers,
+        and(
+          eq(schema.sharedChatMembers.sharedChatId, schema.sharedChats.id),
+          eq(schema.sharedChatMembers.userId, userId),
+          eq(schema.sharedChatMembers.role, "owner"),
+        ),
+      )
+      .where(eq(schema.sharedChats.id, roomId))
+      .limit(1)
+      .for("update");
+    if (!room) {
+      throw new SharedChatError(
+        "Room not found or you cannot invite people to it.",
+        404,
+      );
+    }
+
+    const now = new Date();
+    const [activeInvite] = await transaction
+      .select({
+        id: schema.sharedChatInvites.id,
+        encryptedToken: schema.sharedChatInvites.encryptedToken,
+        expiresAt: schema.sharedChatInvites.expiresAt,
+      })
+      .from(schema.sharedChatInvites)
+      .where(
+        and(
+          eq(schema.sharedChatInvites.sharedChatId, roomId),
+          isNull(schema.sharedChatInvites.revokedAt),
+          isNull(schema.sharedChatInvites.acceptedAt),
+          gt(schema.sharedChatInvites.expiresAt, now),
+        ),
+      )
+      .orderBy(desc(schema.sharedChatInvites.createdAt))
+      .limit(1);
+    if (activeInvite?.encryptedToken) {
+      const token = await decryptSecret(
+        activeInvite.encryptedToken,
+        roomInviteEncryptionContext(roomId),
+      );
+      return {
+        id: activeInvite.id,
+        token,
+        expiresAt: activeInvite.expiresAt,
+        reused: true,
+      };
+    }
+    if (activeInvite) {
+      // Pre-encryption invites cannot be recovered. Retire every active legacy
+      // row so the replacement below becomes the room's only active link.
+      await transaction
+        .update(schema.sharedChatInvites)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(schema.sharedChatInvites.sharedChatId, roomId),
+            isNull(schema.sharedChatInvites.revokedAt),
+            isNull(schema.sharedChatInvites.acceptedAt),
+            gt(schema.sharedChatInvites.expiresAt, now),
+          ),
+        );
+    }
+
+    const token = createInviteToken();
+    const expiresAt = new Date(now.getTime() + ROOM_INVITE_TTL_MS);
+    const encryptedToken = await encryptSecret(
+      token,
+      roomInviteEncryptionContext(roomId),
     );
-  }
+    const [invite] = await transaction
+      .insert(schema.sharedChatInvites)
+      .values({
+        sharedChatId: roomId,
+        createdBy: userId,
+        tokenHash: hashInviteToken(token),
+        encryptedToken,
+        expiresAt,
+      })
+      .returning({ id: schema.sharedChatInvites.id });
+    if (!invite) throw new Error("The room invite could not be created.");
 
-  const token = createInviteToken();
-  const expiresAt = new Date(Date.now() + ROOM_INVITE_TTL_MS);
-  const [invite] = await getDatabase()
-    .insert(schema.sharedChatInvites)
-    .values({
-      sharedChatId: roomId,
-      createdBy: userId,
-      tokenHash: hashInviteToken(token),
-      expiresAt,
-    })
-    .returning({ id: schema.sharedChatInvites.id });
-  if (!invite) throw new Error("The room invite could not be created.");
-
-  return { id: invite.id, token, expiresAt };
+    return { id: invite.id, token, expiresAt, reused: false };
+  });
 }
 
 export async function acceptSharedChatInvite(token: string, userId: string) {

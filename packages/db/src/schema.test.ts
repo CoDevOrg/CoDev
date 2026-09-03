@@ -40,6 +40,7 @@ describe("database schema", () => {
     expect(getTableName(sharedChats)).toBe("shared_chats");
     expect(getTableName(sharedChatMembers)).toBe("shared_chat_members");
     expect(getTableName(sharedChatInvites)).toBe("shared_chat_invites");
+    expect(sharedChatInvites.encryptedToken.name).toBe("encrypted_token");
     expect(conversationMessages.sourceContentType.name).toBe(
       "source_content_type",
     );

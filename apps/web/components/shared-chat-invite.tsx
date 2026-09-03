@@ -8,6 +8,7 @@ import styles from "./shared-chat-room.module.css";
 type InviteResponse = {
   inviteUrl?: string;
   expiresAt?: string;
+  reused?: boolean;
   error?: string;
 };
 
@@ -15,6 +16,7 @@ export function SharedChatInvite({ roomId }: { roomId: string }) {
   const [inviteUrl, setInviteUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [reused, setReused] = useState(false);
   const [error, setError] = useState("");
 
   async function createInvite() {
@@ -33,6 +35,7 @@ export function SharedChatInvite({ roomId }: { roomId: string }) {
         return;
       }
       setInviteUrl(payload.inviteUrl);
+      setReused(payload.reused === true);
     } catch {
       setError("CoDev could not create an invite link. Please try again.");
     } finally {
@@ -63,7 +66,9 @@ export function SharedChatInvite({ roomId }: { roomId: string }) {
       {inviteUrl ? (
         <div className={styles.inviteResult} aria-live="polite">
           <div>
-            <strong>Invite link ready</strong>
+            <strong>
+              {reused ? "Saved invite link" : "Invite link ready"}
+            </strong>
             <span>It expires in 24 hours and works once.</span>
           </div>
           <code>{inviteUrl}</code>

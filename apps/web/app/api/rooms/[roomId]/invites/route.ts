@@ -32,6 +32,7 @@ export async function POST(request: Request, { params }: Context) {
       {
         inviteUrl: `${origin}/room-invites/${invite.token}`,
         expiresAt: invite.expiresAt.toISOString(),
+        reused: invite.reused,
       },
       { status: 201 },
     );

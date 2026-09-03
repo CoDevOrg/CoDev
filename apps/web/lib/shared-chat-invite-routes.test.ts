@@ -48,6 +48,7 @@ describe("shared chat invite routes", () => {
       id: "invite-1",
       token: "secret-token",
       expiresAt: new Date("2026-09-03T12:00:00.000Z"),
+      reused: true,
     });
     mocks.acceptInvite.mockResolvedValue("room-123");
   });
@@ -64,6 +65,7 @@ describe("shared chat invite routes", () => {
     await expect(response.json()).resolves.toEqual({
       inviteUrl: "https://codev.test/room-invites/secret-token",
       expiresAt: "2026-09-03T12:00:00.000Z",
+      reused: true,
     });
     expect(mocks.createInvite).toHaveBeenCalledWith("room-123", "user-1");
   });

@@ -373,6 +373,7 @@ export const sharedChatInvites = pgTable(
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     tokenHash: text("token_hash").notNull(),
+    encryptedToken: text("encrypted_token"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
