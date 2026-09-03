@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray } from "drizzle-orm";
 
 import {
   importedConversationSchema,
+  importedConversationMessageSchema,
   type ImportedConversation,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
@@ -198,12 +199,100 @@ export async function postSharedChatMessage({
       .set({ updatedAt: now })
       .where(eq(schema.sharedChats.id, roomId));
 
-    return {
-      ...message,
+    return importedConversationMessageSchema.parse({
+      sequence: message.sequence,
+      role: "user",
       authorName,
+      text: message.body,
+      sourceContentType: "text",
       createdAt: message.createdAt?.toISOString() ?? now.toISOString(),
-    };
+      artifacts: [],
+    });
   });
+}
+
+export async function listSharedChatMessages(
+  roomId: string,
+  userId: string,
+  afterSequence = -1,
+) {
+  const database = getDatabase();
+  const [room] = await database
+    .select({ conversationId: schema.sharedChats.conversationId })
+    .from(schema.sharedChats)
+    .innerJoin(
+      schema.sharedChatMembers,
+      and(
+        eq(schema.sharedChatMembers.sharedChatId, schema.sharedChats.id),
+        eq(schema.sharedChatMembers.userId, userId),
+      ),
+    )
+    .where(eq(schema.sharedChats.id, roomId))
+    .limit(1);
+  if (!room) throw new SharedChatError("Room not found.", 404);
+
+  const messages = await database
+    .select({
+      id: schema.conversationMessages.id,
+      sequence: schema.conversationMessages.sequence,
+      role: schema.conversationMessages.role,
+      authorName: schema.conversationMessages.authorName,
+      body: schema.conversationMessages.body,
+      sourceContentType: schema.conversationMessages.sourceContentType,
+      sourceCreatedAt: schema.conversationMessages.sourceCreatedAt,
+    })
+    .from(schema.conversationMessages)
+    .where(
+      and(
+        eq(schema.conversationMessages.conversationId, room.conversationId),
+        gt(schema.conversationMessages.sequence, afterSequence),
+      ),
+    )
+    .orderBy(asc(schema.conversationMessages.sequence))
+    .limit(200);
+  if (!messages.length) return [];
+
+  const artifacts = await database
+    .select({
+      messageId: schema.conversationArtifacts.messageId,
+      kind: schema.conversationArtifacts.kind,
+      sourceUrl: schema.conversationArtifacts.sourceUrl,
+      filename: schema.conversationArtifacts.name,
+      description: schema.conversationArtifacts.description,
+      downloadable: schema.conversationArtifacts.downloadable,
+    })
+    .from(schema.conversationArtifacts)
+    .where(
+      inArray(
+        schema.conversationArtifacts.messageId,
+        messages.map((message) => message.id),
+      ),
+    );
+  const artifactsByMessage = new Map<string, typeof artifacts>();
+  for (const artifact of artifacts) {
+    if (!artifact.messageId) continue;
+    const current = artifactsByMessage.get(artifact.messageId) ?? [];
+    current.push(artifact);
+    artifactsByMessage.set(artifact.messageId, current);
+  }
+
+  return messages.map((message) =>
+    importedConversationMessageSchema.parse({
+      sequence: message.sequence,
+      role: message.role,
+      authorName: message.authorName,
+      text: message.body,
+      sourceContentType: message.sourceContentType,
+      createdAt: message.sourceCreatedAt?.toISOString() ?? null,
+      artifacts: (artifactsByMessage.get(message.id) ?? []).map((artifact) => ({
+        kind: artifact.kind,
+        sourceUrl: artifact.sourceUrl,
+        filename: artifact.filename,
+        description: artifact.description,
+        downloadable: artifact.downloadable,
+      })),
+    }),
+  );
 }
 
 export async function listSharedChatsForUser(

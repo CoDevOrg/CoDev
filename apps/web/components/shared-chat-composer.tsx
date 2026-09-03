@@ -1,15 +1,24 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LoaderCircle, Send } from "lucide-react";
+
+import type { ImportedConversationMessage } from "@codev/contracts";
 
 import styles from "./shared-chat-room.module.css";
 
-type MessageResponse = { error?: string };
+type MessageResponse = {
+  message?: ImportedConversationMessage;
+  error?: string;
+};
 
-export function SharedChatComposer({ roomId }: { roomId: string }) {
-  const router = useRouter();
+export function SharedChatComposer({
+  roomId,
+  onMessageSent,
+}: {
+  roomId: string;
+  onMessageSent: (message: ImportedConversationMessage) => void;
+}) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +39,12 @@ export function SharedChatComposer({ roomId }: { roomId: string }) {
       const payload = (await response
         .json()
         .catch(() => null)) as MessageResponse | null;
-      if (!response.ok) {
+      if (!response.ok || !payload?.message) {
         setError(payload?.error ?? "The message could not be sent.");
         return;
       }
       setBody("");
-      router.refresh();
+      onMessageSent(payload.message);
     } catch {
       setError("CoDev could not reach the room. Please try again.");
     } finally {

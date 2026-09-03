@@ -4,9 +4,41 @@ import { sharedChatMessageInputSchema } from "@codev/contracts";
 
 import { apiError, getApiUser } from "@/lib/api";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { postSharedChatMessage, SharedChatError } from "@/lib/shared-chat";
+import {
+  listSharedChatMessages,
+  postSharedChatMessage,
+  SharedChatError,
+} from "@/lib/shared-chat";
 
 type Context = { params: Promise<{ roomId: string }> };
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request, { params }: Context) {
+  const user = await getApiUser();
+  if (!user) return apiError(new Error("Authentication required."), 401);
+
+  const { roomId } = await params;
+  const rawAfter = new URL(request.url).searchParams.get("after");
+  const after = rawAfter === null ? -1 : Number(rawAfter);
+  if (!Number.isInteger(after) || after < -1) {
+    return apiError(new Error("Invalid message cursor."), 400);
+  }
+
+  try {
+    const messages = await listSharedChatMessages(roomId, user.id, after);
+    return Response.json(
+      { messages },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  } catch (error) {
+    if (error instanceof SharedChatError) {
+      return apiError(error, error.status);
+    }
+    console.error("Failed to load collaborative room messages.", error);
+    return apiError(new Error("Room messages could not be loaded."), 500);
+  }
+}
 
 export async function POST(request: Request, { params }: Context) {
   const user = await getApiUser();

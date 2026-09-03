@@ -3,33 +3,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SharedChatComposer } from "./shared-chat-composer";
 
-const refresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh }),
-}));
-
 describe("SharedChatComposer", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    refresh.mockReset();
   });
 
-  it("posts a trimmed message and refreshes the room", async () => {
+  it("posts a trimmed message and adds it to the live transcript", async () => {
+    const message = {
+      sequence: 2,
+      role: "user",
+      authorName: "Qais",
+      text: "A new thought",
+      sourceContentType: "text",
+      createdAt: "2026-09-02T12:00:00.000Z",
+      artifacts: [],
+    };
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ message: { id: "message-1" } }), {
+      new Response(JSON.stringify({ message }), {
         status: 201,
       }),
     );
+    const onMessageSent = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    render(<SharedChatComposer roomId="room-123" />);
+    render(
+      <SharedChatComposer roomId="room-123" onMessageSent={onMessageSent} />,
+    );
 
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "  A new thought  " },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await waitFor(() => expect(onMessageSent).toHaveBeenCalledWith(message));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/rooms/room-123/messages",
       expect.objectContaining({
@@ -49,7 +54,10 @@ describe("SharedChatComposer", () => {
         }),
       ),
     );
-    render(<SharedChatComposer roomId="room-123" />);
+    const onMessageSent = vi.fn();
+    render(
+      <SharedChatComposer roomId="room-123" onMessageSent={onMessageSent} />,
+    );
 
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "Keep this draft" },
@@ -62,6 +70,6 @@ describe("SharedChatComposer", () => {
     expect(screen.getByLabelText("Add to the conversation")).toHaveValue(
       "Keep this draft",
     );
-    expect(refresh).not.toHaveBeenCalled();
+    expect(onMessageSent).not.toHaveBeenCalled();
   });
 });

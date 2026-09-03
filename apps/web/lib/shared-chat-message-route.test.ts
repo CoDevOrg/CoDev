@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   consumeRateLimit: vi.fn(),
   getApiUser: vi.fn(),
+  listMessages: vi.fn(),
   postMessage: vi.fn(),
 }));
 
@@ -27,9 +28,10 @@ vi.mock("@/lib/shared-chat", () => ({
     }
   },
   postSharedChatMessage: mocks.postMessage,
+  listSharedChatMessages: mocks.listMessages,
 }));
 
-import { POST } from "@/app/api/rooms/[roomId]/messages/route";
+import { GET, POST } from "@/app/api/rooms/[roomId]/messages/route";
 import { SharedChatError } from "@/lib/shared-chat";
 
 const context = { params: Promise.resolve({ roomId: "room-123" }) };
@@ -56,12 +58,25 @@ describe("shared chat message route", () => {
       retryAfterSeconds: 0,
     });
     mocks.postMessage.mockResolvedValue({
-      id: "message-1",
       sequence: 2,
-      body: "New message",
+      role: "user",
       authorName: "Qais",
+      text: "New message",
+      sourceContentType: "text",
       createdAt: "2026-09-02T12:00:00.000Z",
+      artifacts: [],
     });
+    mocks.listMessages.mockResolvedValue([
+      {
+        sequence: 3,
+        role: "user",
+        authorName: "Jordan",
+        text: "Live reply",
+        sourceContentType: "text",
+        createdAt: "2026-09-02T12:01:00.000Z",
+        artifacts: [],
+      },
+    ]);
   });
 
   it("posts an authenticated room-member message", async () => {
@@ -69,7 +84,7 @@ describe("shared chat message route", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
-      message: { id: "message-1", body: "New message" },
+      message: { sequence: 2, text: "New message" },
     });
     expect(mocks.postMessage).toHaveBeenCalledWith({
       roomId: "room-123",
@@ -77,6 +92,30 @@ describe("shared chat message route", () => {
       authorName: "Qais",
       body: "New message",
     });
+  });
+
+  it("returns messages after the requested cursor for room members", async () => {
+    const response = await GET(
+      new Request("https://codev.test/api/rooms/room-123/messages?after=2"),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      messages: [{ sequence: 3, text: "Live reply" }],
+    });
+    expect(mocks.listMessages).toHaveBeenCalledWith("room-123", "user-1", 2);
+  });
+
+  it("rejects an invalid live-message cursor", async () => {
+    const response = await GET(
+      new Request("https://codev.test/api/rooms/room-123/messages?after=bad"),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.listMessages).not.toHaveBeenCalled();
   });
 
   it("requires authentication before rate limiting", async () => {

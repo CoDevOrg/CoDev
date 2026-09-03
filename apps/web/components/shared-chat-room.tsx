@@ -1,24 +1,10 @@
-import { ExternalLink, LockKeyhole, Paperclip, Users } from "lucide-react";
-
-import type { ImportedConversationMessage } from "@codev/contracts";
+import { ExternalLink, LockKeyhole, Users } from "lucide-react";
 
 import type { SharedChatRoom as SharedChatRoomData } from "@/lib/shared-chat";
 
-import { SharedChatComposer } from "./shared-chat-composer";
 import { SharedChatInvite } from "./shared-chat-invite";
+import { SharedChatTranscript } from "./shared-chat-transcript";
 import styles from "./shared-chat-room.module.css";
-
-function messageLabel(message: ImportedConversationMessage) {
-  if (message.authorName) return message.authorName;
-  if (message.role === "assistant") return "Assistant";
-  return message.role.charAt(0).toUpperCase() + message.role.slice(1);
-}
-
-function messageClass(message: ImportedConversationMessage) {
-  if (message.role === "user") return styles.userMessage;
-  if (message.role === "assistant") return styles.assistantMessage;
-  return styles.contextMessage;
-}
 
 export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
   const { conversation } = room;
@@ -32,10 +18,6 @@ export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
           <div className={styles.meta}>
             <span>
               <LockKeyhole aria-hidden="true" /> Private
-            </span>
-            <span>
-              {conversation.messages.length}{" "}
-              {conversation.messages.length === 1 ? "message" : "messages"}
             </span>
             <span>
               <Users aria-hidden="true" /> {room.members.length}{" "}
@@ -101,30 +83,10 @@ export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
         </div>
       ) : null}
 
-      <section className={styles.transcript} aria-label="Conversation messages">
-        {conversation.messages.map((message) => (
-          <article
-            className={`${styles.message} ${messageClass(message)}`}
-            key={message.sequence}
-            aria-label={`${messageLabel(message)} message ${message.sequence + 1}`}
-          >
-            <strong>{messageLabel(message)}</strong>
-            <p>{message.text}</p>
-            {message.artifacts.length ? (
-              <ul aria-label="Message attachments">
-                {message.artifacts.map((artifact) => (
-                  <li key={`${artifact.kind}-${artifact.sourceUrl}`}>
-                    <Paperclip aria-hidden="true" />
-                    <span>{artifact.filename}</span>
-                    <small>{artifact.kind}</small>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
-        ))}
-        <SharedChatComposer roomId={room.id} />
-      </section>
+      <SharedChatTranscript
+        roomId={room.id}
+        initialMessages={conversation.messages}
+      />
     </main>
   );
 }

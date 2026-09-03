@@ -307,6 +307,17 @@
   background: rgba(26, 29, 33, 0.82);
 }
 
+.liveStatus {
+  align-self: center;
+  padding: 4px 8px;
+  border: 1px solid rgba(83, 190, 126, 0.22);
+  border-radius: 999px;
+  color: #8fd6aa;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .message {
   width: min(82%, 760px);
   padding: 14px 16px;
