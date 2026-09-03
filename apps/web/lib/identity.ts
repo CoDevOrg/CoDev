@@ -124,14 +124,28 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
       : (
           await database
             .update(schema.users)
-            .set({ clerkUserId, login, name, email, avatarUrl, updatedAt: new Date() })
+            .set({
+              clerkUserId,
+              login,
+              name,
+              email,
+              avatarUrl,
+              updatedAt: new Date(),
+            })
             .where(eq(schema.users.id, existing.id))
             .returning(returning)
         )[0];
   } else {
     [localUser] = await database
       .insert(schema.users)
-      .values({ clerkUserId, githubUserId: null, login, name, email, avatarUrl })
+      .values({
+        clerkUserId,
+        githubUserId: null,
+        login,
+        name,
+        email,
+        avatarUrl,
+      })
       .returning(returning);
   }
 
