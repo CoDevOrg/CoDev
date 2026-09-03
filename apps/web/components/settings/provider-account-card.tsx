@@ -522,7 +522,12 @@ export function ProviderAccountCard({
             </a>
             ). Keep this page open…
           </p>
-          <Button onClick={cancelFlow} size="sm" type="button" variant="secondary">
+          <Button
+            onClick={cancelFlow}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
             Cancel
           </Button>
         </div>
