@@ -39,13 +39,11 @@ describe("SharedChatTranscript", () => {
   });
 
   it("polls from the latest sequence and displays another member's message", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ messages: [liveMessage] }), {
-          status: 200,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ messages: [liveMessage] }), {
+        status: 200,
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     render(
       <SharedChatTranscript

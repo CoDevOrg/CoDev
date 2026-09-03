@@ -112,7 +112,11 @@ export function buildCodevBridgeCommandMessage(
   if (!session.open || session.generation === null) {
     return null;
   }
-  return { type: "codev:bridge-command", generation: session.generation, command };
+  return {
+    type: "codev:bridge-command",
+    generation: session.generation,
+    command,
+  };
 }
 
 const INVITE_ID =
