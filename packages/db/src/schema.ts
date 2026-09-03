@@ -236,6 +236,160 @@ export const users = pgTable(
   ],
 );
 
+/** Provider-neutral transcript content, independent of any executable workspace. */
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    kind: text("kind").default("imported").notNull(),
+    title: text("title").notNull(),
+    sourceProvider: text("source_provider"),
+    sourceExternalId: text("source_external_id"),
+    sourceUrl: text("source_url"),
+    sourceModel: text("source_model"),
+    sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
+    warnings: jsonb("warnings").$type<string[]>().default([]).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("conversations_owner_updated_idx").on(table.ownerId, table.updatedAt),
+    uniqueIndex("conversations_owner_source_idx").on(
+      table.ownerId,
+      table.sourceProvider,
+      table.sourceExternalId,
+    ),
+  ],
+);
+
+export const conversationMessages = pgTable(
+  "conversation_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .references(() => conversations.id, { onDelete: "cascade" })
+      .notNull(),
+    sequence: integer("sequence").notNull(),
+    role: text("role").notNull(),
+    authorUserId: uuid("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    authorName: text("author_name"),
+    body: text("body").notNull(),
+    sourceContentType: text("source_content_type"),
+    sourceCreatedAt: timestamp("source_created_at", { withTimezone: true }),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("conversation_messages_sequence_idx").on(
+      table.conversationId,
+      table.sequence,
+    ),
+  ],
+);
+
+export const conversationArtifacts = pgTable(
+  "conversation_artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .references(() => conversations.id, { onDelete: "cascade" })
+      .notNull(),
+    messageId: uuid("message_id").references(() => conversationMessages.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    description: text("description"),
+    downloadable: boolean("downloadable").default(false).notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("conversation_artifacts_conversation_idx").on(table.conversationId),
+    index("conversation_artifacts_message_idx").on(table.messageId),
+  ],
+);
+
+/** Lightweight collaboration surface around one portable conversation. */
+export const sharedChats = pgTable(
+  "shared_chats",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .references(() => conversations.id, { onDelete: "cascade" })
+      .notNull(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("shared_chats_conversation_idx").on(table.conversationId),
+    index("shared_chats_owner_updated_idx").on(table.ownerId, table.updatedAt),
+  ],
+);
+
+export const sharedChatMembers = pgTable(
+  "shared_chat_members",
+  {
+    sharedChatId: uuid("shared_chat_id")
+      .references(() => sharedChats.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    role: text("role").default("member").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.sharedChatId, table.userId] }),
+    index("shared_chat_members_user_idx").on(table.userId),
+  ],
+);
+
+export const sharedChatInvites = pgTable(
+  "shared_chat_invites",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sharedChatId: uuid("shared_chat_id")
+      .references(() => sharedChats.id, { onDelete: "cascade" })
+      .notNull(),
+    createdBy: uuid("created_by")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    tokenHash: text("token_hash").notNull(),
+    encryptedToken: text("encrypted_token"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedBy: uuid("accepted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("shared_chat_invites_token_hash_idx").on(table.tokenHash),
+    index("shared_chat_invites_room_idx").on(table.sharedChatId),
+  ],
+);
+
 /**
  * One row per page load across the whole site — marketing pages included, so
  * anonymous visits are kept with a null `userId`. `ipHash` is a salted SHA-256

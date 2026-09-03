@@ -5,6 +5,9 @@ import {
   agentEvents,
   agentSessions,
   collaborationConflictResolutions,
+  conversationArtifacts,
+  conversationMessages,
+  conversations,
   coordinationMessages,
   designPartnerFeedback,
   githubIssueAssignments,
@@ -15,6 +18,9 @@ import {
   cliAccessTokens,
   cliDeviceAuthorizations,
   sandboxRuntimeIntervals,
+  sharedChatMembers,
+  sharedChatInvites,
+  sharedChats,
   userComputeUsage,
   userEnvironmentVariables,
   users,
@@ -28,6 +34,16 @@ import {
 describe("database schema", () => {
   it("defines the core workspace tables", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
+    expect(getTableName(conversations)).toBe("conversations");
+    expect(getTableName(conversationMessages)).toBe("conversation_messages");
+    expect(getTableName(conversationArtifacts)).toBe("conversation_artifacts");
+    expect(getTableName(sharedChats)).toBe("shared_chats");
+    expect(getTableName(sharedChatMembers)).toBe("shared_chat_members");
+    expect(getTableName(sharedChatInvites)).toBe("shared_chat_invites");
+    expect(sharedChatInvites.encryptedToken.name).toBe("encrypted_token");
+    expect(conversationMessages.sourceContentType.name).toBe(
+      "source_content_type",
+    );
     expect(workspaces.repositoryVisibility.name).toBe("repository_visibility");
     expect(workspaceRuntimes.provisionedHeadSha.name).toBe(
       "provisioned_head_sha",

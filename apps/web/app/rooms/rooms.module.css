@@ -1,0 +1,139 @@
+.page {
+  width: min(980px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 68px) clamp(18px, 5vw, 52px) 90px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+
+.header span {
+  color: var(--codev-gold-400);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: clamp(32px, 5vw, 48px);
+  letter-spacing: -0.04em;
+}
+
+.header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.createLink,
+.empty a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.createLink svg {
+  width: 14px;
+  height: 14px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+.roomCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(26, 29, 33, 0.82);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.roomCard:hover {
+  border-color: rgba(242, 96, 74, 0.34);
+  transform: translateY(-1px);
+}
+
+.roomCard > svg:first-child {
+  width: 20px;
+  color: var(--codev-gold-400);
+}
+
+.roomCard > svg:last-child {
+  width: 16px;
+  color: var(--muted-2);
+}
+
+.roomCard h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.roomCard p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  padding: 58px 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.empty > svg {
+  width: 28px;
+  height: 28px;
+  color: var(--codev-gold-400);
+}
+
+.empty h2 {
+  margin: 14px 0 0;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.empty p {
+  margin: 6px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

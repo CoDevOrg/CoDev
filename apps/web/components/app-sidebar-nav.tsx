@@ -2,10 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Settings, ShieldCheck } from "lucide-react";
+import {
+  LayoutGrid,
+  MessagesSquare,
+  MessageSquarePlus,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
+  { href: "/rooms", icon: MessagesSquare, label: "Rooms" },
+  { href: "/import", icon: MessageSquarePlus, label: "Import chat" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
