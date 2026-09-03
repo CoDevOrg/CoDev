@@ -102,27 +102,34 @@ export function SharedChatTranscript({
         Live · {messages.length}{" "}
         {messages.length === 1 ? "message" : "messages"}
       </span>
-      {messages.map((message) => (
-        <article
-          className={`${styles.message} ${messageClass(message)}`}
-          key={message.sequence}
-          aria-label={`${messageLabel(message)} message ${message.sequence + 1}`}
-        >
-          <strong>{messageLabel(message)}</strong>
-          <p>{message.text}</p>
-          {message.artifacts.length ? (
-            <ul aria-label="Message attachments">
-              {message.artifacts.map((artifact) => (
-                <li key={`${artifact.kind}-${artifact.sourceUrl}`}>
-                  <Paperclip aria-hidden="true" />
-                  <span>{artifact.filename}</span>
-                  <small>{artifact.kind}</small>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </article>
-      ))}
+      <div
+        className={styles.messageLog}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+      >
+        {messages.map((message) => (
+          <article
+            className={`${styles.message} ${messageClass(message)}`}
+            key={message.sequence}
+            aria-label={`${messageLabel(message)} message ${message.sequence + 1}`}
+          >
+            <strong>{messageLabel(message)}</strong>
+            <p>{message.text}</p>
+            {message.artifacts.length ? (
+              <ul aria-label="Message attachments">
+                {message.artifacts.map((artifact) => (
+                  <li key={`${artifact.kind}-${artifact.sourceUrl}`}>
+                    <Paperclip aria-hidden="true" />
+                    <span>{artifact.filename}</span>
+                    <small>{artifact.kind}</small>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        ))}
+      </div>
       <SharedChatComposer
         roomId={roomId}
         onMessageSent={(message) => addMessages([message])}

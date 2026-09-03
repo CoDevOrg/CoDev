@@ -71,8 +71,9 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  min-height: 44px;
   gap: 7px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
@@ -101,8 +102,8 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 0 12px;
   border: 1px solid rgba(242, 96, 74, 0.28);
   border-radius: 8px;
   background: rgba(242, 96, 74, 0.12);
@@ -285,13 +286,13 @@
 
 .memberPanel li small {
   color: var(--muted-2);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .memberPanel li em {
   justify-self: end;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   font-style: normal;
   text-transform: capitalize;
 }
@@ -307,13 +308,19 @@
   background: rgba(26, 29, 33, 0.82);
 }
 
+.messageLog {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .liveStatus {
   align-self: center;
   padding: 4px 8px;
   border: 1px solid rgba(83, 190, 126, 0.22);
   border-radius: 999px;
   color: #8fd6aa;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -439,7 +446,7 @@
 .composer button {
   display: inline-flex;
   min-width: 92px;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 7px;
