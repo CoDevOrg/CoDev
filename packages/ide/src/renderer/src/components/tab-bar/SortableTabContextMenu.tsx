@@ -23,6 +23,7 @@ import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortc
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 const TAB_COLORS = [
   {
@@ -201,7 +202,13 @@ export function SortableTabContextMenu({
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
+        <DropdownMenuItem
+          onSelect={() => {
+            if (isPinned || (isChatView && isCodevEmbedded())) return
+            onClose(tab.id)
+          }}
+          disabled={isPinned || (isChatView && isCodevEmbedded())}
+        >
           <X className="size-3.5" />
           {translate('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
           {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}

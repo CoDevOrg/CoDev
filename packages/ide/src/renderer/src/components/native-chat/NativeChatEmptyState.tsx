@@ -21,8 +21,7 @@ export function NativeChatEmptyState({
   onReopenPreviousConversation?: () => void
 }): React.JSX.Element {
   const copy = emptyStateCopy(kind, message, agent)
-  const showReopen =
-    Boolean(onReopenPreviousConversation) && (kind === 'empty' || kind === 'error')
+  const showReopen = Boolean(onReopenPreviousConversation) && (kind === 'empty' || kind === 'error')
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div

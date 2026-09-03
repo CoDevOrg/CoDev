@@ -18,6 +18,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -355,7 +356,10 @@ export default function SortableTab({
           <Minimize2 className="w-3 h-3" />
         </button>
       )}
-      {!isEditing && !isPinned && (
+      {/* CoDev: the chat tab is the workspace's one permanent surface (closeTab
+          already refuses a user-close on it too), so showing a close button
+          that silently no-ops would just be confusing. */}
+      {!isEditing && !isPinned && !(isChatView && isCodevEmbedded()) && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button

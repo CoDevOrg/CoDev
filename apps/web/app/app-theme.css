@@ -705,6 +705,65 @@
   color: var(--ink) !important;
 }
 
+@media (max-width: 768px) {
+  /* Collapse the fixed 220px rail into a sticky horizontal bar so the content
+     column gets the full viewport width instead of being crushed. */
+  .app-with-sidebar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .app-sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .app-sidebar-header {
+    flex-shrink: 0;
+    padding: 0 4px 0 0;
+  }
+
+  .app-sidebar-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    flex: 1 1 auto;
+  }
+
+  .app-sidebar-link {
+    height: 44px;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+
+  .app-sidebar-footer {
+    flex-shrink: 0;
+    padding: 0 0 0 6px;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+
+  .app-sidebar-footer .profile-menu-trigger {
+    width: auto;
+  }
+
+  .app-sidebar-footer .profile-menu-popover {
+    top: 100%;
+    bottom: auto;
+    left: auto;
+    right: 0;
+    margin-top: 6px;
+    margin-bottom: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .dashboard-shell {
     padding: 28px 16px 72px;

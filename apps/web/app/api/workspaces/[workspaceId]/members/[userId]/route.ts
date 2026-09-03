@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
 import {
+  leaveWorkspace,
   listWorkspaceMembers,
   updateMemberAccessRole,
   updateMemberCapabilities,
@@ -54,5 +55,31 @@ export async function PATCH(
     });
   } catch (error) {
     return apiError(error);
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ workspaceId: string; userId: string }> },
+) {
+  const user = await getApiUser();
+  if (!user) return apiError(new Error("Authentication required."), 401);
+
+  const { workspaceId, userId } = await context.params;
+  if (userId !== user.id) {
+    return apiError(
+      new Error("You can only remove your own membership here."),
+      403,
+    );
+  }
+
+  try {
+    await leaveWorkspace(workspaceId, user.id);
+    return Response.json({ ok: true, workspaceId, userId });
+  } catch (error) {
+    return apiError(
+      error,
+      error instanceof Error && "status" in error ? Number(error.status) : 500,
+    );
   }
 }

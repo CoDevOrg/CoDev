@@ -21,7 +21,7 @@ const MIN_REPORTABLE_MS = 900
 
 export function nativeChatTurnDurations(
   messages: readonly NativeChatMessage[],
-  now: number,
+  now: number
 ): Array<number | null> {
   return messages.map((message, index) => {
     if (message.timestamp === null) return null
@@ -53,7 +53,7 @@ export function nativeChatTurnTotals(
   messages: readonly NativeChatMessage[],
   now: number,
   /** The turn in flight has no closing message yet; measure it against `now`. */
-  isWorking: boolean,
+  isWorking: boolean
 ): Array<number | null> {
   const totals: Array<number | null> = messages.map(() => null)
   let turnStart: number | null = null

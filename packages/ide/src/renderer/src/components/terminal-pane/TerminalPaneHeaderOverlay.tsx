@@ -14,6 +14,7 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -106,6 +107,10 @@ export default function TerminalPaneHeaderOverlay({
     'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
     'Split Terminal Right'
   )
+  // CoDev: the chat is the workspace, not one pane among several. Continuing in
+  // a new session, flipping to the raw TUI, and splitting all assume a pane
+  // model the member does not have here.
+  const codevEmbedded = isCodevEmbedded()
 
   return (
     <div
@@ -244,7 +249,7 @@ export default function TerminalPaneHeaderOverlay({
                   </button>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-                  {canContinueAgentSessionInNewSession && isActivePane ? (
+                  {canContinueAgentSessionInNewSession && isActivePane && !codevEmbedded ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -272,7 +277,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {canToggleNativeChat && isActivePane ? (
+                  {canToggleNativeChat && isActivePane && !codevEmbedded ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -313,7 +318,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {showAlwaysOnHeaders && showSplitButton ? (
+                  {showAlwaysOnHeaders && showSplitButton && !codevEmbedded ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

@@ -107,9 +107,7 @@ describe('openCodevProject', () => {
     const store = createStore([
       { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
     ])
-    store.worktreesByRepo['repo-1'] = [
-      { id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }
-    ]
+    store.worktreesByRepo['repo-1'] = [{ id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }]
     const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
     const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
       store.activeWorktreeId = worktreeId
@@ -136,9 +134,7 @@ describe('openCodevProject', () => {
     const store = createStore([
       { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
     ])
-    store.worktreesByRepo['repo-1'] = [
-      { id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }
-    ]
+    store.worktreesByRepo['repo-1'] = [{ id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }]
     const openDefaultCheckout = vi.fn().mockResolvedValue(undefined)
     const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
       store.activeWorktreeId = worktreeId
@@ -264,6 +260,53 @@ describe('openCodevProject', () => {
     expect(openDefaultCheckout).toHaveBeenCalledTimes(3)
     expect(activateDefaultCheckoutFromSidebar).toHaveBeenCalledTimes(1)
     expect(waitForActivationRetry).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports failure when the chat surface never appears', async () => {
+    const store = createStore([{ id: 'repo-5', path: projectPath, displayName: 'workspace-id' }])
+    store.worktreesByRepo['repo-5'] = [{ id: 'worktree-5', repoId: 'repo-5', isMainWorktree: true }]
+    const launchDefaultChatTab = vi.fn()
+    // The launch resolves fine — it only kicks off a background worktree create
+    // — so the handoff must not treat that as the workspace being open.
+    const waitForDefaultChatTab = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      openCodevProject({
+        projectPath,
+        projectKind: 'git',
+        store,
+        getStore: () => store,
+        openDefaultCheckout: vi.fn(async () => {
+          store.activeWorktreeId = 'worktree-5'
+        }),
+        activateDefaultCheckoutFromSidebar: vi.fn(),
+        launchDefaultChatTab,
+        waitForDefaultChatTab
+      })
+    ).resolves.toBe(false)
+
+    expect(launchDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-5' })
+    expect(waitForDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-5' })
+  })
+
+  it('reports success once a chat surface exists', async () => {
+    const store = createStore([{ id: 'repo-6', path: projectPath, displayName: 'workspace-id' }])
+    store.worktreesByRepo['repo-6'] = [{ id: 'worktree-6', repoId: 'repo-6', isMainWorktree: true }]
+
+    await expect(
+      openCodevProject({
+        projectPath,
+        projectKind: 'git',
+        store,
+        getStore: () => store,
+        openDefaultCheckout: vi.fn(async () => {
+          store.activeWorktreeId = 'worktree-6'
+        }),
+        activateDefaultCheckoutFromSidebar: vi.fn(),
+        launchDefaultChatTab: vi.fn(),
+        waitForDefaultChatTab: vi.fn().mockResolvedValue(true)
+      })
+    ).resolves.toBe(true)
   })
 
   it('reports failure when Orca cannot add the project', async () => {

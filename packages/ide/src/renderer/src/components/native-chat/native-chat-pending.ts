@@ -361,9 +361,7 @@ export function applyCommandMarkerBoundaries(
   // Grok) can't be placed relative to the boundary, so it stays visible instead
   // of being excluded outright -- that would hide every future turn from that
   // transcript too, since none of them carry a timestamp either.
-  return messages.filter(
-    (message) => message.timestamp === null || message.timestamp > clearSentAt
-  )
+  return messages.filter((message) => message.timestamp === null || message.timestamp > clearSentAt)
 }
 
 /** Render command markers as compact `system` messages. The `system` role draws

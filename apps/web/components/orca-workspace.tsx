@@ -4,25 +4,24 @@ import Link from "next/link";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { Share2 } from "lucide-react";
+import { track } from "@vercel/analytics";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
-  buildCodevBridgeCommandMessage,
   executeCodevBridgeRequest,
   isCodevBridgeClientMessage,
   isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
-  type CodevBridgeCommand,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
 import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { watchOrcaProjectTree } from "@/components/orca-project-tree";
-import { WorkspaceCodexResumeDialog } from "@/components/workspace-codex-resume-dialog";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
@@ -30,8 +29,19 @@ import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 type ConnectionPhase =
   | { phase: "connecting" }
   | { phase: "host-starting" }
-  | { phase: "ready"; iframeSrc: string; workspacePath: string | null }
+  // The host is up and a pairing offer is in hand. The iframe is already
+  // mounted (it booted from the static bundle the moment this component did),
+  // so we hand it the pairing over `postMessage` rather than swapping its src.
+  | { phase: "ready" }
   | { phase: "error"; message: string };
+
+/** Late pairing details posted into the already-running iframe once the host
+ *  answers. Mirrors the fragment `buildOrcaIframeSource` used to encode. */
+type PendingPair = {
+  pairingCode: string;
+  workspacePath: string;
+  memberId?: string;
+};
 
 /**
  * Poll fast while the host comes up. The wake path is idempotent and cheap
@@ -62,6 +72,16 @@ const IDE_KEEPALIVE_MS = 60_000;
 const ACTIONABLE_CONNECT_STATUSES = new Set([401, 403, 404, 429]);
 const ORCA_THEME_OVERRIDE_HREF = "/orca-theme-overrides.css";
 const CODEV_EMPTY_STATE_LOGO_SRC = "/brand/codev-mark-v3.png";
+/** The embedded IDE bundle. Served from this origin, so it is known and
+ *  loadable before the workspace's EC2 host has finished waking. */
+const ORCA_WEB_CLIENT_PATH = "/orca/web-index.html";
+/**
+ * How long to keep the loading skeleton up when the iframe never reports
+ * `codev:shell-ready` (an older bundle, or a shell that failed to paint). By
+ * this point the pairing has usually landed and the iframe is the real IDE, so
+ * revealing it is the right call rather than skeletoning forever.
+ */
+const SHELL_READY_FALLBACK_MS = 8_000;
 
 type OrcaConnectResponse = {
   state?: string;
@@ -74,6 +94,7 @@ type OrcaConnectResponse = {
 
 type CodevOrcaMessage =
   | { type: "codev:choose-repository" }
+  | { type: "codev:shell-ready" }
   | { type: "codev:project-ready" }
   | { type: "codev:project-error"; message?: string }
   | {
@@ -283,6 +304,39 @@ export function buildOrcaIframeSource({
     fragment.set("codevCursorAvailable", "1");
   }
   return `${webClientPath}#${fragment.toString()}`;
+}
+
+/**
+ * The iframe src used before the host is up: everything the client can know
+ * from this origin, and `codevPending=1` so it renders the IDE shell now and
+ * waits for the pairing + project path to arrive over `codev:pair`.
+ */
+export function buildOrcaPendingIframeSource({
+  projectKind,
+  projectName,
+  defaultAgent,
+  cursorAvailable,
+}: {
+  projectKind: "git" | "folder";
+  projectName?: string;
+  defaultAgent?: OrcaDefaultAgent;
+  cursorAvailable?: boolean;
+}) {
+  const fragment = new URLSearchParams({
+    codev: "1",
+    codevPending: "1",
+    codevProjectKind: projectKind,
+  });
+  if (projectName) {
+    fragment.set("codevProjectName", projectName);
+  }
+  if (defaultAgent) {
+    fragment.set("codevDefaultAgent", defaultAgent);
+  }
+  if (cursorAvailable) {
+    fragment.set("codevCursorAvailable", "1");
+  }
+  return `${ORCA_WEB_CLIENT_PATH}#${fragment.toString()}`;
 }
 
 /**
@@ -614,19 +668,13 @@ export function WorkspaceTopBar({
   workspaceId,
   canInvite,
   liveAgentCount = null,
-  onResumeCommand,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
   liveAgentCount?: number | null;
-  /** Sends a command into the embedded IDE. Returns false (no throw) before
-   *  the iframe and its bridge handshake are ready; the dialog falls back
-   *  to the manual copy-paste command in that case. */
-  onResumeCommand: (command: CodevBridgeCommand) => boolean;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
-  const [codexResumeOpen, setCodexResumeOpen] = useState(false);
   const liveLabel =
     liveAgentCount == null
       ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
@@ -669,13 +717,6 @@ export function WorkspaceTopBar({
         <button
           className="workspace-topbar-share"
           type="button"
-          onClick={() => setCodexResumeOpen(true)}
-        >
-          Resume Codex session
-        </button>
-        <button
-          className="workspace-topbar-share"
-          type="button"
           onClick={() => setShareOpen(true)}
         >
           <Share2 aria-hidden size={13} />
@@ -688,12 +729,6 @@ export function WorkspaceTopBar({
         open={shareOpen}
         workspaceId={workspaceId}
       />
-      <WorkspaceCodexResumeDialog
-        onClose={() => setCodexResumeOpen(false)}
-        onResumeCommand={onResumeCommand}
-        open={codexResumeOpen}
-        workspaceId={workspaceId}
-      />
     </header>
   );
 }
@@ -702,13 +737,11 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
-  onResumeCommand,
   children,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
-  onResumeCommand: (command: CodevBridgeCommand) => boolean;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -718,7 +751,6 @@ function WorkspaceChrome({
       <WorkspaceTopBar
         canInvite={canInvite}
         liveAgentCount={activity?.occupied ?? null}
-        onResumeCommand={onResumeCommand}
         repository={repository}
         workspaceId={workspaceId}
       />
@@ -762,34 +794,81 @@ export function OrcaWorkspace({
   // impure, and the value only ever feeds the "this is taking a while" copy.
   const waitingSinceRef = useRef<number | null>(null);
   const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
+  // The embedded IDE reports its chrome has painted; until then the loading
+  // skeleton covers the iframe. `iframeKey` forces a fresh iframe load when a
+  // reaped session has to be replaced under an open tab.
+  const [shellReady, setShellReady] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
+  // Held here (not in `connection`) so it survives the poll's state churn and
+  // can be (re)delivered to the iframe on its next load.
+  const pendingPairRef = useRef<PendingPair | null>(null);
   const codevBridgeSessionRef = useRef<CodevParentBridgeSession>(
     EMPTY_CODEV_PARENT_BRIDGE_SESSION,
   );
 
-  // Sends a parent-initiated command into the embedded IDE over the same
-  // bridge the iframe uses to request things from the parent, just in the
-  // other direction. Returns false (never throws) when there is no iframe
-  // yet or the bridge hasn't completed its hello/ack handshake, so callers
-  // can fall back to a manual instruction instead of failing silently.
-  const sendCodevBridgeCommand = useCallback((command: CodevBridgeCommand) => {
-    const message = buildCodevBridgeCommandMessage(
-      codevBridgeSessionRef.current,
-      command,
-    );
-    if (!message || !iframeRef.current?.contentWindow) {
-      return false;
-    }
-    iframeRef.current.contentWindow.postMessage(message, window.location.origin);
-    return true;
-  }, []);
+  // The iframe src never changes across a connect: it boots from the static
+  // bundle immediately with `codevPending=1`, and the pairing arrives later
+  // over `codev:pair`. Rebuilt only when the RSC-known project facts change.
+  const pendingIframeSrc = useMemo(
+    () =>
+      buildOrcaPendingIframeSource({
+        projectKind: repository ? "git" : "folder",
+        ...(repository ? { projectName: repository } : {}),
+        ...(defaultAgent ? { defaultAgent } : {}),
+        ...(cursorAvailable ? { cursorAvailable } : {}),
+      }),
+    [repository, defaultAgent, cursorAvailable],
+  );
 
+  // Hand the pairing to the embedded IDE. Safe to call repeatedly and before
+  // the pairing exists — it no-ops until both the pairing and a live iframe
+  // window are in hand, so callers fire it from the poll and from `onLoad`.
+  const deliverPairing = useCallback(() => {
+    const pair = pendingPairRef.current;
+    const target = iframeRef.current?.contentWindow;
+    if (!pair || !target) {
+      return;
+    }
+    target.postMessage(
+      {
+        type: "codev:pair",
+        pairing: pair.pairingCode,
+        projectPath: pair.workspacePath,
+        projectKind: repository ? "git" : "folder",
+        ...(repository ? { projectName: repository } : {}),
+        ...(defaultAgent ? { defaultAgent } : {}),
+        ...(pair.memberId ? { memberId: pair.memberId } : {}),
+        ...(cursorAvailable ? { cursorAvailable } : {}),
+      },
+      window.location.origin,
+    );
+  }, [repository, defaultAgent, cursorAvailable]);
+
+  // Time-to-shell / time-to-project, measured from this component's first
+  // paint (which is when the iframe starts loading the static bundle).
+  const bootStartRef = useRef<number | null>(null);
+  const reportedRef = useRef({ shell: false, project: false });
   useEffect(() => {
+    bootStartRef.current ??= performance.now();
     return () => {
       disposeIframeBranding.current?.();
     };
   }, []);
+  const reportBootMark = useCallback(
+    (event: "workspace_shell_ready" | "workspace_project_ready") => {
+      const key = event === "workspace_shell_ready" ? "shell" : "project";
+      if (reportedRef.current[key] || bootStartRef.current === null) {
+        return;
+      }
+      reportedRef.current[key] = true;
+      track(event, {
+        ms: Math.round(performance.now() - bootStartRef.current),
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     function receiveOrcaMessage(event: MessageEvent<CodevOrcaMessage>) {
@@ -863,8 +942,22 @@ export function OrcaWorkspace({
             window.location.origin,
           );
         });
+      } else if (event.data.type === "codev:shell-ready") {
+        setShellReady(true);
+        reportBootMark("workspace_shell_ready");
+        // The pairing can already be sitting in pendingPairRef by the time the
+        // shell announces itself (a warm host resolves the wake-poll almost
+        // instantly, well before the iframe has loaded its bundle, mounted
+        // React, and attached its own `message` listener) — a postMessage
+        // sent before that listener exists is simply dropped, no error, no
+        // retry, and the shell waits for a pairing that already came and went.
+        // This is the one signal that proves the listener is actually up, so
+        // deliver (or re-deliver) here regardless of what triggered delivery
+        // before.
+        deliverPairing();
       } else if (event.data.type === "codev:project-ready") {
         setIsOpeningProject(false);
+        reportBootMark("workspace_project_ready");
       } else if (event.data.type === "codev:project-error") {
         setIsOpeningProject(false);
         setConnection({
@@ -877,11 +970,37 @@ export function OrcaWorkspace({
 
     window.addEventListener("message", receiveOrcaMessage);
     return () => window.removeEventListener("message", receiveOrcaMessage);
-  }, [workspaceId]);
+  }, [workspaceId, reportBootMark, deliverPairing]);
+
+  // Fallback reveal: if the iframe never sends `codev:shell-ready` (older
+  // bundle, or a shell that failed to paint), stop covering it once the wait
+  // has clearly outlasted a normal boot — by then it is the real IDE anyway.
+  useEffect(() => {
+    if (shellReady) {
+      return;
+    }
+    const timer = setTimeout(
+      () => setShellReady(true),
+      SHELL_READY_FALLBACK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [shellReady, iframeKey]);
+
+  // Re-hand the pairing whenever we newly have one (the poll may resolve after
+  // the iframe has already loaded, so `onLoad` alone is not enough).
+  useEffect(() => {
+    if (connection.phase === "ready") {
+      deliverPairing();
+    }
+  }, [connection.phase, deliverPairing]);
 
   const retry = useCallback(() => {
     waitingSinceRef.current = null;
     setIsSlowStart(false);
+    setShellReady(false);
+    pendingPairRef.current = null;
+    setIsOpeningProject(false);
+    setIframeKey((current) => current + 1);
     setConnection({ phase: "connecting" });
     setAttempt((current) => current + 1);
   }, []);
@@ -916,6 +1035,9 @@ export function OrcaWorkspace({
         // leaving somebody staring at a blank pane.
         if (!cancelled && payload?.session === "gone") {
           setIsOpeningProject(false);
+          setShellReady(false);
+          pendingPairRef.current = null;
+          setIframeKey((current) => current + 1);
           setConnection({ phase: "connecting" });
           setAttempt((current) => current + 1);
         }
@@ -998,21 +1120,16 @@ export function OrcaWorkspace({
           waitAndRetry();
           return;
         }
-        setIsOpeningProject(true);
-        setConnection({
-          phase: "ready",
-          iframeSrc: buildOrcaIframeSource({
-            webClientPath: payload.webClientPath,
-            pairingCode: payload.pairingCode,
-            workspacePath,
-            projectKind: repository ? "git" : "folder",
-            ...(repository ? { projectName: repository } : {}),
-            ...(defaultAgent ? { defaultAgent } : {}),
-            ...(payload.memberId ? { memberId: payload.memberId } : {}),
-            ...(cursorAvailable ? { cursorAvailable } : {}),
-          }),
+        // The iframe is already running the pending shell — hand it the
+        // pairing rather than reloading it. `deliverPairing` fires from the
+        // effect keyed on this phase change (and again from `onLoad`).
+        pendingPairRef.current = {
+          pairingCode: payload.pairingCode,
           workspacePath,
-        });
+          ...(payload.memberId ? { memberId: payload.memberId } : {}),
+        };
+        setIsOpeningProject(true);
+        setConnection({ phase: "ready" });
       } catch {
         if (!cancelled) {
           waitAndRetry();
@@ -1029,81 +1146,111 @@ export function OrcaWorkspace({
     };
   }, [workspaceId, repository, attempt, defaultAgent, cursorAvailable]);
 
-  if (connection.phase === "ready") {
+  if (connection.phase === "error") {
     return (
       <WorkspaceChrome
         canInvite={canInvite}
-        onResumeCommand={sendCodevBridgeCommand}
         repository={repository}
         workspaceId={workspaceId}
       >
-        <div className="workspace-iframe-wrap">
-          <iframe
-            ref={iframeRef}
-            className="workspace-iframe"
-            src={connection.iframeSrc}
-            title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
-            allow="clipboard-read; clipboard-write"
-            onLoad={(event) => {
-              disposeIframeBranding.current?.();
-              disposeIframeBranding.current = injectOrcaThemeAndBranding(
-                event.currentTarget,
-                repository || "Workspace",
-              );
-            }}
-          />
-          {isOpeningProject ? (
-            <div className="workspace-iframe-loading" role="status">
-              <span className="workspace-iframe-loading-spinner" />
-              <p>Opening your project…</p>
-            </div>
-          ) : null}
-        </div>
-        <WorkspaceRepositoryDialog
-          open={repositoryDialogOpen}
-          onClose={() => setRepositoryDialogOpen(false)}
-        />
+        <main className="workspace-status">
+          <h1>Could not open the workspace</h1>
+          <p>{connection.message}</p>
+          <button
+            type="button"
+            className="workspace-status-retry"
+            onClick={retry}
+          >
+            Retry
+          </button>
+        </main>
       </WorkspaceChrome>
     );
   }
 
+  // The iframe boots from the static bundle the moment this component mounts,
+  // so the IDE chrome paints while the host is still waking. An IDE-shaped
+  // skeleton covers it until `codev:shell-ready`; after that a small pill in
+  // the corner reports host-wake / project-open progress non-blockingly.
+  const hostReady = connection.phase === "ready";
   return (
     <WorkspaceChrome
       canInvite={canInvite}
-      onResumeCommand={sendCodevBridgeCommand}
       repository={repository}
       workspaceId={workspaceId}
     >
-      <main className="workspace-status">
-        {connection.phase === "error" ? (
-          <>
-            <h1>Could not open the workspace</h1>
-            <p>{connection.message}</p>
-            <button
-              type="button"
-              className="workspace-status-retry"
-              onClick={retry}
-            >
-              Retry
-            </button>
-          </>
-        ) : (
-          <>
-            <h1>
-              {connection.phase === "host-starting"
-                ? "Waking your workspace…"
-                : "Connecting to your workspace…"}
-            </h1>
-            <p>
+      <div className="workspace-iframe-wrap">
+        <iframe
+          key={iframeKey}
+          ref={iframeRef}
+          className="workspace-iframe"
+          src={pendingIframeSrc}
+          title={repository ? `CoDev — ${repository}` : "CoDev workspace"}
+          allow="clipboard-read; clipboard-write"
+          onLoad={(event) => {
+            disposeIframeBranding.current?.();
+            disposeIframeBranding.current = injectOrcaThemeAndBranding(
+              event.currentTarget,
+              repository || "Workspace",
+            );
+            deliverPairing();
+          }}
+        />
+        {shellReady ? null : (
+          <div
+            className="workspace-boot workspace-boot-overlay"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="workspace-boot-skeleton" aria-hidden="true">
+              <div className="workspace-boot-rail" />
+              <div className="workspace-boot-main">
+                <div className="workspace-boot-bar" style={{ width: "38%" }} />
+                <div className="workspace-boot-bar" style={{ width: "72%" }} />
+                <div className="workspace-boot-bar" style={{ width: "54%" }} />
+                <div className="workspace-boot-block" />
+              </div>
+              <div className="workspace-boot-rail workspace-boot-rail-right" />
+            </div>
+            <p className="workspace-boot-note">
               {isSlowStart
-                ? "Still waking up — this one is taking a little longer than usual. It will open on its own."
+                ? "Still starting — this one is taking longer than usual. It will open on its own."
                 : repository
-                  ? `Preparing ${repository} in your CoDev workspace.`
-                  : "Preparing your CoDev workspace."}
+                  ? `Starting ${repository}…`
+                  : "Starting your workspace…"}
             </p>
-          </>
+          </div>
         )}
-      </main>
+        {shellReady && !hostReady ? (
+          <div className="workspace-boot-pill" role="status">
+            <span className="workspace-boot-pill-dot" />
+            {isSlowStart
+              ? "Still starting the workspace…"
+              : repository
+                ? `Starting ${repository}…`
+                : "Starting your workspace…"}
+            {isSlowStart ? (
+              <button
+                type="button"
+                className="workspace-boot-pill-retry"
+                onClick={retry}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {shellReady && hostReady && isOpeningProject ? (
+          <div className="workspace-boot-pill" role="status">
+            <span className="workspace-boot-pill-dot is-live" />
+            Opening project…
+          </div>
+        ) : null}
+      </div>
+      <WorkspaceRepositoryDialog
+        open={repositoryDialogOpen}
+        onClose={() => setRepositoryDialogOpen(false)}
+      />
     </WorkspaceChrome>
   );
 }

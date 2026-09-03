@@ -17,6 +17,7 @@ import type { TerminalQuickCommand } from '../../../../shared/types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -27,6 +28,9 @@ export function TabBarQuickCommandsButton({
   worktreeId,
   groupId
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
+  // CoDev: quick commands are terminal chrome, and the terminal there is a
+  // drawer inside the chat rather than a surface with its own toolbar.
+  const codevEmbedded = isCodevEmbedded()
   const allCommands = useAppStore((s) => s.settings?.terminalQuickCommands)
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -132,7 +136,7 @@ export function TabBarQuickCommandsButton({
   // Without a repoId the button can't represent a repo-scoped run target, and
   // global-only mode would be confusing in a context that doesn't belong to a
   // repo at all.
-  if (!repoId) {
+  if (!repoId || codevEmbedded) {
     return null
   }
 

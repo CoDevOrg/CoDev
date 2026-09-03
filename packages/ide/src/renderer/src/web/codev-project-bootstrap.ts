@@ -44,11 +44,41 @@ type OpenDefaultCheckout = (args: {
  */
 type LaunchDefaultChatTab = (args: { worktreeId: string }) => void | Promise<void>
 
+/**
+ * Resolves once the workspace really has a chat surface. `launchDefaultChatTab`
+ * creates the agent's worktree in the background and returns immediately, so
+ * awaiting the launch proves nothing — without this the handoff reports success
+ * onto an empty workspace and a silent failure is indistinguishable from a
+ * healthy open.
+ */
+type WaitForDefaultChatTab = (args: { worktreeId: string }) => Promise<boolean>
+
 const CODEV_ACTIVATION_ATTEMPTS = 46
 const CODEV_ACTIVATION_RETRY_DELAY_MS = 2_000
 
 function waitForCodevActivationRetry(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, CODEV_ACTIVATION_RETRY_DELAY_MS))
+}
+
+/**
+ * Lets a surface rendered deep in the tree (the awaiting-workspace cover) ask
+ * `App` to run the project handoff again. The handoff owns store actions and a
+ * once-only ref that only `App` can reset, so the retry is registered there
+ * rather than reconstructed at the call site.
+ */
+let codevProjectBootstrapRetry: (() => void) | null = null
+
+export function registerCodevProjectBootstrapRetry(retry: (() => void) | null): void {
+  codevProjectBootstrapRetry = retry
+}
+
+/** Returns false when no handoff is registered (stock Orca, or pre-mount). */
+export function retryCodevProjectBootstrap(): boolean {
+  if (!codevProjectBootstrapRetry) {
+    return false
+  }
+  codevProjectBootstrapRetry()
+  return true
 }
 
 export function isCodevProjectBootstrapReady({
@@ -70,6 +100,7 @@ export async function openCodevProject({
   openDefaultCheckout,
   activateDefaultCheckoutFromSidebar,
   launchDefaultChatTab,
+  waitForDefaultChatTab,
   waitForActivationRetry = waitForCodevActivationRetry
 }: {
   projectPath: string
@@ -80,6 +111,7 @@ export async function openCodevProject({
   openDefaultCheckout: OpenDefaultCheckout
   activateDefaultCheckoutFromSidebar: ActivateDefaultCheckoutFromSidebar
   launchDefaultChatTab?: LaunchDefaultChatTab
+  waitForDefaultChatTab?: WaitForDefaultChatTab
   waitForActivationRetry?: () => Promise<void>
 }): Promise<boolean> {
   const repo =
@@ -93,18 +125,20 @@ export async function openCodevProject({
   }
 
   let defaultChatTabLaunched = false
-  const finishActivation = async (worktreeId: string): Promise<true> => {
-    if (!defaultChatTabLaunched) {
-      defaultChatTabLaunched = true
-      try {
-        await launchDefaultChatTab?.({ worktreeId })
-      } catch (error) {
-        // The workspace is usable without the chat tab; the member can open one
-        // by hand. Never fail the whole handoff on it.
-        console.warn('CoDev could not open the default chat tab:', error)
-      }
+  const finishActivation = async (worktreeId: string): Promise<boolean> => {
+    if (defaultChatTabLaunched) {
+      return true
     }
-    return true
+    defaultChatTabLaunched = true
+    try {
+      await launchDefaultChatTab?.({ worktreeId })
+    } catch (error) {
+      console.warn('CoDev could not open the default chat tab:', error)
+    }
+    // The chat is the workspace, so "opened" means a chat surface exists — not
+    // merely that a checkout activated. Reporting ready any earlier hands the
+    // parent page a success while the member stares at an empty workspace.
+    return waitForDefaultChatTab ? waitForDefaultChatTab({ worktreeId }) : true
   }
 
   for (let attempt = 0; attempt < CODEV_ACTIVATION_ATTEMPTS; attempt += 1) {
