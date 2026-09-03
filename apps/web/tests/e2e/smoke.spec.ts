@@ -45,9 +45,10 @@ test("landing page explains CoDev and offers a clear start", async ({
 
   // Registration is closed until invites go out, so the only route to
   // /sign-in is the low-key "Sign in" link in the footer.
-  await expect(
-    page.getByRole("link", { name: "Sign in" }),
-  ).toHaveAttribute("href", "/sign-in");
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+    "href",
+    "/sign-in",
+  );
   expect(consoleErrors).toEqual([]);
 });
 
