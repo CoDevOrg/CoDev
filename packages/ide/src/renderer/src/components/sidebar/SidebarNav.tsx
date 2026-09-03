@@ -16,6 +16,7 @@ import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
 
@@ -65,6 +66,9 @@ const SidebarNav = React.memo(function SidebarNav() {
   const showAgentDashboardButton = (experimentalSidebarButtons & 2) !== 0
   const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
+  // CoDev ships Tasks and Automations in a later release; hide the nav entries
+  // for now without touching the pages or their wiring.
+  const codevEmbedded = isCodevEmbedded()
   const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
   const mobileActive = activeView === 'mobile'
@@ -83,8 +87,8 @@ const SidebarNav = React.memo(function SidebarNav() {
       data-contextual-tour-target="sidebar-navigation"
     >
       <SetupGuideSidebarEntry />
-      <SidebarTaskNavButton />
-      {showAutomationsButton ? (
+      {!codevEmbedded && <SidebarTaskNavButton />}
+      {showAutomationsButton && !codevEmbedded ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <button

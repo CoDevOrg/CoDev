@@ -887,3 +887,52 @@ export async function deleteWorkspace(workspaceId: string, userId: string) {
     payload: { deletedAt: new Date().toISOString() },
   }).catch(() => undefined);
 }
+
+/**
+ * Remove the caller's own membership from a workspace. Owners cannot leave
+ * (they delete the workspace or transfer ownership instead); every other role
+ * can. Only the caller's row is touched, so this is safe to expose to any
+ * member without an owner check.
+ */
+export async function leaveWorkspace(workspaceId: string, userId: string) {
+  const access = await getWorkspaceAccess(workspaceId, userId);
+  if (!access) {
+    throw new WorkspaceAccessError(
+      "Workspace not found or access denied.",
+      404,
+    );
+  }
+  if (access.role === "owner") {
+    throw new WorkspaceAccessError(
+      "Owners can't leave a workspace. Delete it or transfer ownership first.",
+      409,
+    );
+  }
+
+  const removed = await getDatabase()
+    .delete(schema.workspaceMembers)
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, workspaceId),
+        eq(schema.workspaceMembers.userId, userId),
+        eq(schema.workspaceMembers.role, "member"),
+      ),
+    )
+    .returning({ userId: schema.workspaceMembers.userId });
+  if (!removed.length) {
+    throw new WorkspaceAccessError(
+      "You are not a member of this workspace.",
+      404,
+    );
+  }
+
+  // PostgreSQL membership is the source of truth: getWorkspaceAccess returns
+  // null the moment the row is gone, so a stale OpenFGA tuple can't grant
+  // access. deleteWorkspace leaves tuples behind the same way.
+  await appendWorkspaceEvent({
+    workspaceId,
+    actorId: userId,
+    type: "WORKSPACE_MEMBER_LEFT",
+    payload: { userId, leftAt: new Date().toISOString() },
+  }).catch(() => undefined);
+}

@@ -45,10 +45,12 @@ function readDefaultAgent(value: string | null): CodevDefaultChatAgent | null {
 // services/orchestrator/src/backend/orca.rs) — it has no separate notion of
 // a personal-runtime root, so a settings-only (personal) pairing lives under
 // this same path, keyed by the member's own id instead of a workspace id.
-const CODEV_WORKSPACE_PATH =
+// Exported so the late-pairing path (`codev-pair-message.ts`) validates the
+// project path it receives over postMessage against the exact same shape.
+export const CODEV_WORKSPACE_PATH =
   /^\/srv\/codev\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
-const CODEV_MEMBER_ID =
+export const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
+export const CODEV_MEMBER_ID =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
 export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
@@ -156,8 +156,10 @@ export async function POST(
           "The workspace is not ready for a new agent. Try again after it resumes.",
         );
       }
-      const [sessionCount] = await transaction
-        .select({ value: count() })
+      // Branching always cuts a new worktree, so capacity is counted the same
+      // way the create path counts it: distinct live worktrees, not sessions.
+      const [worktreeCount] = await transaction
+        .select({ value: countDistinct(schema.worktrees.id) })
         .from(schema.agentSessions)
         .innerJoin(
           schema.worktrees,
@@ -169,9 +171,9 @@ export async function POST(
             inArray(schema.worktrees.status, ["active", "frozen"]),
           ),
         );
-      if (Number(sessionCount?.value ?? 0) >= MAX_PARALLEL_AGENT_SESSIONS) {
+      if (Number(worktreeCount?.value ?? 0) >= MAX_PARALLEL_AGENT_SESSIONS) {
         throw new AgentCapacityError(
-          `A workspace supports at most ${MAX_PARALLEL_AGENT_SESSIONS} agent sessions.`,
+          `A workspace supports at most ${MAX_PARALLEL_AGENT_SESSIONS} agent worktrees.`,
         );
       }
 

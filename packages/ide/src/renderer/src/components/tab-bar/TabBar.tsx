@@ -82,6 +82,7 @@ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcrip
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { CodevPresenceSegment } from './CodevPresenceSegment'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -813,7 +814,8 @@ function TabBarInner({
   )
   const activeEditorPath =
     activeTabType === 'editor'
-      ? (editorFiles ?? []).find((file) => (file.tabId ?? file.id) === activeFileId)?.relativePath ?? null
+      ? ((editorFiles ?? []).find((file) => (file.tabId ?? file.id) === activeFileId)
+          ?.relativePath ?? null)
       : null
   const browserMap = useMemo(
     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
@@ -904,6 +906,15 @@ function TabBarInner({
   ])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  // The worktree's chat tab, and whether the member is currently looking at
+  // something else. `viewMode` is the signal that survives a paired host's tab
+  // mirror; `launchAgent` comes back unset from it.
+  const codevChatTabId = useMemo(() => {
+    if (!isCodevEmbedded()) return null
+    const chat = unifiedTabs.find((tab) => tab.viewMode === 'chat')
+    return chat?.entityId ?? chat?.id ?? null
+  }, [unifiedTabs])
+  const codevAwayFromChat = activeTabType !== 'terminal' || activeTabId !== codevChatTabId
 
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
@@ -1023,8 +1034,30 @@ function TabBarInner({
       {/* Why: no strategy stops dnd-kit animating siblings, so tabs stay anchored during drag; only the insertion bar moves. */}
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
+        {/* CoDev: with the strip hidden, anything that still opens a tab — the
+            chat's Browser button, a file link in a transcript — would otherwise
+            strand the member on it with no way back short of a page reload.
+            This is that way back, and it appears only when they are away from
+            the chat. */}
+        {codevChatTabId && codevAwayFromChat ? (
+          <button
+            type="button"
+            className="my-auto ml-1.5 flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            onClick={() => onActivate(codevChatTabId)}
+          >
+            <ChevronLeft className="size-3.5" />
+            {translate('components.codev.backToChat', 'Back to chat')}
+          </button>
+        ) : null}
+        {/* CoDev: the workspace is one permanent chat, so there is nothing for a
+            tab strip to switch between — it only advertises a tab model the
+            member cannot use (the chat has no close button and the "+" is
+            hidden). */}
         <div
-          className="relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
+          className={`relative min-h-0 min-w-0 max-w-full flex-[0_1_auto] ${
+            isCodevEmbedded() ? 'hidden' : 'flex'
+          }`}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -1233,67 +1266,72 @@ function TabBarInner({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      <DropdownMenu
-        open={newTabMenuOpen}
-        onOpenChange={setNewTabMenuOpen}
-        // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
-        modal={false}
-      >
-        <DropdownMenuTrigger asChild>
-          <button
-            className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            // Why: aria-label matches the tooltip so E2E can locate the "+" via getByRole('button', { name: 'New tab' }).
-            aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          sideOffset={6}
-          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
-          onCloseAutoFocus={(e) => {
-            // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
-            e.preventDefault()
-            runPendingNewTabMenuFocusAfterClose()
-          }}
+      {/* CoDev: the workspace is a single permanent chat surface, not a
+          multi-tab terminal — the "+" that opens more terminal/chat/browser
+          tabs has nothing for a member to want there. */}
+      {isCodevEmbedded() ? null : (
+        <DropdownMenu
+          open={newTabMenuOpen}
+          onOpenChange={setNewTabMenuOpen}
+          // Why: modal would disable body pointer events, making the Mobile Emulator "Hide" re-enable toast unclickable.
+          modal={false}
         >
-          {!terminalOnly && onOpenEntry ? (
-            <>
-              <TabBarCreateEntry
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
-                onLaunchAgent={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
-              />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
-            </>
-          ) : null}
-          {showStaticCreateMenuItems ? standardCreateMenuItems : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
-            <>
-              <DropdownMenuSeparator />
-              <QuickLaunchAgentMenuItems
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
-              />
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+              // Why: aria-label matches the tooltip so E2E can locate the "+" via getByRole('button', { name: 'New tab' }).
+              aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            sideOffset={6}
+            className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+            onCloseAutoFocus={(e) => {
+              // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
+              e.preventDefault()
+              runPendingNewTabMenuFocusAfterClose()
+            }}
+          >
+            {!terminalOnly && onOpenEntry ? (
+              <>
+                <TabBarCreateEntry
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  menuOpen={newTabMenuOpen}
+                  menuOptions={createMenuOptions}
+                  agentOptions={agentLaunchOptions}
+                  onLaunchAgent={launchAgentFromNewTabEntry}
+                  onOpenDefaultTerminal={() => {
+                    queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                    onNewTerminalTab()
+                  }}
+                  onOpenEntry={onOpenEntry}
+                  onQueryChange={setCreateMenuQuery}
+                  onSelectMenuOption={handleSelectCreateMenuOption}
+                  onDidOpenEntry={() => setNewTabMenuOpen(false)}
+                />
+                {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              </>
+            ) : null}
+            {showStaticCreateMenuItems ? standardCreateMenuItems : null}
+            {showStaticCreateMenuItems && showAgentLaunchItems ? (
+              <>
+                <DropdownMenuSeparator />
+                <QuickLaunchAgentMenuItems
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  onFocusTerminal={queueTerminalTabFocusAfterNewTabMenuClose}
+                />
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

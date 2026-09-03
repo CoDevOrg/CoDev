@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { getAgentSessionOptionCatalog, type CatalogModel } from '../../../../shared/agent-session-option-catalog'
+import {
+  getAgentSessionOptionCatalog,
+  type CatalogModel
+} from '../../../../shared/agent-session-option-catalog'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { updateNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
 import type {

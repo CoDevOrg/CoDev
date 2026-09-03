@@ -21,26 +21,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
 
-  // CoDev embeds one repository per workspace, so the "Projects" / "Workspaces"
-  // section header plus its Options / Add Project / New workspace controls have
-  // nothing to act on. Replace the whole row with the repository's name so the
-  // sidebar reads as "this project" rather than a list you can add to.
+  // CoDev embeds one repository per workspace and no longer shows the worktree
+  // list, so the "Projects" / "Workspaces" header — its controls and even the
+  // bare repository name — has nothing to frame. Drop it entirely; the team
+  // rail owns this sidebar.
   if (typeof window !== 'undefined' && window.__CODEV_EMBEDDED__) {
-    const projectName = window.__CODEV_PROJECT_NAME__?.trim()
-    if (!projectName) {
-      return null
-    }
-    return (
-      <div className="mt-2 flex h-8 items-center px-2">
-        <span
-          className="min-w-0 flex-1 truncate pl-2 text-xs font-semibold text-worktree-sidebar-foreground/80 select-none"
-          data-sidebar-section-title="projects"
-          title={projectName}
-        >
-          {projectName}
-        </span>
-      </div>
-    )
+    return null
   }
 
   return (

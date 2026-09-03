@@ -1,4 +1,4 @@
-export type ProviderConnectionProvider = "openai" | "anthropic";
+export type ProviderConnectionProvider = "openai" | "anthropic" | "cursor";
 
 export type ProviderConnectionStatus = "connected" | "not_connected";
 
@@ -19,33 +19,69 @@ export type ProviderConnectionViewer = {
   name: string;
 };
 
-export type CliSubscriptionProvider = "codex" | "claude";
+/**
+ * The three agent accounts a member can sign into. Each one is reachable from
+ * the settings page itself: Claude and Codex through their own OAuth flows,
+ * Cursor through the `cursor-agent` browser deeplink. The CLI command is a
+ * fallback for people who would rather stay in a terminal, not the only path.
+ */
+export type CliSubscriptionProvider = "codex" | "claude" | "cursor";
+
+export type SubscriptionConnectMode =
+  | "app_callback"
+  | "manual_code"
+  | "device_code"
+  | "cursor_deeplink";
 
 export type CliSubscriptionRecord = {
   provider: CliSubscriptionProvider;
   label: string;
   status: ProviderConnectionStatus;
-  command: string;
+  /** How the in-page Connect button drives this provider's sign-in. */
+  connectMode: SubscriptionConnectMode;
+  /** Terminal fallback, or null when the provider has no CoDev CLI command. */
+  command: string | null;
 };
 
 const CLI_SUBSCRIPTIONS: Array<{
   provider: CliSubscriptionProvider;
   label: string;
-  command: string;
+  command: string | null;
+  connectMode: SubscriptionConnectMode;
 }> = [
-  { provider: "codex", label: "Codex", command: "codev codex-auth" },
-  { provider: "claude", label: "Claude Code", command: "codev claude-auth" },
+  {
+    provider: "codex",
+    label: "Codex",
+    command: "codev codex-auth",
+    connectMode: "device_code",
+  },
+  {
+    provider: "claude",
+    label: "Claude Code",
+    command: "codev claude-auth",
+    connectMode: "manual_code",
+  },
+  {
+    provider: "cursor",
+    label: "Cursor",
+    command: null,
+    connectMode: "cursor_deeplink",
+  },
 ];
 
 export function toCliSubscriptionRecords(
   statuses: Partial<
     Record<CliSubscriptionProvider, ProviderCredentialStatus | null>
   >,
+  connectModes: Partial<
+    Record<CliSubscriptionProvider, SubscriptionConnectMode>
+  > = {},
 ): CliSubscriptionRecord[] {
-  return CLI_SUBSCRIPTIONS.map(({ provider, label, command }) => ({
+  return CLI_SUBSCRIPTIONS.map(({ provider, label, command, connectMode }) => ({
     provider,
     label,
     status: statuses[provider] ? "connected" : "not_connected",
+    connectMode: connectModes[provider] ?? connectMode,
     command,
   }));
 }
@@ -74,6 +110,7 @@ const PROVIDERS: Array<{
 }> = [
   { provider: "openai", label: "OpenAI" },
   { provider: "anthropic", label: "Anthropic" },
+  { provider: "cursor", label: "Cursor" },
 ];
 
 const SECRET_KEYS = new Set([
@@ -90,6 +127,12 @@ const SECRET_KEYS = new Set([
   "authorization",
   "cookie",
 ]);
+
+export function isProviderConnectionProvider(
+  value: string,
+): value is ProviderConnectionProvider {
+  return value === "openai" || value === "anthropic" || value === "cursor";
+}
 
 function publicCredentialType(
   value: string | null | undefined,
@@ -126,6 +169,9 @@ export function toProviderConnectionSnapshot(input: {
   cliSubscriptionStatuses?: Partial<
     Record<CliSubscriptionProvider, ProviderCredentialStatus | null>
   >;
+  connectModes?: Partial<
+    Record<CliSubscriptionProvider, SubscriptionConnectMode>
+  >;
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -140,6 +186,7 @@ export function toProviderConnectionSnapshot(input: {
     connections,
     cliSubscriptions: toCliSubscriptionRecords(
       input.cliSubscriptionStatuses ?? {},
+      input.connectModes ?? {},
     ),
   };
 }

@@ -243,7 +243,7 @@ describe('codexEffortPickerInput', () => {
 describe('codexModelPickerInput', () => {
   const models = [{ id: 'gpt-5.6-sol' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.5' }]
 
-  it('navigates to the current model\'s position in the picker list', () => {
+  it("navigates to the current model's position in the picker list", () => {
     expect(codexModelPickerInput('gpt-5.6-sol', models)).toBe('\u001b[H\r')
     expect(codexModelPickerInput('gpt-5.6-luna', models)).toBe('\u001b[H\u001b[B\r')
     expect(codexModelPickerInput('gpt-5.5', models)).toBe('\u001b[H\u001b[B\u001b[B\r')

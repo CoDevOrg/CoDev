@@ -134,6 +134,7 @@ import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-ro
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -1585,6 +1586,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       opts?.precomputedRetirementPlan?.tabId === tabId
         ? opts.precomputedRetirementPlan
         : buildTerminalTabRetirementPlan(get(), tabId)
+    // CoDev: the workspace is a single permanent chat surface with no "+" to
+    // recreate one, so a member closing it (the X button, Cmd/Ctrl+W, the
+    // context menu — every one of them passes reason 'user' or omits it,
+    // which defaults to 'user') must not leave the worktree chat-less.
+    // System-initiated closes ('cleanup', 'pty-exit') are unaffected.
+    if (closeReason === 'user' && isCodevEmbedded() && retirementPlan.worktreeId) {
+      const closingTab = (get().unifiedTabsByWorktree[retirementPlan.worktreeId] ?? []).find(
+        (candidate) => candidate.entityId === tabId
+      )
+      if (closingTab?.viewMode === 'chat') {
+        return
+      }
+    }
     let closingWorktreeId: string | null = null
 
     // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.

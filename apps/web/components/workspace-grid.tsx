@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
   Grid2X2,
   List,
+  LogOut,
   Search,
   SlidersHorizontal,
   Trash2,
@@ -42,6 +43,14 @@ const statuses = [
   "stopped",
   "failed",
 ] as const;
+
+const SCOPE_OPTIONS = [
+  { value: "all", label: "All workspaces" },
+  { value: "owner", label: "Owned by me" },
+  { value: "member", label: "Shared with me" },
+] as const;
+
+type WorkspaceScope = (typeof SCOPE_OPTIONS)[number]["value"];
 
 function formatUpdatedAt(value: string) {
   const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
@@ -83,12 +92,51 @@ export function WorkspaceGrid({
   const [status, setStatus] = useState("");
   const [artifactType, setArtifactType] = useState("");
   const [view, setView] = useState<WorkspaceView>("grid");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteConfirmWorkspace, setDeleteConfirmWorkspace] =
-    useState<WorkspaceItem | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [scope, setScope] = useState<WorkspaceScope>("all");
+  const scopeMenuRef = useRef<HTMLDetailsElement>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    workspace: WorkspaceItem;
+    mode: "delete" | "leave";
+  } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const greeting = useMemo(() => getGreeting(), []);
+
+  // Prewarm: nudge a workspace's Orca host awake on hover/focus intent so the
+  // ~10s cold start overlaps navigation instead of starting only once the
+  // workspace page has downloaded and hydrated. The wake is idempotent and
+  // cheap (a DescribeInstances plus at most one StartInstances), fired once per
+  // workspace per session, and its result is intentionally ignored — the
+  // workspace page still runs the real connect.
+  const prewarmedRef = useRef<Set<string>>(new Set());
+  const hoverIntentRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  const prewarmWorkspace = useCallback((workspaceId: string) => {
+    if (prewarmedRef.current.has(workspaceId)) {
+      return;
+    }
+    prewarmedRef.current.add(workspaceId);
+    void fetch(`/api/workspaces/${workspaceId}/orca`, {
+      method: "POST",
+      keepalive: true,
+    }).catch(() => {});
+  }, []);
+  const armPrewarm = useCallback(
+    (workspaceId: string) => {
+      const timer = setTimeout(() => prewarmWorkspace(workspaceId), 120);
+      hoverIntentRef.current.set(workspaceId, timer);
+    },
+    [prewarmWorkspace],
+  );
+  const disarmPrewarm = useCallback((workspaceId: string) => {
+    const timer = hoverIntentRef.current.get(workspaceId);
+    if (timer) {
+      clearTimeout(timer);
+      hoverIntentRef.current.delete(workspaceId);
+    }
+  }, []);
 
   const sortedWorkspaces = useMemo(() => {
     return [...workspaceList].sort(
@@ -110,9 +158,10 @@ export function WorkspaceGrid({
         !artifactType ||
         (artifactType === "repository" && Boolean(workspace.repository)) ||
         (artifactType === "blank" && !workspace.repository);
-      return matchesQuery && matchesStatus && matchesType;
+      const matchesScope = scope === "all" || workspace.role === scope;
+      return matchesQuery && matchesStatus && matchesType && matchesScope;
     });
-  }, [artifactType, query, sortedWorkspaces, status]);
+  }, [artifactType, query, scope, sortedWorkspaces, status]);
 
   const activeCount = useMemo(() => {
     return workspaceList.filter(
@@ -120,31 +169,43 @@ export function WorkspaceGrid({
     ).length;
   }, [workspaceList]);
 
-  const handleDeleteWorkspace = async (workspaceId: string) => {
-    setDeletingId(workspaceId);
-    setDeleteError(null);
+  const runPendingAction = async () => {
+    if (!pendingAction) return;
+    const { workspace, mode } = pendingAction;
+    const failureMessage =
+      mode === "leave"
+        ? "Failed to leave workspace."
+        : "Failed to delete workspace.";
+    setBusyId(workspace.id);
+    setActionError(null);
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}`, {
-        method: "DELETE",
-      });
+      const url =
+        mode === "leave"
+          ? `/api/workspaces/${workspace.id}/members/${user?.id ?? ""}`
+          : `/api/workspaces/${workspace.id}`;
+      const res = await fetch(url, { method: "DELETE" });
       if (res.ok) {
-        setWorkspaceList((prev) => prev.filter((w) => w.id !== workspaceId));
-        setDeleteConfirmWorkspace(null);
+        setWorkspaceList((prev) => prev.filter((w) => w.id !== workspace.id));
+        setPendingAction(null);
       } else {
         const data = (await res.json().catch(() => null)) as {
           error?: string;
         } | null;
-        setDeleteError(data?.error || "Failed to delete workspace.");
+        setActionError(data?.error || failureMessage);
       }
     } catch {
-      setDeleteError("Failed to delete workspace.");
+      setActionError(failureMessage);
     } finally {
-      setDeletingId(null);
+      setBusyId(null);
     }
   };
 
   const firstName =
     user?.name?.split(" ")[0] || user?.githubLogin || "Developer";
+
+  const scopeLabel =
+    SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
+    "All workspaces";
 
   return (
     <div className="home-hub-shell">
@@ -163,7 +224,7 @@ export function WorkspaceGrid({
           <div className="home-quick-stats">
             <div className="stat-card">
               <span className="stat-label">Workspaces</span>
-              <strong className="stat-value">{workspaces.length}</strong>
+              <strong className="stat-value">{workspaceList.length}</strong>
             </div>
             <div className="stat-card">
               <span className="stat-label">Active / Provisioning</span>
@@ -234,11 +295,30 @@ export function WorkspaceGrid({
             {filteredWorkspaces.length === 1 ? "workspace" : "workspaces"}
           </span>
           <div className="workspace-view-controls">
-            <button className="workspace-scope" type="button">
-              <SlidersHorizontal aria-hidden="true" />
-              All workspaces
-              <ChevronDown aria-hidden="true" />
-            </button>
+            <details className="workspace-scope-menu" ref={scopeMenuRef}>
+              <summary className="workspace-scope">
+                <SlidersHorizontal aria-hidden="true" />
+                {scopeLabel}
+                <ChevronDown aria-hidden="true" />
+              </summary>
+              <div className="workspace-scope-popover" role="menu">
+                {SCOPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={scope === option.value}
+                    className="workspace-scope-option"
+                    onClick={() => {
+                      setScope(option.value);
+                      scopeMenuRef.current?.removeAttribute("open");
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </details>
             <div className="workspace-view-toggle" aria-label="Workspace view">
               <button
                 className={view === "grid" ? "is-active" : ""}
@@ -281,6 +361,10 @@ export function WorkspaceGrid({
                 className="workspace-card-link"
                 aria-label={`Open ${workspace.repository || "workspace"}`}
                 style={{ textDecoration: "none", color: "inherit" }}
+                onPointerEnter={() => armPrewarm(workspace.id)}
+                onPointerLeave={() => disarmPrewarm(workspace.id)}
+                onFocus={() => prewarmWorkspace(workspace.id)}
+                onPointerDown={() => prewarmWorkspace(workspace.id)}
               >
                 <article className="workspace-card">
                   <div
@@ -345,34 +429,51 @@ export function WorkspaceGrid({
                   </div>
                 </article>
               </Link>
-              <button
-                type="button"
-                className="workspace-card-delete-button"
-                aria-label={`Delete ${workspace.repository || "workspace"}`}
-                title="Delete workspace"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDeleteConfirmWorkspace(workspace);
-                }}
-                style={{
-                  position: "absolute",
-                  top: "12px",
-                  right: "12px",
-                  zIndex: 10,
-                  background: "transparent",
-                  border: "none",
-                  padding: "6px",
-                  borderRadius: "6px",
-                  color: "var(--workspace-faint, #888)",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {(() => {
+                const mode =
+                  workspace.role === "owner"
+                    ? ("delete" as const)
+                    : ("leave" as const);
+                const label = `${mode === "leave" ? "Leave" : "Delete"} ${
+                  workspace.repository || "workspace"
+                }`;
+                return (
+                  <button
+                    type="button"
+                    className="workspace-card-action-button"
+                    aria-label={label}
+                    title={
+                      mode === "leave" ? "Leave workspace" : "Delete workspace"
+                    }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPendingAction({ workspace, mode });
+                    }}
+                    style={{
+                      position: "absolute",
+                      top: "12px",
+                      right: "12px",
+                      zIndex: 10,
+                      background: "transparent",
+                      border: "none",
+                      padding: "8px",
+                      borderRadius: "6px",
+                      color: "var(--workspace-faint, #888)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {mode === "leave" ? (
+                      <LogOut className="h-4 w-4" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -383,113 +484,150 @@ export function WorkspaceGrid({
           </p>
         ) : null}
 
-        {deleteConfirmWorkspace ? (
-          <div
-            className="delete-workspace-backdrop"
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 1000,
-              background: "rgba(0, 0, 0, 0.6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onClick={() => setDeleteConfirmWorkspace(null)}
-          >
-            <div
-              className="delete-workspace-modal"
-              style={{
-                background: "var(--workspace-surface, #1e1e1e)",
-                color: "var(--workspace-ink, #fff)",
-                border: "1px solid var(--workspace-line, #333)",
-                borderRadius: "12px",
-                padding: "24px",
-                maxWidth: "420px",
-                width: "90%",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3
-                style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}
-              >
-                Delete Workspace?
-              </h3>
-              <p
-                style={{
-                  margin: "0 0 16px",
-                  fontSize: "13px",
-                  opacity: 0.8,
-                  lineHeight: 1.5,
-                }}
-              >
-                Are you sure you want to delete{" "}
-                <strong>
-                  {deleteConfirmWorkspace.repository || "this workspace"}
-                </strong>
-                ? This action is permanent and cannot be undone.
-              </p>
-              {deleteError ? (
+        {pendingAction
+          ? (() => {
+              const { workspace, mode } = pendingAction;
+              const busy = busyId === workspace.id;
+              const name = workspace.repository || "this workspace";
+              const isLeave = mode === "leave";
+              const title = isLeave ? "Leave workspace?" : "Delete workspace?";
+              const cancel = () => {
+                if (!busy) {
+                  setPendingAction(null);
+                  setActionError(null);
+                }
+              };
+              return (
                 <div
+                  className="delete-workspace-backdrop"
                   style={{
-                    color: "#d66161",
-                    fontSize: "12px",
-                    marginBottom: "12px",
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 1000,
+                    background: "rgba(0, 0, 0, 0.6)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
+                  onClick={cancel}
                 >
-                  {deleteError}
+                  <div
+                    className="delete-workspace-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="workspace-action-title"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancel();
+                    }}
+                    style={{
+                      background: "var(--workspace-surface, #1e1e1e)",
+                      color: "var(--workspace-ink, #fff)",
+                      border: "1px solid var(--workspace-line, #333)",
+                      borderRadius: "12px",
+                      padding: "24px",
+                      maxWidth: "420px",
+                      width: "90%",
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h3
+                      id="workspace-action-title"
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: "16px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {title}
+                    </h3>
+                    <p
+                      style={{
+                        margin: "0 0 16px",
+                        fontSize: "13px",
+                        opacity: 0.8,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {isLeave ? (
+                        <>
+                          You&rsquo;ll lose access to <strong>{name}</strong>{" "}
+                          until someone invites you back. The workspace and
+                          everyone else&rsquo;s access stay untouched.
+                        </>
+                      ) : (
+                        <>
+                          Are you sure you want to delete{" "}
+                          <strong>{name}</strong>? This action is permanent and
+                          cannot be undone.
+                        </>
+                      )}
+                    </p>
+                    {actionError ? (
+                      <div
+                        style={{
+                          color: "#d66161",
+                          fontSize: "12px",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        {actionError}
+                      </div>
+                    ) : null}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: "10px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        autoFocus
+                        disabled={busy}
+                        onClick={cancel}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid var(--workspace-line, #444)",
+                          color: "inherit",
+                          borderRadius: "6px",
+                          padding: "8px 14px",
+                          fontSize: "13px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void runPendingAction()}
+                        style={{
+                          background: isLeave ? "#8a5a2b" : "#b33f3f",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "8px 14px",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          opacity: busy ? 0.6 : 1,
+                        }}
+                      >
+                        {busy
+                          ? isLeave
+                            ? "Leaving..."
+                            : "Deleting..."
+                          : isLeave
+                            ? "Leave workspace"
+                            : "Delete workspace"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "10px",
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={deletingId === deleteConfirmWorkspace.id}
-                  onClick={() => setDeleteConfirmWorkspace(null)}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--workspace-line, #444)",
-                    color: "inherit",
-                    borderRadius: "6px",
-                    padding: "8px 14px",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={deletingId === deleteConfirmWorkspace.id}
-                  onClick={() =>
-                    void handleDeleteWorkspace(deleteConfirmWorkspace.id)
-                  }
-                  style={{
-                    background: "#b33f3f",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "8px 14px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    opacity: deletingId === deleteConfirmWorkspace.id ? 0.6 : 1,
-                  }}
-                >
-                  {deletingId === deleteConfirmWorkspace.id
-                    ? "Deleting..."
-                    : "Delete Workspace"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+              );
+            })()
+          : null}
       </section>
     </div>
   );

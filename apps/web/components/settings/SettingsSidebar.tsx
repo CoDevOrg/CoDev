@@ -23,7 +23,16 @@ const personalNav: SettingsNavItem[] = [
     href: "/settings/personal/providers",
     icon: Plug,
     badge: "Optional",
-    keywords: ["openai", "anthropic", "api key", "codex", "claude"],
+    keywords: [
+      "openai",
+      "anthropic",
+      "api key",
+      "codex",
+      "claude",
+      "cursor",
+      "connect",
+      "sign in",
+    ],
   },
   {
     name: "Integrations",

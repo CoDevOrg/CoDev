@@ -206,6 +206,7 @@ describe('SidebarNav', () => {
       }
     })
     document.body.innerHTML = ''
+    delete (window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__
   })
 
   beforeEach(async () => {
@@ -298,6 +299,16 @@ describe('SidebarNav', () => {
 
   it('hides the Mobile entry when the sidebar setting is off', () => {
     expect(shouldShowMobileButton({ showMobileButton: false })).toBe(false)
+  })
+
+  it('hides the Tasks and Automations entries in the CoDev-embedded client', async () => {
+    ;(window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__ = true
+    const container = await renderSidebarNav()
+
+    expect(queryButtonByText(container, 'Tasks')).toBeNull()
+    expect(queryButtonByText(container, 'Automations')).toBeNull()
+    // The worktree search entry is untouched.
+    expect(container.querySelector('[aria-label="Search worktrees and browser tabs"]')).not.toBeNull()
   })
 
   it('updates localized labels when the language changes after mount', async () => {

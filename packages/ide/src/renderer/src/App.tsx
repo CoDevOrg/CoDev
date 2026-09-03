@@ -46,9 +46,11 @@ import { openProjectDefaultCheckout } from './components/sidebar/project-added-d
 import { activateWorktreeFromSidebar } from './lib/sidebar-worktree-activation'
 import {
   isCodevProjectBootstrapReady,
-  openCodevProject
+  openCodevProject,
+  registerCodevProjectBootstrapRetry
 } from './web/codev-project-bootstrap'
-import { launchCodevDefaultChatTab } from './web/codev-default-chat-tab'
+import { launchCodevDefaultChatTab, waitForCodevDefaultChatTab } from './web/codev-default-chat-tab'
+import { isCodevEmbedded } from './web/codev-embedded'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
@@ -334,6 +336,11 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
+const CodevAwaitingWorkspaceCover = lazy(() =>
+  import('./components/codev/CodevAwaitingWorkspaceCover').then((m) => ({
+    default: m.CodevAwaitingWorkspaceCover
+  }))
+)
 const WorktreeCreationPanel = lazy(
   () => import('./components/worktree-creation/WorktreeCreationPanel')
 )
@@ -534,10 +541,18 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const startupWorktreeRefreshCompleted = useAppStore(
-    (s) => s.startupWorktreeRefreshCompleted
-  )
+  const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const codevBootstrapStartedRef = useRef(false)
+  const [codevBootstrapAttempt, setCodevBootstrapAttempt] = useState(0)
+  // Why: the awaiting-workspace cover is the only way back when the handoff
+  // lands without a chat, and it renders far below this effect.
+  useEffect(() => {
+    registerCodevProjectBootstrapRetry(() => {
+      codevBootstrapStartedRef.current = false
+      setCodevBootstrapAttempt((attempt) => attempt + 1)
+    })
+    return () => registerCodevProjectBootstrapRetry(null)
+  }, [])
   useEffect(() => {
     const projectPath = window.__CODEV_PROJECT_PATH__
     const projectKind = window.__CODEV_PROJECT_KIND__
@@ -563,13 +578,17 @@ function App(): React.JSX.Element {
       getStore: useAppStore.getState,
       openDefaultCheckout: openProjectDefaultCheckout,
       activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar,
-      launchDefaultChatTab: launchCodevDefaultChatTab
+      launchDefaultChatTab: launchCodevDefaultChatTab,
+      waitForDefaultChatTab: waitForCodevDefaultChatTab
     })
       .then((opened) => {
         window.parent.postMessage(
           opened
             ? { type: 'codev:project-ready' }
-            : { type: 'codev:project-error', message: 'The workspace project could not be opened.' },
+            : {
+                type: 'codev:project-error',
+                message: 'The workspace project could not be opened.'
+              },
           window.location.origin
         )
         if (!opened) {
@@ -584,7 +603,7 @@ function App(): React.JSX.Element {
         )
         codevBootstrapStartedRef.current = false
       })
-  }, [startupWorktreeRefreshCompleted, workspaceSessionReady])
+  }, [startupWorktreeRefreshCompleted, workspaceSessionReady, codevBootstrapAttempt])
   const backgroundTerminalMountRequested = useSyncExternalStore(
     subscribeBackgroundTerminalWorktreeMountRequests,
     hasRequestedBackgroundTerminalWorktreeMount,
@@ -2486,7 +2505,13 @@ function App(): React.JSX.Element {
                               {activeView === 'terminal' &&
                               !activeWorktreeId &&
                               !creationLayoutActive ? (
-                                <Landing />
+                                // CoDev has no worktree list in the sidebar and no
+                                // "+" menu, so Landing's advice is unreachable.
+                                isCodevEmbedded() ? (
+                                  <CodevAwaitingWorkspaceCover />
+                                ) : (
+                                  <Landing />
+                                )
                               ) : null}
                             </RecoverableRenderErrorBoundary>
                           </Suspense>

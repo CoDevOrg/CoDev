@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, countDistinct, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
@@ -236,8 +236,12 @@ export async function POST(
             "The workspace is not ready for a new agent. Try again after it resumes.",
           );
         }
-        const [sessionCount] = await transaction
-          .select({ value: count() })
+        // A slot is a worktree, not a conversation. Several chat threads can
+        // share one worktree (a member starting a fresh context on the same
+        // branch), and those cost no extra checkout or running process, so
+        // they must not consume capacity.
+        const [worktreeCount] = await transaction
+          .select({ value: countDistinct(schema.worktrees.id) })
           .from(schema.agentSessions)
           .innerJoin(
             schema.worktrees,
@@ -249,7 +253,7 @@ export async function POST(
               inArray(schema.worktrees.status, ["active", "frozen"]),
             ),
           );
-        assertAgentCapacity(Number(sessionCount?.value ?? 0));
+        assertAgentCapacity(Number(worktreeCount?.value ?? 0));
         const [repository] = await transaction
           .select({ id: schema.workspaces.githubRepositoryId })
           .from(schema.workspaces)

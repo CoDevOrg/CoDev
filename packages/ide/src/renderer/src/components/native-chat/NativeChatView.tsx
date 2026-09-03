@@ -12,6 +12,7 @@ import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { CODEV_FOCUS_CHAT_HISTORY_EVENT } from '@/components/right-sidebar/codev-chat-history-entries'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -56,6 +57,12 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatViewProps } from './native-chat-view-types'
 import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
+import { NativeChatTerminalDrawer } from './native-chat-terminal-drawer'
+import { useCodevDrawerTerminal } from './use-codev-drawer-terminal'
+import { FileDiff, Globe, TerminalSquare } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -214,15 +221,19 @@ function NativeChatResolvedView({
     composerRef,
     questionAnswerInputRef
   })
-  // CoDev: when a chat is empty or failed to restore, one click jumps to Agent
-  // Session History so the member can resume the conversation they left.
+  // CoDev: when a chat is empty or failed to restore, one click jumps to the
+  // Agents tab so the member can pick the conversation they left back up.
+  // The tab used to show only what was running, which could never answer that
+  // question; it now carries this project's chat history, so also scroll that
+  // list into view rather than leaving the member to find it.
   const reopenPreviousConversation = useMemo(
     () =>
       isCodevEmbedded()
         ? (): void => {
             const store = useAppStore.getState()
-            store.setRightSidebarTab('vault')
+            store.setRightSidebarTab('codev-agents')
             store.setRightSidebarOpen(true)
+            window.dispatchEvent(new CustomEvent(CODEV_FOCUS_CHAT_HISTORY_EVENT))
           }
         : undefined,
     []
@@ -425,6 +436,37 @@ function NativeChatResolvedView({
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
 
+  // CoDev hides the raw terminal view entirely (canToggleNativeChat always
+  // returns false there), so this small bottom drawer is the only terminal a
+  // member gets. It runs its own plain shell in the worktree — not a view onto
+  // the agent's pty, which would replay the agent's TUI instead of a prompt.
+  // Non-CoDev builds keep the existing tab-bar/shortcut toggle instead.
+  const [terminalDrawerOpen, setTerminalDrawerOpen] = useState(false)
+  const codevEmbedded = isCodevEmbedded()
+  const drawerWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const drawerPtyId = useCodevDrawerTerminal({
+    worktreeId: codevEmbedded ? drawerWorktreeId : null,
+    open: terminalDrawerOpen
+  })
+  const showTerminalToggle = codevEmbedded && targetPtyId !== null
+  const showChangesButton = codevEmbedded
+  const showBrowserButton = codevEmbedded
+  const openChanges = useCallback(() => {
+    const store = useAppStore.getState()
+    store.setRightSidebarTab('source-control')
+    store.setRightSidebarOpen(true)
+  }, [])
+  const openBrowser = useCallback(() => {
+    const store = useAppStore.getState()
+    const worktreeId = store.activeWorktreeId
+    if (!worktreeId) return
+    const groupId =
+      store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+    if (groupId) {
+      void store.openNewBrowserTabInActiveWorkspace(groupId)
+    }
+  }, [])
+
   return (
     <div
       ref={rootRef}
@@ -462,6 +504,72 @@ function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      {showTerminalToggle || showChangesButton || showBrowserButton ? (
+        <div className="flex shrink-0 items-center justify-end gap-0.5 border-b border-border px-1.5 py-1">
+          {showTerminalToggle ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-pressed={terminalDrawerOpen}
+                  aria-label={translate('components.native-chat.terminalDrawer.toggle', 'Terminal')}
+                  onClick={() => setTerminalDrawerOpen((open) => !open)}
+                  className={
+                    terminalDrawerOpen ? 'bg-accent text-foreground' : 'text-muted-foreground'
+                  }
+                >
+                  <TerminalSquare className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {terminalDrawerOpen
+                  ? translate('components.native-chat.terminalDrawer.hide', 'Hide terminal')
+                  : translate('components.native-chat.terminalDrawer.show', 'Show terminal')}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {showChangesButton ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate('components.native-chat.changesButton', 'Changes')}
+                  onClick={openChanges}
+                  className="text-muted-foreground"
+                >
+                  <FileDiff className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {translate('components.native-chat.changesButton', 'Changes')}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {showBrowserButton ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate('components.native-chat.browserButton', 'Browser')}
+                  onClick={openBrowser}
+                  className="text-muted-foreground"
+                >
+                  <Globe className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {translate('components.native-chat.browserButton', 'Browser')}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -522,6 +630,12 @@ function NativeChatResolvedView({
           {...launchDraftSignal}
         />
       )}
+      {showTerminalToggle && terminalDrawerOpen ? (
+        <NativeChatTerminalDrawer
+          ptyId={drawerPtyId}
+          className="h-[220px] border-t border-border"
+        />
+      ) : null}
       {contextMenu.menu}
     </div>
   )

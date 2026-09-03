@@ -77,6 +77,10 @@ export function launchCodevAgentInOwnWorktree(
   const store = useAppStore.getState()
   const base = store.allWorktrees?.().find((entry: { id: string }) => entry.id === baseWorktreeId)
   if (!base?.repoId) {
+    // Why: both bail-outs used to be silent, so a workspace that never opened a
+    // chat gave the console nothing to go on. The caller still falls back to an
+    // in-place launch, so this stays a warning rather than a toast.
+    console.warn('CoDev cannot isolate the agent: base worktree has no repo', { baseWorktreeId })
     return null
   }
 
@@ -87,6 +91,10 @@ export function launchCodevAgentInOwnWorktree(
     promptDelivery
   })
   if (!startupPlan) {
+    console.warn('CoDev cannot isolate the agent: no startup plan resolved', {
+      agent,
+      baseWorktreeId
+    })
     return null
   }
 

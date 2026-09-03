@@ -6,6 +6,7 @@ import {
   applyOrcaWorkspaceBranding,
   autoAddOrcaProject,
   buildOrcaIframeSource,
+  buildOrcaPendingIframeSource,
   createOrcaManagedProposal,
   discardOrcaManagedProposal,
   WorkspaceTopBar,
@@ -133,7 +134,6 @@ describe("WorkspaceTopBar", () => {
         repository: "yousef20920/CoDev",
         workspaceId: "workspace-1",
         canInvite: true,
-        onResumeCommand: () => false,
       }),
     );
 
@@ -149,7 +149,6 @@ describe("WorkspaceTopBar", () => {
         workspaceId: "workspace-1",
         canInvite: true,
         liveAgentCount: 2,
-        onResumeCommand: () => false,
       }),
     );
 
@@ -198,6 +197,44 @@ describe("buildOrcaIframeSource", () => {
     );
 
     expect(fragment.get("codevDefaultAgent")).toBe("codex");
+  });
+});
+
+describe("buildOrcaPendingIframeSource", () => {
+  it("carries only origin-known facts and no runtime credential", () => {
+    const source = buildOrcaPendingIframeSource({
+      projectKind: "git",
+      projectName: "yousef20920/CoDev",
+      defaultAgent: "codex",
+      cursorAvailable: true,
+    });
+    const url = new URL(source, "https://codev.example");
+    const fragment = new URLSearchParams(url.hash.slice(1));
+
+    expect(url.pathname).toBe("/orca/web-index.html");
+    expect(fragment.get("codev")).toBe("1");
+    expect(fragment.get("codevPending")).toBe("1");
+    expect(fragment.get("codevProjectKind")).toBe("git");
+    expect(fragment.get("codevProjectName")).toBe("yousef20920/CoDev");
+    expect(fragment.get("codevDefaultAgent")).toBe("codex");
+    expect(fragment.get("codevCursorAvailable")).toBe("1");
+    // The pairing offer and on-instance path only exist once the host is up.
+    expect(fragment.get("pairing")).toBeNull();
+    expect(fragment.get("codevProject")).toBeNull();
+    expect(fragment.get("codevMemberId")).toBeNull();
+  });
+
+  it("omits optional facts when not supplied", () => {
+    const fragment = new URLSearchParams(
+      new URL(
+        buildOrcaPendingIframeSource({ projectKind: "folder" }),
+        "https://codev.example",
+      ).hash.slice(1),
+    );
+    expect(fragment.get("codevProjectKind")).toBe("folder");
+    expect(fragment.get("codevProjectName")).toBeNull();
+    expect(fragment.get("codevDefaultAgent")).toBeNull();
+    expect(fragment.get("codevCursorAvailable")).toBeNull();
   });
 });
 

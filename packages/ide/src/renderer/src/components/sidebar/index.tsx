@@ -17,6 +17,7 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -58,6 +59,9 @@ function Sidebar({
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
+  // CoDev embeds one repo per workspace; the worktree/project list has nothing
+  // to navigate, so the team rail becomes this sidebar's sole content.
+  const codevEmbedded = isCodevEmbedded()
   const {
     workspaceBoardOpen,
     workspaceBoardRenderedOpen,
@@ -118,19 +122,20 @@ function Sidebar({
             <SidebarNav />
             <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-            />
+            {!codevEmbedded && (
+              <WorktreeList
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+              />
+            )}
 
-            {/* CoDev: the workspace team rail (people, status, channels) folded
-                into Orca's own sidebar, below the worktree list, so a CoDev
-                workspace shows a single left sidebar. No-op outside the
-                embedded client. */}
+            {/* CoDev: the workspace team rail (people, status, channels) is the
+                embedded sidebar's sole content — it replaces the worktree list
+                rather than sitting under it. No-op outside the embedded client. */}
             <CodevTeamPanel />
 
             <div className="relative shrink-0">

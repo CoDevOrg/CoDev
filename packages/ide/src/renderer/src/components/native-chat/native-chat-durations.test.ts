@@ -20,10 +20,7 @@ describe('nativeChatTurnDurations', () => {
   it('measures each turn against the next one', () => {
     const t = 1_000_000
     expect(
-      nativeChatTurnDurations(
-        [message(t), message(t + 6_000), message(t + 20_000)],
-        t + 25_000
-      )
+      nativeChatTurnDurations([message(t), message(t + 6_000), message(t + 20_000)], t + 25_000)
     ).toEqual([6_000, 14_000, 5_000])
   })
 
@@ -40,9 +37,10 @@ describe('nativeChatTurnDurations', () => {
 
   it('rejects a span from a paused session or a clock jump', () => {
     const t = 1_000_000
-    expect(
-      nativeChatTurnDurations([message(t), message(t + 4 * 60 * 60_000)], t)
-    ).toEqual([null, null])
+    expect(nativeChatTurnDurations([message(t), message(t + 4 * 60 * 60_000)], t)).toEqual([
+      null,
+      null
+    ])
   })
 
   it('rejects a negative span from out-of-order timestamps', () => {

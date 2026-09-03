@@ -5,6 +5,7 @@ import {
 
 import {
   AGENT_CAPACITY_EXCEEDED_MESSAGE,
+  liveAgentWorktreeIds,
   summarizeAgentCapacity,
 } from "./agent-capacity";
 import { displayMemberName } from "./shared-session-view";
@@ -131,16 +132,35 @@ function occupiedSlot(
   };
 }
 
+function startedAt(session: WorkboardSession): number {
+  const value = new Date(session.createdAt).getTime();
+  return Number.isNaN(value) ? 0 : value;
+}
+
 export function toWorkboardSlots(
   sessions: WorkboardSession[],
   now = new Date(),
 ): { capacity: AgentCapacity; slots: WorkboardSlot[] } {
   const capacity = summarizeAgentCapacity(sessions);
-  const active = sessions.filter(
-    (session) =>
-      session.worktreeStatus === "active" ||
-      session.worktreeStatus === "frozen",
-  );
+  // One slot per live worktree. A worktree with several chat threads on it is
+  // still one agent occupying one slot, and the slot shows its newest thread
+  // because that is the conversation the member is actually steering.
+  const newestByWorktree = new Map<string, WorkboardSession>();
+  for (const session of sessions) {
+    if (
+      session.worktreeStatus !== "active" &&
+      session.worktreeStatus !== "frozen"
+    ) {
+      continue;
+    }
+    const current = newestByWorktree.get(session.worktreeId);
+    if (!current || startedAt(session) >= startedAt(current)) {
+      newestByWorktree.set(session.worktreeId, session);
+    }
+  }
+  const active = liveAgentWorktreeIds(sessions)
+    .map((worktreeId) => newestByWorktree.get(worktreeId))
+    .filter((session): session is WorkboardSession => session !== undefined);
   const slots: WorkboardSlot[] = [];
   for (let index = 0; index < MAX_PARALLEL_AGENT_SESSIONS; index += 1) {
     const slot = (index + 1) as 1 | 2 | 3;

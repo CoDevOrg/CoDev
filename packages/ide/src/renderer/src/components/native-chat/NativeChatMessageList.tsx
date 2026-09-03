@@ -177,11 +177,7 @@ function MessageRow({
     // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
     // transcript caught up.)
     return (
-      <div
-        ref={rowRef}
-        data-codev-chat-row="user"
-        className="flex flex-col items-end gap-0.5"
-      >
+      <div ref={rowRef} data-codev-chat-row="user" className="flex flex-col items-end gap-0.5">
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div

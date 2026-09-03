@@ -529,6 +529,21 @@ export async function saveAnthropicCredential(userId: string, apiKey: string) {
   });
 }
 
+export async function saveCursorCredential(userId: string, apiKey: string) {
+  const normalized = apiKey.trim();
+  if (normalized.length < 20) {
+    throw new Error("Enter a valid Cursor API key.");
+  }
+  await saveProviderCredential({
+    scopeType: "USER",
+    scopeId: userId,
+    provider: "cursor",
+    credentialType: "API_KEY",
+    apiKey: normalized,
+    lastFour: normalized.slice(-4),
+  });
+}
+
 export async function getProviderCredentialStatus(
   scopeType: ScopeType,
   scopeId: string,

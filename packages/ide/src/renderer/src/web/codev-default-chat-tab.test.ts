@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const launchAgentInNewTab = vi.fn()
+const activateWorktreeFromSidebar = vi.fn()
 const getState = vi.fn()
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: (...args: unknown[]) => launchAgentInNewTab(...args)
+}))
+vi.mock('@/lib/sidebar-worktree-activation', () => ({
+  activateWorktreeFromSidebar: (...args: unknown[]) => activateWorktreeFromSidebar(...args)
 }))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => getState() }
@@ -13,9 +17,75 @@ vi.mock('@/store', () => ({
 import {
   CODEV_DEFAULT_CHAT_AGENT,
   codevDefaultChatAgent,
+  codevWorkspaceHasChatTabInState,
+  failedCodevWorktreeCreationError,
   launchCodevDefaultChatTab,
   worktreeHasAgentTab
 } from './codev-default-chat-tab'
+
+describe('codevWorkspaceHasChatTabInState', () => {
+  const base = { id: 'base', repoId: 'repo-1' }
+
+  it('counts a chat living in the agent worktree, not just the base checkout', () => {
+    expect(
+      codevWorkspaceHasChatTabInState(
+        {
+          tabsByWorktree: { agent: [{ launchAgent: 'claude' }] },
+          worktreesByRepo: {
+            'repo-1': [
+              { id: 'base', isMainWorktree: true },
+              { id: 'agent', branch: 'codev/claude-a1b2c3d4' }
+            ]
+          },
+          pendingWorktreeCreations: {},
+          allWorktrees: () => [base]
+        },
+        'base'
+      )
+    ).toBe(true)
+  })
+
+  it('ignores an agent tab in an unrelated, non-CoDev worktree', () => {
+    expect(
+      codevWorkspaceHasChatTabInState(
+        {
+          tabsByWorktree: { other: [{ launchAgent: 'claude' }] },
+          worktreesByRepo: {
+            'repo-1': [
+              { id: 'base', isMainWorktree: true },
+              { id: 'other', branch: 'feature/unrelated' }
+            ]
+          },
+          pendingWorktreeCreations: {},
+          allWorktrees: () => [base]
+        },
+        'base'
+      )
+    ).toBe(false)
+  })
+})
+
+describe('failedCodevWorktreeCreationError', () => {
+  it('surfaces the create error so the cover can show it instead of a spinner', () => {
+    expect(
+      failedCodevWorktreeCreationError({
+        tabsByWorktree: {},
+        worktreesByRepo: {},
+        pendingWorktreeCreations: { c1: { status: 'error', error: 'branch already exists' } }
+      })
+    ).toBe('branch already exists')
+  })
+
+  it('returns null while a create is merely in flight', () => {
+    expect(
+      failedCodevWorktreeCreationError({
+        tabsByWorktree: {},
+        worktreesByRepo: {},
+        pendingWorktreeCreations: { c1: { status: 'creating' } }
+      })
+    ).toBeNull()
+  })
+})
 
 function setWindow(overrides: Record<string, unknown>): void {
   vi.stubGlobal('window', { location: { hash: '' }, ...overrides })
@@ -105,6 +175,60 @@ describe('launchCodevDefaultChatTab', () => {
     })
   })
 
+  it('activates the agent worktree the restored chat actually lives in', () => {
+    setWindow({ __CODEV_EMBEDDED__: true })
+    // The chat is restored into the agent's own worktree while the workspace
+    // opens on the base checkout — whose shell is retired moments later. Without
+    // the activation the member is covered by an empty checkout forever.
+    getState.mockReturnValue({
+      tabsByWorktree: { 'agent-1': [{ id: 'chat', launchAgent: 'claude' }] },
+      unifiedTabsByWorktree: {},
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-1', isMainWorktree: true },
+          { id: 'agent-1', branch: 'codev/claude-a1b2c3d4' }
+        ]
+      },
+      allWorktrees: () => [{ id: 'wt-1', repoId: 'repo-1' }],
+      activeWorktreeId: 'wt-1',
+      closeTab: vi.fn(),
+      setTabViewMode: vi.fn()
+    })
+
+    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+
+    expect(activateWorktreeFromSidebar).toHaveBeenCalledWith('agent-1')
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
+  })
+
+  it('relaunches into an agent worktree that exists but never got a chat', () => {
+    setWindow({ __CODEV_EMBEDDED__: true })
+    // A previous attempt made the branch and worktree but the agent never
+    // spawned. Merely existing used to count as "already launched", which
+    // wedged the workspace permanently — no retry could escape it.
+    getState.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-1', isMainWorktree: true },
+          { id: 'agent-1', branch: 'codev/claude-a1b2c3d4' }
+        ]
+      },
+      allWorktrees: () => [{ id: 'wt-1', repoId: 'repo-1' }],
+      closeTab: vi.fn(),
+      setTabViewMode: vi.fn()
+    })
+
+    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+
+    expect(launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'claude',
+      worktreeId: 'agent-1',
+      launchSource: 'new_workspace_composer'
+    })
+  })
+
   it('waits for the host tab mirror before opening a default, so a restored chat wins', () => {
     setWindow({ __CODEV_EMBEDDED__: true })
     // Nothing mirrored yet at launch, then the host reports the chat the member
@@ -135,15 +259,15 @@ describe('launchCodevDefaultChatTab', () => {
         tabsByWorktree: {},
         unifiedTabsByWorktree: {},
         closeTab,
-        setTabViewMode: vi.fn(),
+        setTabViewMode: vi.fn()
       })
       .mockReturnValue({
         tabsByWorktree: {
-          'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }],
+          'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }]
         },
         unifiedTabsByWorktree: {},
         closeTab,
-        setTabViewMode: vi.fn(),
+        setTabViewMode: vi.fn()
       })
 
     launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
@@ -158,7 +282,7 @@ describe('launchCodevDefaultChatTab', () => {
     getState.mockReturnValue({
       tabsByWorktree: { 'wt-1': [{ id: 'shell' }] },
       unifiedTabsByWorktree: {},
-      closeTab,
+      closeTab
     })
 
     launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
