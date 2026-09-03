@@ -47,6 +47,7 @@ describe("provider connection view", () => {
     ).toEqual([
       ["openai", "not_connected"],
       ["anthropic", "not_connected"],
+      ["cursor", "not_connected"],
     ]);
     expect(snapshot.connections.every((row) => row.lastFour === null)).toBe(
       true,
@@ -56,6 +57,7 @@ describe("provider connection view", () => {
     ).toEqual([
       ["codex", "not_connected"],
       ["claude", "not_connected"],
+      ["cursor", "not_connected"],
     ]);
     expect(secretKeysInValue(snapshot)).toEqual([]);
   });
@@ -78,6 +80,7 @@ describe("provider connection view", () => {
     ).toEqual([
       ["codex", "connected"],
       ["claude", "not_connected"],
+      ["cursor", "not_connected"],
     ]);
     expect(
       snapshot.cliSubscriptions.find((row) => row.provider === "codex")

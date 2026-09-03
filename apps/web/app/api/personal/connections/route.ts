@@ -8,7 +8,7 @@ import {
 } from "@/lib/provider-connection-server";
 import { publicProviderConnectionPayload } from "@/lib/provider-connection-view";
 
-const providerSchema = z.enum(["openai", "anthropic"]);
+const providerSchema = z.enum(["openai", "anthropic", "cursor"]);
 
 const putSchema = z.object({
   provider: providerSchema,

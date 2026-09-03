@@ -30,7 +30,7 @@ import {
 } from "./oauth";
 
 const scopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
-const DEFAULT_OAUTH_RETURN_TO = "/settings/personal/agents";
+const DEFAULT_OAUTH_RETURN_TO = "/settings/personal/providers";
 
 const sessionBodySchema = z.object({
   scopeType: z.enum(["USER", "WORKSPACE"]).optional(),

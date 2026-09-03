@@ -45,3 +45,20 @@ export function OpenAIMark({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function CursorMark({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinejoin="round"
+      strokeWidth="1.6"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 2.6 20.5 7.3v9.4L12 21.4 3.5 16.7V7.3Z" />
+      <path d="M12 12.1 20.5 7.3M12 12.1 3.5 7.3M12 12.1v9.3" />
+    </svg>
+  );
+}
