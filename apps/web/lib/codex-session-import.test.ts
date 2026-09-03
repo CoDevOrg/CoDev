@@ -8,7 +8,9 @@ import {
 
 const SESSION_ID = "019a88ba-5df0-77c1-83e3-1413a0bce76d";
 
-function rolloutContents(headerOverrides: Record<string, unknown> = {}): string {
+function rolloutContents(
+  headerOverrides: Record<string, unknown> = {},
+): string {
   const header = {
     timestamp: "2025-11-15T18:15:06.507Z",
     type: "session_meta",

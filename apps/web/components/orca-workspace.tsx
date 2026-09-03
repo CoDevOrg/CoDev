@@ -781,7 +781,10 @@ export function OrcaWorkspace({
     if (!message || !iframeRef.current?.contentWindow) {
       return false;
     }
-    iframeRef.current.contentWindow.postMessage(message, window.location.origin);
+    iframeRef.current.contentWindow.postMessage(
+      message,
+      window.location.origin,
+    );
     return true;
   }, []);
 
