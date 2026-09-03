@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { auth as clerkAuth, currentUser } from "@clerk/nextjs/server";
 
@@ -63,6 +64,17 @@ export function clerkAuthConfigured() {
   );
 }
 
+// Columns needed both to identify an existing row and to detect whether the
+// Clerk profile actually changed anything worth writing back.
+const userSyncColumns = {
+  id: schema.users.id,
+  clerkUserId: schema.users.clerkUserId,
+  login: schema.users.login,
+  name: schema.users.name,
+  email: schema.users.email,
+  avatarUrl: schema.users.avatarUrl,
+};
+
 async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
   const profile = await currentUser();
   if (!profile || profile.id !== clerkUserId) return null;
@@ -72,45 +84,56 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
     [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim() ||
     profile.username ||
     null;
+  const avatarUrl = profile.imageUrl;
+
   const database = getDatabase();
   const [existingByClerk] = await database
-    .select({ id: schema.users.id })
+    .select(userSyncColumns)
     .from(schema.users)
     .where(eq(schema.users.clerkUserId, clerkUserId))
     .limit(1);
-  const [existingByEmail] = email
-    ? await database
-        .select({ id: schema.users.id })
-        .from(schema.users)
-        .where(eq(schema.users.email, email))
-        .limit(1)
-    : [];
-  const existingId = existingByClerk?.id ?? existingByEmail?.id;
+  // Only fall back to an email match (pre-Clerk account linking) when the
+  // clerkUserId lookup above didn't already resolve it — running both on
+  // every request just to discard one result was pure waste.
+  const existing =
+    existingByClerk ??
+    (email
+      ? (
+          await database
+            .select(userSyncColumns)
+            .from(schema.users)
+            .where(eq(schema.users.email, email))
+            .limit(1)
+        )[0]
+      : undefined);
+
   const returning = { id: schema.users.id };
-  const [localUser] = existingId
-    ? await database
-        .update(schema.users)
-        .set({
-          clerkUserId,
-          login,
-          name,
-          email,
-          avatarUrl: profile.imageUrl,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.users.id, existingId))
-        .returning(returning)
-    : await database
-        .insert(schema.users)
-        .values({
-          clerkUserId,
-          githubUserId: null,
-          login,
-          name,
-          email,
-          avatarUrl: profile.imageUrl,
-        })
-        .returning(returning);
+  let localUser: { id: string } | undefined;
+  if (existing) {
+    const unchanged =
+      existing.clerkUserId === clerkUserId &&
+      existing.login === login &&
+      existing.name === name &&
+      existing.email === email &&
+      existing.avatarUrl === avatarUrl;
+    // Skip the write entirely when Clerk's profile matches what's already
+    // stored — this runs on every authenticated page view, so an
+    // unconditional UPDATE there was a write on every single navigation.
+    localUser = unchanged
+      ? { id: existing.id }
+      : (
+          await database
+            .update(schema.users)
+            .set({ clerkUserId, login, name, email, avatarUrl, updatedAt: new Date() })
+            .where(eq(schema.users.id, existing.id))
+            .returning(returning)
+        )[0];
+  } else {
+    [localUser] = await database
+      .insert(schema.users)
+      .values({ clerkUserId, githubUserId: null, login, name, email, avatarUrl })
+      .returning(returning);
+  }
 
   if (!localUser) return null;
   const connectedAccounts = await getConnectedAccounts(localUser.id);
@@ -118,18 +141,21 @@ async function ensureClerkUser(clerkUserId: string): Promise<AppUser | null> {
     id: localUser.id,
     name,
     email,
-    image: profile.imageUrl,
+    image: avatarUrl,
     ...(connectedAccounts.github.connected && connectedAccounts.github.login
       ? { githubLogin: connectedAccounts.github.login }
       : {}),
   };
 }
 
-export async function getCurrentAppUser(): Promise<AppUser | null> {
+// Multiple layouts/pages in the same route tree call this (e.g. a segment's
+// layout and its page both need the current user) — cache() dedupes those to
+// one Clerk/DB round trip per request instead of one per call site.
+export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
   if (clerkAuthConfigured()) {
     const { userId } = await clerkAuth();
     return userId ? ensureClerkUser(userId) : null;
   }
   const session = await nextAuth();
   return session?.user ?? null;
-}
+});

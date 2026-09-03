@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
@@ -14,8 +15,12 @@ import type { AppUser } from "./identity";
  * per-workspace role system (`workspace_members.role`): an admin governs the
  * whole product surface — the internal `/admin` console — not a single
  * workspace.
+ *
+ * AppChrome calls this on every authenticated sidebar page, and routes under
+ * `/admin` also call it via requireAdmin() — cache() dedupes those to one DB
+ * lookup per request instead of one per call site.
  */
-export async function isUserAdmin(userId: string): Promise<boolean> {
+export const isUserAdmin = cache(async (userId: string): Promise<boolean> => {
   if (!userId) return false;
   try {
     const [row] = await getDatabase()
@@ -25,13 +30,13 @@ export async function isUserAdmin(userId: string): Promise<boolean> {
       .limit(1);
     return Boolean(row?.isAdmin);
   } catch (error) {
-    // AppChrome calls this on every authenticated page. If the lookup fails
-    // (e.g. the `is_admin` migration has not run yet on this environment),
-    // degrade to "not an admin" rather than taking down the whole app shell.
+    // If the lookup fails (e.g. the `is_admin` migration has not run yet on
+    // this environment), degrade to "not an admin" rather than taking down
+    // the whole app shell.
     console.error("isUserAdmin lookup failed", error);
     return false;
   }
-}
+});
 
 /**
  * Guards an admin-only route. A signed-out visitor is bounced to `/sign-in`
