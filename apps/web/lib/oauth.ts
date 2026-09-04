@@ -87,6 +87,13 @@ type OAuthConfiguration = {
 };
 
 const COOKIE_MAX_AGE_SECONDS = 10 * 60;
+/**
+ * Cursor's `cursor-agent login` polls for ~20 minutes before giving up, and a
+ * real sign-in can take a while (a fresh account, 2FA, team pick). The 10-minute
+ * default would kill the poll session mid-sign-in with no signal, so the cursor
+ * deeplink flow gets its own longer window.
+ */
+const CURSOR_COOKIE_MAX_AGE_SECONDS = 25 * 60;
 
 export function oauthCookieName(provider: OAuthProvider) {
   return `codev_oauth_${provider}`;
@@ -600,18 +607,73 @@ export async function pollCursorLogin(input: {
   return { status: "ready", accessToken, refreshToken };
 }
 
+/**
+ * Exchange a Cursor **user API key** (from cursor.com → Dashboard → API Keys)
+ * for the same `{ accessToken, refreshToken }` pair the browser login yields —
+ * `cursor-agent`'s own `loginWithApiKey` does exactly this. Far more reliable
+ * than reproducing the deeplink poll, so the settings card offers it as a
+ * first-class path.
+ */
+export async function exchangeCursorApiKey(apiKey: string): Promise<{
+  accessToken: string;
+  refreshToken: string;
+}> {
+  const key = apiKey.trim();
+  if (!key) {
+    throw new Error("A Cursor API key is required.");
+  }
+  const response = await fetch(
+    `${cursorApiBaseUrl()}/auth/exchange_user_api_key`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: "{}",
+      cache: "no-store",
+    },
+  );
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("That Cursor API key was not accepted.");
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Cursor API key exchange failed with status ${response.status}.`,
+    );
+  }
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const accessToken =
+    payload && typeof payload.accessToken === "string"
+      ? payload.accessToken
+      : undefined;
+  const refreshToken =
+    payload && typeof payload.refreshToken === "string"
+      ? payload.refreshToken
+      : undefined;
+  if (!accessToken || !refreshToken) {
+    throw new Error(
+      "Cursor API key exchange returned an incomplete token pair.",
+    );
+  }
+  return { accessToken, refreshToken };
+}
+
 export async function persistCursorTokens(
-  state: OAuthState,
+  scope: { scopeType: ScopeType; scopeId: string },
   tokens: { accessToken: string; refreshToken: string },
 ) {
   await saveProviderCredential({
-    scopeType: state.scopeType,
-    scopeId: state.scopeId,
+    scopeType: scope.scopeType,
+    scopeId: scope.scopeId,
     provider: "cursor",
     credentialType: "OAUTH_TOKEN",
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    // Cursor's poll response carries no expiry and `cursor-agent` refreshes
+    // Cursor's token response carries no expiry and `cursor-agent` refreshes
     // its own tokens from the copy CoDev files on the workspace host, so no
     // control-plane refresh is scheduled.
   });
@@ -633,4 +695,4 @@ export async function persistOAuthTokens(
   });
 }
 
-export { COOKIE_MAX_AGE_SECONDS };
+export { COOKIE_MAX_AGE_SECONDS, CURSOR_COOKIE_MAX_AGE_SECONDS };

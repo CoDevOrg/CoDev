@@ -83,16 +83,18 @@ function FallbackRow({
   title,
   description,
   connected,
+  defaultOpen,
   children,
 }: {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: string;
   description: string;
   connected?: boolean;
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
   return (
-    <details className="group border-t border-border/60">
+    <details className="group border-t border-border/60" open={defaultOpen}>
       <summary className="flex cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
         <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
@@ -142,6 +144,8 @@ export function ProviderAccountCard({
   // Codex and Cursor finish out of band: the browser tab does the signing in
   // and CoDev learns about it only by polling its own callback.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartedAt = useRef(0);
+  const isCursor = subscription.provider === "cursor";
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -196,6 +200,19 @@ export function ProviderAccountCard({
       setFlow(null);
       setBusy("");
       setMessage(`${label} sign-in was cancelled.`);
+      return;
+    }
+    // Still pending. Cursor's browser sign-in can quietly fail to hand a token
+    // back to a non-CLI poller; nudge toward the API key rather than spinning
+    // forever with no signal.
+    if (
+      isCursor &&
+      pollStartedAt.current > 0 &&
+      Date.now() - pollStartedAt.current > 90_000
+    ) {
+      setMessage(
+        "Still waiting on Cursor. If you already finished signing in, connect with an API key below instead.",
+      );
     }
   }
 
@@ -246,6 +263,7 @@ export function ProviderAccountCard({
     if (payload.mode === "cursor_deeplink" && payload.loginUrl) {
       window.open(payload.loginUrl, "_blank", "noopener,noreferrer");
       setFlow({ kind: "polling", loginUrl: payload.loginUrl });
+      pollStartedAt.current = Date.now();
       void poll();
       pollTimer.current = setInterval(() => void poll(), 2000);
       return;
@@ -339,6 +357,27 @@ export function ProviderAccountCard({
     setBusy("save");
     setMessage("");
     try {
+      // Cursor: exchange the user API key for the same token pair the browser
+      // login yields, so it lands as one `cursor` connection either way and
+      // `cursor-agent` gets a real refreshable session, not a bare key.
+      if (isCursor) {
+        const response = await fetch("/api/auth/oauth/cursor/complete", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ apiKey: draft.trim(), scopeType: "USER" }),
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        if (!response.ok) {
+          setMessage(payload?.error ?? "The Cursor API key was not accepted.");
+          return;
+        }
+        setDraft("");
+        finishConnected();
+        return;
+      }
+
       const response = await fetch("/api/personal/connections", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -536,9 +575,18 @@ export function ProviderAccountCard({
       <div className="mt-4">
         <FallbackRow
           connected={apiKeyState.status === "connected"}
-          description={`Bill usage to your own ${connection.label} account instead of a subscription.`}
+          defaultOpen={isCursor && !connected}
+          description={
+            isCursor
+              ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
+              : `Bill usage to your own ${connection.label} account instead of a subscription.`
+          }
           icon={KeyRound}
-          title="Use an API key instead"
+          title={
+            isCursor
+              ? "Connect with a Cursor API key"
+              : "Use an API key instead"
+          }
         >
           {apiKeyState.status === "connected" ? (
             <p className="text-xs text-muted-foreground">
@@ -555,23 +603,29 @@ export function ProviderAccountCard({
               disabled={disabled}
               id={`api-key-${provider}`}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Paste API key"
+              placeholder={isCursor ? "key_…" : "Paste API key"}
               spellCheck={false}
               type="password"
               value={draft}
             />
             <Button
-              disabled={disabled}
+              disabled={disabled || !draft.trim()}
               onClick={() => void save()}
               size="sm"
               type="button"
               variant="outline"
             >
               {busy === "save"
-                ? "Saving…"
-                : apiKeyState.status === "connected"
-                  ? "Replace key"
-                  : "Save key"}
+                ? isCursor
+                  ? "Connecting…"
+                  : "Saving…"
+                : isCursor
+                  ? connected
+                    ? "Replace"
+                    : "Connect"
+                  : apiKeyState.status === "connected"
+                    ? "Replace key"
+                    : "Save key"}
             </Button>
             {apiKeyState.status === "connected" ? (
               <Button
