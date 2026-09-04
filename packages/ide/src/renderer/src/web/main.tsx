@@ -127,6 +127,9 @@ function WebRoot(): React.JSX.Element {
   // environment and sets `pairPayload`, which drops through to the keyed
   // remount below (fresh `<App>` picks up the stored environment and connects).
   if (codevPending && !pairPayload) {
+    // Read by the startup chain, which must not run against a runtime that does
+    // not exist yet. Cleared at the paired remount below.
+    window.__CODEV_PENDING_SHELL__ = true
     installWebPreloadApi()
     return (
       <Suspense fallback={<div className="min-h-dvh bg-background" />}>
@@ -146,6 +149,7 @@ function WebRoot(): React.JSX.Element {
     )
   }
 
+  window.__CODEV_PENDING_SHELL__ = false
   installWebPreloadApi()
   return (
     <Suspense fallback={<div className="min-h-dvh bg-background" />}>

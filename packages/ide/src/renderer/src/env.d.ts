@@ -68,6 +68,8 @@ declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     __CODEV_EMBEDDED__?: boolean
+    /** True only while the CoDev shell is mounted ahead of its runtime pairing. */
+    __CODEV_PENDING_SHELL__?: boolean
     __CODEV_PROJECT_PATH__?: string
     __CODEV_PROJECT_KIND__?: 'git' | 'folder'
     __CODEV_PROJECT_NAME__?: string

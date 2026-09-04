@@ -52,6 +52,11 @@ import {
 import { launchCodevDefaultChatTab, waitForCodevDefaultChatTab } from './web/codev-default-chat-tab'
 import { isCodevEmbedded } from './web/codev-embedded'
 import { reportCodevStartupFailure } from './web/codev-host-state'
+import { isCodevPendingShell } from './web/codev-pending-shell'
+
+/** Stable id for the sticky degraded-mode toast, so a later successful
+ *  hydration can clear one raised by an earlier pass. */
+const SESSION_RESTORE_FAILED_TOAST_ID = 'startup-session-restore-failed'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
@@ -955,6 +960,18 @@ function App(): React.JSX.Element {
     let reconnectStarted = false
     void (async () => {
       const startupStartedAt = performance.now()
+      // CoDev mounts this client before its workspace has a runtime; every step
+      // below would throw on the missing pairing and raise a "Session restore
+      // failed" toast for what is a normal cold open. The keyed remount on
+      // `codev:pair` runs the real hydration against a live runtime.
+      if (isCodevPendingShell()) {
+        logRendererStartupDiagnostic('startup-skipped-codev-pending')
+        // Chrome mounts and nothing stays gated; `workspaceSessionReady` stays
+        // false so the project handoff waits for the paired remount, and
+        // `hydrationSucceeded` stays false so nothing is written to disk.
+        useAppStore.setState({ startupWorktreeRefreshCompleted: true })
+        return
+      }
       logRendererStartupDiagnostic('startup-chain-start')
       try {
         // Why: nothing in the hydration chain reads profile state synchronously, so don't let it add a serial IPC round-trip before fetchSettings.
@@ -1189,6 +1206,10 @@ function App(): React.JSX.Element {
           syncZoomCSSVar()
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
+          // A pass that failed earlier (a pending shell, a retried mount) leaves
+          // its sticky toast on screen telling the member nothing will be saved,
+          // which is now false.
+          toast.dismiss(SESSION_RESTORE_FAILED_TOAST_ID)
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
@@ -1249,6 +1270,7 @@ function App(): React.JSX.Element {
           }
           // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
           toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
+            id: SESSION_RESTORE_FAILED_TOAST_ID,
             description: `${translate(
               'auto.App.0a9e810705',
               "Changes won't be saved until restart. Your previous tabs are safe on disk."

@@ -104,7 +104,12 @@ describe('renderer startup runtime routing', () => {
       "console.warn('Remote startup catalog refresh failed:'"
     )
     const lineageIndex = source.indexOf('actions.fetchWorktreeLineage()')
-    const startupRefreshCompletedIndex = source.indexOf('startupWorktreeRefreshCompleted: true')
+    // Search from the lineage fetch: the pending-shell guard sets the same flag
+    // earlier, and this assertion is about the deferred refresh's own write.
+    const startupRefreshCompletedIndex = source.indexOf(
+      'startupWorktreeRefreshCompleted: true',
+      lineageIndex
+    )
 
     expect(hydrationDoneIndex).toBeGreaterThanOrEqual(0)
     expect(hydrationDoneIndex).toBeLessThan(remoteCatalogIndex)
@@ -130,6 +135,26 @@ describe('renderer startup runtime routing', () => {
     expect(source.slice(remoteCatalogIndex, remoteWorktreeIndex)).toContain(
       'actions.fetchFolderWorkspacesForAllHosts()'
     )
+  })
+
+  it('skips the hydration chain while the CoDev shell has no runtime', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const guardIndex = source.indexOf('if (isCodevPendingShell()) {')
+    const chainStartIndex = source.indexOf("logRendererStartupDiagnostic('startup-chain-start')")
+    const firstStepIndex = source.indexOf("timeRendererStartupStep('fetch-settings'")
+
+    expect(guardIndex).toBeGreaterThanOrEqual(0)
+    // Every step below routes through a runtime RPC that throws until the
+    // workspace is paired, so the guard has to precede the chain entirely.
+    expect(guardIndex).toBeLessThan(chainStartIndex)
+    expect(chainStartIndex).toBeLessThan(firstStepIndex)
+    const guardBlock = source.slice(guardIndex, chainStartIndex)
+    expect(guardBlock).toContain("logRendererStartupDiagnostic('startup-skipped-codev-pending')")
+    expect(guardBlock).toContain('startupWorktreeRefreshCompleted: true')
+    // The project handoff waits for the paired remount, and nothing is written.
+    expect(guardBlock).not.toContain('workspaceSessionReady: true')
+    expect(guardBlock).not.toContain('setHydrationSucceeded')
+    expect(guardBlock).toContain('return')
   })
 
   it('waits for first-window startup services before terminal reconnect', () => {
