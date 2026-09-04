@@ -16,10 +16,10 @@ import {
 import { getDatabase } from "./database";
 import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
 import { closeSandboxInterval } from "./vm-usage";
-import { workspaceRuntimeTtlMs } from "./workspaces";
+import { workspaceHibernateIdleMs, workspaceRuntimeTtlMs } from "./workspaces";
 
 export const E2B_LIFECYCLE_OPTIONS = {
-  timeoutMs: 14_400_000,
+  timeoutMs: workspaceHibernateIdleMs,
   lifecycle: { onTimeout: "pause", autoResume: true },
 } as const;
 

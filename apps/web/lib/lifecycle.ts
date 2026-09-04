@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { getRun } from "workflow/api";
 
 import { schema } from "@codev/db";
@@ -9,6 +9,7 @@ import { appendWorkspaceEvent } from "./audit";
 import { closeOrphanOrcaIntervals } from "./compute-credits";
 import { getDatabase } from "./database";
 import { getHostState } from "./host";
+import { hibernateWorkspace } from "./hibernation";
 import { logEvent } from "./observability";
 import { destroySandbox, stopIde } from "./orchestrator";
 import { closeOrphanSandboxIntervals } from "./vm-usage";
@@ -155,8 +156,6 @@ export async function reconcileLifecycle() {
   const targets = new Map<string, "expired" | "runtime_missing">();
   for (const workspace of expired) targets.set(workspace.id, "expired");
 
-  // Automatic workspace hibernation is intentionally disabled. Workspaces
-  // stay live until an explicit stop or cleanup operation is requested.
   let cancellationFailures = 0;
   for (const [workspaceId, reason] of targets) {
     cancellationFailures += await cleanupWorkspace(
@@ -164,6 +163,37 @@ export async function reconcileLifecycle() {
       hostRunning,
       reason,
     );
+  }
+
+  // Snapshotting a guest requires talking to the live sandbox, so only
+  // attempt hibernation while the host is actually up. A batch cap keeps a
+  // single cron invocation (every 45 minutes, see docs/OPERATIONS.md) well
+  // under its 300s budget; any run this misses is picked up next cycle.
+  let hibernated = 0;
+  let hibernationFailures = 0;
+  if (hostRunning) {
+    const hibernationCandidates = await getDatabase()
+      .select({ id: schema.workspaces.id })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.status, "ready"),
+          isNotNull(schema.workspaces.hibernateAt),
+          lt(schema.workspaces.hibernateAt, now),
+        ),
+      )
+      .limit(15);
+    for (const workspace of hibernationCandidates) {
+      try {
+        if (await hibernateWorkspace(workspace.id)) hibernated += 1;
+      } catch (error) {
+        hibernationFailures += 1;
+        logEvent("warn", "lifecycle.hibernate_failed", {
+          workspaceId: workspace.id,
+          error: error instanceof Error ? error.message : "unknown error",
+        });
+      }
+    }
   }
   await getDatabase()
     .update(schema.workspaceInvites)
@@ -192,8 +222,8 @@ export async function reconcileLifecycle() {
   const result = {
     hostState,
     cleaned: targets.size,
-    hibernated: 0,
-    hibernationFailures: 0,
+    hibernated,
+    hibernationFailures,
     cancellationFailures,
     orphanIntervalsClosed,
     orphanOrcaIntervalsClosed,

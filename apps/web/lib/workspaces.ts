@@ -25,6 +25,11 @@ import {
 
 export const workspaceRuntimeTtlMs = 15 * 60 * 1000;
 
+// Matches E2B_LIFECYCLE_OPTIONS.timeoutMs in ./hibernation: the sandbox's own
+// pause timeout, so the control plane's hibernation reaper fires at the same
+// idle threshold the guest runtime already assumes.
+export const workspaceHibernateIdleMs = 4 * 60 * 60 * 1000;
+
 export function inviteAllowsUser(
   invite: {
     allowLink: boolean;
@@ -438,9 +443,7 @@ export async function markWorkspaceReady(
       .set({
         status: "ready",
         lastActivityAt: now,
-        // Automatic hibernation is disabled. Keep this nullable so a stale
-        // deadline cannot be mistaken for an active lifecycle policy.
-        hibernateAt: null,
+        hibernateAt: new Date(now.getTime() + workspaceHibernateIdleMs),
         updatedAt: now,
       })
       .where(eq(schema.workspaces.id, workspaceId));

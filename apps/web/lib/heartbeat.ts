@@ -9,7 +9,7 @@ import { readServerEnvironment } from "@codev/config";
 
 import { getDatabase } from "./database";
 import { touchSandbox } from "./orchestrator";
-import { workspaceRuntimeTtlMs } from "./workspaces";
+import { workspaceHibernateIdleMs, workspaceRuntimeTtlMs } from "./workspaces";
 
 const HEARTBEAT_KEY_PREFIX = "codev:workspace:heartbeat:";
 let redis: Redis | undefined;
@@ -64,10 +64,11 @@ async function hasRecentPostgresActivity(workspaceId: string) {
 
 export async function recordWorkspaceHeartbeat(workspaceId: string) {
   const now = new Date();
+  const hibernateAt = new Date(now.getTime() + workspaceHibernateIdleMs);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.workspaces)
-      .set({ lastActivityAt: now, hibernateAt: null, updatedAt: now })
+      .set({ lastActivityAt: now, hibernateAt, updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
     await transaction
       .update(schema.workspaceRuntimes)
@@ -96,7 +97,7 @@ export async function recordWorkspaceHeartbeat(workspaceId: string) {
   }
 
   await touchSandbox(workspaceId).catch(() => undefined);
-  return { lastActivityAt: now, hibernateAt: null };
+  return { lastActivityAt: now, hibernateAt };
 }
 
 export function workspaceHeartbeatKey(workspaceId: string) {

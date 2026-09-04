@@ -48,6 +48,7 @@ vi.mock("./compute-credits", () => ({
   closeOrphanOrcaIntervals: vi.fn().mockResolvedValue(0),
 }));
 vi.mock("./workspaces", () => ({ markWorkspaceStopped: vi.fn() }));
+vi.mock("./hibernation", () => ({ hibernateWorkspace: vi.fn() }));
 
 import { destroySandboxForCleanup, reconcileLifecycle } from "./lifecycle";
 
@@ -58,11 +59,51 @@ describe("reconcileLifecycle", () => {
     mocks.selectQuery.limit.mockResolvedValue([]);
   });
 
-  it("does not query or hibernate idle ready workspaces", async () => {
+  it("finds no hibernation candidates when none are idle past their deadline", async () => {
     const result = await reconcileLifecycle();
 
     expect(result.hibernated).toBe(0);
     expect(result.hibernationFailures).toBe(0);
+    expect(mocks.database.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("hibernates idle ready workspaces when the host is running", async () => {
+    const { hibernateWorkspace } = await import("./hibernation");
+    vi.mocked(hibernateWorkspace).mockResolvedValueOnce(true);
+    mocks.selectQuery.limit
+      .mockResolvedValueOnce([]) // expired workspaces
+      .mockResolvedValueOnce([{ id: "workspace-2" }]); // hibernation candidates
+
+    const result = await reconcileLifecycle();
+
+    expect(hibernateWorkspace).toHaveBeenCalledWith("workspace-2");
+    expect(result.hibernated).toBe(1);
+    expect(result.hibernationFailures).toBe(0);
+  });
+
+  it("counts a hibernation failure without aborting the rest of the batch", async () => {
+    const { hibernateWorkspace } = await import("./hibernation");
+    vi.mocked(hibernateWorkspace).mockRejectedValueOnce(
+      new Error("snapshot failed"),
+    );
+    mocks.selectQuery.limit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "workspace-3" }]);
+
+    const result = await reconcileLifecycle();
+
+    expect(result.hibernated).toBe(0);
+    expect(result.hibernationFailures).toBe(1);
+  });
+
+  it("does not attempt hibernation when the Firecracker host is unavailable", async () => {
+    mocks.getHostState.mockResolvedValue("stopped");
+    const { hibernateWorkspace } = await import("./hibernation");
+
+    const result = await reconcileLifecycle();
+
+    expect(hibernateWorkspace).not.toHaveBeenCalled();
+    expect(result.hibernated).toBe(0);
     expect(mocks.database.select).toHaveBeenCalledTimes(1);
   });
 
