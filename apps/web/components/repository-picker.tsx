@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
@@ -9,21 +9,64 @@ import type { GitHubInstallation, GitHubRepository } from "@/lib/github";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
-/**
- * `/user/installations` returns every installation the member can reach, so a
- * repo they collaborate on inside someone else's personal account shows up
- * next to their own. Name the relationship instead of labelling both "User".
- */
-function installationLabel(
+type RepositoryChoice = GitHubRepository & {
+  installationId: number;
+  sharedBy: string | null;
+};
+
+function isViewerAccount(
   installation: GitHubInstallation,
   viewerLogin: string | null,
 ) {
-  const { login, type } = installation.account;
-  if (type === "Organization") return `${login} · Organization`;
-  if (viewerLogin && login.toLowerCase() === viewerLogin.toLowerCase()) {
-    return `${login} · Your account`;
+  return (
+    installation.account.type === "User" &&
+    Boolean(viewerLogin) &&
+    installation.account.login.toLowerCase() === viewerLogin!.toLowerCase()
+  );
+}
+
+/**
+ * `/user/installations` also returns installations on other people's personal
+ * accounts whenever the member collaborates on a repository there. Those are
+ * not accounts the member can pick from, so they never reach the account list;
+ * their repositories are folded into the member's own account instead, tagged
+ * with the owner who shared them.
+ */
+function partitionInstallations(
+  installations: GitHubInstallation[],
+  viewerLogin: string | null,
+) {
+  const owned = installations.filter(
+    (installation) =>
+      installation.account.type === "Organization" ||
+      isViewerAccount(installation, viewerLogin),
+  );
+  const shared = installations.filter(
+    (installation) => !owned.includes(installation),
+  );
+  // Without a resolvable login every personal installation looks shared, which
+  // would leave the member nothing to select. Fall back to the full list.
+  if (owned.length === 0) return { owned: installations, shared: [] };
+  return { owned, shared };
+}
+
+function accountLabel(
+  installation: GitHubInstallation,
+  viewerLogin: string | null,
+) {
+  if (installation.account.type === "Organization") {
+    return `${installation.account.login} · Organization`;
   }
-  return `${login} · Shared with you`;
+  return isViewerAccount(installation, viewerLogin)
+    ? `${installation.account.login} · Your account`
+    : `${installation.account.login} · Shared with you`;
+}
+
+function repositoryLabel(repository: RepositoryChoice) {
+  const access = repository.private ? "Private · " : "";
+  return repository.sharedBy
+    ? `${access}${repository.full_name} · shared by ${repository.sharedBy}`
+    : `${access}${repository.full_name}`;
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -46,7 +89,7 @@ export function RepositoryPicker({
   const router = useRouter();
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
   const [viewerLogin, setViewerLogin] = useState<string | null>(null);
-  const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
+  const [repositories, setRepositories] = useState<RepositoryChoice[]>([]);
   const [installationId, setInstallationId] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
   const [state, setState] = useState<LoadState>("loading");
@@ -80,6 +123,11 @@ export function RepositoryPicker({
     };
   }, [open, githubConnected]);
 
+  const accountOptions = useMemo(
+    () => partitionInstallations(installations, viewerLogin).owned,
+    [installations, viewerLogin],
+  );
+
   async function loadRepositories(value: string) {
     setInstallationId(value);
     setRepositoryId("");
@@ -87,15 +135,42 @@ export function RepositoryPicker({
     setMessage("");
     if (!value) return;
 
+    const selected = installations.find(
+      (installation) => String(installation.id) === value,
+    );
+    if (!selected) return;
+    // Repositories other people shared with the member live in their own
+    // installations, so opening the member's account means loading those too.
+    const targets = isViewerAccount(selected, viewerLogin)
+      ? [selected, ...partitionInstallations(installations, viewerLogin).shared]
+      : [selected];
+
     setState("loading");
     try {
-      const payload = await readJson<{ repositories: GitHubRepository[] }>(
-        await fetch(`/api/github/installations/${value}/repositories`),
+      const groups = await Promise.all(
+        targets.map(async (installation) => {
+          const payload = await readJson<{ repositories: GitHubRepository[] }>(
+            await fetch(
+              `/api/github/installations/${installation.id}/repositories`,
+            ),
+          );
+          return payload.repositories.map((repository) => ({
+            ...repository,
+            installationId: installation.id,
+            sharedBy:
+              installation.id === selected.id
+                ? null
+                : installation.account.login,
+          }));
+        }),
       );
-      setRepositories(payload.repositories);
-      setState(payload.repositories.length ? "ready" : "empty");
-      if (!payload.repositories.length) {
-        setMessage("This installation has no eligible repositories.");
+      const loaded = groups
+        .flat()
+        .sort((left, right) => left.full_name.localeCompare(right.full_name));
+      setRepositories(loaded);
+      setState(loaded.length ? "ready" : "empty");
+      if (!loaded.length) {
+        setMessage("This account has no eligible repositories.");
       }
     } catch (error) {
       setMessage(
@@ -240,9 +315,9 @@ export function RepositoryPicker({
                       }
                     >
                       <option value="">Select an account</option>
-                      {installations.map((installation) => (
+                      {accountOptions.map((installation) => (
                         <option key={installation.id} value={installation.id}>
-                          {installationLabel(installation, viewerLogin)}
+                          {accountLabel(installation, viewerLogin)}
                         </option>
                       ))}
                     </select>
@@ -256,9 +331,11 @@ export function RepositoryPicker({
                     >
                       <option value="">Select a repository</option>
                       {repositories.map((repository) => (
-                        <option key={repository.id} value={repository.id}>
-                          {repository.private ? "Private · " : ""}
-                          {repository.full_name}
+                        <option
+                          key={`${repository.installationId}:${repository.id}`}
+                          value={`${repository.installationId}:${repository.id}`}
+                        >
+                          {repositoryLabel(repository)}
                         </option>
                       ))}
                     </select>
@@ -267,12 +344,14 @@ export function RepositoryPicker({
                     className="primary-button picker-submit"
                     type="button"
                     disabled={!repositoryId || creating}
-                    onClick={() =>
+                    onClick={() => {
+                      const [selectedInstallation, selectedRepository] =
+                        repositoryId.split(":");
                       void createWorkspace({
-                        installationId: Number(installationId),
-                        repositoryId: Number(repositoryId),
-                      })
-                    }
+                        installationId: Number(selectedInstallation),
+                        repositoryId: Number(selectedRepository),
+                      });
+                    }}
                   >
                     {creating ? "Creating…" : "Create workspace"}
                   </button>
