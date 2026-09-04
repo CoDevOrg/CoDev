@@ -7,6 +7,7 @@ import {
   createOAuthState,
   DEFAULT_CLAUDE_OAUTH_CLIENT_ID,
   DEFAULT_CODEX_OAUTH_CLIENT_ID,
+  exchangeCursorApiKey,
   exchangeOAuthCode,
   getOAuthConfiguration,
   getOAuthConfigurationStatus,
@@ -287,5 +288,46 @@ describe("Cursor browser login", () => {
       accessToken: "cur_at",
       refreshToken: "cur_rt",
     });
+  });
+
+  it("exchanges a user API key for the token pair", async () => {
+    const seen: { url: string; headers: Headers; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        seen.push({
+          url,
+          headers: new Headers(init.headers),
+          body: init.body,
+        });
+        return new Response(
+          JSON.stringify({ accessToken: "x_at", refreshToken: "x_rt" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    await expect(exchangeCursorApiKey("  key_abc  ")).resolves.toEqual({
+      accessToken: "x_at",
+      refreshToken: "x_rt",
+    });
+    expect(seen[0]!.url).toBe(
+      "https://api2.cursor.sh/auth/exchange_user_api_key",
+    );
+    expect(seen[0]!.headers.get("authorization")).toBe("Bearer key_abc");
+  });
+
+  it("rejects an unaccepted API key without leaking the status body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    await expect(exchangeCursorApiKey("key_bad")).rejects.toThrow(
+      "not accepted",
+    );
+  });
+
+  it("requires a non-empty key", async () => {
+    await expect(exchangeCursorApiKey("   ")).rejects.toThrow("required");
   });
 });

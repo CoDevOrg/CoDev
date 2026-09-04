@@ -10,6 +10,8 @@ import {
   buildAuthorizationUrl,
   COOKIE_MAX_AGE_SECONDS,
   createOAuthState,
+  CURSOR_COOKIE_MAX_AGE_SECONDS,
+  exchangeCursorApiKey,
   exchangeOAuthCode,
   getOAuthConfiguration,
   getOAuthFlowMode,
@@ -39,6 +41,7 @@ const sessionBodySchema = z.object({
   code: z.string().optional(),
   deviceAuthId: z.string().optional(),
   userCode: z.string().optional(),
+  apiKey: z.string().optional(),
 });
 
 function safeReturnTo(
@@ -73,7 +76,10 @@ function setOAuthCookie(
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: COOKIE_MAX_AGE_SECONDS,
+    maxAge:
+      provider === "cursor"
+        ? CURSOR_COOKIE_MAX_AGE_SECONDS
+        : COOKIE_MAX_AGE_SECONDS,
     path: `/api/auth/oauth/${provider}`,
   });
   return response;
@@ -381,6 +387,65 @@ export async function completeManualOAuth(
   }
 }
 
+/**
+ * Cursor's `/complete`: takes a Cursor **user API key**, exchanges it for the
+ * same `{ accessToken, refreshToken }` pair as the browser login, and stores it
+ * as a `cursor` OAUTH_TOKEN connection. Needs no in-flight OAuth session — the
+ * key is the credential — so it works even after the deeplink poll has expired.
+ */
+export async function completeCursorApiKey(request: Request) {
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required." },
+      { status: 401 },
+    );
+  }
+
+  const parsed = sessionBodySchema.safeParse(
+    await request.json().catch(() => ({})),
+  );
+  const apiKey = parsed.success ? (parsed.data.apiKey ?? "").trim() : "";
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "A Cursor API key is required." },
+      { status: 400 },
+    );
+  }
+
+  const scopeType =
+    parsed.success && parsed.data.scopeType === "WORKSPACE"
+      ? "WORKSPACE"
+      : "USER";
+  const workspaceId = parsed.success ? parsed.data.workspaceId : undefined;
+  if (scopeType === "WORKSPACE" && !workspaceId) {
+    return NextResponse.json(
+      { error: "workspaceId is required for a workspace credential." },
+      { status: 400 },
+    );
+  }
+  const scopeId = scopeType === "WORKSPACE" ? workspaceId! : user.id;
+
+  try {
+    if (scopeType === "WORKSPACE") {
+      await requireOrganizationSettingsWrite(user.id, scopeId);
+    }
+    const tokens = await exchangeCursorApiKey(apiKey);
+    await persistCursorTokens({ scopeType, scopeId }, tokens);
+    return NextResponse.json({ status: "connected", provider: "cursor" });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Cursor API key connection failed.",
+      },
+      { status: 400 },
+    );
+  }
+}
+
 export async function pollDeviceOAuth(
   request: Request,
   provider: OAuthProvider,
@@ -426,10 +491,10 @@ export async function pollDeviceOAuth(
           provider,
         );
       }
-      await persistCursorTokens(state, {
-        accessToken: poll.accessToken,
-        refreshToken: poll.refreshToken,
-      });
+      await persistCursorTokens(
+        { scopeType: state.scopeType, scopeId: state.scopeId },
+        { accessToken: poll.accessToken, refreshToken: poll.refreshToken },
+      );
       return clearOAuthCookie(
         NextResponse.json({ status: "connected", provider }),
         provider,

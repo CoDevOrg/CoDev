@@ -94,6 +94,39 @@ describe("ProviderAccountCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("exchanges a Cursor API key through the /complete route", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ status: "connected" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ProviderAccountCard
+        connection={connection()}
+        label="Cursor"
+        logo={null}
+        subscription={subscription()}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("key_…"), {
+      target: { value: "key_live_123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Cursor is connected.",
+      );
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/auth/oauth/cursor/complete",
+    );
+    expect(
+      JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string),
+    ).toMatchObject({ apiKey: "key_live_123", scopeType: "USER" });
+  });
+
   it("takes the authorization code Claude hands back", async () => {
     const fetchMock = vi
       .fn()
