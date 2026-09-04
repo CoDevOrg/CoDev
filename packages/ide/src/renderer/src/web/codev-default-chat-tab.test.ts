@@ -157,6 +157,8 @@ describe('launchCodevDefaultChatTab', () => {
       tabsByWorktree: {},
       unifiedTabsByWorktree: {},
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode: vi.fn()
     })
 
@@ -192,6 +194,8 @@ describe('launchCodevDefaultChatTab', () => {
       allWorktrees: () => [{ id: 'wt-1', repoId: 'repo-1' }],
       activeWorktreeId: 'wt-1',
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode: vi.fn()
     })
 
@@ -217,6 +221,8 @@ describe('launchCodevDefaultChatTab', () => {
       },
       allWorktrees: () => [{ id: 'wt-1', repoId: 'repo-1' }],
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode: vi.fn()
     })
 
@@ -240,6 +246,8 @@ describe('launchCodevDefaultChatTab', () => {
         tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
         unifiedTabsByWorktree: {},
         closeTab: vi.fn(),
+        setActiveTab: vi.fn(),
+        setActiveTabForWorktree: vi.fn(),
         setTabViewMode: vi.fn()
       })
 
@@ -259,6 +267,8 @@ describe('launchCodevDefaultChatTab', () => {
         tabsByWorktree: {},
         unifiedTabsByWorktree: {},
         closeTab,
+        setActiveTab: vi.fn(),
+        setActiveTabForWorktree: vi.fn(),
         setTabViewMode: vi.fn()
       })
       .mockReturnValue({
@@ -267,6 +277,8 @@ describe('launchCodevDefaultChatTab', () => {
         },
         unifiedTabsByWorktree: {},
         closeTab,
+        setActiveTab: vi.fn(),
+        setActiveTabForWorktree: vi.fn(),
         setTabViewMode: vi.fn()
       })
 
@@ -274,6 +286,48 @@ describe('launchCodevDefaultChatTab', () => {
     vi.advanceTimersByTime(5_000)
 
     expect(closeTab).toHaveBeenCalledWith('shell', { reason: 'cleanup' })
+  })
+
+  it('fronts the chat tab as soon as it exists, before any shell is retired', () => {
+    setWindow({ __CODEV_EMBEDDED__: true })
+    const setActiveTab = vi.fn()
+    const setActiveTabForWorktree = vi.fn()
+    // The host's stock shell is the active tab and no shell has been retired
+    // yet — the exact window in which a new workspace used to open on a raw
+    // prompt with the chat hidden behind "Back to chat".
+    getState.mockReturnValue({
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: { 'wt-1': [{ id: 'shell' }, { id: 'chat', launchAgent: 'claude' }] },
+      unifiedTabsByWorktree: {},
+      closeTab: vi.fn(),
+      setTabViewMode: vi.fn(),
+      setActiveTab,
+      setActiveTabForWorktree
+    })
+
+    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+
+    expect(setActiveTabForWorktree).toHaveBeenCalledWith('wt-1', 'chat')
+    expect(setActiveTab).toHaveBeenCalledWith('chat')
+  })
+
+  it('fronts the chat tab only once, leaving a later terminal choice alone', () => {
+    setWindow({ __CODEV_EMBEDDED__: true })
+    const setActiveTab = vi.fn()
+    getState.mockReturnValue({
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: { 'wt-1': [{ id: 'chat', launchAgent: 'claude' }] },
+      unifiedTabsByWorktree: {},
+      closeTab: vi.fn(),
+      setTabViewMode: vi.fn(),
+      setActiveTab,
+      setActiveTabForWorktree: vi.fn()
+    })
+
+    launchCodevDefaultChatTab({ worktreeId: 'wt-1' })
+    vi.advanceTimersByTime(20_000)
+
+    expect(setActiveTab).toHaveBeenCalledTimes(1)
   })
 
   it('never closes a shell while no agent tab exists yet', () => {
@@ -302,6 +356,8 @@ describe('launchCodevDefaultChatTab', () => {
       },
       unifiedTabsByWorktree: {},
       closeTab,
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode: vi.fn()
     })
 
@@ -318,6 +374,8 @@ describe('launchCodevDefaultChatTab', () => {
       tabsByWorktree: { 'wt-1': [{ id: 't1', launchAgent: 'claude' }] },
       unifiedTabsByWorktree: {},
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode: vi.fn()
     })
 
@@ -337,6 +395,8 @@ describe('launchCodevDefaultChatTab', () => {
         'wt-1': [{ id: 'u1', entityId: 't1', viewMode: 'terminal' }]
       },
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode
     })
 
@@ -354,6 +414,8 @@ describe('launchCodevDefaultChatTab', () => {
         'wt-1': [{ id: 'u1', entityId: 't1', viewMode: 'chat' }]
       },
       closeTab: vi.fn(),
+      setActiveTab: vi.fn(),
+      setActiveTabForWorktree: vi.fn(),
       setTabViewMode
     })
 

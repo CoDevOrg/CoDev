@@ -900,6 +900,7 @@ function App(): React.JSX.Element {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       cliInstalled: featureTipCliInstalled,
+      codevEmbedded: isCodevEmbedded(),
       featureTipsSeenIds,
       featureInteractions,
       onboarding,

@@ -156,10 +156,19 @@ export async function waitForCodevDefaultChatTab({
 }
 
 /**
- * Close the stock terminal tab(s) the default chat tab replaces.
+ * Settle the worktree on its chat tab: front the chat as soon as it exists,
+ * then close the stock terminal tab(s) it replaces.
  *
  * CoDev workspaces are agent-first, so the worktree should open on the chat
  * tab alone — not the chat tab plus the idle shell the host created first.
+ *
+ * Fronting is separate from retiring because they become possible at different
+ * moments. The host creates its shell first and mirrors its tab list
+ * asynchronously, so for the first seconds of a new workspace the stock shell
+ * is the active tab; waiting for the retire to close it meant a member's first
+ * ever look at a workspace was a raw prompt, with the chat one click away
+ * behind "Back to chat". Front the chat on the first poll that sees one, and
+ * close shells on whichever later poll finds both.
  *
  * A paired host mirrors its tab list asynchronously, so the shell frequently
  * does not exist yet when the launch is issued (an earlier version captured
@@ -167,9 +176,23 @@ export async function waitForCodevDefaultChatTab({
  * times instead, and only ever close a tab once an agent tab is actually
  * present, so a failed launch cannot leave the worktree empty.
  */
-function retireStockTerminalTabs(worktreeId: string): void {
+function settleWorktreeOnChatTab(worktreeId: string): void {
   let attempt = 0
-  const timer = setInterval(() => {
+  // Front once: after that the member owns the choice, and a later poll must
+  // not yank them out of a terminal they deliberately opened.
+  let fronted = false
+  let timer: ReturnType<typeof setInterval> | null = null
+  let done = false
+  const stop = (): void => {
+    done = true
+    if (timer !== null) {
+      clearInterval(timer)
+    }
+  }
+  const tick = (): void => {
+    if (done) {
+      return
+    }
     attempt += 1
     const state = useAppStore.getState()
     const tabs = state.tabsByWorktree[worktreeId] ?? []
@@ -187,6 +210,14 @@ function retireStockTerminalTabs(worktreeId: string): void {
       Boolean(tab.launchAgent) || chatTabIds.has(tab.id)
     const agentTabs = tabs.filter(isAgentTab)
     const shells = tabs.filter((tab) => !isAgentTab(tab))
+    const chatTab = agentTabs[0]
+    if (!fronted && chatTab) {
+      fronted = true
+      state.setActiveTabForWorktree(worktreeId, chatTab.id)
+      if (state.activeWorktreeId === worktreeId) {
+        state.setActiveTab(chatTab.id)
+      }
+    }
     if (agentTabs.length > 0 && shells.length > 0) {
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       for (const shell of shells) {
@@ -204,13 +235,19 @@ function retireStockTerminalTabs(worktreeId: string): void {
           )
         }
       }
-      clearInterval(timer)
+      stop()
       return
     }
     if (attempt >= RETIRE_STOCK_TABS_ATTEMPTS) {
-      clearInterval(timer)
+      stop()
     }
-  }, RETIRE_STOCK_TABS_INTERVAL_MS)
+  }
+  // Run once now: the first interval alone is 1.5s of stock terminal on screen
+  // when the chat tab is already there to be fronted.
+  tick()
+  if (!done) {
+    timer = setInterval(tick, RETIRE_STOCK_TABS_INTERVAL_MS)
+  }
 }
 
 /**
@@ -284,9 +321,9 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
     if (restorable.length > 0) {
       for (const wt of restorable) {
         ensureAgentTabsRenderAsChat(wt.id)
-        retireStockTerminalTabs(wt.id)
+        settleWorktreeOnChatTab(wt.id)
       }
-      retireStockTerminalTabs(worktreeId)
+      settleWorktreeOnChatTab(worktreeId)
       // The chat lives in the agent's own worktree, but the workspace opens on
       // the base checkout — whose shell was just retired. Without this the
       // member is left staring at an empty covered checkout while a perfectly
@@ -309,8 +346,8 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
         worktreeId: stranded.id,
         launchSource: 'new_workspace_composer'
       })
-      retireStockTerminalTabs(stranded.id)
-      retireStockTerminalTabs(worktreeId)
+      settleWorktreeOnChatTab(stranded.id)
+      settleWorktreeOnChatTab(worktreeId)
       return
     }
 
@@ -321,7 +358,7 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
     })
     // The main checkout stays a plain tree; drop the shell the host opened it
     // with so it isn't a stray idle terminal.
-    retireStockTerminalTabs(worktreeId)
+    settleWorktreeOnChatTab(worktreeId)
     if (creationId) {
       return
     }
@@ -331,17 +368,17 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
 
   if (worktreeHasAgentTab(worktreeId)) {
     ensureAgentTabsRenderAsChat(worktreeId)
-    retireStockTerminalTabs(worktreeId)
+    settleWorktreeOnChatTab(worktreeId)
     return
   }
   waitForHostWorktreeTabs(worktreeId, () => {
     if (worktreeHasAgentTab(worktreeId)) {
       ensureAgentTabsRenderAsChat(worktreeId)
-      retireStockTerminalTabs(worktreeId)
+      settleWorktreeOnChatTab(worktreeId)
       return
     }
     launchAgentInNewTab({ agent, worktreeId, launchSource: 'new_workspace_composer' })
-    retireStockTerminalTabs(worktreeId)
+    settleWorktreeOnChatTab(worktreeId)
     setTimeout(() => ensureAgentTabsRenderAsChat(worktreeId), RETIRE_STOCK_TABS_INTERVAL_MS * 2)
   })
 }

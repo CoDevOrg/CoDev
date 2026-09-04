@@ -22,6 +22,9 @@ export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
   cliInstalled: boolean | null
+  /** CoDev embed: every tip teaches desktop-Orca chrome the member does not
+   *  have (the CLI, the ⌘J worktree palette), so none of them may open. */
+  codevEmbedded?: boolean
   featureTipsSeenIds: readonly FeatureTipId[]
   featureInteractions: FeatureInteractionState
   onboarding: OnboardingState | null
@@ -30,6 +33,10 @@ export function getFeatureTipsAppOpenDecision(args: {
   settings: { voice?: GlobalSettings['voice'] } | null | undefined
   suppressedByOnboardingThisSession: boolean
 }): FeatureTipsAppOpenDecision {
+  if (args.codevEmbedded) {
+    return { kind: 'skip' }
+  }
+
   if (args.onboarding !== null && shouldShowOnboarding(args.onboarding)) {
     return { kind: 'suppress-for-onboarding' }
   }

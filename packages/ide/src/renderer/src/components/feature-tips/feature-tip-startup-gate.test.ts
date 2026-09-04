@@ -57,6 +57,26 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'open', tipId: 'orca-cli' })
   })
 
+  it('never opens a tip inside the CoDev embed', () => {
+    // Every tip teaches desktop-Orca chrome a CoDev member does not have, and
+    // the first one shipped advertised a worktree palette over a workspace with
+    // no worktree list at all.
+    expect(
+      getFeatureTipsAppOpenDecision({
+        activeModal: 'none',
+        cliInstalled: false,
+        codevEmbedded: true,
+        featureTipsSeenIds: [],
+        featureInteractions: {},
+        onboarding: existingUserOnboarding,
+        persistedUIReady: true,
+        promptedThisSession: false,
+        settings: makeSettings(),
+        suppressedByOnboardingThisSession: false
+      })
+    ).toEqual({ kind: 'skip' })
+  })
+
   it('suppresses feature tips for first-time users while onboarding is showing', () => {
     expect(
       getFeatureTipsAppOpenDecision({
