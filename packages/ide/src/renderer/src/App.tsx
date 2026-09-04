@@ -336,6 +336,11 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
+const CodevChannelPane = lazy(() =>
+  import('./components/codev/CodevChannelPane').then((m) => ({
+    default: m.CodevChannelPane
+  }))
+)
 const CodevAwaitingWorkspaceCover = lazy(() =>
   import('./components/codev/CodevAwaitingWorkspaceCover').then((m) => ({
     default: m.CodevAwaitingWorkspaceCover
@@ -2430,6 +2435,14 @@ function App(): React.JSX.Element {
                         <div className="titlebar">{titlebarMainStrip}</div>
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                        {/* CoDev: a team channel layers over the center while the
+                            member reads it, leaving the chat and its agent mounted
+                            underneath so switching back costs nothing. */}
+                        {isCodevEmbedded() ? (
+                          <Suspense fallback={null}>
+                            <CodevChannelPane />
+                          </Suspense>
+                        ) : null}
                         {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                         {workspaceChromeActive && !rightSidebarOpen && (
                           <div

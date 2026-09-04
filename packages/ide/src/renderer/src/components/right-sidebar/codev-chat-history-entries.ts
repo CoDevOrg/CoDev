@@ -1,14 +1,6 @@
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 
 /**
- * Fired when a surface elsewhere in the app (an empty chat, a failed restore)
- * sends the member to the Agents tab to find an earlier conversation. The
- * history section listens for it and scrolls itself into view, so the answer
- * is on screen instead of below the fold.
- */
-export const CODEV_FOCUS_CHAT_HISTORY_EVENT = 'codev:focus-chat-history'
-
-/**
  * Rows for CoDev's chat history list.
  *
  * The embedded workspace hides Orca's Agent Session History tab and shows a

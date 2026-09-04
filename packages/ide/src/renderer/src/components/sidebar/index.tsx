@@ -5,6 +5,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import { CodevTeamPanel } from './CodevTeamPanel'
+import { CodevChatsSection } from './CodevChatsSection'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
@@ -133,9 +134,10 @@ function Sidebar({
               />
             )}
 
-            {/* CoDev: the workspace team rail (people, status, channels) is the
-                embedded sidebar's sole content — it replaces the worktree list
-                rather than sitting under it. No-op outside the embedded client. */}
+            {/* CoDev: the embedded rail is this worktree's chats over the team
+                (people, status, channels), replacing the worktree list rather
+                than sitting under it. No-ops outside the embedded client. */}
+            <CodevChatsSection />
             <CodevTeamPanel />
 
             <div className="relative shrink-0">

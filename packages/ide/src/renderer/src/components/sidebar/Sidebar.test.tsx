@@ -55,6 +55,10 @@ vi.mock('./CodevTeamPanel', () => ({
   CodevTeamPanel: () => <div data-testid="codev-team-panel" />
 }))
 
+vi.mock('./CodevChatsSection', () => ({
+  CodevChatsSection: () => <div data-testid="codev-chats-section" />
+}))
+
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
 }))

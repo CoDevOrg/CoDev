@@ -21,9 +21,6 @@ import {
   type MissionControlCoordination
 } from './CodevMissionControlView'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { codevDefaultChatAgent } from '@/web/codev-default-chat-tab'
-import { CodevChatHistorySection } from './CodevChatHistorySection'
 
 /**
  * Mission Control container.
@@ -117,7 +114,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [steerBusy, setSteerBusy] = useState(false)
-  const [newChatPending, setNewChatPending] = useState(false)
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
   const worktreesByRepo = useAppStore(useShallow((state) => state.worktreesByRepo))
@@ -320,52 +316,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [byKey, refreshManaged]
   )
 
-  // A fresh chat on the agent that owns the worktree the member is looking at.
-  // Same branch, same files, empty context — the escape hatch from a thread
-  // that has grown too long to steer. It reuses the worktree, so it costs no
-  // capacity slot; `agents.newChat` records the thread server-side on the same
-  // terms so the room and the workboard stay honest about who is doing what.
-  const newChatWorktreeId = useAppStore((state) => state.activeWorktreeId) ?? null
-  const newChatSessionId = useMemo(
-    () =>
-      agents.find(
-        (agent) =>
-          agent.origin === 'managed' && agent.sessionId && agent.worktreeId === newChatWorktreeId
-      )?.sessionId ?? null,
-    [agents, newChatWorktreeId]
-  )
-
-  const handleNewChat = useCallback(async () => {
-    if (!newChatWorktreeId || newChatPending) {
-      return
-    }
-    const agent = codevDefaultChatAgent()
-    if (!agent) {
-      return
-    }
-    setNewChatPending(true)
-    try {
-      launchAgentInNewTab({ agent, worktreeId: newChatWorktreeId })
-      if (newChatSessionId) {
-        // Best effort: the chat is already open locally either way, and a
-        // failure here only costs the room's view of it.
-        await requestCodevBridge('agents.newChat', { sessionId: newChatSessionId }).catch(
-          () => undefined
-        )
-        void refreshManaged()
-      }
-      toast.success('Started a fresh chat on this agent', {
-        description: 'Same branch and files, empty context.'
-      })
-    } catch (error: unknown) {
-      toast.error('Could not start a new chat', {
-        description: error instanceof Error ? error.message : String(error)
-      })
-    } finally {
-      setNewChatPending(false)
-    }
-  }, [newChatPending, newChatSessionId, newChatWorktreeId, refreshManaged])
-
   if (!embedded) return null
 
   return (
@@ -383,11 +333,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       onStepIn={handleStepIn}
       onSteer={handleSteer}
       onPause={handlePause}
-    />
-    <CodevChatHistorySection
-      onNewChat={() => void handleNewChat()}
-      newChatPending={newChatPending}
-      canStartNewChat={Boolean(newChatWorktreeId)}
     />
     </div>
   )

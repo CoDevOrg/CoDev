@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useMemo, useState, type JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { History, MessageSquarePlus, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -25,7 +25,6 @@ import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from './ai-vault-session-limit'
 import {
   buildCodevChatHistoryEntries,
-  CODEV_FOCUS_CHAT_HISTORY_EVENT,
   formatChatHistoryAge,
   type CodevChatHistoryEntry
 } from './codev-chat-history-entries'
@@ -45,10 +44,12 @@ import {
  * exists, so reopening one never touches agent capacity.
  */
 export function CodevChatHistorySection({
+  className,
   onNewChat,
   newChatPending = false,
   canStartNewChat = false
 }: {
+  className?: string
   onNewChat?: () => void
   newChatPending?: boolean
   canStartNewChat?: boolean
@@ -69,15 +70,6 @@ export function CodevChatHistorySection({
     }))
   )
   const [query, setQuery] = useState('')
-  const rootRef = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    const focus = (): void => {
-      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-    window.addEventListener(CODEV_FOCUS_CHAT_HISTORY_EVENT, focus)
-    return () => window.removeEventListener(CODEV_FOCUS_CHAT_HISTORY_EVENT, focus)
-  }, [])
 
   const projectScopeContext = useMemo(
     () =>
@@ -175,11 +167,11 @@ export function CodevChatHistorySection({
   )
 
   return (
-    <section ref={rootRef} className="codev-chat-history" aria-label="Chat history">
+    <section className={cn('codev-chat-history', className)} aria-label="Chat history">
       <header className="codev-chat-history-header">
         <div className="codev-chat-history-title">
           <History className="size-3.5 opacity-70" aria-hidden="true" />
-          <h3>Chats in this project</h3>
+          <h3>Chats</h3>
         </div>
         {onNewChat ? (
           <button

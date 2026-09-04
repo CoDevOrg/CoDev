@@ -1,1 +1,0 @@
-import{Iv as e}from"./web-index-CrA1pAKn.js";var t=e(`chevrons-up-down`,[[`path`,{d:`m7 15 5 5 5-5`,key:`1hf1tw`}],[`path`,{d:`m7 9 5-5 5 5`,key:`sgt6xg`}]]);export{t};
