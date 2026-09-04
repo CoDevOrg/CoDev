@@ -1,0 +1,1 @@
+import{nm as e}from"./web-index-K7B34ZmG.js";function t(t,n=2048){return e(t,n)}function n(e){return t(e)?null:e}export{t as n,n as t};

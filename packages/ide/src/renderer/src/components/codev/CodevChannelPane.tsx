@@ -32,6 +32,10 @@ const MESSAGE_POLL_MS = 3_000
  *
  * Rendering nothing when no channel is open keeps the whole surface out of the
  * tree for the common case, and outside the embedded client it never mounts.
+ *
+ * z-20 is load-bearing: the chat lives in a `z-10` layer inside `.pane`, which
+ * is `position: relative; z-index: auto` and so shares this stacking context.
+ * Anything below 10 leaves only this header visible over a still-live chat.
  */
 export function CodevChannelPane(): JSX.Element | null {
   const channelId = useCodevChannelId()
@@ -152,7 +156,7 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
   return (
     <section
       aria-label={`#${slug}`}
-      className="absolute inset-0 z-[5] flex min-h-0 flex-col bg-background"
+      className="absolute inset-0 z-20 flex min-h-0 flex-col bg-background"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
         <button

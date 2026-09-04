@@ -2330,7 +2330,7 @@ function App(): React.JSX.Element {
     leftTitlebarChromeLayout.shouldMount &&
     !stackedSidebarOpen ? (
       <div
-        className="absolute top-0 z-10 flex h-[36px] items-center"
+        className="absolute top-0 z-30 flex h-[36px] items-center"
         style={
           {
             right: showRightSidebarControls
@@ -2476,7 +2476,7 @@ function App(): React.JSX.Element {
                         {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                         {workspaceChromeActive && !rightSidebarOpen && (
                           <div
-                            className="absolute top-0 z-10 flex items-center h-[36px]"
+                            className="absolute top-0 z-30 flex items-center h-[36px]"
                             style={
                               {
                                 // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
