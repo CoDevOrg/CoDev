@@ -9,6 +9,23 @@ import type { GitHubInstallation, GitHubRepository } from "@/lib/github";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
+/**
+ * `/user/installations` returns every installation the member can reach, so a
+ * repo they collaborate on inside someone else's personal account shows up
+ * next to their own. Name the relationship instead of labelling both "User".
+ */
+function installationLabel(
+  installation: GitHubInstallation,
+  viewerLogin: string | null,
+) {
+  const { login, type } = installation.account;
+  if (type === "Organization") return `${login} · Organization`;
+  if (viewerLogin && login.toLowerCase() === viewerLogin.toLowerCase()) {
+    return `${login} · Your account`;
+  }
+  return `${login} · Shared with you`;
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   const payload = (await response.json()) as T & { error?: string };
   if (!response.ok) {
@@ -28,6 +45,7 @@ export function RepositoryPicker({
 }) {
   const router = useRouter();
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
+  const [viewerLogin, setViewerLogin] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [installationId, setInstallationId] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
@@ -41,10 +59,14 @@ export function RepositoryPicker({
     let active = true;
     fetch("/api/github/installations")
       .then((response) =>
-        readJson<{ installations: GitHubInstallation[] }>(response),
+        readJson<{
+          installations: GitHubInstallation[];
+          login: string | null;
+        }>(response),
       )
-      .then(({ installations: loaded }) => {
+      .then(({ installations: loaded, login }) => {
         if (!active) return;
+        setViewerLogin(login ?? null);
         setInstallations(loaded);
         setState(loaded.length ? "ready" : "empty");
       })
@@ -220,8 +242,7 @@ export function RepositoryPicker({
                       <option value="">Select an account</option>
                       {installations.map((installation) => (
                         <option key={installation.id} value={installation.id}>
-                          {installation.account.login} ·{" "}
-                          {installation.account.type}
+                          {installationLabel(installation, viewerLogin)}
                         </option>
                       ))}
                     </select>
