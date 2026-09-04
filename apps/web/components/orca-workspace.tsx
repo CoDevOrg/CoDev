@@ -63,6 +63,8 @@ const SLOW_START_NOTICE_MS = 90_000;
  * does not hold the instance open indefinitely.
  */
 const IDE_KEEPALIVE_MS = 60_000;
+// How often the host-wake state is re-sent to the iframe while it is starting.
+const HOST_STATE_REPORT_MS = 2_000;
 /**
  * The only connect failures worth showing: signing in, being granted access,
  * a workspace that is gone, and running out of credit are all things the
@@ -97,6 +99,7 @@ type CodevOrcaMessage =
   | { type: "codev:shell-ready" }
   | { type: "codev:project-ready" }
   | { type: "codev:project-error"; message?: string }
+  | { type: "codev:startup-failure"; step?: string | null; message?: string }
   | {
       type: "codev:discard-proposal";
       requestId: string;
@@ -846,6 +849,27 @@ export function OrcaWorkspace({
     );
   }, [repository, defaultAgent, cursorAvailable]);
 
+  // Tell the embedded IDE whether the machine is still waking. Without this it
+  // has only a stopwatch, and cannot tell a normal cold boot (up to a minute of
+  // EC2 start, orchestrator, microVM, clone) from a handoff that is stuck — so
+  // it used to accuse the workspace of being slow while it was merely starting.
+  // Read by the `message` listener, which must not re-register on every phase
+  // change (re-registering mid-handshake drops messages).
+  const connectionPhaseRef = useRef(connection.phase);
+  connectionPhaseRef.current = connection.phase;
+  const slowStartRef = useRef(isSlowStart);
+  slowStartRef.current = isSlowStart;
+
+  const reportHostState = useCallback(
+    (phase: "starting" | "ready", slow: boolean) => {
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "codev:host-state", phase, slow },
+        window.location.origin,
+      );
+    },
+    [],
+  );
+
   // Time-to-shell / time-to-project, measured from this component's first
   // paint (which is when the iframe starts loading the static bundle).
   const bootStartRef = useRef<number | null>(null);
@@ -943,6 +967,11 @@ export function OrcaWorkspace({
           );
         });
       } else if (event.data.type === "codev:shell-ready") {
+        // It is listening now, so it may have missed every earlier report.
+        reportHostState(
+          connectionPhaseRef.current === "ready" ? "ready" : "starting",
+          slowStartRef.current,
+        );
         setShellReady(true);
         reportBootMark("workspace_shell_ready");
         // The pairing can already be sitting in pendingPairRef by the time the
@@ -958,6 +987,13 @@ export function OrcaWorkspace({
       } else if (event.data.type === "codev:project-ready") {
         setIsOpeningProject(false);
         reportBootMark("workspace_project_ready");
+      } else if (event.data.type === "codev:startup-failure") {
+        // The embedded IDE has no telemetry channel of its own, so its startup
+        // faults reach the outside world only through here.
+        track("workspace_hydration_failed", {
+          step: event.data.step ?? "unknown",
+          message: (event.data.message ?? "").slice(0, 200),
+        });
       } else if (event.data.type === "codev:project-error") {
         setIsOpeningProject(false);
         setConnection({
@@ -985,6 +1021,20 @@ export function OrcaWorkspace({
     );
     return () => clearTimeout(timer);
   }, [shellReady, iframeKey]);
+
+  useEffect(() => {
+    const phase = connection.phase === "ready" ? "ready" : "starting";
+    reportHostState(phase, isSlowStart);
+    if (phase === "ready") {
+      return;
+    }
+    // The shell may mount after the first report; repeat until it is up.
+    const timer = setInterval(
+      () => reportHostState(phase, isSlowStart),
+      HOST_STATE_REPORT_MS,
+    );
+    return () => clearInterval(timer);
+  }, [connection.phase, isSlowStart, reportHostState, iframeKey]);
 
   // Re-hand the pairing whenever we newly have one (the poll may resolve after
   // the iframe has already loaded, so `onLoad` alone is not enough).

@@ -1,0 +1,1 @@
+import{Qv as e,Tv as t,ny as n}from"./web-index-B4-a8NfZ.js";var r=n(e(),1);t();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

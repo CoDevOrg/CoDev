@@ -26,6 +26,7 @@ import {
   readCodevPendingEmbed,
   type CodevPairPayload
 } from './codev-pair-message'
+import { installCodevHostStateListener } from './codev-host-state'
 
 const App = lazy(() => import('../App'))
 
@@ -38,6 +39,11 @@ function WebRoot(): React.JSX.Element {
   const [pairPayload, setPairPayload] = useState<CodevPairPayload | null>(null)
   const codevBoot = codevBootstrap ?? pairPayload?.bootstrap ?? null
   window.__CODEV_EMBEDDED__ = codevBootstrap !== null || codevPending
+  // Installed before any lazy chunk loads, so a host report that arrives while
+  // the awaiting-workspace cover is still downloading is not lost.
+  if (window.__CODEV_EMBEDDED__) {
+    installCodevHostStateListener()
+  }
   window.__CODEV_PROJECT_PATH__ = codevBoot?.projectPath
   window.__CODEV_PROJECT_KIND__ = codevBoot?.projectKind
   window.__CODEV_PROJECT_NAME__ = codevBoot?.projectName

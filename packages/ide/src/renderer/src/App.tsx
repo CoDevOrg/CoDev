@@ -51,6 +51,7 @@ import {
 } from './web/codev-project-bootstrap'
 import { launchCodevDefaultChatTab, waitForCodevDefaultChatTab } from './web/codev-default-chat-tab'
 import { isCodevEmbedded } from './web/codev-embedded'
+import { reportCodevStartupFailure } from './web/codev-host-state'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
@@ -154,6 +155,7 @@ import {
 } from './lib/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,
+  readStartupStepFromError,
   timeRendererStartupStep,
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
@@ -1226,11 +1228,17 @@ function App(): React.JSX.Element {
       } catch (error) {
         // Why (issue #1158): leave in-memory state untouched and keep hydrationSucceeded false (default-hydrating here once erased saved tabs); still flip the ready flags so the UI mounts.
         const stepLabel = error instanceof Error && error.message ? error.message : String(error)
+        // The step name is the diagnostic that matters and the one the embedded
+        // web client could never deliver: report it to the CoDev shell and put
+        // it in the toast, so the fault is nameable instead of "restore failed".
+        const failedStep = readStartupStepFromError(error)
         console.error(
           '[startup] Workspace session hydration failed; leaving disk state untouched:',
+          failedStep ?? 'unknown-step',
           stepLabel,
           error
         )
+        reportCodevStartupFailure(failedStep, stepLabel)
         if (!cancelled) {
           // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
           useAppStore.setState({ startupWorktreeRefreshCompleted: true })
@@ -1241,10 +1249,10 @@ function App(): React.JSX.Element {
           }
           // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
           toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
-            description: translate(
+            description: `${translate(
               'auto.App.0a9e810705',
               "Changes won't be saved until restart. Your previous tabs are safe on disk."
-            ),
+            )}${failedStep ? ` (${failedStep})` : ''}`,
             duration: Infinity,
             dismissible: true,
             action: {
