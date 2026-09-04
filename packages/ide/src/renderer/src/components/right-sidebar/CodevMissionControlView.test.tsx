@@ -146,6 +146,7 @@ describe('CodevMissionControlView', () => {
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).toContain('Mission Control')
@@ -169,6 +170,7 @@ describe('CodevMissionControlView', () => {
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).toContain('codev-mc-drawer')
@@ -188,6 +190,7 @@ describe('CodevMissionControlView', () => {
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).toContain('No agents are running yet')
@@ -390,6 +393,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).not.toContain('file claim')
@@ -423,6 +427,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).toContain('Alice agent and Bob agent')
@@ -443,6 +448,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         onStepIn={noop}
         onSteer={noop}
         onPause={noop}
+        onStop={noop}
       />
     )
     expect(html).not.toContain('codev-mc-holds')

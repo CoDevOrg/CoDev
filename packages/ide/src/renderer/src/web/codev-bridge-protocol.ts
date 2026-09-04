@@ -55,6 +55,7 @@ export type CodevBridgeRequestMethod =
   | 'agents.list'
   | 'agents.enqueue'
   | 'agents.interrupt'
+  | 'agents.discard'
   | 'agents.startControlled'
   | 'agents.newChat'
   | 'agents.selectProvider'

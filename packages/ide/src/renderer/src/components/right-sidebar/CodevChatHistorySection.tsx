@@ -11,6 +11,8 @@ import {
   useRepos
 } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { supersedeWorktreeAgentTabs } from '@/web/codev-retire-superseded-chat'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { filterAiVaultSessions } from './ai-vault-session-filters'
@@ -160,10 +162,25 @@ export function CodevChatHistorySection({
   const openChat = useCallback(
     (entry: CodevChatHistoryEntry) => {
       const session = sessionById.get(entry.id)
-      if (!session) {return}
+      if (!session) {
+        return
+      }
+      // Reopening a chat resumes it in the worktree it belongs to. Without
+      // this the idle agent already sitting in that worktree stays running
+      // beside the new one, so reading an old conversation silently costs an
+      // agent. Inside CoDev the worktree keeps one agent; stock Orca, where
+      // parallel agents in a worktree are a normal thing to want, is untouched.
+      // `handleResume` resolves the same target when no explicit worktree is
+      // passed, which is the case here.
+      const targetWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
+      const retire =
+        isCodevEmbedded() && targetWorktreeId
+          ? supersedeWorktreeAgentTabs(targetWorktreeId)
+          : null
       launchActions.handleResume(session)
+      retire?.()
     },
-    [launchActions, sessionById]
+    [activeWorktree?.id, activeWorktreeId, launchActions, sessionById]
   )
 
   return (

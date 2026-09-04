@@ -457,7 +457,8 @@ function AgentDrawer({
   onClose,
   onStepIn,
   onSteer,
-  onPause
+  onPause,
+  onStop
 }: {
   agent: MissionControlAgent
   now: number
@@ -466,8 +467,12 @@ function AgentDrawer({
   onStepIn: () => void
   onSteer: (text: string) => void
   onPause: () => void
+  onStop: () => void
 }): JSX.Element {
   const [draft, setDraft] = useState('')
+  // Stopping ends a running agent and frees its slot, so it asks first — in
+  // place, because a modal over a drawer is a lot of chrome for one button.
+  const [confirmingStop, setConfirmingStop] = useState(false)
   const steerable = agent.origin === 'managed' && agent.canSteer && Boolean(agent.sessionId)
 
   useEffect(() => {
@@ -529,7 +534,43 @@ function AgentDrawer({
               Pause
             </button>
           ) : null}
+          {confirmingStop ? (
+            <>
+              <button
+                type="button"
+                className="codev-mc-ghost is-danger"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingStop(false)
+                  onStop()
+                }}
+              >
+                Stop and free the slot
+              </button>
+              <button
+                type="button"
+                className="codev-mc-ghost"
+                onClick={() => setConfirmingStop(false)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="codev-mc-ghost is-danger"
+              disabled={busy}
+              onClick={() => setConfirmingStop(true)}
+            >
+              Stop agent
+            </button>
+          )}
         </div>
+        {confirmingStop ? (
+          <p className="codev-mc-drawer-activity">
+            Ends this agent and releases its slot. The branch it worked on is kept.
+          </p>
+        ) : null}
 
         {steerable ? (
           <footer className="codev-mc-steer">
@@ -596,7 +637,8 @@ export function CodevMissionControlView({
   onClose,
   onStepIn,
   onSteer,
-  onPause
+  onPause,
+  onStop
 }: {
   agents: MissionControlAgent[]
   coordination?: MissionControlCoordination
@@ -608,6 +650,7 @@ export function CodevMissionControlView({
   onStepIn: (key: string) => void
   onSteer: (key: string, text: string) => void
   onPause: (key: string) => void
+  onStop: (key: string) => void
 }): JSX.Element {
   const open = agents.find((agent) => agent.key === openKey) ?? null
   const live = coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
@@ -703,6 +746,7 @@ export function CodevMissionControlView({
           onStepIn={() => onStepIn(open.key)}
           onSteer={(text) => onSteer(open.key, text)}
           onPause={() => onPause(open.key)}
+          onStop={() => onStop(open.key)}
         />
       ) : null}
     </section>

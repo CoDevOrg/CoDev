@@ -100,6 +100,7 @@ type CodevOrcaMessage =
   | { type: "codev:project-ready" }
   | { type: "codev:project-error"; message?: string }
   | { type: "codev:startup-failure"; step?: string | null; message?: string }
+  | { type: "codev:agent-count"; count?: number }
   | {
       type: "codev:discard-proposal";
       requestId: string;
@@ -740,11 +741,16 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
+  embeddedAgentCount = null,
   children,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  /** The embedded Mission Control's merged count, when the IDE has reported
+   *  one. It sees this client's own chat-tab agents, which the server-side
+   *  workboard never registers, so it is the more complete of the two. */
+  embeddedAgentCount?: number | null;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -753,7 +759,7 @@ function WorkspaceChrome({
     <div className="workspace-page">
       <WorkspaceTopBar
         canInvite={canInvite}
-        liveAgentCount={activity?.occupied ?? null}
+        liveAgentCount={embeddedAgentCount ?? activity?.occupied ?? null}
         repository={repository}
         workspaceId={workspaceId}
       />
@@ -801,6 +807,9 @@ export function OrcaWorkspace({
   // skeleton covers the iframe. `iframeKey` forces a fresh iframe load when a
   // reaped session has to be replaced under an open tab.
   const [shellReady, setShellReady] = useState(false);
+  const [embeddedAgentCount, setEmbeddedAgentCount] = useState<number | null>(
+    null,
+  );
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
@@ -987,6 +996,15 @@ export function OrcaWorkspace({
       } else if (event.data.type === "codev:project-ready") {
         setIsOpeningProject(false);
         reportBootMark("workspace_project_ready");
+      } else if (event.data.type === "codev:agent-count") {
+        // The embedded Mission Control merges managed sessions with this
+        // client's own chat-tab agents; the workboard the top bar polls only
+        // knows the managed half. Prefer the merged figure so the two never
+        // contradict each other.
+        const count = event.data.count;
+        if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
+          setEmbeddedAgentCount(count);
+        }
       } else if (event.data.type === "codev:startup-failure") {
         // The embedded IDE has no telemetry channel of its own, so its startup
         // faults reach the outside world only through here.
@@ -1226,6 +1244,7 @@ export function OrcaWorkspace({
   return (
     <WorkspaceChrome
       canInvite={canInvite}
+      embeddedAgentCount={embeddedAgentCount}
       repository={repository}
       workspaceId={workspaceId}
     >

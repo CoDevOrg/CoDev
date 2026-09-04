@@ -248,6 +248,21 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [managed, local, coordination]
   )
 
+  // Keep the workspace top bar's "N of 3 agents live" honest. It reads the
+  // server workboard, which only knows managed sessions — so a workspace whose
+  // agents are all local chat tabs showed "0 of 3 agents live" beside a Mission
+  // Control listing three of them. Reporting the merged count means both
+  // surfaces quote the same number because it is literally the same number.
+  useEffect(() => {
+    if (!embedded || typeof window === 'undefined' || window.parent === window) {
+      return
+    }
+    window.parent.postMessage(
+      { type: 'codev:agent-count', count: agents.length },
+      window.location.origin
+    )
+  }, [agents.length, embedded])
+
   const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
 
   useEffect(() => {
@@ -316,6 +331,57 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [byKey, refreshManaged]
   )
 
+  /**
+   * End an agent and give its slot back.
+   *
+   * The two origins need different teardown. A managed session is the
+   * server's to remove, so it goes through `agents.discard`, which discards
+   * the agent's worktree on the host. A local chat-tab agent has no session
+   * id at all — it is this client's own PTY — so the equivalent is removing
+   * the worktree CoDev created for it, which stops its terminals on the way
+   * out. Capacity counts worktrees, so only the worktree going away actually
+   * frees the slot; `removeWorktree` preserves the branch, so the work
+   * survives either way.
+   */
+  const handleStop = useCallback(
+    async (key: string) => {
+      const agent = byKey(key)
+      if (!agent) {
+        return
+      }
+      try {
+        if (agent.origin === 'managed' && agent.sessionId) {
+          await requestCodevBridge('agents.discard', { sessionId: agent.sessionId })
+        } else if (agent.worktreeId) {
+          const state = useAppStore.getState()
+          const worktree = findWorktreeById(state.worktreesByRepo, agent.worktreeId)
+          // Never tear down the workspace's own checkout: it is not an agent's
+          // to discard, and removing it would take the workspace with it.
+          if (!worktree || worktree.isMainWorktree) {
+            toast.error('This agent has no worktree of its own to release.')
+            return
+          }
+          const result = await state.removeWorktree(agent.worktreeId)
+          if (!result.ok) {
+            toast.error('Could not stop this agent', { description: result.error })
+            return
+          }
+        } else {
+          toast.error('This agent cannot be stopped from here.')
+          return
+        }
+        setOpenKey(null)
+        toast.success('Agent stopped', { description: 'Its slot is free and its branch is kept.' })
+        void refreshManaged()
+      } catch (error: unknown) {
+        toast.error('Could not stop this agent', {
+          description: error instanceof Error ? error.message : String(error)
+        })
+      }
+    },
+    [byKey, refreshManaged]
+  )
+
   if (!embedded) return null
 
   return (
@@ -333,6 +399,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       onStepIn={handleStepIn}
       onSteer={handleSteer}
       onPause={handlePause}
+      onStop={(key) => void handleStop(key)}
     />
     </div>
   )

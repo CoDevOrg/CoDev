@@ -52,6 +52,7 @@ export type CodevBridgeMethod =
   | "agents.list"
   | "agents.enqueue"
   | "agents.interrupt"
+  | "agents.discard"
   | "agents.startControlled"
   | "agents.newChat"
   | "agents.selectProvider"
@@ -137,6 +138,7 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "agents.list",
   "agents.enqueue",
   "agents.interrupt",
+  "agents.discard",
   "agents.startControlled",
   "agents.newChat",
   "agents.selectProvider",
@@ -484,6 +486,23 @@ export async function executeCodevBridgeRequest(
         return fail(
           jsonError(payload, "CoDev could not interrupt this agent turn."),
         );
+      }
+      return succeed(payload);
+    }
+
+    if (request.method === "agents.discard") {
+      const sessionId = request.params?.sessionId;
+      if (typeof sessionId !== "string" || !INVITE_ID.test(sessionId)) {
+        return fail("A valid agent session is required.");
+      }
+      const response = await fetcher(
+        `/api/workspaces/${workspaceId}/agents/${sessionId}`,
+        { method: "DELETE" },
+      );
+      // 204 carries no body; anything else may explain the refusal.
+      const payload = response.status === 204 ? {} : await readJson(response);
+      if (!response.ok) {
+        return fail(jsonError(payload, "CoDev could not stop this agent."));
       }
       return succeed(payload);
     }

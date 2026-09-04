@@ -1407,6 +1407,18 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   cursor: default;
 }
 
+/* Stopping an agent discards its running session; it reads as destructive so a
+   member does not confuse it with Pause sitting next to it. */
+.codev-mc-ghost.is-danger {
+  border-color: rgba(242, 96, 74, 0.45);
+  color: rgb(242, 138, 120);
+}
+
+.codev-mc-ghost.is-danger:hover:not(:disabled) {
+  background: rgba(242, 96, 74, 0.12);
+  border-color: rgba(242, 96, 74, 0.7);
+}
+
 .codev-mc-steer {
   margin-top: auto;
   display: flex;
