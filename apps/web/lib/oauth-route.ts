@@ -363,6 +363,7 @@ export async function completeManualOAuth(
       configuration,
       code,
       state.codeVerifier,
+      state.state,
     );
     await persistOAuthTokens(state, configuration, tokens);
     return clearOAuthCookie(
@@ -524,6 +525,7 @@ export async function finishOAuth(request: Request, provider: OAuthProvider) {
       configuration,
       code,
       state.codeVerifier,
+      state.state,
     );
     await persistOAuthTokens(state, configuration, tokens);
     return clearOAuthCookie(

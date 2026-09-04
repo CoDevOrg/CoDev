@@ -179,6 +179,61 @@ describe("provider OAuth", () => {
     expect(tokens.expiresAt).toBeInstanceOf(Date);
     expect(tokens).not.toHaveProperty("clientSecret");
   });
+
+  it("posts Claude exchanges as JSON with the verified state", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ access_token: "access-token" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const configuration = getOAuthConfiguration(
+      "claude",
+      "https://app.example.com",
+    );
+    await exchangeOAuthCode(
+      configuration,
+      "authorization-code",
+      "code-verifier",
+      "state-value",
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect((init.headers as Record<string, string>)["content-type"]).toBe(
+      "application/json",
+    );
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      grant_type: "authorization_code",
+      code: "authorization-code",
+      code_verifier: "code-verifier",
+      state: "state-value",
+      redirect_uri: CLAUDE_MANUAL_REDIRECT_URI,
+    });
+  });
+
+  it("reports the provider's reason for a rejected exchange", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        text: async () =>
+          JSON.stringify({ error_description: "code has expired" }),
+      })),
+    );
+
+    await expect(
+      exchangeOAuthCode(
+        getOAuthConfiguration("claude", "https://app.example.com"),
+        "authorization-code",
+        "code-verifier",
+        "state-value",
+      ),
+    ).rejects.toThrow(/status 400\. code has expired/);
+  });
 });
 
 describe("Cursor browser login", () => {

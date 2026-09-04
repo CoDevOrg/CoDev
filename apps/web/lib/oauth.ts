@@ -350,27 +350,45 @@ export async function exchangeOAuthCode(
   configuration: OAuthConfiguration,
   code: string,
   codeVerifier: string,
+  /**
+   * Anthropic's token endpoint validates `state` alongside the code, so the
+   * caller passes the state it already verified. Other providers ignore it.
+   */
+  state?: string,
 ) {
-  const body = new URLSearchParams({
+  const fields: Record<string, string> = {
     grant_type: "authorization_code",
     code,
     client_id: configuration.clientId,
     redirect_uri: configuration.redirectUri,
     code_verifier: codeVerifier,
-  });
+  };
+  if (state) fields.state = state;
   if (configuration.clientSecret) {
-    body.set("client_secret", configuration.clientSecret);
+    fields.client_secret = configuration.clientSecret;
   }
 
+  // Anthropic's `/v1/oauth/token` only accepts a JSON body and rejects the
+  // form encoding the OAuth spec suggests with a bare 400.
+  const useJson = configuration.provider === "anthropic";
   const response = await fetch(configuration.tokenUrl, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
+    headers: {
+      "content-type": useJson
+        ? "application/json"
+        : "application/x-www-form-urlencoded",
+      accept: "application/json",
+    },
+    body: useJson
+      ? JSON.stringify(fields)
+      : new URLSearchParams(fields).toString(),
     cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(
-      `OAuth token exchange failed with status ${response.status}.`,
+      `OAuth token exchange failed with status ${response.status}.${describeTokenError(
+        await response.text().catch(() => ""),
+      )}`,
     );
   }
   const payload = (await response.json()) as Record<string, unknown>;
@@ -385,6 +403,30 @@ export async function exchangeOAuthCode(
         : undefined,
     expiresAt: expiresAtFrom(payload.expires_in),
   };
+}
+
+/**
+ * Surface the provider's own reason for a rejected exchange. Token endpoints
+ * answer with `{ error, error_description }`, and without it every failure
+ * reads as an unactionable bare status code.
+ */
+function describeTokenError(body: string) {
+  const trimmed = body.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const description =
+      typeof parsed.error_description === "string"
+        ? parsed.error_description
+        : typeof parsed.error === "string"
+          ? parsed.error
+          : typeof parsed.message === "string"
+            ? parsed.message
+            : undefined;
+    return description ? ` ${description}` : "";
+  } catch {
+    return ` ${trimmed.slice(0, 200)}`;
+  }
 }
 
 export type CodexDeviceCode = {
