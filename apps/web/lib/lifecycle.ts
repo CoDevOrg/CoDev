@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getRun } from "workflow/api";
 
 import { schema } from "@codev/db";
@@ -178,8 +178,18 @@ export async function reconcileLifecycle() {
       .where(
         and(
           eq(schema.workspaces.status, "ready"),
-          isNotNull(schema.workspaces.hibernateAt),
-          lt(schema.workspaces.hibernateAt, now),
+          // Every code path that sets a workspace to "ready" also sets
+          // hibernateAt in the same transaction (see markWorkspaceReady and
+          // hibernation.ts's releaseClaim), so a "ready" row with a null
+          // hibernateAt is never a legitimate, freshly-active workspace - it
+          // can only be a stale/orphaned row (e.g. one that predates this
+          // idle-hibernation feature) that would otherwise sit invisible to
+          // this cron forever. Treat it as already overdue rather than
+          // excluding it.
+          or(
+            isNull(schema.workspaces.hibernateAt),
+            lt(schema.workspaces.hibernateAt, now),
+          ),
         ),
       )
       .limit(15);
