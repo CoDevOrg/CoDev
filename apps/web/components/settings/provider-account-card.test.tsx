@@ -127,18 +127,7 @@ describe("ProviderAccountCard", () => {
     ).toMatchObject({ apiKey: "key_live_123", scopeType: "USER" });
   });
 
-  it("takes the authorization code Claude hands back", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          mode: "manual_code",
-          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse({ status: "connected" }));
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("offers Claude only an API key and the CLI, no browser OAuth button", () => {
     render(
       <ProviderAccountCard
         connection={connection({ provider: "anthropic", label: "Anthropic" })}
@@ -153,25 +142,12 @@ describe("ProviderAccountCard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
-    fireEvent.change(
-      await screen.findByLabelText("Claude authorization code"),
-      { target: { value: "code#state" } },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Claude is connected.",
-      );
-    });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "/api/auth/oauth/claude/complete",
-    );
-    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Connect Claude" })).toBeNull();
+    expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
+    expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
   });
 
-  it("keeps the terminal commands as a fallback, not the first thing offered", () => {
+  it("offers Codex only an API key and the CLI, no browser OAuth button", () => {
     render(
       <ProviderAccountCard
         connection={connection({ provider: "openai", label: "OpenAI" })}
@@ -186,11 +162,31 @@ describe("ProviderAccountCard", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Connect Codex" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Codex" })).toBeNull();
     expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
     expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
+  });
+
+  it("still offers Codex a Disconnect button once connected via the CLI", () => {
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        label="Codex"
+        logo={null}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          status: "connected",
+          connectMode: "device_code",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Disconnect" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
   });
 
   it("offers no terminal fallback for a provider without a CoDev CLI command", () => {

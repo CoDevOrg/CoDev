@@ -20,10 +20,12 @@ export type ProviderConnectionViewer = {
 };
 
 /**
- * The three agent accounts a member can sign into. Each one is reachable from
- * the settings page itself: Claude and Codex through their own OAuth flows,
- * Cursor through the `cursor-agent` browser deeplink. The CLI command is a
- * fallback for people who would rather stay in a terminal, not the only path.
+ * The three agent accounts a member can sign into. Cursor is reachable
+ * through its own `cursor-agent` browser deeplink. Claude and Codex connect
+ * with an API key or the CoDev CLI (which delegates to each provider's own
+ * official CLI login) — Anthropic and OpenAI both restrict consumer-plan
+ * OAuth tokens obtained outside their first-party clients, so CoDev no
+ * longer offers its own browser OAuth flow for either.
  */
 export type CliSubscriptionProvider = "codex" | "claude" | "cursor";
 

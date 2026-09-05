@@ -23,21 +23,13 @@ import { cn } from "@/lib/utils";
 const RETURN_TO = "/settings/personal/providers";
 
 /**
- * The in-page sign-in state for one provider. Each provider's official login
- * ends somewhere different — Claude hands back a code to paste, Codex shows a
- * device code to type into ChatGPT, Cursor just redirects — so the card keeps
- * whichever step is currently on screen rather than a single boolean.
+ * The in-page sign-in state for a provider with a browser OAuth flow. Only
+ * Cursor still has one — Claude and Codex connect via an API key or the
+ * CoDev CLI (which itself delegates to each provider's own official CLI
+ * login), since Anthropic and OpenAI both restrict consumer-plan OAuth
+ * tokens obtained outside their own first-party clients.
  */
-type ActiveFlow =
-  | { kind: "manual_code"; authorizeUrl: string }
-  | {
-      kind: "device_code";
-      verificationUrl: string;
-      userCode: string;
-      deviceAuthId: string;
-      intervalSeconds: number;
-    }
-  | { kind: "polling"; loginUrl: string };
+type ActiveFlow = { kind: "polling"; loginUrl: string };
 
 function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
@@ -133,7 +125,6 @@ export function ProviderAccountCard({
   >("");
   const [message, setMessage] = useState("");
   const [flow, setFlow] = useState<ActiveFlow | null>(null);
-  const [manualCode, setManualCode] = useState("");
   const [connected, setConnected] = useState(
     subscription.status === "connected",
   );
@@ -141,8 +132,9 @@ export function ProviderAccountCard({
   const apiKeyLabel = `${connection.label} API key`;
   const disabled = busy !== "";
 
-  // Codex and Cursor finish out of band: the browser tab does the signing in
-  // and CoDev learns about it only by polling its own callback.
+  // Cursor is the only provider left with a browser sign-in: the tab does
+  // the signing in and CoDev learns about it only by polling its own
+  // callback. Claude and Codex connect through the rows below instead.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedAt = useRef(0);
   const isCursor = subscription.provider === "cursor";
@@ -164,21 +156,16 @@ export function ProviderAccountCard({
     stopPolling();
     setFlow(null);
     setBusy("");
-    setManualCode("");
     setConnected(true);
     setMessage(`${label} is connected.`);
     router.refresh();
   }
 
-  async function poll(body: Record<string, string> = {}) {
-    const endpoint =
-      subscription.provider === "cursor"
-        ? "/api/auth/oauth/cursor/poll"
-        : "/api/auth/oauth/codex/poll";
-    const response = await fetch(endpoint, {
+  async function poll() {
+    const response = await fetch("/api/auth/oauth/cursor/poll", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({}),
     });
     const payload = (await response.json().catch(() => ({}))) as {
       status?: string;
@@ -222,41 +209,19 @@ export function ProviderAccountCard({
     setFlow(null);
     stopPolling();
 
-    if (subscription.connectMode === "app_callback") {
-      window.location.assign(
-        `/api/auth/oauth/${subscription.provider}?returnTo=${encodeURIComponent(RETURN_TO)}`,
-      );
-      return;
-    }
-
-    const response = await fetch(
-      `/api/auth/oauth/${subscription.provider}/session`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scopeType: "USER", returnTo: RETURN_TO }),
-      },
-    );
+    const response = await fetch("/api/auth/oauth/cursor/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scopeType: "USER", returnTo: RETURN_TO }),
+    });
     const payload = (await response.json().catch(() => ({}))) as {
       mode?: string;
-      authorizeUrl?: string;
       loginUrl?: string;
-      verificationUrl?: string;
-      userCode?: string;
-      deviceAuthId?: string;
-      intervalSeconds?: number;
       error?: string;
     };
     if (!response.ok) {
       setBusy("");
       setMessage(payload.error ?? `${label} sign-in could not start.`);
-      return;
-    }
-
-    if (payload.mode === "manual_code" && payload.authorizeUrl) {
-      window.open(payload.authorizeUrl, "_blank", "noopener,noreferrer");
-      setFlow({ kind: "manual_code", authorizeUrl: payload.authorizeUrl });
-      setBusy("");
       return;
     }
 
@@ -269,67 +234,14 @@ export function ProviderAccountCard({
       return;
     }
 
-    if (
-      payload.mode === "device_code" &&
-      payload.userCode &&
-      payload.deviceAuthId &&
-      payload.verificationUrl
-    ) {
-      const device = {
-        deviceAuthId: payload.deviceAuthId,
-        userCode: payload.userCode,
-      };
-      window.open(payload.verificationUrl, "_blank", "noopener,noreferrer");
-      setFlow({
-        kind: "device_code",
-        verificationUrl: payload.verificationUrl,
-        intervalSeconds: payload.intervalSeconds ?? 5,
-        ...device,
-      });
-      void poll(device);
-      pollTimer.current = setInterval(
-        () => void poll(device),
-        Math.max(payload.intervalSeconds ?? 5, 2) * 1000,
-      );
-      return;
-    }
-
-    if (payload.mode === "app_callback" && payload.authorizeUrl) {
-      window.location.assign(payload.authorizeUrl);
-      return;
-    }
-
     setBusy("");
     setMessage(`${label} returned an unexpected sign-in response.`);
-  }
-
-  async function submitManualCode() {
-    setBusy("connect");
-    setMessage("");
-    const response = await fetch(
-      `/api/auth/oauth/${subscription.provider}/complete`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: manualCode }),
-      },
-    );
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    if (!response.ok) {
-      setBusy("");
-      setMessage(payload.error ?? `${label} authorization failed.`);
-      return;
-    }
-    finishConnected();
   }
 
   function cancelFlow() {
     stopPolling();
     setFlow(null);
     setBusy("");
-    setManualCode("");
   }
 
   async function disconnect() {
@@ -435,117 +347,56 @@ export function ProviderAccountCard({
             <StatusDot connected={connected} />
             {connected
               ? "Signed in with your subscription"
-              : "Sign in with your account — no API key needed"}
+              : isCursor
+                ? "Sign in with your account — no API key needed"
+                : "Connect with an API key or the CoDev CLI below"}
           </p>
         </div>
-        {connected ? (
-          <div className="flex shrink-0 gap-2">
+        {isCursor ? (
+          connected ? (
+            <div className="flex shrink-0 gap-2">
+              <Button
+                disabled={disabled}
+                onClick={() => void connect()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Reconnect
+              </Button>
+              <Button
+                disabled={disabled}
+                onClick={() => void disconnect()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
+              </Button>
+            </div>
+          ) : (
             <Button
+              className="shrink-0"
               disabled={disabled}
               onClick={() => void connect()}
               size="sm"
               type="button"
-              variant="outline"
             >
-              Reconnect
+              {busy === "connect" && !flow ? "Starting…" : `Connect ${label}`}
             </Button>
-            <Button
-              disabled={disabled}
-              onClick={() => void disconnect()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
-            </Button>
-          </div>
-        ) : (
+          )
+        ) : connected ? (
           <Button
-            className="shrink-0"
             disabled={disabled}
-            onClick={() => void connect()}
+            onClick={() => void disconnect()}
             size="sm"
             type="button"
+            variant="outline"
           >
-            {busy === "connect" && !flow ? "Starting…" : `Connect ${label}`}
+            {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
           </Button>
-        )}
+        ) : null}
       </div>
-
-      {flow?.kind === "manual_code" ? (
-        <div className="mt-4 space-y-3 rounded-md border border-border bg-background/60 p-4">
-          <p className="text-xs text-muted-foreground">
-            Finish signing in on the {label} tab (
-            <a
-              className="underline"
-              href={flow.authorizeUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              reopen
-            </a>
-            ), then paste the authorization code it gives you.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              aria-label={`${label} authorization code`}
-              autoComplete="off"
-              className="min-w-[12rem] flex-1"
-              onChange={(event) => setManualCode(event.target.value)}
-              placeholder="Paste code"
-              spellCheck={false}
-              value={manualCode}
-            />
-            <Button
-              disabled={disabled || !manualCode.trim()}
-              onClick={() => void submitManualCode()}
-              size="sm"
-              type="button"
-            >
-              {busy === "connect" ? "Connecting…" : "Finish"}
-            </Button>
-            <Button
-              onClick={cancelFlow}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {flow?.kind === "device_code" ? (
-        <div className="mt-4 space-y-3 rounded-md border border-border bg-background/60 p-4">
-          <p className="text-xs text-muted-foreground">
-            Enter this code on{" "}
-            <a
-              className="underline"
-              href={flow.verificationUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {flow.verificationUrl}
-            </a>
-            . Keep this page open.
-          </p>
-          <p className="font-mono text-lg tracking-[0.3em]">{flow.userCode}</p>
-          <div className="flex items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              Waiting for authorization…
-            </p>
-            <Button
-              onClick={cancelFlow}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
 
       {flow?.kind === "polling" ? (
         <div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-background/60 p-4">
@@ -575,7 +426,7 @@ export function ProviderAccountCard({
       <div className="mt-4">
         <FallbackRow
           connected={apiKeyState.status === "connected"}
-          defaultOpen={isCursor && !connected}
+          defaultOpen={!connected}
           description={
             isCursor
               ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
@@ -647,6 +498,7 @@ export function ProviderAccountCard({
 
         {subscription.command ? (
           <FallbackRow
+            defaultOpen={!connected}
             description="Run the same sign-in from the CoDev CLI."
             icon={Terminal}
             title="Connect from a terminal"

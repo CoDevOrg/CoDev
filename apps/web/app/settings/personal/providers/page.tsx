@@ -12,11 +12,10 @@ import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server
 import { requireUser } from "@/lib/session";
 
 /**
- * Every agent account a member can bring lives on this one page, and each one
- * connects from here: no workspace has to be open, no terminal has to be
- * involved, and nothing is hidden behind an org-scoped page. The CLI commands
- * and API-key fields are still available, but as fallbacks under the sign-in
- * button rather than as the only way through.
+ * Every agent account a member can bring lives on this one page. Cursor signs
+ * in with a browser subscription flow; Claude and Codex connect with an API
+ * key or the CoDev CLI, since Anthropic and OpenAI both block browser OAuth
+ * tokens obtained outside their own first-party apps.
  */
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
@@ -47,7 +46,7 @@ export default async function PersonalProvidersPage() {
     <OrcaPageShell>
       <OrcaPageHeader
         badge="Optional"
-        description="Connect the accounts your agents run on. Signing in uses your existing Claude, ChatGPT, or Cursor subscription — an API key is only needed if you would rather pay per token. Everything is encrypted on the CoDev server and never shown again after you save it."
+        description="Connect the accounts your agents run on. Cursor can sign in with your subscription in the browser; Claude and Codex connect with an API key or the CoDev CLI, which signs in through their own official CLI. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
       {cards.map((card) => {
