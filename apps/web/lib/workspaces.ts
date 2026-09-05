@@ -25,10 +25,12 @@ import {
 
 export const workspaceRuntimeTtlMs = 15 * 60 * 1000;
 
-// Matches E2B_LIFECYCLE_OPTIONS.timeoutMs in ./hibernation: the sandbox's own
-// pause timeout, so the control plane's hibernation reaper fires at the same
-// idle threshold the guest runtime already assumes.
-export const workspaceHibernateIdleMs = 4 * 60 * 60 * 1000;
+// Sourced by E2B_LIFECYCLE_OPTIONS.timeoutMs in ./hibernation, so the
+// sandbox's own pause timeout always matches this control-plane deadline.
+// Note the lifecycle cron only reconciles every 45 minutes (see
+// .github/workflows/lifecycle.yml), so the effective wait before a workspace
+// is actually hibernated is this value plus up to one cron cycle.
+export const workspaceHibernateIdleMs = 60 * 60 * 1000;
 
 export function inviteAllowsUser(
   invite: {

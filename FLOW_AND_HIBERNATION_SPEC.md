@@ -1,6 +1,6 @@
 # FLOW_AND_HIBERNATION_SPEC.md
 
-> **Document Scope:** Full End-to-End User Experience, Google Docs-Style Sharing/Permissions Model, and 4-Hour Auto-Hibernation Architecture for **CoDev**.
+> **Document Scope:** Full End-to-End User Experience, Google Docs-Style Sharing/Permissions Model, and Auto-Hibernation Architecture for **CoDev**.
 
 ---
 
@@ -108,9 +108,9 @@ When the task is complete, users export their work directly from the browser:
 
 ---
 
-## 2. 4-Hour Auto-Hibernation & Scale-to-Zero Architecture
+## 2. Auto-Hibernation & Scale-to-Zero Architecture
 
-Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$0.00 for idle sessions**, CoDev automatically scales active sandboxes to zero after **4 hours of inactivity**, without losing a single line of code, agent context, terminal log, or uncommitted diff.
+Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$0.00 for idle sessions**, CoDev automatically scales active sandboxes to zero after **1 hour of inactivity** (`workspaceHibernateIdleMs` in `apps/web/lib/workspaces.ts`), without losing a single line of code, agent context, terminal log, or uncommitted diff.
 
 ---
 
@@ -121,7 +121,7 @@ Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$
                │    WebSocket Heartbeat / Inactivity Monitor      │
                └────────────────────────┬─────────────────────────┘
                                         │
-                         No activity for 4 Hours
+                         No activity for 1 Hour
                                         │
                                         ▼
                ┌──────────────────────────────────────────────────┐
@@ -178,14 +178,14 @@ To guarantee **zero lost context or state**, state persistence is split into two
 #### 2. Layer B: Compute & Execution State (Sandbox Snapshot Layer)
 
 - **Technology:** **E2B Auto-Pause Engine / AWS Firecracker MicroVM Snapshots**
-- **Configuration:** Sandboxes are instantiated with a 4-hour timeout and auto-resume hooks:
+- **Configuration:** Sandboxes are instantiated with a 1-hour timeout and auto-resume hooks:
 
 ```typescript
 import { Sandbox } from "e2b";
 
-// Instantiate Cloud Sandbox with 4-Hour Inactivity Timeout
+// Instantiate Cloud Sandbox with 1-Hour Inactivity Timeout
 const sandbox = await Sandbox.create({
-  timeoutMs: 4 * 60 * 60 * 1000, // 4 hours in ms
+  timeoutMs: 60 * 60 * 1000, // 1 hour in ms
   lifecycle: {
     onTimeout: "pause", // Freezes process RAM + Filesystem to NVMe/S3
     autoResume: true, // Wakes sandbox up in <500ms upon incoming traffic
@@ -193,7 +193,7 @@ const sandbox = await Sandbox.create({
 });
 ```
 
-- **Hibernate Logic:** When 4 hours pass without a WebSocket heartbeat, the E2B daemon executes a complete Firecracker RAM freeze and destroys the vCPU compute allocation.
+- **Hibernate Logic:** When 1 hour passes without a WebSocket heartbeat, the E2B daemon executes a complete Firecracker RAM freeze and destroys the vCPU compute allocation.
 - **Rehydration Logic:** When a user or agent executes an action on a hibernated workspace, the backend issues `sandbox.connect()` (or auto-resume intercepts the WebSocket), restoring memory and running terminal processes in **<500ms**.
 
 ---
@@ -213,7 +213,7 @@ export interface WorkspaceMetadata {
   status: WorkspaceStatus;
   sandboxId: string; // E2B / Firecracker Sandbox Identifier
   lastActivityAt: string; // ISO Timestamp for heartbeat tracking
-  hibernateAt: string; // Expected timeout timestamp (lastActivityAt + 4 hours)
+  hibernateAt: string; // Expected timeout timestamp (lastActivityAt + 1 hour)
   createdAt: string;
 }
 ```
@@ -251,7 +251,7 @@ export interface WorkspaceInvite {
 - [x] Add `@hocuspocus/extension-database` to the `hocuspocus-server` app.
 - [x] Implement `fetch` and `store` hooks to serialize binary Yjs document state directly to PostgreSQL `workspace_state_documents` on every client update.
 
-### Step 3: Implement 4-Hour Idle Hibernation Engine
+### Step 3: Implement Idle Hibernation Engine
 
 - [x] Propagate `timeoutMs: 14400000` and `lifecycle: { onTimeout: 'pause', autoResume: true }` through the Firecracker sandbox lifecycle contract.
 - [x] Implement the workspace heartbeat endpoint and Redis liveness monitor, with PostgreSQL fallback.
