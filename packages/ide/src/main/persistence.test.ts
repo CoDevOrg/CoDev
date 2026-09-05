@@ -130,11 +130,11 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 }))
 
 /** Reset modules and dynamically import Store so the data-file path picks up the current testState.dir */
-async function createStore() {
+async function createStore(options?: { isServeMode?: boolean }) {
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return new Store(options)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
@@ -6435,6 +6435,41 @@ describe('Store', () => {
     })
 
     const store = await createStore()
+    expect(store.getUI().rightSidebarTab).toBe('explorer')
+  })
+
+  it('defaults a fresh serve-mode workspace to the Agents tab, not Explorer', async () => {
+    const store = await createStore({ isServeMode: true })
+    expect(store.getUI().rightSidebarTab).toBe('codev-agents')
+  })
+
+  it('normalizes an invalid persisted rightSidebarTab to Agents in serve mode', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'bogus' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore({ isServeMode: true })
+    expect(store.getUI().rightSidebarTab).toBe('codev-agents')
+  })
+
+  it('does not override an explicit Explorer preference in serve mode', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { rightSidebarTab: 'explorer' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore({ isServeMode: true })
     expect(store.getUI().rightSidebarTab).toBe('explorer')
   })
 

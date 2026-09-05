@@ -2071,7 +2071,7 @@ void app.whenReady().then(async () => {
   )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
-  store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  store = new Store({ dataFile: activeOrcaProfile.dataFile, isServeMode })
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.

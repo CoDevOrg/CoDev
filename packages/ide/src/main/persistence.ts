@@ -847,7 +847,10 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
-export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+export function normalizeRightSidebarTab(
+  tab: unknown,
+  fallback: PersistedState['ui']['rightSidebarTab'] = getDefaultUIState().rightSidebarTab
+): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
@@ -867,7 +870,7 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
   if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
-  return getDefaultUIState().rightSidebarTab
+  return fallback
 }
 
 function normalizeWorkspaceLineageByChildKey(
@@ -2755,6 +2758,11 @@ function deleteRemovedTerminalScrollbackSnapshots(
 
 export type StoreOptions = {
   dataFile?: string
+  /** True for a `orca serve` process — CoDev's orchestrator spawns every
+   *  per-workspace IDE session this way, so a fresh workspace should default
+   *  to the always-on "Agents" tab rather than Explorer. Desktop Electron
+   *  never sets this, so its default is untouched. */
+  isServeMode?: boolean
 }
 
 export class Store {
@@ -2794,8 +2802,12 @@ export class Store {
     ) => void
   >()
   private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
+  private readonly defaultRightSidebarTab: PersistedState['ui']['rightSidebarTab']
 
   constructor(options: StoreOptions = {}) {
+    this.defaultRightSidebarTab = options.isServeMode
+      ? 'codev-agents'
+      : getDefaultUIState().rightSidebarTab
     // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
     this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
@@ -3608,7 +3620,10 @@ export class Store {
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only when no explicit chrome preference exists yet.
               rightSidebarOpen,
-              rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
+              rightSidebarTab: normalizeRightSidebarTab(
+                parsed.ui?.rightSidebarTab,
+                this.defaultRightSidebarTab
+              ),
               setupGuideSidebarDismissed,
               usagePercentageDisplayChangeNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
@@ -3715,6 +3730,14 @@ export class Store {
 
     if (result === null) {
       result = getDefaultPersistedState(homedir())
+      // Why not folded into getDefaultPersistedState: that function has no
+      // notion of serve mode, and is also the general default other callers
+      // (e.g. the renderer) reach for — only a truly fresh on-disk state
+      // should pick up the serve-mode right-sidebar default.
+      result = {
+        ...result,
+        ui: { ...result.ui, rightSidebarTab: this.defaultRightSidebarTab }
+      }
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -5942,7 +5965,10 @@ export class Store {
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
-      rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
+      rightSidebarTab: normalizeRightSidebarTab(
+        this.state.ui?.rightSidebarTab,
+        this.defaultRightSidebarTab
+      ),
       rightSidebarExplorerView: normalizeRightSidebarExplorerView(
         this.state.ui?.rightSidebarExplorerView,
         this.state.ui?.rightSidebarTab
@@ -6014,8 +6040,8 @@ export class Store {
     }
     const nextRightSidebarTab =
       sanitizedUpdates.rightSidebarTab !== undefined
-        ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
-        : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab)
+        ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab, this.defaultRightSidebarTab)
+        : normalizeRightSidebarTab(this.state.ui?.rightSidebarTab, this.defaultRightSidebarTab)
     const nextRightSidebarExplorerView =
       sanitizedUpdates.rightSidebarExplorerView !== undefined
         ? normalizeRightSidebarExplorerView(
