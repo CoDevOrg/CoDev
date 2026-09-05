@@ -106,15 +106,10 @@ function RightSidebarInner(): React.JSX.Element {
 
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
-      {
-        id: 'explorer',
-        icon: Files,
-        title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
-      },
       // CoDev: the single "Agents" tab — every agent in this workspace, always
-      // on screen. Listed first so it is the tab a member lands on, and it
-      // stands in for the AI Vault session-history tab (hidden below).
+      // on screen. Listed first so it is the leftmost tab and the one a
+      // member lands on, and it stands in for the AI Vault session-history
+      // tab (hidden below).
       ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
         ? [
             {
@@ -125,6 +120,12 @@ function RightSidebarInner(): React.JSX.Element {
             }
           ]
         : []),
+      {
+        id: 'explorer',
+        icon: Files,
+        title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
+        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+      },
       // Stock Orca keeps the AI Vault session-history tab; CoDev folds it into
       // the "Agents" tab above rather than showing a second agents tab.
       ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
