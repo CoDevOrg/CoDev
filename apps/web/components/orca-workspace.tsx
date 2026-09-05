@@ -872,9 +872,11 @@ export function OrcaWorkspace({
   // Read by the `message` listener, which must not re-register on every phase
   // change (re-registering mid-handshake drops messages).
   const connectionPhaseRef = useRef(connection.phase);
-  connectionPhaseRef.current = connection.phase;
   const slowStartRef = useRef(isSlowStart);
-  slowStartRef.current = isSlowStart;
+  useEffect(() => {
+    connectionPhaseRef.current = connection.phase;
+    slowStartRef.current = isSlowStart;
+  }, [connection.phase, isSlowStart]);
 
   const reportHostState = useCallback(
     (phase: "starting" | "ready", slow: boolean) => {
@@ -1031,7 +1033,7 @@ export function OrcaWorkspace({
 
     window.addEventListener("message", receiveOrcaMessage);
     return () => window.removeEventListener("message", receiveOrcaMessage);
-  }, [workspaceId, reportBootMark, deliverPairing]);
+  }, [workspaceId, reportBootMark, deliverPairing, reportHostState]);
 
   // Fallback reveal: if the iframe never sends `codev:shell-ready` (older
   // bundle, or a shell that failed to paint), stop covering it once the wait
