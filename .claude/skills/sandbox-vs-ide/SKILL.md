@@ -7,9 +7,9 @@ description: Use when touching agent execution, worktrees, publication exports, 
 
 Firecracker sandbox and Orca IDE session **do not share a disk**.
 
-| Intent | Use |
-|---|---|
-| Agent execution, worktrees, publication export | Sandbox API routes |
+| Intent                                                    | Use                              |
+| --------------------------------------------------------- | -------------------------------- |
+| Agent execution, worktrees, publication export            | Sandbox API routes               |
 | Interactive IDE files, terminals, Git, user-launched CLIs | `/ide` file and execution routes |
 
 Do not mix. Control plane remains Vercel; runtimes remain AWS.

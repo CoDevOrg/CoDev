@@ -12,8 +12,17 @@ alwaysApply: false
 
 Two AWS contexts. **No shared filesystem.**
 
-1. **Firecracker sandboxes** — agent execution, worktrees, publication exports. Use **sandbox API routes**.
-2. **Orca IDE sessions** — browser IDE, terminals, Git, user-launched agent CLIs. Anything `codex resume` or a terminal must see uses **`/ide` file and execution routes**.
+1. **Firecracker sandbox** — agent execution, worktrees, publication exports.
+   Use the real sandbox routes: `apps/web/app/api/workspaces/[workspaceId]/sandbox/**`.
+2. **Orca IDE session** — one `orca serve` per workspace, embedded as a
+   same-origin iframe. It has **no separate `/ide` route family** in
+   `apps/web`. It talks to the parent over `postMessage`
+   (`codev-bridge.ts` ↔ `components/codev-parent-bridge.ts`), which proxies to
+   ordinary `/api/workspaces/{id}/...` endpoints (`presence`,
+   `collaboration/conflicts`, `agents/{sessionId}/...`). The only literal
+   `/ide` path is the orchestrator's `POST/GET /v1/sandboxes/{workspaceId}/ide`
+   (Orca pairing/readiness) — that's `services/orchestrator`, not `apps/web`.
 
-Do not write sandbox files expecting the IDE to see them, or the reverse.
-Web app = Vercel control plane. Do not move control-plane work into AWS or IDE-session work onto Vercel serverless as a shortcut.
+Do not write sandbox files expecting the IDE session to see them, or the
+reverse. Web app = Vercel control plane. Do not move control-plane work into
+AWS or IDE-session work onto Vercel serverless as a shortcut.
