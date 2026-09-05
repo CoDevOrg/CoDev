@@ -2157,6 +2157,40 @@ describe('web UI preload API', () => {
     expect(ui.rightSidebarOpen).toBe(true)
   })
 
+  it('defaults a fresh CoDev-embedded workspace to the live agents tab, not Explorer', async () => {
+    const globals = installBrowserGlobals('Linux')
+    ;(globals.window as unknown as { __CODEV_EMBEDDED__: boolean }).__CODEV_EMBEDDED__ = true
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.rightSidebarTab).toBe('codev-agents')
+  })
+
+  it('keeps Explorer as the default right sidebar tab outside CoDev embedding', async () => {
+    const { api } = await installApi('Linux')
+
+    const ui = await api.ui.get()
+
+    expect(ui.rightSidebarTab).toBe('explorer')
+  })
+
+  it('keeps a member’s earlier switch to Explorer instead of forcing them back to live agents', async () => {
+    const globals = installBrowserGlobals('Linux')
+    ;(globals.window as unknown as { __CODEV_EMBEDDED__: boolean }).__CODEV_EMBEDDED__ = true
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ rightSidebarOpen: true, rightSidebarTab: 'explorer' })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.rightSidebarTab).toBe('explorer')
+  })
+
   it('seeds missing local card display properties from runtime-backed compact settings when ui.get is unavailable', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({

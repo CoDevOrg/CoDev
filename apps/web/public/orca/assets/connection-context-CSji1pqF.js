@@ -1,0 +1,1 @@
+import{Ft as e,Pt as t,Qu as n,a as r}from"./web-index-Dmt5EXDV.js";function i(t){return e(r.getState(),t)}function a(e){return!e||n(e)?.type===`folder`?!0:i(e)!==void 0}function o(e,n){return t(r.getState(),e,n)}export{o as n,a as r,i as t};

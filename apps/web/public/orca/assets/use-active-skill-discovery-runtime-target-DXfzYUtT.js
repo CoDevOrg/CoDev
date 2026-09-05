@@ -1,1 +1,0 @@
-import{$v as e,Au as t,Kf as n,a as r,ry as i}from"./web-index-Cegi2UOh.js";var a=i(e()),o=Symbol(`skill-discovery-runtime-unresolved`);function s(){let e=r(e=>e.runtimeEnvironmentCatalogSettled?t(e):o);return(0,a.useMemo)(()=>e===o?null:n({activeRuntimeEnvironmentId:e}),[e])}export{s as t};

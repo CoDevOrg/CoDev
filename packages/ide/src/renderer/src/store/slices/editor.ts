@@ -9,6 +9,7 @@ import {
 } from './recently-closed-tabs'
 import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
@@ -1535,7 +1536,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
-  rightSidebarTab: 'explorer',
+  rightSidebarTab: isCodevEmbedded() ? 'codev-agents' : 'explorer',
   rightSidebarExplorerView: 'files',
   rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},

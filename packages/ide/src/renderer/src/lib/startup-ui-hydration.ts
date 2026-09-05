@@ -5,6 +5,7 @@ import {
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../shared/constants'
 import type { PersistedUIState } from '../../../shared/types'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,
@@ -37,7 +38,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     activeView: 'terminal',
     sidebarWidth: 280,
     rightSidebarOpen: true,
-    rightSidebarTab: 'explorer',
+    rightSidebarTab: isCodevEmbedded() ? 'codev-agents' : 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,

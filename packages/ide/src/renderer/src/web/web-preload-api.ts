@@ -3915,7 +3915,12 @@ function readLocalWebUIState(): PersistedUIState {
     // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
     worktreeCardProperties: getWorktreeCardModeProperties(
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
-    )
+    ),
+    // Why: a CoDev member should land on the always-current "Live agents" tab,
+    // not Explorer — a member never asked to browse files never touched
+    // `stored.rightSidebarTab`, so this only changes the default, not a
+    // deliberate switch back to Explorer made earlier in the session.
+    ...(isCodevEmbedded() ? { rightSidebarTab: 'codev-agents' as const } : {})
   }
   if (typeof stored.rightSidebarOpen === 'boolean') {
     return mergeWebUIState(base, stored)
