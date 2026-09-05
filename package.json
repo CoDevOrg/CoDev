@@ -19,17 +19,23 @@
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
-    "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test"
+    "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
     "@types/node": "24.10.13",
     "eslint": "9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.4.1",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.65.0"
   },
   "pnpm": {
     "blockExoticSubdeps": false
+  },
+  "lint-staged": {
+    "!(packages/ide/**)*.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
   }
 }
