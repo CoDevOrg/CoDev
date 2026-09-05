@@ -239,6 +239,9 @@ importers:
       '@aws-crypto/sha256-js':
         specifier: 5.2.0
         version: 5.2.0
+      '@aws-sdk/client-cost-explorer':
+        specifier: 3.1098.0
+        version: 3.1098.0
       '@aws-sdk/client-ec2':
         specifier: 3.1098.0
         version: 3.1098.0
@@ -529,6 +532,10 @@ packages:
 
   '@aws-crypto/util@5.2.0':
     resolution: {integrity: sha512-4RkU9EsI6ZpBve5fseQlGNUWKMa1RLPQ1dnjnQoe07ldfIzcsGb5hC5W0Dm7u423KWzawlrpbjXBrXCEv9zazQ==}
+
+  '@aws-sdk/client-cost-explorer@3.1098.0':
+    resolution: {integrity: sha512-gx7JOwlwSVcZN0Arq8iDq4CpKo6JWuoEtcEka8jhiGl4xsQOA+361IbXD99Pr5lItDFhQY+NM3qEHuXUWVfciA==}
+    engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-ec2@3.1098.0':
     resolution: {integrity: sha512-rRwuBKVkskHfEoqrY7DGQ2asXkX39URWNl3/WrVRmnV3fxJ+5aEb87JByapg2+ZMKfCWh+XjR9fDEi2JK5opHA==}
@@ -8722,6 +8729,17 @@ snapshots:
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
+  '@aws-sdk/client-cost-explorer@3.1098.0':
+    dependencies:
+      '@aws-sdk/core': 3.977.6
+      '@aws-sdk/credential-provider-node': 3.972.75
+      '@aws-sdk/types': 3.974.2
+      '@smithy/core': 3.31.1
+      '@smithy/fetch-http-handler': 5.6.13
+      '@smithy/node-http-handler': 4.9.13
+      '@smithy/types': 4.16.1
+      tslib: 2.8.1
+
   '@aws-sdk/client-ec2@3.1098.0':
     dependencies:
       '@aws-sdk/core': 3.977.3
@@ -8949,7 +8967,7 @@ snapshots:
 
   '@aws-sdk/credential-provider-web-identity@3.972.49':
     dependencies:
-      '@aws-sdk/core': 3.977.3
+      '@aws-sdk/core': 3.977.6
       '@aws-sdk/nested-clients': 3.997.38
       '@aws-sdk/types': 3.974.2
       '@smithy/core': 3.31.1
@@ -9013,7 +9031,7 @@ snapshots:
 
   '@aws-sdk/nested-clients@3.997.36':
     dependencies:
-      '@aws-sdk/core': 3.977.3
+      '@aws-sdk/core': 3.977.6
       '@aws-sdk/signature-v4-multi-region': 3.996.42
       '@aws-sdk/types': 3.974.2
       '@smithy/core': 3.31.1
@@ -9060,7 +9078,7 @@ snapshots:
 
   '@aws-sdk/token-providers@3.1098.0':
     dependencies:
-      '@aws-sdk/core': 3.977.3
+      '@aws-sdk/core': 3.977.6
       '@aws-sdk/nested-clients': 3.997.38
       '@aws-sdk/types': 3.974.2
       '@smithy/core': 3.31.1

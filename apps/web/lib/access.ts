@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import {
@@ -320,10 +320,20 @@ export async function getWorkspaceAccess(workspaceId: string, userId: string) {
       canMerge: schema.workspaceMembers.canMerge,
     })
     .from(schema.workspaceMembers)
+    .innerJoin(
+      schema.workspaces,
+      eq(schema.workspaceMembers.workspaceId, schema.workspaces.id),
+    )
     .where(
       and(
         eq(schema.workspaceMembers.workspaceId, workspaceId),
         eq(schema.workspaceMembers.userId, userId),
+        // Deleting a workspace soft-deletes it (see deleteWorkspace) so the
+        // admin console retains its member/cost history. This is the single
+        // gate nearly every workspace-scoped route calls through, so denying
+        // access here is what actually makes a deleted workspace untouchable
+        // again, not just invisible in a list.
+        isNull(schema.workspaces.deletedAt),
       ),
     )
     .limit(1);

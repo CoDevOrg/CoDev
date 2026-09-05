@@ -672,12 +672,17 @@ export const workspaces = pgTable(
       .notNull(),
     hibernateAt: timestamp("hibernate_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // Soft-delete marker. Deleting a workspace sets this instead of removing
+    // the row, so the admin console keeps a permanent record of who owned
+    // it, who was on it, and what it cost, even after the member closes it.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     index("workspaces_owner_idx").on(table.ownerId),
     index("workspaces_repository_idx").on(table.githubRepositoryId),
     index("workspaces_status_expiry_idx").on(table.status, table.expiresAt),
+    index("workspaces_deleted_idx").on(table.deletedAt),
   ],
 );
 

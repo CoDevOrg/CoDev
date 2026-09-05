@@ -245,6 +245,7 @@ export async function getWorkspaceForMember(
       and(
         eq(schema.workspaceMembers.workspaceId, workspaceId),
         eq(schema.workspaceMembers.userId, userId),
+        isNull(schema.workspaces.deletedAt),
       ),
     )
     .limit(1);
@@ -857,32 +858,19 @@ export async function deleteWorkspace(workspaceId: string, userId: string) {
   }
 
   const db = getDatabase();
+  const now = new Date();
 
-  const sessions = await db
-    .select({ id: schema.agentSessions.id })
-    .from(schema.agentSessions)
-    .where(eq(schema.agentSessions.workspaceId, workspaceId));
-
-  for (const session of sessions) {
-    await db
-      .delete(schema.agentTurns)
-      .where(eq(schema.agentTurns.sessionId, session.id));
-  }
-
+  // Soft-delete: mark the row instead of removing it, so the admin console
+  // keeps a permanent record of who owned this workspace, who was on it, and
+  // what it cost, even after it's closed. `status: "stopped"` keeps it out
+  // of every cron's status-scoped queries (expiry, hibernation, active-count
+  // quota) without needing a new enum value, and getWorkspaceAccess denies
+  // access to any workspace with deletedAt set, so this alone makes it
+  // unreachable through the rest of the app. Members, invites, and agent
+  // history are deliberately left in place rather than deleted.
   await db
-    .delete(schema.agentEvents)
-    .where(eq(schema.agentEvents.workspaceId, workspaceId));
-  await db
-    .delete(schema.agentSessions)
-    .where(eq(schema.agentSessions.workspaceId, workspaceId));
-  await db
-    .delete(schema.workspaceInvites)
-    .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
-  await db
-    .delete(schema.workspaceMembers)
-    .where(eq(schema.workspaceMembers.workspaceId, workspaceId));
-  await db
-    .delete(schema.workspaces)
+    .update(schema.workspaces)
+    .set({ deletedAt: now, status: "stopped", updatedAt: now })
     .where(eq(schema.workspaces.id, workspaceId));
 
   await appendWorkspaceEvent({

@@ -24,8 +24,10 @@ const membership = {
 function configureMembership() {
   database.select.mockReturnValue({
     from: () => ({
-      where: () => ({
-        limit: async () => [membership],
+      innerJoin: () => ({
+        where: () => ({
+          limit: async () => [membership],
+        }),
       }),
     }),
   });
@@ -105,8 +107,10 @@ describe("OpenFGA workspace authorization", () => {
     };
     database.select.mockReturnValue({
       from: () => ({
-        where: () => ({
-          limit: async () => [upgradedMembership],
+        innerJoin: () => ({
+          where: () => ({
+            limit: async () => [upgradedMembership],
+          }),
         }),
       }),
     });

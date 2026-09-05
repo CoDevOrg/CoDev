@@ -19,6 +19,7 @@
     "@ai-sdk/anthropic": "4.0.25",
     "@ai-sdk/openai": "4.0.25",
     "@aws-crypto/sha256-js": "5.2.0",
+    "@aws-sdk/client-cost-explorer": "3.1098.0",
     "@aws-sdk/client-ec2": "3.1098.0",
     "@aws-sdk/client-kms": "^3.1098.0",
     "@aws-sdk/client-ssm": "^3.1105.0",

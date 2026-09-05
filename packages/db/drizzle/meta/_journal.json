@@ -281,6 +281,13 @@
       "when": 1788407157820,
       "tag": "0039_daffy_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788569784748,
+      "tag": "0040_wide_terrax",
+      "breakpoints": true
     }
   ]
 }

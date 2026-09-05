@@ -268,6 +268,11 @@ ensure_vercel_role() {
           Effect: "Allow",
           Action: ["kms:Decrypt", "kms:GenerateDataKey"],
           Resource: $credential_key_arn
+        },
+        {
+          Effect: "Allow",
+          Action: "ce:GetCostAndUsage",
+          Resource: "*"
         }
       ]
     }')"

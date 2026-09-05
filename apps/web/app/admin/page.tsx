@@ -14,11 +14,37 @@ import {
   getTopPaths,
   getUserDirectory,
 } from "@/lib/admin-stats";
+import { listAllWorkspacesForAdmin } from "@/lib/admin-workspaces";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
 
 const numberFmt = new Intl.NumberFormat("en-US");
+const usdFmt = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
+function formatUsd(value: number | null): string {
+  if (value === null) return "—";
+  return usdFmt.format(value);
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${numberFmt.format(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${numberFmt.format(hours)}h ${rest}m`;
+}
+
+const ACCESS_ROLE_LABEL: Record<string, string> = {
+  owner: "owner",
+  co_steer: "co-steer",
+  reviewer: "reviewer",
+  viewer: "viewer",
+};
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -44,7 +70,7 @@ function formatRelative(iso: string | null): string {
 export default async function AdminPage() {
   const user = await requireAdmin();
 
-  const [summary, directory, recentVisits, topPaths, daily, waitlist] =
+  const [summary, directory, recentVisits, topPaths, daily, waitlist, workspacesReport] =
     await Promise.all([
       getAdminSummary(),
       getUserDirectory(),
@@ -52,6 +78,7 @@ export default async function AdminPage() {
       getTopPaths(30, 15),
       getDailyTraffic(30),
       listAccessRequests(),
+      listAllWorkspacesForAdmin(),
     ]);
 
   const waitlistPending = waitlist.filter(
@@ -242,6 +269,146 @@ export default async function AdminPage() {
                       <td className="num">{numberFmt.format(row.visits)}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section className="admin-section">
+          <h2>Workspaces ({workspacesReport.workspaces.length})</h2>
+          <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
+            Every workspace ever created, including closed ones — closing a
+            workspace marks it deleted but keeps its record here permanently.
+            Cost is real AWS spend (Cost Explorer, the{" "}
+            <code>Project=CoDev</code> tag), not an estimate — but it has only
+            been tracked since{" "}
+            {formatDate(workspacesReport.costTracking.trackedSinceIso)}, since
+            that&rsquo;s when the tag was activated; AWS cannot retroactively
+            reconstruct tagged spend from before that date. Per-workspace
+            dollars are this workspace&rsquo;s share of the real{" "}
+            {formatUsd(workspacesReport.costTracking.attributableEc2Usd)} EC2
+            bill, split by its real recorded runtime minutes — the only slice
+            that can be honestly attributed to one workspace, since every
+            workspace shares one host. The remaining{" "}
+            {formatUsd(workspacesReport.costTracking.platformOverheadUsd)}{" "}
+            of real spend (networking, KMS, storage, tax) is shared platform
+            overhead with no honest per-workspace split, so it isn&rsquo;t
+            divided below.
+          </p>
+          <div className="admin-stat-grid" style={{ marginBottom: "1rem" }}>
+            <div className="admin-stat">
+              <div className="admin-stat-label">Real AWS spend tracked</div>
+              <div className="admin-stat-value">
+                {formatUsd(workspacesReport.costTracking.totalRealSpendUsd)}
+              </div>
+              <div className="admin-stat-hint">
+                since {formatDate(workspacesReport.costTracking.trackedSinceIso)}
+              </div>
+            </div>
+            <div className="admin-stat">
+              <div className="admin-stat-label">
+                Attributable to workspaces (EC2)
+              </div>
+              <div className="admin-stat-value">
+                {formatUsd(workspacesReport.costTracking.attributableEc2Usd)}
+              </div>
+              <div className="admin-stat-hint">
+                split by real recorded runtime minutes
+              </div>
+            </div>
+            <div className="admin-stat">
+              <div className="admin-stat-label">Platform overhead</div>
+              <div className="admin-stat-value">
+                {formatUsd(workspacesReport.costTracking.platformOverheadUsd)}
+              </div>
+              <div className="admin-stat-hint">
+                networking, KMS, storage, tax — not per-workspace
+              </div>
+            </div>
+          </div>
+          <div className="admin-table-wrap">
+            <div className="admin-table-scroll">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Workspace</th>
+                    <th>Owner</th>
+                    <th>Members</th>
+                    <th className="num">Tracked runtime</th>
+                    <th className="num">Est. cost</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workspacesReport.workspaces.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="admin-muted">
+                        No workspaces yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    workspacesReport.workspaces.map((workspace) => (
+                      <tr key={workspace.id}>
+                        <td>
+                          <span className="admin-user-name">
+                            {workspace.repository}
+                          </span>
+                          <br />
+                          <span className="admin-user-login">
+                            {workspace.defaultBranch}
+                          </span>
+                        </td>
+                        <td>
+                          {workspace.ownerName ?? workspace.ownerLogin}
+                          <br />
+                          <span className="admin-user-login">
+                            @{workspace.ownerLogin}
+                          </span>
+                        </td>
+                        <td>
+                          {workspace.members.length === 0 ? (
+                            <span className="admin-muted">—</span>
+                          ) : (
+                            <span className="admin-providers">
+                              {workspace.members.map((member) => (
+                                <span
+                                  className="admin-chip"
+                                  key={member.userId}
+                                  title={member.name ?? member.login}
+                                >
+                                  @{member.login} ·{" "}
+                                  {ACCESS_ROLE_LABEL[member.accessRole] ??
+                                    member.accessRole}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </td>
+                        <td className="num">
+                          {formatMinutes(workspace.trackedMinutes)}
+                        </td>
+                        <td className="num">
+                          {formatUsd(workspace.estimatedCostUsd)}
+                        </td>
+                        <td className="admin-time">
+                          {formatDate(workspace.createdAt)}
+                        </td>
+                        <td>
+                          {workspace.isDeleted ? (
+                            <span className="admin-badge status-declined">
+                              deleted {formatDate(workspace.deletedAt!)}
+                            </span>
+                          ) : (
+                            <span className="admin-badge status-accepted">
+                              {workspace.status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
