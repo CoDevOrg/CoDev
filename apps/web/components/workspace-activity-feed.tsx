@@ -42,16 +42,12 @@ export function WorkspaceActivityFeed({
   canRestoreWorkspace: boolean;
   initialSnapshot: ActivityAuditSnapshot;
 }) {
-  const [events, setEvents] = useState<ActivityEvent[]>(
-    initialSnapshot.events,
-  );
+  const [events, setEvents] = useState<ActivityEvent[]>(initialSnapshot.events);
   const [cursor, setCursor] = useState<number | null>(
     initialSnapshot.nextCursor,
   );
   const [loadingMore, setLoadingMore] = useState(false);
-  const [restoringEventId, setRestoringEventId] = useState<string | null>(
-    null,
-  );
+  const [restoringEventId, setRestoringEventId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -182,7 +178,9 @@ export function WorkspaceActivityFeed({
           await readJsonError(response, "Could not restore this file."),
         );
       }
-      setNotice(`${target} restored to this version — review it in Source Control.`);
+      setNotice(
+        `${target} restored to this version — review it in Source Control.`,
+      );
     } catch (restoreError) {
       setError(
         restoreError instanceof Error
@@ -230,8 +228,7 @@ export function WorkspaceActivityFeed({
               Restore a file
             </h3>
             <p className="text-sm text-muted-foreground">
-              Look up a file&rsquo;s history and bring back an earlier
-              version.
+              Look up a file&rsquo;s history and bring back an earlier version.
             </p>
           </div>
           <div className="flex gap-2">
@@ -269,9 +266,8 @@ export function WorkspaceActivityFeed({
                         {entry.message}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {entry.author} ·{" "}
-                        {new Date(entry.date).toLocaleString()} ·{" "}
-                        {entry.revision.slice(0, 7)}
+                        {entry.author} · {new Date(entry.date).toLocaleString()}{" "}
+                        · {entry.revision.slice(0, 7)}
                       </p>
                     </div>
                     <button

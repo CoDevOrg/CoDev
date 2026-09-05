@@ -70,16 +70,23 @@ function formatRelative(iso: string | null): string {
 export default async function AdminPage() {
   const user = await requireAdmin();
 
-  const [summary, directory, recentVisits, topPaths, daily, waitlist, workspacesReport] =
-    await Promise.all([
-      getAdminSummary(),
-      getUserDirectory(),
-      getRecentVisits(60),
-      getTopPaths(30, 15),
-      getDailyTraffic(30),
-      listAccessRequests(),
-      listAllWorkspacesForAdmin(),
-    ]);
+  const [
+    summary,
+    directory,
+    recentVisits,
+    topPaths,
+    daily,
+    waitlist,
+    workspacesReport,
+  ] = await Promise.all([
+    getAdminSummary(),
+    getUserDirectory(),
+    getRecentVisits(60),
+    getTopPaths(30, 15),
+    getDailyTraffic(30),
+    listAccessRequests(),
+    listAllWorkspacesForAdmin(),
+  ]);
 
   const waitlistPending = waitlist.filter(
     (row) => row.status === "pending",
@@ -291,8 +298,8 @@ export default async function AdminPage() {
             bill, split by its real recorded runtime minutes — the only slice
             that can be honestly attributed to one workspace, since every
             workspace shares one host. The remaining{" "}
-            {formatUsd(workspacesReport.costTracking.platformOverheadUsd)}{" "}
-            of real spend (networking, KMS, storage, tax) is shared platform
+            {formatUsd(workspacesReport.costTracking.platformOverheadUsd)} of
+            real spend (networking, KMS, storage, tax) is shared platform
             overhead with no honest per-workspace split, so it isn&rsquo;t
             divided below.
           </p>
@@ -303,7 +310,8 @@ export default async function AdminPage() {
                 {formatUsd(workspacesReport.costTracking.totalRealSpendUsd)}
               </div>
               <div className="admin-stat-hint">
-                since {formatDate(workspacesReport.costTracking.trackedSinceIso)}
+                since{" "}
+                {formatDate(workspacesReport.costTracking.trackedSinceIso)}
               </div>
             </div>
             <div className="admin-stat">

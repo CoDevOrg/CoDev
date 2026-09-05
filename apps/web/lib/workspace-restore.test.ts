@@ -28,10 +28,12 @@ import {
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
 
-function mockIntegrationWorktreeLookup(worktree: {
-  id: string;
-  headSha: string;
-} | null) {
+function mockIntegrationWorktreeLookup(
+  worktree: {
+    id: string;
+    headSha: string;
+  } | null,
+) {
   const query = {
     select: vi.fn(),
     from: vi.fn(),
@@ -135,7 +137,16 @@ describe("restoreWorkspaceFile", () => {
     expect(mocks.executeInSandbox).toHaveBeenCalledWith(
       "workspace-1",
       expect.objectContaining({
-        command: ["git", "--no-pager", "-c", "color.ui=never", "checkout", SHA_A, "--", "src/index.ts"],
+        command: [
+          "git",
+          "--no-pager",
+          "-c",
+          "color.ui=never",
+          "checkout",
+          SHA_A,
+          "--",
+          "src/index.ts",
+        ],
         worktreeId: "integration-1",
       }),
     );
@@ -179,7 +190,10 @@ describe("restoreWorkspaceFile", () => {
 });
 
 describe("restoreWorkspaceToRevision", () => {
-  let updateQuery: { set: ReturnType<typeof vi.fn>; where: ReturnType<typeof vi.fn> };
+  let updateQuery: {
+    set: ReturnType<typeof vi.fn>;
+    where: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,7 +234,15 @@ describe("restoreWorkspaceToRevision", () => {
       3,
       "workspace-1",
       expect.objectContaining({
-        command: ["git", "--no-pager", "-c", "color.ui=never", "reset", "--hard", SHA_B],
+        command: [
+          "git",
+          "--no-pager",
+          "-c",
+          "color.ui=never",
+          "reset",
+          "--hard",
+          SHA_B,
+        ],
         worktreeId: "integration-1",
       }),
     );

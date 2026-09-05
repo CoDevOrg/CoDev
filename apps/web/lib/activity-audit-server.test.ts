@@ -37,11 +37,10 @@ describe("loadActivityAuditSnapshot pagination", () => {
   it("passes the requested limit and cursor through to listWorkspaceEvents", async () => {
     mocks.listWorkspaceEvents.mockResolvedValue([event(5), event(4)]);
 
-    await loadActivityAuditSnapshot(
-      "workspace-1",
-      user,
-      { limit: 2, beforeSequence: 6 },
-    );
+    await loadActivityAuditSnapshot("workspace-1", user, {
+      limit: 2,
+      beforeSequence: 6,
+    });
 
     expect(mocks.listWorkspaceEvents).toHaveBeenCalledWith(
       "workspace-1",

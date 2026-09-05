@@ -6,10 +6,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
-import {
-  COST_TRACKING_START_DATE,
-  getRealCodevAwsSpend,
-} from "./aws-cost";
+import { COST_TRACKING_START_DATE, getRealCodevAwsSpend } from "./aws-cost";
 
 export interface AdminWorkspaceMember {
   userId: string;
