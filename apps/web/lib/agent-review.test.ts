@@ -248,6 +248,31 @@ describe("discardAgentWorktree", () => {
     });
   });
 
+  it("never removes the integration worktree, whatever runs in it", async () => {
+    query.limit
+      .mockResolvedValueOnce([
+        {
+          sessionId: "session-1",
+          workflowRunId: null,
+          worktreeId: "integration-1",
+          worktreeStatus: "active",
+          worktreeHeadSha: "main-r1",
+          reviewHeadSha: null,
+          reviewBaseSha: null,
+          reviewDiffDigest: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r1" }]);
+
+    await expect(
+      discardAgentWorktree("workspace-1", "session-1", "user-1"),
+    ).resolves.toEqual({ status: "stopped" });
+
+    // The integration worktree is the workspace; no sibling lookup is even
+    // needed to know it must survive.
+    expect(mocks.deleteSandboxWorktree).not.toHaveBeenCalled();
+  });
+
   it("ends only this agent when a sibling session shares the worktree", async () => {
     query.limit
       .mockResolvedValueOnce([

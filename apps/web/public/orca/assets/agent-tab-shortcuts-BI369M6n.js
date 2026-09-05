@@ -1,0 +1,1 @@
+import{Dm as e,Rg as t,sm as n,zg as r}from"./web-index-BTpDqSlS.js";function i(r,i){if(!r)return[];let a=new Set(t(i)),o=[];for(let t of e){if(a.has(t))continue;let e=n(t);(r[e]??[]).length>0&&o.push({agent:t,actionId:e})}return o}function a(e){return r(e.defaultTuiAgent===`blank`?null:e.defaultTuiAgent,e.detectedAgentIds??[],e.disabledTuiAgents)}export{a as n,i as t};

@@ -10,6 +10,7 @@ import {
 } from '../../web/codev-bridge-singleton'
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import { planAgentStop } from '../../web/codev-agent-stop-plan'
+import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
 import {
   attachMissionControlHolds,
   CodevMissionControlView,
@@ -389,13 +390,18 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
 
   /**
    * Stop is per-agent, not per-worktree: several agents legitimately share one
-   * checkout, so releasing it for any one of them stopped all of them. Only
-   * the last agent to leave a worktree releases it — which is also the only
-   * one that frees a slot, since capacity counts worktrees. Branch is kept.
+   * checkout, so releasing it for any one of them stopped all of them. The
+   * checkout goes only for the last agent out of a worktree CoDev made for it
+   * — never the workspace's own root, which a repo-less workspace's agents run
+   * in directly. Releasing is also the only case that frees a slot, since
+   * capacity counts worktrees. The branch is kept either way.
    */
   const handleStop = useCallback(
     async (key: string) => {
-      const plan = planAgentStop(key, agents)
+      const plan = planAgentStop(key, agents, (worktreeId) => {
+        const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
+        return worktree ? isCodevAgentWorktree(worktree) : false
+      })
       try {
         if (plan.kind === 'discard-session') {
           const result = await requestCodevBridge<{ status?: string }>('agents.discard', {
@@ -419,9 +425,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           setOpenKey(null)
           toast.success('Agent stopped', {
             description:
-              plan.siblingCount === 1
-                ? 'The worktree stays for the other agent in it.'
-                : `The worktree stays for the other ${plan.siblingCount} agents in it.`
+              plan.siblingCount === 0
+                ? "Its checkout is the workspace's own, so it stays."
+                : plan.siblingCount === 1
+                  ? 'The worktree stays for the other agent in it.'
+                  : `The worktree stays for the other ${plan.siblingCount} agents in it.`
           })
           return
         }
@@ -429,14 +437,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           toast.error('This agent cannot be stopped from here.')
           return
         }
-        const state = useAppStore.getState()
-        const worktree = findWorktreeById(state.worktreesByRepo, plan.worktreeId)
-        // The workspace's own checkout is not an agent's to discard.
-        if (!worktree || worktree.isMainWorktree) {
-          toast.error('This agent has no worktree of its own to release.')
-          return
-        }
-        const result = await state.removeWorktree(plan.worktreeId)
+        const result = await useAppStore.getState().removeWorktree(plan.worktreeId)
         if (!result.ok) {
           toast.error('Could not stop this agent', { description: result.error })
           return

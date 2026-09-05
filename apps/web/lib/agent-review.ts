@@ -697,8 +697,13 @@ export async function discardAgentWorktree(
   }
   // Stopping one of several agents in a shared worktree ends that agent only.
   // Removing the checkout here would stop its siblings too, which is how one
-  // "Stop agent" click used to take every agent in the worktree with it.
-  if (await hasLiveSiblingSessions(target.worktreeId, sessionId)) {
+  // "Stop agent" click used to take every agent in the worktree with it. The
+  // integration worktree is the workspace itself and is never an agent's to
+  // remove, whatever is running in it.
+  if (
+    target.worktreeId === target.integrationId ||
+    (await hasLiveSiblingSessions(target.worktreeId, sessionId))
+  ) {
     return stopAgentSessionOnly(workspaceId, target, userId);
   }
   await stopAgentForReview(target);

@@ -11,20 +11,27 @@ export type StoppableAgent = {
 export type AgentStopPlan =
   /** Server-owned session; the host decides whether the worktree goes too. */
   | { kind: 'discard-session'; sessionId: string }
-  /** Retire this agent's tab and leave the checkout to its siblings. */
+  /** End this agent alone and leave the checkout standing. */
   | { kind: 'close-tab'; tabId: string; siblingCount: number }
-  /** Last agent out: release the worktree and settle on one of these. */
+  /** Last agent out of a worktree CoDev made for it: release it, settle here. */
   | { kind: 'release-worktree'; worktreeId: string; survivorWorktreeIds: string[] }
   | { kind: 'unsupported' }
 
 const LOCAL_KEY_PREFIX = 'local:'
 
 /**
- * Stopping an agent must not stop its neighbours. A reopened or fresh chat
- * runs in the worktree its transcript belongs to, so one checkout routinely
- * hosts several agents; only the last one out releases it.
+ * Stopping an agent must not stop its neighbours, and must not take the
+ * workspace with it. A fresh or reopened chat runs in the worktree its
+ * transcript belongs to, so one checkout routinely hosts several agents; and a
+ * workspace with no repository has no agent worktree at all, only its own root.
+ * So the checkout is released for exactly one agent: the last one out of a
+ * worktree CoDev created to isolate it.
  */
-export function planAgentStop(key: string, agents: StoppableAgent[]): AgentStopPlan {
+export function planAgentStop(
+  key: string,
+  agents: StoppableAgent[],
+  isReleasableWorktree: (worktreeId: string) => boolean
+): AgentStopPlan {
   const agent = agents.find((candidate) => candidate.key === key)
   if (!agent) {
     return { kind: 'unsupported' }
@@ -37,19 +44,19 @@ export function planAgentStop(key: string, agents: StoppableAgent[]): AgentStopP
   }
   const others = agents.filter((candidate) => candidate.key !== agent.key)
   const siblings = others.filter((candidate) => candidate.worktreeId === agent.worktreeId)
-  if (siblings.length > 0) {
-    const tabId = key.startsWith(LOCAL_KEY_PREFIX)
-      ? parsePaneKey(key.slice(LOCAL_KEY_PREFIX.length))?.tabId
-      : null
-    return tabId
-      ? { kind: 'close-tab', tabId, siblingCount: siblings.length }
-      : { kind: 'unsupported' }
+  if (siblings.length === 0 && isReleasableWorktree(agent.worktreeId)) {
+    return {
+      kind: 'release-worktree',
+      worktreeId: agent.worktreeId,
+      survivorWorktreeIds: others
+        .map((candidate) => candidate.worktreeId)
+        .filter((id): id is string => Boolean(id))
+    }
   }
-  return {
-    kind: 'release-worktree',
-    worktreeId: agent.worktreeId,
-    survivorWorktreeIds: others
-      .map((candidate) => candidate.worktreeId)
-      .filter((id): id is string => Boolean(id))
-  }
+  const tabId = key.startsWith(LOCAL_KEY_PREFIX)
+    ? parsePaneKey(key.slice(LOCAL_KEY_PREFIX.length))?.tabId
+    : null
+  return tabId
+    ? { kind: 'close-tab', tabId, siblingCount: siblings.length }
+    : { kind: 'unsupported' }
 }
