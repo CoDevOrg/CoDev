@@ -288,6 +288,13 @@
       "when": 1788569784748,
       "tag": "0040_wide_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788648639593,
+      "tag": "0041_faithful_ultron",
+      "breakpoints": true
     }
   ]
 }

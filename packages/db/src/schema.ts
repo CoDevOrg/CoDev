@@ -1545,3 +1545,43 @@ export const sandboxRuntimeIntervals = pgTable(
     ),
   ],
 );
+
+export const claudeConnectionSessionStatus = pgEnum(
+  "claude_connection_session_status",
+  ["starting", "awaiting_code", "exchanging", "connected", "failed"],
+);
+
+/**
+ * One in-progress "Connect Claude" attempt: a hosted runner executing the
+ * official `claude setup-token` flow on the member's behalf. Rows are
+ * short-lived — the flow either reaches `connected` (token persisted to
+ * `provider_credentials`) or `failed`, and stale rows past `expiresAt` are
+ * swept.
+ */
+export const claudeConnectionSessions = pgTable(
+  "claude_connection_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    scopeType: credentialScopeType("scope_type").default("USER").notNull(),
+    scopeId: uuid("scope_id").notNull(),
+    status: claudeConnectionSessionStatus("status")
+      .default("starting")
+      .notNull(),
+    /** Opaque id handed back by the runner implementation (Step 3). */
+    runnerId: text("runner_id"),
+    /** The URL the member opens to approve access, once the runner emits it. */
+    authorizeUrl: text("authorize_url"),
+    /** Populated only when `status = 'failed'`. */
+    failureReason: text("failure_reason"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("claude_connection_sessions_user_idx").on(table.userId, table.status),
+    index("claude_connection_sessions_expiry_idx").on(table.expiresAt),
+  ],
+);
