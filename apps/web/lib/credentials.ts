@@ -139,6 +139,20 @@ export async function getAgentKeySource(
   return "byok" as const;
 }
 
+/**
+ * The scope CoDev originally requests when it authorizes each provider —
+ * duplicated from `getOAuthConfiguration` in `./oauth` (not imported: that
+ * module imports `saveProviderCredential` from here, so importing it back
+ * would cycle). Keep these two literals in sync if either changes.
+ */
+function oauthRefreshScope(provider: AuthProvider): string {
+  return provider === "anthropic"
+    ? process.env.CLAUDE_OAUTH_SCOPE?.trim() ||
+        "org:create_api_key user:profile user:inference"
+    : process.env.CODEX_OAUTH_SCOPE?.trim() ||
+        "openid profile email offline_access";
+}
+
 async function refreshOAuthToken(
   provider: AuthProvider,
   refreshToken: string,
@@ -167,6 +181,13 @@ async function refreshOAuthToken(
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
+    // Some OAuth servers narrow a refresh to a default scope set when the
+    // request omits `scope`, instead of preserving the original grant (RFC
+    // 6749 §6 only says the server SHOULD reuse it). That silently downgraded
+    // a Claude connection here: the CLI kept "connected" but every inference
+    // call 403'd with a scope error hours after the token's first refresh, no
+    // reconnect prompt anywhere. Re-requesting the same scope avoids it.
+    scope: oauthRefreshScope(provider),
   });
   if (configuration.clientId) body.set("client_id", configuration.clientId);
   if (configuration.clientSecret) {

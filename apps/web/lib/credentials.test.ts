@@ -179,4 +179,42 @@ describe("resolveAgentCredential", () => {
     expect(resolved.apiKeyOrToken).toBe("refreshed-access-token");
     expect(mockDatabase.update).toHaveBeenCalledOnce();
   });
+
+  it("re-requests the original scope on refresh so it isn't silently narrowed", async () => {
+    // A refresh_token grant that omits `scope` is only *allowed* (not
+    // required) to preserve the original grant on the server side — this is
+    // exactly what turned a working Claude connection into a 403 scope error
+    // hours later with no visible failure anywhere in CoDev.
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        encryptedApiKey: null,
+        encryptedAccessToken: "access-ciphertext",
+        encryptedRefreshToken: "refresh-ciphertext",
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    ]);
+    let seenBody: URLSearchParams | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        seenBody = init.body as URLSearchParams;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: "refreshed-access-token",
+            expires_in: 3600,
+          }),
+        };
+      }),
+    );
+
+    await resolveAgentCredential("user-1", "workspace-1", "anthropic");
+
+    expect(seenBody?.get("scope")).toBe(
+      "org:create_api_key user:profile user:inference",
+    );
+  });
 });
