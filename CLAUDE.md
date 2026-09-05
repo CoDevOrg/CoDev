@@ -5,6 +5,17 @@ commands, container policy, and engineering conventions that apply to every
 agent working in this repo. The notes below are the points worth repeating for
 Claude Code specifically.
 
+## UI & Design skills are mandatory
+
+Any interface work in this repo uses **both** vendored skills — see the
+"UI & Design (required skills)" section of [`AGENTS.md`](AGENTS.md) for the full
+rule. In short: `.claude/skills/ui-ux-pro-max` for UX, design-system, and
+accessibility decisions (searchable via
+`python3 .claude/skills/ui-ux-pro-max/scripts/search.py`), and
+`.claude/skills/apple-design` for the Apple-style visual language. They are
+checked into `.claude/skills/`, so every session in this repo has them; use them
+instead of improvising design decisions.
+
 ## Deploy & CI Cost Hygiene
 
 Every branch push builds a Vercel preview and every push to `main` builds a

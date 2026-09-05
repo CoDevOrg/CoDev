@@ -47,6 +47,36 @@ Preserve the split between the Vercel-hosted web control plane and AWS-hosted Fi
 - Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
 - Add or update tests with every behavior change.
 
+## UI & Design (required skills)
+
+Every change that touches the interface — pages, components, layout, spacing,
+color, typography, motion, icons, or accessibility — must go through the two
+design skills vendored into this repository. This is not optional and it is not
+per-agent: anyone working in this repo, human or agent, uses both.
+
+- **`.claude/skills/ui-ux-pro-max`** — UX and design-system intelligence.
+  Consult it for style/color/typography selection, layout and responsive rules,
+  accessibility and touch-target requirements, animation timing, and
+  stack-specific implementation guidance. It ships a local searchable dataset:
+
+  ```bash
+  python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux
+  python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<query>" --stack nextjs
+  ```
+
+  Requires Python 3 (standard library only, no network). Run it from the
+  repository root.
+
+- **`.claude/skills/apple-design`** — the visual language. CoDev's surfaces
+  follow Apple-style minimalism: generous whitespace, restrained color, SF-like
+  type scale, subtle depth and glass, and smooth, meaningful motion.
+
+Both are checked in under `.claude/skills/`, so they are available to every
+clone without any personal or global skill setup. Before delivering UI work,
+run the skills' pre-delivery checklists (contrast, focus states, touch targets,
+reduced motion, light **and** dark mode). Do not hand-roll design decisions in
+this repo when a skill already answers them.
+
 ## Deploy & CI Cost Hygiene
 
 Every branch push builds a Vercel preview, and every push to `main` builds a

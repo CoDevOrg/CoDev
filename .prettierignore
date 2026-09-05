@@ -21,3 +21,9 @@ packages/ide
 # Vendored verbatim from stablyai/orca — kept byte-identical to upstream so
 # re-vendoring is a clean copy (see third_party/orca-mobile/UPSTREAM.md).
 apps/mobile/src/vendor/orca
+
+# Vendored design skill (upstream ui-ux-pro-max). Kept byte-identical to the
+# published skill apart from the repo-relative script paths in SKILL.md, so
+# re-vendoring stays a clean copy. Prettier would rewrite its markdown tables
+# and JSON datasets.
+.claude/skills/ui-ux-pro-max
