@@ -56,7 +56,9 @@ const EC2_SERVICE_NAMES = new Set([
 ]);
 
 async function fetchCodevAwsSpend(): Promise<CodevAwsSpend> {
-  const endDate = new Date().toISOString().slice(0, 10);
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() + 1);
+  const endDate = end.toISOString().slice(0, 10);
   if (endDate <= COST_TRACKING_START_DATE) {
     return {
       totalUsd: 0,
@@ -105,6 +107,6 @@ async function fetchCodevAwsSpend(): Promise<CodevAwsSpend> {
  */
 export const getRealCodevAwsSpend = unstable_cache(
   fetchCodevAwsSpend,
-  ["codev-aws-spend"],
+  ["codev-aws-spend-v2"],
   { revalidate: 3600 },
 );
