@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { getRun } from "workflow/api";
 
 import { schema } from "@codev/db";
@@ -596,6 +596,95 @@ export async function mergeAgentReview(
   }
 }
 
+/**
+ * True when a session other than `sessionId` is still live on this worktree.
+ *
+ * Several agents legitimately share one checkout: a fresh chat is a new
+ * `agentSessions` row pointed at the *same* worktree (see
+ * `agent-fresh-chat.ts`, which is why it costs no capacity slot), and a `cli`
+ * session stands in for an agent CLI running inside the embedded IDE. So
+ * "stop this agent" cannot mean "delete the worktree" — that takes every
+ * sibling's files with it and leaves their rows pointing at a checkout that no
+ * longer exists.
+ */
+async function hasLiveSiblingSessions(worktreeId: string, sessionId: string) {
+  const siblings = await getDatabase()
+    .select({ id: schema.agentSessions.id })
+    .from(schema.agentSessions)
+    .where(
+      and(
+        eq(schema.agentSessions.worktreeId, worktreeId),
+        ne(schema.agentSessions.id, sessionId),
+        inArray(schema.agentSessions.status, ["idle", "running", "waiting"]),
+      ),
+    )
+    .limit(1);
+  return siblings.length > 0;
+}
+
+/**
+ * End one agent without touching the checkout its siblings are working in.
+ *
+ * The session is finished for good (not `waiting`, which is a pause), its
+ * in-flight turns are interrupted and its path claims released, so the slot
+ * accounting and the coordination table both stop counting it. The worktree
+ * stays `active` because other agents are still in it.
+ */
+async function stopAgentSessionOnly(
+  workspaceId: string,
+  target: ReviewTarget,
+  userId: string,
+) {
+  if (target.workflowRunId) {
+    await getRun(target.workflowRunId)
+      .cancel()
+      .catch(() => undefined);
+  }
+  const now = new Date();
+  await getDatabase().transaction(async (transaction) => {
+    await transaction
+      .update(schema.agentTurns)
+      .set({ status: "interrupted", finishedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(schema.agentTurns.sessionId, target.sessionId),
+          inArray(schema.agentTurns.status, ["queued", "running"]),
+        ),
+      );
+    await transaction
+      .update(schema.agentSessions)
+      .set({
+        status: "completed",
+        workflowRunId: null,
+        interruptedAt: now,
+        lastError: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.agentSessions.id, target.sessionId));
+    await transaction
+      .update(schema.pathClaims)
+      .set({ status: "released", updatedAt: now })
+      .where(
+        and(
+          eq(schema.pathClaims.sessionId, target.sessionId),
+          inArray(schema.pathClaims.status, ["active", "contested"]),
+        ),
+      );
+  });
+  await appendWorkspaceEvent({
+    workspaceId,
+    actorId: userId,
+    type: "agent.session_stopped",
+    payload: {
+      sessionId: target.sessionId,
+      worktreeId: target.worktreeId,
+      sandboxWorktreeRemoved: false,
+      claimsReleased: true,
+    },
+  });
+  return { status: "stopped" as const };
+}
+
 export async function discardAgentWorktree(
   workspaceId: string,
   sessionId: string,
@@ -605,6 +694,12 @@ export async function discardAgentWorktree(
   if (target.worktreeStatus === "discarded") return { status: "discarded" };
   if (target.worktreeStatus === "merged") {
     throw new ReviewActionError("A merged worktree cannot be discarded.", 409);
+  }
+  // Stopping one of several agents in a shared worktree ends that agent only.
+  // Removing the checkout here would stop its siblings too, which is how one
+  // "Stop agent" click used to take every agent in the worktree with it.
+  if (await hasLiveSiblingSessions(target.worktreeId, sessionId)) {
+    return stopAgentSessionOnly(workspaceId, target, userId);
   }
   await stopAgentForReview(target);
   try {

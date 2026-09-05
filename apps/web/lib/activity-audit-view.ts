@@ -46,6 +46,7 @@ const NOISE_TYPES = new Set(["presence.cursor.changed"]);
 const TYPE_LABELS: Record<string, string> = {
   "agent.review_merged": "integrated a reviewed checkpoint",
   "agent.review_discarded": "discarded a proposal",
+  "agent.session_stopped": "stopped an agent",
   "presence.joined": "joined the workspace",
   "presence.left": "left the workspace",
   "presence.active_file.changed": "opened a file",

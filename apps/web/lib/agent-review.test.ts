@@ -207,6 +207,8 @@ describe("discardAgentWorktree", () => {
         },
       ])
       .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r1" }])
+      // No sibling session is live on this worktree, so the checkout goes.
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           sessionId: "session-1",
@@ -241,6 +243,42 @@ describe("discardAgentWorktree", () => {
         reviewHeadSha: "agent-r2",
         reviewDiffDigest: "sha256:review-digest",
         sandboxWorktreeRemoved: true,
+        claimsReleased: true,
+      },
+    });
+  });
+
+  it("ends only this agent when a sibling session shares the worktree", async () => {
+    query.limit
+      .mockResolvedValueOnce([
+        {
+          sessionId: "session-1",
+          workflowRunId: null,
+          worktreeId: "worktree-1",
+          worktreeStatus: "active",
+          worktreeHeadSha: "agent-r2",
+          reviewHeadSha: null,
+          reviewBaseSha: null,
+          reviewDiffDigest: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r1" }])
+      .mockResolvedValueOnce([{ id: "session-2" }]);
+
+    await expect(
+      discardAgentWorktree("workspace-1", "session-1", "user-1"),
+    ).resolves.toEqual({ status: "stopped" });
+
+    // The sibling is still working in this checkout, so it must survive.
+    expect(mocks.deleteSandboxWorktree).not.toHaveBeenCalled();
+    expect(mocks.appendWorkspaceEvent).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      actorId: "user-1",
+      type: "agent.session_stopped",
+      payload: {
+        sessionId: "session-1",
+        worktreeId: "worktree-1",
+        sandboxWorktreeRemoved: false,
         claimsReleased: true,
       },
     });

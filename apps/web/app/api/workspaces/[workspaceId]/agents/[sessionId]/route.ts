@@ -17,8 +17,11 @@ export async function DELETE(
 
   try {
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
-    await discardAgentWorktree(workspaceId, sessionId, user.id);
-    return new Response(null, { status: 204 });
+    // "discarded" removed the checkout; "stopped" ended this agent only,
+    // because other agents are still live in the same worktree. The caller
+    // needs the difference to say whether a capacity slot came back.
+    const result = await discardAgentWorktree(workspaceId, sessionId, user.id);
+    return Response.json(result);
   } catch (error) {
     if (error instanceof ReviewActionError) {
       return apiError(error, error.status);

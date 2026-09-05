@@ -50,7 +50,8 @@ describe("DELETE agent session", () => {
       }),
     });
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "discarded" });
     expect(mocks.ensureWorkspaceRuntimeReady).toHaveBeenCalledWith(
       "workspace-1",
       "user-1",

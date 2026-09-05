@@ -1,0 +1,1 @@
+import{$v as e,Ev as t,ry as n}from"./web-index-CGSC_nCN.js";var r=n(e(),1);t();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

@@ -9,6 +9,7 @@ import {
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
+import { planAgentStop } from '../../web/codev-agent-stop-plan'
 import {
   attachMissionControlHolds,
   CodevMissionControlView,
@@ -72,16 +73,26 @@ function isLiveState(value: unknown): boolean {
 /** Stable per-name hue so a person keeps one colour across the panel. */
 function hueFor(key: string): number {
   let hash = 0
-  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) % 360
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) % 360
+  }
   return hash
 }
 
 function providerLabel(raw: string): string {
   const value = raw.toLowerCase()
-  if (value.includes('claude') || value.includes('anthropic')) return 'Claude'
-  if (value.includes('codex') || value.includes('openai')) return 'Codex'
-  if (value.includes('cursor')) return 'Cursor'
-  if (!raw) return 'Agent'
+  if (value.includes('claude') || value.includes('anthropic')) {
+    return 'Claude'
+  }
+  if (value.includes('codex') || value.includes('openai')) {
+    return 'Codex'
+  }
+  if (value.includes('cursor')) {
+    return 'Cursor'
+  }
+  if (!raw) {
+    return 'Agent'
+  }
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
@@ -93,11 +104,40 @@ function providerLabel(raw: string): string {
  */
 function usableTaskTitle(raw: string | undefined, providerName: string): string | null {
   const value = raw?.replace(/^[\s✳✶✻*•]+/, '').trim()
-  if (!value) return null
-  if (/@|\/srv\/|~[/$]|\$\s*$|^orca-ws-/i.test(value)) return null
-  if (value.toLowerCase() === providerName.toLowerCase()) return null
-  if (/^(claude code|codex cli|cursor)$/i.test(value)) return null
+  if (!value) {
+    return null
+  }
+  if (/@|\/srv\/|~[/$]|\$\s*$|^orca-ws-/i.test(value)) {
+    return null
+  }
+  if (value.toLowerCase() === providerName.toLowerCase()) {
+    return null
+  }
+  if (/^(claude code|codex cli|cursor)$/i.test(value)) {
+    return null
+  }
   return value
+}
+
+/**
+ * Removing the active worktree leaves `activeWorktreeId: null` and nothing
+ * picks a replacement — fine on the desktop's worktree list, a blank pane in
+ * the embed where the chat *is* the workspace. Prefer a worktree another agent
+ * is still in.
+ */
+function settleOnSurvivingWorktree(removedWorktreeId: string, preferred: string[]): void {
+  const state = useAppStore.getState()
+  if (state.activeWorktreeId) {
+    return
+  }
+  const survivors = (state.allWorktrees?.() ?? []).filter(
+    (entry: { id: string }) => entry.id !== removedWorktreeId
+  )
+  const target =
+    survivors.find((entry: { id: string }) => preferred.includes(entry.id)) ?? survivors[0]
+  if (target) {
+    activateAndRevealWorktree(target.id, { revealInSidebar: true })
+  }
 }
 
 export function CodevLiveAgentsPanel(): JSX.Element | null {
@@ -184,10 +224,14 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   }, [statuses, viewerName, worktreesByRepo])
 
   const refreshManaged = useCallback(async () => {
-    if (bridgeStatus !== 'connected') return
+    if (bridgeStatus !== 'connected') {
+      return
+    }
     try {
       const snapshot = await requestCodevBridge<WorkboardSnapshot>('workboard.list')
-      if (snapshot?.viewer?.name) setViewerName(snapshot.viewer.name)
+      if (snapshot?.viewer?.name) {
+        setViewerName(snapshot.viewer.name)
+      }
       setCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
       const rows = (snapshot?.slots ?? [])
         .filter((slot) => slot.occupied && slot.sessionId)
@@ -217,7 +261,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   }, [bridgeStatus])
 
   const refreshCoordination = useCallback(async () => {
-    if (bridgeStatus !== 'connected') return
+    if (bridgeStatus !== 'connected') {
+      return
+    }
     try {
       const snapshot = await requestCodevBridge<MissionControlCoordination>('coordination.list')
       setCoordination({
@@ -233,7 +279,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   }, [bridgeStatus])
 
   useEffect(() => {
-    if (!embedded) return
+    if (!embedded) {
+      return
+    }
     void refreshManaged()
     void refreshCoordination()
     const timer = setInterval(() => {
@@ -266,7 +314,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
 
   useEffect(() => {
-    if (!busy) return
+    if (!busy) {
+      return
+    }
     setNow(Date.now())
     const timer = setInterval(() => setNow(Date.now()), TICK_MS)
     return () => clearInterval(timer)
@@ -280,7 +330,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const handleStepIn = useCallback(
     (key: string) => {
       const agent = byKey(key)
-      if (!agent) return
+      if (!agent) {
+        return
+      }
       if (agent.worktreeId) {
         activateAndRevealWorktree(agent.worktreeId, { revealInSidebar: true })
         setOpenKey(null)
@@ -297,7 +349,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     async (key: string, text: string) => {
       const agent = byKey(key)
       const prompt = text.trim()
-      if (!agent?.sessionId || !prompt) return
+      if (!agent?.sessionId || !prompt) {
+        return
+      }
       setSteerBusy(true)
       try {
         await requestCodevBridge('agents.enqueue', { sessionId: agent.sessionId, prompt })
@@ -317,7 +371,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const handlePause = useCallback(
     async (key: string) => {
       const agent = byKey(key)
-      if (!agent?.sessionId) return
+      if (!agent?.sessionId) {
+        return
+      }
       try {
         await requestCodevBridge('agents.interrupt', { sessionId: agent.sessionId })
         toast.success('Asked the agent to pause after this step')
@@ -332,44 +388,60 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   )
 
   /**
-   * End an agent and give its slot back.
-   *
-   * The two origins need different teardown. A managed session is the
-   * server's to remove, so it goes through `agents.discard`, which discards
-   * the agent's worktree on the host. A local chat-tab agent has no session
-   * id at all — it is this client's own PTY — so the equivalent is removing
-   * the worktree CoDev created for it, which stops its terminals on the way
-   * out. Capacity counts worktrees, so only the worktree going away actually
-   * frees the slot; `removeWorktree` preserves the branch, so the work
-   * survives either way.
+   * Stop is per-agent, not per-worktree: several agents legitimately share one
+   * checkout, so releasing it for any one of them stopped all of them. Only
+   * the last agent to leave a worktree releases it — which is also the only
+   * one that frees a slot, since capacity counts worktrees. Branch is kept.
    */
   const handleStop = useCallback(
     async (key: string) => {
-      const agent = byKey(key)
-      if (!agent) {
-        return
-      }
+      const plan = planAgentStop(key, agents)
       try {
-        if (agent.origin === 'managed' && agent.sessionId) {
-          await requestCodevBridge('agents.discard', { sessionId: agent.sessionId })
-        } else if (agent.worktreeId) {
-          const state = useAppStore.getState()
-          const worktree = findWorktreeById(state.worktreesByRepo, agent.worktreeId)
-          // Never tear down the workspace's own checkout: it is not an agent's
-          // to discard, and removing it would take the workspace with it.
-          if (!worktree || worktree.isMainWorktree) {
-            toast.error('This agent has no worktree of its own to release.')
-            return
-          }
-          const result = await state.removeWorktree(agent.worktreeId)
-          if (!result.ok) {
-            toast.error('Could not stop this agent', { description: result.error })
-            return
-          }
-        } else {
+        if (plan.kind === 'discard-session') {
+          const result = await requestCodevBridge<{ status?: string }>('agents.discard', {
+            sessionId: plan.sessionId
+          })
+          setOpenKey(null)
+          toast.success('Agent stopped', {
+            description:
+              // The host stops the session only when siblings still hold the worktree.
+              result?.status === 'stopped'
+                ? 'Its branch is kept, and the worktree stays for the other agents in it.'
+                : 'Its slot is free and its branch is kept.'
+          })
+          void refreshManaged()
+          return
+        }
+        if (plan.kind === 'close-tab') {
+          // 'cleanup', not 'user': the embed refuses a user-close of a chat tab
+          // so a workspace always keeps one.
+          useAppStore.getState().closeTab(plan.tabId, { reason: 'cleanup' })
+          setOpenKey(null)
+          toast.success('Agent stopped', {
+            description:
+              plan.siblingCount === 1
+                ? 'The worktree stays for the other agent in it.'
+                : `The worktree stays for the other ${plan.siblingCount} agents in it.`
+          })
+          return
+        }
+        if (plan.kind === 'unsupported') {
           toast.error('This agent cannot be stopped from here.')
           return
         }
+        const state = useAppStore.getState()
+        const worktree = findWorktreeById(state.worktreesByRepo, plan.worktreeId)
+        // The workspace's own checkout is not an agent's to discard.
+        if (!worktree || worktree.isMainWorktree) {
+          toast.error('This agent has no worktree of its own to release.')
+          return
+        }
+        const result = await state.removeWorktree(plan.worktreeId)
+        if (!result.ok) {
+          toast.error('Could not stop this agent', { description: result.error })
+          return
+        }
+        settleOnSurvivingWorktree(plan.worktreeId, plan.survivorWorktreeIds)
         setOpenKey(null)
         toast.success('Agent stopped', { description: 'Its slot is free and its branch is kept.' })
         void refreshManaged()
@@ -379,28 +451,30 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         })
       }
     },
-    [byKey, refreshManaged]
+    [agents, refreshManaged]
   )
 
-  if (!embedded) return null
+  if (!embedded) {
+    return null
+  }
 
   return (
     <div className="codev-agents-panel">
-    <CodevMissionControlView
-      agents={agents.map((agent) =>
-        agent.origin === 'managed' ? { ...agent, canSteer: canCoSteer } : agent
-      )}
-      coordination={coordination}
-      now={now}
-      openKey={openKey}
-      steerBusy={steerBusy}
-      onOpen={setOpenKey}
-      onClose={() => setOpenKey(null)}
-      onStepIn={handleStepIn}
-      onSteer={handleSteer}
-      onPause={handlePause}
-      onStop={(key) => void handleStop(key)}
-    />
+      <CodevMissionControlView
+        agents={agents.map((agent) =>
+          agent.origin === 'managed' ? { ...agent, canSteer: canCoSteer } : agent
+        )}
+        coordination={coordination}
+        now={now}
+        openKey={openKey}
+        steerBusy={steerBusy}
+        onOpen={setOpenKey}
+        onClose={() => setOpenKey(null)}
+        onStepIn={handleStepIn}
+        onSteer={handleSteer}
+        onPause={handlePause}
+        onStop={(key) => void handleStop(key)}
+      />
     </div>
   )
 }
