@@ -1,0 +1,28 @@
+---
+alwaysApply: true
+---
+
+Be extremely concise. Never repeat generated code at the end of a reply. Do not add "key code references" dumps.
+
+## Product
+CoDev is a **web-hosted** collaborative workspace (trycodev.com), not a desktop app.
+
+## Commands
+Run from the repository root with **pnpm**. Node 24+.
+`pnpm install` · `pnpm dev` · `pnpm format:check` · `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` · `pnpm test:e2e` · `pnpm rust:check` · `pnpm orca:web`
+
+Do not add Dockerfiles or Docker Compose. Use Apple `container` if local containers are needed.
+
+## Monorepo
+- Check sibling files in the same package before inventing a pattern.
+- Prefer `packages/contracts`, Zod, and Drizzle schema over ad hoc types.
+- `packages/ide` is excluded from the root workspace. Never include it in root recursive pnpm/Prettier. Use its own tooling.
+
+## Safety
+- Credentials stay server-only. Never put secrets in `NEXT_PUBLIC_*`.
+- Private GitHub credentials must not appear in URLs, argv, logs, browser pairing data, or persisted remotes.
+- Keep Vercel (web) vs AWS (Firecracker/Orca) separate.
+- Sandbox vs IDE filesystems are isolated. Use sandbox API vs `/ide` routes correctly.
+
+## Git / Vercel
+Keep diffs scoped. Do not commit or push unless asked. Each branch push starts a Vercel preview; `main` is production. One coherent commit per change. Add or update tests when behavior changes.

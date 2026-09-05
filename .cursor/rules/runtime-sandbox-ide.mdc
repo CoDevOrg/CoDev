@@ -1,0 +1,19 @@
+---
+description: Firecracker sandbox vs Orca IDE session isolation and which API routes to use.
+globs:
+  - apps/web/**
+  - services/orchestrator/**
+  - infra/aws/**
+  - packages/ide/**
+alwaysApply: false
+---
+
+# Sandbox vs IDE runtime
+
+Two AWS contexts. **No shared filesystem.**
+
+1. **Firecracker sandboxes** — agent execution, worktrees, publication exports. Use **sandbox API routes**.
+2. **Orca IDE sessions** — browser IDE, terminals, Git, user-launched agent CLIs. Anything `codex resume` or a terminal must see uses **`/ide` file and execution routes**.
+
+Do not write sandbox files expecting the IDE to see them, or the reverse.
+Web app = Vercel control plane. Do not move control-plane work into AWS or IDE-session work onto Vercel serverless as a shortcut.
