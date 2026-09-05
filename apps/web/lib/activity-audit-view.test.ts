@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   activityJumpFor,
+  activityRestoreRevision,
   filterActivityEvents,
   toActivitySnapshot,
 } from "./activity-audit-view";
@@ -127,5 +128,19 @@ describe("activity audit view", () => {
     expect(
       activityJumpFor("agent.review_discarded", { sessionId: "s1" })?.kind,
     ).toBe("diff");
+  });
+
+  it("only exposes a restore revision for a merged review's pre-merge sha", () => {
+    expect(
+      activityRestoreRevision("agent.review_merged", {
+        reviewBaseSha: "a".repeat(40),
+      }),
+    ).toBe("a".repeat(40));
+    expect(activityRestoreRevision("agent.review_merged", {})).toBeNull();
+    expect(
+      activityRestoreRevision("agent.review_discarded", {
+        reviewBaseSha: "a".repeat(40),
+      }),
+    ).toBeNull();
   });
 });

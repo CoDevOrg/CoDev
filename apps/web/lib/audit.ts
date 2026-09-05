@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -40,6 +40,7 @@ export async function listWorkspaceEvents(
   workspaceId: string,
   userId: string,
   limit = 100,
+  beforeSequence?: number,
 ) {
   return getDatabase()
     .select({
@@ -58,7 +59,14 @@ export async function listWorkspaceEvents(
         eq(schema.workspaceMembers.userId, userId),
       ),
     )
-    .where(eq(schema.workspaceEvents.workspaceId, workspaceId))
+    .where(
+      and(
+        eq(schema.workspaceEvents.workspaceId, workspaceId),
+        typeof beforeSequence === "number"
+          ? lt(schema.workspaceEvents.sequence, beforeSequence)
+          : undefined,
+      ),
+    )
     .orderBy(desc(schema.workspaceEvents.sequence))
     .limit(Math.min(Math.max(limit, 1), 100));
 }

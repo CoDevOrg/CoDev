@@ -24,10 +24,21 @@ export async function GET(
     kindParam && FILTER_KINDS.has(kindParam as ActivityFilterKind)
       ? (kindParam as ActivityFilterKind)
       : "all";
+  const beforeParam = url.searchParams.get("before");
+  const beforeSequence =
+    beforeParam && /^\d+$/.test(beforeParam) ? Number(beforeParam) : undefined;
+  const limitParam = url.searchParams.get("limit");
+  const limit =
+    limitParam && /^\d+$/.test(limitParam) ? Number(limitParam) : undefined;
   try {
     await requireWorkspacePermission(workspaceId, user.id, "view");
     return Response.json(
-      await loadActivityAuditSnapshot(workspaceId, user, { kind, query }),
+      await loadActivityAuditSnapshot(workspaceId, user, {
+        kind,
+        query,
+        ...(beforeSequence !== undefined ? { beforeSequence } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      }),
     );
   } catch (error) {
     return apiError(

@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Share2 } from "lucide-react";
+import { History, Share2 } from "lucide-react";
 import { track } from "@vercel/analytics";
 
 import {
@@ -718,6 +718,13 @@ export function WorkspaceTopBar({
         >
           {liveLabel}
         </span>
+        <Link
+          className="workspace-topbar-share"
+          href={`/workspaces/${workspaceId}/activity`}
+        >
+          <History aria-hidden size={13} />
+          Activity
+        </Link>
         <button
           className="workspace-topbar-share"
           type="button"

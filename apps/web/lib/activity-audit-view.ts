@@ -30,6 +30,9 @@ export type ActivityEvent = {
   path: string | null;
   sessionId: string | null;
   jump: ActivityJump | null;
+  /** The revision a "restore workspace to this point" action would reset the
+   *  integration worktree to, when this event has one. */
+  restoreRevision: string | null;
 };
 
 export type ActivitySnapshot = {
@@ -51,6 +54,8 @@ const TYPE_LABELS: Record<string, string> = {
   "lifecycle.cleaned": "cleaned up the workspace",
   "publication.published": "published a branch",
   "publication.failed": "failed to publish a branch",
+  "file.restored": "restored a file",
+  "workspace.restored": "restored the workspace",
 };
 
 function iso(value: Date | string) {
@@ -79,6 +84,17 @@ export function activityEventSessionId(
   payload: Record<string, unknown> | null | undefined,
 ) {
   return stringField(payload, ["sessionId"]);
+}
+
+/** Only a merged agent review carries a known-good prior revision (the
+ *  integration head right before that merge) — every other event type has
+ *  no well-defined "restore to this point" target. */
+export function activityRestoreRevision(
+  type: string,
+  payload: Record<string, unknown> | null | undefined,
+) {
+  if (type !== "agent.review_merged") return null;
+  return stringField(payload, ["reviewBaseSha"]);
 }
 
 export function activityJumpFor(
@@ -134,6 +150,9 @@ export function activityEventSummary(
   if (type === "workspace.comment_added" && path) {
     return `${actor} commented on ${path}`;
   }
+  if (type === "file.restored" && path) {
+    return `${actor} restored ${path}`;
+  }
   if (action) return `${actor} ${action}`;
   return `${actor} · ${type}`;
 }
@@ -188,6 +207,7 @@ export function toActivitySnapshot(input: {
         path: activityEventPath(payload),
         sessionId: activityEventSessionId(payload),
         jump: activityJumpFor(event.type, payload),
+        restoreRevision: activityRestoreRevision(event.type, payload),
       } satisfies ActivityEvent;
     })
     .sort((left, right) => right.sequence - left.sequence);
