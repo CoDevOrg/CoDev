@@ -85,6 +85,7 @@ describe("SharedChatRoom", () => {
     expect(screen.getByText("plan.pdf")).toBeInTheDocument();
     expect(screen.getByText("Private")).toBeInTheDocument();
     expect(screen.getByText("2 members")).toBeInTheDocument();
+    expect(screen.getByText("Model: gpt-5")).toBeInTheDocument();
     expect(screen.getByText("Qais")).toBeInTheDocument();
     expect(screen.getByText("Jordan")).toBeInTheDocument();
     expect(

@@ -24,7 +24,7 @@ export function SharedChatRoom({ room }: { room: SharedChatRoomData }) {
               {room.members.length === 1 ? "member" : "members"}
             </span>
             {conversation.source.model ? (
-              <span>{conversation.source.model}</span>
+              <span>Model: {conversation.source.model}</span>
             ) : null}
           </div>
         </div>
