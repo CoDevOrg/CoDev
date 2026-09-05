@@ -7,6 +7,7 @@ import { schema } from "@codev/db";
 import {
   ClaudeConnectionError,
   persistClaudeOAuthToken,
+  redactClaudeSecrets,
   resolveClaudeConnectionScope,
   validateClaudeOAuthToken,
 } from "./claude-connection";
@@ -117,7 +118,11 @@ async function loadOwnedSession(userId: string, sessionId: string) {
 async function markFailed(sessionId: string, reason: string) {
   await getDatabase()
     .update(schema.claudeConnectionSessions)
-    .set({ status: "failed", failureReason: reason, updatedAt: new Date() })
+    .set({
+      status: "failed",
+      failureReason: redactClaudeSecrets(reason),
+      updatedAt: new Date(),
+    })
     .where(eq(schema.claudeConnectionSessions.id, sessionId));
 }
 

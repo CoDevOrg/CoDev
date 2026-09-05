@@ -2,6 +2,7 @@ import "server-only";
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 
+import { redactClaudeSecrets } from "./claude-connection";
 import {
   unavailableClaudeRunner,
   type ClaudeRunnerPollResult,
@@ -82,6 +83,10 @@ function absorb(proc: RunnerProcess, chunk: string) {
     const match = urlPattern().exec(proc.output);
     if (match?.[1]) proc.authorizeUrl = match[1];
   }
+  // Once the whole token is captured, scrub it from the buffered transcript so
+  // a later log or error that echoes `proc.output` cannot leak it. Only after
+  // capture, so a token split across stream chunks is still matched in full.
+  if (proc.token) proc.output = redactClaudeSecrets(proc.output);
 }
 
 export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {

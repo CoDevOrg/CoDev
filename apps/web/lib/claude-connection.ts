@@ -4,6 +4,17 @@ import { saveProviderCredential } from "./credentials";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 
 const CLAUDE_TOKEN_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/;
+const CLAUDE_SECRET_IN_TEXT = /sk-ant-[A-Za-z0-9_-]{12,}/g;
+
+/**
+ * Strip Claude tokens from free text before it is persisted (e.g. a session's
+ * `failureReason`) or logged. The runner captures `claude setup-token` stdout,
+ * which contains the token verbatim, so any string derived from runner output
+ * passes through here. Belt-and-braces alongside `observability.redact`.
+ */
+export function redactClaudeSecrets(text: string): string {
+  return text.replace(CLAUDE_SECRET_IN_TEXT, "sk-ant-[REDACTED]");
+}
 
 /**
  * A failure connecting a Claude subscription. `status` maps straight to the

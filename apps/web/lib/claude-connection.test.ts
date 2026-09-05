@@ -8,6 +8,7 @@ vi.mock("./settings-access", () => ({
 
 import {
   ClaudeConnectionError,
+  redactClaudeSecrets,
   resolveClaudeConnectionScope,
   saveClaudeConnectionForUser,
   validateClaudeOAuthToken,
@@ -31,6 +32,18 @@ describe("validateClaudeOAuthToken", () => {
   it("accepts a well-formed token and rejects junk", () => {
     expect(validateClaudeOAuthToken(TOKEN)).toBe(TOKEN);
     expect(() => validateClaudeOAuthToken("nope")).toThrow(/usable token/);
+  });
+});
+
+describe("redactClaudeSecrets", () => {
+  it("strips Claude tokens from free text but leaves the rest", () => {
+    const out = redactClaudeSecrets(
+      `login ok Token: ${TOKEN} exit 0\nsk-ant-api03-${"z".repeat(40)} also`,
+    );
+    expect(out).not.toContain(TOKEN);
+    expect(out).not.toMatch(/sk-ant-[A-Za-z0-9_-]{12,}/);
+    expect(out).toContain("login ok");
+    expect(out).toContain("exit 0");
   });
 });
 

@@ -59,6 +59,10 @@ import {
   updateHostedCodexAuthCache,
 } from "./hosted-codex-subscription-credentials";
 import {
+  claimClaudeSubscriptionExecution,
+  releaseClaudeSubscriptionExecution,
+} from "./claude-subscription-execution";
+import {
   publishAgentWorktreeToGitHub,
   syncAgentWorktreeWithGitHub,
 } from "./agent-github";
@@ -1393,62 +1397,81 @@ export async function prepareAgentTurn(
     };
   }
 
-  const model = createAgentModel(
-    credential,
-    context.model || getAgentModel(provider),
-  );
+  // A connected Claude Pro/Max subscription runs one cloud turn at a time
+  // (see claude-subscription-execution). API-key Anthropic and every other
+  // provider are unaffected.
+  const claudeLeaseId =
+    credential.provider === "anthropic" && credential.authType === "OAUTH_TOKEN"
+      ? credential.credentialId
+      : undefined;
+  if (claudeLeaseId) {
+    await claimClaudeSubscriptionExecution(claudeLeaseId);
+  }
 
-  let finalOutput = "";
-  const response = await generateText({
-    model,
-    maxOutputTokens: 4096,
-    stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
-    system:
-      "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. This workspace has a shared brain across every agent: the turn transcript may begin with a 'Workspace Brain briefing' describing what other agents are doing and any overlap flagged for you. Before you plan, call brain_search with what you are about to do; right after you plan, call brain_update_brief with your goal, plan and the files you expect to touch, and keep currentStep and status fresh as you work. If the brain reports another agent doing the same work, coordinate (request_claim_coordination or post_team_chat) or narrow your scope rather than proceeding in parallel — it is a warning, not a block. When an approach fails, call brain_record with kind dead_end so no one retries it. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. The workspace has team channels where its humans talk to each other: read them with read_team_chat when the request depends on intent, priorities, or decisions that are not in the repository, and use post_team_chat to answer a question you were mentioned in or to report a blocking finding where the team will see it. Do not merge into the integration worktree or escape this worktree.",
-    messages: [{ role: "user", content: modelInput(context, transcript) }],
-    tools: createAgentTools(context),
-    onStepEnd: async ({ text, response: stepResponse, usage }) => {
-      if (text) {
-        finalOutput = text;
-        const stepUsage = normalizeTokenUsage(usage);
-        await addEvent(context, `${stepResponse.id}:output`, "agent.output", {
-          text,
-          ...(stepUsage ? { usage: stepUsage } : {}),
-        });
-      }
-    },
-  });
-  finalOutput = (response.text || finalOutput).trim();
-  if (!finalOutput) {
-    const executedTools = response.steps.flatMap((step) =>
-      step.toolCalls.map((tc) => tc.toolName),
+  try {
+    const model = createAgentModel(
+      credential,
+      context.model || getAgentModel(provider),
     );
-    if (executedTools.length > 0) {
-      const uniqueTools = Array.from(new Set(executedTools));
-      finalOutput = `Completed turn: executed ${executedTools.length} operation(s) using ${uniqueTools.join(", ")}.`;
-    } else {
-      finalOutput = "Completed requested task.";
+
+    let finalOutput = "";
+    const response = await generateText({
+      model,
+      maxOutputTokens: 4096,
+      stopWhen: stepCountIs(MAX_TOOL_ROUNDS),
+      system:
+        "You are a coding agent inside an isolated Git worktree. Deliver the requested repository change, verify it with focused commands, and finish with a concise outcome. Always conclude your response with a clear textual summary explaining what was accomplished or checked. This workspace has a shared brain across every agent: the turn transcript may begin with a 'Workspace Brain briefing' describing what other agents are doing and any overlap flagged for you. Before you plan, call brain_search with what you are about to do; right after you plan, call brain_update_brief with your goal, plan and the files you expect to touch, and keep currentStep and status fresh as you work. If the brain reports another agent doing the same work, coordinate (request_claim_coordination or post_team_chat) or narrow your scope rather than proceeding in parallel — it is a warning, not a block. When an approach fails, call brain_record with kind dead_end so no one retries it. Inspect workspace claims and coordination messages before editing. Before each write, claim the exact file at its read revision or claim a directory/** scope. If another agent overlaps, create a contested claim and negotiate through correlated claim requests and responses instead of overwriting. Release claims when work is complete. Use only the provided tools. Prefer find and grep instead of rg because optional utilities may be absent from the guest image. A nonzero command exit code is diagnostic output; continue when it is safe to do so. You may run any Git commands inside this worktree (e.g. status, pull, push, commit, etc.). For GitHub remote sync or publishing to a codev/* branch, you can also use the github_sync and github_publish tools. The workspace has team channels where its humans talk to each other: read them with read_team_chat when the request depends on intent, priorities, or decisions that are not in the repository, and use post_team_chat to answer a question you were mentioned in or to report a blocking finding where the team will see it. Do not merge into the integration worktree or escape this worktree.",
+      messages: [{ role: "user", content: modelInput(context, transcript) }],
+      tools: createAgentTools(context),
+      onStepEnd: async ({ text, response: stepResponse, usage }) => {
+        if (text) {
+          finalOutput = text;
+          const stepUsage = normalizeTokenUsage(usage);
+          await addEvent(context, `${stepResponse.id}:output`, "agent.output", {
+            text,
+            ...(stepUsage ? { usage: stepUsage } : {}),
+          });
+        }
+      },
+    });
+    finalOutput = (response.text || finalOutput).trim();
+    if (!finalOutput) {
+      const executedTools = response.steps.flatMap((step) =>
+        step.toolCalls.map((tc) => tc.toolName),
+      );
+      if (executedTools.length > 0) {
+        const uniqueTools = Array.from(new Set(executedTools));
+        finalOutput = `Completed turn: executed ${executedTools.length} operation(s) using ${uniqueTools.join(", ")}.`;
+      } else {
+        finalOutput = "Completed requested task.";
+      }
+    }
+    const totalUsage = normalizeTokenUsage(
+      response.totalUsage ?? response.usage,
+    );
+
+    if (await turnWasInterrupted(turnId)) return { kind: "done" };
+    await getDatabase()
+      .update(schema.agentTurns)
+      .set({
+        status: "completed",
+        responseId: response.response.id,
+        output: finalOutput,
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.agentTurns.id, turnId));
+    await addEvent(context, `${turnId}:completed`, "turn.completed", {
+      output: finalOutput,
+      ...(totalUsage ? { usage: totalUsage } : {}),
+    });
+    await recordTurnOutcomeInBrain(context, finalOutput);
+    return { kind: "done" };
+  } finally {
+    if (claudeLeaseId) {
+      await releaseClaudeSubscriptionExecution(claudeLeaseId);
     }
   }
-  const totalUsage = normalizeTokenUsage(response.totalUsage ?? response.usage);
-
-  if (await turnWasInterrupted(turnId)) return { kind: "done" };
-  await getDatabase()
-    .update(schema.agentTurns)
-    .set({
-      status: "completed",
-      responseId: response.response.id,
-      output: finalOutput,
-      finishedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.agentTurns.id, turnId));
-  await addEvent(context, `${turnId}:completed`, "turn.completed", {
-    output: finalOutput,
-    ...(totalUsage ? { usage: totalUsage } : {}),
-  });
-  await recordTurnOutcomeInBrain(context, finalOutput);
-  return { kind: "done" };
 }
 
 /**
