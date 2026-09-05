@@ -1,0 +1,15 @@
+---
+description: packages/ide Orca fork — own tooling, no root recursive commands, orca:web bundle.
+globs:
+  - packages/ide/**
+  - apps/web/public/orca/**
+alwaysApply: false
+---
+
+# packages/ide (Orca)
+
+Self-contained. **Not** in the root pnpm workspace.
+
+- Do not include in root recursive `pnpm` / Prettier / lint.
+- Use this package’s own package manager and scripts.
+- Source changes that affect the embedded web IDE: run `pnpm orca:web` from repo root and commit regenerated `apps/web/public/orca/**` in the **same** commit.

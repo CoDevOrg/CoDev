@@ -1,0 +1,15 @@
+---
+description: Next.js App Router conventions for apps/web (RSC, client boundaries, Vercel).
+globs:
+  - apps/web/**
+alwaysApply: false
+---
+
+# apps/web (Next.js)
+
+- Default to Server Components. Add `'use client'` only for browser state or event handlers.
+- Check a sibling page/layout/route before creating a new pattern.
+- Use Next DevTools MCP for errors, routes, logs, and version-accurate Next docs. Keep `pnpm dev` running.
+- Hosted on Vercel. Do not assume a long-lived Node server in this app (collaboration sockets belong in `apps/hocuspocus-server`).
+- Server-only secrets: no `NEXT_PUBLIC_*` for keys.
+- Sandbox vs `/ide` route choice: see `runtime-sandbox-ide.mdc`.

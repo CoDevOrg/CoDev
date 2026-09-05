@@ -1,0 +1,31 @@
+---
+description: CoDev monorepo layout, package boundaries, and where code should live.
+globs:
+  - apps/**
+  - packages/**
+  - services/**
+  - infra/**
+alwaysApply: false
+---
+
+# Architecture
+
+Place changes in the owning package. Do not reach across packages with ad hoc imports that bypass contracts.
+
+| Path | Role |
+|---|---|
+| `apps/web` | Next.js control plane (Vercel). RSC by default. |
+| `apps/hocuspocus-server` | Yjs/WebSocket collaboration; persist Yjs in Postgres. |
+| `apps/mobile` | Expo. Do not assume web APIs. |
+| `apps/cli` | CLI only. |
+| `packages/db` | Drizzle schema, queries, migrations. |
+| `packages/contracts` | Shared validated API contracts. |
+| `packages/config` | Config schemas. |
+| `packages/shared-types` | Shared TS types. |
+| `packages/theia-extension` | Theia/IDE extension. |
+| `packages/ide` | Orca fork. Own package manager. Not in root workspace. |
+| `services/orchestrator` | Rust runtime control. |
+| `infra/aws` | Firecracker. |
+| `infra/openfga` | AuthZ. |
+
+Validate at service and persistence boundaries (typically Zod). Follow existing modules; do not add a parallel data layer.

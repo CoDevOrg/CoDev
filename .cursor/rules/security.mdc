@@ -1,0 +1,15 @@
+---
+description: Auth, credentials, GitHub tokens, OpenFGA, and server-only secrets.
+globs:
+alwaysApply: false
+---
+
+# Security
+
+- Auth in `apps/web` is primarily **Clerk**. Follow existing Clerk server/client patterns.
+- Authorization infrastructure lives in **OpenFGA** (`infra/openfga`). Do not invent a second ACL.
+- Validate untrusted input with Zod at boundaries.
+- **Never** expose credentials via `NEXT_PUBLIC_*`.
+- Private GitHub credentials must not appear in URLs, command arguments, logs, browser pairing data, or persisted remotes.
+- Production infra: **AWS Systems Manager**, not inbound SSH.
+- Be extra careful with workspace isolation, session lifecycle, and Vercel/AWS boundary changes.

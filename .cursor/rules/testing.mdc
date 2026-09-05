@@ -1,0 +1,21 @@
+---
+description: When and how to run CoDev tests, lint, and typecheck.
+globs:
+  - "**/*.{test,spec}.{ts,tsx}"
+  - "**/e2e/**"
+alwaysApply: false
+---
+
+# Tests
+
+When behavior changes, add or update tests in the same change.
+
+From repo root:
+- Unit: `pnpm test`
+- Types: `pnpm typecheck`
+- Lint: `pnpm lint`
+- E2E: `pnpm test:e2e`
+- Rust: `pnpm rust:check` for orchestrator/infra Rust.
+
+Follow sibling test style (Vitest/Playwright/etc. already in that package). Do not add a second test runner.
+`packages/ide` uses its own tooling — do not assume root `pnpm test` covers it.

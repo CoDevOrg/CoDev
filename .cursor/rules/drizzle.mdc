@@ -1,0 +1,15 @@
+---
+description: PostgreSQL access via packages/db and Drizzle. Use when touching schema, queries, or migrations.
+globs:
+  - packages/db/**
+  - **/schema.ts
+  - **/drizzle/**
+alwaysApply: false
+---
+
+# Drizzle / Postgres
+
+- All DB access goes through `packages/db`. Do not query Postgres ad hoc from random apps.
+- Match existing Drizzle schema, relations, and migration style.
+- Validate at persistence boundaries (Zod). Do not trust raw JSON from the client.
+- Hocuspocus persists Yjs in Postgres — follow that package’s existing persistence code.
