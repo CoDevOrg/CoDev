@@ -70,6 +70,9 @@ export type WorktreeCreationRequest = {
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  /** Keep the branch when this worktree is removed, instead of letting Orca
+   *  delete the branch it minted. */
+  preserveBranchOnDelete?: boolean
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number

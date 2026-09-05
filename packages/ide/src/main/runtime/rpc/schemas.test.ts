@@ -187,6 +187,19 @@ describe('RPC optional pipe schemas', () => {
       branchNameOverride: 'feature/mobile-tasks',
       pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
     })
+    // The branch-preserving create must survive the wire: a client that asks
+    // for it and a host that drops it disagree about whether stopping an agent
+    // destroys its work.
+    const preserving = create.safeParse({
+      repo: 'id:repo-1',
+      name: 'claude-a1b2c3d4',
+      branchNameOverride: 'codev/claude-a1b2c3d4',
+      preserveBranchOnDelete: true
+    })
+    expect(preserving.success).toBe(true)
+    expect(preserving.success ? preserving.data.preserveBranchOnDelete : undefined).toBe(true)
+    // Omitting it is legal and leaves the host on its existing behavior.
+    expectParses(create, { repo: 'id:repo-1', name: 'plain' })
     expectParses(create, {
       repo: 'id:repo-gitlab',
       name: 'mr-7',

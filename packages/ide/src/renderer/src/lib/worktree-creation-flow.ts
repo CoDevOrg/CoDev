@@ -140,7 +140,8 @@ async function executeWorktreeCreation(
             : {}),
           ...(preparedRequest.linkedTaskSourceContext !== undefined
             ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
-            : {})
+            : {}),
+          ...(preparedRequest.preserveBranchOnDelete ? { preserveBranchOnDelete: true } : {})
         }
       )
   } catch (error) {

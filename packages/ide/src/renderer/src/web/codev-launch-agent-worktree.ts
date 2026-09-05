@@ -131,6 +131,10 @@ export function launchCodevAgentInOwnWorktree(
     ...(baseBranch ? { baseBranch } : {}),
     agent,
     branchNameOverride: branchName,
+    // The branch is the durable artifact of an agent's work — Stop and the
+    // automerge both promise it survives the worktree. Orca deletes a branch it
+    // minted unless the worktree says otherwise.
+    preserveBranchOnDelete: true,
     // Rename the worktree from the agent's first message so the sidebar reads
     // like a task, not `claude-a1b2c3d4`.
     pendingFirstAgentMessageRename: true,

@@ -10769,10 +10769,7 @@ export class OrcaRuntimeService {
     // A spawn published (or admission pending) this generation already
     // attaches the provider stream; a replacement under a reused id must not
     // read as the discovered never-attached session it replaced.
-    if (
-      this.spawnPublishedPtys.has(ptyId) ||
-      this.pendingPtyRegistrationIncarnations.has(ptyId)
-    ) {
+    if (this.spawnPublishedPtys.has(ptyId) || this.pendingPtyRegistrationIncarnations.has(ptyId)) {
       return false
     }
     // SSH panes have their own lease/reattach machinery.
@@ -20554,10 +20551,7 @@ export class OrcaRuntimeService {
         if (options.required) {
           throw error
         }
-        console.warn(
-          `[runtime] Could not inspect remote .gitignore for ${CONFIG_DIR_NAME}`,
-          error
-        )
+        console.warn(`[runtime] Could not inspect remote .gitignore for ${CONFIG_DIR_NAME}`, error)
         return
       }
       try {
@@ -21453,6 +21447,8 @@ export class OrcaRuntimeService {
     baseBranch?: string
     compareBaseRef?: string
     branchNameOverride?: string
+    /** Keep the created branch when this worktree is removed. */
+    preserveBranchOnDelete?: boolean
     linkedIssue?: number | null
     linkedPR?: number | null
     linkedLinearIssue?: string
@@ -22137,7 +22133,9 @@ export class OrcaRuntimeService {
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,
-      ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+      ...(checkoutExistingBranch || args.preserveBranchOnDelete
+        ? { preserveBranchOnDelete: true }
+        : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {

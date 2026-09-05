@@ -198,6 +198,8 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Keep the branch when this worktree is later removed. */
+      preserveBranchOnDelete?: boolean
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */

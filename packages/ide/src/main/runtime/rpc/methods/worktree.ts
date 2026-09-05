@@ -117,6 +117,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             baseBranch: params.baseBranch,
             compareBaseRef: params.compareBaseRef,
             branchNameOverride: params.branchNameOverride,
+            preserveBranchOnDelete: params.preserveBranchOnDelete,
             linkedIssue: params.linkedIssue,
             linkedPR: params.linkedPR,
             linkedLinearIssue: params.linkedLinearIssue,

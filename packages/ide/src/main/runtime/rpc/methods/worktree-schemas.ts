@@ -107,6 +107,9 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
+    // Optional and additive: an older host ignores it and keeps today's
+    // delete-the-branch behavior rather than failing the create.
+    preserveBranchOnDelete: z.boolean().optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),

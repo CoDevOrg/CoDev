@@ -3946,6 +3946,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const automationProvenanceRequest = options?.automationProvenanceRequest
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
+    const preserveBranchOnDelete = options?.preserveBranchOnDelete
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -3997,7 +3998,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {}),
             ...(startup ? { startup } : {}),
             ...(creationId ? { creationId } : {}),
-            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
+            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {}),
+            ...(preserveBranchOnDelete ? { preserveBranchOnDelete } : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           if (
@@ -4024,6 +4026,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(candidateBranchNameOverride
                       ? { branchNameOverride: candidateBranchNameOverride }
                       : {}),
+                    ...(preserveBranchOnDelete ? { preserveBranchOnDelete } : {}),
                     setupDecision,
                     sparseCheckout,
                     ...(displayName ? { displayName } : {}),

@@ -2250,6 +2250,10 @@ export type CreateWorktreeArgs = {
    *  name. Used when creating from an existing branch whose local branch name
    *  legitimately contains `/` while the worktree directory must not. */
   branchNameOverride?: string
+  /** Keep the created branch when this worktree is removed. Orca deletes a
+   *  branch it minted itself; a caller that treats the branch as the durable
+   *  artifact (CoDev's per-agent worktrees) opts out here. */
+  preserveBranchOnDelete?: boolean
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
