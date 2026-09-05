@@ -169,7 +169,10 @@ function RightSidebarInner(): React.JSX.Element {
         icon: ListChecks,
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
         shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
-        gitOnly: true
+        gitOnly: true,
+        // CoDev: no activity-bar button for now; still reachable from Source
+        // Control / the review checkpoint banner, and re-enable by dropping this.
+        hidden: typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
       },
       {
         id: 'ports',
@@ -208,6 +211,9 @@ function RightSidebarInner(): React.JSX.Element {
       }),
     [activityItems, isFolder, isFolderWorkspace, isSshRepo]
   )
+  // Why separate from visibleItems: a `hidden` item stays a valid, reachable
+  // route (deep links keep working) but gets no activity-bar button.
+  const iconStripItems = useMemo(() => visibleItems.filter((item) => !item.hidden), [visibleItems])
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
   const lastRightSidebarRouteRequestIdRef = useRef(rightSidebarRouteRequestId)
@@ -304,11 +310,11 @@ function RightSidebarInner(): React.JSX.Element {
   ) : null
 
   const topActivityLayout = useMemo(
-    () => getTopActivityBarLayout(visibleItems, topActivityStripWidth, effectiveTab),
-    [visibleItems, topActivityStripWidth, effectiveTab]
+    () => getTopActivityBarLayout(iconStripItems, topActivityStripWidth, effectiveTab),
+    [iconStripItems, topActivityStripWidth, effectiveTab]
   )
 
-  const sideActivityBarIcons = visibleItems.map((item) => (
+  const sideActivityBarIcons = iconStripItems.map((item) => (
     <ActivityBarButton
       key={item.id}
       item={item}

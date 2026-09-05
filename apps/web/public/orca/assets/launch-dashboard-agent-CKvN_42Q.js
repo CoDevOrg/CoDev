@@ -1,0 +1,1 @@
+import{Lg as e,a as t,cu as n}from"./web-index-XbaJ01Oz.js";import{t as r}from"./launch-agent-in-new-tab-ul1paU3K.js";function i({worktreeId:i,agent:a}){let o=t.getState(),s=n(o,i);return!o.getKnownWorktreeById(i,s)||!e(a,o.settings?.disabledTuiAgents)?!1:(o.setActiveWorktree(i,s),r({agent:a,worktreeId:i,launchSource:`unknown`})!==null)}export{i as t};
