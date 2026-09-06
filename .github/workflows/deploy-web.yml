@@ -1,0 +1,107 @@
+# Ships apps/web to Vercel from CI instead of through Vercel's own Git
+# integration.
+#
+# Vercel only builds a pushed commit when the GitHub account that pushed it
+# is a member of the Vercel team. Everyone here commits straight to main, so
+# every push from anyone other than the team owner — branch previews and
+# production alike — was silently never deployed ("you don't have perms").
+#
+# Running the deploy here with a team-scoped token makes it independent of
+# who pushed: a branch gets a preview, main gets production, every time. The
+# Vercel Git integration is turned off for this project
+# (git.deploymentEnabled = false in vercel.json), so this workflow is the
+# only thing that ships the web app now.
+name: Deploy web
+
+on:
+  push:
+    branches:
+      - "**"
+    # Mirrors scripts/vercel-ignore-build.sh: only the paths whose contents
+    # end up in, or change, the built web app. A push that touches only the
+    # orchestrator, infra, the IDE fork source, docs, or CI config still
+    # skips the minutes-long Next.js build.
+    paths:
+      - "apps/web/**"
+      - "packages/config/**"
+      - "packages/contracts/**"
+      - "packages/db/**"
+      - "packages/shared-types/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "vercel.json"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One deploy per branch. A newer push to the same branch supersedes an
+  # in-flight build, so cancel it rather than pay for both — the newer commit
+  # already sits on top of the one it cancels.
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Not secrets — these identifiers appear in every deployment URL and
+  # inspector link already. The token is the only credential.
+  VERCEL_ORG_ID: team_7q7NNUAwtqmpVMcrBRon5OSu
+  VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require VERCEL_TOKEN
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "::error::Set the repository secret VERCEL_TOKEN to a Vercel token scoped to the \"yousef20920's projects\" team (Vercel -> Account Settings -> Tokens)." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Resolve deploy target
+        id: target
+        run: |
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "flag=--prod" >> "$GITHUB_OUTPUT"
+            echo "env=production" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+            echo "env=preview" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=${{ steps.target.outputs.env }}
+
+      - name: Build
+        run: vercel build ${{ steps.target.outputs.flag }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt ${{ steps.target.outputs.flag }})"
+          echo "Deployed to: ${url}"
+          {
+            echo "### Vercel ${{ steps.target.outputs.env }} deploy"
+            echo ""
+            echo "${url}"
+          } >> "$GITHUB_STEP_SUMMARY"

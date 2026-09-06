@@ -3,6 +3,9 @@
   "framework": "nextjs",
   "fluid": true,
   "ignoreCommand": "bash \"$(git rev-parse --show-toplevel)/scripts/vercel-ignore-build.sh\"",
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 300
