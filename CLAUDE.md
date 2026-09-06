@@ -18,9 +18,14 @@ instead of improvising design decisions.
 
 ## Deploy & CI Cost Hygiene
 
-Every branch push builds a Vercel preview and every push to `main` builds a
-production deployment. Build minutes are the dominant cost on our Vercel bill
-and the budget is small.
+`apps/web` deploys through the **Deploy web** GitHub Actions workflow
+([`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml)), which
+runs `vercel build` + `vercel deploy --prebuilt` with a team token. Vercel's
+own Git integration is turned off (`git.deploymentEnabled: false` in both
+`vercel.json` files), so a push from any teammate deploys — not only the
+Vercel account owner's. A branch push builds a preview; a push to `main`
+builds and promotes production. Build minutes are the dominant cost on our
+Vercel bill and the budget is small.
 
 - **One commit per change.** When a `packages/ide` source change needs the
   embedded IDE bundle rebuilt, run `pnpm orca:web` and commit the regenerated
@@ -29,11 +34,14 @@ and the budget is small.
   doubles the build cost of a single change.
 - **Keep trivial changes off `main`** as their own pushes (comment fixes,
   doc-only tweaks). Each push to `main` is a full production build.
-- Commits touching only `services/`, `infra/`, `docs/`, `.github/`,
-  `packages/ide/` source (with no regenerated bundle), or
-  `packages/theia-extension/` are skipped by the Vercel Ignored Build Step at
-  [`scripts/vercel-ignore-build.sh`](scripts/vercel-ignore-build.sh). Update
-  that script's watch list if the web app's workspace dependencies change.
+- **Deploy web** only runs when a push touches `apps/web/**`,
+  `packages/{config,contracts,db,shared-types}/**`, `pnpm-lock.yaml`,
+  `package.json`, `pnpm-workspace.yaml`, or a `vercel.json`. Its `paths:`
+  filter mirrors [`scripts/vercel-ignore-build.sh`](scripts/vercel-ignore-build.sh),
+  which is kept as the reference list — update both together if the web app's
+  workspace dependencies change. A push touching only `services/`, `infra/`,
+  `docs/`, `.github/`, `packages/ide/` source (with no regenerated bundle), or
+  `packages/theia-extension/` builds no web deployment.
 
 ## Shared working tree
 

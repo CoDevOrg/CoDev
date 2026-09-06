@@ -31,11 +31,34 @@ are in [EMAIL.md](./EMAIL.md).
    Watch that run rather than deploying by hand, and let the host return to
    `stopped` afterwards. `infra/aws/deploy.sh` stays runnable locally, and the
    workflow can be started by hand from the Actions tab.
-4. Deploy a Vercel preview from that exact source state.
-5. Run `scripts/verify-deployment.sh <preview-url>`.
-6. Promote the verified preview. Vercel rebuilds the same source for the
-   production environment so production-scoped credentials are applied.
+4. Push. The **Deploy web** workflow
+   ([`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml))
+   deploys `apps/web` on every push — a branch gets a Vercel preview, `main`
+   gets built and promoted to production with `--prod`. Vercel's own Git
+   integration is off (`git.deploymentEnabled: false`), so this workflow is
+   the only path; watch its run rather than deploying by hand. It can also be
+   started from the Actions tab, and `vercel` runs locally against the linked
+   project.
+5. Run `scripts/verify-deployment.sh <preview-url>` against the preview the
+   branch run printed.
+6. Merge to `main`. The run on `main` rebuilds the same source for the
+   production environment so production-scoped credentials are applied, then
+   promotes it.
 7. Re-run the verification script and scan Vercel error logs.
+
+## Web deploy credentials
+
+The **Deploy web** workflow deploys with the Vercel CLI, so it needs one
+repository secret and refuses to run with a clear error until it is set:
+
+- `VERCEL_TOKEN` — a Vercel access token scoped to the team that owns the
+  `codev` project (Vercel → Account Settings → Tokens). The team and project
+  IDs are not secret and are set as `env:` in the workflow. Rotate the token
+  before it expires; the workflow's "Check token" step names the fix in its
+  failure message.
+
+Nothing else is required — a token push deploys regardless of who pushed,
+which is the point of not using Vercel's Git integration.
 
 ## Runtime deploy credentials
 

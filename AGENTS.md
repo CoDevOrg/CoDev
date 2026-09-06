@@ -79,9 +79,15 @@ this repo when a skill already answers them.
 
 ## Deploy & CI Cost Hygiene
 
-Every branch push builds a Vercel preview, and every push to `main` builds a
-production deployment. Build minutes are the dominant cost on our Vercel bill
-and the budget is small, so keep builds proportional to real change.
+`apps/web` deploys through the **Deploy web** GitHub Actions workflow
+(`.github/workflows/deploy-web.yml`), which runs `vercel build` +
+`vercel deploy --prebuilt` with a team token. Vercel's own Git integration is
+turned off (`git.deploymentEnabled: false` in both `vercel.json` files) so a
+push from any teammate deploys, not only the Vercel account owner's — it needs
+the `VERCEL_TOKEN` repository secret. A branch push builds a Vercel preview,
+and a push to `main` builds and promotes a production deployment. Build
+minutes are the dominant cost on our Vercel bill and the budget is small, so
+keep builds proportional to real change.
 
 - **One commit per change.** When a `packages/ide` source change needs the
   embedded IDE bundle rebuilt, run `pnpm orca:web` and include the regenerated
@@ -92,11 +98,14 @@ and the budget is small, so keep builds proportional to real change.
   tweaks split off from code). Each one costs a full production build.
 - **Prefer one push over many small pushes** to the same branch in quick
   succession while iterating.
-- Commits that only touch `services/`, `infra/`, `docs/`, `.github/`,
-  `packages/ide/` source (without a regenerated bundle), or `packages/theia-extension/`
-  are skipped automatically by the Vercel Ignored Build Step
-  (`scripts/vercel-ignore-build.sh`). Keep that script's watch list current if
-  the web app's workspace dependencies change.
+- The **Deploy web** workflow only runs when a push touches `apps/web/**`,
+  `packages/{config,contracts,db,shared-types}/**`, `pnpm-lock.yaml`,
+  `package.json`, `pnpm-workspace.yaml`, or a `vercel.json`. Its `paths:`
+  filter mirrors the Vercel Ignored Build Step (`scripts/vercel-ignore-build.sh`),
+  kept as the reference list — update both together if the web app's workspace
+  dependencies change. A commit that only touches `services/`, `infra/`,
+  `docs/`, `.github/`, `packages/ide/` source (without a regenerated bundle),
+  or `packages/theia-extension/` builds no web deployment.
 
 ## Production Test Accounts
 
