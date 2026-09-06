@@ -49,6 +49,7 @@ env:
   # inspector link already. The token is the only credential.
   VERCEL_ORG_ID: team_7q7NNUAwtqmpVMcrBRon5OSu
   VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV
+  VERCEL_SCOPE: yousef20920s-projects
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
@@ -78,6 +79,14 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Check token access
+        run: |
+          echo "whoami: $(vercel whoami --token="$VERCEL_TOKEN" 2>&1)"
+          echo "--- teams the token can see ---"
+          vercel teams ls --token="$VERCEL_TOKEN" 2>&1 || true
+          echo "--- projects in $VERCEL_SCOPE ---"
+          vercel project ls --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 || true
+
       - name: Resolve deploy target
         id: target
         run: |
@@ -90,7 +99,7 @@ jobs:
           fi
 
       - name: Pull Vercel project settings
-        run: vercel pull --yes --environment=${{ steps.target.outputs.env }}
+        run: vercel pull --yes --scope="$VERCEL_SCOPE" --environment=${{ steps.target.outputs.env }}
 
       - name: Build
         run: vercel build ${{ steps.target.outputs.flag }}
@@ -98,7 +107,7 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          url="$(vercel deploy --prebuilt ${{ steps.target.outputs.flag }})"
+          url="$(vercel deploy --prebuilt --scope="$VERCEL_SCOPE" ${{ steps.target.outputs.flag }})"
           echo "Deployed to: ${url}"
           {
             echo "### Vercel ${{ steps.target.outputs.env }} deploy"
