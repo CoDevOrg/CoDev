@@ -79,12 +79,14 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Check token access
+      - name: Check token
         run: |
-          echo "whoami: $(vercel whoami --token="$VERCEL_TOKEN" 2>&1)"
-          echo "--- teams the token can see ---"
-          vercel teams ls --token="$VERCEL_TOKEN" 2>&1 || true
-          echo "--- projects in $VERCEL_SCOPE ---"
+          if ! who="$(vercel whoami --token="$VERCEL_TOKEN" 2>&1)"; then
+            echo "::error::VERCEL_TOKEN is set but not a valid Vercel token (\`vercel whoami\` said: ${who}). Create one at https://vercel.com/account/tokens scoped to the \"yousef20920's projects\" team and paste only the token value into the repository secret VERCEL_TOKEN."
+            exit 1
+          fi
+          echo "Authenticated as: ${who}"
+          echo "--- projects visible in $VERCEL_SCOPE ---"
           vercel project ls --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 || true
 
       - name: Resolve deploy target
