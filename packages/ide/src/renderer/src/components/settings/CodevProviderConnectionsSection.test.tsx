@@ -112,6 +112,21 @@ describe('CodevProviderConnectionsView', () => {
     expect(html).not.toContain('fixture')
   })
 
+  it('shows the in-app Connect Claude button only when the deployment enables it', () => {
+    const withoutFlag = renderToStaticMarkup(
+      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
+    )
+    expect(withoutFlag).not.toContain('Connect Claude')
+
+    const withFlag = renderToStaticMarkup(
+      <CodevProviderConnectionsView
+        connected
+        snapshot={{ ...disconnectedSnapshot, hostedClaudeConnect: true }}
+      />
+    )
+    expect(withFlag).toContain('Connect Claude')
+  })
+
   it('never renders the fixture OAuth flow', () => {
     const html = renderToStaticMarkup(
       <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
