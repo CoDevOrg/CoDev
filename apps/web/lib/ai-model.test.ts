@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@ai-sdk/anthropic", () => ({
+  createAnthropic: vi.fn(() => (model: string) => ({ model })),
+}));
+
+import { createAnthropic } from "@ai-sdk/anthropic";
+
 import {
+  createAgentModel,
   DEFAULT_OPENAI_MODEL,
   getOpenAIModel,
   getSelectableAgentModels,
   resolveSelectableAgentModel,
 } from "./ai-model";
+
+const createAnthropicMock = vi.mocked(createAnthropic);
 
 const originalModel = process.env.CODEV_OPENAI_MODEL;
 const originalModels = process.env.CODEV_AGENT_MODELS;
@@ -22,6 +31,41 @@ afterEach(() => {
   } else {
     process.env.CODEV_AGENT_MODELS = originalModels;
   }
+});
+
+describe("createAgentModel anthropic auth", () => {
+  it("sends the OAuth beta header for a subscription token, not for an API key", () => {
+    createAnthropicMock.mockClear();
+    createAgentModel(
+      {
+        provider: "anthropic",
+        source: "USER",
+        authType: "OAUTH_TOKEN",
+        apiKeyOrToken: "sk-ant-oat01-x",
+      } as never,
+      "claude-sonnet-4-5",
+    );
+    expect(createAnthropicMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authToken: "sk-ant-oat01-x",
+        headers: { "anthropic-beta": "oauth-2025-04-20" },
+      }),
+    );
+
+    createAnthropicMock.mockClear();
+    createAgentModel(
+      {
+        provider: "anthropic",
+        source: "USER",
+        authType: "API_KEY",
+        apiKeyOrToken: "sk-ant-api03-y",
+      } as never,
+      "claude-sonnet-4-5",
+    );
+    expect(createAnthropicMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      "headers",
+    );
+  });
 });
 
 describe("OpenAI model configuration", () => {

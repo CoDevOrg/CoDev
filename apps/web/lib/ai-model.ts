@@ -206,7 +206,12 @@ export function createAgentModel(
         : {};
       const anthropic = createAnthropic(
         credential.authType === "OAUTH_TOKEN"
-          ? { authToken: credential.apiKeyOrToken, ...endpoint }
+          ? {
+              authToken: credential.apiKeyOrToken,
+              // Anthropic gates subscription-token inference behind this beta.
+              headers: { "anthropic-beta": "oauth-2025-04-20" },
+              ...endpoint,
+            }
           : { apiKey: credential.apiKeyOrToken, ...endpoint },
       );
       return anthropic(model);
