@@ -23,12 +23,21 @@ pnpm install --frozen-lockfile
 if [ "${target_arch}" = arm64 ]; then
   export ORCA_LINUX_ARM64_RELEASE=1
 fi
-# --publish never: this path only wants the built AppImage's bytes to
-# repackage into the orca-serve tarball below. The electron-builder config
-# still carries upstream Orca's `publish` block (github / stablyai), which
-# electron-builder would otherwise act on under CI and fail on a missing
-# GH_TOKEN while trying to push a GitHub release nobody asked for.
-pnpm run build:linux -- --"${target_arch}" --publish never
+# Run electron-builder directly rather than `pnpm run build:linux -- ...`: that
+# script does not forward extra args (pnpm passes them through as a literal
+# `-- ...` that electron-builder/yargs treats as positional and ignores), so
+# `--publish never` and `--<arch>` never took effect. This path only needs the
+# built AppImage's bytes to repackage into the orca-serve tarball below, and
+# `--publish never` is required because the electron-builder config still
+# carries upstream Orca's `publish` block (github / stablyai) which
+# electron-builder auto-acts on under CI, then dies on a missing GH_TOKEN.
+pnpm run build:desktop
+pnpm run ensure:electron-runtime
+pnpm exec electron-builder \
+  --config config/electron-builder.config.cjs \
+  --linux AppImage deb \
+  --"${target_arch}" \
+  --publish never
 
 # Extract the AppImage's appended SquashFS directly rather than executing its
 # static ELF launcher, which cannot run under Apple Container's
