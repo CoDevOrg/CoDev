@@ -10,6 +10,8 @@ import {
   redactClaudeSecrets,
   resolveClaudeConnectionScope,
   validateClaudeOAuthToken,
+  verifyClaudeInferenceAccess,
+  type ClaudeInferenceVerifier,
 } from "./claude-connection";
 import { getDatabase } from "./database";
 
@@ -229,6 +231,7 @@ export async function submitClaudeConnectionCode(
 export async function getClaudeConnectionSession(
   input: { userId: string; sessionId: string },
   runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  verify: ClaudeInferenceVerifier = verifyClaudeInferenceAccess,
 ): Promise<ClaudeConnectionSessionView> {
   const row = await loadOwnedSession(input.userId, input.sessionId);
 
@@ -255,6 +258,7 @@ export async function getClaudeConnectionSession(
   // result.status === "ready"
   try {
     const oauthToken = validateClaudeOAuthToken(result.oauthToken);
+    await verify(oauthToken);
     await persistClaudeOAuthToken({
       scopeType: row.scopeType as "USER" | "ORGANIZATION",
       scopeId: row.scopeId,

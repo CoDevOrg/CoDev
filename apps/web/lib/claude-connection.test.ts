@@ -9,6 +9,7 @@ vi.mock("./settings-access", () => ({
 import {
   ClaudeConnectionError,
   redactClaudeSecrets,
+  verifyClaudeInferenceAccess,
   resolveClaudeConnectionScope,
   saveClaudeConnectionForUser,
   validateClaudeOAuthToken,
@@ -44,6 +45,27 @@ describe("redactClaudeSecrets", () => {
     expect(out).not.toMatch(/sk-ant-[A-Za-z0-9_-]{12,}/);
     expect(out).toContain("login ok");
     expect(out).toContain("exit 0");
+  });
+});
+
+describe("verifyClaudeInferenceAccess", () => {
+  it("passes on 200, throws on a hard auth rejection, tolerates a 429", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 429 });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
+    ).resolves.toBeUndefined();
+    await expect(
+      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
+    ).rejects.toBeInstanceOf(ClaudeConnectionError);
+    await expect(
+      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
+    ).resolves.toBeUndefined();
+    vi.unstubAllGlobals();
   });
 });
 

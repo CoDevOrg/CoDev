@@ -142,11 +142,34 @@ describe("getClaudeConnectionSession", () => {
     const view = await getClaudeConnectionSession(
       { userId: "u1", sessionId: "session-1" },
       runner,
+      async () => {},
     );
     expect(view.status).toBe("connected");
     expect(saveProviderCredential).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "anthropic", accessToken: TOKEN }),
     );
+    expect(runner.dispose).toHaveBeenCalled();
+  });
+
+  it("fails the session when the health check rejects the token", async () => {
+    const runner = fakeRunner({
+      poll: vi.fn(async () => ({
+        status: "ready" as const,
+        oauthToken: TOKEN,
+      })),
+    });
+    await startClaudeConnectionSession({ userId: "u1" }, runner);
+    const view = await getClaudeConnectionSession(
+      { userId: "u1", sessionId: "session-1" },
+      runner,
+      async () => {
+        throw new Error(
+          "Anthropic rejected the connected account for inference.",
+        );
+      },
+    );
+    expect(view.status).toBe("failed");
+    expect(saveProviderCredential).not.toHaveBeenCalled();
     expect(runner.dispose).toHaveBeenCalled();
   });
 
