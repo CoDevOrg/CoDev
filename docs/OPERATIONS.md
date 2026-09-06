@@ -25,13 +25,35 @@ are in [EMAIL.md](./EMAIL.md).
 1. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
    `pnpm build`, `pnpm rust:check`, and `pnpm test:e2e`.
 2. Apply the Drizzle migration with `pnpm db:migrate`.
-3. If Rust or AWS changed, run `infra/aws/deploy.sh`, record its release, and
-   allow the host to return to `stopped`.
+3. A push to `main` that touches `packages/ide/`, `services/`, or `infra/aws/`
+   now runs `infra/aws/deploy.sh` itself, through the **Deploy runtime**
+   workflow — anyone's push ships the runtime, not just a maintainer's laptop.
+   Watch that run rather than deploying by hand, and let the host return to
+   `stopped` afterwards. `infra/aws/deploy.sh` stays runnable locally, and the
+   workflow can be started by hand from the Actions tab.
 4. Deploy a Vercel preview from that exact source state.
 5. Run `scripts/verify-deployment.sh <preview-url>`.
 6. Promote the verified preview. Vercel rebuilds the same source for the
    production environment so production-scoped credentials are applied.
 7. Re-run the verification script and scan Vercel error logs.
+
+## Runtime deploy credentials
+
+The **Deploy runtime** workflow assumes an AWS role over GitHub's OIDC
+provider, so no long-lived AWS keys live in the repository. It needs one
+repository variable, and refuses to run with a clear error until it is set:
+
+- `AWS_DEPLOY_ROLE_ARN` — the role GitHub assumes. Its trust policy must accept
+  `token.actions.githubusercontent.com` for `repo:CoDevOrg/CoDev:ref:refs/heads/main`,
+  and it needs the permissions `deploy.sh` uses: CloudFormation on the
+  `codev-runtime-artifacts` and `codev-runtime` stacks, S3 on the release
+  bucket, IAM to maintain the two `codev-vercel-*` roles, EC2/SSM for the host,
+  and `sts:GetCallerIdentity`.
+- `AWS_REGION` — optional, defaults to `us-east-2`.
+
+If the account has no GitHub OIDC provider yet, add one for
+`https://token.actions.githubusercontent.com` with the `sts.amazonaws.com`
+audience before creating the role.
 
 ## Lifecycle recovery
 
