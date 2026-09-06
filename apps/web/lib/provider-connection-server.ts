@@ -7,6 +7,7 @@ import {
   saveCursorCredential,
   saveOpenAICredential,
 } from "./credentials";
+import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
 import { disconnectHostedCodexSubscription } from "./hosted-codex-subscription-credentials";
 import { getOAuthFlowMode } from "./oauth";
 import {
@@ -71,6 +72,7 @@ export async function loadProviderConnectionSnapshot(
       claude: getOAuthFlowMode("claude"),
       cursor: "cursor_deeplink",
     },
+    hostedClaudeConnect: isHostedClaudeConnectEnabled(),
   });
 }
 

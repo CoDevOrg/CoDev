@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Button } from '@/components/ui/button'
+import { CodevClaudeConnectRow } from './CodevClaudeConnectRow'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import {
   getCodevBridgeSnapshot,
@@ -31,6 +32,8 @@ export type CodevProviderConnectionSnapshot = {
   viewer: { id: string; name: string }
   connections: CodevProviderConnection[]
   cliSubscriptions?: CodevCliSubscription[]
+  /** Whether the in-app "Connect Claude" flow is available in this deployment. */
+  hostedClaudeConnect?: boolean
 }
 
 export type CodevProviderConnectionDrafts = Partial<
@@ -45,8 +48,12 @@ const CLI_PROVIDER_BY_CONNECTION: Record<
   anthropic: 'claude'
 }
 
+const EMPTY_DRAFTS: CodevProviderConnectionDrafts = {}
+
 function statusLabel(connection: CodevProviderConnection): string {
-  if (connection.status !== 'connected') return 'Not connected'
+  if (connection.status !== 'connected') {
+    return 'Not connected'
+  }
   const ending = connection.lastFour ? ` · ending ${connection.lastFour}` : ''
   const owner = connection.suppliedBy ? ` · supplied by ${connection.suppliedBy}` : ''
   const kind = connection.credentialType === 'OAUTH_TOKEN' ? 'OAuth' : 'API key'
@@ -56,12 +63,13 @@ function statusLabel(connection: CodevProviderConnection): string {
 export function CodevProviderConnectionsView({
   connected,
   snapshot,
-  drafts = {},
+  drafts = EMPTY_DRAFTS,
   busy = '',
   message = '',
   onDraftChange,
   onSave,
-  onRevoke
+  onRevoke,
+  onClaudeConnected
 }: {
   connected: boolean
   snapshot: CodevProviderConnectionSnapshot | null
@@ -71,8 +79,10 @@ export function CodevProviderConnectionsView({
   onDraftChange?: (provider: CodevProviderConnection['provider'], value: string) => void
   onSave?: (provider: CodevProviderConnection['provider']) => void
   onRevoke?: (provider: CodevProviderConnection['provider']) => void
+  onClaudeConnected?: () => void
 }): JSX.Element {
   const cliSubscriptions = snapshot?.cliSubscriptions ?? []
+  const hostedClaudeConnect = snapshot?.hostedClaudeConnect ?? false
   return (
     <div
       id="codev-provider-connections"
@@ -84,7 +94,9 @@ export function CodevProviderConnectionsView({
         description="Sign in with the official CoDev CLI, or paste a personal OpenAI or Anthropic API key instead. Keys stay encrypted on the CoDev server and are never shown after you save them."
       />
       {!connected ? (
-        <p className="text-xs text-muted-foreground">Connect the CoDev bridge to manage provider connections.</p>
+        <p className="text-xs text-muted-foreground">
+          Connect the CoDev bridge to manage provider connections.
+        </p>
       ) : (
         <ul className="space-y-2" aria-label="Provider connection status">
           {(snapshot?.connections ?? []).map((connection) => {
@@ -92,7 +104,8 @@ export function CodevProviderConnectionsView({
             const revoking = busy === `revoke:${connection.provider}`
             const disabled = !connected || busy !== ''
             const cli = cliSubscriptions.find(
-              (subscription) => subscription.provider === CLI_PROVIDER_BY_CONNECTION[connection.provider]
+              (subscription) =>
+                subscription.provider === CLI_PROVIDER_BY_CONNECTION[connection.provider]
             )
             return (
               <li
@@ -110,13 +123,25 @@ export function CodevProviderConnectionsView({
                       'Connected'
                     ) : (
                       <>
-                        Not connected · run <code>{cli.command}</code> · or paste an API key below instead
+                        Not connected · run <code>{cli.command}</code> · or paste an API key below
+                        instead
                       </>
                     )}
                   </p>
                 ) : null}
+                {connection.provider === 'anthropic' &&
+                hostedClaudeConnect &&
+                connection.status !== 'connected' ? (
+                  <CodevClaudeConnectRow
+                    disabled={!connected || busy !== ''}
+                    onConnected={() => onClaudeConnected?.()}
+                  />
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="sr-only" htmlFor={`codev-connection-key-${connection.provider}`}>
+                  <label
+                    className="sr-only"
+                    htmlFor={`codev-connection-key-${connection.provider}`}
+                  >
                     {connection.label} API key
                   </label>
                   <input
@@ -180,14 +205,20 @@ export function CodevProviderConnectionsSection(): JSX.Element | null {
   useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
 
   useEffect(() => {
-    if (!embedded || bridge.status !== 'connected') return
+    if (!embedded || bridge.status !== 'connected') {
+      return
+    }
     let cancelled = false
     void requestCodevBridge<CodevProviderConnectionSnapshot>('connections.list')
       .then((result) => {
-        if (!cancelled) setSnapshot(result)
+        if (!cancelled) {
+          setSnapshot(result)
+        }
       })
       .catch(() => {
-        if (!cancelled) setSnapshot(null)
+        if (!cancelled) {
+          setSnapshot(null)
+        }
       })
     return () => {
       cancelled = true
@@ -231,7 +262,20 @@ export function CodevProviderConnectionsSection(): JSX.Element | null {
     }
   }
 
-  if (!embedded) return null
+  async function reloadAfterClaudeConnect(): Promise<void> {
+    setMessage('')
+    try {
+      const result = await requestCodevBridge<CodevProviderConnectionSnapshot>('connections.list')
+      setSnapshot(result)
+      setMessage('Anthropic connected with your Claude subscription.')
+    } catch {
+      setMessage('Claude connected. Reopen settings to refresh.')
+    }
+  }
+
+  if (!embedded) {
+    return null
+  }
 
   return (
     <CodevProviderConnectionsView
@@ -248,6 +292,9 @@ export function CodevProviderConnectionsSection(): JSX.Element | null {
       }}
       onRevoke={(provider) => {
         void revoke(provider)
+      }}
+      onClaudeConnected={() => {
+        void reloadAfterClaudeConnect()
       }}
     />
   )

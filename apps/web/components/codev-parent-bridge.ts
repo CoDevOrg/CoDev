@@ -71,6 +71,9 @@ export type CodevBridgeMethod =
   | "connections.list"
   | "connections.put"
   | "connections.revoke"
+  | "claudeConnect.start"
+  | "claudeConnect.submitCode"
+  | "claudeConnect.status"
   | "profile.get"
   | "team.roster"
   | "team.channels"
@@ -157,6 +160,9 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.list",
   "connections.put",
   "connections.revoke",
+  "claudeConnect.start",
+  "claudeConnect.submitCode",
+  "claudeConnect.status",
   "profile.get",
   "team.roster",
   "team.channels",
@@ -285,6 +291,61 @@ async function readJson(
     error?: unknown;
   } | null;
 }
+
+/**
+ * Relay a "Connect Claude" step to the member's personal routes. Shared by
+ * both bridge surfaces — the flow is always personal-scoped regardless of
+ * whether a workspace is in context.
+ */
+async function relayClaudeConnect(
+  method: CodevBridgeMethod,
+  params: Record<string, unknown> | undefined,
+  fetcher: typeof fetch,
+): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
+  const base = "/api/personal/claude-connection/session";
+  let path = base;
+  let init: RequestInit = { cache: "no-store" };
+
+  if (method === "claudeConnect.start") {
+    init = { method: "POST", cache: "no-store" };
+  } else {
+    const sessionId = params?.sessionId;
+    if (typeof sessionId !== "string" || !sessionId) {
+      return { ok: false, error: "A connection session id is required." };
+    }
+    if (method === "claudeConnect.submitCode") {
+      const code = params?.code;
+      if (typeof code !== "string" || !code.trim()) {
+        return { ok: false, error: "Enter the authorization code." };
+      }
+      path = `${base}/${encodeURIComponent(sessionId)}/code`;
+      init = {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: code.trim() }),
+        cache: "no-store",
+      };
+    } else {
+      path = `${base}/${encodeURIComponent(sessionId)}`;
+    }
+  }
+
+  const response = await fetcher(path, init);
+  const payload = await readJson(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: jsonError(payload, "CoDev could not complete the Claude step."),
+    };
+  }
+  return { ok: true, result: payload };
+}
+
+const CLAUDE_CONNECT_METHODS = new Set<CodevBridgeMethod>([
+  "claudeConnect.start",
+  "claudeConnect.submitCode",
+  "claudeConnect.status",
+]);
 
 export async function executeCodevBridgeRequest(
   workspaceId: string,
@@ -656,6 +717,15 @@ export async function executeCodevBridgeRequest(
         );
       }
       return succeed(payload);
+    }
+
+    if (CLAUDE_CONNECT_METHODS.has(request.method)) {
+      const relayed = await relayClaudeConnect(
+        request.method,
+        request.params,
+        fetcher,
+      );
+      return relayed.ok ? succeed(relayed.result) : fail(relayed.error);
     }
 
     if (request.method === "activity.list") {
@@ -1119,6 +1189,9 @@ const PERSONAL_BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "connections.list",
   "connections.put",
   "connections.revoke",
+  "claudeConnect.start",
+  "claudeConnect.submitCode",
+  "claudeConnect.status",
   "profile.get",
 ]);
 
@@ -1211,6 +1284,15 @@ export async function executePersonalCodevBridgeRequest(
         );
       }
       return succeed(payload);
+    }
+
+    if (CLAUDE_CONNECT_METHODS.has(request.method)) {
+      const relayed = await relayClaudeConnect(
+        request.method,
+        request.params,
+        fetcher,
+      );
+      return relayed.ok ? succeed(relayed.result) : fail(relayed.error);
     }
 
     if (request.method === "profile.get") {
