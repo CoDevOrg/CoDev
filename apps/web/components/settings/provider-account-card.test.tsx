@@ -147,6 +147,73 @@ describe("ProviderAccountCard", () => {
     expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
   });
 
+  it("connects Claude in-app: start, paste the code, poll to connected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "sess-1",
+          status: "awaiting_code",
+          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+          failureReason: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ id: "sess-1", status: "exchanging" }),
+      )
+      .mockResolvedValue(
+        jsonResponse({
+          id: "sess-1",
+          status: "connected",
+          authorizeUrl: null,
+          failureReason: null,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "anthropic", label: "Anthropic" })}
+        hostedClaudeConnect
+        label="Claude"
+        logo={null}
+        subscription={subscription({
+          provider: "claude",
+          label: "Claude Code",
+          connectMode: "manual_code",
+          command: "codev claude-auth",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
+
+    const input = await screen.findByPlaceholderText("Paste code");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/personal/claude-connection/session",
+    );
+    expect(window.open).toHaveBeenCalledWith(
+      "https://platform.claude.com/oauth/authorize?x=1",
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    fireEvent.change(input, { target: { value: "code123#state" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Claude is connected.",
+      );
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/personal/claude-connection/session/sess-1/code",
+    );
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "/api/personal/claude-connection/session/sess-1",
+    );
+  });
+
   it("offers Codex only an API key and the CLI, no browser OAuth button", () => {
     render(
       <ProviderAccountCard

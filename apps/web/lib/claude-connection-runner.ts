@@ -186,3 +186,11 @@ export function resolveClaudeRunner(): ClaudeSetupTokenRunner {
   }
   return unavailableClaudeRunner;
 }
+
+/**
+ * Whether the in-app "Connect Claude" flow can actually run. When false the
+ * settings UI shows only the API-key and CoDev CLI paths.
+ */
+export function isHostedClaudeConnectEnabled(): boolean {
+  return resolveClaudeRunner() !== unavailableClaudeRunner;
+}

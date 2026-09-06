@@ -8,6 +8,7 @@ import {
   OrcaPageHeader,
   OrcaPageShell,
 } from "@/components/settings/orca-style";
+import { isHostedClaudeConnectEnabled } from "@/lib/claude-connection-runner";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import { requireUser } from "@/lib/session";
 
@@ -20,6 +21,7 @@ import { requireUser } from "@/lib/session";
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
   const snapshot = await loadProviderConnectionSnapshot(user);
+  const hostedClaudeConnect = isHostedClaudeConnectEnabled();
 
   const cards = [
     {
@@ -60,6 +62,9 @@ export default async function PersonalProvidersPage() {
         return (
           <ProviderAccountCard
             connection={connection}
+            hostedClaudeConnect={
+              hostedClaudeConnect && card.connection === "anthropic"
+            }
             key={card.label}
             label={card.label}
             logo={card.logo}

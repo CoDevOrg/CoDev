@@ -13,6 +13,7 @@ vi.mock("./settings-access", () => ({
 
 import { unavailableClaudeRunner } from "./claude-connection-session";
 import {
+  isHostedClaudeConnectEnabled,
   resolveClaudeRunner,
   subprocessClaudeRunner,
 } from "./claude-connection-runner";
@@ -70,8 +71,10 @@ describe("resolveClaudeRunner", () => {
   it("is unavailable unless explicitly opted in", () => {
     vi.stubEnv("CLAUDE_CONNECTION_RUNNER", "");
     expect(resolveClaudeRunner()).toBe(unavailableClaudeRunner);
+    expect(isHostedClaudeConnectEnabled()).toBe(false);
     vi.stubEnv("CLAUDE_CONNECTION_RUNNER", "subprocess");
     expect(resolveClaudeRunner()).toBe(subprocessClaudeRunner);
+    expect(isHostedClaudeConnectEnabled()).toBe(true);
   });
 });
 
