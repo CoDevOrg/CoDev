@@ -92,6 +92,8 @@ export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
   connections: ProviderConnectionRecord[];
   cliSubscriptions: CliSubscriptionRecord[];
+  /** Whether the in-app "Connect Claude" flow can run in this deployment. */
+  hostedClaudeConnect: boolean;
 };
 
 export type ProviderCredentialStatus = {
@@ -174,6 +176,7 @@ export function toProviderConnectionSnapshot(input: {
   connectModes?: Partial<
     Record<CliSubscriptionProvider, SubscriptionConnectMode>
   >;
+  hostedClaudeConnect?: boolean;
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -190,6 +193,7 @@ export function toProviderConnectionSnapshot(input: {
       input.cliSubscriptionStatuses ?? {},
       input.connectModes ?? {},
     ),
+    hostedClaudeConnect: input.hostedClaudeConnect ?? false,
   };
 }
 
