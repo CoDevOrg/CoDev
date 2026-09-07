@@ -153,7 +153,9 @@ export async function startClaudeConnectionSession(
       );
   } catch (error) {
     logEvent("warn", "claude_connection.stale_sweep_failed", {
-      detail: error instanceof Error ? error.message : String(error),
+      detail: redactClaudeSecrets(
+        error instanceof Error ? error.message : String(error),
+      ),
     });
   }
 
