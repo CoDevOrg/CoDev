@@ -1394,16 +1394,25 @@ impl GuestService {
             }
         }
         self.wait_for_codex_idle();
-        self.claude_setups
-            .lock()
-            .expect("claude setup map lock")
-            .retain(|_, session| {
+        {
+            let mut setups = self
+                .claude_setups
+                .lock()
+                .expect("claude setup map lock");
+            setups.retain(|_, session| {
                 !session
                     .output
                     .lock()
                     .expect("claude setup output lock")
                     .terminal()
             });
+            let live_session_ids: Vec<String> = setups.keys().cloned().collect();
+            drop(setups);
+            self.claude_setup_idempotency
+                .lock()
+                .expect("claude setup idempotency lock")
+                .retain(|_, value| live_session_ids.contains(&*value));
+        }
 
         let pty = native_pty_system()
             .openpty(PtySize {
