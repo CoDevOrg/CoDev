@@ -5,6 +5,7 @@ vi.mock("./credentials", () => ({ saveProviderCredential: vi.fn() }));
 vi.mock("./settings-access", () => ({
   requireOrganizationSettingsWrite: vi.fn(),
 }));
+vi.mock("./observability", () => ({ logEvent: vi.fn() }));
 
 /**
  * A single-row stand-in for the `claude_connection_sessions` table. The module

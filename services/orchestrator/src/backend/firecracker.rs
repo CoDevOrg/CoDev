@@ -26,12 +26,14 @@ use tracing::{info, warn};
 use crate::{
     guest_client::GuestClient,
     model::{
-        CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest,
-        ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
-        PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
-        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
+        ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse,
+        CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
+        PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
+        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+        WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
         WorktreeReviewResponse, WriteFileRequest,
     },
 };
@@ -517,6 +519,51 @@ impl FirecrackerBackend {
     pub async fn close_codex_exec(&self, workspace_id: &str, session_id: &str) -> Result<()> {
         let machine = self.machine(workspace_id).await?;
         machine.guest.close_codex_exec(session_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn start_claude_setup(
+        &self,
+        workspace_id: &str,
+        request: ClaudeSetupStartRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.start_claude_setup(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn input_claude_setup_code(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupCodeRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine
+            .guest
+            .input_claude_setup_code(session_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn poll_claude_setup(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupPollRequest,
+    ) -> Result<ClaudeSetupPollResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.poll_claude_setup(session_id, &request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn close_claude_setup(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.close_claude_setup(session_id).await?;
         self.mark_activity(&machine);
         Ok(())
     }

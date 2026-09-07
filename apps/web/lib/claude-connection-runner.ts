@@ -8,6 +8,15 @@ import {
   type ClaudeRunnerPollResult,
   type ClaudeSetupTokenRunner,
 } from "./claude-connection-session";
+import {
+  closeClaudeSetupTokenInSandbox,
+  destroySandbox,
+  provisionSandbox,
+  pollClaudeSetupTokenInSandbox,
+  startClaudeSetupTokenInSandbox,
+  submitClaudeSetupTokenCodeInSandbox,
+} from "./orchestrator";
+import { logEvent } from "./observability";
 
 /**
  * Runs the official `claude setup-token` binary as a child process and bridges
@@ -46,6 +55,9 @@ function setupCommand(): { command: string; args: string[] } {
 
 const START_TIMEOUT_MS = 30_000;
 const PROC_TTL_MS = 15 * 60 * 1_000;
+const ORCHESTRATOR_SESSION_TTL_MS = 10 * 60 * 1_000;
+const ORCHESTRATOR_SANDBOX_LIFECYCLE_MS = 4 * 60 * 60 * 1_000;
+const EMPTY_AUTH_REPOSITORY_FILE = "Hosted Claude connection runner.\n";
 
 type RunnerProcess = {
   child: ChildProcessWithoutNullStreams;
@@ -175,15 +187,123 @@ export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {
   },
 };
 
+function encodeOrchestratorRunnerId(workspaceId: string, sessionId: string) {
+  return `${workspaceId}:${sessionId}`;
+}
+
+function decodeOrchestratorRunnerId(runnerId: string) {
+  const [workspaceId, sessionId, extra] = runnerId.split(":");
+  if (!workspaceId || !sessionId || extra !== undefined) {
+    throw new Error("The Claude connection runner id is invalid.");
+  }
+  return { workspaceId, sessionId };
+}
+
+export const orchestratorClaudeRunner: ClaudeSetupTokenRunner = {
+  async start({ sessionId }) {
+    const workspaceId = sessionId;
+    let sandboxCreated = false;
+    const startedAt = Date.now();
+    try {
+      await provisionSandbox({
+        workspaceId,
+        repositoryUrl: null,
+        repositorySnapshot: {
+          files: [
+            {
+              path: "README.md",
+              mode: "100644",
+              contentBase64: Buffer.from(
+                EMPTY_AUTH_REPOSITORY_FILE,
+                "utf8",
+              ).toString("base64"),
+            },
+          ],
+          totalBytes: Buffer.byteLength(EMPTY_AUTH_REPOSITORY_FILE),
+        },
+        baseSha: "0".repeat(40),
+        expiresAt: new Date(
+          Date.now() + ORCHESTRATOR_SESSION_TTL_MS,
+        ).toISOString(),
+        resumeFromSnapshot: false,
+        lifecycle: {
+          timeoutMs: ORCHESTRATOR_SANDBOX_LIFECYCLE_MS,
+          lifecycle: { onTimeout: "pause", autoResume: true },
+        },
+      });
+      sandboxCreated = true;
+      const provisionedAt = Date.now();
+      const started = await startClaudeSetupTokenInSandbox(workspaceId, {
+        idempotencyKey: sessionId,
+      });
+      logEvent("info", "claude_connection.runner_started", {
+        runner: "orchestrator",
+        workspaceId,
+        provisionMs: provisionedAt - startedAt,
+        urlMs: Date.now() - provisionedAt,
+        claudeVersion: started.claudeVersion,
+      });
+      return {
+        runnerId: encodeOrchestratorRunnerId(workspaceId, started.sessionId),
+        authorizeUrl: started.authorizeUrl,
+      };
+    } catch (error) {
+      if (sandboxCreated) await destroySandbox(workspaceId).catch(() => {});
+      logEvent("warn", "claude_connection.runner_start_failed", {
+        runner: "orchestrator",
+        workspaceId,
+        durationMs: Date.now() - startedAt,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  },
+
+  async submitCode({ runnerId, code }) {
+    const { workspaceId, sessionId } = decodeOrchestratorRunnerId(runnerId);
+    await submitClaudeSetupTokenCodeInSandbox(workspaceId, sessionId, code);
+    logEvent("info", "claude_connection.runner_code_submitted", {
+      runner: "orchestrator",
+      workspaceId,
+      sessionId,
+    });
+  },
+
+  async poll({ runnerId }): Promise<ClaudeRunnerPollResult> {
+    const { workspaceId, sessionId } = decodeOrchestratorRunnerId(runnerId);
+    const result = await pollClaudeSetupTokenInSandbox(workspaceId, sessionId);
+    if (result.status !== "pending") {
+      logEvent("info", "claude_connection.runner_terminal", {
+        runner: "orchestrator",
+        workspaceId,
+        sessionId,
+        status: result.status,
+        reason: result.status === "failed" ? result.reason : undefined,
+      });
+    }
+    return result;
+  },
+
+  async dispose({ runnerId }) {
+    const { workspaceId, sessionId } = decodeOrchestratorRunnerId(runnerId);
+    await closeClaudeSetupTokenInSandbox(workspaceId, sessionId).catch(
+      () => {},
+    );
+    await destroySandbox(workspaceId).catch(() => {});
+  },
+};
+
 /**
  * Pick the runner for this deployment. `subprocess` opts into the local
  * child-process runner above; anything else (the default) leaves hosted
  * connect disabled so the flow falls back to an API key / the CoDev CLI.
  */
 export function resolveClaudeRunner(): ClaudeSetupTokenRunner {
-  if (process.env.CLAUDE_CONNECTION_RUNNER?.trim() === "subprocess") {
+  const runner = process.env.CLAUDE_CONNECTION_RUNNER?.trim();
+  if (runner === "subprocess") {
     return subprocessClaudeRunner;
   }
+  if (runner === "orchestrator") return orchestratorClaudeRunner;
   return unavailableClaudeRunner;
 }
 

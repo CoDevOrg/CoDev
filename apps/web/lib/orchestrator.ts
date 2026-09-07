@@ -73,6 +73,12 @@ const codexExecPollSchema = z.object({
   codexAuthCacheJson: z.string().optional(),
 });
 
+const claudeSetupPollSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("pending") }),
+  z.object({ status: z.literal("ready"), oauthToken: z.string() }),
+  z.object({ status: z.literal("failed"), reason: z.string() }),
+]);
+
 const publicationExportSchema = z.object({
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   files: z
@@ -228,6 +234,15 @@ async function codexExecRequest(
     environment.ORCHESTRATOR_DIRECT_SECRET
     ? orchestratorDirectRequest(method, path, body, timeoutMs)
     : orchestratorRequest(method, path, body, timeoutMs);
+}
+
+async function claudeSetupRequest(
+  method: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+) {
+  return codexExecRequest(method, path, body, timeoutMs);
 }
 
 export async function checkOrchestratorConnection(timeoutMs = 4_000) {
@@ -743,6 +758,65 @@ export async function closeCodexExecInSandbox(
   await codexExecRequest(
     "DELETE",
     `/v1/sandboxes/${workspaceId}/codex-execs/${sessionId}`,
+    undefined,
+    20_000,
+  );
+}
+
+export async function startClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  input: { idempotencyKey: string },
+) {
+  const response = await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-setup-token`,
+    input,
+    35_000,
+  );
+  return z
+    .object({
+      sessionId: z.string(),
+      authorizeUrl: z.string().url(),
+      claudeVersion: z.string().optional(),
+    })
+    .parse(await response.json());
+}
+
+export async function submitClaudeSetupTokenCodeInSandbox(
+  workspaceId: string,
+  sessionId: string,
+  code: string,
+) {
+  await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}/code`,
+    { code },
+    20_000,
+  );
+}
+
+export async function pollClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  sessionId: string,
+) {
+  const response = await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}/poll`,
+    { waitMilliseconds: 25_000 },
+    35_000,
+  );
+  return z
+    .object({ result: claudeSetupPollSchema })
+    .parse(await response.json()).result;
+}
+
+export async function closeClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  sessionId: string,
+) {
+  await claudeSetupRequest(
+    "DELETE",
+    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}`,
     undefined,
     20_000,
   );

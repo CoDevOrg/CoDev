@@ -1,6 +1,7 @@
 import "server-only";
 
 import { saveProviderCredential } from "./credentials";
+import { logEvent } from "./observability";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 
 const CLAUDE_TOKEN_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/;
@@ -29,6 +30,29 @@ export class ClaudeConnectionError extends Error {
     super(message);
     this.name = "ClaudeConnectionError";
   }
+}
+
+/**
+ * Normalize anything thrown while driving a hosted "Connect Claude" flow into
+ * a client-safe {@link ClaudeConnectionError}. A `ClaudeConnectionError` is
+ * already a curated, user-facing reason and passes through untouched. Anything
+ * else — a failed DB query (raw SQL + params), a runner crash, a stack trace —
+ * is logged server-side and replaced with a generic message so internals never
+ * reach the browser.
+ */
+export function toClaudeConnectionFailure(
+  error: unknown,
+  event: string,
+): ClaudeConnectionError {
+  if (error instanceof ClaudeConnectionError) {
+    return error;
+  }
+  const detail = error instanceof Error ? error.message : String(error);
+  logEvent("error", event, { detail: redactClaudeSecrets(detail) });
+  return new ClaudeConnectionError(
+    "Something went wrong on our end while connecting Claude. Try again in a moment.",
+    500,
+  );
 }
 
 /**
