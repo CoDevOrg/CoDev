@@ -13,6 +13,7 @@ import {
 } from "./orca-pairing";
 import {
   OrchestratorError,
+  getIde,
   startIde,
   stopIde,
   touchIde,
@@ -21,6 +22,7 @@ import {
   type StartIdeInput,
 } from "./orchestrator";
 import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
+import { WorkspaceOpenTiming } from "./workspace-open-timing";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
@@ -263,9 +265,12 @@ export async function ensureOrcaSession(
     defaultBranch: string | null;
   },
   userId: string,
+  timing = new WorkspaceOpenTiming(),
 ): Promise<OrcaRuntimeState> {
   try {
-    await assertWorkspaceCreditQuota(workspace.id);
+    await timing.measure("quota", () =>
+      assertWorkspaceCreditQuota(workspace.id),
+    );
   } catch (error) {
     if (error instanceof QuotaError) {
       throw new OrcaHostError(error.message, 429);
@@ -278,17 +283,38 @@ export async function ensureOrcaSession(
   // capacity refusal, a host still booting its services. None of it is an
   // error from their point of view - it just means "not ready yet" - so any
   // failure reports `host-starting` and the client keeps polling.
+  // A live session proves host readiness without EC2 discovery and health polling.
+  let running = false;
   try {
-    const hostState = await getHostState();
-    if (hostState !== "running") {
-      const wake = await requestHostWake();
-      if (wake !== "running") {
-        return { state: "host-starting" };
-      }
+    const existing = await timing.measure("session_probe", () =>
+      getIde(workspace.id, 1_500),
+    );
+    running = existing.workspaceId === workspace.id;
+  } catch (error) {
+    if (
+      error instanceof OrchestratorError &&
+      [401, 403].includes(error.status)
+    ) {
+      throw new OrcaHostError(error.message, error.status);
     }
-    await waitForOrchestrator();
-  } catch {
-    return { state: "host-starting" };
+  }
+  if (!running) {
+    try {
+      const available = await timing.measure("host", async () => {
+        const hostState = await getHostState();
+        if (
+          hostState !== "running" &&
+          (await requestHostWake()) !== "running"
+        ) {
+          return false;
+        }
+        await waitForOrchestrator();
+        return true;
+      });
+      if (!available) return { state: "host-starting" };
+    } catch {
+      return { state: "host-starting" };
+    }
   }
 
   const workspacePath = orcaWorkspacePath(workspace.id);
@@ -310,13 +336,15 @@ export async function ensureOrcaSession(
     cursorApiKey,
     openaiApiKey,
     claudeEnv,
-  ] = await Promise.all([
-    resolveCodexAuthCacheForIde(userId, workspace.id),
-    resolveCursorAuthJsonForIde(userId, workspace.id),
-    resolveCursorApiKeyForIde(userId, workspace.id),
-    resolveOpenAiApiKeyForIde(userId, workspace.id),
-    resolveClaudeEnvForIde(userId, workspace.id),
-  ]);
+  ] = await timing.measure("credentials", () =>
+    Promise.all([
+      resolveCodexAuthCacheForIde(userId, workspace.id),
+      resolveCursorAuthJsonForIde(userId, workspace.id),
+      resolveCursorApiKeyForIde(userId, workspace.id),
+      resolveOpenAiApiKeyForIde(userId, workspace.id),
+      resolveClaudeEnvForIde(userId, workspace.id),
+    ]),
+  );
 
   const coordinationMcpUrl = new URL(
     `/api/workspaces/${workspace.id}/mcp/coordination`,
@@ -324,21 +352,25 @@ export async function ensureOrcaSession(
   ).toString();
 
   try {
-    const session = await startIdeRecoveringStaleProcess(workspace.id, {
-      projectRoot: workspacePath,
-      memberId: userId,
-      coordinationMcpUrl,
-      coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
-      ...(clone ? { clone } : {}),
-      ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
-      ...(cursorAuthJson ? { cursorAuthJson } : {}),
-      ...(cursorApiKey ? { cursorApiKey } : {}),
-      ...(openaiApiKey ? { openaiApiKey } : {}),
-      ...claudeEnv,
-    });
+    const session = await timing.measure("connect", () =>
+      startIdeRecoveringStaleProcess(workspace.id, {
+        projectRoot: workspacePath,
+        memberId: userId,
+        coordinationMcpUrl,
+        coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
+        ...(clone ? { clone } : {}),
+        ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+        ...(cursorAuthJson ? { cursorAuthJson } : {}),
+        ...(cursorApiKey ? { cursorApiKey } : {}),
+        ...(openaiApiKey ? { openaiApiKey } : {}),
+        ...claudeEnv,
+      }),
+    );
     const pairing = parseOrcaReady(session.ready, workspace.id);
     // Best-effort: a metering hiccup must never block the IDE from opening.
-    await openOrcaInterval(userId, workspace.id).catch(() => {});
+    await timing.measure("metering", () =>
+      openOrcaInterval(userId, workspace.id).catch(() => {}),
+    );
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {

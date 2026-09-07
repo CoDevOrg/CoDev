@@ -403,10 +403,15 @@ export async function startIde(
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
 
-export async function getIde(workspaceId: string): Promise<IdeSession> {
+export async function getIde(
+  workspaceId: string,
+  timeoutMs = 70_000,
+): Promise<IdeSession> {
   const response = await orchestratorRequest(
     "GET",
     `/v1/sandboxes/${workspaceId}/ide`,
+    undefined,
+    timeoutMs,
   );
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
