@@ -2,7 +2,15 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("./database", () => ({ getDatabase: vi.fn() }));
@@ -10,13 +18,30 @@ vi.mock("./credentials", () => ({ saveProviderCredential: vi.fn() }));
 vi.mock("./settings-access", () => ({
   requireOrganizationSettingsWrite: vi.fn(),
 }));
+vi.mock("./orchestrator", () => ({
+  closeClaudeSetupTokenInSandbox: vi.fn(),
+  destroySandbox: vi.fn(),
+  provisionSandbox: vi.fn(),
+  pollClaudeSetupTokenInSandbox: vi.fn(),
+  startClaudeSetupTokenInSandbox: vi.fn(),
+  submitClaudeSetupTokenCodeInSandbox: vi.fn(),
+}));
 
 import { unavailableClaudeRunner } from "./claude-connection-session";
 import {
   isHostedClaudeConnectEnabled,
+  orchestratorClaudeRunner,
   resolveClaudeRunner,
   subprocessClaudeRunner,
 } from "./claude-connection-runner";
+import {
+  closeClaudeSetupTokenInSandbox,
+  destroySandbox,
+  pollClaudeSetupTokenInSandbox,
+  provisionSandbox,
+  startClaudeSetupTokenInSandbox,
+  submitClaudeSetupTokenCodeInSandbox,
+} from "./orchestrator";
 
 /**
  * Stand-in for `claude setup-token`: prints a URL, then reads one line from
@@ -63,6 +88,14 @@ beforeAll(async () => {
   vi.stubEnv("CLAUDE_CONNECTION_RUNNER_COMMAND", process.execPath);
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(provisionSandbox).mockResolvedValue({} as never);
+  vi.mocked(destroySandbox).mockResolvedValue(undefined);
+  vi.mocked(closeClaudeSetupTokenInSandbox).mockResolvedValue(undefined);
+  vi.mocked(submitClaudeSetupTokenCodeInSandbox).mockResolvedValue(undefined);
+});
+
 afterAll(() => {
   vi.unstubAllEnvs();
 });
@@ -75,6 +108,75 @@ describe("resolveClaudeRunner", () => {
     vi.stubEnv("CLAUDE_CONNECTION_RUNNER", "subprocess");
     expect(resolveClaudeRunner()).toBe(subprocessClaudeRunner);
     expect(isHostedClaudeConnectEnabled()).toBe(true);
+    vi.stubEnv("CLAUDE_CONNECTION_RUNNER", "orchestrator");
+    expect(resolveClaudeRunner()).toBe(orchestratorClaudeRunner);
+    expect(isHostedClaudeConnectEnabled()).toBe(true);
+  });
+});
+
+describe("orchestratorClaudeRunner", () => {
+  it("provisions a short-lived sandbox and maps runner calls", async () => {
+    vi.mocked(startClaudeSetupTokenInSandbox).mockResolvedValueOnce({
+      sessionId: "claude-1-1",
+      authorizeUrl: "https://claude.ai/oauth/authorize?client_id=abc",
+      claudeVersion: "2.1.236",
+    });
+    vi.mocked(pollClaudeSetupTokenInSandbox).mockResolvedValueOnce({
+      status: "ready",
+      oauthToken: "sk-ant-oat01-" + "a".repeat(32),
+    });
+
+    const started = await orchestratorClaudeRunner.start({
+      sessionId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(provisionSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "11111111-1111-4111-8111-111111111111",
+        repositoryUrl: null,
+        resumeFromSnapshot: false,
+      }),
+    );
+    expect(started).toEqual({
+      runnerId: "11111111-1111-4111-8111-111111111111:claude-1-1",
+      authorizeUrl: "https://claude.ai/oauth/authorize?client_id=abc",
+    });
+
+    await orchestratorClaudeRunner.submitCode({
+      runnerId: started.runnerId,
+      code: "oauth-code",
+    });
+    expect(submitClaudeSetupTokenCodeInSandbox).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "claude-1-1",
+      "oauth-code",
+    );
+    await expect(
+      orchestratorClaudeRunner.poll({ runnerId: started.runnerId }),
+    ).resolves.toMatchObject({ status: "ready" });
+
+    await orchestratorClaudeRunner.dispose({ runnerId: started.runnerId });
+    expect(closeClaudeSetupTokenInSandbox).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "claude-1-1",
+    );
+    expect(destroySandbox).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+    );
+  });
+
+  it("destroys the sandbox when starting Claude setup fails", async () => {
+    vi.mocked(startClaudeSetupTokenInSandbox).mockRejectedValueOnce(
+      new Error("boom"),
+    );
+    await expect(
+      orchestratorClaudeRunner.start({
+        sessionId: "22222222-2222-4222-8222-222222222222",
+      }),
+    ).rejects.toThrow("boom");
+    expect(destroySandbox).toHaveBeenCalledWith(
+      "22222222-2222-4222-8222-222222222222",
+    );
   });
 });
 

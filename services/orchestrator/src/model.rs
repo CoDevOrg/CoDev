@@ -350,6 +350,38 @@ pub struct CodexExecPollResponse {
     pub codex_auth_cache_json: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupStartRequest {
+    /// Retries from the same web session reattach instead of spawning another
+    /// interactive OAuth process.
+    pub idempotency_key: String,
+    #[cfg(test)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupCodeRequest {
+    pub code: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupPollRequest {
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum ClaudeSetupPollResponse {
+    Pending,
+    Ready { oauth_token: String },
+    Failed { reason: String },
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeStartRequest {

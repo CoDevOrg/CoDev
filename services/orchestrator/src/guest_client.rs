@@ -8,12 +8,14 @@ use tokio::{
 };
 
 use crate::model::{
-    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, ExecRequest, ExecResponse,
-    FileResponse, PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
-    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
+    ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
+    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
+    Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
+    WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse,
+    WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;
@@ -163,6 +165,52 @@ impl GuestClient {
         self.request::<(), serde_json::Value>(
             "DELETE",
             &format!("/v1/codex-execs/{session_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn start_claude_setup(
+        &self,
+        request: &ClaudeSetupStartRequest,
+    ) -> Result<serde_json::Value> {
+        self.request("POST", "/v1/claude-setup-token", Some(request))
+            .await
+    }
+
+    pub async fn input_claude_setup_code(
+        &self,
+        session_id: &str,
+        request: &ClaudeSetupCodeRequest,
+    ) -> Result<()> {
+        self.request::<_, serde_json::Value>(
+            "POST",
+            &format!("/v1/claude-setup-token/{session_id}/code"),
+            Some(request),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn poll_claude_setup(
+        &self,
+        session_id: &str,
+        request: &ClaudeSetupPollRequest,
+    ) -> Result<ClaudeSetupPollResponse> {
+        self.request_with_timeout(
+            "POST",
+            &format!("/v1/claude-setup-token/{session_id}/poll"),
+            Some(request),
+            Duration::from_secs(40),
+        )
+        .await
+    }
+
+    pub async fn close_claude_setup(&self, session_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/claude-setup-token/{session_id}"),
             None,
         )
         .await

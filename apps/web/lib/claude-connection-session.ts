@@ -14,6 +14,7 @@ import {
   type ClaudeInferenceVerifier,
 } from "./claude-connection";
 import { getDatabase } from "./database";
+import { logEvent } from "./observability";
 
 /** A "Connect Claude" attempt lives at most this long before it is abandoned. */
 export const CLAUDE_CONNECTION_SESSION_TTL_MS = 10 * 60 * 1_000;
@@ -139,15 +140,22 @@ export async function startClaudeConnectionSession(
 ): Promise<ClaudeConnectionSessionView> {
   const { scopeType, scopeId } = await resolveClaudeConnectionScope(input);
 
-  // Sweep this member's stale rows so the table stays small.
-  await getDatabase()
-    .delete(schema.claudeConnectionSessions)
-    .where(
-      and(
-        eq(schema.claudeConnectionSessions.userId, input.userId),
-        lt(schema.claudeConnectionSessions.expiresAt, new Date()),
-      ),
-    );
+  // Sweep this member's stale rows so the table stays small. Best-effort: a
+  // cleanup failure must not block starting a fresh connection.
+  try {
+    await getDatabase()
+      .delete(schema.claudeConnectionSessions)
+      .where(
+        and(
+          eq(schema.claudeConnectionSessions.userId, input.userId),
+          lt(schema.claudeConnectionSessions.expiresAt, new Date()),
+        ),
+      );
+  } catch (error) {
+    logEvent("warn", "claude_connection.stale_sweep_failed", {
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const row = requireRow(
     await getDatabase()

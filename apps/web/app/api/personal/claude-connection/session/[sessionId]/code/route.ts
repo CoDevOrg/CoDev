@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/api";
-import { ClaudeConnectionError } from "@/lib/claude-connection";
+import { toClaudeConnectionFailure } from "@/lib/claude-connection";
 import { submitClaudeConnectionCode } from "@/lib/claude-connection-session";
 import { resolveClaudeRunner } from "@/lib/claude-connection-runner";
 
@@ -26,9 +26,10 @@ export async function POST(
       ),
     );
   } catch (error) {
-    if (error instanceof ClaudeConnectionError) {
-      return apiError(error, error.status);
-    }
-    return apiError(error);
+    const failure = toClaudeConnectionFailure(
+      error,
+      "claude_connection.code_submit_failed",
+    );
+    return apiError(failure, failure.status);
   }
 }

@@ -5,28 +5,71 @@ vi.mock("./credentials", () => ({ saveProviderCredential: vi.fn() }));
 vi.mock("./settings-access", () => ({
   requireOrganizationSettingsWrite: vi.fn(),
 }));
+vi.mock("./observability", () => ({ logEvent: vi.fn() }));
 
 import {
   ClaudeConnectionError,
   redactClaudeSecrets,
+  toClaudeConnectionFailure,
   verifyClaudeInferenceAccess,
   resolveClaudeConnectionScope,
   saveClaudeConnectionForUser,
   validateClaudeOAuthToken,
 } from "./claude-connection";
 import { saveProviderCredential } from "./credentials";
+import { logEvent } from "./observability";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 
 const saveProviderCredentialMock = vi.mocked(saveProviderCredential);
 const requireOrganizationSettingsWriteMock = vi.mocked(
   requireOrganizationSettingsWrite,
 );
+const logEventMock = vi.mocked(logEvent);
 
 const TOKEN = "sk-ant-oat01-abc123XYZ_-4567890";
 
 beforeEach(() => {
   saveProviderCredentialMock.mockReset();
   requireOrganizationSettingsWriteMock.mockReset();
+  logEventMock.mockReset();
+});
+
+describe("toClaudeConnectionFailure", () => {
+  it("passes a ClaudeConnectionError through untouched and does not log", () => {
+    const original = new ClaudeConnectionError("Start a new one.", 409);
+    expect(toClaudeConnectionFailure(original, "evt")).toBe(original);
+    expect(logEventMock).not.toHaveBeenCalled();
+  });
+
+  it("replaces a raw error with a generic message and logs the detail", () => {
+    const raw = new Error(
+      `Failed query: delete from "claude_connection_sessions" where "user_id" = $1 params: 464b50d7`,
+    );
+    const failure = toClaudeConnectionFailure(
+      raw,
+      "claude_connection.x_failed",
+    );
+    expect(failure).toBeInstanceOf(ClaudeConnectionError);
+    expect(failure.status).toBe(500);
+    expect(failure.message).not.toContain("claude_connection_sessions");
+    expect(failure.message).not.toContain("delete from");
+    expect(logEventMock).toHaveBeenCalledWith(
+      "error",
+      "claude_connection.x_failed",
+      expect.objectContaining({
+        detail: expect.stringContaining("Failed query"),
+      }),
+    );
+  });
+
+  it("redacts a Claude token from the logged detail", () => {
+    toClaudeConnectionFailure(
+      new Error(`runner crashed with ${TOKEN} in output`),
+      "evt",
+    );
+    const context = logEventMock.mock.calls[0]?.[2] ?? {};
+    expect(context.detail).not.toContain(TOKEN);
+  });
 });
 
 describe("validateClaudeOAuthToken", () => {

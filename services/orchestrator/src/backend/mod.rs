@@ -6,13 +6,15 @@ use std::{
 use chrono::{Duration, Utc};
 
 use crate::model::{
-    CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest, ExecRequest,
-    ExecResponse, FileResponse, IdeExecRequest, IdeSession, IdeStartRequest, IdeWriteFileRequest,
-    Instance, PublicationExportRequest, PublicationExportResponse, Result, RuntimeError,
-    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
+    ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
+    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeExecRequest, IdeSession,
+    IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
+    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
+    WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse,
+    WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -347,6 +349,66 @@ impl Backend {
         }
     }
 
+    pub async fn start_claude_setup(
+        &self,
+        workspace_id: &str,
+        request: ClaudeSetupStartRequest,
+    ) -> Result<serde_json::Value> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.start_claude_setup(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.start_claude_setup(workspace_id, request).await,
+        }
+    }
+
+    pub async fn input_claude_setup_code(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupCodeRequest,
+    ) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.input_claude_setup_code(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .input_claude_setup_code(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn poll_claude_setup(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupPollRequest,
+    ) -> Result<ClaudeSetupPollResponse> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.poll_claude_setup(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .poll_claude_setup(workspace_id, session_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn close_claude_setup(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.close_claude_setup(workspace_id, session_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.close_claude_setup(workspace_id, session_id).await,
+        }
+    }
+
     pub async fn create_worktree(
         &self,
         workspace_id: &str,
@@ -642,6 +704,34 @@ impl FakeBackend {
     }
 
     fn close_codex_exec(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn start_claude_setup(&self, workspace_id: &str) -> Result<serde_json::Value> {
+        self.get(workspace_id)?;
+        Ok(serde_json::json!({
+            "sessionId": "claude-1-1",
+            "authorizeUrl": "https://claude.ai/oauth/authorize?client_id=fake",
+            "claudeVersion": "fake"
+        }))
+    }
+
+    fn input_claude_setup_code(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn poll_claude_setup(
+        &self,
+        workspace_id: &str,
+        _session_id: &str,
+    ) -> Result<ClaudeSetupPollResponse> {
+        self.get(workspace_id)?;
+        Ok(ClaudeSetupPollResponse::Pending)
+    }
+
+    fn close_claude_setup(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
         self.get(workspace_id)?;
         Ok(())
     }
