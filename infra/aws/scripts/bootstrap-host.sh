@@ -306,7 +306,17 @@ install -d -m 0755 "${work_dir}/rootfs/usr/local/lib/node_modules"
 cp -a "$(npm root -g)/@openai" "${work_dir}/rootfs/usr/local/lib/node_modules/"
 cp -a "$(npm root -g)/@anthropic-ai" "${work_dir}/rootfs/usr/local/lib/node_modules/"
 ln -s ../lib/node_modules/@openai/codex/bin/codex.js "${work_dir}/rootfs/usr/local/bin/codex"
-ln -s ../lib/node_modules/@anthropic-ai/claude-code/cli.js "${work_dir}/rootfs/usr/local/bin/claude"
+# claude-code ships a compiled launcher (2.1.236: bin/claude.exe), not the
+# cli.js this used to point at, and the path has already moved once between
+# releases. Read it from the package's own bin map and verify it before
+# linking: a hardcoded target that goes stale produces a dangling symlink,
+# and the only symptom is `claude` failing to spawn inside a guest with "No
+# viable candidates found in PATH" long after the host has bootstrapped.
+claude_package_dir="$(npm root -g)/@anthropic-ai/claude-code"
+claude_bin_rel="$(jq -re '.bin.claude' "${claude_package_dir}/package.json")"
+test -x "${claude_package_dir}/${claude_bin_rel}"
+ln -s "../lib/node_modules/@anthropic-ai/claude-code/${claude_bin_rel}" \
+  "${work_dir}/rootfs/usr/local/bin/claude"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
