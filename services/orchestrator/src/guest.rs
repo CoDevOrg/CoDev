@@ -1972,9 +1972,8 @@ impl ClaudeSetupOutput {
             self.buffer = redact_claude_secrets(&self.buffer);
         }
         if self.buffer.len() > MAX_OUTPUT_BYTES {
-            while self.buffer.len() > MAX_OUTPUT_BYTES {
-                self.buffer.remove(0);
-            }
+            let overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
+            self.buffer.drain(0..overflow);
         }
     }
 
