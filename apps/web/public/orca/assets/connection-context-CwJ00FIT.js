@@ -1,1 +1,0 @@
-import{Ft as e,Ju as t,Pt as n,a as r}from"./web-index-FYit4bG1.js";function i(t){return e(r.getState(),t)}function a(e){return!e||t(e)?.type===`folder`?!0:i(e)!==void 0}function o(e,t){return n(r.getState(),e,t)}export{o as n,a as r,i as t};

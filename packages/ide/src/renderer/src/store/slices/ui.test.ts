@@ -886,6 +886,31 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarExplorerView).toBe('files')
   })
 
+  it('opens workspace Activity on embedded startup and preserves later tab changes', () => {
+    vi.stubGlobal('window', {
+      __CODEV_EMBEDDED__: true,
+      api: { ui: { set: vi.fn().mockResolvedValue(undefined) } }
+    })
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarOpen: false, rightSidebarTab: 'source-control' }),
+        'startup'
+      )
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('codev-agents')
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ rightSidebarOpen: true, rightSidebarTab: 'explorer' }),
+        'sync'
+      )
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+  })
+
   it('preserves persisted repo filters until repos are loaded', () => {
     const store = createUIStore()
     const remoteDismissalKey = getSetupScriptPromptDismissalKey(

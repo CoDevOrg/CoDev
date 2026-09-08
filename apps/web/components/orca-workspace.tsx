@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { History, Share2 } from "lucide-react";
+import { History, MoreHorizontal, Share2 } from "lucide-react";
 import { track } from "@vercel/analytics";
 
 import {
@@ -20,11 +20,10 @@ import {
   replyToCodevBridgeMessage,
   type CodevParentBridgeSession,
 } from "@/components/codev-parent-bridge";
-import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { watchOrcaProjectTree } from "@/components/orca-project-tree";
+import { WorkspacePresenceMenu } from "@/components/workspace-presence-menu";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
-import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
   | { phase: "connecting" }
@@ -672,17 +671,15 @@ export function WorkspaceTopBar({
   workspaceId,
   canInvite,
   liveAgentCount = null,
+  onOpenTeamRoom = () => {},
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
   liveAgentCount?: number | null;
+  onOpenTeamRoom?: () => void;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
-  const liveLabel =
-    liveAgentCount == null
-      ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
-      : `${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} agents live`;
 
   return (
     <header className="workspace-topbar">
@@ -708,23 +705,11 @@ export function WorkspaceTopBar({
         <span className="workspace-topbar-repo">{repository}</span>
       ) : null}
       <div className="workspace-topbar-actions">
-        <span
-          className={`workspace-topbar-capacity${liveAgentCount ? " is-live" : ""}`}
-          aria-label={
-            liveAgentCount == null
-              ? `Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`
-              : `Active agents: ${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} live`
-          }
-        >
-          {liveLabel}
-        </span>
-        <Link
-          className="workspace-topbar-share"
-          href={`/workspaces/${workspaceId}/activity`}
-        >
-          <History aria-hidden size={13} />
-          History
-        </Link>
+        <WorkspacePresenceMenu
+          activeAgentCount={liveAgentCount}
+          onOpenTeamRoom={onOpenTeamRoom}
+          workspaceId={workspaceId}
+        />
         <button
           className="workspace-topbar-share"
           type="button"
@@ -733,6 +718,17 @@ export function WorkspaceTopBar({
           <Share2 aria-hidden size={13} />
           Share
         </button>
+        <details className="workspace-topbar-more">
+          <summary aria-label="Workspace actions">
+            <MoreHorizontal aria-hidden size={16} />
+          </summary>
+          <div className="workspace-topbar-menu">
+            <Link href={`/workspaces/${workspaceId}/activity`}>
+              <History aria-hidden size={14} />
+              File history and restore
+            </Link>
+          </div>
+        </details>
       </div>
       <WorkspaceShareDialog
         canInvite={canInvite}
@@ -749,6 +745,7 @@ function WorkspaceChrome({
   workspaceId,
   canInvite,
   embeddedAgentCount = null,
+  onOpenTeamRoom,
   children,
 }: {
   repository: string | null;
@@ -758,23 +755,21 @@ function WorkspaceChrome({
    *  one. It sees this client's own chat-tab agents, which the server-side
    *  workboard never registers, so it is the more complete of the two. */
   embeddedAgentCount?: number | null;
+  onOpenTeamRoom: () => void;
   children: ReactNode;
 }) {
-  const activity = useLiveAgentActivity(workspaceId);
-
   return (
     <div className="workspace-page">
       <WorkspaceTopBar
         canInvite={canInvite}
-        liveAgentCount={embeddedAgentCount ?? activity?.occupied ?? null}
+        liveAgentCount={embeddedAgentCount}
+        onOpenTeamRoom={onOpenTeamRoom}
         repository={repository}
         workspaceId={workspaceId}
       />
-      {/* The workspace's team rail (people, status, channels) and its live
-          agents both live inside the embedded IDE's own sidebars now — the
-          team rail folded into Orca's left sidebar, live agents in its right
-          one — so the parent page is just the top bar plus the IDE. The live
-          count stays in the top bar so it is visible from here too. */}
+      {/* The compact chat rail and agent activity live inside the embedded IDE.
+          The host owns lightweight people presence so it remains visible while
+          members move between chat, files, changes, and team conversations. */}
       <div className="workspace-body">{children}</div>
     </div>
   );
@@ -819,6 +814,12 @@ export function OrcaWorkspace({
   );
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const openTeamRoom = useCallback(() => {
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "codev:open-team-room" },
+      window.location.origin,
+    );
+  }, []);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
   // Held here (not in `connection`) so it survives the poll's state churn and
   // can be (re)delivered to the iframe on its next load.
@@ -1227,6 +1228,7 @@ export function OrcaWorkspace({
     return (
       <WorkspaceChrome
         canInvite={canInvite}
+        onOpenTeamRoom={openTeamRoom}
         repository={repository}
         workspaceId={workspaceId}
       >
@@ -1254,6 +1256,7 @@ export function OrcaWorkspace({
     <WorkspaceChrome
       canInvite={canInvite}
       embeddedAgentCount={embeddedAgentCount}
+      onOpenTeamRoom={openTeamRoom}
       repository={repository}
       workspaceId={workspaceId}
     >

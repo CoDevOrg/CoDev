@@ -132,7 +132,10 @@ function RightSidebarInner(): React.JSX.Element {
       {
         id: 'explorer',
         icon: Files,
-        title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
+        title:
+          typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+            ? 'Files'
+            : translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
       },
       // Stock Orca keeps the AI Vault session-history tab; CoDev folds it into
@@ -170,7 +173,10 @@ function RightSidebarInner(): React.JSX.Element {
       {
         id: 'source-control',
         icon: GitBranch,
-        title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
+        title:
+          typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+            ? 'Changes'
+            : translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
         shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
         gitOnly: true
       },
@@ -363,6 +369,12 @@ function RightSidebarInner(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
+      data-codev-context-panel={
+        typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? '' : undefined
+      }
+      aria-label={
+        typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? 'Workspace context' : undefined
+      }
       className={cn(
         'relative flex-shrink-0 flex flex-row',
         // Why: overflow-visible is needed when open so the resize handle

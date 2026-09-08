@@ -36,6 +36,7 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -2447,8 +2448,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.combinedDiffFileTreeWidth
         ),
-        rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-        rightSidebarTab: rightSidebarRoute.rightSidebarTab,
+        rightSidebarOpen:
+          source === 'startup' && isCodevEmbedded()
+            ? true
+            : typeof ui.rightSidebarOpen === 'boolean'
+              ? ui.rightSidebarOpen
+              : true,
+        rightSidebarTab:
+          source === 'startup' && isCodevEmbedded()
+            ? 'codev-agents'
+            : rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,

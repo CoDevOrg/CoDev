@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- The panel coordinates local and managed agent snapshots in one lifecycle. */
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -27,6 +28,13 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 const REFRESH_MS = 5_000
 const TICK_MS = 1_000
+
+export function shouldRefreshCodevActivity(
+  embedded: boolean,
+  visibility: DocumentVisibilityState
+): boolean {
+  return embedded && visibility === 'visible'
+}
 
 type WorkboardSlot = {
   occupied?: boolean
@@ -249,13 +257,20 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     if (!embedded) {
       return
     }
-    void refreshManaged()
-    void refreshCoordination()
-    const timer = setInterval(() => {
+    const refreshVisible = (): void => {
+      if (!shouldRefreshCodevActivity(embedded, document.visibilityState)) {
+        return
+      }
       void refreshManaged()
       void refreshCoordination()
-    }, REFRESH_MS)
-    return () => clearInterval(timer)
+    }
+    refreshVisible()
+    const timer = setInterval(refreshVisible, REFRESH_MS)
+    document.addEventListener('visibilitychange', refreshVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshVisible)
+    }
   }, [embedded, refreshManaged, refreshCoordination])
 
   const agents = useMemo(

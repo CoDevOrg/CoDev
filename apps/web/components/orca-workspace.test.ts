@@ -128,7 +128,7 @@ describe("createOrcaManagedProposal", () => {
 });
 
 describe("WorkspaceTopBar", () => {
-  it("shows the reconciled three-agent worktree capacity", () => {
+  it("shows the compact people and agent-session control", () => {
     render(
       createElement(WorkspaceTopBar, {
         repository: "yousef20920/CoDev",
@@ -138,8 +138,8 @@ describe("WorkspaceTopBar", () => {
     );
 
     expect(
-      screen.getByLabelText("Agent worktree capacity: 3 slots"),
-    ).toHaveTextContent("3 agent worktree slots");
+      screen.getByLabelText("0 people here, 0 active agent sessions"),
+    ).toHaveAttribute("aria-haspopup", "dialog");
   });
 
   it("shows how many agents are live without opening a panel", () => {
@@ -153,8 +153,8 @@ describe("WorkspaceTopBar", () => {
     );
 
     expect(
-      screen.getByLabelText("Active agents: 2 of 3 live"),
-    ).toHaveTextContent("2 of 3 agents live");
+      screen.getByLabelText("0 people here, 2 active agent sessions"),
+    ).toBeInTheDocument();
   });
 });
 

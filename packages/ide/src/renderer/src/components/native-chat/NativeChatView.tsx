@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- This view composes the established chat, composer, and persistent utility drawer lifecycle. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -58,10 +59,7 @@ import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 import { NativeChatTerminalDrawer } from './native-chat-terminal-drawer'
 import { useCodevDrawerTerminal } from './use-codev-drawer-terminal'
-import { FileDiff, Globe, TerminalSquare } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { CodevNativeChatHeader } from './CodevNativeChatHeader'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -163,7 +161,9 @@ function NativeChatResolvedView({
     return () => window.clearInterval(timer)
   }, [agent, readTerminalScreen])
   const sessionWithTerminalFallback = useMemo<typeof session>(() => {
-    if (terminalFallbackMessages.length === 0) return session
+    if (terminalFallbackMessages.length === 0) {
+      return session
+    }
     const assembled = assembleNativeChatSession({
       sources: { transcript: session.messages, scrape: terminalFallbackMessages },
       sessionId: session.sessionId,
@@ -441,7 +441,9 @@ function NativeChatResolvedView({
   const openBrowser = useCallback(() => {
     const store = useAppStore.getState()
     const worktreeId = store.activeWorktreeId
-    if (!worktreeId) return
+    if (!worktreeId) {
+      return
+    }
     const groupId =
       store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
     if (groupId) {
@@ -487,70 +489,14 @@ function NativeChatResolvedView({
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
       {showTerminalToggle || showChangesButton || showBrowserButton ? (
-        <div className="flex shrink-0 items-center justify-end gap-0.5 border-b border-border px-1.5 py-1">
-          {showTerminalToggle ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-pressed={terminalDrawerOpen}
-                  aria-label={translate('components.native-chat.terminalDrawer.toggle', 'Terminal')}
-                  onClick={() => setTerminalDrawerOpen((open) => !open)}
-                  className={
-                    terminalDrawerOpen ? 'bg-accent text-foreground' : 'text-muted-foreground'
-                  }
-                >
-                  <TerminalSquare className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                {terminalDrawerOpen
-                  ? translate('components.native-chat.terminalDrawer.hide', 'Hide terminal')
-                  : translate('components.native-chat.terminalDrawer.show', 'Show terminal')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {showChangesButton ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={translate('components.native-chat.changesButton', 'Changes')}
-                  onClick={openChanges}
-                  className="text-muted-foreground"
-                >
-                  <FileDiff className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                {translate('components.native-chat.changesButton', 'Changes')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {showBrowserButton ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={translate('components.native-chat.browserButton', 'Browser')}
-                  onClick={openBrowser}
-                  className="text-muted-foreground"
-                >
-                  <Globe className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                {translate('components.native-chat.browserButton', 'Browser')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
+        <CodevNativeChatHeader
+          agent={agent}
+          working={isWorking}
+          terminalOpen={terminalDrawerOpen}
+          onToggleTerminal={() => setTerminalDrawerOpen((open) => !open)}
+          onOpenChanges={openChanges}
+          onOpenBrowser={openBrowser}
+        />
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
@@ -604,11 +550,13 @@ function NativeChatResolvedView({
           {...launchDraftSignal}
         />
       )}
-      {showTerminalToggle && terminalDrawerOpen ? (
-        <NativeChatTerminalDrawer
-          ptyId={drawerPtyId}
-          className="h-[220px] border-t border-border"
-        />
+      {showTerminalToggle ? (
+        <div hidden={!terminalDrawerOpen} aria-hidden={!terminalDrawerOpen}>
+          <NativeChatTerminalDrawer
+            ptyId={drawerPtyId}
+            className="h-[220px] border-t border-border"
+          />
+        </div>
       ) : null}
       {contextMenu.menu}
     </div>
