@@ -2031,8 +2031,14 @@ fn claude_version(command: &str) -> Option<String> {
 fn claude_authorize_url_pattern() -> &'static Regex {
     static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     PATTERN.get_or_init(|| {
+        // The character class stops at any control byte, not just
+        // whitespace. `claude setup-token` prints the URL as an OSC-8
+        // terminal hyperlink -- ESC ] 8 ; ; <url> BEL <visible text> ESC ] 8
+        // ; ; BEL -- and BEL and ESC are neither whitespace nor quotes, so a
+        // `[^\s'"]*` tail ran straight through the terminator and captured
+        // the escape sequence plus the truncated copy the terminal displays.
         Regex::new(
-            r#"https?://[^\s'"]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\s'"]*"#,
+            r#"https?://[^\x00-\x20'"\x7f]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\x00-\x20'"\x7f]*"#,
         )
         .expect("Claude authorize URL regex")
     })
@@ -3248,5 +3254,29 @@ sleep 5
             String::from_utf8_lossy(&response.body)
         );
         serde_json::from_slice(&response.body).expect("checkpoint")
+    }
+
+    #[test]
+    fn authorize_url_stops_at_the_osc8_hyperlink_terminator() {
+        // `claude setup-token` prints the URL as a clickable terminal
+        // hyperlink. Captured verbatim from a guest, the pty carries:
+        //   ESC ] 8 ; ; <url> BEL <truncated visible copy> ESC ] 8 ; ; BEL
+        // The scraped value is handed to the browser, so anything past the
+        // BEL makes the link the member opens unusable.
+        let url = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a&state=abc";
+        let pty = format!(
+            "\x1b]8;;{url}\x07https://claude.com/cai/oauth/authorize?code=true&clie\x1b]8;;\x07"
+        );
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(&pty);
+        assert_eq!(output.authorize_url.as_deref(), Some(url));
+    }
+
+    #[test]
+    fn authorize_url_still_matches_a_plain_printed_url() {
+        let url = "https://claude.com/cai/oauth/authorize?code=true&state=xyz";
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(&format!("Open this URL:\n{url}\n"));
+        assert_eq!(output.authorize_url.as_deref(), Some(url));
     }
 }
