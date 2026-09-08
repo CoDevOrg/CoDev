@@ -994,6 +994,13 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   border-top: 1px solid rgba(237, 238, 240, 0.08);
 }
 
+.codev-mc-intro {
+  margin: -0.1rem 0 0.1rem;
+  color: rgba(237, 238, 240, 0.62);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .codev-mc-section-head {
   display: flex;
   align-items: center;
@@ -1317,6 +1324,22 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   line-height: 1.35;
 }
 
+.codev-mc-focus,
+.codev-mc-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.codev-mc-focus > span,
+.codev-mc-files > span {
+  color: rgba(237, 238, 240, 0.5);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .codev-mc-activity {
   display: flex;
   gap: 0.35rem;
@@ -1371,6 +1394,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-card-actions button {
   flex: 1;
+  min-height: 32px;
   padding: 6px 8px;
   background: transparent;
   border: 0;
@@ -1396,6 +1420,43 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-card-actions button:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+.codev-mc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px dashed rgba(237, 238, 240, 0.16);
+  border-radius: 12px;
+  background: rgba(237, 238, 240, 0.025);
+}
+
+.codev-mc-start-chat {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--codev-gold-500, #f2604a);
+  color: #121417;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.codev-mc-start-chat:hover:not(:disabled) {
+  background: #ff765f;
+}
+
+.codev-mc-start-chat:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.codev-mc-start-chat:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 /* Detail drawer ---------------------------------------------------------- */
@@ -1496,13 +1557,26 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-drawer-activity {
   display: flex;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.25rem;
   margin: 0;
   padding: 0.6rem 0.65rem;
   border-radius: 9px;
   background: rgba(237, 238, 240, 0.045);
   font-size: 11.5px;
   line-height: 1.5;
+}
+
+.codev-mc-drawer-activity > strong {
+  color: rgba(237, 238, 240, 0.58);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.codev-mc-drawer-activity > span {
+  display: flex;
+  gap: 0.4rem;
 }
 
 .codev-mc-drawer-actions {
@@ -1552,6 +1626,12 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   gap: 0.5rem;
   padding-top: 0.7rem;
   border-top: 1px solid rgba(237, 238, 240, 0.1);
+}
+
+.codev-mc-steer-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .codev-mc-quick {

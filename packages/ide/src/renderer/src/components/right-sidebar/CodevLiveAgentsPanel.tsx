@@ -25,6 +25,7 @@ import {
   type MissionControlCoordination
 } from './CodevMissionControlView'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { useCodevNewChat } from '@/components/codev/codev-new-chat'
 
 const REFRESH_MS = 5_000
 const TICK_MS = 1_000
@@ -128,6 +129,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [steerBusy, setSteerBusy] = useState(false)
+  const { startNewChat, pending: newChatPending, canStart: canStartNewChat } = useCodevNewChat()
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
   const worktreesByRepo = useAppStore(useShallow((state) => state.worktreesByRepo))
@@ -474,6 +476,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         onPause={handlePause}
         onStop={(key) => void handleStop(key)}
         onOpenContext={handleOpenContext}
+        onStartChat={() => void startNewChat()}
+        startChatDisabled={!canStartNewChat}
+        startingChat={newChatPending}
       />
     </div>
   )

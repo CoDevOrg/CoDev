@@ -1,1 +1,0 @@
-import{di as e,ui as t,vp as n}from"./web-index-D2Cl_q4g.js";function r(r,i,a){let o=0;for(let s of r){let r=i.get(s.repoId);if(!r||n(r)||s.isMainWorktree)continue;let c=t(s);c>0&&e({isArchived:s.isArchived,lastActivityAt:c},a)&&(o+=1)}return o}export{r as t};

@@ -107,18 +107,21 @@ export function AgentDrawer({
           <PhasePill phase={agent.phase} label={phaseLabel(agent)} />
           <span className="codev-mc-chip">{runtimeText(agent, now)}</span>
           <span className="codev-mc-chip">
-            {agent.origin === 'you' ? 'Your chat tab' : 'Managed session'}
+            {agent.origin === 'you' ? 'In your chat' : 'Shared agent'}
           </span>
         </div>
 
         <p className="codev-mc-drawer-activity">
-          <i className="codev-mc-caret" aria-hidden />
-          <span>{agent.activity}</span>
+          <strong>Current focus</strong>
+          <span>
+            <i className="codev-mc-caret" aria-hidden />
+            {agent.activity}
+          </span>
         </p>
 
         <div className="codev-mc-drawer-actions">
           <button type="button" className="codev-mc-ghost" onClick={onStepIn}>
-            {agent.worktreeId ? 'Open this worktree' : 'Open the chat tab'}
+            {agent.worktreeId ? 'Open workspace' : 'Open chat'}
           </button>
           {steerable ? (
             <button type="button" className="codev-mc-ghost" onClick={onPause} disabled={busy}>
@@ -136,7 +139,7 @@ export function AgentDrawer({
                   onStop()
                 }}
               >
-                Stop and free the slot
+                Stop agent
               </button>
               <button
                 type="button"
@@ -158,13 +161,12 @@ export function AgentDrawer({
           )}
         </div>
         {confirmingStop ? (
-          <p className="codev-mc-drawer-activity">
-            Ends this agent and releases its slot. The branch it worked on is kept.
-          </p>
+          <p className="codev-mc-drawer-activity">This stops the agent. Its branch is kept.</p>
         ) : null}
 
         {steerable ? (
           <footer className="codev-mc-steer">
+            <p className="codev-mc-steer-title">Give this agent direction</p>
             <div className="codev-mc-quick">
               {QUICK_STEERS.map((text) => (
                 <button
@@ -181,7 +183,7 @@ export function AgentDrawer({
             <div className="codev-mc-steer-row">
               <input
                 className="codev-mc-steer-input"
-                placeholder={`Steer ${agent.ownerName.split(' ')[0] ?? 'this'}'s agent…`}
+                placeholder={`Tell ${agent.ownerName.split(' ')[0] ?? 'this agent'} what to do next…`}
                 value={draft}
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
@@ -191,7 +193,7 @@ export function AgentDrawer({
                     submit()
                   }
                 }}
-                aria-label="Steer this agent"
+                aria-label="Give this agent direction"
               />
               <button
                 type="button"
@@ -199,18 +201,18 @@ export function AgentDrawer({
                 onClick={submit}
                 disabled={busy || !draft.trim()}
               >
-                {busy ? 'Sending…' : 'Steer'}
+                {busy ? 'Sending…' : 'Send'}
               </button>
             </div>
             <p className="codev-mc-steer-note">
-              Queued as a co-steer turn — every instruction is attributed in the shared transcript.
+              Your instruction is added to the shared conversation.
             </p>
           </footer>
         ) : (
           <p className="codev-mc-steer-note">
             {agent.origin === 'you'
-              ? 'This agent runs in your chat tab — type there to steer it directly.'
-              : 'Co-steer permission is required to send this agent instructions.'}
+              ? 'This agent is in your chat. Type there to give it direction.'
+              : 'You need permission to give this agent direction.'}
           </p>
         )}
       </aside>

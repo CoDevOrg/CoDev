@@ -150,13 +150,13 @@ describe('CodevMissionControlView', () => {
         onStop={noop}
       />
     )
-    expect(html).toContain('Activity')
-    expect(html).toContain('Working now')
+    expect(html).toContain('Workspace activity')
+    expect(html).toContain('Agent chats')
     expect(html).toContain('Alex Morgan')
     expect(html).toContain('Wire the billing webhook')
     expect(html).toContain('Editing app/api/webhooks/route.ts')
     expect(html).toContain('Draft the release notes')
-    expect(html).toContain('your chat tab')
+    expect(html).toContain('In your chat')
     expect(html).toContain('2 people steering')
   })
 
@@ -177,7 +177,7 @@ describe('CodevMissionControlView', () => {
     )
     expect(html).toContain('codev-mc-drawer')
     expect(html).toContain('Add a test for that case')
-    expect(html).toContain('co-steer turn')
+    expect(html).toContain('shared conversation')
   })
 
   it('shows the empty state when nothing is running', () => {
@@ -193,9 +193,11 @@ describe('CodevMissionControlView', () => {
         onSteer={noop}
         onPause={noop}
         onStop={noop}
+        onStartChat={noop}
       />
     )
-    expect(html).toContain('No agents are running yet')
+    expect(html).toContain('No agent chats yet')
+    expect(html).toContain('Start a chat')
   })
 })
 

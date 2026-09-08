@@ -40,8 +40,8 @@ export * from './CodevMissionControlModel'
  *    which is what the collision banner and the per-agent holds are actually
  *    made of.
  *
- * Nothing here is simulated. "Step in" reveals the agent's worktree; "Steer"
- * and "Pause" call the same co-steer endpoints the workboard uses.
+ * Nothing here is simulated. Opening an agent reveals its real workspace, and
+ * direction and pause actions call the same live workboard endpoints.
  */
 
 /**
@@ -63,6 +63,10 @@ function runtimeText(agent: MissionControlAgent, now: number): string {
     return missionControlElapsed(agent.startedAt, now)
   }
   return agent.serverElapsed ?? '—'
+}
+
+function agentLocationLabel(agent: MissionControlAgent): string {
+  return agent.origin === 'you' ? 'In your chat' : 'Shared agent'
 }
 
 function Face({
@@ -126,6 +130,7 @@ function AgentCard({
         className="codev-mc-card-open"
         role="button"
         tabIndex={0}
+        aria-label={`Open details for ${agent.title}`}
         onClick={onOpen}
         onKeyDown={activate}
       >
@@ -147,44 +152,48 @@ function AgentCard({
 
         <p className="codev-mc-title">{agent.title}</p>
 
-        <p className={`codev-mc-activity${agent.phase === 'blocked' ? ' is-blocked' : ''}`}>
-          <i className="codev-mc-caret" aria-hidden />
-          <span>{agent.activity}</span>
-        </p>
+        <div className="codev-mc-focus">
+          <span>Current focus</span>
+          <p className={`codev-mc-activity${agent.phase === 'blocked' ? ' is-blocked' : ''}`}>
+            <i className="codev-mc-caret" aria-hidden />
+            <span>{agent.activity}</span>
+          </p>
+        </div>
 
         {agent.holds.length > 0 ? (
-          <ul className="codev-mc-holds" aria-label="Paths this agent has claimed">
-            {agent.holds.map((hold) => (
-              <li
-                key={hold.claimId}
-                className={`codev-mc-hold is-${hold.status}`}
-                title={
-                  hold.status === 'contested'
-                    ? `${hold.path} — another agent is holding this too`
-                    : `${hold.path} — claimed by this agent`
-                }
-              >
-                <i aria-hidden />
-                <span>{hold.path}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="codev-mc-files">
+            <span>Files in use</span>
+            <ul className="codev-mc-holds" aria-label="Files this agent is using">
+              {agent.holds.map((hold) => (
+                <li
+                  key={hold.claimId}
+                  className={`codev-mc-hold is-${hold.status}`}
+                  title={
+                    hold.status === 'contested'
+                      ? `${hold.path} — another agent is using this file too`
+                      : `${hold.path} — in use by this agent`
+                  }
+                >
+                  <i aria-hidden />
+                  <span>{hold.path}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
         <div className="codev-mc-cardfoot">
           <span className="codev-mc-runtime">{runtimeText(agent, now)}</span>
-          <span className="codev-mc-tag">
-            {agent.origin === 'you' ? 'your chat tab' : 'managed session'}
-          </span>
+          <span className="codev-mc-tag">{agentLocationLabel(agent)}</span>
         </div>
       </div>
 
       <div className="codev-mc-card-actions">
         <button type="button" onClick={onStepIn}>
-          Step in
+          {agent.worktreeId ? 'Open workspace' : 'Open chat'}
         </button>
-        <button type="button" onClick={onOpen} disabled={agent.origin !== 'managed'}>
-          Steer
+        <button type="button" onClick={onOpen}>
+          View details
         </button>
       </div>
     </li>
@@ -203,7 +212,10 @@ export function CodevMissionControlView({
   onSteer,
   onPause,
   onStop,
-  onOpenContext
+  onOpenContext,
+  onStartChat,
+  startChatDisabled = false,
+  startingChat = false
 }: {
   agents: MissionControlAgent[]
   coordination?: MissionControlCoordination
@@ -217,6 +229,9 @@ export function CodevMissionControlView({
   onPause: (key: string) => void
   onStop: (key: string) => void
   onOpenContext?: (sessionIds: string[], worktreeIds: string[]) => void
+  onStartChat?: () => void
+  startChatDisabled?: boolean
+  startingChat?: boolean
 }): JSX.Element {
   const open = agents.find((agent) => agent.key === openKey) ?? null
   const live = coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
@@ -239,15 +254,22 @@ export function CodevMissionControlView({
         <div>
           <p className="codev-agents-kicker">
             <i className="codev-agents-dot" aria-hidden />
-            {working > 0 ? `${working} working now` : 'Live in this workspace'}
+            {working > 0
+              ? `${working} ${working === 1 ? 'agent is' : 'agents are'} working`
+              : agents.length > 0
+                ? 'No agents are working right now'
+                : 'No agents are active yet'}
           </p>
-          <h3>Activity</h3>
+          <h3>Workspace activity</h3>
         </div>
-        <span className="codev-agents-count">
-          <strong>{agents.length}</strong>
-          <span>/ {Math.max(agents.length, 3)}</span>
+        <span className="codev-agents-count" aria-label={`${agents.length} active agents`}>
+          {agents.length === 1 ? '1 agent' : `${agents.length} agents`}
         </span>
       </header>
+
+      <p className="codev-mc-intro">
+        See what agents are doing, the files they are using, and anything that needs your attention.
+      </p>
 
       {owners.length > 0 ? (
         <div className="codev-mc-people">
@@ -284,12 +306,24 @@ export function CodevMissionControlView({
         </ActivitySection>
       ) : null}
 
-      <ActivitySection title="Working now" count={agents.length}>
+      <ActivitySection title="Agent chats" count={agents.length}>
         {agents.length === 0 ? (
-          <p className="codev-agents-empty">
-            No agents are running yet. Open a chat and give an agent a task; its progress and file
-            claims will appear here.
-          </p>
+          <div className="codev-mc-empty">
+            <p className="codev-agents-empty">
+              No agent chats yet. Start a chat, describe what you want to accomplish, and follow its
+              progress here.
+            </p>
+            {onStartChat ? (
+              <button
+                type="button"
+                className="codev-mc-start-chat"
+                onClick={onStartChat}
+                disabled={startChatDisabled || startingChat}
+              >
+                {startingChat ? 'Starting chat…' : 'Start a chat'}
+              </button>
+            ) : null}
+          </div>
         ) : (
           <ul className="codev-mc-list">
             {agents.map((agent) => (
