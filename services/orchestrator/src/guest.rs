@@ -1380,25 +1380,22 @@ impl GuestService {
                 .claude_setup_idempotency
                 .lock()
                 .expect("claude setup idempotency lock");
-            if let Some(session_id) = idempotency.get(&request.idempotency_key) {
-                if let Ok(session) = self.claude_setup(session_id) {
-                    let output = session.output.lock().expect("claude setup output lock");
-                    if let Some(authorize_url) = output.authorize_url.clone() {
-                        return Ok(serde_json::json!({
-                            "sessionId": session_id,
-                            "authorizeUrl": authorize_url,
-                            "claudeVersion": output.claude_version
-                        }));
-                    }
+            if let Some(session_id) = idempotency.get(&request.idempotency_key)
+                && let Ok(session) = self.claude_setup(session_id)
+            {
+                let output = session.output.lock().expect("claude setup output lock");
+                if let Some(authorize_url) = output.authorize_url.clone() {
+                    return Ok(serde_json::json!({
+                        "sessionId": session_id,
+                        "authorizeUrl": authorize_url,
+                        "claudeVersion": output.claude_version
+                    }));
                 }
             }
         }
         self.wait_for_codex_idle();
         {
-            let mut setups = self
-                .claude_setups
-                .lock()
-                .expect("claude setup map lock");
+            let mut setups = self.claude_setups.lock().expect("claude setup map lock");
             setups.retain(|_, session| {
                 !session
                     .output
@@ -1456,7 +1453,7 @@ impl GuestService {
             CLAUDE_SETUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         );
         let session = Arc::new(ClaudeSetupSession {
-            master: Mutex::new(pty.master),
+            _master: Mutex::new(pty.master),
             writer: Mutex::new(writer),
             output: Mutex::new(ClaudeSetupOutput {
                 claude_version,
@@ -1525,9 +1522,7 @@ impl GuestService {
                 .expect("claude setup output lock");
             output.exit_code = Some(exit_code);
             if exit_code != 0 && output.token.is_none() && output.failure.is_none() {
-                output.failure = Some(format!(
-                    "claude setup-token exited with code {exit_code}."
-                ));
+                output.failure = Some(format!("claude setup-token exited with code {exit_code}."));
             }
             waiter_session.output_changed.notify_all();
         });
@@ -1937,7 +1932,8 @@ impl Default for CodexExecOutput {
 }
 
 struct ClaudeSetupSession {
-    master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
+    // Keep the PTY master alive for the duration of the interactive setup.
+    _master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     output: Mutex<ClaudeSetupOutput>,
     output_changed: Condvar,
@@ -1989,10 +1985,9 @@ impl ClaudeSetupOutput {
         }
         if self.terminal() {
             return ClaudeSetupPollResponse::Failed {
-                reason: self
-                    .failure
-                    .clone()
-                    .unwrap_or_else(|| "claude setup-token stopped before returning a token.".into()),
+                reason: self.failure.clone().unwrap_or_else(|| {
+                    "claude setup-token stopped before returning a token.".into()
+                }),
             };
         }
         ClaudeSetupPollResponse::Pending
@@ -2005,9 +2000,9 @@ fn claude_setup_route(path: &str) -> Option<(&str, &str)> {
     (!session_id.is_empty()).then_some((session_id, action))
 }
 
-fn claude_setup_command(request: &ClaudeSetupStartRequest) -> String {
+fn claude_setup_command(_request: &ClaudeSetupStartRequest) -> String {
     #[cfg(test)]
-    if let Some(command) = request.command.as_ref() {
+    if let Some(command) = _request.command.as_ref() {
         return command.clone();
     }
     std::env::var("CODEV_CLAUDE_SETUP_COMMAND")
@@ -2036,8 +2031,10 @@ fn claude_version(command: &str) -> Option<String> {
 fn claude_authorize_url_pattern() -> &'static Regex {
     static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     PATTERN.get_or_init(|| {
-        Regex::new(r#"https?://[^\s'"]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\s'"]*"#)
-            .expect("Claude authorize URL regex")
+        Regex::new(
+            r#"https?://[^\s'"]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\s'"]*"#,
+        )
+        .expect("Claude authorize URL regex")
     })
 }
 
@@ -2897,7 +2894,12 @@ mod tests {
         }))
         .expect("start body");
         let start = service.handle("POST", "/v1/claude-setup-token", &body);
-        assert_eq!(start.status, 200, "{}", String::from_utf8_lossy(&start.body));
+        assert_eq!(
+            start.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&start.body)
+        );
         serde_json::from_slice(&start.body).expect("start json")
     }
 
@@ -2922,7 +2924,12 @@ exit 1
         );
         let start = start_claude_setup(&service, &command, "claude-good");
         let session_id = start["sessionId"].as_str().expect("session id");
-        assert!(start["authorizeUrl"].as_str().expect("authorize").contains("oauth"));
+        assert!(
+            start["authorizeUrl"]
+                .as_str()
+                .expect("authorize")
+                .contains("oauth")
+        );
         assert_eq!(start["claudeVersion"], "Claude Code 2.1.236");
 
         let code = service.handle(
@@ -3045,22 +3052,56 @@ sleep 5
 
     #[test]
     fn codex_exec_blocks_other_mutations_until_it_exits() {
-        let directory = tempdir().expect("tempdir");
-        let service = GuestService::new(directory.path()).expect("service");
-        let session_id =
-            start_codex_exec(&service, serde_json::json!(["sleep", "0.3"]), "busy-key");
+        struct ReleaseOnDrop(PathBuf);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                let _ = fs::write(&self.0, b"release");
+            }
+        }
 
-        let started_at = Instant::now();
-        let plain = service.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
+        let directory = tempdir().expect("tempdir");
+        let release = directory.path().join("release-codex-exec");
+        let _release_on_drop = ReleaseOnDrop(release.clone());
+        let service = Arc::new(GuestService::new(directory.path()).expect("service"));
+        let session_id = start_codex_exec(
+            &service,
+            serde_json::json!([
+                "/bin/sh",
+                "-c",
+                "while [ ! -e \"$1\" ]; do sleep 0.01; done",
+                "sh",
+                release
+            ]),
+            "busy-key",
+        );
+
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let service_for_plain = service.clone();
+        let plain_thread = thread::spawn(move || {
+            started_tx.send(()).expect("announce plain exec");
+            let response =
+                service_for_plain.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
+            done_tx.send(response).expect("send plain exec response");
+        });
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("plain exec thread did not start");
+        assert!(
+            done_rx.recv_timeout(Duration::from_millis(100)).is_err(),
+            "a plain exec must stay blocked while the Codex exec is running"
+        );
+
+        fs::write(&release, b"release").expect("release Codex exec");
+        let plain = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("plain exec did not unblock after the Codex exec exited");
+        plain_thread.join().expect("plain exec thread");
         assert_eq!(
             plain.status,
             200,
             "{}",
             String::from_utf8_lossy(&plain.body)
-        );
-        assert!(
-            started_at.elapsed() >= Duration::from_millis(250),
-            "a plain exec must wait for the in-flight Codex exec to finish"
         );
 
         poll_codex_exec_until_exited(

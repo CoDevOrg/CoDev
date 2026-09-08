@@ -11,7 +11,8 @@ artifacts built from this one source tree:
   (`services/orchestrator/src/backend/orca.rs`) runs one per workspace on the
   Firecracker host.
 
-Because both come from this directory, they cannot drift apart.
+Both build from this directory. Deployments remain independent, so client/server
+compatibility still needs verification during rollout.
 
 ## Origin and license
 
@@ -40,6 +41,17 @@ skip it. Run its own tooling from this directory:
 ```bash
 pnpm --dir packages/ide install
 ```
+
+From the repository root, `pnpm ide:dev` starts the browser client directly from
+source, `pnpm ide:check` checks its types, and `pnpm ide:test:web` runs its browser
+integration unit tests. These commands delegate to the IDE's own pinned tooling;
+they do not add it to root recursive builds. Use the development client with a
+test runtime pairing for editor/terminal verification. `pnpm orca:web` creates the
+production browser assets consumed by the CoDev website.
+
+CoDev's browser defaults, GitHub preflight adaptation, and dismissed-tip persistence
+live in `src/renderer/src/web/codev-web-preferences.ts`. There is no injected
+`codev-preload.js` or interception of assignments to `window.api`.
 
 It formats with oxfmt and lints with oxlint (`.oxfmtrc.json`, `.oxlintrc.json`),
 not the repo's Prettier — the root `.prettierignore` excludes this directory for

@@ -13,12 +13,10 @@ if (!index.includes("<title>Orca Web</title>")) {
     "Unexpected Orca web title; refusing an unsafe branding rewrite.",
   );
 }
-index = index
-  .replace("<title>Orca Web</title>", "<title>CoDev Workspace</title>")
-  .replace(
-    /(<script type="module"[^>]*><\/script>)/,
-    '<script src="./codev-preload.js"></script>\n    $1',
-  );
+index = index.replace(
+  "<title>Orca Web</title>",
+  "<title>CoDev Workspace</title>",
+);
 await writeFile(indexPath, index);
 
 const assetsDirectory = join(outputDirectory, "assets");

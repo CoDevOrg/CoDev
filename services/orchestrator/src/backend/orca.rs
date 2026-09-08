@@ -173,31 +173,13 @@ impl OrcaBackend {
             ));
         }
 
-        // Serialize start attempts for this backend: cheap (there are at most
-        // `max_sessions` of these at once) and avoids double-spawning a
-        // session or racing two Caddy config reloads for the same workspace.
+        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+            return Ok(session);
+        }
+        // Only provisioning and routing changes need the global capacity lock.
         let _guard = self.provision.lock().await;
-
-        if let Some(session) = self.sessions.read().await.get(workspace_id).cloned()
-            && session.is_running().await
-        {
-            // A shared workspace runs one session, but each member's coding
-            // subscription is their own. Re-file this member's credentials on
-            // every open — including this join-an-existing-session path, which
-            // is the *only* path a second member ever takes — so an agent they
-            // launch runs on their subscription instead of whichever member
-            // started the session. Best-effort: a member with nothing linked
-            // (or a rotated credential) must never fail the open.
-            if let Err(error) =
-                write_member_agent_credentials(&linux_user_for(workspace_id), &request).await
-            {
-                warn!(
-                    workspace_id,
-                    %error, "could not file this member's agent credentials"
-                );
-            }
-            session.touch();
-            return Ok(session.to_model(workspace_id));
+        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+            return Ok(session);
         }
         // Either absent or the process died since the last check; drop any
         // stale entry before re-provisioning.
@@ -297,6 +279,26 @@ impl OrcaBackend {
         self.reload_caddy_routes().await?;
         info!(workspace_id, port, "started per-workspace Orca IDE session");
         Ok(session.to_model(workspace_id))
+    }
+
+    async fn reconnect(
+        &self,
+        workspace_id: &str,
+        request: &IdeStartRequest,
+    ) -> Result<Option<IdeSession>> {
+        // Keep stop from removing the session while member credentials are refreshed.
+        let sessions = self.sessions.read().await;
+        let Some(session) = sessions.get(workspace_id) else {
+            return Ok(None);
+        };
+        if !session.is_running().await {
+            return Ok(None);
+        }
+        session.touch();
+        if let Err(error) = write_member_agent_credentials(&session.linux_user, request).await {
+            warn!(workspace_id, %error, "could not file this member's agent credentials");
+        }
+        Ok(Some(session.to_model(workspace_id)))
     }
 
     pub async fn status(&self, workspace_id: &str) -> Result<IdeSession> {
@@ -486,13 +488,23 @@ impl OrcaBackend {
     }
 
     pub async fn stop(&self, workspace_id: &str) -> Result<()> {
+        self.stop_session(workspace_id, false).await
+    }
+
+    async fn stop_session(&self, workspace_id: &str, only_if_idle: bool) -> Result<()> {
         let _guard = self.provision.lock().await;
-        let session = self
-            .sessions
-            .write()
-            .await
+        let mut sessions = self.sessions.write().await;
+        if only_if_idle
+            && sessions
+                .get(workspace_id)
+                .is_some_and(|session| session.idle_for() < self.config.idle_timeout)
+        {
+            return Ok(());
+        }
+        let session = sessions
             .remove(workspace_id)
             .ok_or(RuntimeError::SandboxNotFound)?;
+        drop(sessions);
         self.destroy_session(workspace_id, &session).await;
         self.reload_caddy_routes().await
     }
@@ -575,7 +587,7 @@ async fn reap_idle_sessions(backend: Arc<OrcaBackend>) {
             .collect();
         for workspace_id in idle {
             info!(workspace_id, "stopping idle Orca IDE session");
-            if let Err(error) = backend.stop(&workspace_id).await {
+            if let Err(error) = backend.stop_session(&workspace_id, true).await {
                 warn!(workspace_id, %error, "failed to stop idle Orca IDE session");
             }
         }
@@ -1537,6 +1549,57 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn reconnect_does_not_wait_for_another_workspace_provisioning() {
+        use super::*;
+        let root = tempfile::tempdir().unwrap();
+        let backend = OrcaBackend {
+            config: OrcaConfig {
+                app_run_bin: "/unused".into(),
+                workspaces_root: root.path().into(),
+                public_host: "localhost".into(),
+                caddy_admin_addr: "127.0.0.1:1".into(),
+                display: ":99".into(),
+                port_range_start: 7000,
+                port_range_end: 7999,
+                max_sessions: 1,
+                idle_timeout: Duration::from_secs(60),
+            },
+            sessions: AsyncRwLock::new(HashMap::new()),
+            provision: AsyncMutex::new(()),
+        };
+        let child = Command::new("sleep")
+            .arg("60")
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        backend.sessions.write().await.insert(
+            "test".into(),
+            Arc::new(RunningSession {
+                port: 7000,
+                linux_user: "unused".into(),
+                child: AsyncMutex::new(child),
+                ready: serde_json::json!({"type": "orca_server_ready"}),
+                created_at: Utc::now(),
+                last_activity_at: std::sync::RwLock::new(Utc::now()),
+            }),
+        );
+        let request: IdeStartRequest = serde_json::from_value(serde_json::json!({
+            "projectRoot": root.path().join("test")
+        }))
+        .unwrap();
+        let guard = backend.provision.lock().await;
+        let session = timeout(Duration::from_millis(250), backend.start("test", request))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.port, 7000);
+        drop(guard);
+        // An idle scan made before a reconnect must not reap the refreshed session.
+        backend.stop_session("test", true).await.unwrap();
+        assert!(backend.sessions.read().await.contains_key("test"));
+    }
+
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
         claude_settings_with_theme, codex_config_with_coordination_mcp, create_dir_all_within,

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
   return {
     OrchestratorError,
     getHostState: vi.fn(),
+    getIde: vi.fn(),
     requestHostWake: vi.fn(),
     waitForOrchestrator: vi.fn().mockResolvedValue(undefined),
     startIde: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("./credentials", () => ({
 vi.mock("./orchestrator", () => ({
   OrchestratorError: mocks.OrchestratorError,
   startIde: mocks.startIde,
+  getIde: mocks.getIde,
   stopIde: mocks.stopIde,
   waitForOrchestrator: mocks.waitForOrchestrator,
 }));
@@ -87,11 +89,77 @@ describe("ensureOrcaSession", () => {
     // before it reaches what it is actually asserting.
     vi.stubEnv("AUTH_SECRET", "o".repeat(40));
     mocks.getHostState.mockResolvedValue("running");
+    mocks.getIde.mockRejectedValue(
+      new mocks.OrchestratorError("not found", 404),
+    );
     mocks.waitForOrchestrator.mockResolvedValue(undefined);
     mocks.stopIde.mockResolvedValue(undefined);
     // Default: nothing linked, so a resolution throws exactly as the real
     // lookup does without a database.
     mocks.resolveAgentCredential.mockRejectedValue(new Error("no credential"));
+  });
+
+  it("reconnects a live workspace without EC2 discovery while refreshing member credentials and metering", async () => {
+    mocks.getIde.mockResolvedValueOnce(session);
+    mocks.startIde.mockResolvedValueOnce(session);
+    const result = await ensureOrcaSession(workspace, userId);
+    expect(result.state).toBe("ready");
+    expect(mocks.assertWorkspaceCreditQuota).toHaveBeenCalledWith(workspaceId);
+    expect(mocks.getIde).toHaveBeenCalledWith(workspaceId, 1_500);
+    expect(mocks.getHostState).not.toHaveBeenCalled();
+    expect(mocks.requestHostWake).not.toHaveBeenCalled();
+    expect(mocks.waitForOrchestrator).not.toHaveBeenCalled();
+    expect(mocks.startIde).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ memberId: userId }),
+    );
+    expect(mocks.resolveAgentCredential).toHaveBeenCalled();
+    expect(mocks.openOrcaInterval).toHaveBeenCalledWith(userId, workspaceId);
+  });
+
+  it("falls back to waking the host when the bounded session probe times out", async () => {
+    mocks.getIde.mockRejectedValueOnce(
+      new DOMException("timed out", "TimeoutError"),
+    );
+    mocks.getHostState.mockResolvedValueOnce("stopped");
+    mocks.requestHostWake.mockResolvedValueOnce("starting");
+    await expect(ensureOrcaSession(workspace, userId)).resolves.toEqual({
+      state: "host-starting",
+    });
+    expect(mocks.requestHostWake).toHaveBeenCalledOnce();
+    expect(mocks.startIde).not.toHaveBeenCalled();
+  });
+
+  it("does not treat denied runtime access as a reason to wake or start a host", async () => {
+    mocks.getIde.mockRejectedValueOnce(
+      new mocks.OrchestratorError("forbidden", 403),
+    );
+    await expect(ensureOrcaSession(workspace, userId)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(mocks.getHostState).not.toHaveBeenCalled();
+    expect(mocks.startIde).not.toHaveBeenCalled();
+  });
+
+  it("does not probe or connect when the workspace quota check fails", async () => {
+    mocks.assertWorkspaceCreditQuota.mockRejectedValueOnce(
+      new Error("quota unavailable"),
+    );
+    await expect(ensureOrcaSession(workspace, userId)).rejects.toThrow(
+      "quota unavailable",
+    );
+    expect(mocks.getIde).not.toHaveBeenCalled();
+    expect(mocks.startIde).not.toHaveBeenCalled();
+  });
+
+  it("does not trust a session returned for a different workspace", async () => {
+    mocks.getIde.mockResolvedValueOnce({
+      ...session,
+      workspaceId: "different",
+    });
+    mocks.startIde.mockResolvedValueOnce(session);
+    await ensureOrcaSession(workspace, userId);
+    expect(mocks.getHostState).toHaveBeenCalledOnce();
   });
 
   it("forwards a member's linked Cursor and plain OpenAI keys to the host", async () => {

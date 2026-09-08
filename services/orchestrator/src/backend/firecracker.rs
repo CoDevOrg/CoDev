@@ -556,7 +556,10 @@ impl FirecrackerBackend {
         request: ClaudeSetupPollRequest,
     ) -> Result<ClaudeSetupPollResponse> {
         let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.poll_claude_setup(session_id, &request).await?;
+        let result = machine
+            .guest
+            .poll_claude_setup(session_id, &request)
+            .await?;
         self.mark_activity(&machine);
         Ok(result)
     }

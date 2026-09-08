@@ -12,9 +12,8 @@ use crate::model::{
     IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
     TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
-    WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse,
-    WriteFileRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -405,7 +404,9 @@ impl Backend {
         match self {
             Self::Fake(backend) => backend.close_claude_setup(workspace_id, session_id),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.close_claude_setup(workspace_id, session_id).await,
+            Self::Firecracker(backend) => {
+                backend.close_claude_setup(workspace_id, session_id).await
+            }
         }
     }
 
