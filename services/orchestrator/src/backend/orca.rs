@@ -70,6 +70,13 @@ pub struct OrcaConfig {
     pub port_range_end: u16,
     pub max_sessions: usize,
     pub idle_timeout: Duration,
+    /// Bearer token gating the public `/v1/*` bypass described on
+    /// `direct_route`. Empty disables the route entirely, which is the safe
+    /// default: this API performs no authentication of its own.
+    pub direct_secret: String,
+    /// Port this orchestrator's own HTTP API listens on, i.e. what the
+    /// bypass route proxies to. Mirrors `PORT` in bin/orchestrator.rs.
+    pub api_port: u16,
 }
 
 impl OrcaConfig {
@@ -94,6 +101,8 @@ impl OrcaConfig {
                 "CODEV_IDE_IDLE_TIMEOUT",
                 Duration::from_secs(1_800),
             )?,
+            direct_secret: std::env::var("CODEV_DIRECT_SECRET").unwrap_or_default(),
+            api_port: environment_number("PORT", 8_080)?,
         };
         if config.public_host.trim().is_empty() {
             return Err(RuntimeError::BadRequest(
@@ -566,11 +575,44 @@ impl OrcaBackend {
         }
         drop(sessions);
         let caddyfile = format!(
-            "{{\n  admin {}\n}}\n\n{} {{\n{routes}  respond 404\n}}\n",
-            self.config.caddy_admin_addr, self.config.public_host
+            "{{\n  admin {}\n}}\n\n{} {{\n{}{routes}  respond 404\n}}\n",
+            self.config.caddy_admin_addr,
+            self.config.public_host,
+            direct_route(&self.config.direct_secret, self.config.api_port),
         );
         caddy_load(&self.config.caddy_admin_addr, &caddyfile).await
     }
+}
+
+/// The public `/v1/*` bypass around API Gateway.
+///
+/// Vercel normally reaches this orchestrator through an API Gateway + Lambda
+/// proxy, which imposes a hard, non-configurable 29-second integration
+/// timeout. Two calls legitimately run longer: an authenticated Codex exec
+/// turn (up to 900s) and the hosted `claude setup-token` flow, whose start
+/// measured 27s against that 29s ceiling. This route lets those go straight
+/// to the host, gated by a bearer token because the orchestrator itself
+/// performs no request authentication -- everywhere else it relies on the
+/// Lambda's security-group-restricted network path.
+///
+/// Every reload replaces Caddy's whole configuration, so this has to be
+/// re-emitted here rather than living in the Caddyfile bootstrap-host.sh
+/// writes. That file emits a byte-identical block for the window before the
+/// first workspace triggers a reload; the two must be changed together.
+///
+/// An empty or non-token-shaped secret emits nothing, leaving `/v1/*`
+/// unreachable from the internet. The shape check is what keeps a stray
+/// quote or brace in the secret from breaking out into the surrounding
+/// Caddyfile.
+fn direct_route(secret: &str, api_port: u16) -> String {
+    if secret.is_empty() || !secret.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return String::new();
+    }
+    format!(
+        "  @codev_direct {{\n    path /v1/*\n    header Authorization \"Bearer {secret}\"\n  }}\n\
+         \x20 handle @codev_direct {{\n    reverse_proxy 127.0.0.1:{api_port} {{\n      transport http {{\n        dial_timeout 10s\n        response_header_timeout 900s\n      }}\n    }}\n  }}\n\
+         \x20 handle /v1/* {{\n    respond 401\n  }}\n"
+    )
 }
 
 async fn reap_idle_sessions(backend: Arc<OrcaBackend>) {
@@ -2021,5 +2063,38 @@ mod tests {
         let chosen = claude_settings_with_theme(Some(json!({ "theme": "light", "model": "opus" })));
         assert_eq!(chosen["theme"], json!("light"));
         assert_eq!(chosen["model"], json!("opus"));
+    }
+
+    #[test]
+    fn direct_route_is_omitted_without_a_secret() {
+        assert_eq!(direct_route("", 8080), "");
+    }
+
+    #[test]
+    fn direct_route_rejects_a_secret_that_could_escape_the_caddyfile() {
+        // A quote or brace would otherwise terminate the header matcher and
+        // let the rest of the value be parsed as Caddyfile directives.
+        for hostile in [
+            "abc\"}\nrespond 200 {",
+            "has space",
+            "semi;colon",
+            "quote\"",
+        ] {
+            assert_eq!(direct_route(hostile, 8080), "", "accepted {hostile:?}");
+        }
+    }
+
+    #[test]
+    fn direct_route_gates_v1_on_the_bearer_token_and_denies_otherwise() {
+        let route = direct_route("deadbeefcafe0123", 8080);
+        assert!(route.contains("path /v1/*"));
+        assert!(route.contains("header Authorization \"Bearer deadbeefcafe0123\""));
+        assert!(route.contains("reverse_proxy 127.0.0.1:8080"));
+        // Anything reaching /v1/* without the token must be refused rather
+        // than falling through to the workspace routes or the 404.
+        assert!(route.contains("handle /v1/*"));
+        assert!(route.contains("respond 401"));
+        // Long Codex exec turns must not be cut off waiting for headers.
+        assert!(route.contains("response_header_timeout 900s"));
     }
 }
