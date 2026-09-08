@@ -7,7 +7,7 @@ import { loadActivityAuditSnapshot } from "@/lib/activity-audit-server";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
-export const metadata: Metadata = { title: "Workspace activity" };
+export const metadata: Metadata = { title: "Workspace history" };
 
 const PAGE_SIZE = 30;
 

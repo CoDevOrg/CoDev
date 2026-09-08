@@ -723,7 +723,7 @@ export function WorkspaceTopBar({
           href={`/workspaces/${workspaceId}/activity`}
         >
           <History aria-hidden size={13} />
-          Activity
+          History
         </Link>
         <button
           className="workspace-topbar-share"

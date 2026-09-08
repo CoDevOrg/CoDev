@@ -8,7 +8,7 @@ import {
   type CoordinationMessageInput,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 
 import { claimPatternsOverlap } from "./claim-patterns";
 import { getDatabase } from "./database";
@@ -425,6 +425,19 @@ export async function listCoordinationMessages(
       ),
     )
     .orderBy(asc(schema.coordinationMessages.createdAt));
+}
+
+/** Recent agent-to-agent messages for the workspace Activity panel. */
+export async function listWorkspaceCoordinationMessages(
+  workspaceId: string,
+  limit = 40,
+) {
+  return getDatabase()
+    .select()
+    .from(schema.coordinationMessages)
+    .where(eq(schema.coordinationMessages.workspaceId, workspaceId))
+    .orderBy(desc(schema.coordinationMessages.createdAt))
+    .limit(limit);
 }
 
 export async function createCoordinationMessage(

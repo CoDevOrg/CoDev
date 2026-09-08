@@ -5,6 +5,7 @@ import {
   CodevMissionControlView,
   distinctLocalAgentEntries,
   mergeMissionControlAgents,
+  missionControlActivityItems,
   missionControlContestNotice,
   missionControlOverlapNotice,
   missionControlPhaseFromStatus,
@@ -149,7 +150,8 @@ describe('CodevMissionControlView', () => {
         onStop={noop}
       />
     )
-    expect(html).toContain('Mission Control')
+    expect(html).toContain('Activity')
+    expect(html).toContain('Working now')
     expect(html).toContain('Alex Morgan')
     expect(html).toContain('Wire the billing webhook')
     expect(html).toContain('Editing app/api/webhooks/route.ts')
@@ -368,6 +370,49 @@ describe('missionControlOverlapNotice', () => {
     )
     expect(notice).toContain('alice-agent and bob-agent')
     expect(notice).toContain('Both briefs name apps/web/lib/auth.ts.')
+  })
+})
+
+describe('missionControlActivityItems', () => {
+  it('orders factual coordination events newest first', () => {
+    const items = missionControlActivityItems(
+      coordination({
+        claims: [
+          {
+            id: 'c1',
+            sessionId: 's1',
+            worktreeId: 'w1',
+            branch: null,
+            agentLabel: 'Codex',
+            path: 'apps/web/lib/auth.ts',
+            status: 'active',
+            createdAt: '2026-09-01T12:00:00.000Z'
+          }
+        ],
+        messages: [
+          {
+            id: 'm1',
+            fromSessionId: 's1',
+            toSessionId: 's2',
+            fromAgentLabel: 'Codex',
+            toAgentLabel: 'Claude',
+            sessionIds: ['s1', 's2'],
+            worktreeIds: ['w1', 'w2'],
+            kind: 'handoff',
+            status: 'delivered',
+            summary: 'Codex handed 2 files to Claude',
+            detail: 'Retry guard is ready.',
+            createdAt: '2026-09-01T12:01:00.000Z'
+          }
+        ]
+      })
+    )
+    expect(items.map((item) => item.id)).toEqual(['message:m1', 'claim:c1'])
+    expect(items[0]).toMatchObject({
+      title: 'Codex handed 2 files to Claude',
+      sessionIds: ['s1', 's2'],
+      worktreeIds: ['w1', 'w2']
+    })
   })
 })
 

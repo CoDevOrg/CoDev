@@ -1,6 +1,15 @@
 /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow , Radio } from 'lucide-react'
+import {
+  Plug,
+  Files,
+  GitBranch,
+  History,
+  ListChecks,
+  PanelRight,
+  Workflow,
+  Radio
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
@@ -106,7 +115,7 @@ function RightSidebarInner(): React.JSX.Element {
 
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
-      // CoDev: the single "Agents" tab — every agent in this workspace, always
+      // CoDev: the single Activity tab — every agent in this workspace, always
       // on screen. Listed first so it is the leftmost tab and the one a
       // member lands on, and it stands in for the AI Vault session-history
       // tab (hidden below).
@@ -115,7 +124,7 @@ function RightSidebarInner(): React.JSX.Element {
             {
               id: 'codev-agents' as const,
               icon: Radio,
-              title: 'Agents',
+              title: 'Activity',
               shortcut: ''
             }
           ]

@@ -204,10 +204,10 @@ export function WorkspaceActivityFeed({
       <OrcaPageHeader
         description={
           repository
-            ? `A durable history of what happened in ${repository}, with restore for tracked changes.`
-            : "A durable history of what happened in this workspace, with restore for tracked changes."
+            ? `A durable record of changes in ${repository}, with restore for tracked files and merged work.`
+            : "A durable record of workspace changes, with restore for tracked files and merged work."
         }
-        title="Activity"
+        title="Workspace history"
       />
 
       {error ? (
@@ -291,7 +291,7 @@ export function WorkspaceActivityFeed({
       <OrcaCard className="space-y-0 p-0">
         <div className="px-7 pt-6 pb-1">
           <h3 className="text-sm font-semibold text-foreground">
-            Recent activity
+            Recent history
           </h3>
         </div>
         {events.length === 0 ? (

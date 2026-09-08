@@ -270,7 +270,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       setCoordination({
         claims: snapshot?.claims ?? [],
         contests: snapshot?.contests ?? [],
-        overlaps: snapshot?.overlaps ?? []
+        overlaps: snapshot?.overlaps ?? [],
+        messages: snapshot?.messages ?? []
       })
     } catch {
       // Keep the last snapshot rather than blanking the holds on one bad poll;
@@ -344,6 +345,23 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       })
     },
     [byKey]
+  )
+
+  const handleOpenContext = useCallback(
+    (sessionIds: string[], worktreeIds: string[]) => {
+      const related = agents.find(
+        (agent) => agent.sessionId !== null && sessionIds.includes(agent.sessionId)
+      )
+      if (related) {
+        setOpenKey(related.key)
+        return
+      }
+      const worktreeId = worktreeIds.find((id) => Boolean(findWorktreeById(worktreesByRepo, id)))
+      if (worktreeId) {
+        activateAndRevealWorktree(worktreeId, { revealInSidebar: true })
+      }
+    },
+    [agents, worktreesByRepo]
   )
 
   const handleSteer = useCallback(
@@ -475,6 +493,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         onSteer={handleSteer}
         onPause={handlePause}
         onStop={(key) => void handleStop(key)}
+        onOpenContext={handleOpenContext}
       />
     </div>
   )

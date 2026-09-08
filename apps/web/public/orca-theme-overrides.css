@@ -982,6 +982,51 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   opacity: 0.6;
 }
 
+.codev-mc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.15rem;
+}
+
+.codev-mc-section + .codev-mc-section {
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(237, 238, 240, 0.08);
+}
+
+.codev-mc-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.codev-mc-section-head h4 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(237, 238, 240, 0.62);
+}
+
+.codev-mc-section-head > span {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(237, 238, 240, 0.07);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: rgba(237, 238, 240, 0.68);
+}
+
+.codev-mc-attention {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .codev-mc-alert {
   margin: 0;
   padding: 0.5rem 0.6rem;
@@ -999,6 +1044,87 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   border-color: rgba(237, 238, 240, 0.14);
   background: rgba(237, 238, 240, 0.05);
   color: rgba(237, 238, 240, 0.72);
+}
+
+.codev-mc-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codev-mc-event {
+  display: flex;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem 0.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.codev-mc-event:hover {
+  background: rgba(237, 238, 240, 0.05);
+}
+
+.codev-mc-event:focus-visible {
+  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline-offset: 1px;
+}
+
+.codev-mc-event-rail {
+  display: flex;
+  justify-content: center;
+  width: 12px;
+  padding-top: 4px;
+  flex: none;
+}
+
+.codev-mc-event-rail i {
+  width: 7px;
+  height: 7px;
+  border: 2px solid rgba(237, 238, 240, 0.35);
+  border-radius: 50%;
+  background: #1a1d21;
+}
+
+.codev-mc-event.is-message .codev-mc-event-rail i {
+  border-color: rgba(120, 170, 255, 0.72);
+}
+
+.codev-mc-event.is-overlap .codev-mc-event-rail i {
+  border-color: rgba(224, 128, 92, 0.9);
+}
+
+.codev-mc-event-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.codev-mc-event-body strong {
+  font-weight: 600;
+}
+
+.codev-mc-event-body > span:not(.codev-mc-event-meta) {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(237, 238, 240, 0.66);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.codev-mc-event-meta {
+  font-size: 9.5px;
+  text-transform: capitalize;
+  color: rgba(237, 238, 240, 0.48);
 }
 
 /* The paths an agent is actually holding, from `path_claims`. */

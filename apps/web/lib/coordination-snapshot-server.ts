@@ -3,7 +3,10 @@ import "server-only";
 import { schema } from "@codev/db";
 import { eq } from "drizzle-orm";
 
-import { listWorkspaceLivePathClaims } from "./agent-coordination";
+import {
+  listWorkspaceCoordinationMessages,
+  listWorkspaceLivePathClaims,
+} from "./agent-coordination";
 import {
   toCoordinationSnapshot,
   type CoordinationSnapshot,
@@ -24,7 +27,7 @@ import { listWorkspaceOverlaps } from "./workspace-brain";
 export async function loadWorkspaceCoordinationSnapshot(
   workspaceId: string,
 ): Promise<CoordinationSnapshot> {
-  const [claims, sessions, overlaps] = await Promise.all([
+  const [claims, sessions, overlaps, messages] = await Promise.all([
     listWorkspaceLivePathClaims(workspaceId),
     getDatabase()
       .select({
@@ -48,6 +51,7 @@ export async function loadWorkspaceCoordinationSnapshot(
       )
       .where(eq(schema.agentSessions.workspaceId, workspaceId)),
     listWorkspaceOverlaps(workspaceId),
+    listWorkspaceCoordinationMessages(workspaceId),
   ]);
 
   return toCoordinationSnapshot({
@@ -71,6 +75,16 @@ export async function loadWorkspaceCoordinationSnapshot(
       kind: overlap.kind,
       score: overlap.score,
       rationale: overlap.rationale,
+      detectedAt: overlap.detectedAt,
+    })),
+    messages: messages.map((message) => ({
+      id: message.id,
+      fromSessionId: message.fromSessionId,
+      toSessionId: message.toSessionId,
+      kind: message.kind,
+      payload: message.payload,
+      status: message.status,
+      createdAt: message.createdAt,
     })),
   });
 }

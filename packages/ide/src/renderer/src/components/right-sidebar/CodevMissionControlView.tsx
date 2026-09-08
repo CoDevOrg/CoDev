@@ -1,5 +1,17 @@
 import { useEffect, useState, type JSX, type KeyboardEvent } from 'react'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  ActivitySection,
+  ActivityTimeline,
+  EMPTY_MISSION_CONTROL_COORDINATION,
+  missionControlActivityItems,
+  type MissionControlCoordination
+} from './CodevActivityFeed'
+export {
+  EMPTY_MISSION_CONTROL_COORDINATION,
+  missionControlActivityItems,
+  type MissionControlCoordination
+} from './CodevActivityFeed'
 
 /**
  * Mission Control — the workspace's live agent view.
@@ -111,42 +123,6 @@ export function missionControlPhaseFromStatus(status: string): MissionControlPha
   if (/(done|merged|complete|ready|closed)/.test(value)) return 'done'
   if (/(wait|idle|queued|paused|standby)/.test(value)) return 'waiting'
   return 'working'
-}
-
-/** The slice of `coordination.list` the panel renders. */
-export type MissionControlCoordination = {
-  claims: {
-    id: string
-    sessionId: string
-    worktreeId: string | null
-    branch: string | null
-    agentLabel: string
-    path: string
-    status: 'active' | 'contested'
-  }[]
-  /** Agents whose live claims cover the same files. Not keyed on one path: a
-   *  claim can be a `dir/**` glob, and `apps/web/**` collides with
-   *  `apps/web/lib/auth.ts`. */
-  contests: {
-    paths: string[]
-    holders: { sessionId: string; agentLabel: string; paths: string[] }[]
-  }[]
-  /** The brain's *pre*-collision warning: two agents whose posted plans are
-   *  converging, before either has claimed anything. */
-  overlaps: {
-    id: string
-    sessionIds: string[]
-    agentLabels: string[]
-    kind: string
-    score: number
-    rationale: string
-  }[]
-}
-
-export const EMPTY_MISSION_CONTROL_COORDINATION: MissionControlCoordination = {
-  claims: [],
-  contests: [],
-  overlaps: []
 }
 
 /**
@@ -638,7 +614,8 @@ export function CodevMissionControlView({
   onStepIn,
   onSteer,
   onPause,
-  onStop
+  onStop,
+  onOpenContext
 }: {
   agents: MissionControlAgent[]
   coordination?: MissionControlCoordination
@@ -651,6 +628,7 @@ export function CodevMissionControlView({
   onSteer: (key: string, text: string) => void
   onPause: (key: string) => void
   onStop: (key: string) => void
+  onOpenContext?: (sessionIds: string[], worktreeIds: string[]) => void
 }): JSX.Element {
   const open = agents.find((agent) => agent.key === openKey) ?? null
   const live = coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
@@ -658,6 +636,8 @@ export function CodevMissionControlView({
   const overlapNotice = missionControlOverlapNotice(live)
   const working = agents.filter((agent) => agent.phase === 'working').length
   const blocked = agents.filter((agent) => agent.phase === 'blocked').length
+  const activity = missionControlActivityItems(live)
+  const needsAttention = live.contests.length + live.overlaps.length + blocked
   const owners: Array<{ name: string; hue: number }> = []
   for (const agent of agents) {
     if (!owners.some((owner) => owner.name === agent.ownerName)) {
@@ -666,14 +646,14 @@ export function CodevMissionControlView({
   }
 
   return (
-    <section className="codev-agents-panel codev-mc" aria-label="Live agents in this workspace">
+    <section className="codev-agents-panel codev-mc" aria-label="Workspace activity">
       <header className="codev-agents-head">
         <div>
           <p className="codev-agents-kicker">
             <i className="codev-agents-dot" aria-hidden />
             {working > 0 ? `${working} working now` : 'Live in this workspace'}
           </p>
-          <h3>Mission Control</h3>
+          <h3>Activity</h3>
         </div>
         <span className="codev-agents-count">
           <strong>{agents.length}</strong>
@@ -700,42 +680,52 @@ export function CodevMissionControlView({
         </div>
       ) : null}
 
-      {contestNotice ? (
-        <p className="codev-mc-alert" role="status">
-          {contestNotice}
-        </p>
+      {needsAttention > 0 ? (
+        <ActivitySection title="Needs attention" count={needsAttention}>
+          <div className="codev-mc-attention" role="status">
+            {contestNotice ? <p className="codev-mc-alert">{contestNotice}</p> : null}
+            {overlapNotice ? <p className="codev-mc-alert is-soft">{overlapNotice}</p> : null}
+            {blocked > 0 ? (
+              <p className="codev-mc-alert is-soft">
+                {blocked === 1
+                  ? 'One agent is waiting on you.'
+                  : `${blocked} agents are waiting on you.`}
+              </p>
+            ) : null}
+          </div>
+        </ActivitySection>
       ) : null}
 
-      {overlapNotice ? (
-        <p className="codev-mc-alert is-soft" role="status">
-          {overlapNotice}
-        </p>
-      ) : null}
+      <ActivitySection title="Working now" count={agents.length}>
+        {agents.length === 0 ? (
+          <p className="codev-agents-empty">
+            No agents are running yet. Open a chat and give an agent a task; its progress and file
+            claims will appear here.
+          </p>
+        ) : (
+          <ul className="codev-mc-list">
+            {agents.map((agent) => (
+              <AgentCard
+                key={agent.key}
+                agent={agent}
+                now={now}
+                onOpen={() => onOpen(agent.key)}
+                onStepIn={() => onStepIn(agent.key)}
+              />
+            ))}
+          </ul>
+        )}
+      </ActivitySection>
 
-      {!contestNotice && !overlapNotice && blocked > 0 ? (
-        <p className="codev-mc-alert is-soft" role="status">
-          {blocked === 1 ? 'One agent is waiting on you.' : `${blocked} agents are waiting on you.`}
-        </p>
+      {activity.length > 0 ? (
+        <ActivitySection title="Recent coordination">
+          <ActivityTimeline
+            items={activity}
+            now={now}
+            onOpenContext={onOpenContext ?? (() => undefined)}
+          />
+        </ActivitySection>
       ) : null}
-
-      {agents.length === 0 ? (
-        <p className="codev-agents-empty">
-          No agents are running yet. Start one from the chat tab, or open the agent workboard to
-          launch a managed session — it appears here the moment it moves.
-        </p>
-      ) : (
-        <ul className="codev-mc-list">
-          {agents.map((agent) => (
-            <AgentCard
-              key={agent.key}
-              agent={agent}
-              now={now}
-              onOpen={() => onOpen(agent.key)}
-              onStepIn={() => onStepIn(agent.key)}
-            />
-          ))}
-        </ul>
-      )}
 
       {open ? (
         <AgentDrawer

@@ -50,6 +50,7 @@ describe("toCoordinationSnapshot", () => {
         intent: "rewriting the cookie parser",
         status: "active",
         expiresAt: EXPIRES.toISOString(),
+        createdAt: EXPIRES.toISOString(),
       },
     ]);
   });
@@ -327,7 +328,79 @@ describe("toCoordinationSnapshot", () => {
         kind: "same_files",
         score: 82,
         rationale: "Both briefs name apps/web/lib/auth.ts.",
+        detectedAt: new Date(0).toISOString(),
       },
     ]);
+  });
+
+  it("summarizes coordination messages without exposing the full payload", () => {
+    const createdAt = new Date("2026-09-01T11:58:00.000Z");
+    const snapshot = toCoordinationSnapshot({
+      sessions: [
+        session({ id: "s1", name: "Codex" }),
+        session({ id: "s2", name: "Claude" }),
+      ],
+      claims: [],
+      overlaps: [],
+      messages: [
+        {
+          id: "m1",
+          fromSessionId: "s1",
+          toSessionId: "s2",
+          kind: "claim_request",
+          payload: {
+            path: "apps/web/lib/auth.ts",
+            intent:
+              "Coordinate the authentication parser before either agent edits it.",
+            privateField: "must not be copied",
+          },
+          status: "delivered",
+          createdAt,
+        },
+      ],
+    });
+
+    expect(snapshot.messages).toEqual([
+      expect.objectContaining({
+        summary:
+          "Codex asked Claude to coordinate work on apps/web/lib/auth.ts",
+        detail:
+          "Coordinate the authentication parser before either agent edits it.",
+        status: "delivered",
+        createdAt: createdAt.toISOString(),
+      }),
+    ]);
+    expect(JSON.stringify(snapshot.messages)).not.toContain("privateField");
+    expect(JSON.stringify(snapshot.messages)).not.toContain(
+      "must not be copied",
+    );
+  });
+
+  it("uses deterministic handoff copy and caps the displayed detail", () => {
+    const snapshot = toCoordinationSnapshot({
+      sessions: [
+        session({ id: "s1", name: "Codex" }),
+        session({ id: "s2", name: "Claude" }),
+      ],
+      claims: [],
+      overlaps: [],
+      messages: [
+        {
+          id: "m2",
+          fromSessionId: "s1",
+          toSessionId: "s2",
+          kind: "handoff",
+          payload: { paths: ["a.ts", "b.ts"], summary: "x".repeat(200) },
+          status: "resolved",
+          createdAt: EXPIRES,
+        },
+      ],
+    });
+
+    expect(snapshot.messages[0]?.summary).toBe(
+      "Codex handed 2 files to Claude",
+    );
+    expect(snapshot.messages[0]?.detail).toHaveLength(120);
+    expect(snapshot.messages[0]?.detail?.endsWith("…")).toBe(true);
   });
 });

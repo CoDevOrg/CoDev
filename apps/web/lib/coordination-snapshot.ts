@@ -20,6 +20,7 @@ export type CoordinationClaimSource = {
   intent: string;
   status: string;
   expiresAt: Date | string;
+  createdAt?: Date | string;
 };
 
 export type CoordinationSessionSource = {
@@ -40,6 +41,17 @@ export type CoordinationOverlapSource = {
   kind: string;
   score: number;
   rationale: string;
+  detectedAt?: Date | string;
+};
+
+export type CoordinationMessageSource = {
+  id: string;
+  fromSessionId: string;
+  toSessionId: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  status: string;
+  createdAt: Date | string;
 };
 
 export type CoordinationClaim = {
@@ -55,6 +67,7 @@ export type CoordinationClaim = {
   intent: string;
   status: "active" | "contested";
   expiresAt: string;
+  createdAt: string;
 };
 
 export type CoordinationOverlap = {
@@ -65,6 +78,22 @@ export type CoordinationOverlap = {
   kind: string;
   score: number;
   rationale: string;
+  detectedAt: string;
+};
+
+export type CoordinationActivityMessage = {
+  id: string;
+  fromSessionId: string;
+  toSessionId: string;
+  fromAgentLabel: string;
+  toAgentLabel: string;
+  sessionIds: [string, string];
+  worktreeIds: (string | null)[];
+  kind: "claim_request" | "claim_response" | "handoff" | "note";
+  status: "pending" | "delivered" | "resolved";
+  summary: string;
+  detail: string | null;
+  createdAt: string;
 };
 
 /** Two or more live agents holding claims that cover the same files. This is
@@ -89,13 +118,65 @@ export type CoordinationSnapshot = {
   claims: CoordinationClaim[];
   overlaps: CoordinationOverlap[];
   contests: CoordinationContest[];
+  messages: CoordinationActivityMessage[];
 };
 
 export const EMPTY_COORDINATION_SNAPSHOT: CoordinationSnapshot = {
   claims: [],
   overlaps: [],
   contests: [],
+  messages: [],
 };
+
+function compactText(value: unknown, max = 120): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function coordinationMessageCopy(
+  message: CoordinationMessageSource,
+  from: string,
+  to: string,
+): Pick<CoordinationActivityMessage, "summary" | "detail"> {
+  const payload = message.payload;
+  if (message.kind === "claim_request") {
+    return {
+      summary: `${from} asked ${to} to coordinate work on ${String(payload.path ?? "a claimed path")}`,
+      detail: compactText(payload.intent),
+    };
+  }
+  if (message.kind === "claim_response") {
+    const decision =
+      payload.decision === "accept"
+        ? "accepted"
+        : payload.decision === "reject"
+          ? "declined"
+          : "suggested a different path for";
+    return {
+      summary: `${from} ${decision} ${to}'s claim request`,
+      detail: compactText(payload.proposedPath ?? payload.reason),
+    };
+  }
+  if (message.kind === "handoff") {
+    const paths = stringList(payload.paths);
+    return {
+      summary: `${from} handed ${paths.length === 1 ? "1 file" : `${paths.length} files`} to ${to}`,
+      detail: compactText(payload.summary),
+    };
+  }
+  return {
+    summary: `${from} sent ${to} a coordination note`,
+    detail: compactText(payload.body),
+  };
+}
 
 function isoDate(value: Date | string): string {
   return value instanceof Date
@@ -190,6 +271,7 @@ export function toCoordinationSnapshot(input: {
   claims: CoordinationClaimSource[];
   sessions: CoordinationSessionSource[];
   overlaps: CoordinationOverlapSource[];
+  messages?: CoordinationMessageSource[];
 }): CoordinationSnapshot {
   const bySession = new Map(
     input.sessions.map((session) => [session.id, session]),
@@ -213,6 +295,7 @@ export function toCoordinationSnapshot(input: {
         intent: claim.intent,
         status: claim.status === "contested" ? "contested" : "active",
         expiresAt: isoDate(claim.expiresAt),
+        createdAt: isoDate(claim.createdAt ?? claim.expiresAt),
       };
     });
 
@@ -230,7 +313,37 @@ export function toCoordinationSnapshot(input: {
     kind: overlap.kind,
     score: overlap.score,
     rationale: overlap.rationale,
+    detectedAt: isoDate(overlap.detectedAt ?? new Date(0)),
   }));
 
-  return { claims, overlaps, contests };
+  const messages: CoordinationActivityMessage[] = (input.messages ?? []).map(
+    (message) => {
+      const from = coordinationAgentLabel(bySession.get(message.fromSessionId));
+      const to = coordinationAgentLabel(bySession.get(message.toSessionId));
+      return {
+        id: message.id,
+        fromSessionId: message.fromSessionId,
+        toSessionId: message.toSessionId,
+        fromAgentLabel: from,
+        toAgentLabel: to,
+        sessionIds: [message.fromSessionId, message.toSessionId],
+        worktreeIds: [
+          bySession.get(message.fromSessionId)?.worktreeId ?? null,
+          bySession.get(message.toSessionId)?.worktreeId ?? null,
+        ],
+        kind: ["claim_request", "claim_response", "handoff"].includes(
+          message.kind,
+        )
+          ? (message.kind as CoordinationActivityMessage["kind"])
+          : "note",
+        status: ["delivered", "resolved"].includes(message.status)
+          ? (message.status as CoordinationActivityMessage["status"])
+          : "pending",
+        ...coordinationMessageCopy(message, from, to),
+        createdAt: isoDate(message.createdAt),
+      };
+    },
+  );
+
+  return { claims, overlaps, contests, messages };
 }
