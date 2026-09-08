@@ -11,6 +11,7 @@ import {
 import {
   closeClaudeSetupTokenInSandbox,
   destroySandbox,
+  ensureHostReady,
   provisionSandbox,
   pollClaudeSetupTokenInSandbox,
   startClaudeSetupTokenInSandbox,
@@ -205,6 +206,11 @@ export const orchestratorClaudeRunner: ClaudeSetupTokenRunner = {
     let sandboxCreated = false;
     const startedAt = Date.now();
     try {
+      // The host stops itself after ten minutes idle, so connecting Claude
+      // after any quiet period arrives at a stopped instance. Without this the
+      // provision below raced the boot and reported "Firecracker host
+      // unavailable" on the first click.
+      await ensureHostReady();
       await provisionSandbox({
         workspaceId,
         repositoryUrl: null,

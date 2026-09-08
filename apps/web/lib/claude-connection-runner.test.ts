@@ -21,6 +21,7 @@ vi.mock("./settings-access", () => ({
 vi.mock("./orchestrator", () => ({
   closeClaudeSetupTokenInSandbox: vi.fn(),
   destroySandbox: vi.fn(),
+  ensureHostReady: vi.fn(),
   provisionSandbox: vi.fn(),
   pollClaudeSetupTokenInSandbox: vi.fn(),
   startClaudeSetupTokenInSandbox: vi.fn(),
@@ -37,6 +38,7 @@ import {
 import {
   closeClaudeSetupTokenInSandbox,
   destroySandbox,
+  ensureHostReady,
   pollClaudeSetupTokenInSandbox,
   provisionSandbox,
   startClaudeSetupTokenInSandbox,
@@ -90,6 +92,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(ensureHostReady).mockResolvedValue(undefined);
   vi.mocked(provisionSandbox).mockResolvedValue({} as never);
   vi.mocked(destroySandbox).mockResolvedValue(undefined);
   vi.mocked(closeClaudeSetupTokenInSandbox).mockResolvedValue(undefined);
@@ -163,6 +166,44 @@ describe("orchestratorClaudeRunner", () => {
     expect(destroySandbox).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
     );
+  });
+
+  it("waits for a stopped host before provisioning", async () => {
+    // The runtime host stops itself after ten minutes idle, so connecting
+    // Claude after a quiet period lands on a stopped instance. Provisioning
+    // before it is up produced "Firecracker host unavailable" on the first
+    // click and success on the second.
+    const order: string[] = [];
+    vi.mocked(ensureHostReady).mockImplementation(async () => {
+      order.push("ensureHostReady");
+    });
+    vi.mocked(provisionSandbox).mockImplementation(async () => {
+      order.push("provisionSandbox");
+      return {} as never;
+    });
+    vi.mocked(startClaudeSetupTokenInSandbox).mockResolvedValue({
+      sessionId: "claude-1",
+      authorizeUrl: "https://claude.com/cai/oauth/authorize?x=1",
+    } as never);
+
+    await orchestratorClaudeRunner.start({
+      sessionId: "11111111-2222-4333-8444-555555555555",
+    } as never);
+
+    expect(order).toEqual(["ensureHostReady", "provisionSandbox"]);
+  });
+
+  it("does not provision when the host never becomes ready", async () => {
+    vi.mocked(ensureHostReady).mockRejectedValue(
+      new Error("The workspace runtime is still starting."),
+    );
+
+    await expect(
+      orchestratorClaudeRunner.start({
+        sessionId: "11111111-2222-4333-8444-555555555555",
+      } as never),
+    ).rejects.toThrow(/still starting/);
+    expect(provisionSandbox).not.toHaveBeenCalled();
   });
 
   it("destroys the sandbox when starting Claude setup fails", async () => {

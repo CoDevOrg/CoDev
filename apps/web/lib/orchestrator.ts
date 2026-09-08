@@ -8,6 +8,7 @@ import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
 import { getAwsConfiguration } from "./aws";
+import { requestHostWake } from "./host";
 import type { RepositorySnapshot } from "./github";
 
 const errorSchema = z.object({
@@ -259,6 +260,38 @@ export async function checkOrchestratorConnection(timeoutMs = 4_000) {
     })
     .parse(await response.json());
 }
+
+/**
+ * Wait until the Firecracker host is running *and* its orchestrator answers.
+ *
+ * The host stops itself after ten minutes idle, so the first call after any
+ * quiet period lands on a stopped instance. Starting it takes roughly ten
+ * seconds before the orchestrator is even up, and longer before it serves --
+ * far longer than a single provision attempt is willing to wait. Callers that
+ * skip this see "Firecracker host unavailable" on the first click and success
+ * on the second, which is the whole of that bug.
+ *
+ * `requestHostWake` absorbs transient EC2 failures itself and reports the host
+ * as starting, so a capacity refusal or a mid-restart instance costs another
+ * turn of this loop rather than failing the action outright.
+ */
+export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = await requestHostWake().catch(() => "starting" as const);
+    if (state === "running") {
+      await waitForOrchestrator();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new OrchestratorError(
+    "The workspace runtime is still starting. Try again in a moment.",
+    503,
+  );
+}
+
+const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
 export async function waitForOrchestrator() {
   const deadline = Date.now() + 45_000;
