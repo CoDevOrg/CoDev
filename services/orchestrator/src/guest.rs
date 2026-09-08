@@ -1594,8 +1594,15 @@ impl GuestService {
         }
         let session = self.claude_setup(session_id)?;
         let mut writer = session.writer.lock().expect("claude setup writer lock");
+        // CR, not LF. `claude setup-token` is an ink TUI reading a raw-mode
+        // pty, where the Enter key is a carriage return and no line-ending
+        // translation happens. Sending "\n" put the code into the field and
+        // never submitted it: the characters echoed back as asterisks and the
+        // session sat in `exchanging` until it expired. Verified against the
+        // real binary in a guest -- LF leaves it at the prompt indefinitely,
+        // CR gets the code evaluated.
         writer
-            .write_all(format!("{}\n", request.code.trim()).as_bytes())
+            .write_all(format!("{}\r", request.code.trim()).as_bytes())
             .and_then(|_| writer.flush())
             .map_err(RuntimeError::internal)?;
         Ok(serde_json::json!({ "accepted": true }))
@@ -2962,6 +2969,12 @@ exit 1
         );
         assert_eq!(start["claudeVersion"], "Claude Code 2.1.236");
 
+        // Note what this does *not* prove. The fake reads in canonical mode,
+        // where the pty's ICRNL rewrites the CR we send into the NL its `read`
+        // wants, so it would pass either way. The real binary puts the pty in
+        // raw mode and only accepts CR; that was verified directly against
+        // claude 2.1.236 inside a guest, where LF left it sitting at the
+        // prompt with the code echoed as asterisks and CR got it evaluated.
         let code = service.handle(
             "POST",
             &format!("/v1/claude-setup-token/{session_id}/code"),
