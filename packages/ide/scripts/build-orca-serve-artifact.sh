@@ -17,6 +17,7 @@ readonly target_arch="${TARGET_ARCH:?TARGET_ARCH is required (arm64|x64)}"
 readonly artifact_arch="${ARTIFACT_ARCH:?ARTIFACT_ARCH is required (arm64|x86_64)}"
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+pnpm run prepare:build-toolchain
 pnpm install --frozen-lockfile
 
 # ORCA_LINUX_ARM64_RELEASE controls electron-builder's ARM artifact naming.
@@ -35,7 +36,7 @@ pnpm run build:desktop
 pnpm run ensure:electron-runtime
 pnpm exec electron-builder \
   --config config/electron-builder.config.cjs \
-  --linux AppImage deb \
+  --linux AppImage \
   --"${target_arch}" \
   --publish never
 

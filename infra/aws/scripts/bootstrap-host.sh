@@ -266,17 +266,114 @@ public_ipv4="$(curl -fsS -H "X-aws-ec2-metadata-token: ${public_ipv4_token}" \
   "http://169.254.169.254/latest/meta-data/public-ipv4")"
 orca_public_host="${public_ipv4//./-}.nip.io"
 
+# Bearer token for the /v1/* bypass around API Gateway's hard 29-second
+# timeout. Absent or unreadable is not fatal: the route is simply not served,
+# which is the same posture as before the bypass existed. Anything other than
+# an alphanumeric token is rejected rather than interpolated -- a quote or
+# brace would otherwise escape the header matcher into the Caddyfile.
+direct_secret=""
+if [[ -n "${CODEV_DIRECT_SECRET_PARAMETER:-}" ]]; then
+  direct_secret="$(aws ssm get-parameter \
+    --name "${CODEV_DIRECT_SECRET_PARAMETER}" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || true)"
+  if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
+    echo "direct secret missing or not alphanumeric; not serving /v1/*" >&2
+    direct_secret=""
+  fi
+fi
+
+# This block must stay byte-identical to direct_route() in
+# services/orchestrator/src/backend/orca.rs. Caddy's config is wholly replaced
+# by the orchestrator over the admin API on the first workspace change, so this
+# copy only covers the window before that happens -- but during that window it
+# is the only thing serving the route.
+direct_route=""
+if [[ -n "${direct_secret}" ]]; then
+  direct_route="  @codev_direct {
+    path /v1/*
+    header Authorization \"Bearer ${direct_secret}\"
+  }
+  handle @codev_direct {
+    reverse_proxy 127.0.0.1:8080 {
+      transport http {
+        dial_timeout 10s
+        response_header_timeout 900s
+      }
+    }
+  }
+  handle /v1/* {
+    respond 401
+  }
+"
+fi
+
 cat >/etc/caddy/Caddyfile <<CADDYFILE
 {
   admin 127.0.0.1:2019
 }
 
 ${orca_public_host} {
-  respond 404
+${direct_route}  respond 404
 }
 CADDYFILE
+# The Caddyfile now carries a bearer token, so keep it off world-readable.
+chown root:caddy /etc/caddy/Caddyfile
+chmod 0640 /etc/caddy/Caddyfile
+# Caddy's certificate storage lives on the root volume, which CloudFormation
+# destroys with the instance on every host-affecting deploy. Without this the
+# replacement asks Let's Encrypt for a brand new certificate each time, and
+# five issuances for the same name inside 168h exhausts the rate limit -- the
+# host then serves no TLS at all, which breaks Orca's browser IDE (it connects
+# straight to https://<host>/w/<workspaceId>) as well as the /v1 bypass. The
+# Elastic IP keeps the hostname stable, so a restored certificate is still
+# valid for the replacement.
+readonly caddy_data_dir="/var/lib/caddy/.local/share/caddy"
+readonly caddy_backup_prefix="s3://${CODEV_ARTIFACT_BUCKET}/caddy-data"
+install -d -m 0700 -o caddy -g caddy "${caddy_data_dir}"
+aws s3 sync "${caddy_backup_prefix}/" "${caddy_data_dir}/" --only-show-errors || \
+  echo "no stored Caddy certificates to restore; a new one will be requested" >&2
+chown -R caddy:caddy /var/lib/caddy
+
+# Push newly obtained or renewed certificates back. Certificates arrive
+# asynchronously after Caddy starts, so a one-shot copy here would miss the
+# first issuance; a timer also covers renewals. No --delete: an empty or
+# half-populated local directory must never wipe the stored copy.
+cat >/usr/local/sbin/codev-caddy-cert-sync <<SYNC
+#!/usr/bin/env bash
+set -euo pipefail
+aws s3 sync "${caddy_data_dir}/" "${caddy_backup_prefix}/" \
+  --sse AES256 --only-show-errors
+SYNC
+chmod 0700 /usr/local/sbin/codev-caddy-cert-sync
+
+cat >/etc/systemd/system/codev-caddy-cert-sync.service <<'UNIT'
+[Unit]
+Description=Persist Caddy certificate storage to S3
+After=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/codev-caddy-cert-sync
+UNIT
+
+cat >/etc/systemd/system/codev-caddy-cert-sync.timer <<'UNIT'
+[Unit]
+Description=Persist Caddy certificate storage to S3
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 systemctl enable caddy.service
 systemctl restart caddy.service
+systemctl daemon-reload
+systemctl enable --now codev-caddy-cert-sync.timer
 
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \
@@ -306,7 +403,17 @@ install -d -m 0755 "${work_dir}/rootfs/usr/local/lib/node_modules"
 cp -a "$(npm root -g)/@openai" "${work_dir}/rootfs/usr/local/lib/node_modules/"
 cp -a "$(npm root -g)/@anthropic-ai" "${work_dir}/rootfs/usr/local/lib/node_modules/"
 ln -s ../lib/node_modules/@openai/codex/bin/codex.js "${work_dir}/rootfs/usr/local/bin/codex"
-ln -s ../lib/node_modules/@anthropic-ai/claude-code/cli.js "${work_dir}/rootfs/usr/local/bin/claude"
+# claude-code ships a compiled launcher (2.1.236: bin/claude.exe), not the
+# cli.js this used to point at, and the path has already moved once between
+# releases. Read it from the package's own bin map and verify it before
+# linking: a hardcoded target that goes stale produces a dangling symlink,
+# and the only symptom is `claude` failing to spawn inside a guest with "No
+# viable candidates found in PATH" long after the host has bootstrapped.
+claude_package_dir="$(npm root -g)/@anthropic-ai/claude-code"
+claude_bin_rel="$(jq -re '.bin.claude' "${claude_package_dir}/package.json")"
+test -x "${claude_package_dir}/${claude_bin_rel}"
+ln -s "../lib/node_modules/@anthropic-ai/claude-code/${claude_bin_rel}" \
+  "${work_dir}/rootfs/usr/local/bin/claude"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
@@ -358,6 +465,16 @@ ln -s ../workspace.mount \
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
 
+# The guest's NIC is configured by the kernel `ip=` argument the orchestrator
+# passes, which carries an address and route but no resolver. Public servers
+# rather than the VPC's: 169.254.169.253 is link-local, so it is unreachable
+# from behind the host's NAT, and 169.254.169.254 is deliberately dropped.
+cat >"${work_dir}/rootfs/etc/resolv.conf" <<'RESOLV'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options timeout:2 attempts:2
+RESOLV
+
 truncate -s 3G "${base_dir}/rootfs.ext4"
 mkfs.ext4 -q -F -d "${work_dir}/rootfs" -L CODEV_ROOT "${base_dir}/rootfs.ext4"
 chmod 0600 "${base_dir}/rootfs.ext4"
@@ -386,10 +503,28 @@ add_rule() {
   iptables -C FORWARD "$@" 2>/dev/null || iptables -A FORWARD "$@"
 }
 
+nat_rule() {
+  iptables -t nat -C POSTROUTING "$@" 2>/dev/null ||
+    iptables -t nat -A POSTROUTING "$@"
+}
+
+# Guests sit on per-slot /30s behind codev-tapN (see backend/firecracker.rs)
+# and reach the internet only by being NAT'd here, so forwarding and
+# masquerading have to be on for any of the filtering below to see traffic at
+# all. Until outbound access was needed for OAuth device flows like
+# `claude setup-token`, guests had no NIC and every rule here matched nothing.
+sysctl -w net.ipv4.ip_forward=1
+printf 'net.ipv4.ip_forward = 1\n' >/etc/sysctl.d/99-codev-forwarding.conf
+nat_rule -s 10.200.0.0/16 -j MASQUERADE
+
 add_rule -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 add_rule -d 169.254.169.254/32 -j DROP
 add_rule -p tcp --dport 22 -j DROP
 add_rule -p tcp --dport 25 -j DROP
+# Name resolution, without which the allowed HTTPS below is unreachable by
+# hostname. TCP 53 covers responses too large for a UDP datagram.
+add_rule -p udp --dport 53 -j ACCEPT
+add_rule -p tcp --dport 53 -j ACCEPT
 add_rule -p tcp -m multiport --dports 80,443 -j ACCEPT
 add_rule -j DROP
 SCRIPT
@@ -440,6 +575,7 @@ Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
 Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
 Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
 Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
+Environment=CODEV_DIRECT_SECRET=${direct_secret}
 Environment=CODEV_MAX_IDE_SESSIONS=4
 Environment=CODEV_IDE_IDLE_TIMEOUT=10m
 Restart=always

@@ -10,16 +10,21 @@ import { readServerEnvironment } from "@codev/config";
 
 import { getAwsConfiguration } from "./aws";
 
+/**
+ * `AWS_HOST_INSTANCE_ID` pins resolution to one instance; leaving it unset is
+ * the normal configuration, because `resolveHost` finds the host through the
+ * stack's tags instead. This used to fall back to a hardcoded instance ID,
+ * which `deploy.sh` had long since replaced -- every resolution then spent a
+ * guaranteed `InvalidInstanceID.NotFound` round trip before reaching the tag
+ * lookup that was going to answer anyway. Return null instead so an unset
+ * variable goes straight to the tags.
+ */
 function getHostConfiguration() {
   const environment = readServerEnvironment();
-  const instanceId =
-    environment.AWS_HOST_INSTANCE_ID &&
-    environment.AWS_HOST_INSTANCE_ID.trim() !== ""
-      ? environment.AWS_HOST_INSTANCE_ID
-      : "i-03013fac5bc0e7bd0";
+  const configured = environment.AWS_HOST_INSTANCE_ID?.trim();
   return {
     ...getAwsConfiguration(),
-    instanceId,
+    instanceId: configured && configured !== "" ? configured : null,
   };
 }
 
@@ -105,18 +110,23 @@ async function describeInstance(
   return response.Reservations?.[0]?.Instances?.[0]?.State?.Name;
 }
 
-async function resolveHost(client: EC2Client, configuredInstanceId: string) {
-  try {
-    const state = await describeInstance(client, configuredInstanceId);
-    if (state && state !== "terminated" && state !== "shutting-down") {
-      return { instanceId: configuredInstanceId, state };
-    }
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      error.name !== "InvalidInstanceID.NotFound"
-    ) {
-      throw error;
+async function resolveHost(
+  client: EC2Client,
+  configuredInstanceId: string | null,
+) {
+  if (configuredInstanceId) {
+    try {
+      const state = await describeInstance(client, configuredInstanceId);
+      if (state && state !== "terminated" && state !== "shutting-down") {
+        return { instanceId: configuredInstanceId, state };
+      }
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.name !== "InvalidInstanceID.NotFound"
+      ) {
+        throw error;
+      }
     }
   }
 

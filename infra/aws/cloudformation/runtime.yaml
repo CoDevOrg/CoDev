@@ -52,6 +52,14 @@ Parameters:
   BudgetAlertEmail:
     Type: String
     Default: ""
+  DirectSecretParameter:
+    Description: >-
+      SSM SecureString holding the bearer token for the orchestrator's
+      /v1/* bypass around API Gateway's 29s timeout. deploy.sh creates it
+      once and reuses it, so the value survives host replacement and stays
+      in step with Vercel's ORCHESTRATOR_DIRECT_SECRET.
+    Type: String
+    Default: /codev/runtime/direct-secret
 
 Conditions:
   HasBudgetAlertEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
@@ -247,13 +255,38 @@ Resources:
                 Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}
                 Condition:
                   StringLike:
-                    s3:prefix: releases/*
+                    s3:prefix:
+                      - releases/*
+                      - caddy-data/*
+              # Caddy's certificate storage, kept across host replacement so a
+              # new instance restores the existing certificate instead of
+              # asking Let's Encrypt for another and exhausting the five-per-
+              # week limit for this hostname. Write access is confined to that
+              # prefix; release artifacts stay read-only.
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/caddy-data/*
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:DescribeLogStreams
                   - logs:PutLogEvents
                 Resource: !Sub "${HostLogGroup.Arn}:*"
+              # Scoped to the one parameter, and to SSM's own key: a
+              # SecureString read needs kms:Decrypt, and the alias condition
+              # keeps this from becoming a decrypt grant for the account.
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DirectSecretParameter}
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
 
   HostLogGroup:
     Type: AWS::Logs::LogGroup
@@ -313,7 +346,7 @@ Resources:
               sleep 10
             done
             chmod 0700 /tmp/codev-bootstrap-host.sh
-            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_ARCH=${HostArchitecture} CODEV_HOST_LOG_GROUP=${HostLogGroup} /tmp/codev-bootstrap-host.sh
+            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_ARCH=${HostArchitecture} CODEV_HOST_LOG_GROUP=${HostLogGroup} CODEV_DIRECT_SECRET_PARAMETER=${DirectSecretParameter} /tmp/codev-bootstrap-host.sh
       TagSpecifications:
         - ResourceType: launch-template
           Tags:

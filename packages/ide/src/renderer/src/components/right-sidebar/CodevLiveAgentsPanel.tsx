@@ -8,7 +8,6 @@ import {
   requestCodevBridge,
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
-import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import { planAgentStop } from '../../web/codev-agent-stop-plan'
 import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
 import {
@@ -17,35 +16,14 @@ import {
   distinctLocalAgentEntries,
   EMPTY_MISSION_CONTROL_COORDINATION,
   mergeMissionControlAgents,
+  isMissionControlLiveState,
+  missionControlHueFor,
   missionControlPhaseFromState,
   missionControlPhaseFromStatus,
   type MissionControlAgent,
   type MissionControlCoordination
 } from './CodevMissionControlView'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-
-/**
- * Mission Control container.
- *
- * CoDev's premise is several people steering several agents against one
- * repository, and until now that was only legible by opening a panel and
- * reading a status string. This is the workspace's default right-sidebar tab,
- * so the state of the room is on screen while you work.
- *
- * Two real sources, merged:
- *
- *  - Orca's local `agentStatusByPaneKey` — the agent in *this* tab, updated as
- *    tokens stream. The workboard never sees a chat-tab PTY agent, so without
- *    this the panel would read "0 agents" with one visibly working.
- *  - `workboard.list` over the CoDev bridge — every teammate's managed agent
- *    session, polled on an interval, with real owner attribution and a
- *    session id that "Steer" and "Pause" act on.
- *  - `coordination.list` over the same bridge — the workspace's live path
- *    claims and brain overlaps. The panel used to decide an agent was "blocked
- *    on a file claim" by regex over its status text and then describe the
- *    claim mechanism to the user on that basis; these are the rows the agents
- *    actually write.
- */
 
 const REFRESH_MS = 5_000
 const TICK_MS = 1_000
@@ -65,19 +43,6 @@ type WorkboardSlot = {
 type WorkboardSnapshot = {
   viewer?: { id?: string; name?: string; canCoSteer?: boolean }
   slots?: WorkboardSlot[]
-}
-
-function isLiveState(value: unknown): boolean {
-  return typeof value === 'string' && (AGENT_STATUS_STATES as readonly string[]).includes(value)
-}
-
-/** Stable per-name hue so a person keeps one colour across the panel. */
-function hueFor(key: string): number {
-  let hash = 0
-  for (let i = 0; i < key.length; i += 1) {
-    hash = (hash * 31 + key.charCodeAt(i)) % 360
-  }
-  return hash
 }
 
 function providerLabel(raw: string): string {
@@ -171,7 +136,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     const entries = Object.entries(statuses ?? {})
       // A status row with no agent identity is a plain terminal pane or a
       // half-torn-down entry, not an agent.
-      .filter(([, entry]) => isLiveState(entry.state) && Boolean(entry.agentType))
+      .filter(([, entry]) => isMissionControlLiveState(entry.state) && Boolean(entry.agentType))
       .sort(([, a], [, b]) => b.updatedAt - a.updatedAt)
 
     // One row per tab, not per worktree: every agent the user started is its
@@ -210,7 +175,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           ? (findWorktreeById(worktreesByRepo, entry.worktreeId)?.branch ?? null)
           : null,
         ownerName: viewerName,
-        ownerHue: hueFor(viewerName || paneKey),
+        ownerHue: missionControlHueFor(viewerName || paneKey),
         providerLabel: label,
         model: entry.model ?? null,
         phase,
@@ -243,7 +208,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           worktreeId: slot.worktreeId ?? null,
           branch: null,
           ownerName: slot.owner?.trim() || 'Teammate',
-          ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
+          ownerHue: missionControlHueFor(slot.owner?.trim() || String(slot.sessionId)),
           providerLabel: providerLabel(String(slot.provider ?? '')),
           model: null,
           phase: missionControlPhaseFromStatus(String(slot.status ?? '')),

@@ -13,9 +13,8 @@ use crate::model::{
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
     TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
-    WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse,
-    WriteFileRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;

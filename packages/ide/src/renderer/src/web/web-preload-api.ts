@@ -146,6 +146,8 @@ import {
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
+import { createCodevWebApi, seedCodevWebPreferences } from './codev-web-preferences'
+import { applyDocumentTheme } from '../lib/document-theme'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -496,11 +498,21 @@ const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linu
 const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
 
 export function installWebPreloadApi(): void {
+  if (isCodevEmbedded()) {
+    seedCodevWebPreferences(window.localStorage)
+  }
   activeEnvironment = readStoredWebRuntimeEnvironment()
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
   window.electron = createFallbackProxy(['electron']) as Window['electron']
-  window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
+  const api = createWebPreloadApi()
+  window.api = withFallback(
+    isCodevEmbedded() ? createCodevWebApi(api, window.localStorage) : api,
+    []
+  ) as PreloadApi
+  if (isCodevEmbedded() && typeof document !== 'undefined') {
+    applyDocumentTheme(getStoredSettings().theme, { disableTransitions: false })
+  }
 }
 
 async function writeWebClipboardText(text: string): Promise<void> {
