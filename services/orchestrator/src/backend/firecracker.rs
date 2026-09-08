@@ -1554,7 +1554,9 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_available_slot, parse_duration};
+    use super::{
+        GUEST_CID_BASE, first_available_slot, guest_ip, host_ip, parse_duration, tap_name,
+    };
 
     #[test]
     fn parses_runtime_durations() {

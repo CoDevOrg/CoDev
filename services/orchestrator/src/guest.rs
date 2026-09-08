@@ -2945,14 +2945,29 @@ exit 1
         );
         assert_eq!(code.status, 200);
 
-        let poll = service.handle(
-            "POST",
-            &format!("/v1/claude-setup-token/{session_id}/poll"),
-            br#"{"waitMilliseconds":5000}"#,
-        );
-        assert_eq!(poll.status, 200, "{}", String::from_utf8_lossy(&poll.body));
-        let result: ClaudeSetupPollResponse =
-            serde_json::from_slice(&poll.body).expect("poll response");
+        // Poll to a deadline rather than once. A single fixed wait raced the
+        // fake claude whenever the suite ran in parallel: the child had not
+        // written its token yet, poll answered Pending, and the assertion
+        // below failed as though the product were broken. What is asserted is
+        // unchanged -- a real sk-ant-oat token still has to arrive.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let result = loop {
+            let poll = service.handle(
+                "POST",
+                &format!("/v1/claude-setup-token/{session_id}/poll"),
+                br#"{"waitMilliseconds":5000}"#,
+            );
+            assert_eq!(poll.status, 200, "{}", String::from_utf8_lossy(&poll.body));
+            let parsed: ClaudeSetupPollResponse =
+                serde_json::from_slice(&poll.body).expect("poll response");
+            if !matches!(parsed, ClaudeSetupPollResponse::Pending) {
+                break parsed;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "claude setup-token never reported a token"
+            );
+        };
         assert!(matches!(
             result,
             ClaudeSetupPollResponse::Ready { ref oauth_token }

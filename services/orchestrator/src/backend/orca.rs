@@ -1606,6 +1606,8 @@ mod tests {
                 port_range_end: 7999,
                 max_sessions: 1,
                 idle_timeout: Duration::from_secs(60),
+                direct_secret: String::new(),
+                api_port: 8080,
             },
             sessions: AsyncRwLock::new(HashMap::new()),
             provision: AsyncMutex::new(()),
@@ -1645,9 +1647,10 @@ mod tests {
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
         claude_settings_with_theme, codex_config_with_coordination_mcp, create_dir_all_within,
-        linux_user_for, linux_user_process_command, member_agent_dir, member_agent_env_map,
-        member_id_pattern, merge_coordination_mcp_server, orca_serve_command_line,
-        orca_serve_sudo_command, repository_pattern, resolve_within, shell_quote, token_pattern,
+        direct_route, linux_user_for, linux_user_process_command, member_agent_dir,
+        member_agent_env_map, member_id_pattern, merge_coordination_mcp_server,
+        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, resolve_within,
+        shell_quote, token_pattern,
     };
     use crate::model::{IdeStartRequest, RuntimeError};
     use serde_json::json;
