@@ -18,6 +18,7 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use regex::Regex;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use tracing::info;
 use wait_timeout::ChildExt;
 
 use crate::model::{
@@ -1421,10 +1422,28 @@ impl GuestService {
             .map_err(RuntimeError::internal)?;
         let claude_command = claude_setup_command(&request);
         let claude_version = claude_version(&claude_command);
+        // A private HOME per session. CommandBuilder starts from an empty
+        // environment, so without this `claude` runs with no HOME at all and
+        // falls back to whatever passwd says -- /root, which the base rootfs
+        // ships as mode 000. Point it somewhere it certainly owns, and keep it
+        // out of the workspace so a credential file can never be picked up by
+        // the repository snapshot.
+        let session_id = format!(
+            "claude-{}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(RuntimeError::internal)?
+                .as_millis(),
+            CLAUDE_SETUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        let claude_home = std::env::temp_dir().join(&session_id);
+        std::fs::create_dir_all(&claude_home).map_err(RuntimeError::internal)?;
+
         let mut command = CommandBuilder::new(&claude_command);
         command.arg("setup-token");
         command.cwd(&self.workspace_root);
         command.env("PATH", GUEST_PATH);
+        command.env("HOME", &claude_home);
         command.env("TERM", "xterm-256color");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
@@ -1444,14 +1463,6 @@ impl GuestService {
             .try_clone_reader()
             .map_err(RuntimeError::internal)?;
         let writer = pty.master.take_writer().map_err(RuntimeError::internal)?;
-        let session_id = format!(
-            "claude-{}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(RuntimeError::internal)?
-                .as_millis(),
-            CLAUDE_SETUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        );
         let session = Arc::new(ClaudeSetupSession {
             _master: Mutex::new(pty.master),
             writer: Mutex::new(writer),
@@ -1606,6 +1617,19 @@ impl GuestService {
                 .expect("claude setup output lock");
             output = next_output;
         }
+        // The only window into a stalled exchange. `claude` can sit waiting on
+        // a prompt, or print an error the scrapers do not match, and every
+        // other signal here looks identical to "still working". Tail only, and
+        // redacted, so a token can never reach the log.
+        let tail = redact_claude_secrets(&output.buffer);
+        let tail = tail.get(tail.len().saturating_sub(400)..).unwrap_or(&tail);
+        info!(
+            session_id,
+            terminal = output.terminal(),
+            has_token = output.token.is_some(),
+            output_tail = %tail.escape_debug(),
+            "claude setup poll"
+        );
         let result = output.poll_response();
         serde_json::to_value(result).map_err(RuntimeError::internal)
     }
