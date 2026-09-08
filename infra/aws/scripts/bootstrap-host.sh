@@ -321,8 +321,59 @@ CADDYFILE
 # The Caddyfile now carries a bearer token, so keep it off world-readable.
 chown root:caddy /etc/caddy/Caddyfile
 chmod 0640 /etc/caddy/Caddyfile
+# Caddy's certificate storage lives on the root volume, which CloudFormation
+# destroys with the instance on every host-affecting deploy. Without this the
+# replacement asks Let's Encrypt for a brand new certificate each time, and
+# five issuances for the same name inside 168h exhausts the rate limit -- the
+# host then serves no TLS at all, which breaks Orca's browser IDE (it connects
+# straight to https://<host>/w/<workspaceId>) as well as the /v1 bypass. The
+# Elastic IP keeps the hostname stable, so a restored certificate is still
+# valid for the replacement.
+readonly caddy_data_dir="/var/lib/caddy/.local/share/caddy"
+readonly caddy_backup_prefix="s3://${CODEV_ARTIFACT_BUCKET}/caddy-data"
+install -d -m 0700 -o caddy -g caddy "${caddy_data_dir}"
+aws s3 sync "${caddy_backup_prefix}/" "${caddy_data_dir}/" --only-show-errors || \
+  echo "no stored Caddy certificates to restore; a new one will be requested" >&2
+chown -R caddy:caddy /var/lib/caddy
+
+# Push newly obtained or renewed certificates back. Certificates arrive
+# asynchronously after Caddy starts, so a one-shot copy here would miss the
+# first issuance; a timer also covers renewals. No --delete: an empty or
+# half-populated local directory must never wipe the stored copy.
+cat >/usr/local/sbin/codev-caddy-cert-sync <<SYNC
+#!/usr/bin/env bash
+set -euo pipefail
+aws s3 sync "${caddy_data_dir}/" "${caddy_backup_prefix}/" \
+  --sse AES256 --only-show-errors
+SYNC
+chmod 0700 /usr/local/sbin/codev-caddy-cert-sync
+
+cat >/etc/systemd/system/codev-caddy-cert-sync.service <<'UNIT'
+[Unit]
+Description=Persist Caddy certificate storage to S3
+After=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/codev-caddy-cert-sync
+UNIT
+
+cat >/etc/systemd/system/codev-caddy-cert-sync.timer <<'UNIT'
+[Unit]
+Description=Persist Caddy certificate storage to S3
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 systemctl enable caddy.service
 systemctl restart caddy.service
+systemctl daemon-reload
+systemctl enable --now codev-caddy-cert-sync.timer
 
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \

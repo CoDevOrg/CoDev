@@ -255,7 +255,20 @@ Resources:
                 Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}
                 Condition:
                   StringLike:
-                    s3:prefix: releases/*
+                    s3:prefix:
+                      - releases/*
+                      - caddy-data/*
+              # Caddy's certificate storage, kept across host replacement so a
+              # new instance restores the existing certificate instead of
+              # asking Let's Encrypt for another and exhausting the five-per-
+              # week limit for this hostname. Write access is confined to that
+              # prefix; release artifacts stay read-only.
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/caddy-data/*
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
