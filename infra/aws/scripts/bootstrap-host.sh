@@ -368,6 +368,16 @@ ln -s ../workspace.mount \
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
 
+# The guest's NIC is configured by the kernel `ip=` argument the orchestrator
+# passes, which carries an address and route but no resolver. Public servers
+# rather than the VPC's: 169.254.169.253 is link-local, so it is unreachable
+# from behind the host's NAT, and 169.254.169.254 is deliberately dropped.
+cat >"${work_dir}/rootfs/etc/resolv.conf" <<'RESOLV'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options timeout:2 attempts:2
+RESOLV
+
 truncate -s 3G "${base_dir}/rootfs.ext4"
 mkfs.ext4 -q -F -d "${work_dir}/rootfs" -L CODEV_ROOT "${base_dir}/rootfs.ext4"
 chmod 0600 "${base_dir}/rootfs.ext4"
@@ -396,10 +406,28 @@ add_rule() {
   iptables -C FORWARD "$@" 2>/dev/null || iptables -A FORWARD "$@"
 }
 
+nat_rule() {
+  iptables -t nat -C POSTROUTING "$@" 2>/dev/null ||
+    iptables -t nat -A POSTROUTING "$@"
+}
+
+# Guests sit on per-slot /30s behind codev-tapN (see backend/firecracker.rs)
+# and reach the internet only by being NAT'd here, so forwarding and
+# masquerading have to be on for any of the filtering below to see traffic at
+# all. Until outbound access was needed for OAuth device flows like
+# `claude setup-token`, guests had no NIC and every rule here matched nothing.
+sysctl -w net.ipv4.ip_forward=1
+printf 'net.ipv4.ip_forward = 1\n' >/etc/sysctl.d/99-codev-forwarding.conf
+nat_rule -s 10.200.0.0/16 -j MASQUERADE
+
 add_rule -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 add_rule -d 169.254.169.254/32 -j DROP
 add_rule -p tcp --dport 22 -j DROP
 add_rule -p tcp --dport 25 -j DROP
+# Name resolution, without which the allowed HTTPS below is unreachable by
+# hostname. TCP 53 covers responses too large for a UDP datagram.
+add_rule -p udp --dport 53 -j ACCEPT
+add_rule -p tcp --dport 53 -j ACCEPT
 add_rule -p tcp -m multiport --dports 80,443 -j ACCEPT
 add_rule -j DROP
 SCRIPT
