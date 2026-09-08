@@ -266,15 +266,61 @@ public_ipv4="$(curl -fsS -H "X-aws-ec2-metadata-token: ${public_ipv4_token}" \
   "http://169.254.169.254/latest/meta-data/public-ipv4")"
 orca_public_host="${public_ipv4//./-}.nip.io"
 
+# Bearer token for the /v1/* bypass around API Gateway's hard 29-second
+# timeout. Absent or unreadable is not fatal: the route is simply not served,
+# which is the same posture as before the bypass existed. Anything other than
+# an alphanumeric token is rejected rather than interpolated -- a quote or
+# brace would otherwise escape the header matcher into the Caddyfile.
+direct_secret=""
+if [[ -n "${CODEV_DIRECT_SECRET_PARAMETER:-}" ]]; then
+  direct_secret="$(aws ssm get-parameter \
+    --name "${CODEV_DIRECT_SECRET_PARAMETER}" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text 2>/dev/null || true)"
+  if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
+    echo "direct secret missing or not alphanumeric; not serving /v1/*" >&2
+    direct_secret=""
+  fi
+fi
+
+# This block must stay byte-identical to direct_route() in
+# services/orchestrator/src/backend/orca.rs. Caddy's config is wholly replaced
+# by the orchestrator over the admin API on the first workspace change, so this
+# copy only covers the window before that happens -- but during that window it
+# is the only thing serving the route.
+direct_route=""
+if [[ -n "${direct_secret}" ]]; then
+  direct_route="  @codev_direct {
+    path /v1/*
+    header Authorization \"Bearer ${direct_secret}\"
+  }
+  handle @codev_direct {
+    reverse_proxy 127.0.0.1:8080 {
+      transport http {
+        dial_timeout 10s
+        response_header_timeout 900s
+      }
+    }
+  }
+  handle /v1/* {
+    respond 401
+  }
+"
+fi
+
 cat >/etc/caddy/Caddyfile <<CADDYFILE
 {
   admin 127.0.0.1:2019
 }
 
 ${orca_public_host} {
-  respond 404
+${direct_route}  respond 404
 }
 CADDYFILE
+# The Caddyfile now carries a bearer token, so keep it off world-readable.
+chown root:caddy /etc/caddy/Caddyfile
+chmod 0640 /etc/caddy/Caddyfile
 systemctl enable caddy.service
 systemctl restart caddy.service
 
@@ -478,6 +524,7 @@ Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
 Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
 Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
 Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
+Environment=CODEV_DIRECT_SECRET=${direct_secret}
 Environment=CODEV_MAX_IDE_SESSIONS=4
 Environment=CODEV_IDE_IDLE_TIMEOUT=10m
 Restart=always

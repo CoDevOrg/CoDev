@@ -45,6 +45,7 @@ readonly monthly_budget_usd="${CODEV_MONTHLY_BUDGET_USD:-75}"
 readonly budget_alert_email="${CODEV_BUDGET_ALERT_EMAIL:-}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
 readonly artifact_bucket="${CODEV_ARTIFACT_BUCKET:-codev-runtime-${account_id}-${region}}"
+readonly direct_secret_parameter="${CODEV_DIRECT_SECRET_PARAMETER:-/codev/runtime/direct-secret}"
 readonly artifacts_stack="${CODEV_ARTIFACTS_STACK:-codev-runtime-artifacts}"
 readonly runtime_stack="${CODEV_RUNTIME_STACK:-codev-runtime}"
 readonly oidc_url="https://oidc.vercel.com/${team_slug}"
@@ -115,6 +116,23 @@ aws s3 cp \
   --sse AES256 \
   --only-show-errors
 
+# The bypass bearer token. Created once and never rotated automatically:
+# Vercel's ORCHESTRATOR_DIRECT_SECRET has to match, and silently rolling it
+# here would break every long-running call until someone noticed. Hex keeps it
+# alphanumeric, which both the Caddyfile emitters require.
+if ! aws ssm get-parameter \
+  --region "${region}" \
+  --name "${direct_secret_parameter}" >/dev/null 2>&1; then
+  echo "Creating ${direct_secret_parameter}"
+  aws ssm put-parameter \
+    --region "${region}" \
+    --name "${direct_secret_parameter}" \
+    --type SecureString \
+    --value "$(openssl rand -hex 32)" \
+    --description "Bearer token for the CoDev orchestrator's API Gateway bypass" \
+    --tags Key=Project,Value=CoDev >/dev/null
+fi
+
 aws cloudformation deploy \
   --region "${region}" \
   --stack-name "${runtime_stack}" \
@@ -132,6 +150,7 @@ aws cloudformation deploy \
     "JailerVolumeSizeGiB=${jailer_volume_size_gib}" \
     "MonthlyBudgetUsd=${monthly_budget_usd}" \
     "BudgetAlertEmail=${budget_alert_email}" \
+    "DirectSecretParameter=${direct_secret_parameter}" \
   --no-fail-on-empty-changeset
 
 api_id="$(aws cloudformation describe-stacks \
@@ -148,6 +167,11 @@ instance_id="$(aws cloudformation describe-stacks \
   --region "${region}" \
   --stack-name "${runtime_stack}" \
   --query "Stacks[0].Outputs[?OutputKey=='HostInstanceId'].OutputValue" \
+  --output text)"
+host_public_ip="$(aws cloudformation describe-stacks \
+  --region "${region}" \
+  --stack-name "${runtime_stack}" \
+  --query "Stacks[0].Outputs[?OutputKey=='HostPublicIp'].OutputValue" \
   --output text)"
 credential_key_arn="$(aws cloudformation describe-stacks \
   --region "${region}" \
@@ -298,7 +322,14 @@ ensure_vercel_role() {
 production_role_arn="$(ensure_vercel_role production)"
 preview_role_arn="$(ensure_vercel_role preview)"
 
+# The Elastic IP is stable across host replacement, so this URL can be set
+# in Vercel once. The secret is deliberately not printed: read it from SSM
+# with the parameter name below when setting ORCHESTRATOR_DIRECT_SECRET.
+readonly direct_url="https://${host_public_ip//./-}.nip.io"
+
 jq -n \
+  --arg directUrl "${direct_url}" \
+  --arg directSecretParameter "${direct_secret_parameter}" \
   --arg accountId "${account_id}" \
   --arg region "${region}" \
   --arg releaseVersion "${release_version}" \
@@ -313,6 +344,8 @@ jq -n \
     releaseVersion: $releaseVersion,
     artifactBucket: $artifactBucket,
     apiUrl: $apiUrl,
+    directUrl: $directUrl,
+    directSecretParameter: $directSecretParameter,
     instanceId: $instanceId,
     productionRoleArn: $productionRoleArn,
     previewRoleArn: $previewRoleArn

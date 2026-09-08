@@ -52,6 +52,14 @@ Parameters:
   BudgetAlertEmail:
     Type: String
     Default: ""
+  DirectSecretParameter:
+    Description: >-
+      SSM SecureString holding the bearer token for the orchestrator's
+      /v1/* bypass around API Gateway's 29s timeout. deploy.sh creates it
+      once and reuses it, so the value survives host replacement and stays
+      in step with Vercel's ORCHESTRATOR_DIRECT_SECRET.
+    Type: String
+    Default: /codev/runtime/direct-secret
 
 Conditions:
   HasBudgetAlertEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
@@ -254,6 +262,18 @@ Resources:
                   - logs:DescribeLogStreams
                   - logs:PutLogEvents
                 Resource: !Sub "${HostLogGroup.Arn}:*"
+              # Scoped to the one parameter, and to SSM's own key: a
+              # SecureString read needs kms:Decrypt, and the alias condition
+              # keeps this from becoming a decrypt grant for the account.
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DirectSecretParameter}
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
 
   HostLogGroup:
     Type: AWS::Logs::LogGroup
@@ -313,7 +333,7 @@ Resources:
               sleep 10
             done
             chmod 0700 /tmp/codev-bootstrap-host.sh
-            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_ARCH=${HostArchitecture} CODEV_HOST_LOG_GROUP=${HostLogGroup} /tmp/codev-bootstrap-host.sh
+            CODEV_ARTIFACT_BUCKET=${ArtifactBucket} CODEV_RELEASE_VERSION=${ReleaseVersion} CODEV_HOST_ARCH=${HostArchitecture} CODEV_HOST_LOG_GROUP=${HostLogGroup} CODEV_DIRECT_SECRET_PARAMETER=${DirectSecretParameter} /tmp/codev-bootstrap-host.sh
       TagSpecifications:
         - ResourceType: launch-template
           Tags:
