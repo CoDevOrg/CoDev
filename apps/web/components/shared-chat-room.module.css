@@ -1,54 +1,135 @@
+/* The room fills the full-height content cell as a fixed frame: a slim chat
+   header over the message column, the scrolling chat column, and a right info
+   rail that runs the full height. Only the message log and rail scroll. */
 .page {
-  display: flex;
-  flex-direction: column;
-  width: min(1080px, 100%);
-  min-height: 100dvh;
-  margin: 0 auto;
-  padding: clamp(18px, 3vw, 34px) clamp(14px, 4vw, 40px) 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* The room always renders inside the full-height sidebar shell, so pin to
+     the viewport directly rather than relying on percentage-height resolving
+     through the grid chain. */
+  height: 100dvh;
+  min-height: 0;
 }
 
-/* ---------------- Topbar ---------------- */
-.topbar {
-  position: sticky;
-  top: 0;
+/* ---------------- Chat-name header (center column only) ---------------- */
+.chatHeader {
+  grid-column: 1;
+  grid-row: 1;
+  /* Establish a stacking context above the chat/rail so the room-switcher
+     dropdown floats over the conversation. */
+  position: relative;
   z-index: 6;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px clamp(16px, 3vw, 26px);
-  border: 1px solid var(--line);
-  border-radius: 18px 18px 0 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px clamp(16px, 3vw, 26px);
+  border-bottom: 1px solid var(--line);
   background: linear-gradient(
     120deg,
-    rgba(242, 96, 74, 0.09),
-    rgba(26, 29, 33, 0.92) 55%
+    rgba(242, 96, 74, 0.06),
+    rgba(26, 29, 33, 0.5) 60%
   );
-  backdrop-filter: blur(10px);
 }
 
-.heading {
+/* ---- Room switcher (title dropdown) ---- */
+.switcher {
+  position: relative;
   min-width: 0;
 }
 
-.eyebrow {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--codev-gold-400);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+.switcherTitle {
+  margin: 0;
+  min-width: 0;
 }
 
-.heading h1 {
-  margin: 0;
+.switcherBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
   color: var(--ink);
-  font-size: clamp(17px, 2.4vw, 21px);
+  font: inherit;
+  font-size: clamp(15px, 2vw, 18px);
   font-weight: 700;
   letter-spacing: -0.02em;
+  cursor: pointer;
+}
+
+.switcherBtn:disabled {
+  cursor: default;
+}
+
+.switcherBtn:hover:not(:disabled) {
+  background: rgba(237, 238, 240, 0.06);
+}
+
+.switcherBtn:focus-visible {
+  outline: 2px solid var(--codev-gold-400);
+  outline-offset: 2px;
+}
+
+.switcherName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.switcherChev {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.switcherMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(320px, 80vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.switcherItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+
+.switcherItem:hover {
+  background: var(--surface-3);
+}
+
+.switcherItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcherItem small {
+  color: var(--muted-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .meta {
@@ -56,7 +137,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 5px;
 }
 
 .meta span {
@@ -81,8 +161,20 @@
   height: 12px;
 }
 
-.spacer {
-  flex: 1;
+/* Invite + participants cluster, blended into the top of the right rail. */
+.railTop {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.railTop .inviteControl > button {
+  min-height: 34px;
 }
 
 /* Participant avatar stack */
@@ -144,9 +236,11 @@
   height: 13px;
 }
 
-/* Invite / Share control */
+/* Invite / Share control. Left transparent to positioning so its popover
+   anchors to the rail-top cluster (.railTop) and spans the rail width rather
+   than the narrow button — keeping it clear of the rail's scroll clip. */
 .inviteControl {
-  position: relative;
+  position: static;
 }
 
 .inviteControl > button,
@@ -184,11 +278,11 @@
   position: absolute;
   z-index: 8;
   top: calc(100% + 8px);
+  left: 0;
   right: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  width: min(440px, calc(100vw - 44px));
   padding: 14px;
   border: 1px solid var(--line-strong);
   border-radius: 14px;
@@ -234,8 +328,8 @@
   position: absolute;
   z-index: 8;
   top: calc(100% + 8px);
+  left: 0;
   right: 0;
-  width: 280px;
   margin: 0;
   padding: 10px;
   border: 1px solid rgba(255, 124, 99, 0.3);
@@ -245,23 +339,22 @@
   font-size: 11px;
 }
 
-/* ---------------- Notes / people / warnings ---------------- */
-.roomNote,
+/* ---------------- Chat column ---------------- */
+.chat {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .warnings {
   padding: 10px clamp(16px, 3vw, 26px);
-  border: 1px solid var(--line);
-  border-top: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.roomNote {
-  background: rgba(237, 238, 240, 0.02);
-}
-
-.warnings {
+  border-bottom: 1px solid var(--line);
   background: rgba(139, 124, 216, 0.08);
   color: #c7bee9;
+  font-size: 12px;
 }
 
 .warnings p {
@@ -272,83 +365,134 @@
   margin-top: 5px;
 }
 
-.memberPanel {
+/* ---------------- Info rail ---------------- */
+.rail {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 0;
+  padding: 18px;
+  border-left: 1px solid var(--line);
+  background: rgba(18, 20, 23, 0.4);
+  overflow-y: auto;
+}
+
+.railBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.railBlock h2 {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px clamp(16px, 3vw, 26px);
-  border: 1px solid var(--line);
-  border-top: 0;
-  background: rgba(18, 20, 23, 0.32);
-  overflow-x: auto;
-}
-
-.memberHeading {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
-  color: var(--muted);
+  margin: 0;
+  color: var(--muted-2);
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.memberHeading svg {
+.railBlock h2 svg {
   width: 13px;
   height: 13px;
   color: var(--codev-gold-400);
 }
 
-.memberPanel ul {
+.railRow {
   display: flex;
-  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.railRow strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.railNote {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* The role caption sits quietly at the bottom of the rail. */
+.rail > .railNote {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.memberList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.memberPanel li {
-  display: inline-flex;
+.memberList li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  padding: 4px 10px 4px 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(26, 29, 33, 0.72);
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 9px;
 }
 
-.memberPanel li > img,
-.memberPanel li > span[aria-hidden] {
+.memberList li:hover {
+  background: rgba(237, 238, 240, 0.04);
+}
+
+.memberList li > img,
+.memberList li > span[aria-hidden] {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   object-fit: cover;
 }
 
-.memberPanel li > div {
+.memberList li > div {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  gap: 6px;
+  flex-direction: column;
 }
 
-.memberPanel li strong {
+.memberList li strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.memberPanel li small {
+.memberList li small {
   color: var(--muted-2);
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
-.memberPanel li em {
+.memberList li em {
   color: var(--codev-gold-400);
   font-size: 9px;
   font-style: normal;
@@ -363,19 +507,36 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  border: 1px solid var(--line);
-  border-top: 0;
-  border-radius: 0 0 18px 18px;
-  background: rgba(20, 22, 25, 0.6);
+  background: rgba(20, 22, 25, 0.45);
 }
 
+/* The full-width panel is the scroller, so the scrollbar rides the panel's
+   right edge; only the message column inside is centered and width-capped. */
 .messageLog {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
   padding: clamp(18px, 3vw, 28px) clamp(16px, 3vw, 26px) 8px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.messageLog::-webkit-scrollbar {
+  width: 10px;
+}
+
+.messageLog::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--line-strong);
+  background-clip: padding-box;
+}
+
+.messageLog::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .liveStatus {
@@ -393,12 +554,14 @@
   order: -1;
 }
 
-/* Message row: avatar + content */
+/* Message row: avatar + content, centered in a capped reading column. */
 .message {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 12px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
 }
 
 .avatar {
@@ -568,12 +731,17 @@
 
 /* ---------------- Composer ---------------- */
 .composer {
-  position: sticky;
-  bottom: 0;
-  padding: 12px clamp(16px, 3vw, 26px) 16px;
+  padding: 8px clamp(16px, 3vw, 26px) 10px;
   border-top: 1px solid var(--line);
-  background: linear-gradient(rgba(20, 22, 25, 0), rgba(20, 22, 25, 0.86) 30%);
-  backdrop-filter: blur(8px);
+  background: var(--surface-2);
+}
+
+.composerBox,
+.composer > .hint,
+.composer > .composerError {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
 }
 
 .composer > label {
@@ -590,9 +758,9 @@
 
 .composerBox {
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface);
-  padding: 10px 12px;
+  padding: 8px 12px;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -606,8 +774,8 @@
 .composer textarea {
   display: block;
   width: 100%;
-  min-height: 26px;
-  max-height: 220px;
+  min-height: 22px;
+  max-height: 200px;
   resize: none;
   padding: 0;
   border: 0;
@@ -627,7 +795,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .iconButton {
@@ -882,7 +1050,7 @@
 }
 
 .hint {
-  margin: 10px 2px 0;
+  margin: 6px 2px 0;
   color: var(--muted-2);
   font-size: 11px;
 }
@@ -937,16 +1105,34 @@
   outline-offset: 2px;
 }
 
+/* Below the two-pane breakpoint the rail folds under the chat: chat header,
+   the scrolling conversation, then the rail as a shorter scrolling panel. */
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .chatHeader {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .chat {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .rail {
+    grid-column: 1;
+    grid-row: 3;
+    max-height: 42vh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
 @media (max-width: 700px) {
-  .topbar {
-    flex-wrap: wrap;
-  }
-
-  .headerActions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
   .modelMenu {
     grid-template-columns: 116px minmax(0, 1fr);
   }
