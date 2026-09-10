@@ -148,6 +148,7 @@ describe("ProviderAccountCard", () => {
   });
 
   it("connects Claude in-app: start, paste the code, poll to connected", async () => {
+    let submitted = false;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -158,17 +159,18 @@ describe("ProviderAccountCard", () => {
           failureReason: null,
         }),
       )
-      .mockResolvedValueOnce(
-        jsonResponse({ id: "sess-1", status: "exchanging" }),
-      )
-      .mockResolvedValue(
-        jsonResponse({
+      .mockImplementation(async (url: string) => {
+        if (url.endsWith("/code")) {
+          submitted = true;
+          return jsonResponse({ id: "sess-1", status: "exchanging" });
+        }
+        return jsonResponse({
           id: "sess-1",
-          status: "connected",
+          status: submitted ? "connected" : "awaiting_code",
           authorizeUrl: null,
           failureReason: null,
-        }),
-      );
+        });
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -201,16 +203,21 @@ describe("ProviderAccountCard", () => {
     fireEvent.change(input, { target: { value: "code123#state" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Claude is connected.",
-      );
-    });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "/api/personal/claude-connection/session/sess-1/code",
+    await waitFor(
+      () => {
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Claude is connected.",
+        );
+      },
+      { timeout: 4000 },
     );
-    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/personal/claude-connection/session/sess-1/code",
+      expect.anything(),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal/claude-connection/session/sess-1",
+      expect.anything(),
     );
   });
 

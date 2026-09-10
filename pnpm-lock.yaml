@@ -265,7 +265,7 @@ importers:
         version: 3.1098.0
       '@clerk/nextjs':
         specifier: 7.6.3
-        version: 7.6.3(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 7.6.3(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@codev/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -298,7 +298,7 @@ importers:
         version: 1.38.0
       '@vercel/analytics':
         specifier: ^2.0.1
-        version: 2.0.1(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+        version: 2.0.1(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@vercel/functions':
         specifier: 3.7.6
         version: 3.7.6(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.1)
@@ -325,10 +325,10 @@ importers:
         version: 1.28.0(react@19.2.8)
       next:
         specifier: 16.2.12
-        version: 16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       next-auth:
         specifier: 5.0.0-beta.32
-        version: 5.0.0-beta.32(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+        version: 5.0.0-beta.32(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       openai:
         specifier: 7.0.0
         version: 7.0.0(@aws-sdk/credential-provider-node@3.972.75)(@smithy/signature-v4@5.6.12)(ws@8.21.1)(zod@4.3.6)
@@ -355,7 +355,7 @@ importers:
         version: 3.6.0
       workflow:
         specifier: 4.7.0
-        version: 4.7.0(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(ws@8.21.1)
+        version: 4.7.0(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(ws@8.21.1)
       ws:
         specifier: 8.21.1
         version: 8.21.1
@@ -408,6 +408,10 @@ importers:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@24.10.13)(jsdom@30.0.0)(vite@8.1.5(@types/node@24.10.13)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.1)(yaml@2.9.0))
+    optionalDependencies:
+      node-pty:
+        specifier: 1.1.0
+        version: 1.1.0
 
   packages/config:
     dependencies:
@@ -6842,6 +6846,9 @@ packages:
       sass:
         optional: true
 
+  node-addon-api@7.1.1:
+    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+
   node-exports-info@1.6.2:
     resolution: {integrity: sha512-kXs9Go0cah0qHVV2v389IXQLdLCeE1xfFtjOAF+iobu0OIoG1pje8At2vMHyaPMiPMnG/LWP50twML21eMcAag==}
     engines: {node: '>= 0.4'}
@@ -6865,6 +6872,9 @@ packages:
 
   node-int64@0.4.0:
     resolution: {integrity: sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw==}
+
+  node-pty@1.1.0:
+    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
 
   node-releases@2.0.51:
     resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
@@ -9653,12 +9663,12 @@ snapshots:
       - react
       - react-dom
 
-  '@clerk/nextjs@7.6.3(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@clerk/nextjs@7.6.3(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@clerk/backend': 3.14.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@clerk/react': 6.12.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@clerk/shared': 4.25.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      next: 16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next: 16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       server-only: 0.0.1
@@ -12199,9 +12209,9 @@ snapshots:
     dependencies:
       uncrypto: 0.1.3
 
-  '@vercel/analytics@2.0.1(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+  '@vercel/analytics@2.0.1(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
     optionalDependencies:
-      next: 16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next: 16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8
 
   '@vercel/cli-auth@0.0.1':
@@ -12471,7 +12481,7 @@ snapshots:
       - supports-color
       - ws
 
-  '@workflow/next@4.1.3(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(ws@8.21.1)':
+  '@workflow/next@4.1.3(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(ws@8.21.1)':
     dependencies:
       '@swc/core': 1.15.3
       '@workflow/builders': 4.1.4(ws@8.21.1)
@@ -12480,7 +12490,7 @@ snapshots:
       semver: 7.7.4
       watchpack: 2.5.1
     optionalDependencies:
-      next: 16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next: 16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     transitivePeerDependencies:
       - '@opentelemetry/api'
       - '@swc/helpers'
@@ -13967,7 +13977,7 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.2(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.56.1(eslint@9.39.2(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.2(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -15757,13 +15767,13 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  next-auth@5.0.0-beta.32(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
+  next-auth@5.0.0-beta.32(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
     dependencies:
       '@auth/core': 0.41.3
-      next: 16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next: 16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8
 
-  next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@next/env': 16.2.12
       '@swc/helpers': 0.5.15
@@ -15772,7 +15782,7 @@ snapshots:
       postcss: 8.5.25
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
-      styled-jsx: 5.1.6(react@19.2.8)
+      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.8)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.12
       '@next/swc-darwin-x64': 16.2.12
@@ -15789,6 +15799,9 @@ snapshots:
       - '@babel/core'
       - '@types/node'
       - babel-plugin-macros
+
+  node-addon-api@7.1.1:
+    optional: true
 
   node-exports-info@1.6.2:
     dependencies:
@@ -15809,6 +15822,11 @@ snapshots:
     optional: true
 
   node-int64@0.4.0: {}
+
+  node-pty@1.1.0:
+    dependencies:
+      node-addon-api: 7.1.1
+    optional: true
 
   node-releases@2.0.51: {}
 
@@ -16993,10 +17011,12 @@ snapshots:
 
   structured-headers@0.4.1: {}
 
-  styled-jsx@5.1.6(react@19.2.8):
+  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.8):
     dependencies:
       client-only: 0.0.1
       react: 19.2.8
+    optionalDependencies:
+      '@babel/core': 7.29.7
 
   styleq@0.1.3: {}
 
@@ -17391,7 +17411,7 @@ snapshots:
   vite@8.1.5(@types/node@24.10.13)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.50.0)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       postcss: 8.5.25
       rolldown: 1.1.5
       tinyglobby: 0.2.17
@@ -17407,7 +17427,7 @@ snapshots:
   vite@8.1.5(@types/node@24.10.13)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.50.0)(tsx@4.23.1)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       postcss: 8.5.25
       rolldown: 1.1.5
       tinyglobby: 0.2.17
@@ -17594,14 +17614,14 @@ snapshots:
 
   wordwrap@1.0.0: {}
 
-  workflow@4.7.0(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(ws@8.21.1):
+  workflow@4.7.0(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(typescript@5.9.3)(ws@8.21.1):
     dependencies:
       '@workflow/astro': 4.0.14(ws@8.21.1)
       '@workflow/cli': 4.3.3(ws@8.21.1)
       '@workflow/core': 4.7.0(ws@8.21.1)
       '@workflow/errors': 4.2.0
       '@workflow/nest': 4.0.15(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(ws@8.21.1)
-      '@workflow/next': 4.1.3(next@16.2.12(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(ws@8.21.1)
+      '@workflow/next': 4.1.3(next@16.2.12(@babel/core@7.29.7)(@playwright/test@1.62.0)(@types/node@24.10.13)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(ws@8.21.1)
       '@workflow/nitro': 4.1.5(ws@8.21.1)
       '@workflow/nuxt': 4.0.15(ws@8.21.1)
       '@workflow/rollup': 4.0.14(ws@8.21.1)

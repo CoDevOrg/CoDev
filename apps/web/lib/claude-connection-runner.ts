@@ -33,12 +33,15 @@ import { logEvent } from "./observability";
  * is a one-line change in {@link resolveClaudeRunner}.
  */
 
-const TOKEN_PATTERN = /sk-ant-[A-Za-z0-9_-]{20,}/;
+// A stream chunk can stop halfway through a token. Wait for its delimiter
+// before storing it; otherwise polling can persist a truncated credential.
+const TOKEN_PATTERN = /sk-ant-[A-Za-z0-9_-]{20,}(?=[^A-Za-z0-9_-])/;
 
 function urlPattern() {
   const override = process.env.CLAUDE_CONNECTION_URL_PATTERN?.trim();
   if (override) return new RegExp(override, "i");
-  return /(https?:\/\/[^\s'"]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\s'"]*)/i;
+  // OSC terminal hyperlinks end in BEL/ESC, which are not whitespace.
+  return /(https?:\/\/[^\x00-\x20'"\x7f]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\x00-\x20'"\x7f]*)(?=[\x00-\x20'"\x7f])/i;
 }
 
 function setupCommand(): { command: string; args: string[] } {
@@ -61,7 +64,8 @@ const ORCHESTRATOR_SANDBOX_LIFECYCLE_MS = 4 * 60 * 60 * 1_000;
 const EMPTY_AUTH_REPOSITORY_FILE = "Hosted Claude connection runner.\n";
 
 type RunnerProcess = {
-  child: ChildProcessWithoutNullStreams;
+  kill: () => void;
+  write: (code: string) => void;
   output: string;
   authorizeUrl?: string;
   token?: string;
@@ -77,7 +81,7 @@ function sweep() {
   for (const [id, proc] of processes) {
     if (proc.createdAt < cutoff) {
       try {
-        proc.child.kill("SIGKILL");
+        proc.kill();
       } catch {
         // already gone
       }
@@ -88,12 +92,20 @@ function sweep() {
 
 function absorb(proc: RunnerProcess, chunk: string) {
   proc.output += chunk;
+  // ConPTY inserts cursor/style controls between writes. They are not token
+  // or URL delimiters. Keep the raw buffer so a control split across chunks
+  // can be completed on the next read; retain OSC hyperlinks for their URLs.
+  const text = proc.output
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b\[[0-?]*[ -/]*$/, "")
+    .replace(/\x1b\](?!8;)[^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\](?!8;)[^\x07]*$/, "");
   if (!proc.token) {
-    const match = TOKEN_PATTERN.exec(proc.output);
+    const match = TOKEN_PATTERN.exec(text);
     if (match) proc.token = match[0];
   }
   if (!proc.authorizeUrl) {
-    const match = urlPattern().exec(proc.output);
+    const match = urlPattern().exec(text);
     if (match?.[1]) proc.authorizeUrl = match[1];
   }
   // Once the whole token is captured, scrub it from the buffered transcript so
@@ -106,31 +118,62 @@ export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {
   async start({ sessionId }) {
     sweep();
     const { command, args } = setupCommand();
-    const child = spawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, CI: "1", FORCE_COLOR: "0" },
-    }) as ChildProcessWithoutNullStreams;
-
     const proc: RunnerProcess = {
-      child,
+      kill: () => {},
+      write: () => {},
       output: "",
       exited: false,
       createdAt: Date.now(),
     };
-    processes.set(sessionId, proc);
-
-    child.stdout.on("data", (d: Buffer) => absorb(proc, d.toString()));
-    child.stderr.on("data", (d: Buffer) => absorb(proc, d.toString()));
-    child.on("error", (error) => {
-      proc.failure = error.message;
-      proc.exited = true;
-    });
-    child.on("exit", (code) => {
+    // `exit` may arrive before the final stdout chunk; `close` means all
+    // output has drained. EOF also terminates a token without a newline.
+    const onClose = (code: number | null) => {
+      absorb(proc, "\n");
       proc.exited = true;
       if (!proc.token && !proc.failure) {
         proc.failure = `claude setup-token exited with code ${code ?? "unknown"}.`;
       }
-    });
+    };
+    const env = { ...process.env, CI: "1", FORCE_COLOR: "0" };
+    if (process.platform === "win32") {
+      // The native Windows CLI emits no setup-token output when all stdio
+      // handles are pipes. ConPTY gives its interactive login a real terminal.
+      // Load lazily: the production orchestrator runner never needs this addon.
+      const pty = await import("node-pty");
+      const child = pty.spawn(command, args, {
+        name: "xterm-256color",
+        useConptyDll: true,
+        // This terminal is a transport, not a visible panel. Keep long OAuth
+        // URLs and tokens on one line so ConPTY cannot wrap their contents.
+        cols: 4096,
+        rows: 24,
+        cwd: process.cwd(),
+        env,
+      });
+      proc.kill = () => child.kill();
+      proc.write = (code) => child.write(`${code}\r`);
+      child.onData((chunk) => absorb(proc, chunk));
+      child.onExit(({ exitCode }) => onClose(exitCode));
+    } else {
+      const child = spawn(command, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        env,
+      }) as ChildProcessWithoutNullStreams;
+      proc.kill = () => {
+        child.kill("SIGKILL");
+      };
+      proc.write = (code) => {
+        child.stdin.write(`${code}\n`);
+      };
+      child.stdout.on("data", (d: Buffer) => absorb(proc, d.toString()));
+      child.stderr.on("data", (d: Buffer) => absorb(proc, d.toString()));
+      child.on("error", (error) => {
+        proc.failure = error.message;
+        proc.exited = true;
+      });
+      child.on("close", onClose);
+    }
+    processes.set(sessionId, proc);
 
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
@@ -146,12 +189,14 @@ export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {
       await new Promise((r) => setTimeout(r, 250));
     }
     try {
-      child.kill("SIGKILL");
+      proc.kill();
     } catch {
       // already gone
     }
     processes.delete(sessionId);
-    throw new Error("Timed out waiting for claude setup-token to start.");
+    throw new Error(
+      "Claude did not print an authorization URL within 30 seconds. Check that the configured Claude executable can run setup-token and reach Anthropic, then try again.",
+    );
   },
 
   async submitCode({ runnerId, code }) {
@@ -159,7 +204,7 @@ export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {
     if (!proc || proc.exited) {
       throw new Error("The connection runner is no longer active.");
     }
-    proc.child.stdin.write(`${code}\n`);
+    proc.write(code);
   },
 
   async poll({ runnerId }): Promise<ClaudeRunnerPollResult> {
@@ -180,7 +225,7 @@ export const subprocessClaudeRunner: ClaudeSetupTokenRunner = {
     const proc = processes.get(runnerId);
     if (!proc) return;
     try {
-      proc.child.kill("SIGKILL");
+      if (!proc.exited) proc.kill();
     } catch {
       // already gone
     }
