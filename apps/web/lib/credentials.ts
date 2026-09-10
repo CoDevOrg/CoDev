@@ -325,6 +325,43 @@ async function getCredentialValue(
   };
 }
 
+/** Resolve only the sender's subscription; never fall back to an API key or shared seat. */
+export async function resolvePersonalChatSubscription(
+  userId: string,
+  provider: "claude" | "codex",
+): Promise<ResolvedCredential> {
+  if (provider === "codex") {
+    const hosted = await resolveHostedCodexSubscription({
+      userId,
+      includeBusy: true,
+    });
+    if (hosted?.credential.encryptedMaterial) {
+      const material = await decryptHostedMaterial(
+        hosted.credential.encryptedMaterial,
+      );
+      if (material.authCacheJson)
+        return {
+          provider: "openai",
+          source: "USER",
+          authType: "HOSTED_CODEX_SUBSCRIPTION",
+          credentialId: hosted.credential.id,
+          codexAuthCacheJson: material.authCacheJson,
+        };
+    }
+  }
+  const credential = await findCredential(
+    "USER",
+    userId,
+    provider === "claude" ? "anthropic" : "openai",
+    "OAUTH_TOKEN",
+  );
+  if (!credential || credential.status !== "active")
+    throw new Error(
+      "Connect your subscription in Settings before asking for a reply.",
+    );
+  return getCredentialValue(credential);
+}
+
 export async function resolveAgentCredential(
   userId: string,
   workspaceId: string,

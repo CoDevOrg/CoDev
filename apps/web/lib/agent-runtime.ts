@@ -23,6 +23,7 @@ import {
   assertProviderConnectionForTurn,
 } from "./provider-turn-auth";
 import { normalizeTokenUsage } from "./token-usage";
+import { codexFinalMessage } from "./shared-chat-context";
 import {
   createCoordinationMessage,
   createPathClaim,
@@ -85,29 +86,6 @@ function channelSlugArgument(value: unknown) {
 function agentChatLabel(context: { provider: string }) {
   const provider = context.provider.trim();
   return provider ? `Agent · ${provider}` : "Agent";
-}
-
-function codexFinalMessage(output: string) {
-  let final = "";
-  for (const line of output.split(/\r?\n/)) {
-    try {
-      const event = JSON.parse(line) as {
-        type?: string;
-        item?: { type?: string; text?: string };
-      };
-      if (
-        event.type === "item.completed" &&
-        event.item?.type === "agent_message" &&
-        typeof event.item.text === "string"
-      ) {
-        final = event.item.text;
-      }
-    } catch {
-      // The official CLI may include a non-JSON diagnostic line. Never echo it
-      // because provider diagnostics can contain sensitive metadata.
-    }
-  }
-  return final.trim();
 }
 
 const tools: OpenAI.Responses.Tool[] = [

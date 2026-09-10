@@ -8,6 +8,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { AuthProvider } from "@codev/shared-types";
 
 import type { ResolvedCredential } from "./credentials";
+import { getAnthropicModels } from "./anthropic-models";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.6-luna";
 export const DEFAULT_CURSOR_MODEL = "composer-2.5";
@@ -155,6 +156,11 @@ export async function getSelectableAgentModels(
   provider: AuthProvider = getAgentProvider(),
   credential?: ResolvedCredential,
 ) {
+  // Subscription choices must come from this connection, not a global list or
+  // the historical single-model default. Never fabricate an available catalog.
+  if (provider === "anthropic" && credential) {
+    return getAnthropicModels(credential);
+  }
   const configured = process.env.CODEV_AGENT_MODELS?.split(",")
     .map((model) => model.trim())
     .filter(Boolean);
@@ -175,8 +181,11 @@ export async function resolveSelectableAgentModel(
   credential?: ResolvedCredential,
 ) {
   const available = await getSelectableAgentModels(provider, credential);
-  const selected = requested?.trim() || getAgentModel(provider);
-  if (!available.includes(selected)) {
+  const defaultModel = getAgentModel(provider);
+  const selected =
+    requested?.trim() ||
+    (available.includes(defaultModel) ? defaultModel : available[0]);
+  if (!selected || !available.includes(selected)) {
     throw new Error(`Model ${selected} is not available for this workspace.`);
   }
   return selected;

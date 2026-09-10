@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip } from "lucide-react";
 
-import type { ImportedConversationMessage } from "@codev/contracts";
+import {
+  importedConversationMessageSchema,
+  type ImportedConversationMessage,
+} from "@codev/contracts";
 
 import { CHANNEL_MESSAGE_POLL_MS } from "@/lib/team-chat-view";
 
@@ -43,6 +46,10 @@ export function SharedChatTranscript({
   const [messages, setMessages] = useState(initialMessages);
   const latestSequence = useRef(initialMessages.at(-1)?.sequence ?? -1);
   const requestInFlight = useRef(false);
+  const pendingSequence = useRef<number | null>(
+    initialMessages.find((message) => message.generation?.status === "pending")
+      ?.sequence ?? null,
+  );
 
   const addMessages = useCallback((incoming: ImportedConversationMessage[]) => {
     if (!incoming.length) return;
@@ -50,7 +57,13 @@ export function SharedChatTranscript({
       latestSequence.current,
       ...incoming.map((message) => message.sequence),
     );
-    setMessages((current) => mergeRoomMessages(current, incoming));
+    setMessages((current) => {
+      const merged = mergeRoomMessages(current, incoming);
+      pendingSequence.current =
+        merged.find((message) => message.generation?.status === "pending")
+          ?.sequence ?? null;
+      return merged;
+    });
   }, []);
 
   const refreshMessages = useCallback(
@@ -60,15 +73,34 @@ export function SharedChatTranscript({
       }
       requestInFlight.current = true;
       try {
-        const response = await fetch(
-          `/api/rooms/${roomId}/messages?after=${latestSequence.current}`,
-          { cache: "no-store", ...(signal ? { signal } : {}) },
-        );
-        if (!response.ok) return;
-        const payload = (await response.json()) as {
-          messages?: ImportedConversationMessage[];
-        };
-        addMessages(payload.messages ?? []);
+        let after =
+          pendingSequence.current === null
+            ? latestSequence.current
+            : Math.min(latestSequence.current, pendingSequence.current - 1);
+        for (;;) {
+          const response = await fetch(
+            `/api/rooms/${roomId}/messages?after=${after}`,
+            { cache: "no-store", ...(signal ? { signal } : {}) },
+          );
+          if (!response.ok) return;
+          const payload = (await response.json()) as {
+            messages?: ImportedConversationMessage[];
+          };
+          const parsed = importedConversationMessageSchema
+            .array()
+            .safeParse(payload.messages);
+          if (!parsed.success) return;
+          addMessages(parsed.data);
+          const next = parsed.data.at(-1)?.sequence;
+          if (
+            parsed.data.length < 200 ||
+            next === undefined ||
+            next <= after ||
+            signal?.aborted
+          )
+            break;
+          after = next;
+        }
       } catch {
         // Preserve the current transcript; the next polling tick can recover.
       } finally {
@@ -106,7 +138,7 @@ export function SharedChatTranscript({
         className={styles.messageLog}
         role="log"
         aria-live="polite"
-        aria-relevant="additions"
+        aria-relevant="additions text"
       >
         {messages.map((message) => (
           <article
@@ -115,7 +147,16 @@ export function SharedChatTranscript({
             aria-label={`${messageLabel(message)} message ${message.sequence + 1}`}
           >
             <strong>{messageLabel(message)}</strong>
-            <p>{message.text}</p>
+            {message.generation ? (
+              <small className={styles.replyHint}>
+                {message.generation.model}
+              </small>
+            ) : null}
+            <p aria-busy={message.generation?.status === "pending"}>
+              {message.generation?.status === "pending"
+                ? `${messageLabel(message)} is replying…`
+                : message.text}
+            </p>
             {message.artifacts.length ? (
               <ul aria-label="Message attachments">
                 {message.artifacts.map((artifact) => (
