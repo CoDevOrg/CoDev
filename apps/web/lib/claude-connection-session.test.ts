@@ -46,14 +46,20 @@ const fakeDb = {
       where: () => ({ limit: async () => (row ? [row] : []) }),
     }),
   }),
-  delete: () => ({ where: async () => undefined }),
+  delete: () => ({
+    where: async () => {
+      row = null;
+    },
+  }),
 };
 
 vi.mock("./database", () => ({ getDatabase: () => fakeDb }));
 
 import { saveProviderCredential } from "./credentials";
 import {
+  cancelClaudeConnectionSession,
   getClaudeConnectionSession,
+  reapExpiredClaudeConnectionSessions,
   startClaudeConnectionSession,
   submitClaudeConnectionCode,
   unavailableClaudeRunner,
@@ -128,6 +134,39 @@ describe("submitClaudeConnectionCode", () => {
         runner,
       ),
     ).rejects.toThrow(/code is required/);
+  });
+});
+
+describe("cancelClaudeConnectionSession", () => {
+  it("disposes the runner and marks the attempt canceled", async () => {
+    const runner = fakeRunner();
+    await startClaudeConnectionSession({ userId: "u1" }, runner);
+
+    const view = await cancelClaudeConnectionSession(
+      { userId: "u1", sessionId: "session-1" },
+      runner,
+    );
+
+    expect(runner.dispose).toHaveBeenCalledWith({ runnerId: "runner-1" });
+    expect(view).toMatchObject({
+      status: "failed",
+      failureReason: "Connection attempt canceled.",
+    });
+  });
+});
+
+describe("reapExpiredClaudeConnectionSessions", () => {
+  it("disposes and removes an expired runner", async () => {
+    const runner = fakeRunner();
+    await startClaudeConnectionSession({ userId: "u1" }, runner);
+    if (row) row.expiresAt = new Date(Date.now() - 1_000);
+
+    await expect(reapExpiredClaudeConnectionSessions(runner)).resolves.toEqual({
+      cleaned: 1,
+      failures: 0,
+    });
+    expect(runner.dispose).toHaveBeenCalledWith({ runnerId: "runner-1" });
+    expect(row).toBeNull();
   });
 });
 

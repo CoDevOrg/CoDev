@@ -34,14 +34,21 @@ export function ClaudeHostedConnect({
   const [session, setSession] = useState<SessionView | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [canceling, setCanceling] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCount = useRef(0);
 
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
+      if (session) {
+        void fetch(`${BASE}/${session.id}`, {
+          method: "DELETE",
+          keepalive: true,
+        });
+      }
     },
-    [],
+    [session],
   );
 
   function stopPolling() {
@@ -56,7 +63,37 @@ export function ClaudeHostedConnect({
     setSession(null);
     setCode("");
     setError("");
+    setCanceling(false);
     setPhase("idle");
+  }
+
+  async function cancel() {
+    stopPolling();
+    if (!session) {
+      reset();
+      return;
+    }
+    setCanceling(true);
+    setError("");
+    try {
+      const response = await fetch(`${BASE}/${session.id}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not cancel this attempt.");
+      }
+      reset();
+    } catch (cause) {
+      setCanceling(false);
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not cancel this attempt.",
+      );
+    }
   }
 
   async function start() {
@@ -133,6 +170,10 @@ export function ClaudeHostedConnect({
       stopPolling();
       setPhase("failed");
       setError("Timed out waiting for Claude. Start again.");
+      void fetch(`${BASE}/${session.id}`, {
+        method: "DELETE",
+        keepalive: true,
+      });
     }
   }
 
@@ -193,8 +234,15 @@ export function ClaudeHostedConnect({
             >
               Submit
             </Button>
-            <Button onClick={reset} size="sm" type="button" variant="secondary">
-              Cancel
+            <Button
+              aria-busy={canceling}
+              disabled={canceling}
+              onClick={() => void cancel()}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {canceling ? "Canceling…" : "Cancel"}
             </Button>
           </div>
         </>

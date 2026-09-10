@@ -214,6 +214,58 @@ describe("ProviderAccountCard", () => {
     );
   });
 
+  it("releases the hosted Claude runner when canceled", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "sess-cancel",
+          status: "awaiting_code",
+          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+          failureReason: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "sess-cancel",
+          status: "failed",
+          authorizeUrl: null,
+          failureReason: "Connection attempt canceled.",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "anthropic", label: "Anthropic" })}
+        hostedClaudeConnect
+        label="Claude"
+        logo={null}
+        subscription={subscription({
+          provider: "claude",
+          label: "Claude Code",
+          connectMode: "manual_code",
+          command: "codev claude-auth",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
+    await screen.findByPlaceholderText("Paste code");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Connect Claude" }),
+      ).toBeVisible();
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/personal/claude-connection/session/sess-cancel",
+      { method: "DELETE" },
+    );
+  });
+
   it("offers Codex only an API key and the CLI, no browser OAuth button", () => {
     render(
       <ProviderAccountCard

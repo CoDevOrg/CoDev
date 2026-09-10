@@ -29,6 +29,7 @@ export class OrchestratorError extends Error {
 
 export interface ProvisionSandboxInput {
   workspaceId: string;
+  ephemeral?: boolean;
   repositoryUrl: string | null;
   repositorySnapshot?: RepositorySnapshot;
   baseSha: string;

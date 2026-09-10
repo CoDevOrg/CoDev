@@ -6,6 +6,7 @@ import { startClaudeConnectionSession } from "@/lib/claude-connection-session";
 import { resolveClaudeRunner } from "@/lib/claude-connection-runner";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const postSchema = z.object({
   scopeType: z.enum(["USER", "ORGANIZATION"]).optional(),

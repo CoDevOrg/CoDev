@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
@@ -146,6 +146,16 @@ impl Backend {
             Self::Fake(backend) => backend.active_count(),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => backend.active_count().await,
+        }
+    }
+
+    /// Stop ephemeral sandboxes whose advertised lifetime has elapsed. This
+    /// is a host-level backstop for callers that disappear before DELETE.
+    pub async fn reap_expired(&self) -> usize {
+        match self {
+            Self::Fake(backend) => backend.reap_expired(),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.reap_expired().await,
         }
     }
 
@@ -547,6 +557,7 @@ pub type SharedBackend = Arc<Backend>;
 
 pub struct FakeBackend {
     instances: RwLock<HashMap<String, Instance>>,
+    ephemeral: RwLock<HashSet<String>>,
     max: usize,
 }
 
@@ -560,6 +571,7 @@ impl FakeBackend {
     pub fn new() -> Self {
         Self {
             instances: RwLock::new(HashMap::new()),
+            ephemeral: RwLock::new(HashSet::new()),
             max: MAX_ACTIVE_SESSIONS,
         }
     }
@@ -570,6 +582,18 @@ impl FakeBackend {
 
     fn active_count(&self) -> usize {
         self.instances.read().expect("fake backend lock").len()
+    }
+
+    fn reap_expired(&self) -> usize {
+        let mut instances = self.instances.write().expect("fake backend lock");
+        let mut ephemeral = self.ephemeral.write().expect("fake backend lock");
+        let before = instances.len();
+        let now = Utc::now();
+        instances.retain(|workspace_id, instance| {
+            !ephemeral.contains(workspace_id) || instance.expires_at > now
+        });
+        ephemeral.retain(|workspace_id| instances.contains_key(workspace_id));
+        before - instances.len()
     }
 
     fn create(&self, request: CreateRequest) -> Result<Instance> {
@@ -590,6 +614,12 @@ impl FakeBackend {
             last_activity_at: now,
             expires_at: request.expires_at,
         };
+        if request.ephemeral {
+            self.ephemeral
+                .write()
+                .expect("fake backend lock")
+                .insert(request.workspace_id.clone());
+        }
         instances.insert(request.workspace_id, instance.clone());
         Ok(instance)
     }
@@ -615,12 +645,20 @@ impl FakeBackend {
     }
 
     fn destroy(&self, workspace_id: &str) -> Result<()> {
-        self.instances
+        let removed = self
+            .instances
             .write()
             .expect("fake backend lock")
             .remove(workspace_id)
-            .map(|_| ())
-            .ok_or(RuntimeError::SandboxNotFound)
+            .is_some();
+        if !removed {
+            return Err(RuntimeError::SandboxNotFound);
+        }
+        self.ephemeral
+            .write()
+            .expect("fake backend lock")
+            .remove(workspace_id);
+        Ok(())
     }
 
     fn resume(&self, workspace_id: &str) -> Result<()> {
@@ -845,6 +883,7 @@ mod tests {
     fn create_request(workspace_id: &str) -> CreateRequest {
         CreateRequest {
             workspace_id: workspace_id.into(),
+            ephemeral: false,
             repository_url: Some("https://github.com/yousef20920/CoDev.git".into()),
             repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
@@ -893,5 +932,28 @@ mod tests {
             .await
             .expect("destroy");
         assert_eq!(backend.active_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn fake_backend_reaps_expired_sandboxes() {
+        let backend = Backend::fake();
+        let mut expired = create_request("expired-workspace");
+        expired.expires_at = Utc::now() - Duration::seconds(1);
+        expired.ephemeral = true;
+        backend
+            .create(expired)
+            .await
+            .expect("create expired sandbox");
+        backend
+            .create(create_request("live-workspace"))
+            .await
+            .expect("create live sandbox");
+
+        assert_eq!(backend.reap_expired().await, 1);
+        assert!(matches!(
+            backend.get("expired-workspace").await,
+            Err(RuntimeError::SandboxNotFound)
+        ));
+        assert!(backend.get("live-workspace").await.is_ok());
     }
 }

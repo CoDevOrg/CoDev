@@ -37,6 +37,14 @@ vi.mock("./host", () => ({
 }));
 vi.mock("./audit", () => ({ appendWorkspaceEvent: vi.fn() }));
 vi.mock("./observability", () => ({ logEvent: vi.fn() }));
+vi.mock("./claude-connection-session", () => ({
+  reapExpiredClaudeConnectionSessions: vi
+    .fn()
+    .mockResolvedValue({ cleaned: 0, failures: 0 }),
+}));
+vi.mock("./claude-connection-runner", () => ({
+  resolveClaudeRunner: vi.fn(() => ({ dispose: vi.fn() })),
+}));
 vi.mock("./orchestrator", () => ({
   destroySandbox: vi.fn().mockResolvedValue(undefined),
   stopIde: vi.fn().mockResolvedValue(undefined),
@@ -65,6 +73,20 @@ describe("reconcileLifecycle", () => {
     expect(result.hibernated).toBe(0);
     expect(result.hibernationFailures).toBe(0);
     expect(mocks.database.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("reaps expired Claude connection runners", async () => {
+    const { reapExpiredClaudeConnectionSessions } =
+      await import("./claude-connection-session");
+    vi.mocked(reapExpiredClaudeConnectionSessions).mockResolvedValueOnce({
+      cleaned: 2,
+      failures: 0,
+    });
+
+    await expect(reconcileLifecycle()).resolves.toMatchObject({
+      expiredClaudeConnectionsCleaned: 2,
+      expiredClaudeConnectionCleanupFailures: 0,
+    });
   });
 
   it("hibernates idle ready workspaces when the host is running", async () => {
