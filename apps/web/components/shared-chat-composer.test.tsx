@@ -39,13 +39,13 @@ describe("SharedChatComposer", () => {
     render(
       <SharedChatComposer roomId="room-123" onMessageSent={onMessageSent} />,
     );
-    fireEvent.change(await screen.findByLabelText("Provider"), {
-      target: { value: "codex" },
-    });
-    expect(screen.getByLabelText("Model")).toHaveValue("codex-one");
-    fireEvent.change(screen.getByLabelText("Model"), {
-      target: { value: "codex-two" },
-    });
+    // Open the provider → model picker (defaults to the first connection).
+    fireEvent.click(await screen.findByRole("button", { name: /^Model:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "OpenAI Codex" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "codex-two" }));
+    expect(
+      screen.getByRole("button", { name: "Model: codex-two" }),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "Continue" },
     });

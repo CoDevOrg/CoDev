@@ -17,6 +17,7 @@ import {
   SharedChatError,
   getSharedChatRoom,
 } from "@/lib/shared-chat";
+import { publishRoomMessages } from "@/lib/shared-chat-stream";
 
 type Context = { params: Promise<{ roomId: string }> };
 
@@ -85,8 +86,13 @@ export async function POST(request: Request, { params }: Context) {
       body: input.body,
       ...(input.reply ? { reply: input.reply } : {}),
     });
+    const userMessage = "pendingReply" in message ? message.message : message;
     if ("pendingReply" in message && message.pendingReply) {
       const pending = message.pendingReply;
+      // Push the user message and the pending-reply placeholder to live
+      // subscribers now; the completed reply is published from
+      // finishRoomReply once the model responds.
+      await publishRoomMessages(roomId, [userMessage, pending.message]);
       try {
         await start(sharedChatReplyWorkflow, [pending.id]);
       } catch {
@@ -95,11 +101,12 @@ export async function POST(request: Request, { params }: Context) {
         pending.message.generation!.status = "failed";
       }
       return Response.json(
-        { message: message.message, reply: pending.message },
+        { message: userMessage, reply: pending.message },
         { status: 201 },
       );
     }
-    return Response.json({ message }, { status: 201 });
+    await publishRoomMessages(roomId, [userMessage]);
+    return Response.json({ message: userMessage }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return apiError(new Error("Enter a message before sending."), 400);

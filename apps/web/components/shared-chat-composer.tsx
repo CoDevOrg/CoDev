@@ -1,8 +1,14 @@
 "use client";
 
-import { type FormEvent, useState, useEffect } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { LoaderCircle, Send } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronUp,
+  LoaderCircle,
+  Send,
+  Sparkles,
+} from "lucide-react";
 
 import {
   importedConversationMessageSchema,
@@ -26,6 +32,24 @@ const optionsSchema = z.object({
   ),
 });
 
+const PROVIDER_META: Record<
+  string,
+  { label: string; logo: string; color: string }
+> = {
+  claude: { label: "Claude", logo: "A", color: "var(--codev-gold-500)" },
+  codex: { label: "OpenAI Codex", logo: "O", color: "#0e8f6f" },
+};
+
+function providerMeta(provider: string) {
+  return (
+    PROVIDER_META[provider] ?? {
+      label: provider.charAt(0).toUpperCase() + provider.slice(1),
+      logo: provider.slice(0, 1).toUpperCase(),
+      color: "var(--surface-3)",
+    }
+  );
+}
+
 export function SharedChatComposer({
   roomId,
   onMessageSent,
@@ -42,6 +66,10 @@ export function SharedChatComposer({
   const [provider, setProvider] = useState("claude");
   const [model, setModel] = useState("");
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [viewedProvider, setViewedProvider] = useState("claude");
+  const pickerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
@@ -54,8 +82,10 @@ export function SharedChatComposer({
         const payload = optionsSchema.parse(await response.json());
         if (controller.signal.aborted) return;
         setOptions(payload.options);
-        setProvider(payload.options[0]?.provider ?? "claude");
-        setModel(payload.options[0]?.models[0] ?? "");
+        const first = payload.options[0];
+        setProvider(first?.provider ?? "claude");
+        setViewedProvider(first?.provider ?? "claude");
+        setModel(first?.models[0] ?? "");
       } catch {
         /* Posting remains available when connections cannot load. */
       } finally {
@@ -65,6 +95,37 @@ export function SharedChatComposer({
     void load();
     return () => controller.abort();
   }, [roomId]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const viewedModels = useMemo(
+    () =>
+      options.find((option) => option.provider === viewedProvider)?.models ??
+      [],
+    [options, viewedProvider],
+  );
+
+  function chooseModel(nextProvider: string, nextModel: string) {
+    setProvider(nextProvider);
+    setModel(nextModel);
+    setMenuOpen(false);
+  }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,95 +174,150 @@ export function SharedChatComposer({
       aria-busy={sending}
     >
       <label htmlFor="room-message">Add to the conversation</label>
-      <div>
+      <div className={styles.composerBox}>
         <textarea
           id="room-message"
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder="Write a message…"
+          onInput={(event) => {
+            const el = event.currentTarget;
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }}
+          placeholder="Message the room…  Ask the assistant with Ask AI"
           maxLength={20_000}
-          rows={3}
+          rows={1}
           disabled={sending}
         />
-        <button type="submit" disabled={sending || !body.trim()}>
-          {sending ? (
-            <LoaderCircle className={styles.spinner} aria-hidden="true" />
-          ) : (
-            <Send aria-hidden="true" />
-          )}
-          {sending ? "Sending…" : "Post"}
-        </button>
-      </div>
-      <div className={styles.replyControls}>
-        {options.length ? (
-          <>
-            <label>
-              Provider
-              <select
-                value={provider}
+        <div className={styles.composerRow}>
+          {options.length ? (
+            <div className={styles.modelPicker} ref={pickerRef}>
+              <button
+                type="button"
+                className={styles.modelTrigger}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={`Model: ${model || "select a model"}`}
                 disabled={sending}
-                onChange={(event) => {
-                  setProvider(event.target.value);
-                  setModel(
-                    options.find(
-                      (option) => option.provider === event.target.value,
-                    )?.models[0] ?? "",
-                  );
+                onClick={() => {
+                  setViewedProvider(provider);
+                  setMenuOpen((open) => !open);
                 }}
               >
-                {options.map((option) => (
-                  <option key={option.provider} value={option.provider}>
-                    {option.provider === "claude" ? "Claude" : "Codex"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Model
-              <select
-                value={model}
-                disabled={sending}
-                onChange={(event) => setModel(event.target.value)}
+                <span className={styles.dot} />
+                {model || "Select model"}
+                <ChevronUp className={styles.chev} aria-hidden="true" />
+              </button>
+              {menuOpen ? (
+                <div className={styles.modelMenu} role="menu">
+                  <div className={`${styles.modelCol} ${styles.providers}`}>
+                    <div className={styles.menuLabel}>Provider</div>
+                    {options.map((option) => {
+                      const meta = providerMeta(option.provider);
+                      const active = option.provider === viewedProvider;
+                      return (
+                        <button
+                          key={option.provider}
+                          type="button"
+                          className={`${styles.provider} ${
+                            active ? styles.active : ""
+                          }`}
+                          onMouseEnter={() =>
+                            setViewedProvider(option.provider)
+                          }
+                          onClick={() => setViewedProvider(option.provider)}
+                        >
+                          <span
+                            className={styles.providerLogo}
+                            style={{ background: meta.color }}
+                            aria-hidden="true"
+                          >
+                            {meta.logo}
+                          </span>
+                          <span className={styles.name}>{meta.label}</span>
+                          <ChevronRight
+                            className={styles.chev}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className={styles.modelCol}>
+                    <div className={styles.menuLabel}>Model</div>
+                    {viewedModels.map((value) => {
+                      const selected =
+                        value === model && viewedProvider === provider;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={selected}
+                          className={`${styles.modelOption} ${
+                            selected ? styles.selected : ""
+                          }`}
+                          onClick={() => chooseModel(viewedProvider, value)}
+                        >
+                          <span className={styles.radio} aria-hidden="true" />
+                          <span>
+                            <span className={styles.label}>{value}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className={styles.connectHint}>
+              {loading ? (
+                "Loading subscriptions…"
+              ) : (
+                <>
+                  To ask AI,{" "}
+                  <a href="/settings/personal/providers">
+                    connect your subscription
+                  </a>
+                  .
+                </>
+              )}
+            </span>
+          )}
+
+          <div className={styles.postGroup}>
+            {options.length ? (
+              <button
+                type="submit"
+                value="ai"
+                className={styles.askButton}
+                disabled={sending || !body.trim() || !model}
               >
-                {(
-                  options.find((option) => option.provider === provider)
-                    ?.models ?? []
-                ).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <Sparkles aria-hidden="true" />
+                Ask AI
+              </button>
+            ) : null}
             <button
               type="submit"
-              value="ai"
-              disabled={sending || !body.trim() || !model}
+              className={styles.postButton}
+              disabled={sending || !body.trim()}
             >
-              Ask AI
+              {sending ? (
+                <LoaderCircle className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <Send aria-hidden="true" />
+              )}
+              {sending ? "Sending…" : "Post"}
             </button>
-          </>
-        ) : (
-          <span>
-            {loading ? (
-              "Loading subscriptions…"
-            ) : (
-              <>
-                To ask AI,{" "}
-                <a href="/settings/personal/providers">
-                  connect your subscription
-                </a>
-                .
-              </>
-            )}
-          </span>
-        )}
+          </div>
+        </div>
       </div>
-      {options.length ? (
-        <p className={styles.replyHint}>
-          Replies use your subscription and recent room history.
-        </p>
-      ) : null}
+      <p className={styles.hint}>
+        {options.length
+          ? "Ask AI replies use your subscription and recent room history — visible to everyone in the room."
+          : "Messages are visible to everyone in the room."}
+      </p>
       {error ? (
         <p className={styles.composerError} role="alert">
           {error}

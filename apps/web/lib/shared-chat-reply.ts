@@ -30,6 +30,7 @@ import {
   pollCodexExecInSandbox,
 } from "./orchestrator";
 import { SharedChatError, getSharedChatRoom } from "./shared-chat";
+import { publishRoomMessages } from "./shared-chat-stream";
 import {
   buildSharedChatContext,
   codexFinalMessage,
@@ -116,6 +117,7 @@ export async function finishRoomReply(
   const message = await loadReply(id);
   if (message.metadata.generation.status !== "pending") return;
   const now = new Date();
+  const status = failed ? ("failed" as const) : ("completed" as const);
   await getDatabase().transaction(async (transaction) => {
     await transaction
       .update(schema.conversationMessages)
@@ -125,7 +127,7 @@ export async function finishRoomReply(
           ...message.metadata,
           generation: {
             ...message.metadata.generation,
-            status: failed ? "failed" : "completed",
+            status,
           },
         },
         updatedAt: now,
@@ -141,6 +143,21 @@ export async function finishRoomReply(
       .set({ updatedAt: now })
       .where(eq(schema.sharedChats.id, message.metadata.roomId));
   });
+
+  // Push the resolved reply to live subscribers. Same-sequence delivery
+  // replaces the pending placeholder they already hold.
+  await publishRoomMessages(message.metadata.roomId, [
+    importedConversationMessageSchema.parse({
+      sequence: message.sequence,
+      role: "assistant",
+      authorName: message.authorName ?? null,
+      text,
+      sourceContentType: "text",
+      createdAt: (message.sourceCreatedAt ?? now).toISOString(),
+      artifacts: [],
+      generation: { ...message.metadata.generation, status },
+    }),
+  ]);
 }
 
 export async function prepareRoomReply(id: string) {
