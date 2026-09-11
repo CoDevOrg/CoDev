@@ -408,6 +408,11 @@ export async function exchangeOAuthCode(
       typeof payload.refresh_token === "string"
         ? payload.refresh_token
         : undefined,
+    // OpenAI returns an id_token whenever the `openid` scope is requested; the
+    // Codex CLI's auth.json stores it (and derives the ChatGPT account id from
+    // its claims), so surface it for callers that materialize that file.
+    idToken:
+      typeof payload.id_token === "string" ? payload.id_token : undefined,
     expiresAt: expiresAtFrom(payload.expires_in),
   };
 }

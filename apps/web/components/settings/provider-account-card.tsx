@@ -13,6 +13,7 @@ import { Check, ChevronDown, Copy, KeyRound, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClaudeHostedConnect } from "@/components/settings/claude-hosted-connect";
+import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
 import { OrcaCard } from "@/components/settings/orca-style";
 import type {
   CliSubscriptionRecord,
@@ -113,6 +114,7 @@ export function ProviderAccountCard({
   subscription,
   connection,
   hostedClaudeConnect = false,
+  hostedOpenAIConnect = false,
 }: {
   logo: ReactNode;
   label: string;
@@ -120,6 +122,8 @@ export function ProviderAccountCard({
   connection: ProviderConnectionRecord;
   /** Show the in-app "Connect Claude" flow (anthropic card only). */
   hostedClaudeConnect?: boolean;
+  /** Show the in-app "Connect ChatGPT" device-code flow (openai card only). */
+  hostedOpenAIConnect?: boolean;
 }) {
   const router = useRouter();
   const [apiKeyState, setApiKeyState] = useState(connection);
@@ -144,6 +148,9 @@ export function ProviderAccountCard({
   const isCursor = subscription.provider === "cursor";
   const showClaudeConnect =
     hostedClaudeConnect && subscription.provider === "claude";
+  const showCodexConnect =
+    hostedOpenAIConnect && subscription.provider === "codex";
+  const showHostedConnect = showClaudeConnect || showCodexConnect;
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -353,7 +360,7 @@ export function ProviderAccountCard({
             <StatusDot connected={connected} />
             {connected
               ? "Signed in with your subscription"
-              : isCursor || showClaudeConnect
+              : isCursor || showHostedConnect
                 ? "Sign in with your subscription — no API key needed"
                 : "Connect with an API key or the CoDev CLI below"}
           </p>
@@ -411,6 +418,13 @@ export function ProviderAccountCard({
         />
       ) : null}
 
+      {showCodexConnect ? (
+        <CodexHostedConnect
+          connected={connected}
+          onConnected={finishConnected}
+        />
+      ) : null}
+
       {flow?.kind === "polling" ? (
         <div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-background/60 p-4">
           <p className="flex-1 text-xs text-muted-foreground">
@@ -439,7 +453,7 @@ export function ProviderAccountCard({
       <div className="mt-4">
         <FallbackRow
           connected={apiKeyState.status === "connected"}
-          defaultOpen={!connected && !showClaudeConnect}
+          defaultOpen={!connected && !showHostedConnect}
           description={
             isCursor
               ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
@@ -511,7 +525,7 @@ export function ProviderAccountCard({
 
         {subscription.command ? (
           <FallbackRow
-            defaultOpen={!connected && !showClaudeConnect}
+            defaultOpen={!connected && !showHostedConnect}
             description="Run the same sign-in from the CoDev CLI."
             icon={Terminal}
             title="Connect from a terminal"

@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getApiUser } from "./api";
+import { persistCodexSubscriptionFromOAuth } from "./codex-oauth-connection";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 import {
   buildAuthorizationUrl,
@@ -527,7 +528,15 @@ export async function pollDeviceOAuth(
       poll.authorizationCode,
       poll.codeVerifier,
     );
-    await persistOAuthTokens(state, configuration, tokens);
+    // Codex authenticates `codex exec` from a `~/.codex/auth.json`, not a bare
+    // OAuth token, so store the exchange as the HOSTED_CODEX_SUBSCRIPTION the
+    // runtime already consumes rather than an `openai`/OAUTH_TOKEN row.
+    await persistCodexSubscriptionFromOAuth({
+      userId: user.id,
+      scopeType: state.scopeType,
+      scopeId: state.scopeId,
+      tokens,
+    });
     return clearOAuthCookie(
       NextResponse.json({ status: "connected", provider }),
       provider,
@@ -592,7 +601,18 @@ export async function finishOAuth(request: Request, provider: OAuthProvider) {
       state.codeVerifier,
       state.state,
     );
-    await persistOAuthTokens(state, configuration, tokens);
+    if (provider === "codex") {
+      // Match the device-code path: Codex needs a `~/.codex/auth.json`, so
+      // persist the hosted subscription rather than a bare OAUTH_TOKEN.
+      await persistCodexSubscriptionFromOAuth({
+        userId: user.id,
+        scopeType: state.scopeType,
+        scopeId: state.scopeId,
+        tokens,
+      });
+    } else {
+      await persistOAuthTokens(state, configuration, tokens);
+    }
     return clearOAuthCookie(
       redirectToSettings(request, provider, "connected", returnTo),
       provider,
