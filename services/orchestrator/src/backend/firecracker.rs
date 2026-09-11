@@ -427,11 +427,11 @@ impl FirecrackerBackend {
             let machines = self.machines.read().await;
             machines
                 .iter()
-                .filter_map(|(workspace_id, machine)| {
-                    (machine.reap_on_expiry
-                        && machine.instance.read().expect("machine lock").expires_at <= now)
-                        .then(|| (workspace_id.clone(), machine.clone()))
+                .filter(|&(_, machine)| {
+                    machine.reap_on_expiry
+                        && machine.instance.read().expect("machine lock").expires_at <= now
                 })
+                .map(|(workspace_id, machine)| (workspace_id.clone(), machine.clone()))
                 .collect::<Vec<_>>()
         };
 
