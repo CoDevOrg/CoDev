@@ -42,7 +42,10 @@ vi.mock("./hosted-codex-subscription-credentials", () => ({
   })),
 }));
 
-import { resolveAgentCredential } from "./credentials";
+import {
+  resolveAgentCredential,
+  resolvePersonalChatSubscription,
+} from "./credentials";
 
 const baseCredential = (overrides: Record<string, unknown> = {}) => ({
   id: "credential-1",
@@ -66,6 +69,7 @@ const baseCredential = (overrides: Record<string, unknown> = {}) => ({
 });
 
 afterEach(() => {
+  vi.clearAllMocks();
   mockRows.length = 0;
   mockHostedSubscription.mockReset();
   mockHostedSubscription.mockResolvedValue(null);
@@ -74,6 +78,38 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
+  it("room replies resolve only personal OAuth subscriptions", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        status: "active",
+        encryptedAccessToken: "ciphertext",
+      }),
+    ]);
+    expect(
+      await resolvePersonalChatSubscription("sender", "claude"),
+    ).toMatchObject({ source: "USER", authType: "OAUTH_TOKEN" });
+    mockRows.push([]);
+    await expect(
+      resolvePersonalChatSubscription("sender", "claude"),
+    ).rejects.toThrow("Connect your subscription");
+    expect(mockRows).toHaveLength(0);
+  });
+
+  it("room Codex resolution never requests an organization credential", async () => {
+    mockHostedSubscription.mockResolvedValueOnce({
+      source: "USER",
+      credential: { id: "personal", encryptedMaterial: "encrypted" },
+    });
+    expect(
+      await resolvePersonalChatSubscription("sender", "codex"),
+    ).toMatchObject({ authType: "HOSTED_CODEX_SUBSCRIPTION", source: "USER" });
+    expect(mockHostedSubscription).toHaveBeenLastCalledWith({
+      userId: "sender",
+      includeBusy: true,
+    });
+  });
   it("resolves the encrypted official Codex auth cache", async () => {
     mockHostedSubscription.mockResolvedValueOnce({
       source: "USER",

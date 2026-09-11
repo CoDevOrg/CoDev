@@ -172,6 +172,7 @@ export async function persistHostedCodexConnection(input: {
 async function findActiveHostedCredential(
   scopeType: HostedCodexScopeType,
   scopeId: string,
+  includeBusy = false,
 ) {
   const [credential] = await getDatabase()
     .select()
@@ -191,6 +192,7 @@ async function findActiveHostedCredential(
     )
     .limit(1);
   if (
+    !includeBusy &&
     credential?.unavailableUntil &&
     credential.unavailableUntil.getTime() > Date.now()
   ) {
@@ -218,11 +220,17 @@ async function userBelongsToOrganization(
 
 export async function resolveHostedCodexSubscription(input: {
   userId: string;
-  workspaceId: string;
+  workspaceId?: string;
+  includeBusy?: boolean;
 }) {
   if (!isHostedCodexSubscriptionEnabled()) return null;
-  const personal = await findActiveHostedCredential("USER", input.userId);
+  const personal = await findActiveHostedCredential(
+    "USER",
+    input.userId,
+    input.includeBusy,
+  );
   if (personal) return { credential: personal, source: "USER" as const };
+  if (!input.workspaceId) return null;
   const organization = await findActiveHostedCredential(
     "ORGANIZATION",
     input.workspaceId,

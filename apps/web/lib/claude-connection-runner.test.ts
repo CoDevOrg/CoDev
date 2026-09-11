@@ -223,6 +223,96 @@ describe("orchestratorClaudeRunner", () => {
 });
 
 describe("subprocessClaudeRunner", () => {
+  it.skipIf(!process.env.CODEV_TEST_CLAUDE_BINARY)(
+    "starts the configured real CLI without completing authorization",
+    async () => {
+      vi.stubEnv(
+        "CLAUDE_CONNECTION_RUNNER_COMMAND",
+        process.env.CODEV_TEST_CLAUDE_BINARY!,
+      );
+      vi.stubEnv("CLAUDE_CONNECTION_RUNNER_ARGS", '["setup-token"]');
+      vi.stubEnv("BROWSER", "codev-no-browser");
+      const { runnerId, authorizeUrl } = await subprocessClaudeRunner.start({
+        sessionId: "live-startup",
+      });
+      try {
+        expect(new URL(authorizeUrl).protocol).toBe("https:");
+        expect(new URL(authorizeUrl).searchParams.has("state")).toBe(true);
+        expect(new URL(authorizeUrl).searchParams.has("code_challenge")).toBe(
+          true,
+        );
+      } finally {
+        await subprocessClaudeRunner.dispose({ runnerId });
+        vi.stubEnv("CLAUDE_CONNECTION_RUNNER_COMMAND", process.execPath);
+      }
+    },
+    40000,
+  );
+
+  it("captures automatic completion and a split token without stdin", async () => {
+    const script = `
+      process.stdout.write("\\x1b]8;;https://claude.ai/oauth/authorize?state=complete\\x07Open\\x1b]8;;\\x07\\n");
+      process.stdout.write("sk-ant-oat01-" + "a".repeat(32));
+      setTimeout(() => { process.stdout.write("b".repeat(32)); }, 600);
+    `;
+    vi.stubEnv("CLAUDE_CONNECTION_RUNNER_ARGS", JSON.stringify(["-e", script]));
+    const { runnerId, authorizeUrl } = await subprocessClaudeRunner.start({
+      sessionId: "automatic",
+    });
+    try {
+      expect(authorizeUrl).toBe(
+        "https://claude.ai/oauth/authorize?state=complete",
+      );
+      const result = await pollUntilTerminal(runnerId);
+      expect(result).toEqual({
+        status: "ready",
+        oauthToken: "sk-ant-oat01-" + "a".repeat(32) + "b".repeat(32),
+      });
+    } finally {
+      await subprocessClaudeRunner.dispose({ runnerId });
+    }
+  });
+
+  it("waits for a complete authorization URL across output chunks", async () => {
+    const script = `
+      process.stdout.write("https://claude.ai/oauth/authorize?state=");
+      setTimeout(() => process.stdout.write("complete\\n"), 400);
+    `;
+    vi.stubEnv("CLAUDE_CONNECTION_RUNNER_ARGS", JSON.stringify(["-e", script]));
+    const { runnerId, authorizeUrl } = await subprocessClaudeRunner.start({
+      sessionId: "split-url",
+    });
+    try {
+      expect(authorizeUrl).toBe(
+        "https://claude.ai/oauth/authorize?state=complete",
+      );
+    } finally {
+      await subprocessClaudeRunner.dispose({ runnerId });
+    }
+  });
+
+  it("does not wrap a long OAuth URL at the terminal column boundary", async () => {
+    const url =
+      "https://claude.ai/oauth/authorize?code_challenge=" +
+      "a".repeat(256) +
+      "&state=complete";
+    vi.stubEnv(
+      "CLAUDE_CONNECTION_RUNNER_ARGS",
+      JSON.stringify([
+        "-e",
+        `process.stdout.write(${JSON.stringify(url + "\n")})`,
+      ]),
+    );
+    const { runnerId, authorizeUrl } = await subprocessClaudeRunner.start({
+      sessionId: "long-url",
+    });
+    try {
+      expect(authorizeUrl).toBe(url);
+    } finally {
+      await subprocessClaudeRunner.dispose({ runnerId });
+    }
+  });
+
   it("captures the authorize URL, then the token on a good code", async () => {
     vi.stubEnv("CLAUDE_CONNECTION_RUNNER_ARGS", JSON.stringify([fakePath]));
     const { runnerId, authorizeUrl } = await subprocessClaudeRunner.start({

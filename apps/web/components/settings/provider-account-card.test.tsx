@@ -148,6 +148,7 @@ describe("ProviderAccountCard", () => {
   });
 
   it("connects Claude in-app: start, paste the code, poll to connected", async () => {
+    let submitted = false;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -158,17 +159,18 @@ describe("ProviderAccountCard", () => {
           failureReason: null,
         }),
       )
-      .mockResolvedValueOnce(
-        jsonResponse({ id: "sess-1", status: "exchanging" }),
-      )
-      .mockResolvedValue(
-        jsonResponse({
+      .mockImplementation(async (url: string) => {
+        if (url.endsWith("/code")) {
+          submitted = true;
+          return jsonResponse({ id: "sess-1", status: "exchanging" });
+        }
+        return jsonResponse({
           id: "sess-1",
-          status: "connected",
+          status: submitted ? "connected" : "awaiting_code",
           authorizeUrl: null,
           failureReason: null,
-        }),
-      );
+        });
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -201,38 +203,35 @@ describe("ProviderAccountCard", () => {
     fireEvent.change(input, { target: { value: "code123#state" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Claude is connected.",
-      );
-    });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "/api/personal/claude-connection/session/sess-1/code",
+    await waitFor(
+      () => {
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Claude is connected.",
+        );
+      },
+      { timeout: 4000 },
     );
-    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/personal/claude-connection/session/sess-1/code",
+      expect.anything(),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal/claude-connection/session/sess-1",
+      expect.anything(),
     );
   });
 
   it("releases the hosted Claude runner when canceled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: "sess-cancel",
-          status: "awaiting_code",
-          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
-          failureReason: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: "sess-cancel",
-          status: "failed",
-          authorizeUrl: null,
-          failureReason: "Connection attempt canceled.",
-        }),
-      );
+    // The flow polls the session while awaiting the code, so keep returning
+    // `awaiting_code` — the Cancel button must stay available until clicked.
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        id: "sess-cancel",
+        status: "awaiting_code",
+        authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+        failureReason: null,
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -259,10 +258,9 @@ describe("ProviderAccountCard", () => {
         screen.getByRole("button", { name: "Connect Claude" }),
       ).toBeVisible();
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal/claude-connection/session/sess-cancel",
-      { method: "DELETE" },
+      expect.objectContaining({ method: "DELETE" }),
     );
   });
 

@@ -5,6 +5,20 @@ const mocks = vi.hoisted(() => ({
   getApiUser: vi.fn(),
   listMessages: vi.fn(),
   postMessage: vi.fn(),
+  validateReply: vi.fn(),
+  getRoom: vi.fn(),
+  start: vi.fn(),
+  finishReply: vi.fn(),
+}));
+
+vi.mock("workflow/api", () => ({ start: mocks.start }));
+vi.mock("@/workflows/shared-chat-reply", () => ({
+  sharedChatReplyWorkflow: vi.fn(),
+}));
+vi.mock("@/lib/shared-chat-reply", () => ({
+  validateRoomReply: mocks.validateReply,
+  finishRoomReply: mocks.finishReply,
+  ROOM_REPLY_FAILURE: "Reply failed.",
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -29,6 +43,7 @@ vi.mock("@/lib/shared-chat", () => ({
   },
   postSharedChatMessage: mocks.postMessage,
   listSharedChatMessages: mocks.listMessages,
+  getSharedChatRoom: mocks.getRoom,
 }));
 
 import { GET, POST } from "@/app/api/rooms/[roomId]/messages/route";
@@ -47,6 +62,9 @@ function request(body: unknown = { body: "New message" }) {
 describe("shared chat message route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getRoom.mockResolvedValue({ id: "room-123" });
+    mocks.validateReply.mockResolvedValue(undefined);
+    mocks.start.mockResolvedValue({ runId: "run-1" });
     mocks.getApiUser.mockResolvedValue({
       id: "user-1",
       name: "Qais",
@@ -92,6 +110,102 @@ describe("shared chat message route", () => {
       authorName: "Qais",
       body: "New message",
     });
+  });
+
+  it("queues a reply using only the authenticated sender and a durable message id", async () => {
+    const reply = { provider: "claude", model: "claude-sonnet-4-5" };
+    mocks.postMessage.mockResolvedValue({
+      message: { sequence: 2 },
+      pendingReply: {
+        id: "reply-1",
+        message: { sequence: 3, generation: { ...reply, status: "pending" } },
+      },
+    });
+    const response = await POST(request({ body: "Continue", reply }), context);
+    expect(response.status).toBe(201);
+    expect(mocks.validateReply).toHaveBeenCalledWith("user-1", reply);
+    expect(mocks.start).toHaveBeenCalledWith(expect.anything(), ["reply-1"]);
+    expect(await response.json()).toMatchObject({
+      reply: { generation: { status: "pending" } },
+    });
+  });
+
+  it("rejects disconnected subscriptions before persisting a message", async () => {
+    mocks.validateReply.mockRejectedValue(
+      new SharedChatError("Reconnect subscription.", 409),
+    );
+    expect(
+      (
+        await POST(
+          request({
+            body: "Continue",
+            reply: { provider: "codex", model: "gpt-5.6-luna" },
+          }),
+          context,
+        )
+      ).status,
+    ).toBe(409);
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("checks room membership before resolving credentials", async () => {
+    mocks.getRoom.mockResolvedValue(null);
+    expect(
+      (
+        await POST(
+          request({
+            body: "Continue",
+            reply: { provider: "claude", model: "m" },
+          }),
+          context,
+        )
+      ).status,
+    ).toBe(404);
+    expect(mocks.validateReply).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported provider input", async () => {
+    expect(
+      (
+        await POST(
+          request({
+            body: "Continue",
+            reply: { provider: "cursor", model: "m" },
+          }),
+          context,
+        )
+      ).status,
+    ).toBe(400);
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the posted message and exposes a failed reply when workflow startup fails", async () => {
+    mocks.postMessage.mockResolvedValue({
+      message: { sequence: 2 },
+      pendingReply: {
+        id: "reply-1",
+        message: {
+          sequence: 3,
+          text: "",
+          generation: { provider: "claude", model: "m", status: "pending" },
+        },
+      },
+    });
+    mocks.start.mockRejectedValue(new Error("private diagnostic"));
+    const response = await POST(
+      request({ body: "Continue", reply: { provider: "claude", model: "m" } }),
+      context,
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      message: { sequence: 2 },
+      reply: { text: "Reply failed.", generation: { status: "failed" } },
+    });
+    expect(mocks.finishReply).toHaveBeenCalledWith(
+      "reply-1",
+      "Reply failed.",
+      true,
+    );
   });
 
   it("returns messages after the requested cursor for room members", async () => {

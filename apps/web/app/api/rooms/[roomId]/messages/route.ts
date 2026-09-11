@@ -1,4 +1,11 @@
 import { ZodError } from "zod";
+import { start } from "workflow/api";
+import { sharedChatReplyWorkflow } from "@/workflows/shared-chat-reply";
+import {
+  validateRoomReply,
+  finishRoomReply,
+  ROOM_REPLY_FAILURE,
+} from "@/lib/shared-chat-reply";
 
 import { sharedChatMessageInputSchema } from "@codev/contracts";
 
@@ -8,7 +15,9 @@ import {
   listSharedChatMessages,
   postSharedChatMessage,
   SharedChatError,
+  getSharedChatRoom,
 } from "@/lib/shared-chat";
+import { publishRoomMessages } from "@/lib/shared-chat-stream";
 
 type Context = { params: Promise<{ roomId: string }> };
 
@@ -65,13 +74,39 @@ export async function POST(request: Request, { params }: Context) {
     const input = sharedChatMessageInputSchema.parse(
       await request.json().catch(() => null),
     );
+    if (input.reply) {
+      if (!(await getSharedChatRoom(roomId, user.id)))
+        throw new SharedChatError("Room not found.", 404);
+      await validateRoomReply(user.id, input.reply);
+    }
     const message = await postSharedChatMessage({
       roomId,
       userId: user.id,
       authorName: user.name?.trim() || user.githubLogin || "You",
       body: input.body,
+      ...(input.reply ? { reply: input.reply } : {}),
     });
-    return Response.json({ message }, { status: 201 });
+    const userMessage = "pendingReply" in message ? message.message : message;
+    if ("pendingReply" in message && message.pendingReply) {
+      const pending = message.pendingReply;
+      // Push the user message and the pending-reply placeholder to live
+      // subscribers now; the completed reply is published from
+      // finishRoomReply once the model responds.
+      await publishRoomMessages(roomId, [userMessage, pending.message]);
+      try {
+        await start(sharedChatReplyWorkflow, [pending.id]);
+      } catch {
+        await finishRoomReply(pending.id, ROOM_REPLY_FAILURE, true);
+        pending.message.text = ROOM_REPLY_FAILURE;
+        pending.message.generation!.status = "failed";
+      }
+      return Response.json(
+        { message: userMessage, reply: pending.message },
+        { status: 201 },
+      );
+    }
+    await publishRoomMessages(roomId, [userMessage]);
+    return Response.json({ message: userMessage }, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) {
       return apiError(new Error("Enter a message before sending."), 400);

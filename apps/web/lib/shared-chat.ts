@@ -6,6 +6,7 @@ import {
   importedConversationSchema,
   importedConversationMessageSchema,
   type ImportedConversation,
+  type SharedChatMessageInput,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
@@ -196,11 +197,13 @@ export async function postSharedChatMessage({
   userId,
   authorName,
   body,
+  reply,
 }: {
   roomId: string;
   userId: string;
   authorName: string;
   body: string;
+  reply?: SharedChatMessageInput["reply"];
 }) {
   return getDatabase().transaction(async (transaction) => {
     const [room] = await transaction
@@ -257,12 +260,44 @@ export async function postSharedChatMessage({
       throw new Error("The room message could not be created.");
     }
 
+    let pendingReply;
+    if (reply) {
+      const generation = { ...reply, status: "pending" as const };
+      const [pending] = await transaction
+        .insert(schema.conversationMessages)
+        .values({
+          conversationId: room.conversationId,
+          sequence: sequence + 1,
+          role: "assistant",
+          authorName: reply.provider === "claude" ? "Claude" : "Codex",
+          body: "",
+          sourceContentType: "text",
+          sourceCreatedAt: now,
+          metadata: { generation, requestedBy: userId, roomId },
+        })
+        .returning({ id: schema.conversationMessages.id });
+      if (!pending) throw new Error("The reply could not be queued.");
+      pendingReply = {
+        id: pending.id,
+        message: importedConversationMessageSchema.parse({
+          sequence: sequence + 1,
+          role: "assistant",
+          authorName: reply.provider === "claude" ? "Claude" : "Codex",
+          text: "",
+          sourceContentType: "text",
+          createdAt: now.toISOString(),
+          artifacts: [],
+          generation,
+        }),
+      };
+    }
+
     await transaction
       .update(schema.sharedChats)
       .set({ updatedAt: now })
       .where(eq(schema.sharedChats.id, roomId));
 
-    return importedConversationMessageSchema.parse({
+    const posted = importedConversationMessageSchema.parse({
       sequence: message.sequence,
       role: "user",
       authorName,
@@ -271,6 +306,7 @@ export async function postSharedChatMessage({
       createdAt: message.createdAt?.toISOString() ?? now.toISOString(),
       artifacts: [],
     });
+    return reply ? { message: posted, pendingReply } : posted;
   });
 }
 
@@ -309,6 +345,7 @@ export async function listSharedChatMessages(
       body: schema.conversationMessages.body,
       sourceContentType: schema.conversationMessages.sourceContentType,
       sourceCreatedAt: schema.conversationMessages.sourceCreatedAt,
+      metadata: schema.conversationMessages.metadata,
     })
     .from(schema.conversationMessages)
     .where(
@@ -353,6 +390,7 @@ export async function listSharedChatMessages(
       text: message.body,
       sourceContentType: message.sourceContentType,
       createdAt: message.sourceCreatedAt?.toISOString() ?? null,
+      generation: message.metadata.generation,
       artifacts: (artifactsByMessage.get(message.id) ?? []).map((artifact) => ({
         kind: artifact.kind,
         sourceUrl: artifact.sourceUrl,
@@ -573,6 +611,7 @@ export async function getSharedChatRoom(
         body: schema.conversationMessages.body,
         sourceContentType: schema.conversationMessages.sourceContentType,
         sourceCreatedAt: schema.conversationMessages.sourceCreatedAt,
+        metadata: schema.conversationMessages.metadata,
       })
       .from(schema.conversationMessages)
       .where(
@@ -633,6 +672,7 @@ export async function getSharedChatRoom(
       text: message.body,
       sourceContentType: message.sourceContentType,
       createdAt: message.sourceCreatedAt?.toISOString() ?? null,
+      generation: message.metadata.generation,
       artifacts: (artifactsByMessage.get(message.id) ?? []).map((artifact) => ({
         kind: artifact.kind,
         sourceUrl: artifact.sourceUrl,
