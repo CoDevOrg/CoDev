@@ -132,6 +132,12 @@ it("aborts polling when unmounted", async () => {
   const signal = fetchMock.mock.calls[1]?.[1].signal as AbortSignal;
   unmount();
   expect(signal.aborted).toBe(true);
+  // Unmount frees the hosted session on the server, then never polls again.
+  expect(fetchMock).toHaveBeenCalledWith(
+    `${BASE}/session-1`,
+    expect.objectContaining({ method: "DELETE" }),
+  );
+  const settled = fetchMock.mock.calls.length;
   await act(() => vi.advanceTimersByTimeAsync(10000));
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock).toHaveBeenCalledTimes(settled);
 });

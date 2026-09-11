@@ -18,6 +18,18 @@ const BASE = "/api/personal/claude-connection/session";
 const POLL_MS = 2_000;
 
 /**
+ * Best-effort teardown of a hosted session on the server. Used when the member
+ * abandons the flow (cancel, retry, or navigating away) so an in-flight
+ * `claude setup-token` run doesn't linger until it expires. `keepalive` lets it
+ * survive the page unload that fires it.
+ */
+function deleteSession(id: string) {
+  void fetch(`${BASE}/${id}`, { method: "DELETE", keepalive: true }).catch(
+    () => {},
+  );
+}
+
+/**
  * The in-app "Connect Claude" flow: starts a hosted `claude setup-token` run,
  * opens Anthropic's authorization page, takes the code the member pastes back,
  * and polls until the subscription is linked. No terminal, no API key.
@@ -35,15 +47,23 @@ export function ClaudeHostedConnect({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const attempt = useRef(0);
+  const sessionRef = useRef<SessionView | null>(null);
   const notifyConnected = useEffectEvent(onConnected);
   const activeSessionId =
     !connected && (phase === "awaiting_code" || phase === "polling")
       ? session?.id
       : undefined;
 
+  // Mirror the latest session into a ref so the unmount cleanup can reach it
+  // without re-running (and tearing the session down) on every session change.
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
   useEffect(
     () => () => {
       attempt.current += 1;
+      if (sessionRef.current) deleteSession(sessionRef.current.id);
     },
     [],
   );
@@ -108,6 +128,9 @@ export function ClaudeHostedConnect({
 
   function reset() {
     attempt.current += 1;
+    // Free the hosted session when the member cancels or retries; a connected
+    // session is consumed server-side and never routes through here.
+    if (session) deleteSession(session.id);
     setSession(null);
     setCode("");
     setError("");
