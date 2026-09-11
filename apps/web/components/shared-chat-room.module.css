@@ -820,7 +820,7 @@
   height: 15px;
 }
 
-/* Post + Ask AI */
+/* Send button (posts to the room and asks the assistant to reply) */
 .postGroup {
   display: flex;
   align-items: center;
@@ -828,47 +828,32 @@
   margin-left: auto;
 }
 
-.postButton,
-.askButton {
+.postButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
+  padding: 0 16px;
+  border: 1px solid transparent;
   border-radius: 9px;
-  background: var(--surface-2);
-  color: var(--ink);
+  background: var(--codev-gold-500);
+  color: var(--codev-on-gold);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.postButton:hover:not(:disabled),
-.askButton:hover:not(:disabled) {
-  background: var(--surface-3);
-}
-
-.askButton {
-  border-color: transparent;
-  background: var(--codev-gold-500);
-  color: var(--codev-on-gold);
-}
-
-.askButton:hover:not(:disabled) {
-  background: var(--codev-gold-500);
+.postButton:hover:not(:disabled) {
   filter: brightness(1.05);
 }
 
-.postButton:disabled,
-.askButton:disabled {
+.postButton:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.postButton svg,
-.askButton svg {
+.postButton svg {
   width: 14px;
   height: 14px;
 }
