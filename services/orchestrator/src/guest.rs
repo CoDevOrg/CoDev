@@ -18,7 +18,6 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use regex::Regex;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use tracing::info;
 use wait_timeout::ChildExt;
 
 use crate::model::{
