@@ -662,7 +662,8 @@ async fn start_ide(
     }
     if request.claude_code_oauth_token.is_some() {
         return Err(RuntimeError::BadRequest(
-            "Claude subscriptions run only in private backend runtimes, never shared IDE sessions.".into(),
+            "Claude subscriptions run only in private backend runtimes, never shared IDE sessions."
+                .into(),
         ));
     }
     if request

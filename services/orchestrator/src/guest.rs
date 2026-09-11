@@ -1167,7 +1167,8 @@ impl GuestService {
             .map_err(RuntimeError::internal)?;
         let auth_path = codex_home_path.join("auth.json");
         if !request.codex_auth_cache_json.is_empty() {
-            fs::write(&auth_path, &request.codex_auth_cache_json).map_err(RuntimeError::internal)?;
+            fs::write(&auth_path, &request.codex_auth_cache_json)
+                .map_err(RuntimeError::internal)?;
             fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
                 .map_err(RuntimeError::internal)?;
         }
@@ -1567,8 +1568,7 @@ impl GuestService {
                     .expect("claude setup map lock")
                     .remove(&session_id);
                 return Err(RuntimeError::Timeout(
-                    "Timed out waiting for claude auth login to print an authorization URL."
-                        .into(),
+                    "Timed out waiting for claude auth login to print an authorization URL.".into(),
                 ));
             }
             let wait = start_deadline.saturating_duration_since(now);
@@ -2038,9 +2038,10 @@ impl ClaudeSetupOutput {
         }
         if self.terminal() {
             return ClaudeSetupPollResponse::Failed {
-                reason: self.failure.clone().unwrap_or_else(|| {
-                    "Claude login stopped before sign-in was verified.".into()
-                }),
+                reason: self
+                    .failure
+                    .clone()
+                    .unwrap_or_else(|| "Claude login stopped before sign-in was verified.".into()),
             };
         }
         ClaudeSetupPollResponse::Pending
