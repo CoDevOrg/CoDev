@@ -244,14 +244,10 @@ impl OrcaBackend {
         if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
             warn!(workspace_id, %error, "could not file this member's agent credentials");
         }
-        let claude_env = if let Some(api_key) = &request.anthropic_api_key {
-            Some(("ANTHROPIC_API_KEY", api_key.as_str()))
-        } else {
-            request
-                .claude_code_oauth_token
-                .as_deref()
-                .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
-        };
+        let claude_env = request
+            .anthropic_api_key
+            .as_deref()
+            .map(|api_key| ("ANTHROPIC_API_KEY", api_key));
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -961,12 +957,13 @@ fn member_agent_env_map(
             "ANTHROPIC_API_KEY".to_string(),
             Value::String(api_key.clone()),
         );
-    } else if let Some(token) = &request.claude_code_oauth_token {
-        env.insert(
-            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
-            Value::String(token.clone()),
-        );
     }
+    // Override any token inherited from an older shared IDE process. Claude
+    // subscription profiles are never copied into this filesystem.
+    env.insert(
+        "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+        Value::String(String::new()),
+    );
 
     // Cursor's browser login is filed as an auth.json under a per-member
     // XDG config home; a pasted API key is the fallback when there is none.
@@ -2055,8 +2052,22 @@ mod tests {
     }
 
     #[test]
-    fn nothing_linked_yields_an_empty_bundle_that_clears_a_stale_one() {
-        assert!(member_agent_env_map(&ide_start_request(json!({})), None, None).is_empty());
+    fn nothing_linked_clears_a_stale_claude_token() {
+        let env = member_agent_env_map(&ide_start_request(json!({})), None, None);
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!(""));
+        assert_eq!(env.len(), 1);
+    }
+
+    #[test]
+    fn legacy_claude_tokens_are_never_forwarded_to_member_agents() {
+        let request = ide_start_request(json!({ "claudeCodeOauthToken": "private-subscription" }));
+        let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!(""));
+        assert!(
+            !serde_json::to_string(&env)
+                .expect("env")
+                .contains("private-subscription")
+        );
     }
 
     #[test]

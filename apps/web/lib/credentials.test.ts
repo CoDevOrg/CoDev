@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockRows = vi.hoisted(() => [] as Array<Record<string, unknown>[]>);
+const mockClaudeRuntime = vi.hoisted(() =>
+  vi.fn(async () => null as null | { id: string }),
+);
+vi.mock("./claude-connection-session", () => ({
+  getConnectedClaudeRuntime: mockClaudeRuntime,
+}));
 const mockHostedSubscription = vi.hoisted(() =>
   vi.fn<
     (input: { userId: string; workspaceId: string }) => Promise<{
@@ -69,6 +75,7 @@ const baseCredential = (overrides: Record<string, unknown> = {}) => ({
 });
 
 afterEach(() => {
+  mockClaudeRuntime.mockResolvedValue(null);
   vi.clearAllMocks();
   mockRows.length = 0;
   mockHostedSubscription.mockReset();
@@ -78,6 +85,24 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
+  it("uses only the requesting member's Claude profile for rooms and workspaces", async () => {
+    mockClaudeRuntime.mockResolvedValue({ id: "personal-runtime" });
+    for (const resolved of [
+      await resolvePersonalChatSubscription("sender", "claude"),
+      await resolveAgentCredential("sender", "workspace", "anthropic"),
+    ]) {
+      expect(resolved).toMatchObject({
+        authType: "CLAUDE_RUNTIME",
+        source: "USER",
+        claudeUserId: "sender",
+        credentialId: "personal-runtime",
+      });
+      expect(resolved.apiKeyOrToken).toBeUndefined();
+    }
+    expect(mockClaudeRuntime).toHaveBeenCalledTimes(2);
+    expect(mockClaudeRuntime).toHaveBeenCalledWith("sender");
+    expect(mockDatabase.select).not.toHaveBeenCalled();
+  });
   it("refuses legacy Claude tokens and requires official runtime reconnect", async () => {
     mockRows.push([
       baseCredential({
@@ -90,10 +115,10 @@ describe("resolveAgentCredential", () => {
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
     ).rejects.toThrow(/Reconnect Claude/);
-    mockRows.push([]);
+    mockRows.length = 0;
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
-    ).rejects.toThrow("Connect your subscription");
+    ).rejects.toThrow("Reconnect Claude");
     expect(mockRows).toHaveLength(0);
   });
 

@@ -760,7 +760,7 @@ export async function executeCodexInSandbox(
 export async function startCodexExecInSandbox(
   workspaceId: string,
   input: SandboxExecInput & {
-    codexAuthCacheJson: string;
+    codexAuthCacheJson?: string;
     idempotencyKey: string;
   },
 ) {

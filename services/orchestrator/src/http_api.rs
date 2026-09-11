@@ -660,6 +660,11 @@ async fn start_ide(
             "Codex auth cache is invalid or too large".into(),
         ));
     }
+    if request.claude_code_oauth_token.is_some() {
+        return Err(RuntimeError::BadRequest(
+            "Claude subscriptions run only in private backend runtimes, never shared IDE sessions.".into(),
+        ));
+    }
     if request
         .anthropic_api_key
         .as_ref()

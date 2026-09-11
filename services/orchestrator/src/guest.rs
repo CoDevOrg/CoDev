@@ -1090,9 +1090,10 @@ impl GuestService {
                 "command must contain between 1 and 32 arguments".into(),
             ));
         }
-        if request.codex_auth_cache_json.len() > (128 << 10)
-            || !serde_json::from_str::<serde_json::Value>(&request.codex_auth_cache_json)
-                .is_ok_and(|value| value.is_object())
+        if !request.codex_auth_cache_json.is_empty()
+            && (request.codex_auth_cache_json.len() > (128 << 10)
+                || !serde_json::from_str::<serde_json::Value>(&request.codex_auth_cache_json)
+                    .is_ok_and(|value| value.is_object()))
         {
             return Err(RuntimeError::BadRequest(
                 "Codex auth cache is invalid or too large".into(),
@@ -1165,9 +1166,11 @@ impl GuestService {
         fs::set_permissions(&codex_home_path, fs::Permissions::from_mode(0o700))
             .map_err(RuntimeError::internal)?;
         let auth_path = codex_home_path.join("auth.json");
-        fs::write(&auth_path, &request.codex_auth_cache_json).map_err(RuntimeError::internal)?;
-        fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
-            .map_err(RuntimeError::internal)?;
+        if !request.codex_auth_cache_json.is_empty() {
+            fs::write(&auth_path, &request.codex_auth_cache_json).map_err(RuntimeError::internal)?;
+            fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
+                .map_err(RuntimeError::internal)?;
+        }
         let codex_home = TemporaryCodexHome(codex_home_path);
 
         let pty = native_pty_system()
@@ -3138,6 +3141,32 @@ sleep 5
             br#"{}"#,
         );
         assert_eq!(poll.status, 400);
+    }
+
+    #[test]
+    fn async_exec_without_codex_credentials_does_not_create_an_auth_cache() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&serde_json::json!({
+                "command": ["/bin/sh", "-c", "test ! -f \"$CODEX_HOME/auth.json\" && printf native-runtime"],
+                "idempotencyKey": "native-runtime"
+            }))
+            .expect("request")
+            .as_slice(),
+        );
+        assert_eq!(response.status, 200);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).expect("response");
+        let result = poll_codex_exec_until_exited(
+            &service,
+            body["sessionId"].as_str().expect("session id"),
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(result.exit_code, Some(0));
+        assert!(result.output.contains("native-runtime"));
+        assert!(result.codex_auth_cache_json.is_none());
     }
 
     #[test]

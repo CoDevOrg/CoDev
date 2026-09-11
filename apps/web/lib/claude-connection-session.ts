@@ -430,6 +430,8 @@ export async function getClaudeConnectionSession(
       .set({
         status: "connected",
         authorizeUrl: null,
+        // Connected rows use expiry as the subscription execution lease.
+        expiresAt: new Date(0),
         completedAt: new Date(),
         updatedAt: new Date(),
       })

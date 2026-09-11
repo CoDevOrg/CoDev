@@ -9,6 +9,8 @@ import type { AuthProvider } from "@codev/shared-types";
 
 import type { ResolvedCredential } from "./credentials";
 import { getAnthropicModels } from "./anthropic-models";
+import { createClaudeRuntimeModel } from "./claude-runtime-model";
+import { CLAUDE_RUNTIME_MODELS } from "./claude-runtime-execution";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.6-luna";
 export const DEFAULT_CURSOR_MODEL = "composer-2.5";
@@ -159,6 +161,8 @@ export async function getSelectableAgentModels(
   // Subscription choices must come from this connection, not a global list or
   // the historical single-model default. Never fabricate an available catalog.
   if (provider === "anthropic" && credential) {
+    if (credential.authType === "CLAUDE_RUNTIME")
+      return [...CLAUDE_RUNTIME_MODELS];
     return getAnthropicModels(credential);
   }
   const configured = process.env.CODEV_AGENT_MODELS?.split(",")
@@ -205,6 +209,15 @@ export function createAgentModel(
       }
       return createOpenAI({ apiKey: credential.apiKeyOrToken })(model);
     case "anthropic": {
+      if (credential.authType === "CLAUDE_RUNTIME") {
+        if (!credential.claudeUserId || credential.source !== "USER")
+          throw new Error("A personal Claude runtime is required.");
+        return createClaudeRuntimeModel(credential.claudeUserId, model);
+      }
+      if (credential.authType === "OAUTH_TOKEN")
+        throw new Error(
+          "Claude subscription tokens cannot be used through the API. Reconnect with official login.",
+        );
       if (!credential.apiKeyOrToken) {
         throw new Error(
           "The Anthropic credential has no API key or bearer token.",
@@ -213,16 +226,10 @@ export function createAgentModel(
       const endpoint = credential.endpointUrl
         ? { baseURL: credential.endpointUrl }
         : {};
-      const anthropic = createAnthropic(
-        credential.authType === "OAUTH_TOKEN"
-          ? {
-              authToken: credential.apiKeyOrToken,
-              // Anthropic gates subscription-token inference behind this beta.
-              headers: { "anthropic-beta": "oauth-2025-04-20" },
-              ...endpoint,
-            }
-          : { apiKey: credential.apiKeyOrToken, ...endpoint },
-      );
+      const anthropic = createAnthropic({
+        apiKey: credential.apiKeyOrToken,
+        ...endpoint,
+      });
       return anthropic(model);
     }
     case "bedrock": {

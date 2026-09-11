@@ -193,19 +193,13 @@ async function resolveOpenAiApiKeyForIde(
 }
 
 /**
- * Same idea as resolveCodexAuthCacheForIde, for a linked Anthropic
- * credential. Both the BYOK API key and the OAuth token from `claude
- * setup-token`/browser login resolve through the same generic lookup,
- * distinguished only by authType — the Claude Code CLI expects a different
- * env var for each (ANTHROPIC_API_KEY vs CLAUDE_CODE_OAUTH_TOKEN), so the
- * orchestrator needs to know which one it's setting.
+ * API-key support is unchanged. Personal Claude subscriptions stay in their
+ * private backend runtime and are never copied to a shared IDE session.
  */
 async function resolveClaudeEnvForIde(
   userId: string,
   workspaceId: string,
-): Promise<
-  { anthropicApiKey: string } | { claudeCodeOauthToken: string } | undefined
-> {
+): Promise<{ anthropicApiKey: string } | undefined> {
   try {
     const credential = await resolveAgentCredential(
       userId,
@@ -216,9 +210,8 @@ async function resolveClaudeEnvForIde(
     if (credential.authType === "API_KEY") {
       return { anthropicApiKey: credential.apiKeyOrToken };
     }
-    if (credential.authType === "OAUTH_TOKEN") {
-      return { claudeCodeOauthToken: credential.apiKeyOrToken };
-    }
+    // Shared IDE sessions must never receive a member's subscription profile
+    // or token. Subscription-backed work runs through isolated backend agents.
     return undefined;
   } catch {
     return undefined;

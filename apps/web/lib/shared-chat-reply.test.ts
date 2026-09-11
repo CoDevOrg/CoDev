@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  nativeStart: vi.fn(),
+  nativePoll: vi.fn(),
+  nativeCleanup: vi.fn(),
   rows: [] as unknown[][],
   set: vi.fn(),
   resolve: vi.fn(),
@@ -19,6 +22,13 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   destroy: vi.fn(),
   refresh: vi.fn(),
+}));
+vi.mock("./claude-runtime-execution", () => ({
+  startClaudeExecution: mocks.nativeStart,
+  pollClaudeExecution: mocks.nativePoll,
+  cleanupClaudeExecution: mocks.nativeCleanup,
+  isClaudeExecution: (id: string) => id.startsWith("claude-exec"),
+  parseClaudeResult: () => ({ result: "Answer" }),
 }));
 vi.mock("./database", () => {
   const query = () => ({
@@ -98,11 +108,12 @@ const history = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.nativeStart.mockResolvedValue("claude-exec");
   mocks.rows.length = 0;
   mocks.resolve.mockResolvedValue({
     provider: "anthropic",
     source: "USER",
-    authType: "OAUTH_TOKEN",
+    authType: "CLAUDE_RUNTIME",
     credentialId: "seat",
     apiKeyOrToken: "private-token",
   });
@@ -113,37 +124,32 @@ beforeEach(() => {
 });
 
 describe("room replies", () => {
-  it("uses the requester account and persists a Claude reply before releasing its lease", async () => {
+  it("starts official Claude for the requester and leaves completion to durable polling", async () => {
     mocks.rows.push([pending()], history, [pending()]);
-    await prepareRoomReply("reply");
+    expect(await prepareRoomReply("reply")).toEqual({
+      sessionId: "claude-exec",
+      credentialId: "seat",
+    });
     expect(mocks.resolve).toHaveBeenCalledWith("sender", "claude");
     expect(mocks.room).toHaveBeenCalledWith("room", "sender");
-    expect(mocks.claim).toHaveBeenCalledWith("seat");
-    expect(mocks.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining("Continue"),
-        maxRetries: 0,
-      }),
+    expect(mocks.nativeStart).toHaveBeenCalledWith(
+      "sender",
+      "chosen-model",
+      expect.stringContaining("Continue"),
+      "reply",
     );
-    expect(mocks.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: "Answer",
-        metadata: expect.objectContaining({
-          generation: expect.objectContaining({ status: "completed" }),
-        }),
-      }),
-    );
-    expect(mocks.release).toHaveBeenCalledWith("seat");
+    expect(mocks.generate).not.toHaveBeenCalled();
+    expect(mocks.set).not.toHaveBeenCalled();
   });
-  it("releases the Claude lease when inference fails", async () => {
+  it("propagates a native start failure without API fallback", async () => {
     mocks.rows.push([pending()], history);
-    mocks.generate.mockRejectedValue(new Error("provider failure"));
+    mocks.nativeStart.mockRejectedValue(new Error("provider failure"));
     await expect(prepareRoomReply("reply")).rejects.toThrow("provider failure");
-    expect(mocks.release).toHaveBeenCalledWith("seat");
+    expect(mocks.generate).not.toHaveBeenCalled();
   });
   it("does not generate or release another turn's busy lease", async () => {
     mocks.rows.push([pending()], history);
-    mocks.claim.mockRejectedValue(new Error("busy"));
+    mocks.nativeStart.mockRejectedValue(new Error("busy"));
     await expect(prepareRoomReply("reply")).rejects.toThrow("busy");
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(mocks.release).not.toHaveBeenCalled();

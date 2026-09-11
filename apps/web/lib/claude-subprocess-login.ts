@@ -34,7 +34,7 @@ const authStatus = z.object({
   authMethod: z.literal("claude.ai"),
 });
 
-function executable() {
+export function claudeExecutable() {
   if (process.env.CLAUDE_CONNECTION_RUNNER_COMMAND)
     return process.env.CLAUDE_CONNECTION_RUNNER_COMMAND;
   const npmBinary = join(
@@ -96,7 +96,7 @@ export function claudeLoginEnvironment(profile: string) {
 async function authenticated(profile: string) {
   if (!existsSync(profile)) return false;
   try {
-    const result = await run(executable(), ["auth", "status"], {
+    const result = await run(claudeExecutable(), ["auth", "status"], {
       cwd: profile,
       env: claudeLoginEnvironment(profile),
       timeout: 10000,
@@ -161,7 +161,7 @@ export const subprocessClaudeRunner: ClaudeLoginRunner = {
       const env = claudeLoginEnvironment(profile);
       if (process.platform === "win32") {
         const pty = await import("node-pty");
-        const child = pty.spawn(executable(), args, {
+        const child = pty.spawn(claudeExecutable(), args, {
           cwd: profile,
           env,
           cols: 4096,
@@ -174,7 +174,7 @@ export const subprocessClaudeRunner: ClaudeLoginRunner = {
         child.onData((chunk) => absorb(login, chunk));
         child.onExit(({ exitCode }) => closed(exitCode));
       } else {
-        const child = spawn(executable(), args, {
+        const child = spawn(claudeExecutable(), args, {
           cwd: profile,
           env,
           stdio: "pipe",

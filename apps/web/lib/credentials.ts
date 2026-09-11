@@ -30,7 +30,8 @@ export type CredentialSource = "USER" | "WORKSPACE" | "ORGANIZATION";
 export interface ResolvedCredential {
   provider: AuthProvider;
   source: CredentialSource;
-  authType: CredentialType;
+  authType: CredentialType | "CLAUDE_RUNTIME";
+  claudeUserId?: string;
   apiKeyOrToken?: string | undefined;
   endpointUrl?: string | undefined;
   awsRoleArn?: string | undefined;
@@ -335,6 +336,20 @@ export async function resolvePersonalChatSubscription(
   userId: string,
   provider: "claude" | "codex",
 ): Promise<ResolvedCredential> {
+  if (provider === "claude") {
+    const { getConnectedClaudeRuntime } =
+      await import("./claude-connection-session");
+    const connection = await getConnectedClaudeRuntime(userId);
+    if (!connection)
+      throw new Error("Reconnect Claude using official login in Settings.");
+    return {
+      provider: "anthropic",
+      source: "USER",
+      authType: "CLAUDE_RUNTIME",
+      credentialId: connection.id,
+      claudeUserId: userId,
+    };
+  }
   if (provider === "codex") {
     const hosted = await resolveHostedCodexSubscription({
       userId,
@@ -357,7 +372,7 @@ export async function resolvePersonalChatSubscription(
   const credential = await findCredential(
     "USER",
     userId,
-    provider === "claude" ? "anthropic" : "openai",
+    "openai",
     "OAUTH_TOKEN",
   );
   if (!credential || credential.status !== "active")
@@ -373,6 +388,19 @@ export async function resolveAgentCredential(
   provider: AuthProvider,
 ): Promise<ResolvedCredential> {
   const normalizedProvider = parseProvider(provider);
+  if (normalizedProvider === "anthropic") {
+    const { getConnectedClaudeRuntime } =
+      await import("./claude-connection-session");
+    const connection = await getConnectedClaudeRuntime(userId);
+    if (connection)
+      return {
+        provider: "anthropic",
+        source: "USER",
+        authType: "CLAUDE_RUNTIME",
+        credentialId: connection.id,
+        claudeUserId: userId,
+      };
+  }
   if (normalizedProvider === "openai") {
     const hosted = await resolveHostedCodexSubscription({
       userId,
