@@ -222,24 +222,16 @@ describe("ProviderAccountCard", () => {
   });
 
   it("releases the hosted Claude runner when canceled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: "sess-cancel",
-          status: "awaiting_code",
-          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
-          failureReason: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: "sess-cancel",
-          status: "failed",
-          authorizeUrl: null,
-          failureReason: "Connection attempt canceled.",
-        }),
-      );
+    // The flow polls the session while awaiting the code, so keep returning
+    // `awaiting_code` — the Cancel button must stay available until clicked.
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        id: "sess-cancel",
+        status: "awaiting_code",
+        authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+        failureReason: null,
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -266,10 +258,9 @@ describe("ProviderAccountCard", () => {
         screen.getByRole("button", { name: "Connect Claude" }),
       ).toBeVisible();
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal/claude-connection/session/sess-cancel",
-      { method: "DELETE" },
+      expect.objectContaining({ method: "DELETE" }),
     );
   });
 
