@@ -130,6 +130,85 @@ async function markFailed(sessionId: string, reason: string) {
 }
 
 /**
+ * Stop an in-progress connection owned by this member and release its runner.
+ * Terminal sessions are intentionally idempotent so unload cleanup cannot
+ * turn a connection that completed concurrently into an error.
+ */
+export async function cancelClaudeConnectionSession(
+  input: { userId: string; sessionId: string },
+  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+): Promise<ClaudeConnectionSessionView> {
+  const row = await loadOwnedSession(input.userId, input.sessionId);
+  if (row.status === "connected" || row.status === "failed") {
+    return toView(row);
+  }
+  if (row.runnerId) await runner.dispose({ runnerId: row.runnerId });
+  const now = new Date();
+  const updated = requireRow(
+    await getDatabase()
+      .update(schema.claudeConnectionSessions)
+      .set({
+        status: "failed",
+        failureReason: "Connection attempt canceled.",
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(schema.claudeConnectionSessions.id, row.id))
+      .returning(),
+  );
+  return toView(updated);
+}
+
+/**
+ * Release runners belonging to expired connection attempts and prune expired
+ * terminal rows. This runs both before a member starts another attempt and
+ * from lifecycle reconciliation, so abandoned browser tabs cannot pin
+ * Firecracker capacity indefinitely.
+ */
+export async function reapExpiredClaudeConnectionSessions(
+  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  input: { userId?: string; limit?: number } = {},
+) {
+  const conditions = [
+    lt(schema.claudeConnectionSessions.expiresAt, new Date()),
+  ];
+  if (input.userId) {
+    conditions.push(eq(schema.claudeConnectionSessions.userId, input.userId));
+  }
+  const expired = await getDatabase()
+    .select({
+      id: schema.claudeConnectionSessions.id,
+      runnerId: schema.claudeConnectionSessions.runnerId,
+    })
+    .from(schema.claudeConnectionSessions)
+    .where(and(...conditions))
+    .limit(input.limit ?? 100);
+
+  let cleaned = 0;
+  let failures = 0;
+  for (const session of expired) {
+    try {
+      if (session.runnerId) {
+        await runner.dispose({ runnerId: session.runnerId });
+      }
+      await getDatabase()
+        .delete(schema.claudeConnectionSessions)
+        .where(eq(schema.claudeConnectionSessions.id, session.id));
+      cleaned += 1;
+    } catch (error) {
+      failures += 1;
+      logEvent("warn", "claude_connection.expired_cleanup_failed", {
+        sessionId: session.id,
+        detail: redactClaudeSecrets(
+          error instanceof Error ? error.message : String(error),
+        ),
+      });
+    }
+  }
+  return { cleaned, failures };
+}
+
+/**
  * Begin a hosted "Connect Claude" flow for a signed-in member. Resolves once
  * there is an authorization URL to show, or throws if the runner could not
  * start.
@@ -140,17 +219,12 @@ export async function startClaudeConnectionSession(
 ): Promise<ClaudeConnectionSessionView> {
   const { scopeType, scopeId } = await resolveClaudeConnectionScope(input);
 
-  // Sweep this member's stale rows so the table stays small. Best-effort: a
-  // cleanup failure must not block starting a fresh connection.
+  // Sweep this member's stale runners before allocating another scarce
+  // sandbox. Best-effort: cleanup failure must not block a fresh attempt.
   try {
-    await getDatabase()
-      .delete(schema.claudeConnectionSessions)
-      .where(
-        and(
-          eq(schema.claudeConnectionSessions.userId, input.userId),
-          lt(schema.claudeConnectionSessions.expiresAt, new Date()),
-        ),
-      );
+    await reapExpiredClaudeConnectionSessions(runner, {
+      userId: input.userId,
+    });
   } catch (error) {
     logEvent("warn", "claude_connection.stale_sweep_failed", {
       detail: redactClaudeSecrets(

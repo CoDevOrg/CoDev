@@ -190,6 +190,7 @@ struct RunningMachine {
     workspace_dir: PathBuf,
     jail_dir: PathBuf,
     slot: u32,
+    reap_on_expiry: bool,
 }
 
 impl RunningMachine {
@@ -417,6 +418,41 @@ impl FirecrackerBackend {
 
     pub async fn active_count(&self) -> usize {
         self.machines.read().await.len()
+    }
+
+    pub async fn reap_expired(&self) -> usize {
+        let _guard = self.provision.lock().await;
+        let now = Utc::now();
+        let expired = {
+            let machines = self.machines.read().await;
+            machines
+                .iter()
+                .filter_map(|(workspace_id, machine)| {
+                    (machine.reap_on_expiry
+                        && machine.instance.read().expect("machine lock").expires_at <= now)
+                        .then(|| (workspace_id.clone(), machine.clone()))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut reaped = 0;
+        for (workspace_id, machine) in expired {
+            // Activity may have refreshed the deadline after collection.
+            if machine.instance.read().expect("machine lock").expires_at > Utc::now() {
+                continue;
+            }
+            match self.stop_machine(machine).await {
+                Ok(()) => {
+                    self.machines.write().await.remove(&workspace_id);
+                    reaped += 1;
+                    info!(%workspace_id, "stopped expired Firecracker sandbox");
+                }
+                Err(error) => {
+                    warn!(%workspace_id, %error, "failed to stop expired Firecracker sandbox");
+                }
+            }
+        }
+        reaped
     }
 
     pub async fn create(&self, request: CreateRequest) -> Result<Instance> {
@@ -1038,6 +1074,7 @@ impl FirecrackerBackend {
             workspace_dir,
             jail_dir,
             slot,
+            reap_on_expiry: request.ephemeral,
         };
 
         if restore_snapshot {

@@ -962,6 +962,7 @@ mod tests {
     fn validates_credential_free_private_snapshots() {
         let request = CreateRequest {
             workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
+            ephemeral: false,
             repository_url: None,
             repository_snapshot: Some(RepositorySnapshot {
                 files: vec![RepositorySnapshotFile {

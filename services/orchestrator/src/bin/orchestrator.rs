@@ -26,6 +26,8 @@ async fn main() -> Result<()> {
 
     let ide = configure_ide_backend();
 
+    tokio::spawn(reap_expired_sandboxes(backend.clone()));
+
     if !host_idle_timeout.is_zero() {
         tokio::spawn(stop_idle_host(
             backend.clone(),
@@ -43,6 +45,18 @@ async fn main() -> Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(RuntimeError::internal)
+}
+
+async fn reap_expired_sandboxes(backend: SharedBackend) {
+    let mut interval = time::interval(Duration::from_secs(30));
+    interval.tick().await;
+    loop {
+        interval.tick().await;
+        let reaped = backend.reap_expired().await;
+        if reaped > 0 {
+            info!(reaped, "reaped expired Firecracker sandboxes");
+        }
+    }
 }
 
 /// The Orca IDE backend is optional: a host that has not been provisioned

@@ -70,6 +70,10 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     pub workspace_id: String,
+    /// Short-lived infrastructure work with no durable workspace state, such
+    /// as a hosted provider-auth runner. The host may destroy it at expiry.
+    #[serde(default)]
+    pub ephemeral: bool,
     pub repository_url: Option<String>,
     pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,

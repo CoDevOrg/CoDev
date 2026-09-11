@@ -258,6 +258,7 @@ export const orchestratorClaudeRunner: ClaudeSetupTokenRunner = {
       await ensureHostReady();
       await provisionSandbox({
         workspaceId,
+        ephemeral: true,
         repositoryUrl: null,
         repositorySnapshot: {
           files: [
