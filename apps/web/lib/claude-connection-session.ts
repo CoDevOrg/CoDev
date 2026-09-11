@@ -1,33 +1,28 @@
 import "server-only";
 
-import { and, eq, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, ne } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
 import {
   ClaudeConnectionError,
-  persistClaudeOAuthToken,
   redactClaudeSecrets,
   resolveClaudeConnectionScope,
-  validateClaudeOAuthToken,
-  verifyClaudeInferenceAccess,
-  type ClaudeInferenceVerifier,
 } from "./claude-connection";
 import { getDatabase } from "./database";
+import { deleteProviderCredential } from "./credentials";
 import { logEvent } from "./observability";
+import { isClaudeRuntimeReference } from "./claude-runtime-reference";
 
 /** A "Connect Claude" attempt lives at most this long before it is abandoned. */
 export const CLAUDE_CONNECTION_SESSION_TTL_MS = 10 * 60 * 1_000;
 
 /**
- * The boundary the orchestration layer drives. Step 3 provides a real
- * implementation that runs the official `claude setup-token` binary in a
- * hosted runner; until then {@link unavailableClaudeRunner} is used and the
- * flow reports that hosted connect is not enabled.
+ * Official CLI login transport. Credentials remain in the runtime profile.
  */
-export interface ClaudeSetupTokenRunner {
+export interface ClaudeLoginRunner {
   /**
-   * Provision a runner and start `claude setup-token`. Resolves once the
+   * Provision a runner and start `claude auth login`. Resolves once the
    * runner has emitted the authorization URL the member must open.
    */
   start(input: { sessionId: string }): Promise<{
@@ -36,22 +31,24 @@ export interface ClaudeSetupTokenRunner {
   }>;
   /** Feed the authorization code the member pasted to the waiting process. */
   submitCode(input: { runnerId: string; code: string }): Promise<void>;
-  /** Poll for the captured token (or a terminal failure). */
+  /** Poll verified CLI auth status (or a terminal failure), never credentials. */
   poll(input: { runnerId: string }): Promise<ClaudeRunnerPollResult>;
-  /** Best-effort teardown; never throws in a way the caller must handle. */
+  /** Delete the private profile; failures must remain retryable. */
   dispose(input: { runnerId: string }): Promise<void>;
+  /** Persist runtime-owned login state before acknowledging the connection. */
+  retain?(input: { runnerId: string }): Promise<void>;
 }
 
 export type ClaudeRunnerPollResult =
   | { status: "pending" }
-  | { status: "ready"; oauthToken: string }
+  | { status: "ready" }
   | { status: "failed"; reason: string };
 
 /** Placeholder runner used until the hosted implementation lands (Step 3). */
-export const unavailableClaudeRunner: ClaudeSetupTokenRunner = {
+export const unavailableClaudeRunner: ClaudeLoginRunner = {
   async start() {
     throw new ClaudeConnectionError(
-      "Hosted Claude connection is not available yet. Use an API key or the CoDev CLI for now.",
+      "Official Claude login is not configured. Contact your CoDev administrator.",
       503,
     );
   },
@@ -123,6 +120,7 @@ async function markFailed(sessionId: string, reason: string) {
     .update(schema.claudeConnectionSessions)
     .set({
       status: "failed",
+      authorizeUrl: null,
       failureReason: redactClaudeSecrets(reason),
       updatedAt: new Date(),
     })
@@ -136,26 +134,33 @@ async function markFailed(sessionId: string, reason: string) {
  */
 export async function cancelClaudeConnectionSession(
   input: { userId: string; sessionId: string },
-  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  suppliedRunner?: ClaudeLoginRunner,
 ): Promise<ClaudeConnectionSessionView> {
   const row = await loadOwnedSession(input.userId, input.sessionId);
   if (row.status === "connected" || row.status === "failed") {
     return toView(row);
   }
-  if (row.runnerId) await runner.dispose({ runnerId: row.runnerId });
+  const runner = await sessionRunner(row.runnerId, suppliedRunner);
   const now = new Date();
-  const updated = requireRow(
-    await getDatabase()
-      .update(schema.claudeConnectionSessions)
-      .set({
-        status: "failed",
-        failureReason: "Connection attempt canceled.",
-        completedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(schema.claudeConnectionSessions.id, row.id))
-      .returning(),
-  );
+  const [updated] = await getDatabase()
+    .update(schema.claudeConnectionSessions)
+    .set({
+      status: "failed",
+      authorizeUrl: null,
+      failureReason: "Connection attempt canceled.",
+      completedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(schema.claudeConnectionSessions.id, row.id),
+        ne(schema.claudeConnectionSessions.status, "connected"),
+      ),
+    )
+    .returning();
+  if (!updated)
+    return toView(await loadOwnedSession(input.userId, input.sessionId));
+  if (row.runnerId) await runner.dispose({ runnerId: row.runnerId });
   return toView(updated);
 }
 
@@ -166,11 +171,12 @@ export async function cancelClaudeConnectionSession(
  * Firecracker capacity indefinitely.
  */
 export async function reapExpiredClaudeConnectionSessions(
-  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  suppliedRunner?: ClaudeLoginRunner,
   input: { userId?: string; limit?: number } = {},
 ) {
   const conditions = [
     lt(schema.claudeConnectionSessions.expiresAt, new Date()),
+    ne(schema.claudeConnectionSessions.status, "connected"),
   ];
   if (input.userId) {
     conditions.push(eq(schema.claudeConnectionSessions.userId, input.userId));
@@ -188,8 +194,27 @@ export async function reapExpiredClaudeConnectionSessions(
   let failures = 0;
   for (const session of expired) {
     try {
+      const [claimed] = await getDatabase()
+        .update(schema.claudeConnectionSessions)
+        .set({
+          status: "failed",
+          authorizeUrl: null,
+          failureReason: "Connection attempt expired.",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.claudeConnectionSessions.id, session.id),
+            ne(schema.claudeConnectionSessions.status, "connected"),
+          ),
+        )
+        .returning();
+      if (!claimed) continue;
       if (session.runnerId) {
-        await runner.dispose({ runnerId: session.runnerId });
+        if (suppliedRunner || isClaudeRuntimeReference(session.runnerId)) {
+          const runner = await sessionRunner(session.runnerId, suppliedRunner);
+          await runner.dispose({ runnerId: session.runnerId });
+        }
       }
       await getDatabase()
         .delete(schema.claudeConnectionSessions)
@@ -215,14 +240,20 @@ export async function reapExpiredClaudeConnectionSessions(
  */
 export async function startClaudeConnectionSession(
   input: { userId: string; scopeType?: unknown; organizationId?: unknown },
-  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  runner: ClaudeLoginRunner = unavailableClaudeRunner,
 ): Promise<ClaudeConnectionSessionView> {
+  if (input.scopeType === "ORGANIZATION") {
+    throw new ClaudeConnectionError(
+      "Claude subscriptions must be connected personally, not shared with an organization.",
+      400,
+    );
+  }
   const { scopeType, scopeId } = await resolveClaudeConnectionScope(input);
 
   // Sweep this member's stale runners before allocating another scarce
   // sandbox. Best-effort: cleanup failure must not block a fresh attempt.
   try {
-    await reapExpiredClaudeConnectionSessions(runner, {
+    await reapExpiredClaudeConnectionSessions(undefined, {
       userId: input.userId,
     });
   } catch (error) {
@@ -246,10 +277,12 @@ export async function startClaudeConnectionSession(
       .returning(),
   );
 
+  let allocatedRunnerId: string | undefined;
   try {
     const { runnerId, authorizeUrl } = await runner.start({
       sessionId: row.id,
     });
+    allocatedRunnerId = runnerId;
     const updated = requireRow(
       await getDatabase()
         .update(schema.claudeConnectionSessions)
@@ -259,13 +292,22 @@ export async function startClaudeConnectionSession(
           authorizeUrl,
           updatedAt: new Date(),
         })
-        .where(eq(schema.claudeConnectionSessions.id, row.id))
+        .where(
+          and(
+            eq(schema.claudeConnectionSessions.id, row.id),
+            eq(schema.claudeConnectionSessions.status, "starting"),
+          ),
+        )
         .returning(),
     );
     return toView(updated);
   } catch (error) {
+    if (allocatedRunnerId)
+      await runner.dispose({ runnerId: allocatedRunnerId });
     const reason =
-      error instanceof Error ? error.message : "The runner failed to start.";
+      error instanceof ClaudeConnectionError
+        ? error.message
+        : "Unable to start official Claude login. Check the runtime configuration and try again.";
     await markFailed(row.id, reason);
     throw error instanceof ClaudeConnectionError
       ? error
@@ -279,12 +321,15 @@ export async function startClaudeConnectionSession(
  */
 export async function submitClaudeConnectionCode(
   input: { userId: string; sessionId: string; code: string },
-  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
+  suppliedRunner?: ClaudeLoginRunner,
 ): Promise<ClaudeConnectionSessionView> {
   const code = input.code.trim();
   if (!code) throw new ClaudeConnectionError("Authorization code is required.");
+  if (code.length > 4096 || /[\r\n]/.test(code))
+    throw new ClaudeConnectionError("Invalid authorization code.");
 
   const row = await loadOwnedSession(input.userId, input.sessionId);
+  const runner = await sessionRunner(row.runnerId, suppliedRunner);
   if (row.status !== "awaiting_code" || !row.runnerId) {
     throw new ClaudeConnectionError(
       `This connection session is ${row.status}; start a new one.`,
@@ -301,7 +346,12 @@ export async function submitClaudeConnectionCode(
     await getDatabase()
       .update(schema.claudeConnectionSessions)
       .set({ status: "exchanging", updatedAt: new Date() })
-      .where(eq(schema.claudeConnectionSessions.id, row.id))
+      .where(
+        and(
+          eq(schema.claudeConnectionSessions.id, row.id),
+          eq(schema.claudeConnectionSessions.status, "awaiting_code"),
+        ),
+      )
       .returning(),
   );
   return toView(updated);
@@ -309,18 +359,27 @@ export async function submitClaudeConnectionCode(
 
 /**
  * Report where a connection session stands. While the runner is still
- * working this polls it; on success the captured token is persisted to
- * `provider_credentials` and the runner is torn down.
+ * working this polls it; on success the runtime is retained and CoDev stores
+ * only its opaque reference in the existing session record.
  */
 export async function getClaudeConnectionSession(
   input: { userId: string; sessionId: string },
-  runner: ClaudeSetupTokenRunner = unavailableClaudeRunner,
-  verify: ClaudeInferenceVerifier = verifyClaudeInferenceAccess,
+  suppliedRunner?: ClaudeLoginRunner,
 ): Promise<ClaudeConnectionSessionView> {
   const row = await loadOwnedSession(input.userId, input.sessionId);
-
+  if (
+    !suppliedRunner &&
+    row.status === "connected" &&
+    !isClaudeRuntimeReference(row.runnerId)
+  ) {
+    throw new ClaudeConnectionError(
+      "This legacy connection requires reconnecting with official Claude login.",
+      410,
+    );
+  }
   const terminal = row.status === "connected" || row.status === "failed";
   if (terminal) return toView(row);
+  const runner = await sessionRunner(row.runnerId, suppliedRunner);
 
   if (row.expiresAt.getTime() < Date.now()) {
     if (row.runnerId) await runner.dispose({ runnerId: row.runnerId });
@@ -329,6 +388,8 @@ export async function getClaudeConnectionSession(
   }
 
   if (!row.runnerId) return toView(row);
+  // A poll winner is currently retaining the profile. Other polls wait.
+  if (row.status === "starting") return toView(row);
 
   const result = await runner.poll({ runnerId: row.runnerId });
   if (result.status === "pending") return toView(row);
@@ -340,31 +401,102 @@ export async function getClaudeConnectionSession(
   }
 
   // result.status === "ready"
+  const [claimed] = await getDatabase()
+    .update(schema.claudeConnectionSessions)
+    .set({ status: "starting", updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.claudeConnectionSessions.id, row.id),
+        inArray(schema.claudeConnectionSessions.status, [
+          "awaiting_code",
+          "exchanging",
+        ]),
+      ),
+    )
+    .returning();
+  if (!claimed)
+    return toView(await loadOwnedSession(input.userId, input.sessionId));
   try {
-    const oauthToken = validateClaudeOAuthToken(result.oauthToken);
-    await verify(oauthToken);
-    await persistClaudeOAuthToken({
-      scopeType: row.scopeType as "USER" | "ORGANIZATION",
-      scopeId: row.scopeId,
-      oauthToken,
-      source: "hosted_runner",
-    });
-    await getDatabase()
+    await runner.retain?.({ runnerId: row.runnerId });
+    // Reconnection retires any previously stored subscription token, not API keys.
+    await deleteProviderCredential(
+      "USER",
+      row.userId,
+      "anthropic",
+      "OAUTH_TOKEN",
+    );
+    const saved = await getDatabase()
       .update(schema.claudeConnectionSessions)
       .set({
         status: "connected",
+        authorizeUrl: null,
         completedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(schema.claudeConnectionSessions.id, row.id));
-  } catch (error) {
-    const reason =
-      error instanceof Error
-        ? error.message
-        : "The captured token could not be saved.";
-    await markFailed(row.id, reason);
-  } finally {
+      .where(
+        and(
+          eq(schema.claudeConnectionSessions.id, row.id),
+          ne(schema.claudeConnectionSessions.status, "failed"),
+        ),
+      )
+      .returning();
+    if (!saved.length) await runner.dispose({ runnerId: row.runnerId });
+  } catch {
+    await markFailed(
+      row.id,
+      "The signed-in runtime could not be retained. Try connecting again.",
+    );
     await runner.dispose({ runnerId: row.runnerId });
   }
   return toView(await loadOwnedSession(input.userId, input.sessionId));
+}
+
+async function sessionRunner(
+  reference: string | null,
+  supplied?: ClaudeLoginRunner,
+) {
+  if (supplied) return supplied;
+  if (!reference) return unavailableClaudeRunner;
+  if (!isClaudeRuntimeReference(reference))
+    throw new ClaudeConnectionError(
+      "This legacy connection requires reconnecting with official Claude login.",
+      410,
+    );
+  const { resolveClaudeRunner } = await import("./claude-connection-runner");
+  return resolveClaudeRunner(reference);
+}
+
+/** Server-only reference lookup. Never read or return the runtime's credential files. */
+export async function getConnectedClaudeRuntime(userId: string) {
+  const rows = await getDatabase()
+    .select()
+    .from(schema.claudeConnectionSessions)
+    .where(
+      and(
+        eq(schema.claudeConnectionSessions.userId, userId),
+        eq(schema.claudeConnectionSessions.scopeType, "USER"),
+        eq(schema.claudeConnectionSessions.status, "connected"),
+      ),
+    )
+    .orderBy(desc(schema.claudeConnectionSessions.createdAt));
+  return rows.find((row) => isClaudeRuntimeReference(row.runnerId)) ?? null;
+}
+
+export async function disconnectClaudeRuntime(userId: string) {
+  const rows = await getDatabase()
+    .select()
+    .from(schema.claudeConnectionSessions)
+    .where(
+      and(
+        eq(schema.claudeConnectionSessions.userId, userId),
+        eq(schema.claudeConnectionSessions.status, "connected"),
+      ),
+    );
+  for (const row of rows) {
+    if (!isClaudeRuntimeReference(row.runnerId)) continue;
+    const runner = await sessionRunner(row.runnerId);
+    // Leave the record connected if runtime cleanup fails, so it can be retried.
+    await runner.dispose({ runnerId: row.runnerId });
+    await markFailed(row.id, "Disconnected.");
+  }
 }

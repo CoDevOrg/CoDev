@@ -157,7 +157,7 @@ impl GuestService {
             ("POST", "/v1/pty/exec") => self.exec(body),
             ("POST", "/v1/terminals") => self.start_terminal(body),
             ("POST", "/v1/codex-execs") => self.start_codex_exec(body),
-            ("POST", "/v1/claude-setup-token") => self.start_claude_setup(body),
+            ("POST", "/v1/claude-auth-login") => self.start_claude_setup(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
@@ -1415,7 +1415,7 @@ impl GuestService {
         let pty = native_pty_system()
             .openpty(PtySize {
                 rows: 24,
-                cols: 120,
+                cols: 4096,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -1438,12 +1438,15 @@ impl GuestService {
         );
         let claude_home = std::env::temp_dir().join(&session_id);
         std::fs::create_dir_all(&claude_home).map_err(RuntimeError::internal)?;
+        fs::set_permissions(&claude_home, fs::Permissions::from_mode(0o700))
+            .map_err(RuntimeError::internal)?;
 
         let mut command = CommandBuilder::new(&claude_command);
-        command.arg("setup-token");
-        command.cwd(&self.workspace_root);
+        command.args(["auth", "login", "--claudeai"]);
+        command.cwd(&claude_home);
         command.env("PATH", GUEST_PATH);
         command.env("HOME", &claude_home);
+        command.env("CLAUDE_CONFIG_DIR", claude_home.join("config"));
         command.env("TERM", "xterm-256color");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
@@ -1452,8 +1455,9 @@ impl GuestService {
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
+                let _ = fs::remove_dir_all(&claude_home);
                 return Err(RuntimeError::BadRequest(format!(
-                    "unable to spawn claude setup-token: {error}"
+                    "unable to spawn claude auth login: {error}"
                 )));
             }
         };
@@ -1464,6 +1468,7 @@ impl GuestService {
             .map_err(RuntimeError::internal)?;
         let writer = pty.master.take_writer().map_err(RuntimeError::internal)?;
         let session = Arc::new(ClaudeSetupSession {
+            profile_path: claude_home.clone(),
             _master: Mutex::new(pty.master),
             writer: Mutex::new(writer),
             output: Mutex::new(ClaudeSetupOutput {
@@ -1527,13 +1532,23 @@ impl GuestService {
                 }
                 thread::sleep(Duration::from_millis(25));
             };
+            let authenticated = exit_code == 0
+                && !waiter_session.cancel_requested.load(Ordering::Relaxed)
+                && claude_authenticated(&claude_command, &claude_home);
+            if !authenticated {
+                let _ = fs::remove_dir_all(&claude_home);
+            }
             let mut output = waiter_session
                 .output
                 .lock()
                 .expect("claude setup output lock");
+            output.authenticated = authenticated;
             output.exit_code = Some(exit_code);
-            if exit_code != 0 && output.token.is_none() && output.failure.is_none() {
-                output.failure = Some(format!("claude setup-token exited with code {exit_code}."));
+            output.buffer.clear();
+            if !authenticated {
+                output.failure = Some(
+                    "Claude login was not verified. Reconnect using the official login.".into(),
+                );
             }
             waiter_session.output_changed.notify_all();
         });
@@ -1549,7 +1564,7 @@ impl GuestService {
                     .expect("claude setup map lock")
                     .remove(&session_id);
                 return Err(RuntimeError::Timeout(
-                    "Timed out waiting for claude setup-token to print an authorization URL."
+                    "Timed out waiting for claude auth login to print an authorization URL."
                         .into(),
                 ));
             }
@@ -1576,7 +1591,7 @@ impl GuestService {
                 output
                     .failure
                     .clone()
-                    .unwrap_or_else(|| "claude setup-token exited before printing a URL.".into()),
+                    .unwrap_or_else(|| "claude auth login exited before printing a URL.".into()),
             ))
         }
     }
@@ -1587,14 +1602,17 @@ impl GuestService {
         body: &[u8],
     ) -> crate::model::Result<serde_json::Value> {
         let request: ClaudeSetupCodeRequest = decode(body)?;
-        if request.code.trim().is_empty() || request.code.len() > MAX_CLAUDE_CODE_BYTES {
+        if request.code.trim().is_empty()
+            || request.code.len() > MAX_CLAUDE_CODE_BYTES
+            || request.code.contains(['\r', '\n'])
+        {
             return Err(RuntimeError::BadRequest(
                 "invalid Claude authorization code".into(),
             ));
         }
         let session = self.claude_setup(session_id)?;
         let mut writer = session.writer.lock().expect("claude setup writer lock");
-        // CR, not LF. `claude setup-token` is an ink TUI reading a raw-mode
+        // CR, not LF. `claude auth login` is an ink TUI reading a raw-mode
         // pty, where the Enter key is a carriage return and no line-ending
         // translation happens. Sending "\n" put the code into the field and
         // never submitted it: the characters echoed back as asterisks and the
@@ -1616,7 +1634,7 @@ impl GuestService {
         let request: ClaudeSetupPollRequest = decode(body)?;
         let session = self.claude_setup(session_id)?;
         let mut output = session.output.lock().expect("claude setup output lock");
-        if output.token.is_none() && !output.terminal() && request.wait_milliseconds > 0 {
+        if !output.terminal() && request.wait_milliseconds > 0 {
             let wait = Duration::from_millis(request.wait_milliseconds.min(25_000));
             let (next_output, _) = session
                 .output_changed
@@ -1624,31 +1642,36 @@ impl GuestService {
                 .expect("claude setup output lock");
             output = next_output;
         }
-        // The only window into a stalled exchange. `claude` can sit waiting on
-        // a prompt, or print an error the scrapers do not match, and every
-        // other signal here looks identical to "still working". Tail only, and
-        // redacted, so a token can never reach the log.
-        let tail = redact_claude_secrets(&output.buffer);
-        let tail = tail.get(tail.len().saturating_sub(400)..).unwrap_or(&tail);
-        info!(
-            session_id,
-            terminal = output.terminal(),
-            has_token = output.token.is_some(),
-            output_tail = %tail.escape_debug(),
-            "claude setup poll"
-        );
+        // Never log terminal output: it may contain authorization codes.
         let result = output.poll_response();
         serde_json::to_value(result).map_err(RuntimeError::internal)
     }
 
     fn close_claude_setup(&self, session_id: &str) -> crate::model::Result<serde_json::Value> {
-        let session = self
-            .claude_setups
+        let session = self.claude_setup(session_id)?;
+        session.cancel_requested.store(true, Ordering::Relaxed);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut output = session.output.lock().expect("claude setup output lock");
+        while output.exit_code.is_none() {
+            if Instant::now() >= deadline {
+                return Err(RuntimeError::Timeout(
+                    "Claude login is still stopping.".into(),
+                ));
+            }
+            output = session
+                .output_changed
+                .wait_timeout(output, Duration::from_millis(100))
+                .expect("claude setup output lock")
+                .0;
+        }
+        drop(output);
+        if session.profile_path.exists() {
+            fs::remove_dir_all(&session.profile_path).map_err(RuntimeError::internal)?;
+        }
+        self.claude_setups
             .lock()
             .expect("claude setup map lock")
-            .remove(session_id)
-            .ok_or_else(|| RuntimeError::BadRequest("Claude setup session not found".into()))?;
-        session.cancel_requested.store(true, Ordering::Relaxed);
+            .remove(session_id);
         Ok(serde_json::json!({ "closed": true }))
     }
 
@@ -1963,6 +1986,7 @@ impl Default for CodexExecOutput {
 }
 
 struct ClaudeSetupSession {
+    profile_path: PathBuf,
     // Keep the PTY master alive for the duration of the interactive setup.
     _master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
@@ -1975,7 +1999,7 @@ struct ClaudeSetupSession {
 struct ClaudeSetupOutput {
     buffer: String,
     authorize_url: Option<String>,
-    token: Option<String>,
+    authenticated: bool,
     failure: Option<String>,
     reader_closed: bool,
     exit_code: Option<i32>,
@@ -1986,20 +2010,17 @@ impl ClaudeSetupOutput {
     fn absorb(&mut self, chunk: &str) {
         self.buffer.push_str(chunk);
         if self.authorize_url.is_none()
-            && let Some(match_) = claude_authorize_url_pattern().find(&self.buffer)
+            && let Some(captures) = claude_authorize_url_pattern().captures(&self.buffer)
+            && let Some(match_) = captures.get(1)
         {
             self.authorize_url = Some(match_.as_str().to_owned());
         }
-        if self.token.is_none()
-            && let Some(match_) = claude_token_pattern().find(&self.buffer)
-        {
-            self.token = Some(match_.as_str().to_owned());
-        }
-        if self.token.is_some() {
-            self.buffer = redact_claude_secrets(&self.buffer);
-        }
+        self.buffer = redact_claude_secrets(&self.buffer);
         if self.buffer.len() > MAX_OUTPUT_BYTES {
-            let overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
+            let mut overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
+            while !self.buffer.is_char_boundary(overflow) {
+                overflow += 1;
+            }
             self.buffer.drain(0..overflow);
         }
     }
@@ -2009,15 +2030,13 @@ impl ClaudeSetupOutput {
     }
 
     fn poll_response(&self) -> ClaudeSetupPollResponse {
-        if let Some(token) = &self.token {
-            return ClaudeSetupPollResponse::Ready {
-                oauth_token: token.clone(),
-            };
+        if self.terminal() && self.authenticated {
+            return ClaudeSetupPollResponse::Ready;
         }
         if self.terminal() {
             return ClaudeSetupPollResponse::Failed {
                 reason: self.failure.clone().unwrap_or_else(|| {
-                    "claude setup-token stopped before returning a token.".into()
+                    "Claude login stopped before sign-in was verified.".into()
                 }),
             };
         }
@@ -2026,7 +2045,7 @@ impl ClaudeSetupOutput {
 }
 
 fn claude_setup_route(path: &str) -> Option<(&str, &str)> {
-    let suffix = path.strip_prefix("/v1/claude-setup-token/")?;
+    let suffix = path.strip_prefix("/v1/claude-auth-login/")?;
     let (session_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
     (!session_id.is_empty()).then_some((session_id, action))
 }
@@ -2059,17 +2078,50 @@ fn claude_version(command: &str) -> Option<String> {
     Some(output.trim().to_owned()).filter(|value| !value.is_empty() && value.len() <= 128)
 }
 
+/// Ask the unmodified CLI about its own isolated profile. Never read credentials.
+fn claude_authenticated(command: &str, profile: &Path) -> bool {
+    let Ok(mut child) = Command::new(command)
+        .args(["auth", "status"])
+        .env_clear()
+        .env("PATH", GUEST_PATH)
+        .env("HOME", profile)
+        .env("CLAUDE_CONFIG_DIR", profile.join("config"))
+        .current_dir(profile)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    let success =
+        matches!(child.wait_timeout(Duration::from_secs(10)), Ok(Some(status)) if status.success());
+    if !success {
+        let _ = child.kill();
+        let _ = child.wait();
+        return false;
+    }
+    let mut output = String::new();
+    let Some(stdout) = child.stdout.take() else {
+        return false;
+    };
+    if stdout.take(16384).read_to_string(&mut output).is_err() {
+        return false;
+    }
+    serde_json::from_str::<serde_json::Value>(&output)
+        .is_ok_and(|value| value["loggedIn"] == true && value["authMethod"] == "claude.ai")
+}
+
 fn claude_authorize_url_pattern() -> &'static Regex {
     static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     PATTERN.get_or_init(|| {
         // The character class stops at any control byte, not just
-        // whitespace. `claude setup-token` prints the URL as an OSC-8
+        // whitespace. `claude auth login` prints the URL as an OSC-8
         // terminal hyperlink -- ESC ] 8 ; ; <url> BEL <visible text> ESC ] 8
         // ; ; BEL -- and BEL and ESC are neither whitespace nor quotes, so a
         // `[^\s'"]*` tail ran straight through the terminator and captured
         // the escape sequence plus the truncated copy the terminal displays.
         Regex::new(
-            r#"https?://[^\x00-\x20'"\x7f]*(?:oauth|authorize|claude\.ai|anthropic\.com|claude\.com)[^\x00-\x20'"\x7f]*"#,
+            r#"(https://(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com)/[^\x00-\x20'"\x7f]*(?:oauth|authorize)[^\x00-\x20'"\x7f]*)[\x00-\x20'"\x7f]"#,
         )
         .expect("Claude authorize URL regex")
     })
@@ -2930,7 +2982,7 @@ mod tests {
             "command": command.to_string_lossy()
         }))
         .expect("start body");
-        let start = service.handle("POST", "/v1/claude-setup-token", &body);
+        let start = service.handle("POST", "/v1/claude-auth-login", &body);
         assert_eq!(
             start.status,
             200,
@@ -2941,17 +2993,25 @@ mod tests {
     }
 
     #[test]
-    fn claude_setup_captures_url_accepts_code_and_returns_token() {
+    fn claude_login_retains_private_profile_without_returning_credentials() {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
         let command = fake_claude(
             directory.path(),
             r#"#!/bin/sh
 if [ "$1" = "--version" ]; then echo "Claude Code 2.1.236"; exit 0; fi
+if [ "$1 $2" = "auth status" ]; then
+  test -f "$CLAUDE_CONFIG_DIR/signed-in" || exit 1
+  printf '{"loggedIn":true,"authMethod":"claude.ai"}\n'
+  exit 0
+fi
+test "$1 $2 $3" = "auth login --claudeai" || exit 2
+mkdir -p "$CLAUDE_CONFIG_DIR"
 printf 'Open this URL:\n'
 printf 'https://claude.ai/oauth/authorize?client_id=abc\n'
 IFS= read code
 if [ "$code" = "good" ]; then
+  touch "$CLAUDE_CONFIG_DIR/signed-in"
   printf 'Login successful. Token: sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
   exit 0
 fi
@@ -2977,7 +3037,7 @@ exit 1
         // prompt with the code echoed as asterisks and CR got it evaluated.
         let code = service.handle(
             "POST",
-            &format!("/v1/claude-setup-token/{session_id}/code"),
+            &format!("/v1/claude-auth-login/{session_id}/code"),
             br#"{"code":"good"}"#,
         );
         assert_eq!(code.status, 200);
@@ -2991,7 +3051,7 @@ exit 1
         let result = loop {
             let poll = service.handle(
                 "POST",
-                &format!("/v1/claude-setup-token/{session_id}/poll"),
+                &format!("/v1/claude-auth-login/{session_id}/poll"),
                 br#"{"waitMilliseconds":5000}"#,
             );
             assert_eq!(poll.status, 200, "{}", String::from_utf8_lossy(&poll.body));
@@ -3002,14 +3062,25 @@ exit 1
             }
             assert!(
                 std::time::Instant::now() < deadline,
-                "claude setup-token never reported a token"
+                "claude auth login never verified sign-in"
             );
         };
-        assert!(matches!(
-            result,
-            ClaudeSetupPollResponse::Ready { ref oauth_token }
-                if oauth_token.starts_with("sk-ant-oat")
-        ));
+        assert!(matches!(result, ClaudeSetupPollResponse::Ready));
+        assert_eq!(
+            serde_json::to_value(&result).unwrap(),
+            serde_json::json!({"status":"ready"})
+        );
+        let profile = service
+            .claude_setup(session_id)
+            .unwrap()
+            .profile_path
+            .clone();
+        assert!(profile.join("config/signed-in").exists());
+        assert!(!profile.starts_with(directory.path()));
+        assert_eq!(
+            fs::metadata(&profile).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
 
         let buffered = service
             .claude_setup(session_id)
@@ -3020,7 +3091,8 @@ exit 1
             .buffer
             .clone();
         assert!(!buffered.contains("sk-ant-oat"));
-        assert!(buffered.contains("[REDACTED_CLAUDE_TOKEN]"));
+        service.close_claude_setup(session_id).unwrap();
+        assert!(!profile.exists());
     }
 
     #[test]
@@ -3056,13 +3128,13 @@ sleep 5
         let session_id = start["sessionId"].as_str().expect("session id");
         let close = service.handle(
             "DELETE",
-            &format!("/v1/claude-setup-token/{session_id}"),
+            &format!("/v1/claude-auth-login/{session_id}"),
             b"",
         );
         assert_eq!(close.status, 200);
         let poll = service.handle(
             "POST",
-            &format!("/v1/claude-setup-token/{session_id}/poll"),
+            &format!("/v1/claude-auth-login/{session_id}/poll"),
             br#"{}"#,
         );
         assert_eq!(poll.status, 400);
@@ -3310,7 +3382,7 @@ sleep 5
 
     #[test]
     fn authorize_url_stops_at_the_osc8_hyperlink_terminator() {
-        // `claude setup-token` prints the URL as a clickable terminal
+        // `claude auth login` prints the URL as a clickable terminal
         // hyperlink. Captured verbatim from a guest, the pty carries:
         //   ESC ] 8 ; ; <url> BEL <truncated visible copy> ESC ] 8 ; ; BEL
         // The scraped value is handed to the browser, so anything past the

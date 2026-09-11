@@ -1,6 +1,5 @@
 import "server-only";
 
-import { saveProviderCredential } from "./credentials";
 import { logEvent } from "./observability";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 
@@ -61,11 +60,6 @@ export function toClaudeConnectionFailure(
  */
 export type ClaudeConnectionSource = "cli" | "hosted_runner";
 
-const SOURCE_LABEL: Record<ClaudeConnectionSource, string> = {
-  cli: "Claude CLI",
-  hosted_runner: "Claude account",
-};
-
 export function validateClaudeOAuthToken(value: unknown) {
   const token = typeof value === "string" ? value.trim() : "";
   if (!CLAUDE_TOKEN_PATTERN.test(token)) {
@@ -120,60 +114,12 @@ export async function persistClaudeOAuthToken(input: {
   oauthToken: string;
   source: ClaudeConnectionSource;
 }) {
-  await saveProviderCredential({
-    scopeType: input.scopeType,
-    scopeId: input.scopeId,
-    provider: "anthropic",
-    credentialType: "OAUTH_TOKEN",
-    accessToken: input.oauthToken,
-    lastFour: SOURCE_LABEL[input.source],
-  });
-  return { scopeType: input.scopeType, scopeId: input.scopeId };
+  void input;
+  throw new ClaudeConnectionError(
+    "Token-based Claude connections have been retired. Reconnect using the official runtime login in Settings.",
+    410,
+  );
 }
-
-/**
- * Post-connect health check: confirm the captured token is actually accepted
- * for inference (the OAuth beta + Claude Code identity requirement). Only a
- * hard auth rejection (401/403) fails the connection — a rate-limit or
- * transient 5xx means the token authenticated fine.
- */
-export type ClaudeInferenceVerifier = (token: string) => Promise<void>;
-
-export const verifyClaudeInferenceAccess: ClaudeInferenceVerifier = async (
-  token,
-) => {
-  if (process.env.CLAUDE_CONNECTION_SKIP_HEALTHCHECK === "true") return;
-  let response: Response;
-  try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "oauth-2025-04-20",
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        model:
-          process.env.CLAUDE_CONNECTION_HEALTHCHECK_MODEL ??
-          "claude-3-5-haiku-20241022",
-        max_tokens: 1,
-        system: "You are Claude Code, Anthropic's official CLI for Claude.",
-        messages: [{ role: "user", content: "ping" }],
-      }),
-      cache: "no-store",
-    });
-  } catch {
-    // Network trouble reaching Anthropic — don't fail the connect over it.
-    return;
-  }
-  if (response.status === 401 || response.status === 403) {
-    throw new ClaudeConnectionError(
-      "Anthropic rejected the connected account for inference. Reconnect and grant access.",
-      502,
-    );
-  }
-};
 
 /**
  * Save a Claude connection for a signed-in web user. The token has already

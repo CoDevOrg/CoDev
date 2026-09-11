@@ -49,7 +49,7 @@ env:
   # inspector link already. The token is the only credential.
   VERCEL_ORG_ID: team_7q7NNUAwtqmpVMcrBRon5OSu
   VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV
-  VERCEL_SCOPE: yousef20920s-projects
+  VERCEL_SCOPE: co-dev-admins
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:

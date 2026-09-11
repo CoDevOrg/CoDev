@@ -207,6 +207,7 @@ export async function prepareRoomReply(id: string) {
       await ensureHostReady();
       await provisionSandbox({
         workspaceId: id,
+        ephemeral: true,
         repositoryUrl: null,
         repositorySnapshot: {
           files: [

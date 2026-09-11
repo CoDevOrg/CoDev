@@ -8,6 +8,10 @@ import {
   saveOpenAICredential,
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
+import {
+  getConnectedClaudeRuntime,
+  disconnectClaudeRuntime,
+} from "./claude-connection-session";
 import { disconnectHostedCodexSubscription } from "./hosted-codex-subscription-credentials";
 import { getOAuthFlowMode } from "./oauth";
 import {
@@ -47,7 +51,7 @@ export async function loadProviderConnectionSnapshot(
       "HOSTED_CODEX_SUBSCRIPTION",
     ),
     getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
-    getProviderCredentialStatus("USER", user.id, "anthropic", "OAUTH_TOKEN"),
+    getConnectedClaudeRuntime(user.id),
     getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
   ]);
   return toProviderConnectionSnapshot({
@@ -64,7 +68,9 @@ export async function loadProviderConnectionSnapshot(
       // Codex counts as signed in whether the login arrived through the CoDev
       // CLI (hosted auth cache) or the in-page device-code flow.
       codex: hostedCodex ?? codexOAuth,
-      claude: claudeOAuth,
+      claude: claudeOAuth
+        ? { credentialType: "OAUTH_TOKEN", lastFour: "Official runtime" }
+        : null,
       cursor: cursorOAuth,
     },
     connectModes: {
@@ -115,6 +121,7 @@ export async function revokePersonalSubscription(
   provider: CliSubscriptionProvider,
 ): Promise<ProviderConnectionSnapshot> {
   if (provider === "claude") {
+    await disconnectClaudeRuntime(user.id);
     await deleteProviderCredential("USER", user.id, "anthropic", "OAUTH_TOKEN");
   } else if (provider === "cursor") {
     await deleteProviderCredential("USER", user.id, "cursor", "OAUTH_TOKEN");

@@ -131,19 +131,19 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             delete(close_codex_exec),
         )
         .route(
-            "/v1/sandboxes/{workspace_id}/claude-setup-token",
+            "/v1/sandboxes/{workspace_id}/claude-auth-login",
             post(start_claude_setup),
         )
         .route(
-            "/v1/sandboxes/{workspace_id}/claude-setup-token/{session_id}/code",
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}/code",
             post(input_claude_setup_code),
         )
         .route(
-            "/v1/sandboxes/{workspace_id}/claude-setup-token/{session_id}/poll",
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}/poll",
             post(poll_claude_setup),
         )
         .route(
-            "/v1/sandboxes/{workspace_id}/claude-setup-token/{session_id}",
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}",
             delete(close_claude_setup),
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
@@ -1170,7 +1170,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-setup-token")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-auth-login")
                     .header("content-type", "application/json")
                     .body(Body::from(
                         serde_json::json!({ "idempotencyKey": "claude-test" }).to_string(),
@@ -1198,7 +1198,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-setup-token/bad/poll")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-auth-login/bad/poll")
                     .header("content-type", "application/json")
                     .body(Body::from("{}"))
                     .expect("request"),

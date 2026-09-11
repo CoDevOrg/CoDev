@@ -382,7 +382,7 @@ pub struct ClaudeSetupPollRequest {
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum ClaudeSetupPollResponse {
     Pending,
-    Ready { oauth_token: String },
+    Ready,
     Failed { reason: String },
 }
 

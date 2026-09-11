@@ -4,13 +4,11 @@ import {
   cancelClaudeConnectionSession,
   getClaudeConnectionSession,
 } from "@/lib/claude-connection-session";
-import { resolveClaudeRunner } from "@/lib/claude-connection-runner";
 
 export const runtime = "nodejs";
 
 /**
- * Poll a connection session. Drives the runner forward: on a captured token
- * this persists the Anthropic credential and returns `status: "connected"`.
+ * Poll official login and retain only the runtime reference on success.
  */
 export async function GET(
   _request: Request,
@@ -21,10 +19,7 @@ export async function GET(
   try {
     const { sessionId } = await context.params;
     return Response.json(
-      await getClaudeConnectionSession(
-        { userId: user.id, sessionId },
-        resolveClaudeRunner(),
-      ),
+      await getClaudeConnectionSession({ userId: user.id, sessionId }),
     );
   } catch (error) {
     const failure = toClaudeConnectionFailure(
@@ -45,10 +40,7 @@ export async function DELETE(
   try {
     const { sessionId } = await context.params;
     return Response.json(
-      await cancelClaudeConnectionSession(
-        { userId: user.id, sessionId },
-        resolveClaudeRunner(),
-      ),
+      await cancelClaudeConnectionSession({ userId: user.id, sessionId }),
     );
   } catch (error) {
     const failure = toClaudeConnectionFailure(

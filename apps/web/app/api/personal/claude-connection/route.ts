@@ -24,10 +24,7 @@ export async function POST(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const input = postSchema.parse(await request.json());
-    return Response.json({
-      status: "connected",
-      ...(await saveClaudeConnectionForUser(user.id, input)),
-    });
+    await saveClaudeConnectionForUser(user.id, input);
   } catch (error) {
     if (error instanceof ClaudeConnectionError) {
       return apiError(error, error.status);

@@ -11,8 +11,8 @@ export function ClaudeCliSubscriptionCard({
     <SettingsCard
       description={
         isOrg
-          ? "Authenticate Claude Code from a terminal and make it the shared default for this organization."
-          : "Authenticate Claude Code through the official CLI, then securely attach that login to your CoDev account."
+          ? "Claude subscriptions are personal and cannot be shared with an organization."
+          : "Connect through official Claude login in personal provider settings. Credentials stay in a private runtime profile."
       }
       title={
         isOrg
@@ -26,7 +26,9 @@ export function ClaudeCliSubscriptionCard({
             {isOrg ? "Organization default" : "Your Claude Code subscription"}
           </strong>
           <small>
-            {connected ? "Connected and encrypted" : "Not connected"}
+            {connected
+              ? "Signed in to a private runtime"
+              : "Reconnect using official Claude login"}
           </small>
         </div>
         <span
@@ -36,18 +38,10 @@ export function ClaudeCliSubscriptionCard({
         </span>
       </div>
       <div className="oauth-connection-flow">
-        <p>1. Install the CoDev CLI</p>
-        <code className="oauth-device-code">npm install -g @trycodev/cli</code>
-        <p>2. Log in to CoDev</p>
-        <code className="oauth-device-code">codev login</code>
-        <p>3. Authenticate Claude Code</p>
-        <code className="oauth-device-code">
-          {isOrg ? "codev claude-auth --org" : "codev claude-auth"}
-        </code>
         <p>
-          The last command runs the official Claude Code login and generates a
-          long-lived subscription token. CoDev never asks for an Anthropic API
-          key.
+          Open personal Settings → Providers and select Connect for Claude Code.
+          Existing token-based connections must reconnect. CoDev no longer
+          accepts subscription token uploads.
         </p>
       </div>
     </SettingsCard>

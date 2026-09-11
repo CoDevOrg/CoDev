@@ -11,7 +11,6 @@ import {
   ClaudeConnectionError,
   redactClaudeSecrets,
   toClaudeConnectionFailure,
-  verifyClaudeInferenceAccess,
   resolveClaudeConnectionScope,
   saveClaudeConnectionForUser,
   validateClaudeOAuthToken,
@@ -91,27 +90,6 @@ describe("redactClaudeSecrets", () => {
   });
 });
 
-describe("verifyClaudeInferenceAccess", () => {
-  it("passes on 200, throws on a hard auth rejection, tolerates a 429", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200 })
-      .mockResolvedValueOnce({ ok: false, status: 403 })
-      .mockResolvedValueOnce({ ok: false, status: 429 });
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(
-      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
-    ).resolves.toBeUndefined();
-    await expect(
-      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
-    ).rejects.toBeInstanceOf(ClaudeConnectionError);
-    await expect(
-      verifyClaudeInferenceAccess("sk-ant-oat01-x"),
-    ).resolves.toBeUndefined();
-    vi.unstubAllGlobals();
-  });
-});
-
 describe("resolveClaudeConnectionScope", () => {
   it("defaults to the user's own scope", async () => {
     await expect(
@@ -133,17 +111,11 @@ describe("resolveClaudeConnectionScope", () => {
 });
 
 describe("saveClaudeConnectionForUser", () => {
-  it("persists the token as an anthropic OAUTH_TOKEN credential", async () => {
-    await saveClaudeConnectionForUser("u1", { oauthToken: TOKEN });
-    expect(saveProviderCredentialMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopeType: "USER",
-        scopeId: "u1",
-        provider: "anthropic",
-        credentialType: "OAUTH_TOKEN",
-        accessToken: TOKEN,
-      }),
-    );
+  it("rejects retired token uploads without saving credentials", async () => {
+    await expect(
+      saveClaudeConnectionForUser("u1", { oauthToken: TOKEN }),
+    ).rejects.toMatchObject({ status: 410 });
+    expect(saveProviderCredentialMock).not.toHaveBeenCalled();
   });
 
   it("rejects a malformed token before writing anything", async () => {

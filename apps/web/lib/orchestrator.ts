@@ -77,7 +77,7 @@ const codexExecPollSchema = z.object({
 
 const claudeSetupPollSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("pending") }),
-  z.object({ status: z.literal("ready"), oauthToken: z.string() }),
+  z.object({ status: z.literal("ready") }).strict(),
   z.object({ status: z.literal("failed"), reason: z.string() }),
 ]);
 
@@ -808,7 +808,7 @@ export async function startClaudeSetupTokenInSandbox(
 ) {
   const response = await claudeSetupRequest(
     "POST",
-    `/v1/sandboxes/${workspaceId}/claude-setup-token`,
+    `/v1/sandboxes/${workspaceId}/claude-auth-login`,
     input,
     35_000,
   );
@@ -828,7 +828,7 @@ export async function submitClaudeSetupTokenCodeInSandbox(
 ) {
   await claudeSetupRequest(
     "POST",
-    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}/code`,
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}/code`,
     { code },
     20_000,
   );
@@ -840,7 +840,7 @@ export async function pollClaudeSetupTokenInSandbox(
 ) {
   const response = await claudeSetupRequest(
     "POST",
-    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}/poll`,
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}/poll`,
     { waitMilliseconds: 25_000 },
     35_000,
   );
@@ -855,7 +855,7 @@ export async function closeClaudeSetupTokenInSandbox(
 ) {
   await claudeSetupRequest(
     "DELETE",
-    `/v1/sandboxes/${workspaceId}/claude-setup-token/${sessionId}`,
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}`,
     undefined,
     20_000,
   );

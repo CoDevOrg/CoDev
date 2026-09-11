@@ -250,6 +250,11 @@ async function getCredentialValue(
 ): Promise<ResolvedCredential> {
   const provider = credential.provider as AuthProvider;
   const authType = credential.credentialType as CredentialType;
+  if (provider === "anthropic" && authType === "OAUTH_TOKEN") {
+    throw new Error(
+      "Reconnect Claude using official runtime login. Subscription tokens can no longer be used through the API.",
+    );
+  }
 
   if (authType === "AWS_BEDROCK_ROLE") {
     if (!credential.awsRoleArn) {
@@ -479,6 +484,12 @@ export async function saveProviderCredential(input: {
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
 
+  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") {
+    throw new Error(
+      "Token-based Claude connections are retired. Reconnect using official Claude login in Settings.",
+    );
+  }
+
   if (credentialType === "HOSTED_CODEX_SUBSCRIPTION") {
     throw new Error(
       "Hosted Codex subscription credentials must be saved by the hosted connection service.",
@@ -608,6 +619,7 @@ export async function getProviderCredentialStatus(
   provider: AuthProvider,
   credentialType?: CredentialType,
 ) {
+  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") return null;
   const credential = await findCredential(
     scopeType,
     scopeId,

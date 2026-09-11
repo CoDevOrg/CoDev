@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
-  it("room replies resolve only personal OAuth subscriptions", async () => {
+  it("refuses legacy Claude tokens and requires official runtime reconnect", async () => {
     mockRows.push([
       baseCredential({
         provider: "anthropic",
@@ -87,9 +87,9 @@ describe("resolveAgentCredential", () => {
         encryptedAccessToken: "ciphertext",
       }),
     ]);
-    expect(
-      await resolvePersonalChatSubscription("sender", "claude"),
-    ).toMatchObject({ source: "USER", authType: "OAUTH_TOKEN" });
+    await expect(
+      resolvePersonalChatSubscription("sender", "claude"),
+    ).rejects.toThrow(/Reconnect Claude/);
     mockRows.push([]);
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
@@ -247,10 +247,9 @@ describe("resolveAgentCredential", () => {
       }),
     );
 
-    await resolveAgentCredential("user-1", "workspace-1", "anthropic");
-
-    expect(seenBody?.get("scope")).toBe(
-      "org:create_api_key user:profile user:inference",
-    );
+    await expect(
+      resolveAgentCredential("user-1", "workspace-1", "anthropic"),
+    ).rejects.toThrow(/Reconnect Claude/);
+    expect(seenBody).toBeUndefined();
   });
 });
