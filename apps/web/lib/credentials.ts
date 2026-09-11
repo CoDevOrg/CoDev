@@ -30,7 +30,8 @@ export type CredentialSource = "USER" | "WORKSPACE" | "ORGANIZATION";
 export interface ResolvedCredential {
   provider: AuthProvider;
   source: CredentialSource;
-  authType: CredentialType;
+  authType: CredentialType | "CLAUDE_RUNTIME";
+  claudeUserId?: string;
   apiKeyOrToken?: string | undefined;
   endpointUrl?: string | undefined;
   awsRoleArn?: string | undefined;
@@ -250,6 +251,11 @@ async function getCredentialValue(
 ): Promise<ResolvedCredential> {
   const provider = credential.provider as AuthProvider;
   const authType = credential.credentialType as CredentialType;
+  if (provider === "anthropic" && authType === "OAUTH_TOKEN") {
+    throw new Error(
+      "Reconnect Claude using official runtime login. Subscription tokens can no longer be used through the API.",
+    );
+  }
 
   if (authType === "AWS_BEDROCK_ROLE") {
     if (!credential.awsRoleArn) {
@@ -330,6 +336,20 @@ export async function resolvePersonalChatSubscription(
   userId: string,
   provider: "claude" | "codex",
 ): Promise<ResolvedCredential> {
+  if (provider === "claude") {
+    const { getConnectedClaudeRuntime } =
+      await import("./claude-connection-session");
+    const connection = await getConnectedClaudeRuntime(userId);
+    if (!connection)
+      throw new Error("Reconnect Claude using official login in Settings.");
+    return {
+      provider: "anthropic",
+      source: "USER",
+      authType: "CLAUDE_RUNTIME",
+      credentialId: connection.id,
+      claudeUserId: userId,
+    };
+  }
   if (provider === "codex") {
     const hosted = await resolveHostedCodexSubscription({
       userId,
@@ -352,7 +372,7 @@ export async function resolvePersonalChatSubscription(
   const credential = await findCredential(
     "USER",
     userId,
-    provider === "claude" ? "anthropic" : "openai",
+    "openai",
     "OAUTH_TOKEN",
   );
   if (!credential || credential.status !== "active")
@@ -368,6 +388,19 @@ export async function resolveAgentCredential(
   provider: AuthProvider,
 ): Promise<ResolvedCredential> {
   const normalizedProvider = parseProvider(provider);
+  if (normalizedProvider === "anthropic") {
+    const { getConnectedClaudeRuntime } =
+      await import("./claude-connection-session");
+    const connection = await getConnectedClaudeRuntime(userId);
+    if (connection)
+      return {
+        provider: "anthropic",
+        source: "USER",
+        authType: "CLAUDE_RUNTIME",
+        credentialId: connection.id,
+        claudeUserId: userId,
+      };
+  }
   if (normalizedProvider === "openai") {
     const hosted = await resolveHostedCodexSubscription({
       userId,
@@ -478,6 +511,12 @@ export async function saveProviderCredential(input: {
   const scopeType = parseScopeType(input.scopeType);
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
+
+  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") {
+    throw new Error(
+      "Token-based Claude connections are retired. Reconnect using official Claude login in Settings.",
+    );
+  }
 
   if (credentialType === "HOSTED_CODEX_SUBSCRIPTION") {
     throw new Error(
@@ -608,6 +647,7 @@ export async function getProviderCredentialStatus(
   provider: AuthProvider,
   credentialType?: CredentialType,
 ) {
+  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") return null;
   const credential = await findCredential(
     scopeType,
     scopeId,

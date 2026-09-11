@@ -4,7 +4,7 @@ set -euo pipefail
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly region="${AWS_REGION:-us-east-2}"
 readonly account_id="$(aws sts get-caller-identity --query Account --output text)"
-readonly team_slug="${VERCEL_TEAM_SLUG:-yousef20920s-projects}"
+readonly team_slug="${VERCEL_TEAM_SLUG:-co-dev-admins}"
 readonly project_name="${VERCEL_PROJECT_NAME:-codev}"
 readonly instance_type="${CODEV_INSTANCE_TYPE:-m7i-flex.large}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
@@ -228,15 +228,24 @@ ensure_vercel_role() {
   local environment="$1"
   local role_name="codev-vercel-${environment}"
   local subject="owner:${team_slug}:project:${project_name}:environment:${environment}"
+  local subjects_json
   local trust_policy
   local invoke_policy
 
+  if [[ "${environment}" == "preview" ]]; then
+    subjects_json="$(jq -cn \
+      --arg preview "${subject}" \
+      --arg development "owner:${team_slug}:project:${project_name}:environment:development" \
+      '[$preview, $development]')"
+  else
+    subjects_json="$(jq -cn --arg subject "${subject}" '[$subject]')"
+  fi
   trust_policy="$(jq -cn \
     --arg provider "${oidc_provider_arn}" \
     --arg audience_key "${oidc_host}:aud" \
     --arg subject_key "${oidc_host}:sub" \
     --arg audience "${oidc_audience}" \
-    --arg subject "${subject}" \
+    --argjson subjects "${subjects_json}" \
     --arg credential_key_arn "${credential_key_arn}" \
     '{
       Version: "2012-10-17",
@@ -247,7 +256,7 @@ ensure_vercel_role() {
         Condition: {
           StringEquals: {
             ($audience_key): $audience,
-            ($subject_key): $subject
+            ($subject_key): $subjects
           }
         }
       }]

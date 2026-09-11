@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSharedChatContext,
+  claudeFinalMessage,
   codexFinalMessage,
 } from "./shared-chat-context";
 
@@ -42,5 +43,17 @@ describe("room reply context", () => {
         'secret diagnostic\n{"type":"item.completed","item":{"type":"agent_message","text":"Answer"}}',
       ),
     ).toBe("Answer");
+  });
+  it("only takes a successful Claude CLI result", () => {
+    expect(
+      claudeFinalMessage(
+        'private diagnostic\n{"type":"result","is_error":false,"result":"Claude answer"}',
+      ),
+    ).toBe("Claude answer");
+    expect(
+      claudeFinalMessage(
+        '{"type":"result","is_error":true,"result":"private failure"}',
+      ),
+    ).toBe("");
   });
 });

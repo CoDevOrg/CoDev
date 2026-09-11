@@ -33,26 +33,26 @@ beforeEach(() => {
 describe("claimClaudeSubscriptionExecution", () => {
   it("takes the lease when the credential row is free", async () => {
     claimedRows = [{ id: "cred-1" }];
-    await claimClaudeSubscriptionExecution("cred-1");
-    expect(lastSet?.unavailableUntil).toBeInstanceOf(Date);
+    await claimClaudeSubscriptionExecution("cred-1", "user-1");
+    expect(lastSet?.expiresAt).toBeInstanceOf(Date);
   });
 
   it("throws 429 when the row is already leased or inactive", async () => {
     claimedRows = [];
     await expect(
-      claimClaudeSubscriptionExecution("cred-1"),
+      claimClaudeSubscriptionExecution("cred-1", "user-1"),
     ).rejects.toMatchObject({
       status: 429,
     });
     await expect(
-      claimClaudeSubscriptionExecution("cred-1"),
+      claimClaudeSubscriptionExecution("cred-1", "user-1"),
     ).rejects.toBeInstanceOf(ClaudeConnectionError);
   });
 });
 
 describe("releaseClaudeSubscriptionExecution", () => {
   it("clears the lease", async () => {
-    await releaseClaudeSubscriptionExecution("cred-1");
-    expect(lastSet).toMatchObject({ unavailableUntil: null });
+    await releaseClaudeSubscriptionExecution("cred-1", 123456);
+    expect(lastSet).toMatchObject({ expiresAt: new Date(0) });
   });
 });

@@ -316,6 +316,7 @@ pub struct CodexExecStartRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+    #[serde(default)]
     pub codex_auth_cache_json: String,
     /// The caller's Vercel Workflow DevKit step id. A retried "start" step
     /// reuses the same id, letting the guest reattach to the still-running
@@ -382,7 +383,7 @@ pub struct ClaudeSetupPollRequest {
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum ClaudeSetupPollResponse {
     Pending,
-    Ready { oauth_token: String },
+    Ready,
     Failed { reason: String },
 }
 

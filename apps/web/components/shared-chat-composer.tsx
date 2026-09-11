@@ -2,13 +2,7 @@
 
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import {
-  ChevronRight,
-  ChevronUp,
-  LoaderCircle,
-  Send,
-  Sparkles,
-} from "lucide-react";
+import { ChevronRight, ChevronUp, LoaderCircle, Send } from "lucide-react";
 
 import {
   importedConversationMessageSchema,
@@ -134,9 +128,9 @@ export function SharedChatComposer({
 
     setSending(true);
     setError(null);
-    const askAI =
-      (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ===
-      "ai";
+    // Sending always asks the assistant to reply when a subscription and model
+    // are available; without one the message just posts to the room.
+    const askAI = options.length > 0 && Boolean(model);
     try {
       const response = await fetch(`/api/rooms/${roomId}/messages`, {
         method: "POST",
@@ -184,7 +178,7 @@ export function SharedChatComposer({
             el.style.height = "auto";
             el.style.height = `${el.scrollHeight}px`;
           }}
-          placeholder="Message the room…  Ask the assistant with Ask AI"
+          placeholder="Message the room…"
           maxLength={20_000}
           rows={1}
           disabled={sending}
@@ -287,17 +281,6 @@ export function SharedChatComposer({
           )}
 
           <div className={styles.postGroup}>
-            {options.length ? (
-              <button
-                type="submit"
-                value="ai"
-                className={styles.askButton}
-                disabled={sending || !body.trim() || !model}
-              >
-                <Sparkles aria-hidden="true" />
-                Ask AI
-              </button>
-            ) : null}
             <button
               type="submit"
               className={styles.postButton}
@@ -308,14 +291,14 @@ export function SharedChatComposer({
               ) : (
                 <Send aria-hidden="true" />
               )}
-              {sending ? "Sending…" : "Post"}
+              {sending ? "Sending…" : "Send"}
             </button>
           </div>
         </div>
       </div>
       <p className={styles.hint}>
         {options.length
-          ? "Ask AI replies use your subscription and recent room history — visible to everyone in the room."
+          ? "Sending posts to the room and asks the assistant to reply, using your subscription and recent room history — visible to everyone."
           : "Messages are visible to everyone in the room."}
       </p>
       {error ? (

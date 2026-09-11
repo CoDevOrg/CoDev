@@ -45,3 +45,22 @@ export function codexFinalMessage(output: string) {
   }
   return final.trim();
 }
+
+export function claudeFinalMessage(output: string) {
+  for (const line of output.split(/\r?\n/).reverse()) {
+    try {
+      const start = line.indexOf("{");
+      const end = line.lastIndexOf("}");
+      if (start < 0 || end < start) continue;
+      const event = JSON.parse(line.slice(start, end + 1)) as {
+        is_error?: unknown;
+        result?: unknown;
+      };
+      if (event.is_error === false && typeof event.result === "string")
+        return event.result.trim();
+    } catch {
+      // PTYs can include prompts or diagnostics around the JSON result.
+    }
+  }
+  return "";
+}

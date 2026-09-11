@@ -49,7 +49,7 @@ describe("SharedChatComposer", () => {
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "Continue" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Ask AI" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(onMessageSent).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/rooms/room-123/messages",
@@ -92,7 +92,7 @@ describe("SharedChatComposer", () => {
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "  A new thought  " },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(onMessageSent).toHaveBeenCalledWith(message));
     expect(fetchMock).toHaveBeenCalledWith(
@@ -127,7 +127,7 @@ describe("SharedChatComposer", () => {
     fireEvent.change(screen.getByLabelText("Add to the conversation"), {
       target: { value: "Keep this draft" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Only the owner can post.",

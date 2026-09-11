@@ -222,6 +222,20 @@ describe("ensureOrcaSession", () => {
     expect(input?.openaiApiKey).toBeUndefined();
   });
 
+  it("never passes a personal Claude runtime or legacy subscription token to the shared IDE", async () => {
+    mocks.resolveAgentCredential.mockResolvedValue({
+      provider: "anthropic",
+      source: "USER",
+      authType: "CLAUDE_RUNTIME",
+      claudeUserId: userId,
+      credentialId: "private-connection",
+    });
+    mocks.startIde.mockResolvedValueOnce(session);
+    await ensureOrcaSession(workspace, userId);
+    const input = mocks.startIde.mock.calls[0]?.[1];
+    expect(input?.claudeCodeOauthToken).toBeUndefined();
+    expect(JSON.stringify(input)).not.toContain("private-connection");
+  });
   it("stops the stale IDE record and retries once after a crashed launch", async () => {
     mocks.startIde
       .mockRejectedValueOnce(

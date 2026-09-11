@@ -174,7 +174,7 @@ impl GuestClient {
         &self,
         request: &ClaudeSetupStartRequest,
     ) -> Result<serde_json::Value> {
-        self.request("POST", "/v1/claude-setup-token", Some(request))
+        self.request("POST", "/v1/claude-auth-login", Some(request))
             .await
     }
 
@@ -185,7 +185,7 @@ impl GuestClient {
     ) -> Result<()> {
         self.request::<_, serde_json::Value>(
             "POST",
-            &format!("/v1/claude-setup-token/{session_id}/code"),
+            &format!("/v1/claude-auth-login/{session_id}/code"),
             Some(request),
         )
         .await
@@ -199,7 +199,7 @@ impl GuestClient {
     ) -> Result<ClaudeSetupPollResponse> {
         self.request_with_timeout(
             "POST",
-            &format!("/v1/claude-setup-token/{session_id}/poll"),
+            &format!("/v1/claude-auth-login/{session_id}/poll"),
             Some(request),
             Duration::from_secs(40),
         )
@@ -209,7 +209,7 @@ impl GuestClient {
     pub async fn close_claude_setup(&self, session_id: &str) -> Result<()> {
         self.request::<(), serde_json::Value>(
             "DELETE",
-            &format!("/v1/claude-setup-token/{session_id}"),
+            &format!("/v1/claude-auth-login/{session_id}"),
             None,
         )
         .await

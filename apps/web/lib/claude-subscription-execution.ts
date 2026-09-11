@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -9,52 +9,60 @@ import { getDatabase } from "./database";
 
 /**
  * A Claude Pro/Max subscription is a human seat, not a shared backend pool:
- * Anthropic rate-limits it accordingly. So a connected subscription runs at
- * most one CoDev cloud turn at a time — the same row-level lease the hosted
- * Codex subscription uses (`unavailableUntil` on the credential row). A second
- * turn that arrives while one is running is rejected and retried, not fanned
- * out in parallel.
+ * A connected profile runs at most one CLI invocation at a time. Reuse the
+ * row-level compare-and-set lease pattern on the connection's expiresAt;
+ * connected rows are excluded from login-attempt expiry. The lease deadline
+ * fences cleanup, so an old finalizer cannot unlock a newer invocation.
  */
 const LEASE_MS = 10 * 60 * 1_000;
 
 /**
- * Take the execution lease on a connected Claude subscription credential.
+ * Take the execution lease on the requesting member's connected runtime.
  * Throws {@link ClaudeConnectionError} (429) if another turn already holds it
- * or the credential is not an active Anthropic OAuth connection.
+ * or the connection is no longer active or belongs to another member.
  */
-export async function claimClaudeSubscriptionExecution(credentialId: string) {
+export async function claimClaudeSubscriptionExecution(
+  credentialId: string,
+  userId: string,
+) {
+  const until = new Date(Date.now() + LEASE_MS);
   const [claimed] = await getDatabase()
-    .update(schema.providerCredentials)
+    .update(schema.claudeConnectionSessions)
     .set({
-      unavailableUntil: new Date(Date.now() + LEASE_MS),
+      expiresAt: until,
       updatedAt: new Date(),
     })
     .where(
       and(
-        eq(schema.providerCredentials.id, credentialId),
-        eq(schema.providerCredentials.provider, "anthropic"),
-        eq(schema.providerCredentials.credentialType, "OAUTH_TOKEN"),
-        eq(schema.providerCredentials.status, "active"),
-        eq(schema.providerCredentials.isConnected, true),
-        or(
-          isNull(schema.providerCredentials.unavailableUntil),
-          lt(schema.providerCredentials.unavailableUntil, new Date()),
-        ),
+        eq(schema.claudeConnectionSessions.id, credentialId),
+        eq(schema.claudeConnectionSessions.userId, userId),
+        eq(schema.claudeConnectionSessions.scopeType, "USER"),
+        eq(schema.claudeConnectionSessions.status, "connected"),
+        lt(schema.claudeConnectionSessions.expiresAt, new Date()),
       ),
     )
-    .returning({ id: schema.providerCredentials.id });
+    .returning({ id: schema.claudeConnectionSessions.id });
   if (!claimed) {
     throw new ClaudeConnectionError(
       "Your Claude subscription is already running another cloud turn. Try again shortly.",
       429,
     );
   }
+  return until.getTime();
 }
 
 /** Release the execution lease. Safe to call more than once. */
-export async function releaseClaudeSubscriptionExecution(credentialId: string) {
+export async function releaseClaudeSubscriptionExecution(
+  credentialId: string,
+  leaseUntil: number,
+) {
   await getDatabase()
-    .update(schema.providerCredentials)
-    .set({ unavailableUntil: null, updatedAt: new Date() })
-    .where(eq(schema.providerCredentials.id, credentialId));
+    .update(schema.claudeConnectionSessions)
+    .set({ expiresAt: new Date(0), updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.claudeConnectionSessions.id, credentialId),
+        eq(schema.claudeConnectionSessions.expiresAt, new Date(leaseUntil)),
+      ),
+    );
 }

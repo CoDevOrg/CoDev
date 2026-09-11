@@ -264,6 +264,91 @@ describe("ProviderAccountCard", () => {
     );
   });
 
+  it("connects ChatGPT in-app via device code: start, show code, poll to connected", async () => {
+    let polls = 0;
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url === "/api/auth/oauth/codex/session") {
+        return jsonResponse({
+          mode: "device_code",
+          verificationUrl: "https://auth.openai.com/codex/device",
+          userCode: "WDJB-MJHT",
+          deviceAuthId: "dev-1",
+          intervalSeconds: 1,
+        });
+      }
+      // First poll stays pending so the user code is on screen to assert;
+      // the next poll reports the linked account.
+      polls += 1;
+      return jsonResponse({ status: polls > 1 ? "connected" : "pending" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        hostedOpenAIConnect
+        label="Codex"
+        logo={null}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          connectMode: "device_code",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect ChatGPT" }));
+
+    expect(await screen.findByText("WDJB-MJHT")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/oauth/codex/session");
+    expect(window.open).toHaveBeenCalledWith(
+      "https://auth.openai.com/codex/device",
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Codex is connected.",
+        );
+      },
+      { timeout: 4000 },
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/oauth/codex/poll",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const pollBody = JSON.parse(
+      (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string,
+    );
+    expect(pollBody).toMatchObject({
+      deviceAuthId: "dev-1",
+      userCode: "WDJB-MJHT",
+    });
+  });
+
+  it("shows no ChatGPT device-code button unless hostedOpenAIConnect is set", () => {
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        label="Codex"
+        logo={null}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          connectMode: "device_code",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Connect ChatGPT" }),
+    ).toBeNull();
+  });
+
   it("offers Codex only an API key and the CLI, no browser OAuth button", () => {
     render(
       <ProviderAccountCard

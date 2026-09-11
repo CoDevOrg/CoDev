@@ -3,11 +3,17 @@ import { z } from "zod";
 import { apiError, getApiUser } from "@/lib/api";
 import { toClaudeConnectionFailure } from "@/lib/claude-connection";
 import { submitClaudeConnectionCode } from "@/lib/claude-connection-session";
-import { resolveClaudeRunner } from "@/lib/claude-connection-runner";
 
 export const runtime = "nodejs";
 
-const postSchema = z.object({ code: z.string().trim().min(1) });
+const postSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1)
+    .max(4096)
+    .regex(/^[^\r\n]+$/),
+});
 
 /** Hand the authorization code the member copied from Anthropic to the runner. */
 export async function POST(
@@ -20,10 +26,7 @@ export async function POST(
     const { sessionId } = await context.params;
     const { code } = postSchema.parse(await request.json());
     return Response.json(
-      await submitClaudeConnectionCode(
-        { userId: user.id, sessionId, code },
-        resolveClaudeRunner(),
-      ),
+      await submitClaudeConnectionCode({ userId: user.id, sessionId, code }),
     );
   } catch (error) {
     const failure = toClaudeConnectionFailure(

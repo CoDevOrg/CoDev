@@ -9,19 +9,21 @@ import {
   OrcaPageShell,
 } from "@/components/settings/orca-style";
 import { isHostedClaudeConnectEnabled } from "@/lib/claude-connection-runner";
+import { isHostedCodexSubscriptionEnabled } from "@/lib/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import { requireUser } from "@/lib/session";
 
 /**
  * Every agent account a member can bring lives on this one page. Cursor signs
- * in with a browser subscription flow; Claude and Codex connect with an API
- * key or the CoDev CLI, since Anthropic and OpenAI both block browser OAuth
- * tokens obtained outside their own first-party apps.
+ * in with a browser subscription flow; Claude connects through its official
+ * runtime login and ChatGPT through OpenAI's device-code flow. An API key or
+ * the CoDev CLI remains available as a fallback for each.
  */
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
   const snapshot = await loadProviderConnectionSnapshot(user);
   const hostedClaudeConnect = isHostedClaudeConnectEnabled();
+  const hostedOpenAIConnect = isHostedCodexSubscriptionEnabled();
 
   const cards = [
     {
@@ -48,7 +50,7 @@ export default async function PersonalProvidersPage() {
     <OrcaPageShell>
       <OrcaPageHeader
         badge="Optional"
-        description="Connect the accounts your agents run on. Cursor can sign in with your subscription in the browser; Claude and Codex connect with an API key or the CoDev CLI, which signs in through their own official CLI. Everything is encrypted on the CoDev server and never shown again after you save it."
+        description="Connect the accounts your agents run on. Sign in with your Claude, ChatGPT, or Cursor subscription right in the browser — no terminal needed — or fall back to an API key or the CoDev CLI. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
       {cards.map((card) => {
@@ -64,6 +66,9 @@ export default async function PersonalProvidersPage() {
             connection={connection}
             hostedClaudeConnect={
               hostedClaudeConnect && card.connection === "anthropic"
+            }
+            hostedOpenAIConnect={
+              hostedOpenAIConnect && card.connection === "openai"
             }
             key={card.label}
             label={card.label}

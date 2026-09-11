@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("./credentials", () => ({ saveProviderCredential: vi.fn() }));
+vi.mock("./credentials", () => ({
+  saveProviderCredential: vi.fn(),
+  deleteProviderCredential: vi.fn(),
+}));
 vi.mock("./settings-access", () => ({
   requireOrganizationSettingsWrite: vi.fn(),
 }));
@@ -63,14 +66,12 @@ import {
   startClaudeConnectionSession,
   submitClaudeConnectionCode,
   unavailableClaudeRunner,
-  type ClaudeSetupTokenRunner,
+  type ClaudeLoginRunner,
 } from "./claude-connection-session";
 
-const TOKEN = "sk-ant-oat01-abc123XYZ_-4567890";
-
 function fakeRunner(
-  overrides: Partial<ClaudeSetupTokenRunner> = {},
-): ClaudeSetupTokenRunner {
+  overrides: Partial<ClaudeLoginRunner> = {},
+): ClaudeLoginRunner {
   return {
     start: vi.fn(async () => ({
       runnerId: "runner-1",
@@ -79,6 +80,7 @@ function fakeRunner(
     submitCode: vi.fn(async () => undefined),
     poll: vi.fn(async () => ({ status: "pending" as const })),
     dispose: vi.fn(async () => undefined),
+    retain: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -105,7 +107,7 @@ describe("startClaudeConnectionSession", () => {
     });
     await expect(
       startClaudeConnectionSession({ userId: "u1" }, runner),
-    ).rejects.toThrow(/no capacity/);
+    ).rejects.toThrow(/Unable to start official Claude login/);
     expect(row?.status).toBe("failed");
   });
 });
@@ -171,44 +173,41 @@ describe("reapExpiredClaudeConnectionSessions", () => {
 });
 
 describe("getClaudeConnectionSession", () => {
-  it("persists the token and connects on a ready poll", async () => {
+  it("retains the runtime without persisting credentials on a ready poll", async () => {
     const runner = fakeRunner({
       poll: vi.fn(async () => ({
         status: "ready" as const,
-        oauthToken: TOKEN,
       })),
     });
     await startClaudeConnectionSession({ userId: "u1" }, runner);
     const view = await getClaudeConnectionSession(
       { userId: "u1", sessionId: "session-1" },
       runner,
-      async () => {},
     );
     expect(view.status).toBe("connected");
-    expect(saveProviderCredential).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "anthropic", accessToken: TOKEN }),
-    );
-    expect(runner.dispose).toHaveBeenCalled();
+    expect(saveProviderCredential).not.toHaveBeenCalled();
+    expect(runner.retain).toHaveBeenCalledWith({ runnerId: "runner-1" });
+    expect(runner.dispose).not.toHaveBeenCalled();
+    expect(view.authorizeUrl).toBeNull();
+    expect(view).not.toHaveProperty("runnerId");
   });
 
-  it("fails the session when the health check rejects the token", async () => {
+  it("fails safely when the profile cannot be retained", async () => {
     const runner = fakeRunner({
       poll: vi.fn(async () => ({
         status: "ready" as const,
-        oauthToken: TOKEN,
       })),
+      retain: vi.fn(async () => {
+        throw new Error("private runtime error");
+      }),
     });
     await startClaudeConnectionSession({ userId: "u1" }, runner);
     const view = await getClaudeConnectionSession(
       { userId: "u1", sessionId: "session-1" },
       runner,
-      async () => {
-        throw new Error(
-          "Anthropic rejected the connected account for inference.",
-        );
-      },
     );
     expect(view.status).toBe("failed");
+    expect(view.failureReason).not.toContain("private runtime error");
     expect(saveProviderCredential).not.toHaveBeenCalled();
     expect(runner.dispose).toHaveBeenCalled();
   });

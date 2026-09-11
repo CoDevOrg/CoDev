@@ -36,21 +36,18 @@ afterEach(() => {
 describe("createAgentModel anthropic auth", () => {
   it("sends the OAuth beta header for a subscription token, not for an API key", () => {
     createAnthropicMock.mockClear();
-    createAgentModel(
-      {
-        provider: "anthropic",
-        source: "USER",
-        authType: "OAUTH_TOKEN",
-        apiKeyOrToken: "sk-ant-oat01-x",
-      } as never,
-      "claude-sonnet-4-5",
-    );
-    expect(createAnthropicMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        authToken: "sk-ant-oat01-x",
-        headers: { "anthropic-beta": "oauth-2025-04-20" },
-      }),
-    );
+    expect(() =>
+      createAgentModel(
+        {
+          provider: "anthropic",
+          source: "USER",
+          authType: "OAUTH_TOKEN",
+          apiKeyOrToken: "sk-ant-oat01-x",
+        } as never,
+        "claude-sonnet-4-5",
+      ),
+    ).toThrow(/subscription tokens cannot/);
+    expect(createAnthropicMock).not.toHaveBeenCalled();
 
     createAnthropicMock.mockClear();
     createAgentModel(

@@ -60,7 +60,7 @@ const CLI_SUBSCRIPTIONS: Array<{
   {
     provider: "claude",
     label: "Claude Code",
-    command: "codev claude-auth",
+    command: null,
     connectMode: "manual_code",
   },
   {
