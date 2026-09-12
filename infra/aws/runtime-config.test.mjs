@@ -102,6 +102,25 @@ test("Azure bootstrap unit re-runs on every boot without an ordering cycle", () 
 // deallocated VM. The roll path has to start an off host, not only restart a
 // running one, or the routine deploy fails whenever nobody is using the
 // runtime -- which is most of the time.
+// The bootstrap re-runs on every boot, by which point the orchestrator from
+// the previous run is already executing out of /usr/local/bin. Writing the
+// new binary into that path fails with ETXTBSY and kills the bootstrap, so
+// every artifact is fetched to a staging path and renamed into place.
+test("bootstrap never writes a release artifact onto a running binary", () => {
+  const fetch = bootstrap.slice(
+    bootstrap.indexOf("codev_fetch() {"),
+    bootstrap.indexOf("codev_public_ipv4() {"),
+  );
+  assert.match(fetch, /staging="\$\{destination\}\.codev-fetch\.\$\$"/);
+  assert.match(
+    fetch,
+    /aws s3 cp "\$\{release_prefix\}\/\$\{name\}" "\$\{staging\}"/,
+  );
+  assert.match(fetch, /--file "\$\{staging\}"/);
+  assert.doesNotMatch(fetch, /--file "\$\{destination\}"/);
+  assert.match(fetch, /mv -f "\$\{staging\}" "\$\{destination\}"/);
+});
+
 test("Azure release roll starts a deallocated host instead of failing", () => {
   assert.match(azureDeploy, /PowerState\/running/);
   assert.match(azureDeploy, /az vm start \\/);

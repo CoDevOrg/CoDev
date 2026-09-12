@@ -61,21 +61,31 @@ readonly orca_workspaces_root="/srv/codev/workspaces"
 # ---------------------------------------------------------------------------
 
 # Fetch one release artifact to a local path.
+#
+# Downloaded beside the destination and renamed into place, never written
+# into the destination directly. This script re-runs on every boot to roll a
+# release, and by then the orchestrator installed by the previous run is
+# already executing from /usr/local/bin: opening a running binary for writing
+# fails with ETXTBSY ("Text file busy") and takes the whole bootstrap down.
+# rename(2) over a running executable is allowed, and the running process
+# keeps its old inode until it is restarted onto the new one below.
 codev_fetch() {
   local name="$1" destination="$2"
+  local staging="${destination}.codev-fetch.$$"
   case "${codev_cloud}" in
     aws)
-      aws s3 cp "${release_prefix}/${name}" "${destination}"
+      aws s3 cp "${release_prefix}/${name}" "${staging}"
       ;;
     azure)
       az storage blob download \
         --account-name "${CODEV_ARTIFACT_ACCOUNT}" \
         --container-name releases \
         --name "${release_prefix}/${name}" \
-        --file "${destination}" \
+        --file "${staging}" \
         --auth-mode login --only-show-errors --no-progress >/dev/null
       ;;
   esac
+  mv -f "${staging}" "${destination}"
 }
 
 # This host's own public IPv4, used to derive the nip.io hostname Orca
