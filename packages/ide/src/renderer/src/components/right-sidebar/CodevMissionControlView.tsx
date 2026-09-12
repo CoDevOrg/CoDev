@@ -49,7 +49,9 @@ export function CodevMissionControlView({
   onOpen: (key: string) => void
   onClose: () => void
   onStepIn: (key: string) => void
-  onSteer: (key: string, text: string) => void
+  /** May resolve false when the instruction was not accepted, so the drawer
+   *  keeps the typed text. */
+  onSteer: (key: string, text: string) => void | Promise<boolean>
   onPause: (key: string) => void
   onStop: (key: string) => void
 }): JSX.Element {

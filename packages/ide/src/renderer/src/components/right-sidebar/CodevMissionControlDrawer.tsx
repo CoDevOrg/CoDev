@@ -1,4 +1,5 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useState, type JSX } from 'react'
+import { Dialog as DialogPrimitive } from 'radix-ui'
 import { phaseLabel, runtimeText, type MissionControlAgent } from './codev-mission-control-model'
 import { PhasePill } from './CodevMissionControlAgentCard'
 
@@ -9,7 +10,15 @@ const QUICK_STEERS = [
   'Looks good — keep going'
 ] as const
 
-/** The detail drawer for one agent: step in, steer, pause, stop. */
+/**
+ * The detail drawer for one agent: step in, steer, pause, stop.
+ *
+ * Built on the Dialog primitive rather than a bare `aside`: it looked modal
+ * but focus stayed on the card underneath, Tab walked the obscured list, and
+ * nothing came back on close. The primitive owns initial focus, the focus
+ * trap, hiding the rest of the page from assistive tech, Escape, the scrim
+ * click, and returning focus to the card that opened it.
+ */
 export function AgentDrawer({
   agent,
   now,
@@ -25,7 +34,8 @@ export function AgentDrawer({
   busy: boolean
   onClose: () => void
   onStepIn: () => void
-  onSteer: (text: string) => void
+  /** Resolves false when the instruction was not accepted; the draft stays. */
+  onSteer: (text: string) => void | Promise<boolean>
   onPause: () => void
   onStop: () => void
 }): JSX.Element {
@@ -35,45 +45,49 @@ export function AgentDrawer({
   const [confirmingStop, setConfirmingStop] = useState(false)
   const steerable = agent.origin === 'managed' && agent.canSteer && Boolean(agent.sessionId)
 
-  useEffect(() => {
-    const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const submit = (): void => {
+  // The typed instruction is cleared only once the request is accepted. It
+  // used to clear on click, so a failed steer took the text with it.
+  const submit = async (): Promise<void> => {
     const text = draft.trim()
     if (!text) {
       return
     }
-    onSteer(text)
-    setDraft('')
+    const accepted = await onSteer(text)
+    if (accepted !== false) {
+      setDraft((current) => (current.trim() === text ? '' : current))
+    }
   }
 
   return (
-    <>
-      <div className="codev-mc-scrim" onClick={onClose} aria-hidden />
-      <aside className="codev-mc-drawer" role="dialog" aria-modal="true" aria-label={agent.title}>
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose()
+        }
+      }}
+    >
+      <DialogPrimitive.Overlay className="codev-mc-scrim" />
+      <DialogPrimitive.Content
+        className="codev-mc-drawer"
+        aria-label={agent.title}
+        aria-describedby={undefined}
+      >
         <header className="codev-mc-drawer-head">
           <div>
             <p className="codev-mc-drawer-kicker">
               {agent.ownerName} · {agent.providerLabel}
               {agent.model ? ` · ${agent.model}` : ''}
             </p>
-            <h4>{agent.title}</h4>
+            <DialogPrimitive.Title asChild>
+              <h4>{agent.title}</h4>
+            </DialogPrimitive.Title>
           </div>
-          <button
-            type="button"
-            className="codev-mc-drawer-close"
-            onClick={onClose}
-            aria-label="Close agent detail"
-          >
-            ✕
-          </button>
+          <DialogPrimitive.Close asChild>
+            <button type="button" className="codev-mc-drawer-close" aria-label="Close agent detail">
+              ✕
+            </button>
+          </DialogPrimitive.Close>
         </header>
 
         <div className="codev-mc-drawer-strip">
@@ -175,7 +189,7 @@ export function AgentDrawer({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault()
-                    submit()
+                    void submit()
                   }
                 }}
                 aria-label="Steer this agent"
@@ -183,7 +197,7 @@ export function AgentDrawer({
               <button
                 type="button"
                 className="codev-mc-steer-send"
-                onClick={submit}
+                onClick={() => void submit()}
                 disabled={busy || !draft.trim()}
               >
                 {busy ? 'Sending…' : 'Steer'}
@@ -200,7 +214,7 @@ export function AgentDrawer({
               : 'Co-steer permission is required to send this agent instructions.'}
           </p>
         )}
-      </aside>
-    </>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Root>
   )
 }

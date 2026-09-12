@@ -444,22 +444,25 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [byKey]
   )
 
+  /** Resolves true once the host queued the instruction; false keeps the draft. */
   const handleSteer = useCallback(
-    async (key: string, text: string) => {
+    async (key: string, text: string): Promise<boolean> => {
       const agent = byKey(key)
       const prompt = text.trim()
       if (!agent?.sessionId || !prompt) {
-        return
+        return false
       }
       setSteerBusy(true)
       try {
         await requestCodevBridge('agents.enqueue', { sessionId: agent.sessionId, prompt })
         toast.success(`Steer queued for ${agent.ownerName}'s agent`)
         void refreshManaged()
+        return true
       } catch (error: unknown) {
         toast.error('Could not steer this agent', {
           description: error instanceof Error ? error.message : String(error)
         })
+        return false
       } finally {
         setSteerBusy(false)
       }

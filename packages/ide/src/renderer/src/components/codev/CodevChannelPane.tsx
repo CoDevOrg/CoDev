@@ -11,6 +11,11 @@ import { ArrowLeft, Hash, Lock, Send, Sparkles } from 'lucide-react'
 import { requestCodevBridge } from '@/web/codev-bridge-singleton'
 import { closeCodevChannel, useCodevChannelId } from '@/web/codev-channel-view'
 import {
+  getCodevChannelDraft,
+  restoreUnsentChannelMessage,
+  setCodevChannelDraft
+} from '@/web/codev-channel-drafts'
+import {
   AGENT_MENTION,
   formatChatTime,
   groupMessages,
@@ -51,7 +56,19 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
-  const [draft, setDraft] = useState('')
+  // The draft outlives this component: it is remounted on every channel
+  // switch and every "Back to chat", which used to discard unsent text.
+  const [draft, setDraftState] = useState(() => getCodevChannelDraft(channelId))
+  const setDraft = useCallback(
+    (next: string | ((current: string) => string)): void => {
+      setDraftState((current) => {
+        const value = typeof next === 'function' ? next(current) : next
+        setCodevChannelDraft(channelId, value)
+        return value
+      })
+    },
+    [channelId]
+  )
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -100,8 +117,16 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
     }
   }, [channelId])
 
+  // Focus moves into the composer while the channel is up, and goes back to
+  // whatever had it — usually the agent composer — when the layer drops.
   useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     composerRef.current?.focus()
+    return () => {
+      if (previous?.isConnected) {
+        previous.focus()
+      }
+    }
   }, [])
 
   const groups = useMemo(() => groupMessages(messages), [messages])
@@ -135,11 +160,15 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         )
       }
     } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : 'The message was not sent.')
+      // The text comes back rather than vanishing with the error.
+      setDraft((current) => restoreUnsentChannelMessage(body, current))
+      setNotice(
+        `Not sent — ${cause instanceof Error ? cause.message : 'the server did not accept it'}. Your message is back in the composer.`
+      )
     } finally {
       setSending(false)
     }
-  }, [channelId, draft, sending])
+  }, [channelId, draft, sending, setDraft])
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
     if (event.key === 'Enter' && !event.shiftKey) {

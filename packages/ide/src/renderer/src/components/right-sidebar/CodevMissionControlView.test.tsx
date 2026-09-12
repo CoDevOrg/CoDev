@@ -193,6 +193,12 @@ describe('CodevMissionControlView', () => {
     expect(html).toContain('codev-mc-drawer')
     expect(html).toContain('Add a test for that case')
     expect(html).toContain('co-steer turn')
+    // A real dialog: the primitive owns focus, Escape, the scrim, and hides
+    // the rest of the page while open; its title is the agent's own.
+    const drawerTag = html.match(/<div[^>]*codev-mc-drawer[^>]*>/)?.[0] ?? ''
+    expect(drawerTag).toContain('role="dialog"')
+    expect(drawerTag).toContain('aria-labelledby=')
+    expect(drawerTag).toContain('tabindex="-1"')
   })
 
   it('offers to open the agent’s own chat when it has a tab, its worktree otherwise', () => {
