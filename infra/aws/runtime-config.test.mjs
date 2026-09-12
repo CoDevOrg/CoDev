@@ -10,6 +10,8 @@ const deploy = read("./deploy.sh");
 const bootstrap = read("./scripts/bootstrap-host.sh");
 const buildOrca = read("./scripts/build-orca-serve.sh");
 const buildOrcaWeb = read("./scripts/build-orca-web.sh");
+const azureTemplate = read("../azure/main.bicep");
+const azureDeploy = read("../azure/deploy.sh");
 
 test("defaults the Firecracker host to on-demand capacity with nested KVM", () => {
   assert.match(template, /Default: m7i-flex\.large/);
@@ -77,12 +79,45 @@ test("IDE artifacts build from packages/ide, never from an upstream clone", () =
   assert.match(containerfile, /^COPY \. \/build$/m);
 });
 
+// The Azure bootstrap is a systemd unit because cloud-init's runcmd fires on
+// first boot only, and rolling a release works by restarting the host. That
+// unit must not be wanted by multi-user.target while waiting on cloud-init:
+// cloud-init.target is ordered after multi-user.target, so systemd sees a
+// cycle, deletes the bootstrap's start job, and every boot after the first
+// silently skips it. It looked fine on the first boot, where runcmd started
+// it by hand, and only a real reboot showed the host never rolling forward.
+test("Azure bootstrap unit re-runs on every boot without an ordering cycle", () => {
+  const unit = azureTemplate.slice(
+    azureTemplate.indexOf("path: /etc/systemd/system/codev-bootstrap.service"),
+    azureTemplate.indexOf("runcmd:"),
+  );
+  assert.match(unit, /WantedBy=cloud-init\.target/);
+  assert.doesNotMatch(unit, /WantedBy=multi-user\.target/);
+  assert.doesNotMatch(unit, /After=.*cloud-init\.target/);
+  assert.match(unit, /After=[^\n]*cloud-final\.service/);
+  assert.match(unit, /RemainAfterExit=yes/);
+});
+
+// An idle Azure host deallocates itself, and `az vm restart` refuses a
+// deallocated VM. The roll path has to start an off host, not only restart a
+// running one, or the routine deploy fails whenever nobody is using the
+// runtime -- which is most of the time.
+test("Azure release roll starts a deallocated host instead of failing", () => {
+  assert.match(azureDeploy, /PowerState\/running/);
+  assert.match(azureDeploy, /az vm start \\/);
+  assert.match(azureDeploy, /az vm restart \\/);
+  // The release travels as a mutable VM tag, never in immutable customData.
+  assert.match(azureTemplate, /ReleaseVersion: releaseVersion/);
+  assert.doesNotMatch(azureTemplate, /__RELEASE_VERSION__/);
+});
+
 test("deployment shell scripts parse", () => {
   for (const script of [
     "deploy.sh",
     "scripts/bootstrap-host.sh",
     "scripts/build-orca-serve.sh",
     "scripts/build-orca-web.sh",
+    "../azure/deploy.sh",
   ]) {
     execFileSync("bash", ["-n", new URL(script, import.meta.url).pathname]);
   }

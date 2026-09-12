@@ -554,20 +554,26 @@ write_files:
     content: |
       [Unit]
       Description=Fetch and run the CoDev host bootstrap
-      After=network-online.target cloud-final.service
-      Wants=network-online.target
       # cloud-final is where cloud-init installs this image's own packages.
       # Starting before it finishes puts two apt runs on one dpkg lock, which
       # leaves dpkg interrupted and fails the bootstrap outright.
-      After=cloud-init.target
+      After=network-online.target cloud-final.service
+      Wants=network-online.target
 
       [Service]
       Type=oneshot
       RemainAfterExit=yes
       ExecStart=/usr/local/sbin/codev-fetch-bootstrap.sh
 
+      # Wanted by cloud-init.target, not multi-user.target. cloud-init.target
+      # is itself ordered After=multi-user.target, so a unit that multi-user
+      # wants and that waits on cloud-init is an ordering cycle; systemd
+      # resolves that by deleting this unit's start job, and the bootstrap
+      # silently never runs on any boot after the first (the first boot only
+      # worked because runcmd started it by hand). cloud-init.target is
+      # reached on every boot, so this still re-runs the bootstrap on restart.
       [Install]
-      WantedBy=multi-user.target
+      WantedBy=cloud-init.target
 runcmd:
   # --no-block queues the unit instead of running it inside cloud-final.
   # systemd then honours the After=cloud-final ordering above and starts it

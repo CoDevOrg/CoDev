@@ -193,11 +193,28 @@ az storage container create \
 # ---------------------------------------------------------------------------
 
 if [[ "${host_existed}" == "true" ]]; then
-  echo "==> Restarting the existing host onto ${release_version}"
-  az vm restart \
+  # An idle host deallocates itself after ten minutes, so more often than not
+  # the host being rolled is off. `az vm restart` refuses a deallocated VM;
+  # `az vm start` boots it, and a boot re-runs the bootstrap just like a
+  # restart does, so both land on the new tag.
+  host_power="$(az vm get-instance-view \
     --resource-group "${resource_group}" \
     --name "${name_prefix}-host" \
-    --only-show-errors --output none
+    --query "instanceView.statuses[?starts_with(code, 'PowerState/')].code | [0]" \
+    -o tsv 2>/dev/null || true)"
+  if [[ "${host_power}" == "PowerState/running" ]]; then
+    echo "==> Restarting the running host onto ${release_version}"
+    az vm restart \
+      --resource-group "${resource_group}" \
+      --name "${name_prefix}-host" \
+      --only-show-errors --output none
+  else
+    echo "==> Starting the ${host_power#PowerState/} host onto ${release_version}"
+    az vm start \
+      --resource-group "${resource_group}" \
+      --name "${name_prefix}-host" \
+      --only-show-errors --output none
+  fi
 else
   echo "==> Host was created by this deploy; it is already bootstrapping ${release_version}"
 fi
