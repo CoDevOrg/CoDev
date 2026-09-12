@@ -62,6 +62,23 @@ export type MissionControlAgent = {
   holds: MissionControlHold[]
 }
 
+/** A lifecycle request in flight for one agent; the drawer disables the
+ *  conflicting controls and labels the pending one while it runs. */
+export type MissionControlPendingAction = 'stop' | 'pause' | 'steer'
+
+/** Worktree slots in use, from the workboard. Distinct from the agent count:
+ *  several agents share one checkout, and a chat in the workspace's own
+ *  checkout holds no slot at all. */
+export type MissionControlSlotUsage = { used: number; total: number }
+
+/** Whether the live feeds behind the panel are current. `staleSince` is the
+ *  first failed refresh after a good snapshot; the data on screen is from
+ *  before it. */
+export type MissionControlFeedHealth = { staleSince: number | null; message: string | null }
+
+/** What Stop will do to the open agent, from its actual stop plan. */
+export type MissionControlStopDescription = { allowed: boolean; button: string; detail: string }
+
 export const MISSION_CONTROL_PHASE_LABEL: Record<MissionControlPhase, string> = {
   planning: 'Planning',
   working: 'Working',

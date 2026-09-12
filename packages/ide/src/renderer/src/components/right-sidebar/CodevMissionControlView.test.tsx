@@ -157,7 +157,7 @@ describe('CodevMissionControlView', () => {
         ]}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -181,7 +181,7 @@ describe('CodevMissionControlView', () => {
         agents={[agent({ key: 'managed:s1', canSteer: true })]}
         now={Date.now()}
         openKey="managed:s1"
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -215,7 +215,7 @@ describe('CodevMissionControlView', () => {
         agents={[local]}
         now={Date.now()}
         openKey={local.key}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -232,7 +232,7 @@ describe('CodevMissionControlView', () => {
         agents={[agent({ key: 'managed:s1' })]}
         now={Date.now()}
         openKey="managed:s1"
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -244,13 +244,99 @@ describe('CodevMissionControlView', () => {
     expect(managedOnly).toContain('Open this worktree')
   })
 
+  it('counts agents and worktree slots as two different numbers', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'a' }), agent({ key: 'b', worktreeId: 'w1' })]}
+        slots={{ used: 1, total: 3 }}
+        now={Date.now()}
+        openKey={null}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('<strong>2</strong><span>agents</span>')
+    expect(html).toContain('<strong>1</strong><span>/ 3 slots</span>')
+    expect(html).not.toContain('/ 3</span>')
+  })
+
+  it('labels the data as old when a feed has stopped refreshing', () => {
+    const now = Date.now()
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({})]}
+        feed={{ staleSince: now - 65_000, message: 'bridge closed' }}
+        onRetryFeed={noop}
+        now={now}
+        openKey={null}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('Live data last refreshed 1m 05s ago — bridge closed')
+    expect(html).toContain('Retry now')
+  })
+
+  it('confirms a stop with what the plan will actually do', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction={null}
+        stopDescription={{
+          allowed: true,
+          button: 'Stop agent',
+          detail:
+            'Ends this agent only. The worktree stays for the other agent in it, so no slot is freed.'
+        }}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).not.toContain('Stop and free the slot')
+  })
+
+  it('shows a stop in progress instead of snapping back to the button', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction="stop"
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('Stopping…')
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Pause<\/button>/)
+  })
+
   it('shows the empty state when nothing is running', () => {
     const html = renderToStaticMarkup(
       <CodevMissionControlView
         agents={[]}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -521,7 +607,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         coordination={coordination()}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -563,7 +649,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         })}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -598,7 +684,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         ]}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -618,7 +704,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         coordination={coordination()}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}

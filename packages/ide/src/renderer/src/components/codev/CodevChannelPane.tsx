@@ -54,7 +54,13 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
   const [channel, setChannel] = useState<ChannelSummary | null>(null)
   const [messages, setMessages] = useState<ChannelMessage[]>([])
   const [notice, setNotice] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Metadata and transcript fail independently, so each has its own error;
+  // a transcript poll succeeding must not erase a channel-metadata failure.
+  const [channelError, setChannelError] = useState<string | null>(null)
+  const [transcript, setTranscript] = useState<
+    { status: 'loading' } | { status: 'ready' } | { status: 'failed'; message: string }
+  >({ status: 'loading' })
+  const [transcriptAttempt, setTranscriptAttempt] = useState(0)
   const [sending, setSending] = useState(false)
   // The draft outlives this component: it is remounted on every channel
   // switch and every "Back to chat", which used to discard unsent text.
@@ -85,7 +91,7 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         setChannel(payload.channels?.find((entry) => entry.id === channelId) ?? null)
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Team chat is offline.')
+          setChannelError(cause instanceof Error ? cause.message : 'Team chat is offline.')
         }
       }
     })()
@@ -103,10 +109,17 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         })
         if (!cancelled) {
           setMessages(payload.messages ?? [])
-          setError(null)
+          setTranscript({ status: 'ready' })
         }
-      } catch {
-        // Keep the transcript on screen; the next tick may succeed.
+      } catch (cause) {
+        // A failed load is a failed load, not an empty channel. Messages
+        // already on screen stay; the state says they may be behind.
+        if (!cancelled) {
+          setTranscript({
+            status: 'failed',
+            message: cause instanceof Error ? cause.message : 'Team chat is offline.'
+          })
+        }
       }
     }
     void load()
@@ -115,7 +128,7 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
       cancelled = true
       clearInterval(timer)
     }
-  }, [channelId])
+  }, [channelId, transcriptAttempt])
 
   // Focus moves into the composer while the channel is up, and goes back to
   // whatever had it — usually the agent composer — when the layer drops.
@@ -213,8 +226,29 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         role="log"
         className="scrollbar-sleek mx-auto w-full max-w-3xl min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4"
       >
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
-        {groups.length === 0 ? (
+        {channelError ? <p className="text-xs text-destructive">{channelError}</p> : null}
+        {transcript.status === 'failed' ? (
+          <p role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive">
+            <span>
+              {groups.length === 0
+                ? `Couldn’t load this channel’s messages: ${transcript.message}`
+                : `Messages may be behind — the last refresh failed: ${transcript.message}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setTranscriptAttempt((attempt) => attempt + 1)}
+              className="rounded border border-border px-1.5 py-0.5 text-xs text-foreground hover:bg-accent"
+            >
+              Retry
+            </button>
+          </p>
+        ) : null}
+        {transcript.status === 'loading' && groups.length === 0 ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Loading #{slug}…
+          </p>
+        ) : null}
+        {transcript.status === 'ready' && groups.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             This is the start of #{slug}. Say hello, or mention{' '}
             <code className="rounded bg-accent px-1">{AGENT_MENTION}</code> to pull in the coding

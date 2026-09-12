@@ -1,6 +1,12 @@
 import { useState, type JSX } from 'react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
-import { phaseLabel, runtimeText, type MissionControlAgent } from './codev-mission-control-model'
+import {
+  phaseLabel,
+  runtimeText,
+  type MissionControlAgent,
+  type MissionControlPendingAction,
+  type MissionControlStopDescription
+} from './codev-mission-control-model'
 import { PhasePill } from './CodevMissionControlAgentCard'
 
 const QUICK_STEERS = [
@@ -19,10 +25,17 @@ const QUICK_STEERS = [
  * trap, hiding the rest of the page from assistive tech, Escape, the scrim
  * click, and returning focus to the card that opened it.
  */
+const FALLBACK_STOP: MissionControlStopDescription = {
+  allowed: true,
+  button: 'Stop agent',
+  detail: 'Ends this agent. The branch it worked on is kept.'
+}
+
 export function AgentDrawer({
   agent,
   now,
-  busy,
+  pendingAction,
+  stopDescription,
   onClose,
   onStepIn,
   onSteer,
@@ -31,7 +44,13 @@ export function AgentDrawer({
 }: {
   agent: MissionControlAgent
   now: number
-  busy: boolean
+  /** Which lifecycle request is in flight for this agent, if any. Every
+   *  other lifecycle control is disabled meanwhile, and the pending one says
+   *  so — a stop used to snap back to "Stop agent" while still running. */
+  pendingAction: MissionControlPendingAction | null
+  /** Derived from the real stop plan; the confirmation must not promise a
+   *  freed slot for a stop that leaves the checkout standing. */
+  stopDescription: MissionControlStopDescription | null
   onClose: () => void
   onStepIn: () => void
   /** Resolves false when the instruction was not accepted; the draft stays. */
@@ -44,6 +63,8 @@ export function AgentDrawer({
   // place, because a modal over a drawer is a lot of chrome for one button.
   const [confirmingStop, setConfirmingStop] = useState(false)
   const steerable = agent.origin === 'managed' && agent.canSteer && Boolean(agent.sessionId)
+  const busy = pendingAction !== null
+  const stop = stopDescription ?? FALLBACK_STOP
 
   // The typed instruction is cleared only once the request is accepted. It
   // used to clear on click, so a failed steer took the text with it.
@@ -122,11 +143,25 @@ export function AgentDrawer({
                 : 'Nothing to open'}
           </button>
           {steerable ? (
-            <button type="button" className="codev-mc-ghost" onClick={onPause} disabled={busy}>
-              Pause
+            <button
+              type="button"
+              className="codev-mc-ghost"
+              onClick={onPause}
+              disabled={busy}
+              aria-busy={pendingAction === 'pause'}
+            >
+              {pendingAction === 'pause' ? 'Pausing…' : 'Pause'}
             </button>
           ) : null}
-          {confirmingStop ? (
+          {pendingAction === 'stop' ? (
+            <button type="button" className="codev-mc-ghost is-danger" disabled aria-busy>
+              Stopping…
+            </button>
+          ) : !stop.allowed ? (
+            <button type="button" className="codev-mc-ghost is-danger" disabled title={stop.detail}>
+              {stop.button}
+            </button>
+          ) : confirmingStop ? (
             <>
               <button
                 type="button"
@@ -137,7 +172,7 @@ export function AgentDrawer({
                   onStop()
                 }}
               >
-                Stop and free the slot
+                {stop.button}
               </button>
               <button
                 type="button"
@@ -158,11 +193,10 @@ export function AgentDrawer({
             </button>
           )}
         </div>
-        {confirmingStop ? (
-          <p className="codev-mc-drawer-activity">
-            Ends this agent and releases its slot. The branch it worked on is kept.
-          </p>
+        {confirmingStop && stop.allowed && pendingAction !== 'stop' ? (
+          <p className="codev-mc-drawer-activity">{stop.detail}</p>
         ) : null}
+        {!stop.allowed ? <p className="codev-mc-drawer-activity">{stop.detail}</p> : null}
 
         {steerable ? (
           <footer className="codev-mc-steer">
@@ -200,7 +234,7 @@ export function AgentDrawer({
                 onClick={() => void submit()}
                 disabled={busy || !draft.trim()}
               >
-                {busy ? 'Sending…' : 'Steer'}
+                {pendingAction === 'steer' ? 'Sending…' : 'Steer'}
               </button>
             </div>
             <p className="codev-mc-steer-note">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planAgentStop, type StoppableAgent } from './codev-agent-stop-plan'
+import { describeAgentStopPlan, planAgentStop, type StoppableAgent } from './codev-agent-stop-plan'
 
 /** Every worktree in these fixtures is one CoDev made for an agent. */
 const releasable = () => true
@@ -136,5 +136,36 @@ describe('planAgentStop', () => {
     ]
 
     expect(planAgentStop(agents[0]!.key, agents, releasable)).toEqual({ kind: 'unsupported' })
+  })
+})
+
+describe('describeAgentStopPlan', () => {
+  it('promises a freed slot only when the plan releases a worktree', () => {
+    expect(
+      describeAgentStopPlan({ kind: 'release-worktree', worktreeId: 'wt', survivorWorktreeIds: [] })
+        .button
+    ).toBe('Stop and free the slot')
+    expect(describeAgentStopPlan({ kind: 'close-tab', tabId: 't', siblingCount: 0 }).button).toBe(
+      'Stop agent'
+    )
+    expect(
+      describeAgentStopPlan({ kind: 'close-tab', tabId: 't', siblingCount: 0 }).detail
+    ).toContain('no slot is freed')
+  })
+
+  it('says the checkout stays for the agents that share it', () => {
+    expect(
+      describeAgentStopPlan({ kind: 'close-tab', tabId: 't', siblingCount: 2 }).detail
+    ).toContain('other 2 agents')
+  })
+
+  it('leaves the host its own decision for a managed session', () => {
+    expect(describeAgentStopPlan({ kind: 'discard-session', sessionId: 's' }).detail).toContain(
+      'unless other agents share its worktree'
+    )
+  })
+
+  it('does not offer a stop it cannot perform', () => {
+    expect(describeAgentStopPlan({ kind: 'unsupported' }).allowed).toBe(false)
   })
 })

@@ -328,6 +328,12 @@
   background: #3fbf7a;
 }
 
+/* The connect poll is failing, not merely waiting. */
+.workspace-boot-pill-dot.is-failing {
+  background: #e0805c;
+  animation: none;
+}
+
 .workspace-boot-pill-retry {
   margin-left: 4px;
   padding: 2px 8px;

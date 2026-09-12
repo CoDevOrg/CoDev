@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-  type JSX
-} from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type JSX } from 'react'
 import { Check, Hash, Lock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { requestCodevBridge } from '@/web/codev-bridge-singleton'
@@ -37,7 +31,14 @@ import {
 
 const AGENT_MENTION = '@agent'
 const ROSTER_POLL_MS = 5_000
-const STATUS_EMOJI = ['\u{1F6E0}\uFE0F', '\u{1F50D}', '\u{1F41B}', '\u{1F4DD}', '\u{1F680}', '\u2615']
+const STATUS_EMOJI = [
+  '\u{1F6E0}\uFE0F',
+  '\u{1F50D}',
+  '\u{1F41B}',
+  '\u{1F4DD}',
+  '\u{1F680}',
+  '\u2615'
+]
 
 function isEmbedded(): boolean {
   return typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
@@ -70,13 +71,19 @@ function StatusComposer({
   const [headline, setHeadline] = useState(member.headline ?? '')
   const [emoji, setEmoji] = useState(member.emoji ?? '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
+  // A failed save keeps the editor open with the text intact and says what
+  // went wrong; it used to stop silently with the new status apparently lost.
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault()
     setSaving(true)
+    setError(null)
     try {
       await onSave(headline.trim() || null, emoji || null)
       setEditing(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Your status was not saved.')
     } finally {
       setSaving(false)
     }
@@ -150,13 +157,18 @@ function StatusComposer({
         />
         <button
           type="submit"
-          aria-label="Save status"
+          aria-label={saving ? 'Saving status…' : 'Save status'}
           disabled={saving}
           className="flex size-6 shrink-0 items-center justify-center rounded bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground disabled:opacity-50"
         >
           <Check aria-hidden className="size-3.5" />
         </button>
       </div>
+      {error ? (
+        <p role="alert" className="text-[11px] text-destructive">
+          {error} Try again.
+        </p>
+      ) : null}
     </form>
   )
 }
@@ -223,6 +235,7 @@ export function CodevTeamPanel(): JSX.Element | null {
   const [newChannelOpen, setNewChannelOpen] = useState(false)
   const [newChannelSlug, setNewChannelSlug] = useState('')
   const [newChannelError, setNewChannelError] = useState<string | null>(null)
+  const [creatingChannel, setCreatingChannel] = useState(false)
 
   if (!active) {
     return null
@@ -241,15 +254,17 @@ export function CodevTeamPanel(): JSX.Element | null {
 
   const handleCreateChannel = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    const slug = newChannelSlug
-      .trim()
-      .replace(/^#/, '')
-      .replace(/\s+/g, '-')
-      .toLowerCase()
+    // A second Enter or click while the first request is in flight used to
+    // race it: one created the channel, the other reported a duplicate name.
+    if (creatingChannel) {
+      return
+    }
+    const slug = newChannelSlug.trim().replace(/^#/, '').replace(/\s+/g, '-').toLowerCase()
     if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
       setNewChannelError('Use lowercase letters, numbers and hyphens.')
       return
     }
+    setCreatingChannel(true)
     try {
       const created = await requestCodevBridge<{ channel: { id: string } }>('team.createChannel', {
         slug
@@ -261,13 +276,12 @@ export function CodevTeamPanel(): JSX.Element | null {
       handleOpenChannel(created.channel.id)
     } catch (cause) {
       setNewChannelError(cause instanceof Error ? cause.message : 'The channel was not created.')
+    } finally {
+      setCreatingChannel(false)
     }
   }
 
-  const handleSaveStatus = async (
-    headline: string | null,
-    emoji: string | null
-  ): Promise<void> => {
+  const handleSaveStatus = async (headline: string | null, emoji: string | null): Promise<void> => {
     await requestCodevBridge('team.saveStatus', { headline, emoji })
     await refresh()
   }
@@ -348,10 +362,7 @@ export function CodevTeamPanel(): JSX.Element | null {
                   channel.id === openChannelId && 'bg-worktree-sidebar-accent/70'
                 )}
               >
-                <Hash
-                  aria-hidden
-                  className="size-3 shrink-0 text-worktree-sidebar-foreground/40"
-                />
+                <Hash aria-hidden className="size-3 shrink-0 text-worktree-sidebar-foreground/40" />
                 <span className="truncate text-[12px] text-worktree-sidebar-foreground/80">
                   {channel.slug}
                 </span>
@@ -388,6 +399,7 @@ export function CodevTeamPanel(): JSX.Element | null {
                   autoFocus
                   maxLength={48}
                   value={newChannelSlug}
+                  disabled={creatingChannel}
                   onChange={(event) => setNewChannelSlug(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
@@ -399,9 +411,11 @@ export function CodevTeamPanel(): JSX.Element | null {
                 />
                 <button
                   type="submit"
-                  className="rounded bg-worktree-sidebar-accent px-2 py-1 text-[11px] text-worktree-sidebar-accent-foreground"
+                  disabled={creatingChannel}
+                  aria-busy={creatingChannel}
+                  className="rounded bg-worktree-sidebar-accent px-2 py-1 text-[11px] text-worktree-sidebar-accent-foreground disabled:opacity-50"
                 >
-                  Create
+                  {creatingChannel ? 'Creating…' : 'Create'}
                 </button>
               </div>
               {newChannelError ? (

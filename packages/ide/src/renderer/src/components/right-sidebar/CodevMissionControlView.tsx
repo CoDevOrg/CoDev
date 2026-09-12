@@ -2,9 +2,14 @@ import type { JSX } from 'react'
 import {
   EMPTY_MISSION_CONTROL_COORDINATION,
   missionControlContestNotice,
+  missionControlElapsed,
   missionControlOverlapNotice,
   type MissionControlAgent,
-  type MissionControlCoordination
+  type MissionControlCoordination,
+  type MissionControlFeedHealth,
+  type MissionControlPendingAction,
+  type MissionControlSlotUsage,
+  type MissionControlStopDescription
 } from './codev-mission-control-model'
 import { AgentCard, Face } from './CodevMissionControlAgentCard'
 import { AgentDrawer } from './CodevMissionControlDrawer'
@@ -33,7 +38,11 @@ export function CodevMissionControlView({
   coordination,
   now,
   openKey,
-  steerBusy,
+  pendingAction,
+  slots = null,
+  feed,
+  stopDescription = null,
+  onRetryFeed,
   onOpen,
   onClose,
   onStepIn,
@@ -45,7 +54,14 @@ export function CodevMissionControlView({
   coordination?: MissionControlCoordination
   now: number
   openKey: string | null
-  steerBusy: boolean
+  /** The lifecycle request in flight for the open agent, if any. */
+  pendingAction: MissionControlPendingAction | null
+  /** Worktree slots in use, when the workboard has reported them. */
+  slots?: MissionControlSlotUsage | null
+  feed?: MissionControlFeedHealth
+  /** What Stop will do to the open agent. */
+  stopDescription?: MissionControlStopDescription | null
+  onRetryFeed?: () => void
   onOpen: (key: string) => void
   onClose: () => void
   onStepIn: (key: string) => void
@@ -78,11 +94,36 @@ export function CodevMissionControlView({
           </p>
           <h3>Mission Control</h3>
         </div>
-        <span className="codev-agents-count">
-          <strong>{agents.length}</strong>
-          <span>/ {Math.max(agents.length, 3)}</span>
+        <span className="codev-mc-counts">
+          <span className="codev-agents-count" title="Agents running in this workspace">
+            <strong>{agents.length}</strong>
+            <span>{agents.length === 1 ? 'agent' : 'agents'}</span>
+          </span>
+          {slots ? (
+            <span
+              className="codev-agents-count is-slots"
+              title="Agent worktree slots in use. Several agents can share one slot, and a chat in the workspace's own checkout uses none."
+            >
+              <strong>{slots.used}</strong>
+              <span>/ {slots.total} slots</span>
+            </span>
+          ) : null}
         </span>
       </header>
+
+      {feed?.staleSince ? (
+        <p className="codev-mc-alert is-soft codev-mc-stale" role="status">
+          <span>
+            Live data last refreshed {missionControlElapsed(feed.staleSince, now)} ago
+            {feed.message ? ` — ${feed.message}` : ''}. What is shown may be behind.
+          </span>
+          {onRetryFeed ? (
+            <button type="button" className="codev-mc-ghost" onClick={onRetryFeed}>
+              Retry now
+            </button>
+          ) : null}
+        </p>
+      ) : null}
 
       {owners.length > 0 ? (
         <div className="codev-mc-people">
@@ -144,7 +185,8 @@ export function CodevMissionControlView({
         <AgentDrawer
           agent={open}
           now={now}
-          busy={steerBusy}
+          pendingAction={pendingAction}
+          stopDescription={stopDescription}
           onClose={onClose}
           onStepIn={() => onStepIn(open.key)}
           onSteer={(text) => onSteer(open.key, text)}

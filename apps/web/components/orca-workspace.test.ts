@@ -152,9 +152,34 @@ describe("WorkspaceTopBar", () => {
       }),
     );
 
+    expect(screen.getByLabelText("Active agents: 2 live")).toHaveTextContent(
+      "2 agents live",
+    );
+  });
+
+  /**
+   * Two chat tabs in one checkout are two agents and one slot; a chat in the
+   * workspace's own checkout is an agent and no slot. The bar used to print
+   * the agent count over the slot denominator, so four tabs read "4 of 3".
+   */
+  it("keeps agents and worktree slots as separate numbers", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        liveAgentCount: 4,
+        slotsUsed: 1,
+        slotsTotal: 3,
+      }),
+    );
+
     expect(
-      screen.getByLabelText("Active agents: 2 of 3 live"),
-    ).toHaveTextContent("2 of 3 agents live");
+      screen.getByLabelText(
+        "Active agents: 4 live; worktree slots: 1 of 3 in use",
+      ),
+    ).toHaveTextContent("4 agents live · 1 of 3 slots");
+    expect(screen.queryByText(/4 of 3/)).not.toBeInTheDocument();
   });
 
   it("does not present a provisional zero while the workspace is starting", () => {

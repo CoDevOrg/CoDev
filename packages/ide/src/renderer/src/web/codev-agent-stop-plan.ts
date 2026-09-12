@@ -63,3 +63,50 @@ export function planAgentStop(
     ? { kind: 'close-tab', tabId, siblingCount: siblings.length }
     : { kind: 'unsupported' }
 }
+
+/**
+ * What the Stop confirmation should say, from the plan it will actually run.
+ * The drawer used to promise "Stop and free the slot" for every agent, while
+ * most stop plans close one tab and leave the checkout — and its slot —
+ * exactly as they were.
+ */
+export function describeAgentStopPlan(plan: AgentStopPlan): {
+  allowed: boolean
+  button: string
+  detail: string
+} {
+  switch (plan.kind) {
+    case 'release-worktree':
+      return {
+        allowed: true,
+        button: 'Stop and free the slot',
+        detail:
+          'Ends this agent and releases its worktree, which frees a slot. The branch it worked on is kept.'
+      }
+    case 'discard-session':
+      return {
+        allowed: true,
+        button: 'Stop agent',
+        detail:
+          'Ends this managed session. Its slot is freed unless other agents share its worktree; the branch is kept either way.'
+      }
+    case 'close-tab':
+      return {
+        allowed: true,
+        button: 'Stop agent',
+        detail:
+          plan.siblingCount === 0
+            ? "Ends this agent. Its checkout is the workspace's own, so it stays and no slot is freed. The branch is kept."
+            : plan.siblingCount === 1
+              ? 'Ends this agent only. The worktree stays for the other agent in it, so no slot is freed. The branch is kept.'
+              : `Ends this agent only. The worktree stays for the other ${plan.siblingCount} agents in it, so no slot is freed. The branch is kept.`
+      }
+    case 'unsupported':
+    default:
+      return {
+        allowed: false,
+        button: 'Stop agent',
+        detail: 'This agent cannot be stopped from here.'
+      }
+  }
+}
