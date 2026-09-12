@@ -387,17 +387,26 @@ export async function requireWorkspacePermission(
   if (!access.permissions[permission]) {
     throw new WorkspaceAccessError();
   }
-  if (
-    openFgaConfiguration() &&
-    !(await checkOpenFga(
-      workspaceId,
-      userId,
-      openFgaRelationForPermission(permission),
-    ))
-  ) {
-    throw new WorkspaceAccessError(
-      `OpenFGA denied the ${permission} workspace permission.`,
-    );
+  if (openFgaConfiguration()) {
+    const relation = openFgaRelationForPermission(permission);
+    if (!(await checkOpenFga(workspaceId, userId, relation))) {
+      // getWorkspaceAccess repairs the *role* tuple and re-checks the role
+      // relation, but this second check is for the *permission* relation the
+      // role only implies once its tuple exists in FGA. A workspace whose tuple
+      // predates OpenFGA, whose FGA write was interrupted, or which the earlier
+      // check fail-opened past on a transient error can pass role repair yet
+      // still be missing here. Repair from access.role — the DB membership was
+      // the source of truth and is already validated above — then require FGA
+      // to confirm before failing closed. The role permits this permission (or
+      // access.permissions[permission] would be false), so its tuple implies
+      // `relation`; reaching this write means that tuple is absent, not a dup.
+      await writeWorkspaceTuple({ workspaceId, userId, role: access.role });
+      if (!(await checkOpenFga(workspaceId, userId, relation))) {
+        throw new WorkspaceAccessError(
+          `OpenFGA denied the ${permission} workspace permission.`,
+        );
+      }
+    }
   }
   return access;
 }

@@ -234,4 +234,68 @@ describe("OpenFGA workspace authorization", () => {
       Authorization: "Bearer access-token-1",
     });
   });
+
+  it("self-heals a missing permission tuple the role check passed on", async () => {
+    configureMembership();
+    vi.stubEnv("OPENFGA_API_URL", "https://fga.test");
+    vi.stubEnv("OPENFGA_STORE_ID", "store-1");
+    vi.stubEnv("OPENFGA_AUTHORIZATION_MODEL_ID", "model-1");
+    // The role relation check passes (or fail-opens), yet the mapped permission
+    // relation is still missing: the workspace the user reported, where "view"
+    // was denied though the database membership was intact. Repairing only in
+    // getWorkspaceAccess left this second check to fail closed forever.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ allowed: true })) // role relation
+      .mockResolvedValueOnce(Response.json({ allowed: false })) // permission relation
+      .mockResolvedValueOnce(Response.json({})) // repair write
+      .mockResolvedValueOnce(Response.json({ allowed: true })); // permission re-check
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      requireWorkspacePermission(
+        "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+        "2f2387ed-4a63-4b05-88cc-266d65f7b82b",
+        "view",
+      ),
+    ).resolves.toMatchObject({ role: "co_steer" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const permissionCheck = JSON.parse(
+      String(fetchMock.mock.calls[1]?.[1]?.body),
+    );
+    expect(permissionCheck.tuple_key).toMatchObject({ relation: "viewer" });
+    const writeBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    expect(writeBody.writes.tuple_keys).toEqual([
+      {
+        user: "user:2f2387ed-4a63-4b05-88cc-266d65f7b82b",
+        relation: "editor",
+        object: "workspace:e010bd2c-a3c1-438f-acef-166287a3b1cb",
+      },
+    ]);
+  });
+
+  it("fails closed when a permission tuple stays missing after repair", async () => {
+    configureMembership();
+    vi.stubEnv("OPENFGA_API_URL", "https://fga.test");
+    vi.stubEnv("OPENFGA_STORE_ID", "store-1");
+    vi.stubEnv("OPENFGA_AUTHORIZATION_MODEL_ID", "model-1");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ allowed: true })) // role relation
+      .mockResolvedValueOnce(Response.json({ allowed: false })) // permission relation
+      .mockResolvedValueOnce(Response.json({})) // repair write
+      .mockResolvedValueOnce(Response.json({ allowed: false })); // still denied
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      requireWorkspacePermission(
+        "e010bd2c-a3c1-438f-acef-166287a3b1cb",
+        "2f2387ed-4a63-4b05-88cc-266d65f7b82b",
+        "view",
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
 });
