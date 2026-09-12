@@ -8,13 +8,15 @@ import {
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
 import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
+import { CodevReviewCheckpointViewPanel } from './CodevReviewCheckpointView'
+import type { CodevReviewSnapshot } from './codev-review-checkpoint-snapshot'
 import {
-  CodevReviewCheckpointViewPanel,
   selectCodevReviewCheckpoint,
-  type CodevReviewSnapshot
-} from './CodevReviewCheckpointView'
+  type CodevReviewCheckpointChoice
+} from './codev-review-checkpoint-selection'
 
-export { CodevReviewCheckpointViewPanel, type CodevReviewSnapshot } from './CodevReviewCheckpointView'
+export { CodevReviewCheckpointViewPanel } from './CodevReviewCheckpointView'
+export type { CodevReviewSnapshot } from './codev-review-checkpoint-snapshot'
 
 let sharedDiffOpen = false
 
@@ -33,6 +35,9 @@ export function CodevReviewCheckpointPanel({
   const [snapshot, setSnapshot] = useState<CodevReviewSnapshot | null>(null)
   const [busy, setBusy] = useState('')
   const [diffOpen, setDiffOpen] = useState(sharedDiffOpen)
+  // A member's explicit pick of another worktree's checkpoint. Scoped to the
+  // checkout it was made in, so switching worktrees never carries it along.
+  const [choice, setChoice] = useState<CodevReviewCheckpointChoice | null>(null)
 
   useEffect(() => {
     return subscribeCodevBridge(() => {
@@ -41,7 +46,9 @@ export function CodevReviewCheckpointPanel({
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!embedded || bridge.status !== 'connected') return
+    if (!embedded || bridge.status !== 'connected') {
+      return
+    }
     setBusy('refresh')
     try {
       const result = await requestCodevBridge<CodevReviewSnapshot>('review.list')
@@ -56,7 +63,9 @@ export function CodevReviewCheckpointPanel({
   }, [bridge.status, embedded])
 
   useEffect(() => {
-    if (!embedded || bridge.status !== 'connected') return
+    if (!embedded || bridge.status !== 'connected') {
+      return
+    }
     void refresh()
   }, [bridge.status, embedded, refresh])
 
@@ -64,7 +73,8 @@ export function CodevReviewCheckpointPanel({
     return null
   }
 
-  const checkpoint = selectCodevReviewCheckpoint(snapshot?.checkpoints ?? [], worktreeId)
+  const selection = selectCodevReviewCheckpoint(snapshot?.checkpoints ?? [], worktreeId, choice)
+  const checkpoint = selection.checkpoint
   const canReview = Boolean(snapshot?.viewer?.canReview)
   const canMerge = Boolean(snapshot?.viewer?.canMerge)
 
@@ -74,6 +84,8 @@ export function CodevReviewCheckpointPanel({
       connected={bridge.status === 'connected'}
       snapshot={snapshot}
       checkpoint={checkpoint}
+      selection={selection}
+      onChooseCheckpoint={(sessionId) => setChoice({ worktreeId, sessionId })}
       busy={busy}
       canReview={canReview}
       canMerge={canMerge}
@@ -83,7 +95,9 @@ export function CodevReviewCheckpointPanel({
       }}
       onPrepare={() => {
         const sessionId = checkpoint?.sessionId
-        if (!sessionId) return
+        if (!sessionId) {
+          return
+        }
         setBusy('prepare')
         void requestCodevBridge<CodevReviewSnapshot>('review.prepare', { sessionId })
           .then((result) => {
@@ -115,7 +129,9 @@ export function CodevReviewCheckpointPanel({
       }}
       onMerge={() => {
         const sessionId = checkpoint?.sessionId
-        if (!sessionId) return
+        if (!sessionId) {
+          return
+        }
         setBusy('merge')
         void requestCodevBridge<CodevReviewSnapshot>('review.merge', { sessionId })
           .then((result) => {

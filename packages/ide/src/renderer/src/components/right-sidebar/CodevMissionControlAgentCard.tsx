@@ -6,8 +6,21 @@ import {
   phaseLabel,
   runtimeText,
   type MissionControlAgent,
+  type MissionControlHold,
   type MissionControlPhase
 } from './codev-mission-control-model'
+
+/** What a hold chip says on hover. A shared hold names its own uncertainty:
+ *  the claim is filed against the checkout, and more than one agent runs there. */
+function holdTitle(hold: MissionControlHold): string {
+  if (hold.shared) {
+    return `${hold.path} — claimed in this checkout, which several agents share; CoDev cannot tell which one holds it`
+  }
+  if (hold.status === 'contested') {
+    return `${hold.path} — another agent is holding this too`
+  }
+  return `${hold.path} — claimed by this agent`
+}
 
 /** The card for one agent in the Mission Control list, plus the two marks
  *  (owner face, phase pill) the drawer reuses. */
@@ -109,12 +122,8 @@ export function AgentCard({
             {agent.holds.map((hold) => (
               <li
                 key={hold.claimId}
-                className={`codev-mc-hold is-${hold.status}`}
-                title={
-                  hold.status === 'contested'
-                    ? `${hold.path} — another agent is holding this too`
-                    : `${hold.path} — claimed by this agent`
-                }
+                className={`codev-mc-hold is-${hold.status}${hold.shared ? ' is-shared' : ''}`}
+                title={holdTitle(hold)}
               >
                 <i aria-hidden />
                 <span>{hold.path}</span>

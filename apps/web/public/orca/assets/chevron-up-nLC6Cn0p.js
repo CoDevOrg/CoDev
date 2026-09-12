@@ -1,0 +1,1 @@
+import{Vv as e}from"./web-index-BlUre39q.js";var t=e(`chevron-up`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};

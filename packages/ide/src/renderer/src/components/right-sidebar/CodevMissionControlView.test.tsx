@@ -286,8 +286,70 @@ describe('attachMissionControlHolds', () => {
       })
     )
     expect(row?.holds).toEqual([
-      { claimId: 'c1', path: 'app/api/webhooks/route.ts', status: 'active' }
+      {
+        claimId: 'c1',
+        path: 'app/api/webhooks/route.ts',
+        status: 'active',
+        attribution: 'session',
+        shared: false
+      }
     ])
+  })
+
+  /**
+   * Managed sessions A and B share worktree W and A owns a claim. Matching W
+   * used to attach A's claim to B as well, so the panel named the wrong owner.
+   * A session id is authoritative: B has one, and the claim is not under it.
+   */
+  it('never attaches a claim to a session-bearing agent on worktree alone', () => {
+    const rows = attachMissionControlHolds(
+      [
+        agent({ key: 'managed:a', sessionId: 'a', worktreeId: 'w', branch: 'shared' }),
+        agent({ key: 'managed:b', sessionId: 'b', worktreeId: 'w', branch: 'shared' })
+      ],
+      coordination({
+        claims: [
+          {
+            id: 'c-a',
+            sessionId: 'a',
+            worktreeId: 'w',
+            branch: 'shared',
+            agentLabel: 'A',
+            path: 'a.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    expect(rows[0]?.holds.map((hold) => hold.claimId)).toEqual(['c-a'])
+    expect(rows[1]?.holds).toEqual([])
+  })
+
+  it('marks a checkout-matched hold as shared when another session-less agent fits it too', () => {
+    const rows = attachMissionControlHolds(
+      [
+        agent({ key: 'local:tab:1', origin: 'you', sessionId: null, worktreeId: 'w', branch: 'b' }),
+        agent({ key: 'local:tab:2', origin: 'you', sessionId: null, worktreeId: 'w', branch: 'b' })
+      ],
+      coordination({
+        claims: [
+          {
+            id: 'c9',
+            sessionId: 'cli-1',
+            worktreeId: 'w',
+            branch: 'b',
+            agentLabel: 'claude · b',
+            path: 'x.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    for (const row of rows) {
+      expect(row.holds).toEqual([
+        { claimId: 'c9', path: 'x.ts', status: 'active', attribution: 'checkout', shared: true }
+      ])
+    }
   })
 
   /**
@@ -313,7 +375,13 @@ describe('attachMissionControlHolds', () => {
       })
     )
     expect(row?.holds).toEqual([
-      { claimId: 'c9', path: 'apps/web/lib/auth.ts', status: 'contested' }
+      {
+        claimId: 'c9',
+        path: 'apps/web/lib/auth.ts',
+        status: 'contested',
+        attribution: 'checkout',
+        shared: false
+      }
     ])
   })
 
@@ -465,7 +533,15 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
       <CodevMissionControlView
         agents={[
           agent({
-            holds: [{ claimId: 'c1', path: 'apps/web/lib/auth.ts', status: 'contested' }]
+            holds: [
+              {
+                claimId: 'c1',
+                path: 'apps/web/lib/auth.ts',
+                status: 'contested',
+                attribution: 'session',
+                shared: false
+              }
+            ]
           })
         ]}
         coordination={coordination({
@@ -493,6 +569,40 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
     expect(html).toContain('Alice agent and Bob agent')
     expect(html).toContain('codev-mc-hold is-contested')
     expect(html).toContain('apps/web/lib/auth.ts')
+  })
+
+  it('draws a shared hold as tentative and says why', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[
+          agent({
+            key: 'local:tab:1',
+            origin: 'you',
+            sessionId: null,
+            holds: [
+              {
+                claimId: 'c1',
+                path: 'x.ts',
+                status: 'active',
+                attribution: 'checkout',
+                shared: true
+              }
+            ]
+          })
+        ]}
+        now={Date.now()}
+        openKey={null}
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('codev-mc-hold is-active is-shared')
+    expect(html).toContain('CoDev cannot tell which one holds it')
   })
 
   it('renders no holds list for an agent that has claimed nothing', () => {

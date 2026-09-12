@@ -20,6 +20,12 @@ export type MissionControlHold = {
   claimId: string
   path: string
   status: 'active' | 'contested'
+  /** How the claim was tied to this agent: its own session id, or only the
+   *  checkout (worktree or branch) it runs in. */
+  attribution: 'session' | 'checkout'
+  /** True when the checkout match also fits another agent in the same
+   *  checkout, so this row cannot be the sole holder on the evidence. */
+  shared: boolean
 }
 
 export type MissionControlAgent = {
@@ -152,12 +158,13 @@ export const EMPTY_MISSION_CONTROL_COORDINATION: MissionControlCoordination = {
 /**
  * Hang each agent's real claims off its row.
  *
- * A managed session is matched on its CoDev session id. A chat-tab agent has no
- * session id in this panel, so it is matched on its worktree, then on its
- * branch — which is the identity a CLI agent's `cli` session is keyed on when
- * the coordination MCP creates it. Nothing is matched by name or guessed: an
- * agent whose claims cannot be identified shows no holds rather than someone
- * else's.
+ * A session id is authoritative: an agent that has one gets exactly the claims
+ * filed under it, never its neighbours' claims by virtue of sharing a
+ * worktree. A chat-tab agent has no session id in this panel, so it is matched
+ * on its worktree, then on its branch — the identity a CLI agent's `cli`
+ * session is keyed on when the coordination MCP creates it. When two
+ * session-less agents share that checkout the match is ambiguous, and the hold
+ * says so instead of showing up on both as if each owned it.
  */
 export function attachMissionControlHolds(
   agents: MissionControlAgent[],
@@ -166,22 +173,42 @@ export function attachMissionControlHolds(
   if (coordination.claims.length === 0) {
     return agents
   }
+  const matchesCheckout = (
+    agent: MissionControlAgent,
+    claim: MissionControlCoordination['claims'][number]
+  ): boolean =>
+    Boolean(agent.worktreeId && claim.worktreeId === agent.worktreeId) ||
+    Boolean(agent.branch && claim.branch === agent.branch)
+  const sessionless = agents.filter((agent) => !agent.sessionId)
   return agents.map((agent) => {
-    const holds = coordination.claims
-      .filter((claim) => {
-        if (agent.sessionId && claim.sessionId === agent.sessionId) {
-          return true
+    const holds = coordination.claims.flatMap((claim): MissionControlHold[] => {
+      if (agent.sessionId) {
+        return claim.sessionId === agent.sessionId
+          ? [
+              {
+                claimId: claim.id,
+                path: claim.path,
+                status: claim.status,
+                attribution: 'session',
+                shared: false
+              }
+            ]
+          : []
+      }
+      if (!matchesCheckout(agent, claim)) {
+        return []
+      }
+      const shared = sessionless.some((other) => other !== agent && matchesCheckout(other, claim))
+      return [
+        {
+          claimId: claim.id,
+          path: claim.path,
+          status: claim.status,
+          attribution: 'checkout',
+          shared
         }
-        if (agent.worktreeId && claim.worktreeId === agent.worktreeId) {
-          return true
-        }
-        return Boolean(agent.branch) && claim.branch === agent.branch
-      })
-      .map((claim) => ({
-        claimId: claim.id,
-        path: claim.path,
-        status: claim.status
-      }))
+      ]
+    })
     return holds.length > 0 ? { ...agent, holds } : agent
   })
 }

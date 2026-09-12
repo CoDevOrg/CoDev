@@ -1052,6 +1052,17 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   background: rgba(224, 128, 92, 0.95);
 }
 
+/* A hold matched only by checkout, in a checkout several agents share: the
+   holder is uncertain, so the chip is drawn as tentative rather than owned. */
+.codev-mc-hold.is-shared {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.codev-mc-hold.is-shared > i {
+  background: rgba(237, 238, 240, 0.45);
+}
+
 .codev-mc-list {
   display: flex;
   flex-direction: column;
