@@ -67,16 +67,40 @@ block in `main.bicep` requires deleting the host first:
 
 ```bash
 az vm delete -g <rg> -n codev-runtime-host --yes
-az disk list -g <rg> --query "[].name" -o tsv | xargs -I{} az disk delete -g <rg> -n {} --yes
 ./infra/azure/deploy.sh
 ```
 
-This is why cloud-init here does as little as possible and carries nothing
-that varies between deploys. The release version travels as a VM tag instead,
-read back through IMDS, so rolling a new release forward is just a tag update
-and a restart. Treat cloud-init as the bootstrap-of-the-bootstrap: if a change
-can go in `bootstrap-host.sh`, put it there, because that one ships as a blob
-and needs no replacement.
+Both disks carry `deleteOption: Delete`, so they go with the VM. This is why
+cloud-init here does as little as possible and carries nothing that varies
+between deploys. The release version travels as a VM tag instead, read back
+through IMDS, so rolling a new release forward is just a tag update and a
+restart. Treat cloud-init as the bootstrap-of-the-bootstrap: if a change can
+go in `bootstrap-host.sh`, put it there, because that one ships as a blob and
+needs no replacement.
+
+### The bootstrap unit must hang off `cloud-init.target`
+
+The bootstrap re-runs on every boot because it is a systemd unit, and that
+unit is `WantedBy=cloud-init.target`, not `multi-user.target`. This is not a
+style choice. `cloud-init.target` is itself ordered `After=multi-user.target`,
+so a unit that multi-user wants _and_ that waits on cloud-init is an ordering
+cycle. systemd breaks cycles by deleting a job, and the job it deletes is the
+bootstrap's. The result is silent: the unit shows `enabled`, the first boot
+looks fine because `runcmd` started it by hand, and every boot after that
+skips it. A "rolled" host reboots onto whatever it already had, still tagged
+with the new release.
+
+If you change the unit, check a real reboot, not `what-if` and not the first
+boot. `journalctl -b -u codev-bootstrap.service` on the rebooted host should
+show it running; a line containing `ordering cycle` means it did not.
+
+### Rolling a host that is off
+
+The host deallocates itself after ten idle minutes, so a deploy usually finds
+it off. `deploy.sh` checks the power state: a running host is restarted, a
+deallocated one is started. Both re-run the bootstrap, and both read the new
+`ReleaseVersion` tag. `az vm restart` alone refuses a deallocated VM, which
+would make the routine deploy fail precisely when nobody is using the runtime.
 
 Note that the public IP, Key Vault, storage account and the user-assigned
 identity all survive a host replacement, so it costs a few minutes rather
