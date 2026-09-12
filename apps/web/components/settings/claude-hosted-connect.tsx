@@ -72,13 +72,14 @@ export function ClaudeHostedConnect({
 
   useEffect(() => {
     if (!activeSessionId) return;
+    const sessionId = activeSessionId;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
 
     async function poll() {
       try {
-        const response = await fetch(`${BASE}/${activeSessionId}`, {
+        const response = await fetch(`${BASE}/${sessionId}`, {
           signal: controller.signal,
         });
         const payload = (await response.json().catch(() => ({}))) as
@@ -108,7 +109,7 @@ export function ClaudeHostedConnect({
         }
         if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
           attempt.current += 1;
-          deleteSession(activeSessionId);
+          deleteSession(sessionId);
           setSubmitting(false);
           setPhase("failed");
           setError("Timed out waiting for Claude. Start again.");
