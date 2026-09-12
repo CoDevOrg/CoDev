@@ -459,6 +459,11 @@ if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
   direct_secret=""
 fi
 
+# /healthz rides on the same bearer route because on Azure this is the only
+# path from apps/web to the orchestrator: there is no API Gateway proxying
+# health checks, so a health route that the bearer matcher does not cover
+# answers 404 and the app reports the runtime degraded while it is fine.
+#
 # This block must stay byte-identical to direct_route() in
 # services/orchestrator/src/backend/orca.rs. Caddy's config is wholly replaced
 # by the orchestrator over the admin API on the first workspace change, so this
@@ -467,7 +472,7 @@ fi
 direct_route=""
 if [[ -n "${direct_secret}" ]]; then
   direct_route="  @codev_direct {
-    path /v1/*
+    path /v1/* /healthz
     header Authorization \"Bearer ${direct_secret}\"
   }
   handle @codev_direct {

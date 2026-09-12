@@ -130,6 +130,22 @@ test("Azure release roll starts a deallocated host instead of failing", () => {
   assert.doesNotMatch(azureTemplate, /__RELEASE_VERSION__/);
 });
 
+// apps/web's health check calls /healthz. On AWS that goes through API
+// Gateway; on Azure the bearer route on the host is the only way in, so it has
+// to match /healthz as well as /v1/*. The Caddyfile block is written twice, in
+// the bootstrap and in the orchestrator that later replaces it over the admin
+// API, and the two must not drift.
+test("the direct bearer route serves /healthz and both copies agree", () => {
+  const orca = read("../../services/orchestrator/src/backend/orca.rs");
+  assert.match(bootstrap, /path \/v1\/\* \/healthz/);
+  assert.match(orca, /path \/v1\/\* \/healthz/);
+  assert.equal(
+    (bootstrap.match(/path \/v1\/\*/g) ?? []).length,
+    1,
+    "bootstrap should declare the direct matcher exactly once",
+  );
+});
+
 test("deployment shell scripts parse", () => {
   for (const script of [
     "deploy.sh",

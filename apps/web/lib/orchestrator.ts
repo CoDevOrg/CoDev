@@ -8,6 +8,7 @@ import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
 import { getAwsConfiguration } from "./aws";
+import { isAzure } from "./cloud";
 import { requestHostWake } from "./host";
 import type { RepositorySnapshot } from "./github";
 
@@ -117,6 +118,13 @@ async function orchestratorRequest(
   body?: unknown,
   timeoutMs = 70_000,
 ) {
+  // On Azure there is no API Gateway or Lambda proxy to sign for: the
+  // bearer-authenticated direct path is the only path, for every call, not
+  // just the long-running exec ones. Deciding here, at the single choke
+  // point, is what lets the 30-odd exported functions stay cloud-agnostic.
+  if (isAzure()) {
+    return orchestratorDirectRequest(method, path, body, timeoutMs);
+  }
   const configuration = getOrchestratorConfiguration();
   const url = new URL(path, configuration.endpoint);
   const encodedBody = body === undefined ? undefined : JSON.stringify(body);
@@ -168,10 +176,12 @@ async function orchestratorRequest(
 }
 
 /**
- * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL), used
- * only for calls that can legitimately run longer than the API Gateway
- * Lambda proxy's hard 29-second integration timeout — currently just the
- * authenticated Codex exec. Everything else keeps using orchestratorRequest.
+ * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL). On
+ * AWS it is used only for calls that can legitimately run longer than the
+ * API Gateway Lambda proxy's hard 29-second integration timeout — currently
+ * just the authenticated Codex exec — and everything else keeps using the
+ * signed orchestratorRequest. On Azure it is the only path and every call
+ * comes through here.
  */
 async function orchestratorDirectRequest(
   method: string,
