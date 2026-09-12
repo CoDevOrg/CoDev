@@ -605,7 +605,7 @@ fn direct_route(secret: &str, api_port: u16) -> String {
         return String::new();
     }
     format!(
-        "  @codev_direct {{\n    path /v1/*\n    header Authorization \"Bearer {secret}\"\n  }}\n\
+        "  @codev_direct {{\n    path /v1/* /healthz\n    header Authorization \"Bearer {secret}\"\n  }}\n\
          \x20 handle @codev_direct {{\n    reverse_proxy 127.0.0.1:{api_port} {{\n      transport http {{\n        dial_timeout 10s\n        response_header_timeout 900s\n      }}\n    }}\n  }}\n\
          \x20 handle /v1/* {{\n    respond 401\n  }}\n"
     )
@@ -2101,7 +2101,9 @@ mod tests {
     #[test]
     fn direct_route_gates_v1_on_the_bearer_token_and_denies_otherwise() {
         let route = direct_route("deadbeefcafe0123", 8080);
-        assert!(route.contains("path /v1/*"));
+        // /healthz is on the bearer route too: on Azure the direct path is
+        // the only path, and apps/web's health check has to get through it.
+        assert!(route.contains("path /v1/* /healthz"));
         assert!(route.contains("header Authorization \"Bearer deadbeefcafe0123\""));
         assert!(route.contains("reverse_proxy 127.0.0.1:8080"));
         // Anything reaching /v1/* without the token must be refused rather

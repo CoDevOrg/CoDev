@@ -116,7 +116,33 @@ In CI this runs from
 [`.github/workflows/deploy-runtime-azure.yml`](../../.github/workflows/deploy-runtime-azure.yml)
 on pushes to `main`, authenticating through OIDC. There is no Azure client
 secret in the repository: the app registration trusts GitHub's token through a
-federated credential matched on repo and ref.
+federated credential matched on the token's subject.
+
+That subject is not the form most examples show. CoDevOrg emits
+**immutable-identifier** subject claims, so the `deploy` job (which runs in
+the `production` environment) presents
+
+```
+repo:CoDevOrg@320302482/CoDev@1315384847:environment:production
+```
+
+and a credential registered as `repo:CoDevOrg/CoDev:environment:production`
+never matches; the login fails with `AADSTS700213: No matching federated
+identity record found`. The first CI deploy failed exactly this way. Register
+the credential with the id-bearing subject:
+
+```bash
+az ad app federated-credential create --id <AZURE_CLIENT_ID> --parameters '{
+  "name": "github-production-ids",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:CoDevOrg@320302482/CoDev@1315384847:environment:production",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+```
+
+The same ids appear in [`docs/OPERATIONS.md`](../../docs/OPERATIONS.md) for
+the AWS role's trust policy; if the org or repo is ever recreated, both
+change together.
 
 Required repository variables:
 
