@@ -105,8 +105,30 @@ async function fetchCodevAwsSpend(): Promise<CodevAwsSpend> {
  * loaded repeatedly - cache the real result for an hour rather than paying
  * for a fresh query on every page view.
  */
+/**
+ * The runtime moved to Azure and the AWS account is being emptied, so the
+ * Cost Explorer call can fail for good reasons: the role is gone, the
+ * credentials are unset, or the account no longer has the tagged resources.
+ * The admin console must keep rendering either way; AWS spend simply reads
+ * as zero once there is none to report.
+ */
+async function fetchCodevAwsSpendOrZero(): Promise<CodevAwsSpend> {
+  try {
+    return await fetchCodevAwsSpend();
+  } catch (error) {
+    console.warn("AWS spend unavailable; reporting zero.", error);
+    return {
+      totalUsd: 0,
+      ec2Usd: 0,
+      overheadUsd: 0,
+      startDate: COST_TRACKING_START_DATE,
+      endDate: COST_TRACKING_START_DATE,
+    };
+  }
+}
+
 export const getRealCodevAwsSpend = unstable_cache(
-  fetchCodevAwsSpend,
+  fetchCodevAwsSpendOrZero,
   ["codev-aws-spend-v2"],
   { revalidate: 3600 },
 );
