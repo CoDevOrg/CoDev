@@ -239,8 +239,11 @@ export async function prepareRoomReply(id: string) {
         baseSha: "0".repeat(40),
         expiresAt: new Date(Date.now() + 8 * 60_000).toISOString(),
         resumeFromSnapshot: false,
+        // The orchestrator's create validation requires exactly a four-hour
+        // pause/auto-resume lifecycle. The reply sandbox is torn down in
+        // cleanup long before then, so this only satisfies the contract.
         lifecycle: {
-          timeoutMs: 10 * 60_000,
+          timeoutMs: 4 * 60 * 60_000,
           lifecycle: { onTimeout: "pause", autoResume: true },
         },
       });
