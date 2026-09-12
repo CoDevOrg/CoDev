@@ -21,7 +21,14 @@ export async function pollReplyStep(
 ) {
   "use step";
   const { pollRoomReply } = await import("@/lib/shared-chat-reply");
-  return pollRoomReply(id, sessionId, credentialId, after);
+  try {
+    return await pollRoomReply(id, sessionId, credentialId, after);
+  } catch (error) {
+    // The workflow's catch turns any failure here into the generic member
+    // message; record the real (redacted) cause for operators before rethrowing.
+    await logReplyStepError(id, "poll", error);
+    throw error;
+  }
 }
 
 export async function finishReplyStep(
@@ -31,7 +38,28 @@ export async function finishReplyStep(
 ) {
   "use step";
   const { finishCodexRoomReply } = await import("@/lib/shared-chat-reply");
-  await finishCodexRoomReply(id, output, exitCode);
+  try {
+    await finishCodexRoomReply(id, output, exitCode);
+  } catch (error) {
+    await logReplyStepError(id, "finish", error, { exitCode });
+    throw error;
+  }
+}
+
+/** Emit the real (redacted) cause of a reply-stage failure for operators. */
+async function logReplyStepError(
+  id: string,
+  stage: "poll" | "finish",
+  error: unknown,
+  extra: Record<string, number | string> = {},
+) {
+  const { logEvent } = await import("@/lib/observability");
+  logEvent("error", "room_reply_step_failed", {
+    replyId: id,
+    stage,
+    detail: error instanceof Error ? error.message : String(error),
+    ...extra,
+  });
 }
 
 export async function failReplyStep(id: string) {
