@@ -262,6 +262,12 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-checked="false"')
   })
 
+  it('hides the desktop keep-awake toggle in the web client', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'), { showDesktopOnlySettings: false })
+
+    expect(markup).not.toContain('Keep computer awake while agents are working')
+  })
+
   it('renders the agent runtime control on Windows-class hosts', () => {
     const markup = renderPane(
       {

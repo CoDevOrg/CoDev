@@ -211,6 +211,7 @@ describe('AppearancePane', () => {
       }
     })
     document.body.innerHTML = ''
+    Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
   })
 
   beforeEach(() => {
@@ -439,6 +440,14 @@ describe('AppearancePane', () => {
         appIconImage &&
         interfaceRow.compareDocumentPosition(appIconImage) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('hides the desktop app icon control in the web client', async () => {
+    Object.assign(window, { __ORCA_WEB_CLIENT__: true })
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    expect(container.querySelector('img[alt="Selected app icon"]')).toBeNull()
   })
 
   it('reveals an advanced sidebar control when its search matches, even though it is hidden by default', async () => {

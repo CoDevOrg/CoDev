@@ -1,0 +1,1 @@
+import{a as e}from"./web-index-DV36cP3T.js";export{e as useAppStore};
