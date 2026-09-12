@@ -36,6 +36,12 @@ function agentTabIdsInWorktree(worktreeId: string): string[] {
  * Returns a function to call after the launch. It waits for the replacement to
  * appear before closing anything, so a launch that fails silently cannot leave
  * the worktree with no agent at all.
+ *
+ * The close is a system 'cleanup', not a 'user' close: the embed refuses a
+ * user-close of a chat tab so a workspace always keeps one, which is exactly
+ * what silently kept every superseded agent alive. And the close is checked —
+ * a tab still standing after the call is retried on the next tick rather than
+ * assumed gone.
  */
 export function supersedeWorktreeAgentTabs(worktreeId: string): () => void {
   const previousTabIds = new Set(agentTabIdsInWorktree(worktreeId))
@@ -53,11 +59,14 @@ export function supersedeWorktreeAgentTabs(worktreeId: string): () => void {
         const state = useAppStore.getState()
         for (const id of currentIds) {
           if (previousTabIds.has(id)) {
-            state.closeTab(id, { reason: 'user' })
+            state.closeTab(id, { reason: 'cleanup' })
           }
         }
-        clearInterval(timer)
-        return
+        const leftover = agentTabIdsInWorktree(worktreeId).some((id) => previousTabIds.has(id))
+        if (!leftover) {
+          clearInterval(timer)
+          return
+        }
       }
       if (attempt >= RETIRE_SUPERSEDED_ATTEMPTS) {
         clearInterval(timer)

@@ -1,4 +1,15 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+
+/**
+ * The tab a status row belongs to, whichever pane-key form the row uses.
+ * Retained rows still carry the legacy `<tabId>:<n>` shape next to the stable
+ * `<tabId>:<leaf-uuid>` one, and every Mission Control decision — counting,
+ * de-duplicating, stepping in, stopping — has to resolve both to the same tab
+ * or the same agent shows up twice, or not at all.
+ */
+export function tabIdFromPaneKey(paneKey: string): string | null {
+  return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
+}
 
 export type MissionControlTab = {
   id: string
@@ -57,14 +68,20 @@ export function resolveLocalStatusAgent(
  * same trusted launch identity used by the native-chat resolver and the
  * workspace bootstrap. Return only tabs that do not already have a status
  * row, so the hook-backed row remains authoritative once it arrives.
+ *
+ * Only a status row that will itself render as an agent suppresses the tab.
+ * A row with no `agentType` is a plain terminal pane or a half-torn-down
+ * entry: the container drops it from the status list, so treating it as
+ * authoritative here made a real chat vanish from Mission Control entirely.
  */
 export function localAgentTabsWithoutStatus(
   tabsByWorktree: Record<string, readonly MissionControlTab[]>,
   statuses: Record<string, { agentType?: string }>
 ): { worktreeId: string; tab: MissionControlTab }[] {
   const statusTabIds = new Set(
-    Object.keys(statuses)
-      .map((paneKey) => parsePaneKey(paneKey)?.tabId)
+    Object.entries(statuses)
+      .filter(([, entry]) => Boolean(entry.agentType))
+      .map(([paneKey]) => tabIdFromPaneKey(paneKey))
       .filter((tabId): tabId is string => Boolean(tabId))
   )
 

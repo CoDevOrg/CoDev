@@ -4,6 +4,11 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  activateWebRuntimeSessionTab,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
@@ -12,9 +17,9 @@ import {
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import { planAgentStop } from '../../web/codev-agent-stop-plan'
 import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
+import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
-  CodevMissionControlView,
   distinctLocalAgentEntries,
   EMPTY_MISSION_CONTROL_COORDINATION,
   mergeMissionControlAgents,
@@ -22,12 +27,13 @@ import {
   missionControlPhaseFromStatus,
   type MissionControlAgent,
   type MissionControlCoordination
-} from './CodevMissionControlView'
+} from './codev-mission-control-model'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   localAgentTabsWithoutStatus,
   resolveLocalStatusAgent,
-  resolveLocalTabAgent
+  resolveLocalTabAgent,
+  tabIdFromPaneKey
 } from './codev-local-agent-tabs'
 
 /**
@@ -147,6 +153,18 @@ function settleOnSurvivingWorktree(removedWorktreeId: string, preferred: string[
   }
 }
 
+/** Where a chat tab currently lives, or null once it has been closed. */
+function findAgentTab(tabId: string): { tabId: string; worktreeId: string | null } | null {
+  const state = useAppStore.getState()
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+    if (tab) {
+      return { tabId: tab.id, worktreeId: tab.worktreeId || worktreeId || null }
+    }
+  }
+  return null
+}
+
 export function CodevLiveAgentsPanel(): JSX.Element | null {
   const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
   const [now, setNow] = useState(() => Date.now())
@@ -213,6 +231,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         origin: 'you' as const,
         sessionId: null,
         worktreeId: entry.worktreeId ?? null,
+        tabId: tabIdFromPaneKey(paneKey),
         // A chat-tab agent has no CoDev session id here, so its branch is the
         // only identity its `cli` coordination session shares with it.
         branch: entry.worktreeId
@@ -236,7 +255,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       typeof window !== 'undefined' && window.__CODEV_DEFAULT_AGENT__
         ? window.__CODEV_DEFAULT_AGENT__
         : 'Agent'
-    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, statuses).map(
+    // Only the rows that render above count as "has a status": a row with no
+    // agent identity was dropped from `entries`, so its tab must still show.
+    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, Object.fromEntries(entries)).map(
       ({ worktreeId, tab }): MissionControlAgent => {
         const label = providerLabel(resolveLocalTabAgent(tab, fallbackAgent))
         const title = usableTaskTitle(tab.generatedTitle ?? tab.title, label) || `${label} session`
@@ -245,6 +266,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           origin: 'you',
           sessionId: null,
           worktreeId: tab.worktreeId ?? worktreeId,
+          tabId: tab.id,
           branch: tab.worktreeId
             ? (findWorktreeById(worktreesByRepo, tab.worktreeId)?.branch ?? null)
             : (findWorktreeById(worktreesByRepo, worktreeId)?.branch ?? null),
@@ -283,6 +305,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           origin: 'managed',
           sessionId: slot.sessionId ?? null,
           worktreeId: slot.worktreeId ?? null,
+          tabId: null,
           branch: null,
           ownerName: slot.owner?.trim() || 'Teammate',
           ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
@@ -370,10 +393,45 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [agents]
   )
 
+  /**
+   * Step in lands on the agent you clicked, not merely its worktree: several
+   * agents share one checkout, and activating the worktree alone left the
+   * member in whichever chat that worktree last showed. A local agent's tab
+   * is activated in its owning worktree; a managed session, which has no tab
+   * here, still reveals its worktree.
+   */
   const handleStepIn = useCallback(
     (key: string) => {
       const agent = byKey(key)
       if (!agent) {
+        return
+      }
+      if (agent.tabId) {
+        const target = findAgentTab(agent.tabId)
+        if (!target) {
+          toast.error('This agent’s chat is no longer open', {
+            description: 'Its tab has been closed. The list refreshes on the next status update.'
+          })
+          return
+        }
+        if (target.worktreeId && target.worktreeId !== useAppStore.getState().activeWorktreeId) {
+          activateAndRevealWorktree(target.worktreeId, { revealInSidebar: true })
+        }
+        // Same steps as the tab strip: a paired host learns the selection too.
+        const state = useAppStore.getState()
+        const runtimeEnvironmentId = target.worktreeId
+          ? getRuntimeEnvironmentIdForWorktree(state, target.worktreeId)
+          : null
+        if (target.worktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+          void activateWebRuntimeSessionTab({
+            worktreeId: target.worktreeId,
+            tabId: target.tabId,
+            environmentId: runtimeEnvironmentId
+          })
+        }
+        state.setActiveTab(target.tabId)
+        state.setActiveTabType('terminal')
+        setOpenKey(null)
         return
       }
       if (agent.worktreeId) {
@@ -381,9 +439,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         setOpenKey(null)
         return
       }
-      toast.message('This agent runs in your chat tab', {
-        description: 'Open the chat tab to follow it live.'
-      })
+      toast.message('This agent has no open chat or worktree to step into.')
     },
     [byKey]
   )
@@ -464,6 +520,14 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           // 'cleanup', not 'user': the embed refuses a user-close of a chat tab
           // so a workspace always keeps one.
           useAppStore.getState().closeTab(plan.tabId, { reason: 'cleanup' })
+          // The store can decline a close without saying so. Announcing success
+          // over an agent that is still running is worse than a plain failure.
+          if (findAgentTab(plan.tabId)) {
+            toast.error('Could not stop this agent', {
+              description: 'Its chat tab did not close. Try again, or close the tab directly.'
+            })
+            return
+          }
           setOpenKey(null)
           toast.success('Agent stopped', {
             description:

@@ -1,0 +1,1 @@
+import{pv as e}from"./web-index-l9HX2lHF.js";function t(t){let n,r;return()=>((n!==e.language||r===void 0)&&(n=e.language,r=t()),r)}export{t};

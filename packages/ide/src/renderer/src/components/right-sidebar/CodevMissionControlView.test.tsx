@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
-  CodevMissionControlView,
   distinctLocalAgentEntries,
   mergeMissionControlAgents,
   missionControlContestNotice,
@@ -11,7 +11,7 @@ import {
   sortMissionControlAgents,
   type MissionControlAgent,
   type MissionControlCoordination
-} from './CodevMissionControlView'
+} from './codev-mission-control-model'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -22,6 +22,7 @@ function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
     origin: 'managed',
     sessionId: 's1',
     worktreeId: 'w1',
+    tabId: null,
     ownerName: 'Alex Morgan',
     ownerHue: 200,
     providerLabel: 'Claude',
@@ -76,6 +77,22 @@ describe('distinctLocalAgentEntries', () => {
       [`tab-one:${LEAF_A}`, { worktreeId: 'w1' }]
     ]).map(([paneKey]) => paneKey)
     expect(kept).toEqual([`tab-one:${LEAF_B}`])
+  })
+
+  it('keeps two legacy-keyed tabs in one worktree as two agents', () => {
+    const kept = distinctLocalAgentEntries([
+      ['tab-a:0', { worktreeId: 'w' }],
+      ['tab-b:0', { worktreeId: 'w' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual(['tab-a:0', 'tab-b:0'])
+  })
+
+  it('collapses a legacy row onto the stable row for the same tab', () => {
+    const kept = distinctLocalAgentEntries([
+      [`tab-a:${LEAF_A}`, { worktreeId: 'w' }],
+      ['tab-a:0', { worktreeId: 'w' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual([`tab-a:${LEAF_A}`])
   })
 
   it('falls back to worktree, then paneKey, for rows with no derivable tab', () => {
@@ -176,6 +193,49 @@ describe('CodevMissionControlView', () => {
     expect(html).toContain('codev-mc-drawer')
     expect(html).toContain('Add a test for that case')
     expect(html).toContain('co-steer turn')
+  })
+
+  it('offers to open the agent’s own chat when it has a tab, its worktree otherwise', () => {
+    const local = agent({
+      key: 'local:tab:t1',
+      origin: 'you',
+      sessionId: null,
+      worktreeId: 'w1',
+      tabId: 't1',
+      canSteer: false
+    })
+    const withTab = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[local]}
+        now={Date.now()}
+        openKey={local.key}
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(withTab).toContain('Open this chat')
+    expect(withTab).not.toContain('Open this worktree')
+
+    const managedOnly = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        steerBusy={false}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(managedOnly).toContain('Open this worktree')
   })
 
   it('shows the empty state when nothing is running', () => {
