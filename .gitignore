@@ -17,4 +17,3 @@ test-results/
 services/orchestrator/bin/
 services/orchestrator/target/
 .vercel
-.env*
