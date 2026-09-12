@@ -1,0 +1,1 @@
+import{ny as e,oy as t}from"./web-index-CxTs1bPf.js";var n=t(e());const r=(0,n.createContext)(null);function i(){let e=(0,n.useContext)(r);if(!e)throw Error(`useConfirmationDialog must be used inside ConfirmationDialogProvider`);return e}export{i as n,r as t};

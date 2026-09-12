@@ -1,33 +1,43 @@
 /* eslint-disable max-lines -- The Mission Control container keeps polling, merge, and stop actions together so the live-room lifecycle is auditable in one place. */
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  activateWebRuntimeSessionTab,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
-import { planAgentStop } from '../../web/codev-agent-stop-plan'
+import { describeAgentStopPlan, planAgentStop } from '../../web/codev-agent-stop-plan'
 import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
+import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
+import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
-  CodevMissionControlView,
   distinctLocalAgentEntries,
   EMPTY_MISSION_CONTROL_COORDINATION,
   mergeMissionControlAgents,
   missionControlPhaseFromState,
   missionControlPhaseFromStatus,
   type MissionControlAgent,
-  type MissionControlCoordination
-} from './CodevMissionControlView'
+  type MissionControlCoordination,
+  type MissionControlFeedHealth,
+  type MissionControlPendingAction,
+  type MissionControlSlotUsage
+} from './codev-mission-control-model'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   localAgentTabsWithoutStatus,
   resolveLocalStatusAgent,
-  resolveLocalTabAgent
+  resolveLocalTabAgent,
+  tabIdFromPaneKey
 } from './codev-local-agent-tabs'
 
 /**
@@ -147,6 +157,24 @@ function settleOnSurvivingWorktree(removedWorktreeId: string, preferred: string[
   }
 }
 
+/** A worktree CoDev made for an agent, as opposed to the workspace's own. */
+function isReleasableWorktree(worktreeId: string): boolean {
+  const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
+  return worktree ? isCodevAgentWorktree(worktree) : false
+}
+
+/** Where a chat tab currently lives, or null once it has been closed. */
+function findAgentTab(tabId: string): { tabId: string; worktreeId: string | null } | null {
+  const state = useAppStore.getState()
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const tab = tabs.find((candidate) => candidate.id === tabId)
+    if (tab) {
+      return { tabId: tab.id, worktreeId: tab.worktreeId || worktreeId || null }
+    }
+  }
+  return null
+}
+
 export function CodevLiveAgentsPanel(): JSX.Element | null {
   const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
   const [now, setNow] = useState(() => Date.now())
@@ -160,7 +188,20 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [viewerName, setViewerName] = useState('You')
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const [steerBusy, setSteerBusy] = useState(false)
+  // One lifecycle request per agent at a time; the drawer shows which.
+  const [pending, setPending] = useState<{
+    key: string
+    action: MissionControlPendingAction
+  } | null>(null)
+  const [slots, setSlots] = useState<MissionControlSlotUsage | null>(null)
+  // Each feed remembers its first failure after a good snapshot, so the
+  // panel can say the data is old instead of presenting it as live.
+  const [feedFailures, setFeedFailures] = useState<{
+    workboard: { at: number; message: string } | null
+    coordination: { at: number; message: string } | null
+  }>({ workboard: null, coordination: null })
+  const hadWorkboardRef = useRef(false)
+  const hadCoordinationRef = useRef(false)
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
   const tabsByWorktree = useAppStore(useShallow((state) => state.tabsByWorktree))
@@ -213,6 +254,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         origin: 'you' as const,
         sessionId: null,
         worktreeId: entry.worktreeId ?? null,
+        tabId: tabIdFromPaneKey(paneKey),
         // A chat-tab agent has no CoDev session id here, so its branch is the
         // only identity its `cli` coordination session shares with it.
         branch: entry.worktreeId
@@ -236,7 +278,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       typeof window !== 'undefined' && window.__CODEV_DEFAULT_AGENT__
         ? window.__CODEV_DEFAULT_AGENT__
         : 'Agent'
-    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, statuses).map(
+    // Only the rows that render above count as "has a status": a row with no
+    // agent identity was dropped from `entries`, so its tab must still show.
+    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, Object.fromEntries(entries)).map(
       ({ worktreeId, tab }): MissionControlAgent => {
         const label = providerLabel(resolveLocalTabAgent(tab, fallbackAgent))
         const title = usableTaskTitle(tab.generatedTitle ?? tab.title, label) || `${label} session`
@@ -245,6 +289,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           origin: 'you',
           sessionId: null,
           worktreeId: tab.worktreeId ?? worktreeId,
+          tabId: tab.id,
           branch: tab.worktreeId
             ? (findWorktreeById(worktreesByRepo, tab.worktreeId)?.branch ?? null)
             : (findWorktreeById(worktreesByRepo, worktreeId)?.branch ?? null),
@@ -276,13 +321,20 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         setViewerName(snapshot.viewer.name)
       }
       setCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
-      const rows = (snapshot?.slots ?? [])
+      const slotRows = snapshot?.slots ?? []
+      setSlots(
+        slotRows.length > 0
+          ? { used: slotRows.filter((slot) => slot.occupied).length, total: slotRows.length }
+          : null
+      )
+      const rows = slotRows
         .filter((slot) => slot.occupied && slot.sessionId)
         .map<MissionControlAgent>((slot) => ({
           key: `managed:${slot.sessionId}`,
           origin: 'managed',
           sessionId: slot.sessionId ?? null,
           worktreeId: slot.worktreeId ?? null,
+          tabId: null,
           branch: null,
           ownerName: slot.owner?.trim() || 'Teammate',
           ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
@@ -297,9 +349,19 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           holds: []
         }))
       setManaged(rows)
-    } catch {
+      hadWorkboardRef.current = true
+      setFeedFailures((current) => (current.workboard ? { ...current, workboard: null } : current))
+    } catch (error: unknown) {
       // Keep the last known managed set; local agents still render, and the
-      // interval retries on its own.
+      // interval retries on its own. But say so: rows from before the failure
+      // are not live, and a stopped agent could otherwise look running.
+      if (hadWorkboardRef.current) {
+        const message = error instanceof Error ? error.message : String(error)
+        setFeedFailures((current) => ({
+          ...current,
+          workboard: current.workboard ?? { at: Date.now(), message }
+        }))
+      }
     }
   }, [bridgeStatus])
 
@@ -314,12 +376,39 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         contests: snapshot?.contests ?? [],
         overlaps: snapshot?.overlaps ?? []
       })
-    } catch {
+      hadCoordinationRef.current = true
+      setFeedFailures((current) =>
+        current.coordination ? { ...current, coordination: null } : current
+      )
+    } catch (error: unknown) {
       // Keep the last snapshot rather than blanking the holds on one bad poll;
       // the interval retries. An older claim set is closer to the truth than
-      // asserting nobody holds anything.
+      // asserting nobody holds anything — as long as it is labelled old.
+      if (hadCoordinationRef.current) {
+        const message = error instanceof Error ? error.message : String(error)
+        setFeedFailures((current) => ({
+          ...current,
+          coordination: current.coordination ?? { at: Date.now(), message }
+        }))
+      }
     }
   }, [bridgeStatus])
+
+  const feed = useMemo<MissionControlFeedHealth>(() => {
+    const failures = [feedFailures.workboard, feedFailures.coordination].filter(
+      (entry): entry is { at: number; message: string } => entry !== null
+    )
+    if (failures.length === 0) {
+      return { staleSince: null, message: null }
+    }
+    const first = failures.reduce((oldest, entry) => (entry.at < oldest.at ? entry : oldest))
+    return { staleSince: first.at, message: first.message }
+  }, [feedFailures])
+
+  const retryFeeds = useCallback(() => {
+    void refreshManaged()
+    void refreshCoordination()
+  }, [refreshManaged, refreshCoordination])
 
   useEffect(() => {
     if (!embedded) {
@@ -349,10 +438,16 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       return
     }
     window.parent.postMessage(
-      { type: 'codev:agent-count', count: agents.length },
+      {
+        type: 'codev:agent-count',
+        count: agents.length,
+        // Slots are a different number from agents, and the top bar used to
+        // print the agent count over a slot denominator.
+        ...(slots ? { slotsUsed: slots.used, slotsTotal: slots.total } : {})
+      },
       window.location.origin
     )
-  }, [agents.length, embedded])
+  }, [agents.length, embedded, slots])
 
   const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
 
@@ -370,10 +465,74 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [agents]
   )
 
+  // An activity jump names a session; open its drawer once the row is here.
+  // Until the first workboard snapshot lands the row may simply not have
+  // arrived, so "not running" is only concluded after that.
+  const focus = useCodevSurfaceFocus('mission-control-agent')
+  useEffect(() => {
+    if (!focus) {
+      return
+    }
+    const key = `managed:${focus.target.sessionId}`
+    if (agents.some((agent) => agent.key === key)) {
+      setOpenKey(key)
+      consumeCodevSurfaceFocus(focus.id)
+      return
+    }
+    if (hadWorkboardRef.current) {
+      toast.message('That agent session is no longer running.')
+      consumeCodevSurfaceFocus(focus.id)
+    }
+  }, [agents, focus, managed])
+
+  // The confirmation the drawer shows is the plan Stop will run, not a
+  // generic promise about slots.
+  const stopDescription = useMemo(
+    () =>
+      openKey ? describeAgentStopPlan(planAgentStop(openKey, agents, isReleasableWorktree)) : null,
+    [agents, openKey]
+  )
+  const pendingAction = pending && pending.key === openKey ? pending.action : null
+
+  /**
+   * Step in lands on the agent you clicked, not merely its worktree: several
+   * agents share one checkout, and activating the worktree alone left the
+   * member in whichever chat that worktree last showed. A local agent's tab
+   * is activated in its owning worktree; a managed session, which has no tab
+   * here, still reveals its worktree.
+   */
   const handleStepIn = useCallback(
     (key: string) => {
       const agent = byKey(key)
       if (!agent) {
+        return
+      }
+      if (agent.tabId) {
+        const target = findAgentTab(agent.tabId)
+        if (!target) {
+          toast.error('This agent’s chat is no longer open', {
+            description: 'Its tab has been closed. The list refreshes on the next status update.'
+          })
+          return
+        }
+        if (target.worktreeId && target.worktreeId !== useAppStore.getState().activeWorktreeId) {
+          activateAndRevealWorktree(target.worktreeId, { revealInSidebar: true })
+        }
+        // Same steps as the tab strip: a paired host learns the selection too.
+        const state = useAppStore.getState()
+        const runtimeEnvironmentId = target.worktreeId
+          ? getRuntimeEnvironmentIdForWorktree(state, target.worktreeId)
+          : null
+        if (target.worktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+          void activateWebRuntimeSessionTab({
+            worktreeId: target.worktreeId,
+            tabId: target.tabId,
+            environmentId: runtimeEnvironmentId
+          })
+        }
+        state.setActiveTab(target.tabId)
+        state.setActiveTabType('terminal')
+        setOpenKey(null)
         return
       }
       if (agent.worktreeId) {
@@ -381,42 +540,44 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         setOpenKey(null)
         return
       }
-      toast.message('This agent runs in your chat tab', {
-        description: 'Open the chat tab to follow it live.'
-      })
+      toast.message('This agent has no open chat or worktree to step into.')
     },
     [byKey]
   )
 
+  /** Resolves true once the host queued the instruction; false keeps the draft. */
   const handleSteer = useCallback(
-    async (key: string, text: string) => {
+    async (key: string, text: string): Promise<boolean> => {
       const agent = byKey(key)
       const prompt = text.trim()
-      if (!agent?.sessionId || !prompt) {
-        return
+      if (!agent?.sessionId || !prompt || pending) {
+        return false
       }
-      setSteerBusy(true)
+      setPending({ key, action: 'steer' })
       try {
         await requestCodevBridge('agents.enqueue', { sessionId: agent.sessionId, prompt })
         toast.success(`Steer queued for ${agent.ownerName}'s agent`)
         void refreshManaged()
+        return true
       } catch (error: unknown) {
         toast.error('Could not steer this agent', {
           description: error instanceof Error ? error.message : String(error)
         })
+        return false
       } finally {
-        setSteerBusy(false)
+        setPending(null)
       }
     },
-    [byKey, refreshManaged]
+    [byKey, pending, refreshManaged]
   )
 
   const handlePause = useCallback(
     async (key: string) => {
       const agent = byKey(key)
-      if (!agent?.sessionId) {
+      if (!agent?.sessionId || pending) {
         return
       }
+      setPending({ key, action: 'pause' })
       try {
         await requestCodevBridge('agents.interrupt', { sessionId: agent.sessionId })
         toast.success('Asked the agent to pause after this step')
@@ -425,9 +586,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         toast.error('Could not pause this agent', {
           description: error instanceof Error ? error.message : String(error)
         })
+      } finally {
+        setPending(null)
       }
     },
-    [byKey, refreshManaged]
+    [byKey, pending, refreshManaged]
   )
 
   /**
@@ -440,10 +603,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
    */
   const handleStop = useCallback(
     async (key: string) => {
-      const plan = planAgentStop(key, agents, (worktreeId) => {
-        const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
-        return worktree ? isCodevAgentWorktree(worktree) : false
-      })
+      if (pending) {
+        return
+      }
+      const plan = planAgentStop(key, agents, isReleasableWorktree)
+      setPending({ key, action: 'stop' })
       try {
         if (plan.kind === 'discard-session') {
           const result = await requestCodevBridge<{ status?: string }>('agents.discard', {
@@ -464,6 +628,14 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           // 'cleanup', not 'user': the embed refuses a user-close of a chat tab
           // so a workspace always keeps one.
           useAppStore.getState().closeTab(plan.tabId, { reason: 'cleanup' })
+          // The store can decline a close without saying so. Announcing success
+          // over an agent that is still running is worse than a plain failure.
+          if (findAgentTab(plan.tabId)) {
+            toast.error('Could not stop this agent', {
+              description: 'Its chat tab did not close. Try again, or close the tab directly.'
+            })
+            return
+          }
           setOpenKey(null)
           toast.success('Agent stopped', {
             description:
@@ -492,9 +664,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         toast.error('Could not stop this agent', {
           description: error instanceof Error ? error.message : String(error)
         })
+      } finally {
+        setPending(null)
       }
     },
-    [agents, refreshManaged]
+    [agents, pending, refreshManaged]
   )
 
   if (!embedded) {
@@ -510,7 +684,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         coordination={coordination}
         now={now}
         openKey={openKey}
-        steerBusy={steerBusy}
+        pendingAction={pendingAction}
+        slots={slots}
+        feed={feed}
+        stopDescription={stopDescription}
+        onRetryFeed={retryFeeds}
         onOpen={setOpenKey}
         onClose={() => setOpenKey(null)}
         onStepIn={handleStepIn}

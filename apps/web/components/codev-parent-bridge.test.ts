@@ -1387,6 +1387,43 @@ describe("codev parent bridge", () => {
     );
   });
 
+  it("pages older channel history with the server's before cursor", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const channelId = "3c1c4f2a-8d5e-4a7b-9c1d-2e3f4a5b6c7d";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ messages: [{ id: "m0" }] }));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-older",
+          method: "team.messages",
+          params: {
+            channelId,
+            before: "2026-09-12T07:00:00.000Z",
+            limit: 60,
+          },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { messages: [{ id: "m0" }] },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      `/api/workspaces/workspace-1/channels/${channelId}/messages?before=2026-09-12T07%3A00%3A00.000Z&limit=60`,
+      { cache: "no-store" },
+    );
+  });
+
   it("rejects team message calls without a valid channel id", async () => {
     const connected = replyToCodevBridgeMessage(
       EMPTY_CODEV_PARENT_BRIDGE_SESSION,

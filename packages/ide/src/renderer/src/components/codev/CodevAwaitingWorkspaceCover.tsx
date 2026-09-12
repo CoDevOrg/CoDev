@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { retryCodevProjectBootstrap } from '@/web/codev-project-bootstrap'
 import { failedCodevWorktreeCreationError } from '@/web/codev-default-chat-tab'
-import { useCodevHostState } from '@/web/codev-host-state'
+import { requestCodevHostRetry, useCodevHostState } from '@/web/codev-host-state'
 
 /** How long the plain loading state holds before offering a manual retry, once
  *  the machine is up. Well past a warm handoff (repo registering, agent
@@ -54,7 +54,27 @@ export function CodevAwaitingWorkspaceCover(): React.JSX.Element {
   }, [cycle, hostStarting])
 
   if (creationError) {
-    return <AwaitingWorkspaceNotice message={creationError} onRetry={() => setCycle((c) => c + 1)} />
+    return (
+      <AwaitingWorkspaceNotice message={creationError} onRetry={() => setCycle((c) => c + 1)} />
+    )
+  }
+
+  // The parent's poll is failing, not merely waiting: say what it hit and
+  // offer the one thing that helps, restarting that poll. Without this an
+  // unreachable runtime looked identical to a slow cold boot forever.
+  if (hostStarting && hostState?.slow && hostState.failure) {
+    const { message, attempts } = hostState.failure
+    return (
+      <AwaitingWorkspaceNotice
+        message={translate(
+          'components.codev.awaitingWorkspace.hostFailing',
+          'CoDev cannot reach your workspace’s machine. The last {{attempts}} attempts failed: {{message}}. It keeps retrying on its own.',
+          { attempts: String(attempts), message }
+        )}
+        retryLabel={translate('components.codev.awaitingWorkspace.retryConnect', 'Retry now')}
+        onRetry={requestCodevHostRetry}
+      />
+    )
   }
 
   if (hostStarting) {
@@ -92,10 +112,14 @@ export function CodevAwaitingWorkspaceCover(): React.JSX.Element {
 
 function AwaitingWorkspaceNotice({
   message,
-  onRetry
+  onRetry,
+  retryLabel
 }: {
   message: string
+  /** Given a label, the button runs only `onRetry`; without one it re-runs
+   *  the project handoff, which is the right recovery once the host is up. */
   onRetry?: () => void
+  retryLabel?: string
 }): React.JSX.Element {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
@@ -106,11 +130,13 @@ function AwaitingWorkspaceNotice({
           variant="outline"
           size="sm"
           onClick={() => {
-            retryCodevProjectBootstrap()
+            if (!retryLabel) {
+              retryCodevProjectBootstrap()
+            }
             onRetry()
           }}
         >
-          {translate('components.codev.awaitingWorkspace.retry', 'Try again')}
+          {retryLabel ?? translate('components.codev.awaitingWorkspace.retry', 'Try again')}
         </Button>
       ) : null}
     </div>

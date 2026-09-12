@@ -458,6 +458,26 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   letter-spacing: -0.01em;
 }
 
+.codev-mc-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Agents and worktree slots are two different numbers (WUI-07); a dot keeps
+   them from reading as one when they sit side by side. */
+.codev-mc-counts .is-slots::before {
+  content: "·";
+  opacity: 0.4;
+  font-weight: 400;
+}
+
+.codev-agents-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
 .codev-agents-count strong {
   font-size: 17px;
   font-weight: 650;
@@ -1050,6 +1070,17 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-hold.is-contested > i {
   background: rgba(224, 128, 92, 0.95);
+}
+
+/* A hold matched only by checkout, in a checkout several agents share: the
+   holder is uncertain, so the chip is drawn as tentative rather than owned. */
+.codev-mc-hold.is-shared {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.codev-mc-hold.is-shared > i {
+  background: rgba(237, 238, 240, 0.45);
 }
 
 .codev-mc-list {

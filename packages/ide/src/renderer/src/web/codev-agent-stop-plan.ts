@@ -1,11 +1,13 @@
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-
 /** The Mission Control fields the stop decision actually reads. */
 export type StoppableAgent = {
   key: string
   origin: 'you' | 'managed'
   sessionId: string | null
   worktreeId: string | null
+  /** The chat tab a local agent runs in, resolved by the container from the
+   *  status row's pane key (stable or legacy form) or from the tab itself for
+   *  a chat that has no status row yet. `null` for a managed session. */
+  tabId: string | null
 }
 
 export type AgentStopPlan =
@@ -17,8 +19,6 @@ export type AgentStopPlan =
   | { kind: 'release-worktree'; worktreeId: string; survivorWorktreeIds: string[] }
   | { kind: 'unsupported' }
 
-const LOCAL_KEY_PREFIX = 'local:'
-
 /**
  * Stopping an agent must not stop its neighbours, and must not take the
  * workspace with it. A fresh or reopened chat runs in the worktree its
@@ -26,6 +26,11 @@ const LOCAL_KEY_PREFIX = 'local:'
  * workspace with no repository has no agent worktree at all, only its own root.
  * So the checkout is released for exactly one agent: the last one out of a
  * worktree CoDev created to isolate it.
+ *
+ * The tab to close comes from the agent row, never from re-parsing its key:
+ * a chat with no status row is keyed `local:tab:<tabId>`, which parsed as a
+ * pane key whose tab was literally `tab` — so the stop either did nothing or
+ * announced success while the real agent kept running.
  */
 export function planAgentStop(
   key: string,
@@ -39,10 +44,7 @@ export function planAgentStop(
   if (agent.origin === 'managed' && agent.sessionId) {
     return { kind: 'discard-session', sessionId: agent.sessionId }
   }
-  const paneKey = key.startsWith(LOCAL_KEY_PREFIX) ? key.slice(LOCAL_KEY_PREFIX.length) : null
-  const tabId = paneKey
-    ? (parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null)
-    : null
+  const tabId = agent.tabId
   if (!agent.worktreeId) {
     return tabId ? { kind: 'close-tab', tabId, siblingCount: 0 } : { kind: 'unsupported' }
   }
@@ -60,4 +62,51 @@ export function planAgentStop(
   return tabId
     ? { kind: 'close-tab', tabId, siblingCount: siblings.length }
     : { kind: 'unsupported' }
+}
+
+/**
+ * What the Stop confirmation should say, from the plan it will actually run.
+ * The drawer used to promise "Stop and free the slot" for every agent, while
+ * most stop plans close one tab and leave the checkout — and its slot —
+ * exactly as they were.
+ */
+export function describeAgentStopPlan(plan: AgentStopPlan): {
+  allowed: boolean
+  button: string
+  detail: string
+} {
+  switch (plan.kind) {
+    case 'release-worktree':
+      return {
+        allowed: true,
+        button: 'Stop and free the slot',
+        detail:
+          'Ends this agent and releases its worktree, which frees a slot. The branch it worked on is kept.'
+      }
+    case 'discard-session':
+      return {
+        allowed: true,
+        button: 'Stop agent',
+        detail:
+          'Ends this managed session. Its slot is freed unless other agents share its worktree; the branch is kept either way.'
+      }
+    case 'close-tab':
+      return {
+        allowed: true,
+        button: 'Stop agent',
+        detail:
+          plan.siblingCount === 0
+            ? "Ends this agent. Its checkout is the workspace's own, so it stays and no slot is freed. The branch is kept."
+            : plan.siblingCount === 1
+              ? 'Ends this agent only. The worktree stays for the other agent in it, so no slot is freed. The branch is kept.'
+              : `Ends this agent only. The worktree stays for the other ${plan.siblingCount} agents in it, so no slot is freed. The branch is kept.`
+      }
+    case 'unsupported':
+    default:
+      return {
+        allowed: false,
+        button: 'Stop agent',
+        detail: 'This agent cannot be stopped from here.'
+      }
+  }
 }

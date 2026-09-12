@@ -1128,7 +1128,21 @@ export async function executeCodevBridgeRequest(
       }
       const messagesUrl = `/api/workspaces/${workspaceId}/channels/${channelId}/messages`;
       if (request.method === "team.messages") {
-        const response = await fetcher(messagesUrl, { cache: "no-store" });
+        // Older history is paged with the server's `before` cursor (the
+        // oldest loaded message's timestamp). Without it the IDE could only
+        // ever see the latest page.
+        const query = new URLSearchParams();
+        const before = request.params?.before;
+        if (typeof before === "string" && !Number.isNaN(Date.parse(before))) {
+          query.set("before", before);
+        }
+        const limit = request.params?.limit;
+        if (typeof limit === "number" && Number.isInteger(limit) && limit > 0) {
+          query.set("limit", String(Math.min(limit, 200)));
+        }
+        const pagedUrl =
+          query.size > 0 ? `${messagesUrl}?${query}` : messagesUrl;
+        const response = await fetcher(pagedUrl, { cache: "no-store" });
         const payload = await readJson(response);
         if (!response.ok) {
           return fail(jsonError(payload, "CoDev could not load messages."));

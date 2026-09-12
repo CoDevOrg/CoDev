@@ -72,6 +72,21 @@ const HOST_STATE_REPORT_MS = 2_000;
  * retried silently.
  */
 const ACTIONABLE_CONNECT_STATUSES = new Set([401, 403, 404, 429]);
+/**
+ * Bound on a single connect request. Without one, a request that never
+ * settled kept the starting state up forever with nothing to report.
+ */
+const CONNECT_REQUEST_TIMEOUT_MS = 20_000;
+/**
+ * Consecutive genuine failures - not "still starting" answers - before the
+ * waiting copy names the failure instead of describing a normal boot.
+ */
+const CONNECT_FAILURE_NOTICE_ATTEMPTS = 3;
+/**
+ * After this long of nothing but failures, waiting will not help: the wait
+ * becomes the error screen, with the last reason and a Retry.
+ */
+const CONNECT_FAILURE_ESCALATE_MS = 6 * 60_000;
 const ORCA_THEME_OVERRIDE_HREF = "/orca-theme-overrides.css";
 const CODEV_EMPTY_STATE_LOGO_SRC = "/brand/codev-mark-v3.png";
 /** The embedded IDE bundle. Served from this origin, so it is known and
@@ -100,7 +115,13 @@ type CodevOrcaMessage =
   | { type: "codev:project-ready" }
   | { type: "codev:project-error"; message?: string }
   | { type: "codev:startup-failure"; step?: string | null; message?: string }
-  | { type: "codev:agent-count"; count?: number }
+  | {
+      type: "codev:agent-count";
+      count?: number;
+      slotsUsed?: number;
+      slotsTotal?: number;
+    }
+  | { type: "codev:retry-connect" }
   | {
       type: "codev:discard-proposal";
       requestId: string;
@@ -672,20 +693,41 @@ export function WorkspaceTopBar({
   workspaceId,
   canInvite,
   liveAgentCount = null,
+  slotsUsed = null,
+  slotsTotal = MAX_PARALLEL_AGENT_SESSIONS,
   isStarting = false,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  /** Agents running, every chat tab and managed session counted. */
   liveAgentCount?: number | null;
+  /** Worktree slots in use. Not the same number: several agents share one
+   *  checkout, and a chat in the workspace's own checkout holds no slot. The
+   *  bar used to print the agent count over the slot denominator. */
+  slotsUsed?: number | null;
+  slotsTotal?: number;
   isStarting?: boolean;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
+  const agentsText =
+    liveAgentCount == null
+      ? null
+      : `${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} live`;
+  const slotsText =
+    slotsUsed == null ? null : `${slotsUsed} of ${slotsTotal} slots`;
   const liveLabel = isStarting
     ? "Starting workspace…"
-    : liveAgentCount == null
-      ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
-      : `${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} agents live`;
+    : agentsText == null
+      ? `${slotsTotal} agent worktree slots`
+      : slotsText
+        ? `${agentsText} · ${slotsText}`
+        : agentsText;
+  const liveAriaLabel = isStarting
+    ? "Workspace is starting"
+    : agentsText == null
+      ? `Agent worktree capacity: ${slotsTotal} slots`
+      : `Active agents: ${liveAgentCount} live${slotsText ? `; worktree slots: ${slotsUsed} of ${slotsTotal} in use` : ""}`;
 
   return (
     <header className="workspace-topbar">
@@ -716,13 +758,7 @@ export function WorkspaceTopBar({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          aria-label={
-            isStarting
-              ? "Workspace is starting"
-              : liveAgentCount == null
-                ? `Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`
-                : `Active agents: ${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} live`
-          }
+          aria-label={liveAriaLabel}
         >
           {liveLabel}
         </span>
@@ -757,6 +793,7 @@ function WorkspaceChrome({
   workspaceId,
   canInvite,
   embeddedAgentCount = null,
+  embeddedSlots = null,
   isStarting = false,
   children,
 }: {
@@ -767,6 +804,8 @@ function WorkspaceChrome({
    *  one. It sees this client's own chat-tab agents, which the server-side
    *  workboard never registers, so it is the more complete of the two. */
   embeddedAgentCount?: number | null;
+  /** Worktree slots in use, as the embedded IDE read them off the workboard. */
+  embeddedSlots?: { used: number; total: number } | null;
   isStarting?: boolean;
   children: ReactNode;
 }) {
@@ -777,6 +816,8 @@ function WorkspaceChrome({
       <WorkspaceTopBar
         canInvite={canInvite}
         liveAgentCount={embeddedAgentCount ?? activity?.occupied ?? null}
+        slotsUsed={embeddedSlots?.used ?? activity?.occupied ?? null}
+        slotsTotal={embeddedSlots?.total ?? MAX_PARALLEL_AGENT_SESSIONS}
         isStarting={isStarting}
         repository={repository}
         workspaceId={workspaceId}
@@ -828,6 +869,19 @@ export function OrcaWorkspace({
   const [embeddedAgentCount, setEmbeddedAgentCount] = useState<number | null>(
     null,
   );
+  const [embeddedSlots, setEmbeddedSlots] = useState<{
+    used: number;
+    total: number;
+  } | null>(null);
+  // The connect poll's last genuine failure and how many in a row. A 202
+  // ("still starting") is not a failure and clears it.
+  const [connectFailure, setConnectFailure] = useState<{
+    message: string;
+    attempts: number;
+  } | null>(null);
+  const connectFailureRef = useRef(connectFailure);
+  // The embed can ask for a fresh connect poll; `retry` is defined below.
+  const retryRef = useRef<() => void>(() => undefined);
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
@@ -887,12 +941,18 @@ export function OrcaWorkspace({
   useEffect(() => {
     connectionPhaseRef.current = connection.phase;
     slowStartRef.current = isSlowStart;
-  }, [connection.phase, isSlowStart]);
+    connectFailureRef.current = connectFailure;
+  }, [connection.phase, isSlowStart, connectFailure]);
 
   const reportHostState = useCallback(
     (phase: "starting" | "ready", slow: boolean) => {
       iframeRef.current?.contentWindow?.postMessage(
-        { type: "codev:host-state", phase, slow },
+        {
+          type: "codev:host-state",
+          phase,
+          slow,
+          failure: phase === "starting" ? connectFailureRef.current : null,
+        },
         window.location.origin,
       );
     },
@@ -1025,6 +1085,21 @@ export function OrcaWorkspace({
         if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
           setEmbeddedAgentCount(count);
         }
+        const { slotsUsed, slotsTotal } = event.data;
+        if (
+          typeof slotsUsed === "number" &&
+          typeof slotsTotal === "number" &&
+          Number.isFinite(slotsUsed) &&
+          Number.isFinite(slotsTotal) &&
+          slotsTotal > 0 &&
+          slotsUsed >= 0
+        ) {
+          setEmbeddedSlots({ used: slotsUsed, total: slotsTotal });
+        }
+      } else if (event.data.type === "codev:retry-connect") {
+        // The embedded cover offers "Retry now" when this page reports the
+        // runtime as unreachable; the poll is ours to restart.
+        retryRef.current();
       } else if (event.data.type === "codev:startup-failure") {
         // The embedded IDE has no telemetry channel of its own, so its startup
         // faults reach the outside world only through here.
@@ -1072,7 +1147,13 @@ export function OrcaWorkspace({
       HOST_STATE_REPORT_MS,
     );
     return () => clearInterval(timer);
-  }, [connection.phase, isSlowStart, reportHostState, iframeKey]);
+  }, [
+    connection.phase,
+    isSlowStart,
+    connectFailure,
+    reportHostState,
+    iframeKey,
+  ]);
 
   // Re-hand the pairing whenever we newly have one (the poll may resolve after
   // the iframe has already loaded, so `onLoad` alone is not enough).
@@ -1087,11 +1168,16 @@ export function OrcaWorkspace({
     setIsSlowStart(false);
     setShellReady(false);
     pendingPairRef.current = null;
+    connectFailureRef.current = null;
+    setConnectFailure(null);
     setIsOpeningProject(false);
     setIframeKey((current) => current + 1);
     setConnection({ phase: "connecting" });
     setAttempt((current) => current + 1);
   }, []);
+  useEffect(() => {
+    retryRef.current = retry;
+  }, [retry]);
 
   /**
    * Hold the IDE session open while this tab is actually being looked at.
@@ -1169,17 +1255,53 @@ export function OrcaWorkspace({
      * they can actually act on (sign in, ask for access, missing workspace,
      * quota) become an error screen.
      */
-    function waitAndRetry() {
+    /**
+     * `failure` names a genuine failure (a 5xx, a malformed answer, a dropped
+     * or timed-out request); a plain "still starting" answer passes nothing
+     * and clears any earlier failure. Failures are counted so the waiting
+     * copy can name them, and after long enough with nothing else they stop
+     * being a wait at all.
+     */
+    function waitAndRetry(failure?: string) {
+      if (failure) {
+        const attempts = (connectFailureRef.current?.attempts ?? 0) + 1;
+        const since = waitingSinceRef.current;
+        if (
+          attempts >= CONNECT_FAILURE_NOTICE_ATTEMPTS &&
+          since !== null &&
+          Date.now() - since >= CONNECT_FAILURE_ESCALATE_MS
+        ) {
+          setConnection({
+            phase: "error",
+            message: `The workspace runtime could not be reached after ${attempts} attempts. Last failure: ${failure}.`,
+          });
+          return;
+        }
+        const next = { message: failure, attempts };
+        connectFailureRef.current = next;
+        setConnectFailure(next);
+      } else if (connectFailureRef.current) {
+        connectFailureRef.current = null;
+        setConnectFailure(null);
+      }
       setConnection({ phase: "host-starting" });
       retryTimer = setTimeout(() => {
         setAttempt((current) => current + 1);
       }, HOST_STARTING_RETRY_MS);
     }
 
+    let controller: AbortController | null = null;
+
     async function connect() {
+      controller = new AbortController();
+      const requestTimer = setTimeout(
+        () => controller?.abort(),
+        CONNECT_REQUEST_TIMEOUT_MS,
+      );
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/orca`, {
           method: "POST",
+          signal: controller.signal,
         });
         const payload = (await response
           .json()
@@ -1199,15 +1321,23 @@ export function OrcaWorkspace({
           });
           return;
         }
-        if (!response.ok || !payload?.pairingCode || !payload.webClientPath) {
-          waitAndRetry();
+        if (!response.ok) {
+          waitAndRetry(
+            `the runtime answered ${response.status}${payload?.error ? ` (${payload.error})` : ""}`,
+          );
+          return;
+        }
+        if (!payload?.pairingCode || !payload.webClientPath) {
+          waitAndRetry("the runtime answered without a pairing offer");
           return;
         }
         const workspacePath = payload.workspacePath;
         if (!workspacePath) {
-          waitAndRetry();
+          waitAndRetry("the runtime answered without a workspace path");
           return;
         }
+        connectFailureRef.current = null;
+        setConnectFailure(null);
         // The iframe is already running the pending shell — hand it the
         // pairing rather than reloading it. `deliverPairing` fires from the
         // effect keyed on this phase change (and again from `onLoad`).
@@ -1218,16 +1348,25 @@ export function OrcaWorkspace({
         };
         setIsOpeningProject(true);
         setConnection({ phase: "ready" });
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          waitAndRetry();
+          waitAndRetry(
+            controller?.signal.aborted
+              ? `no answer within ${CONNECT_REQUEST_TIMEOUT_MS / 1000}s`
+              : error instanceof Error && error.message
+                ? `the request failed (${error.message})`
+                : "the request failed",
+          );
         }
+      } finally {
+        clearTimeout(requestTimer);
       }
     }
 
     void connect();
     return () => {
       cancelled = true;
+      controller?.abort();
       if (retryTimer) {
         clearTimeout(retryTimer);
       }
@@ -1261,11 +1400,17 @@ export function OrcaWorkspace({
   // skeleton covers it until `codev:shell-ready`; after that a small pill in
   // the corner reports host-wake / project-open progress non-blockingly.
   const hostReady = connection.phase === "ready";
+  // Only a persistent failure is worth naming; one dropped request is noise.
+  const failureNotice =
+    connectFailure && connectFailure.attempts >= CONNECT_FAILURE_NOTICE_ATTEMPTS
+      ? `Still can’t reach the workspace — ${connectFailure.message} (attempt ${connectFailure.attempts}). Retrying…`
+      : null;
   return (
     <WorkspaceChrome
       canInvite={canInvite}
       isStarting={!hostReady || isOpeningProject}
       embeddedAgentCount={embeddedAgentCount}
+      embeddedSlots={embeddedSlots}
       repository={repository}
       workspaceId={workspaceId}
     >
@@ -1303,23 +1448,29 @@ export function OrcaWorkspace({
               <div className="workspace-boot-rail workspace-boot-rail-right" />
             </div>
             <p className="workspace-boot-note">
-              {isSlowStart
-                ? "Still starting — this one is taking longer than usual. It will open on its own."
-                : repository
-                  ? `Starting ${repository}…`
-                  : "Starting your workspace…"}
+              {failureNotice
+                ? failureNotice
+                : isSlowStart
+                  ? "Still starting — this one is taking longer than usual. It will open on its own."
+                  : repository
+                    ? `Starting ${repository}…`
+                    : "Starting your workspace…"}
             </p>
           </div>
         )}
         {shellReady && !hostReady ? (
           <div className="workspace-boot-pill" role="status">
-            <span className="workspace-boot-pill-dot" />
-            {isSlowStart
-              ? "Still starting the workspace…"
-              : repository
-                ? `Starting ${repository}…`
-                : "Starting your workspace…"}
-            {isSlowStart ? (
+            <span
+              className={`workspace-boot-pill-dot${failureNotice ? " is-failing" : ""}`}
+            />
+            {failureNotice
+              ? failureNotice
+              : isSlowStart
+                ? "Still starting the workspace…"
+                : repository
+                  ? `Starting ${repository}…`
+                  : "Starting your workspace…"}
+            {isSlowStart || failureNotice ? (
               <button
                 type="button"
                 className="workspace-boot-pill-retry"

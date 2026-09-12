@@ -2,10 +2,25 @@ import { describe, expect, it } from 'vitest'
 import {
   localAgentTabsWithoutStatus,
   resolveLocalStatusAgent,
-  resolveLocalTabAgent
+  resolveLocalTabAgent,
+  tabIdFromPaneKey
 } from './codev-local-agent-tabs'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
+describe('tabIdFromPaneKey', () => {
+  it('resolves both the stable and the legacy pane-key forms to their tab', () => {
+    expect(tabIdFromPaneKey(`tab-1:${LEAF}`)).toBe('tab-1')
+    expect(tabIdFromPaneKey('tab-1:0')).toBe('tab-1')
+    expect(tabIdFromPaneKey(`${LEAF}:${LEAF}`)).toBe(LEAF)
+  })
+
+  it('returns null for anything that is not a pane key', () => {
+    expect(tabIdFromPaneKey('tab:tab-1')).toBeNull()
+    expect(tabIdFromPaneKey('not-a-pane-key')).toBeNull()
+    expect(tabIdFromPaneKey('')).toBeNull()
+  })
+})
 
 describe('localAgentTabsWithoutStatus', () => {
   it('counts a launched chat tab before its provider emits status', () => {
@@ -42,6 +57,30 @@ describe('localAgentTabsWithoutStatus', () => {
     )
 
     expect(result).toHaveLength(1)
+  })
+
+  it('treats a retained legacy status key as that tab’s status row', () => {
+    const result = localAgentTabsWithoutStatus(
+      { w1: [{ id: 'tab-a', worktreeId: 'w1', viewMode: 'chat' }] },
+      { 'tab-a:0': { agentType: 'claude' } }
+    )
+
+    expect(result).toEqual([])
+  })
+
+  /**
+   * The container renders a status row only when it has an agent identity.
+   * A row without one must not also hide the chat tab it belongs to, or the
+   * agent disappears from Mission Control altogether.
+   */
+  it('keeps a chat tab whose only status row would not render as an agent', () => {
+    const result = localAgentTabsWithoutStatus(
+      { w1: [{ id: 'tab-a', worktreeId: 'w1', viewMode: 'chat' }] },
+      { [`tab-a:${LEAF}`]: {} }
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0]?.tab.id).toBe('tab-a')
   })
 })
 
