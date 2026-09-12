@@ -58,6 +58,30 @@ The script keeps its `infra/aws/` path because moving it would touch
 `deploy.sh`, `package.json`, a contents-asserting test, and the workflow path
 filters — all on the live AWS deploy path, for a rename.
 
+## Changing cloud-init means replacing the VM
+
+`osProfile.customData` is immutable on an existing Azure VM — a deployment
+carrying a different value is rejected with `PropertyChangeNotAllowed`, where
+EC2 UserData can simply be updated in place. So any edit to the cloud-init
+block in `main.bicep` requires deleting the host first:
+
+```bash
+az vm delete -g <rg> -n codev-runtime-host --yes
+az disk list -g <rg> --query "[].name" -o tsv | xargs -I{} az disk delete -g <rg> -n {} --yes
+./infra/azure/deploy.sh
+```
+
+This is why cloud-init here does as little as possible and carries nothing
+that varies between deploys. The release version travels as a VM tag instead,
+read back through IMDS, so rolling a new release forward is just a tag update
+and a restart. Treat cloud-init as the bootstrap-of-the-bootstrap: if a change
+can go in `bootstrap-host.sh`, put it there, because that one ships as a blob
+and needs no replacement.
+
+Note that the public IP, Key Vault, storage account and the user-assigned
+identity all survive a host replacement, so it costs a few minutes rather
+than a reconfiguration.
+
 ## Deploying
 
 ```bash

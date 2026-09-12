@@ -18,6 +18,9 @@ readonly subscription_id="${AZURE_SUBSCRIPTION_ID:-$(az account show --query id 
 # Nested virtualization is not optional: Firecracker needs /dev/kvm, and a
 # size without it produces a host that provisions cleanly and then cannot
 # start a single microVM. Verified working on Standard_D2s_v7.
+# Must match main.bicep's namePrefix parameter: every resource name below is
+# derived from it, so a mismatch silently targets a host that does not exist.
+readonly name_prefix="${CODEV_NAME_PREFIX:-codev-runtime}"
 readonly vm_size="${CODEV_AZURE_VM_SIZE:-Standard_D2s_v7}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-64}"
@@ -82,7 +85,7 @@ fi
 # here would break every long-running call until someone noticed. Hex keeps it
 # alphanumeric, which the Caddyfile emitters require.
 existing_secret="$(az keyvault secret show \
-  --vault-name codev-runtime-kv --name orchestrator-direct-secret \
+  --vault-name "${name_prefix}-kv" --name orchestrator-direct-secret \
   --query value -o tsv 2>/dev/null || true)"
 if [[ -n "${existing_secret}" ]]; then
   direct_secret="${existing_secret}"
@@ -91,12 +94,23 @@ else
 fi
 readonly direct_secret
 
+# Whether the host already exists decides if it needs restarting later. A VM
+# the stack is about to create boots with the right tag on its own; one that
+# is already running read its tag at its last boot and has to be rolled.
+host_existed=false
+if az vm show --resource-group "${resource_group}" --name "${name_prefix}-host" \
+  --query id -o tsv >/dev/null 2>&1; then
+  host_existed=true
+fi
+readonly host_existed
+
 echo "==> Applying infra/azure/main.bicep to ${resource_group}"
 az deployment group create \
   --resource-group "${resource_group}" \
   --name "codev-runtime-${release_version}" \
   --template-file "${repo_root}/infra/azure/main.bicep" \
   --parameters \
+    namePrefix="${name_prefix}" \
     location="${location}" \
     hostVmSize="${vm_size}" \
     hostVolumeSizeGiB="${host_volume_size_gib}" \
@@ -141,23 +155,32 @@ az storage container create \
   --auth-mode login --only-show-errors >/dev/null || true
 
 # ---------------------------------------------------------------------------
-# Roll the host onto the new release
+# Roll an existing host onto the new release
 #
-# The stack above updated the VM's ReleaseVersion tag, but a running host
-# read its tag at boot and is still on the old one. cloud-init's runcmd fires
-# only on a VM's first boot, so the bootstrap is a systemd unit instead and a
-# restart is what re-runs it. This is the Azure equivalent of CloudFormation
-# replacing the EC2 instance on a UserData change, minus the replacement.
+# An already-running host read its ReleaseVersion tag at its last boot, so the
+# tag the stack just updated means nothing to it until it restarts; the
+# bootstrap is a systemd unit precisely so a restart re-runs it. This is the
+# Azure equivalent of CloudFormation replacing the EC2 instance on a UserData
+# change, minus the replacement.
 #
-# Deliberately after the upload: a host that reboots into a release prefix
-# that is still half-uploaded fails its bootstrap.
+# A host this run just created is skipped, and that is not an optimisation: it
+# is already booting, already on the right tag, and already partway through
+# its bootstrap. Restarting it SIGTERMs that bootstrap halfway through
+# installing Firecracker.
+#
+# Either way this comes after the upload, so a host can never reboot into a
+# release prefix that is still half-written.
 # ---------------------------------------------------------------------------
 
-echo "==> Restarting the host onto ${release_version}"
-az vm restart \
-  --resource-group "${resource_group}" \
-  --name codev-runtime-host \
-  --only-show-errors --output none
+if [[ "${host_existed}" == "true" ]]; then
+  echo "==> Restarting the existing host onto ${release_version}"
+  az vm restart \
+    --resource-group "${resource_group}" \
+    --name "${name_prefix}-host" \
+    --only-show-errors --output none
+else
+  echo "==> Host was created by this deploy; it is already bootstrapping ${release_version}"
+fi
 
 # ---------------------------------------------------------------------------
 # Report

@@ -2017,6 +2017,20 @@ impl ClaudeSetupOutput {
         {
             self.authorize_url = Some(match_.as_str().to_owned());
         }
+        // `claude auth login` does not exit when it rejects a code: it prints
+        // an error and waits at a "Press Enter to retry" prompt. Nothing else
+        // sets `failure` until the process ends, so without this the session
+        // sat Pending until the start timeout and the member was told nothing
+        // about what went wrong. Catching it here turns a silent wait into an
+        // immediate, actionable failure.
+        if self.failure.is_none()
+            && claude_oauth_error_pattern().is_match(&strip_ansi(&self.buffer))
+        {
+            self.failure = Some(
+                "Claude rejected the authorization code. Copy the full code from the Claude tab, including any part after the # character, and try again."
+                    .into(),
+            );
+        }
         self.buffer = redact_claude_secrets(&self.buffer);
         if self.buffer.len() > MAX_OUTPUT_BYTES {
             let mut overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
@@ -2133,6 +2147,29 @@ fn claude_authorize_url_pattern() -> &'static Regex {
         )
         .expect("Claude authorize URL regex")
     })
+}
+
+/// Strips CSI escape sequences so a message split across cursor-positioning
+/// jumps reads as one line.
+///
+/// `claude auth login` renders its error screen by moving the cursor to a
+/// column and printing a fragment, so the raw PTY bytes for one sentence look
+/// like `OAuth error: Invalid\x1b[23Gcode. Please make\x1b[41Gsure...`. A
+/// plain substring search over that finds neither the whole phrase nor most
+/// of its words.
+fn strip_ansi(value: &str) -> String {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let pattern = PATTERN.get_or_init(|| {
+        // CSI (ESC [ ... final byte) plus OSC (ESC ] ... BEL), which is how
+        // the authorize URL is emitted.
+        Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07").expect("ANSI escape regex")
+    });
+    pattern.replace_all(value, "").into_owned()
+}
+
+fn claude_oauth_error_pattern() -> &'static Regex {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"(?i)oauth error").expect("Claude OAuth error regex"))
 }
 
 fn claude_token_pattern() -> &'static Regex {

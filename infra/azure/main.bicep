@@ -195,6 +195,27 @@ resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
 }
 
 // ---------------------------------------------------------------------------
+// The host's identity
+//
+// User-assigned rather than system-assigned, and that choice is load-bearing.
+// A system-assigned identity is born and dies with its VM, so replacing the
+// host mints a brand new principal -- and a role assignment's principalId
+// cannot be updated in place, so every one of its grants fails the next
+// deployment with RoleAssignmentUpdateNotPermitted. Naming the assignments
+// after the principal would fix that except Bicep requires a role
+// assignment's name to be computable before deployment starts, which a
+// principalId is not. A user-assigned identity sidesteps both: it persists
+// across host replacement, so the grants below are stable and are named from
+// its resource id.
+// ---------------------------------------------------------------------------
+
+resource hostIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${namePrefix}-host-identity'
+  location: location
+  tags: tags
+}
+
+// ---------------------------------------------------------------------------
 // Key Vault — replaces the KMS key and the SSM parameter in one resource
 // ---------------------------------------------------------------------------
 
@@ -378,6 +399,7 @@ write_files:
       CODEV_ARTIFACT_ACCOUNT=__ARTIFACT_ACCOUNT__
       CODEV_KEY_VAULT_NAME=__KEY_VAULT_NAME__
       CODEV_HOST_ARCH=x86_64
+      CODEV_IDENTITY_CLIENT_ID=__IDENTITY_CLIENT_ID__
   - path: /usr/local/sbin/codev-fetch-bootstrap.sh
     permissions: '0700'
     content: |
@@ -391,8 +413,15 @@ write_files:
       chronyc -a makestep
       chronyc waitsync 60 1.0 0.0 2
       export DEBIAN_FRONTEND=noninteractive
+      # Belt and braces on top of the unit ordering: wait for cloud-init to
+      # report done, then repair dpkg if anything left it half-configured.
+      cloud-init status --wait || true
+      dpkg --configure -a || true
+      apt-get -o DPkg::Lock::Timeout=300 update
       command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-      until az login --identity >/dev/null 2>&1; do sleep 5; done
+      # --client-id is required: the VM carries a user-assigned identity, and
+      # a bare `az login --identity` does not know which one to present.
+      until az login --identity --client-id "$CODEV_IDENTITY_CLIENT_ID" >/dev/null 2>&1; do sleep 5; done
       # The release to run comes from this VM's own ReleaseVersion tag, which
       # the deploy updates in place. Reading it at boot rather than baking it
       # into customData is what lets the same VM be rolled forward.
@@ -416,8 +445,12 @@ write_files:
     content: |
       [Unit]
       Description=Fetch and run the CoDev host bootstrap
-      After=network-online.target
+      After=network-online.target cloud-final.service
       Wants=network-online.target
+      # cloud-final is where cloud-init installs this image's own packages.
+      # Starting before it finishes puts two apt runs on one dpkg lock, which
+      # leaves dpkg interrupted and fails the bootstrap outright.
+      After=cloud-init.target
 
       [Service]
       Type=oneshot
@@ -427,16 +460,24 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 runcmd:
-  - [ systemctl, enable, --now, codev-bootstrap.service ]
+  # --no-block queues the unit instead of running it inside cloud-final.
+  # systemd then honours the After=cloud-final ordering above and starts it
+  # once cloud-init is genuinely done, rather than alongside itself.
+  - [ systemctl, enable, codev-bootstrap.service ]
+  - [ systemctl, start, --no-block, codev-bootstrap.service ]
 '''
 
 // A boot-time service rather than a bare runcmd, because cloud-init's runcmd
 // fires only on a VM's very first boot. Rolling a release works by updating
 // the tag and restarting the host, so the bootstrap has to run every boot.
 var cloudInit = replace(
-  replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
-  '__KEY_VAULT_NAME__',
-  '${namePrefix}-kv'
+  replace(
+    replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
+    '__KEY_VAULT_NAME__',
+    '${namePrefix}-kv'
+  ),
+  '__IDENTITY_CLIENT_ID__',
+  hostIdentity.properties.clientId
 )
 
 resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
@@ -448,7 +489,12 @@ resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
     // IMDS to decide which release to install.
     ReleaseVersion: releaseVersion
   })
-  identity: { type: 'SystemAssigned' }
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${hostIdentity.id}': {}
+    }
+  }
   properties: {
     hardwareProfile: { vmSize: hostVmSize }
     osProfile: {
@@ -508,6 +554,10 @@ resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
 
 // ---------------------------------------------------------------------------
 // Access for the host's own identity
+//
+// Keyed on hostIdentity, which survives host replacement, so these names and
+// their principal both stay put across deploys. See the identity's own note
+// for why a system-assigned one cannot work here.
 // ---------------------------------------------------------------------------
 
 var keyVaultSecretsUser = subscriptionResourceId(
@@ -527,21 +577,21 @@ var virtualMachineContributor = subscriptionResourceId(
 // the template, which is how the AWS side delivers it via SSM. Nothing
 // sensitive ends up in deployment history either way.
 resource hostReadsSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vault.id, host.id, 'kv-secrets-user')
+  name: guid(vault.id, hostIdentity.id, 'kv-secrets-user')
   scope: vault
   properties: {
     roleDefinitionId: keyVaultSecretsUser
-    principalId: host.identity.principalId
+    principalId: hostIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
 resource hostReadsArtifacts 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, host.id, 'blob-reader')
+  name: guid(storage.id, hostIdentity.id, 'blob-reader')
   scope: storage
   properties: {
     roleDefinitionId: storageBlobDataReader
-    principalId: host.identity.principalId
+    principalId: hostIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -553,11 +603,11 @@ resource hostReadsArtifacts 'Microsoft.Authorization/roleAssignments@2022-04-01'
 // whereas an Azure VM that powers itself off stays allocated and billing.
 // Scoped to this one VM, not the resource group.
 resource hostDeallocatesItself 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(host.id, 'self-deallocate')
+  name: guid(host.id, hostIdentity.id, 'self-deallocate')
   scope: host
   properties: {
     roleDefinitionId: virtualMachineContributor
-    principalId: host.identity.principalId
+    principalId: hostIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
 }
