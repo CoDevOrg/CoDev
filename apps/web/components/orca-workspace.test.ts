@@ -156,6 +156,23 @@ describe("WorkspaceTopBar", () => {
       screen.getByLabelText("Active agents: 2 of 3 live"),
     ).toHaveTextContent("2 of 3 agents live");
   });
+
+  it("does not present a provisional zero while the workspace is starting", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        liveAgentCount: 0,
+        isStarting: true,
+      }),
+    );
+
+    expect(
+      screen.getByRole("status", { name: "Workspace is starting" }),
+    ).toHaveTextContent("Starting workspace…");
+    expect(screen.queryByText("0 of 3 agents live")).not.toBeInTheDocument();
+  });
 });
 
 describe("buildOrcaIframeSource", () => {

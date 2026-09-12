@@ -672,15 +672,18 @@ export function WorkspaceTopBar({
   workspaceId,
   canInvite,
   liveAgentCount = null,
+  isStarting = false,
 }: {
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
   liveAgentCount?: number | null;
+  isStarting?: boolean;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
-  const liveLabel =
-    liveAgentCount == null
+  const liveLabel = isStarting
+    ? "Starting workspace…"
+    : liveAgentCount == null
       ? `${MAX_PARALLEL_AGENT_SESSIONS} agent worktree slots`
       : `${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} agents live`;
 
@@ -709,11 +712,16 @@ export function WorkspaceTopBar({
       ) : null}
       <div className="workspace-topbar-actions">
         <span
-          className={`workspace-topbar-capacity${liveAgentCount ? " is-live" : ""}`}
+          className={`workspace-topbar-capacity${!isStarting && liveAgentCount ? " is-live" : ""}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           aria-label={
-            liveAgentCount == null
-              ? `Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`
-              : `Active agents: ${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} live`
+            isStarting
+              ? "Workspace is starting"
+              : liveAgentCount == null
+                ? `Agent worktree capacity: ${MAX_PARALLEL_AGENT_SESSIONS} slots`
+                : `Active agents: ${liveAgentCount} of ${MAX_PARALLEL_AGENT_SESSIONS} live`
           }
         >
           {liveLabel}
@@ -749,6 +757,7 @@ function WorkspaceChrome({
   workspaceId,
   canInvite,
   embeddedAgentCount = null,
+  isStarting = false,
   children,
 }: {
   repository: string | null;
@@ -758,6 +767,7 @@ function WorkspaceChrome({
    *  one. It sees this client's own chat-tab agents, which the server-side
    *  workboard never registers, so it is the more complete of the two. */
   embeddedAgentCount?: number | null;
+  isStarting?: boolean;
   children: ReactNode;
 }) {
   const activity = useLiveAgentActivity(workspaceId);
@@ -767,6 +777,7 @@ function WorkspaceChrome({
       <WorkspaceTopBar
         canInvite={canInvite}
         liveAgentCount={embeddedAgentCount ?? activity?.occupied ?? null}
+        isStarting={isStarting}
         repository={repository}
         workspaceId={workspaceId}
       />
@@ -1253,6 +1264,7 @@ export function OrcaWorkspace({
   return (
     <WorkspaceChrome
       canInvite={canInvite}
+      isStarting={!hostReady || isOpeningProject}
       embeddedAgentCount={embeddedAgentCount}
       repository={repository}
       workspaceId={workspaceId}

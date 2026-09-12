@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- The Mission Control container keeps polling, merge, and stop actions together so the live-room lifecycle is auditable in one place. */
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -23,6 +24,11 @@ import {
   type MissionControlCoordination
 } from './CodevMissionControlView'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import {
+  localAgentTabsWithoutStatus,
+  resolveLocalStatusAgent,
+  resolveLocalTabAgent
+} from './codev-local-agent-tabs'
 
 /**
  * Mission Control container.
@@ -157,6 +163,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [steerBusy, setSteerBusy] = useState(false)
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
+  const tabsByWorktree = useAppStore(useShallow((state) => state.tabsByWorktree))
   const worktreesByRepo = useAppStore(useShallow((state) => state.worktreesByRepo))
 
   useEffect(
@@ -176,8 +183,10 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
 
     // One row per tab, not per worktree: every agent the user started is its
     // own agent even when several run the same provider in one worktree.
-    return distinctLocalAgentEntries(entries).map(([paneKey, entry]) => {
-      const label = providerLabel(String(entry.agentType ?? ''))
+    const statusAgents = distinctLocalAgentEntries(entries).map(([paneKey, entry]) => {
+      const label = providerLabel(
+        resolveLocalStatusAgent(entry.agentType, entry.terminalTitle, entry.prompt)
+      )
       const phase = missionControlPhaseFromState(entry.state)
       // The prompt is often blank for a native-chat turn, so fall back to the
       // agent tab's own title (Orca derives it from the first prompt) before
@@ -222,7 +231,40 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         holds: []
       }
     })
-  }, [statuses, viewerName, worktreesByRepo])
+
+    const fallbackAgent =
+      typeof window !== 'undefined' && window.__CODEV_DEFAULT_AGENT__
+        ? window.__CODEV_DEFAULT_AGENT__
+        : 'Agent'
+    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, statuses).map(
+      ({ worktreeId, tab }): MissionControlAgent => {
+        const label = providerLabel(resolveLocalTabAgent(tab, fallbackAgent))
+        const title = usableTaskTitle(tab.generatedTitle ?? tab.title, label) || `${label} session`
+        return {
+          key: `local:tab:${tab.id}`,
+          origin: 'you',
+          sessionId: null,
+          worktreeId: tab.worktreeId ?? worktreeId,
+          branch: tab.worktreeId
+            ? (findWorktreeById(worktreesByRepo, tab.worktreeId)?.branch ?? null)
+            : (findWorktreeById(worktreesByRepo, worktreeId)?.branch ?? null),
+          ownerName: viewerName,
+          ownerHue: hueFor(viewerName || tab.id),
+          providerLabel: label,
+          model: null,
+          phase: 'waiting',
+          title,
+          activity: 'Waiting for the next instruction.',
+          startedAt: tab.createdAt ?? null,
+          serverElapsed: null,
+          canSteer: false,
+          holds: []
+        }
+      }
+    )
+
+    return [...statusAgents, ...tabAgents]
+  }, [statuses, tabsByWorktree, viewerName, worktreesByRepo])
 
   const refreshManaged = useCallback(async () => {
     if (bridgeStatus !== 'connected') {

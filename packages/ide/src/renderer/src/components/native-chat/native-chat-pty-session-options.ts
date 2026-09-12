@@ -13,8 +13,11 @@ import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
-  setTrackedSessionOption
+  seedNativeChatSessionModelDefaults,
+  setTrackedSessionOption,
+  type NativeChatSessionOptionRecord
 } from '../../../../shared/native-chat-session-option-state'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
@@ -32,6 +35,34 @@ type PersistSelection = (args: {
   optionId: string
   value: SessionOptionValue
 }) => Promise<void> | void
+
+function seedDraftDefaults(
+  catalog: AgentSessionOptionCatalog,
+  models: readonly CatalogModel[],
+  record: NativeChatSessionOptionRecord
+): void {
+  if (record.model || models.length === 0) {
+    return
+  }
+
+  // Why: the composer exists before the PTY in CoDev. Give that draft the
+  // same explicit model/effort baseline the eventual launch will use, so the
+  // effort picker is present before the first message instead of appearing
+  // only after the terminal reports a model.
+  const catalogDefault = catalog.models.find((model) => model.isDefault)
+  const defaultModel =
+    (catalogDefault && models.some((model) => model.id === catalogDefault.id)
+      ? catalogDefault
+      : undefined) ??
+    models.find((model) => model.isDefault) ??
+    models[0]
+  if (!defaultModel) {
+    return
+  }
+
+  record.model = { value: defaultModel.id, source: 'applied' }
+  seedNativeChatSessionModelDefaults(record, defaultModel)
+}
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
@@ -74,6 +105,9 @@ export function createNativeChatPtySessionOptions(
 
   if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
+  }
+  if (args.mode === 'draft') {
+    seedDraftDefaults(catalog, models, record)
   }
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({

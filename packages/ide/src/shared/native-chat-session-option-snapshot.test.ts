@@ -27,7 +27,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot).toHaveLength(1)
+    expect(snapshot).toHaveLength(2)
     const model = snapshot[0]!
     expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'unknown' })
     if (model.kind.type !== 'select') {
@@ -36,6 +36,9 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     expect(model.kind.currentValue).toBeUndefined()
     expect(model.kind.choices.map((choice) => choice.value)).toEqual(
       CLAUDE_SESSION_OPTION_CATALOG.models.map((catalogModel) => catalogModel.id)
+    )
+    expect(snapshot).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'effort', settable: true })])
     )
   })
 

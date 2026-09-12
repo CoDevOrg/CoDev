@@ -66,10 +66,26 @@ describe('planAgentStop', () => {
     })
   })
 
-  it('cannot stop an agent with no worktree and no session', () => {
+  it('closes a local agent with a stable pane key even without a worktree', () => {
     const agents = [local('tab-a', null)]
 
-    expect(planAgentStop(agents[0]!.key, agents, releasable)).toEqual({ kind: 'unsupported' })
+    expect(planAgentStop(agents[0]!.key, agents, releasable)).toEqual({
+      kind: 'close-tab',
+      tabId: 'tab-a',
+      siblingCount: 0
+    })
     expect(planAgentStop('local:gone', agents, releasable)).toEqual({ kind: 'unsupported' })
+  })
+
+  it('closes a local agent from a legacy numeric pane key', () => {
+    const agents: StoppableAgent[] = [
+      { key: 'local:tab-a:0', origin: 'you', sessionId: null, worktreeId: null }
+    ]
+
+    expect(planAgentStop(agents[0]!.key, agents, releasable)).toEqual({
+      kind: 'close-tab',
+      tabId: 'tab-a',
+      siblingCount: 0
+    })
   })
 })

@@ -1,7 +1,8 @@
 import type { AgentType } from './agent-status-types'
 import type {
   CatalogMidSessionApply,
-  AgentSessionOptionCatalog
+  AgentSessionOptionCatalog,
+  CatalogModel
 } from './agent-session-option-catalog'
 import type { SessionOptionValue, SessionOptionValueSource } from './native-chat-session-options'
 
@@ -20,6 +21,21 @@ export function createNativeChatSessionOptionRecord(
   agent: AgentType
 ): NativeChatSessionOptionRecord {
   return { agent, valuesByModel: {} }
+}
+
+export function seedNativeChatSessionModelDefaults(
+  record: NativeChatSessionOptionRecord,
+  model: CatalogModel
+): void {
+  const defaults = Object.fromEntries(
+    model.options.map((option) => [
+      option.id,
+      { value: option.kind.defaultValue, source: 'applied' as const }
+    ])
+  )
+  if (Object.keys(defaults).length > 0) {
+    record.valuesByModel[model.id] = defaults
+  }
 }
 
 export function cloneNativeChatSessionOptionRecord(

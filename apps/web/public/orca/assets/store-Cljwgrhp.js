@@ -1,0 +1,1 @@
+import{a as e}from"./web-index-CAZ3tsa6.js";export{e as useAppStore};

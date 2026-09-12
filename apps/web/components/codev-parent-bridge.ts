@@ -557,7 +557,7 @@ export async function executeCodevBridgeRequest(
         return fail("A valid agent session is required.");
       }
       const response = await fetcher(
-        `/api/workspaces/${workspaceId}/agents/${sessionId}`,
+        `/api/workspaces/${workspaceId}/agents/${sessionId}/stop`,
         { method: "DELETE" },
       );
       // 204 carries no body; anything else may explain the refusal.

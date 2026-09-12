@@ -308,4 +308,31 @@ describe("discardAgentWorktree", () => {
       },
     });
   });
+
+  it("uses co-steer permission when stopping an agent from Mission Control", async () => {
+    query.limit
+      .mockResolvedValueOnce([
+        {
+          sessionId: "session-1",
+          workflowRunId: null,
+          worktreeId: "integration-1",
+          worktreeStatus: "active",
+          worktreeHeadSha: "main-r1",
+          reviewHeadSha: null,
+          reviewBaseSha: null,
+          reviewDiffDigest: null,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: "integration-1", headSha: "main-r1" }]);
+
+    await expect(
+      discardAgentWorktree("workspace-1", "session-1", "user-1", "coSteer"),
+    ).resolves.toEqual({ status: "stopped" });
+
+    expect(mocks.requireWorkspacePermission).toHaveBeenCalledWith(
+      "workspace-1",
+      "user-1",
+      "coSteer",
+    );
+  });
 });

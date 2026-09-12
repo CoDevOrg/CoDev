@@ -3,7 +3,9 @@
   "configurations": [
     {
       "name": "CoDev Web",
-      "url": "http://localhost:3000"
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@codev/web", "dev"],
+      "port": 3000
     }
   ]
 }

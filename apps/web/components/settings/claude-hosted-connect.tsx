@@ -16,6 +16,7 @@ type Phase = "idle" | "starting" | "awaiting_code" | "polling" | "failed";
 
 const BASE = "/api/personal/claude-connection/session";
 const POLL_MS = 2_000;
+const POLL_TIMEOUT_MS = 3 * 60 * 1_000;
 
 /**
  * Best-effort teardown of a hosted session on the server. Used when the member
@@ -46,6 +47,7 @@ export function ClaudeHostedConnect({
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const attempt = useRef(0);
   const sessionRef = useRef<SessionView | null>(null);
   const notifyConnected = useEffectEvent(onConnected);
@@ -72,6 +74,7 @@ export function ClaudeHostedConnect({
     if (!activeSessionId) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
 
     async function poll() {
       try {
@@ -102,6 +105,14 @@ export function ClaudeHostedConnect({
           throw new Error(
             payload.failureReason ?? "The connection attempt failed.",
           );
+        }
+        if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
+          attempt.current += 1;
+          deleteSession(activeSessionId);
+          setSubmitting(false);
+          setPhase("failed");
+          setError("Timed out waiting for Claude. Start again.");
+          return;
         }
         if (payload.status === "exchanging") setPhase("polling");
         // One request at a time. The server owns the session expiry, including
@@ -135,6 +146,19 @@ export function ClaudeHostedConnect({
     setCode("");
     setError("");
     setSubmitting(false);
+    setPhase("idle");
+  }
+
+  function cancel() {
+    if (canceling) return;
+    setCanceling(true);
+    attempt.current += 1;
+    if (session) deleteSession(session.id);
+    setSession(null);
+    setCode("");
+    setError("");
+    setSubmitting(false);
+    setCanceling(false);
     setPhase("idle");
   }
 
@@ -261,22 +285,40 @@ export function ClaudeHostedConnect({
               {submitting ? "Submitting…" : "Submit"}
             </Button>
             <Button
+              aria-busy={canceling}
               className="min-h-11"
-              onClick={reset}
+              disabled={canceling}
+              onClick={cancel}
               size="sm"
               type="button"
               variant="secondary"
             >
-              Cancel
+              {canceling ? "Canceling…" : "Cancel"}
             </Button>
           </div>
         </>
       ) : null}
 
       {phase === "polling" ? (
-        <p className="text-xs text-muted-foreground" role="status">
-          Linking your Claude subscription…
-        </p>
+        <div
+          aria-live="polite"
+          className="flex flex-wrap items-center justify-between gap-2"
+          role="status"
+        >
+          <p className="text-xs text-muted-foreground">
+            Linking your Claude subscription… This usually takes a few seconds.
+          </p>
+          <Button
+            aria-busy={canceling}
+            disabled={canceling}
+            onClick={() => void cancel()}
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            {canceling ? "Canceling…" : "Cancel"}
+          </Button>
+        </div>
       ) : null}
 
       {phase === "failed" ? (

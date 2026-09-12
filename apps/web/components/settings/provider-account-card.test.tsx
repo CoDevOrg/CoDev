@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProviderAccountCard } from "./provider-account-card";
@@ -50,6 +56,7 @@ describe("ProviderAccountCard", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -347,6 +354,71 @@ describe("ProviderAccountCard", () => {
     expect(
       screen.queryByRole("button", { name: "Connect ChatGPT" }),
     ).toBeNull();
+  });
+
+  it("does not overlap long-running Claude status polls", async () => {
+    let resolvePoll!: (response: Response) => void;
+    const pendingPoll = new Promise<Response>((resolve) => {
+      resolvePoll = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "sess-poll",
+          status: "awaiting_code",
+          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+          failureReason: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ id: "sess-poll", status: "exchanging" }),
+      )
+      .mockReturnValueOnce(pendingPoll);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { unmount } = render(
+      <ProviderAccountCard
+        connection={connection({ provider: "anthropic", label: "Anthropic" })}
+        hostedClaudeConnect
+        label="Claude"
+        logo={null}
+        subscription={subscription({
+          provider: "claude",
+          label: "Claude Code",
+          connectMode: "manual_code",
+          command: "codev claude-auth",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
+    const input = await screen.findByPlaceholderText("Paste code");
+    fireEvent.change(input, { target: { value: "code123#state" } });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      resolvePoll(
+        jsonResponse({
+          id: "sess-poll",
+          status: "exchanging",
+          authorizeUrl: null,
+          failureReason: null,
+        }),
+      );
+      await Promise.resolve();
+    });
+    unmount();
   });
 
   it("offers Codex only an API key and the CLI, no browser OAuth button", () => {

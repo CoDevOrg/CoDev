@@ -238,6 +238,13 @@ import {
   setRegularTerminalInputFocusAttribute
 } from './regular-terminal-focus-ownership'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import AgentUpdatePromptBanner from './AgentUpdatePromptBanner'
+import {
+  detectAgentUpdatePrompt,
+  readRecentTerminalBuffer,
+  type AgentUpdatePrompt,
+  type AgentUpdateProvider
+} from './agent-update-prompt'
 
 type TerminalPaneProps = {
   tabId: string
@@ -252,6 +259,10 @@ type TerminalPaneProps = {
   showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
+}
+
+function isAgentUpdateProvider(value: unknown): value is AgentUpdateProvider {
+  return value === 'claude' || value === 'codex'
 }
 
 export type TerminalPaneHandle = {
@@ -396,6 +407,10 @@ function TerminalPane(
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [agentUpdatePromptsByPaneId, setAgentUpdatePromptsByPaneId] = useState<
+    Map<number, AgentUpdatePrompt>
+  >(() => new Map())
+  const [agentUpdatingPaneIds, setAgentUpdatingPaneIds] = useState<Set<number>>(() => new Set())
   const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
     Record<number, VisiblePtyRecoveryState>
   >({})
@@ -2797,6 +2812,104 @@ function TerminalPane(
 
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  useEffect(() => {
+    if (!terminalContentVisible) {
+      setAgentUpdatePromptsByPaneId((previous) => (previous.size === 0 ? previous : new Map()))
+      setAgentUpdatingPaneIds((previous) => (previous.size === 0 ? previous : new Set()))
+      return
+    }
+
+    const refreshAgentUpdatePromptState = (): void => {
+      const panes = managerRef.current?.getPanes() ?? []
+      const nextPromptsByPaneId = new Map<number, AgentUpdatePrompt>()
+      for (const pane of panes) {
+        const detectedAgent = tabAgentTypeByLeaf[pane.leafId]
+        const launchAgent = terminalTab?.launchAgent
+        const preferredProvider: AgentUpdateProvider | undefined = isAgentUpdateProvider(
+          detectedAgent
+        )
+          ? detectedAgent
+          : isAgentUpdateProvider(launchAgent)
+            ? launchAgent
+            : undefined
+        const prompt = detectAgentUpdatePrompt(
+          readRecentTerminalBuffer(pane.terminal.buffer.active),
+          preferredProvider
+        )
+        if (prompt) {
+          nextPromptsByPaneId.set(pane.id, prompt)
+        }
+      }
+
+      setAgentUpdatePromptsByPaneId((previous) => {
+        if (
+          previous.size === nextPromptsByPaneId.size &&
+          [...previous].every(
+            ([paneId, prompt]) =>
+              nextPromptsByPaneId.get(paneId)?.provider === prompt.provider &&
+              nextPromptsByPaneId.get(paneId)?.input === prompt.input
+          )
+        ) {
+          return previous
+        }
+        return nextPromptsByPaneId
+      })
+      setAgentUpdatingPaneIds((previous) => {
+        const next = new Set([...previous].filter((paneId) => nextPromptsByPaneId.has(paneId)))
+        if (previous.size === next.size && [...previous].every((paneId) => next.has(paneId))) {
+          return previous
+        }
+        return next
+      })
+    }
+
+    refreshAgentUpdatePromptState()
+    const intervalId = window.setInterval(refreshAgentUpdatePromptState, 400)
+    return () => window.clearInterval(intervalId)
+  }, [paneCount, tabAgentTypeByLeaf, terminalContentVisible, terminalTab?.launchAgent])
+  const sendAgentPromptInput = useCallback((paneId: number, input: string): boolean => {
+    const transport = paneTransportsRef.current.get(paneId)
+    if (!transport?.sendInput(input)) {
+      setTerminalError('Could not start the provider update. Try again from the terminal.')
+      return false
+    }
+    return true
+  }, [])
+  const handleAgentProviderUpdate = useCallback(
+    (paneId: number, input: string): void => {
+      if (!sendAgentPromptInput(paneId, input)) {
+        return
+      }
+      setAgentUpdatingPaneIds((previous) => new Set(previous).add(paneId))
+      window.setTimeout(() => {
+        setAgentUpdatingPaneIds((previous) => {
+          if (!previous.has(paneId)) {
+            return previous
+          }
+          const next = new Set(previous)
+          next.delete(paneId)
+          return next
+        })
+      }, 10_000)
+    },
+    [sendAgentPromptInput]
+  )
+  const handleAgentProviderSkip = useCallback(
+    (paneId: number, input: string): void => {
+      if (!sendAgentPromptInput(paneId, input)) {
+        return
+      }
+      setAgentUpdatePromptsByPaneId((previous) => {
+        if (!previous.has(paneId)) {
+          return previous
+        }
+        const next = new Map(previous)
+        next.delete(paneId)
+        return next
+      })
+    },
+    [sendAgentPromptInput]
+  )
   const showSshReconnectOverlay = Boolean(
     isActive &&
     isVisible &&
@@ -2953,6 +3066,22 @@ function TerminalPane(
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       ) : null}
+      {managedPanes.map((pane) => {
+        const updatePrompt = agentUpdatePromptsByPaneId.get(pane.id)
+        if (!updatePrompt) {
+          return null
+        }
+        return createPortal(
+          <AgentUpdatePromptBanner
+            provider={updatePrompt.provider}
+            updating={agentUpdatingPaneIds.has(pane.id)}
+            onUpdate={() => handleAgentProviderUpdate(pane.id, updatePrompt.input)}
+            onSkip={() => handleAgentProviderSkip(pane.id, updatePrompt.skipInput)}
+          />,
+          pane.container,
+          `agent-update-prompt-${pane.id}`
+        )
+      })}
       {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
       {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
         ? managedPanes.map((pane) =>

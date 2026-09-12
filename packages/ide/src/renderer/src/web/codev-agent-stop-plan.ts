@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 
 /** The Mission Control fields the stop decision actually reads. */
 export type StoppableAgent = {
@@ -39,8 +39,12 @@ export function planAgentStop(
   if (agent.origin === 'managed' && agent.sessionId) {
     return { kind: 'discard-session', sessionId: agent.sessionId }
   }
+  const paneKey = key.startsWith(LOCAL_KEY_PREFIX) ? key.slice(LOCAL_KEY_PREFIX.length) : null
+  const tabId = paneKey
+    ? (parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null)
+    : null
   if (!agent.worktreeId) {
-    return { kind: 'unsupported' }
+    return tabId ? { kind: 'close-tab', tabId, siblingCount: 0 } : { kind: 'unsupported' }
   }
   const others = agents.filter((candidate) => candidate.key !== agent.key)
   const siblings = others.filter((candidate) => candidate.worktreeId === agent.worktreeId)
@@ -53,9 +57,6 @@ export function planAgentStop(
         .filter((id): id is string => Boolean(id))
     }
   }
-  const tabId = key.startsWith(LOCAL_KEY_PREFIX)
-    ? parsePaneKey(key.slice(LOCAL_KEY_PREFIX.length))?.tabId
-    : null
   return tabId
     ? { kind: 'close-tab', tabId, siblingCount: siblings.length }
     : { kind: 'unsupported' }

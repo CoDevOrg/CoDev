@@ -689,8 +689,14 @@ export async function discardAgentWorktree(
   workspaceId: string,
   sessionId: string,
   userId: string,
+  permission: WorkspacePermission = "merge",
 ) {
-  const target = await requireReviewTarget(workspaceId, sessionId, userId);
+  const target = await requireReviewTarget(
+    workspaceId,
+    sessionId,
+    userId,
+    permission,
+  );
   if (target.worktreeStatus === "discarded") return { status: "discarded" };
   if (target.worktreeStatus === "merged") {
     throw new ReviewActionError("A merged worktree cannot be discarded.", 409);

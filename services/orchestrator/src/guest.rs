@@ -2035,6 +2035,11 @@ impl ClaudeSetupOutput {
         if self.terminal() && self.authenticated {
             return ClaudeSetupPollResponse::Ready;
         }
+        if let Some(reason) = &self.failure {
+            return ClaudeSetupPollResponse::Failed {
+                reason: reason.clone(),
+            };
+        }
         if self.terminal() {
             return ClaudeSetupPollResponse::Failed {
                 reason: self
@@ -3431,5 +3436,19 @@ sleep 5
         let mut output = ClaudeSetupOutput::default();
         output.absorb(&format!("Open this URL:\n{url}\n"));
         assert_eq!(output.authorize_url.as_deref(), Some(url));
+    }
+
+    #[test]
+    fn oauth_error_screen_becomes_a_failed_poll() {
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(
+            "\x1b[2KOAuth error: Invalid\x1b[23Gcode. Please make\x1b[41Gsure the full\x1b[55Gcode was copied\r\nPress Enter to retry.",
+        );
+
+        assert!(matches!(
+            output.poll_response(),
+            ClaudeSetupPollResponse::Failed { reason }
+                if reason.contains("Copy the full code")
+        ));
     }
 }

@@ -47,7 +47,7 @@ concurrency:
 env:
   # Not secrets — these identifiers appear in every deployment URL and
   # inspector link already. The token is the only credential.
-  VERCEL_ORG_ID: team_7q7NNUAwtqmpVMcrBRon5OSu
+  VERCEL_ORG_ID: team_8tQg0IbclwFRP8sVXOqjvbLU
   VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV
   VERCEL_SCOPE: co-dev-admins
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -60,7 +60,7 @@ jobs:
       - name: Require VERCEL_TOKEN
         run: |
           if [ -z "${VERCEL_TOKEN}" ]; then
-            echo "::error::Set the repository secret VERCEL_TOKEN to a Vercel token scoped to the \"yousef20920's projects\" team (Vercel -> Account Settings -> Tokens)." >&2
+            echo "::error::Set the repository secret VERCEL_TOKEN to a Vercel token with access to the \"CoDev Admins\" team (Vercel -> Account Settings -> Tokens)." >&2
             exit 1
           fi
 
@@ -82,7 +82,7 @@ jobs:
       - name: Check token
         run: |
           if ! who="$(vercel whoami --token="$VERCEL_TOKEN" 2>&1)"; then
-            echo "::error::VERCEL_TOKEN is set but not a valid Vercel token (\`vercel whoami\` said: ${who}). Create one at https://vercel.com/account/tokens scoped to the \"yousef20920's projects\" team and paste only the token value into the repository secret VERCEL_TOKEN."
+            echo "::error::VERCEL_TOKEN is set but not a valid Vercel token (\`vercel whoami\` said: ${who}). Create one at https://vercel.com/account/tokens with access to the \"CoDev Admins\" team and paste only the token value into the repository secret VERCEL_TOKEN."
             exit 1
           fi
           echo "Authenticated as: ${who}"
