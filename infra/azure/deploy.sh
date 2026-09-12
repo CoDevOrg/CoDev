@@ -84,14 +84,34 @@ fi
 # Vercel's ORCHESTRATOR_DIRECT_SECRET has to match, and silently rolling it
 # here would break every long-running call until someone noticed. Hex keeps it
 # alphanumeric, which the Caddyfile emitters require.
-existing_secret="$(az keyvault secret show \
+# "Absent" and "unreadable" must not be treated alike. Swallowing every
+# failure here means a deployer without Key Vault *data-plane* access -- and
+# Contributor alone does not grant getSecret -- silently mints a fresh secret
+# and the stack overwrites the live one, breaking the value apps/web holds
+# until somebody notices long-running calls failing. So the two cases are
+# separated: a genuinely missing secret is the first-deploy path and creates
+# one; anything else stops.
+secret_read_error=""
+if existing_secret="$(az keyvault secret show \
   --vault-name "${name_prefix}-kv" --name orchestrator-direct-secret \
-  --query value -o tsv 2>/dev/null || true)"
-if [[ -n "${existing_secret}" ]]; then
+  --query value -o tsv 2>/tmp/codev-secret-read.err)"; then
   direct_secret="${existing_secret}"
 else
-  direct_secret="$(openssl rand -hex 32)"
+  secret_read_error="$(cat /tmp/codev-secret-read.err 2>/dev/null || true)"
+  if grep -qiE 'SecretNotFound|was not found|ResourceNotFound|VaultNotFound' \
+    <<<"${secret_read_error}"; then
+    echo "==> No existing direct secret; creating one (first deploy)"
+    direct_secret="$(openssl rand -hex 32)"
+  else
+    echo "Could not read the existing orchestrator direct secret, and refusing" >&2
+    echo "to replace it blindly -- doing so would invalidate the value already" >&2
+    echo "configured in Vercel. Grant the deploy principal the Key Vault" >&2
+    echo "Secrets Officer role on the resource group and retry." >&2
+    echo "${secret_read_error}" >&2
+    exit 1
+  fi
 fi
+rm -f /tmp/codev-secret-read.err
 readonly direct_secret
 
 # Whether the host already exists decides if it needs restarting later. A VM
@@ -186,10 +206,10 @@ fi
 # Report
 # ---------------------------------------------------------------------------
 
-host_ip="$(az deployment group show \
+host_host="$(az deployment group show \
   --resource-group "${resource_group}" \
   --name "codev-runtime-${release_version}" \
-  --query properties.outputs.hostPublicIp.value -o tsv)"
+  --query properties.outputs.hostPublicHost.value -o tsv)"
 key_id="$(az deployment group show \
   --resource-group "${resource_group}" \
   --name "codev-runtime-${release_version}" \
@@ -204,7 +224,7 @@ Runtime deployed. Set these in the Vercel project:
   AZURE_SUBSCRIPTION_ID=${subscription_id}
   AZURE_RESOURCE_GROUP=${resource_group}
   CREDENTIAL_KEY_VAULT_KEY_ID=${key_id}
-  ORCHESTRATOR_DIRECT_URL=https://${host_ip//./-}.nip.io
+  ORCHESTRATOR_DIRECT_URL=https://${host_host}
   ORCHESTRATOR_DIRECT_SECRET=<the value in Key Vault: orchestrator-direct-secret>
 
 AZURE_CLIENT_ID is the app registration apps/web federates into; it is not

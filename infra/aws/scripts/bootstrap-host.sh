@@ -91,8 +91,14 @@ codev_public_ipv4() {
         "http://169.254.169.254/latest/meta-data/public-ipv4"
       ;;
     azure)
-      curl -fsS -H "Metadata: true" \
-        "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text"
+      # Unreachable in practice: the Azure stack always supplies
+      # CODEV_PUBLIC_HOST, so the caller never needs an address. Kept as a
+      # loud failure rather than a silent empty string, because Azure IMDS
+      # reports an empty publicIpAddress for Standard-SKU addresses and
+      # returning that produced a Caddyfile asking for a certificate for
+      # ".nip.io".
+      echo "Azure hosts take their hostname from CODEV_PUBLIC_HOST" >&2
+      return 1
       ;;
   esac
 }
@@ -286,10 +292,16 @@ chmod -R go+rX /opt/cursor-agent
 ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
 ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
 
-curl -fsSL \
-  "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
-  -o /tmp/amazon-cloudwatch-agent.deb
-dpkg -i /tmp/amazon-cloudwatch-agent.deb
+# Log shipping. The CloudWatch agent is EC2-only in a way that is not merely
+# cosmetic: it resolves its instance identity through EC2 IMDS
+# (/latest/meta-data/instance-id), which does not exist on Azure, so it exits
+# non-zero and takes the whole bootstrap with it.
+if [[ "${codev_cloud}" == "aws" ]]; then
+  curl -fsSL \
+    "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
+    -o /tmp/amazon-cloudwatch-agent.deb
+  dpkg -i /tmp/amazon-cloudwatch-agent.deb
+fi
 
 install -d -m 0700 "${runtime_dir}/workspaces"
 install -d -m 0755 "${base_dir}" "${jailer_dir}"
@@ -394,8 +406,13 @@ systemctl restart codev-orca-xvfb.service
 # runtime over the local admin API (127.0.0.1:2019), one `handle_path
 # /w/<workspaceId>/*` route per active IDE session.
 install -d -m 0755 /usr/share/keyrings
+# --batch --yes, because this script is not run once. Rolling a release
+# restarts the host, which re-runs the whole bootstrap, and on the second
+# pass the keyring already exists: gpg then tries to ask whether to
+# overwrite it, finds no tty, and exits 2 -- taking the bootstrap with it
+# after everything before this point has already succeeded.
 curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" \
-  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  | gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" \
   -o /etc/apt/sources.list.d/caddy-stable.list
 chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -406,8 +423,20 @@ apt-get -o DPkg::Lock::Timeout=300 install -y caddy
 # Orca's browser client connects to a `nip.io` hostname that resolves to
 # this instance's own current public IP, so a real domain/DNS record is not
 # required. Caddy obtains its own TLS certificate for that hostname.
-public_ipv4="$(codev_public_ipv4)"
-orca_public_host="${public_ipv4//./-}.nip.io"
+# Azure hands the host a real DNS name through cloud-init (see
+# infra/azure/main.bicep), so there is nothing to derive and no address to
+# discover. AWS has no equivalent, so it keeps synthesising a nip.io name
+# from its own public address.
+if [[ -n "${CODEV_PUBLIC_HOST:-}" ]]; then
+  orca_public_host="${CODEV_PUBLIC_HOST}"
+else
+  public_ipv4="$(codev_public_ipv4)"
+  if [[ -z "${public_ipv4}" ]]; then
+    echo "could not determine this host's public address" >&2
+    exit 1
+  fi
+  orca_public_host="${public_ipv4//./-}.nip.io"
+fi
 
 # Bearer token for the /v1/* bypass around API Gateway's hard 29-second
 # timeout. Absent or unreadable is not fatal: the route is simply not served,
@@ -735,6 +764,7 @@ StandardError=append:/var/log/codev-orchestrator.log
 WantedBy=multi-user.target
 UNIT
 
+if [[ "${codev_cloud}" == "aws" ]]; then
 cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<AGENT
 {
   "agent": {
@@ -757,16 +787,20 @@ cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<AGENT
   }
 }
 AGENT
+fi
 
 systemctl daemon-reload
 systemctl enable codev-firecracker-network-isolation.service
 systemctl start codev-firecracker-network-isolation.service
 systemctl enable codev-orchestrator.service
-systemctl enable amazon-cloudwatch-agent.service
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config \
-  -m ec2 \
-  -s \
-  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+if [[ "${codev_cloud}" == "aws" ]]; then
+  systemctl enable amazon-cloudwatch-agent.service
+  # -m ec2 is literal: this mode reads the instance id from EC2 IMDS.
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config \
+    -m ec2 \
+    -s \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+fi
 systemctl restart codev-orchestrator.service
 systemctl --no-pager --full status codev-orchestrator.service

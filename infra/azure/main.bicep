@@ -63,6 +63,10 @@ var tags = {
   ManagedBy: 'Bicep'
 }
 
+// Globally unique within the region, and stable for the life of the group.
+var dnsLabel = '${namePrefix}-${uniqueString(resourceGroup().id)}'
+var publicHost = '${dnsLabel}.${location}.cloudapp.azure.com'
+
 var vnetCidr = '10.42.0.0/16'
 var subnetCidr = '10.42.0.0/24'
 
@@ -173,6 +177,17 @@ resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   properties: {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
+    // A real hostname, which removes a whole problem rather than solving it.
+    // The AWS host derives a nip.io name from its own address because EC2
+    // has nothing better to offer, but Azure IMDS reports an empty
+    // publicIpAddress for Standard-SKU addresses -- and Standard is exactly
+    // what a static allocation requires -- so the host cannot learn its own
+    // address that way at all. Azure hands out <label>.<region>
+    // .cloudapp.azure.com for free, which Caddy can obtain a certificate for
+    // and which the host never has to discover: it is fixed by the template.
+    dnsSettings: {
+      domainNameLabel: dnsLabel
+    }
   }
 }
 
@@ -365,6 +380,99 @@ resource hostAvailabilityAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if
 }
 
 // ---------------------------------------------------------------------------
+// Orchestrator log shipping
+//
+// The AWS host runs the CloudWatch agent to tail
+// /var/log/codev-orchestrator.log into a log group. That agent resolves its
+// own identity through EC2 IMDS and cannot run here at all, so the bootstrap
+// skips it on Azure -- which would leave the host's logs sitting on its own
+// disk, lost the moment it is replaced.
+//
+// Azure's equivalent is assembled rather than installed: a custom table to
+// land the lines in, a collection endpoint to receive them, a rule saying
+// which file goes where, the agent itself as a VM extension, and an
+// association binding the rule to this host. All five are required; omitting
+// any one fails silently, with the agent running and nothing arriving.
+// ---------------------------------------------------------------------------
+
+// Custom log tables must end in _CL. RawData carries the line verbatim,
+// which matches what CloudWatch stored.
+resource orchestratorTable 'Microsoft.OperationalInsights/workspaces/tables@2022-10-01' = {
+  parent: logs
+  name: 'CodevOrchestrator_CL'
+  properties: {
+    schema: {
+      name: 'CodevOrchestrator_CL'
+      columns: [
+        { name: 'TimeGenerated', type: 'datetime' }
+        { name: 'RawData', type: 'string' }
+        { name: 'FilePath', type: 'string' }
+      ]
+    }
+    // The CloudWatch config this replaces kept 14 days.
+    retentionInDays: 14
+    totalRetentionInDays: 14
+  }
+}
+
+resource collectionEndpoint 'Microsoft.Insights/dataCollectionEndpoints@2023-03-11' = {
+  name: '${namePrefix}-dce'
+  location: location
+  tags: tags
+  properties: {
+    networkAcls: { publicNetworkAccess: 'Enabled' }
+  }
+}
+
+resource orchestratorLogRule 'Microsoft.Insights/dataCollectionRules@2023-03-11' = {
+  name: '${namePrefix}-orchestrator-logs'
+  location: location
+  tags: tags
+  properties: {
+    dataCollectionEndpointId: collectionEndpoint.id
+    streamDeclarations: {
+      'Custom-CodevOrchestrator_CL': {
+        columns: [
+          { name: 'TimeGenerated', type: 'datetime' }
+          { name: 'RawData', type: 'string' }
+          { name: 'FilePath', type: 'string' }
+        ]
+      }
+    }
+    dataSources: {
+      logFiles: [
+        {
+          name: 'orchestrator'
+          streams: ['Custom-CodevOrchestrator_CL']
+          filePatterns: ['/var/log/codev-orchestrator.log']
+          format: 'text'
+          settings: {
+            text: { recordStartTimestampFormat: 'ISO 8601' }
+          }
+        }
+      ]
+    }
+    destinations: {
+      logAnalytics: [
+        {
+          name: 'workspace'
+          workspaceResourceId: logs.id
+        }
+      ]
+    }
+    dataFlows: [
+      {
+        streams: ['Custom-CodevOrchestrator_CL']
+        destinations: ['workspace']
+        transformKql: 'source'
+        outputStream: 'Custom-CodevOrchestrator_CL'
+      }
+    ]
+  }
+  dependsOn: [orchestratorTable]
+}
+
+// ---------------------------------------------------------------------------
 // The Firecracker host
 // ---------------------------------------------------------------------------
 
@@ -400,6 +508,7 @@ write_files:
       CODEV_KEY_VAULT_NAME=__KEY_VAULT_NAME__
       CODEV_HOST_ARCH=x86_64
       CODEV_IDENTITY_CLIENT_ID=__IDENTITY_CLIENT_ID__
+      CODEV_PUBLIC_HOST=__PUBLIC_HOST__
   - path: /usr/local/sbin/codev-fetch-bootstrap.sh
     permissions: '0700'
     content: |
@@ -470,7 +579,7 @@ runcmd:
 // A boot-time service rather than a bare runcmd, because cloud-init's runcmd
 // fires only on a VM's very first boot. Rolling a release works by updating
 // the tag and restarting the host, so the bootstrap has to run every boot.
-var cloudInit = replace(
+var cloudInitWithIdentity = replace(
   replace(
     replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
     '__KEY_VAULT_NAME__',
@@ -479,6 +588,8 @@ var cloudInit = replace(
   '__IDENTITY_CLIENT_ID__',
   hostIdentity.properties.clientId
 )
+
+var cloudInit = replace(cloudInitWithIdentity, '__PUBLIC_HOST__', publicHost)
 
 resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-host'
@@ -550,6 +661,44 @@ resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       bootDiagnostics: { enabled: true }
     }
   }
+}
+
+// The agent is a VM extension, which -- unlike customData -- can be added and
+// updated on a running host without replacing it.
+resource monitorAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = {
+  parent: host
+  name: 'AzureMonitorLinuxAgent'
+  location: location
+  tags: tags
+  properties: {
+    publisher: 'Microsoft.Azure.Monitor'
+    type: 'AzureMonitorLinuxAgent'
+    typeHandlerVersion: '1.33'
+    autoUpgradeMinorVersion: true
+    enableAutomaticUpgrade: true
+    settings: {
+      // The host carries no system-assigned identity, so the agent has to be
+      // told which user-assigned one to authenticate with. Left out, it
+      // installs cleanly and then fails every ingestion attempt.
+      authentication: {
+        managedIdentity: {
+          'identifier-name': 'mi_res_id'
+          'identifier-value': hostIdentity.id
+        }
+      }
+    }
+  }
+}
+
+// Without this the agent is installed and idle: the rule exists, the host
+// exists, and nothing connects them.
+resource orchestratorLogAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2023-03-11' = {
+  name: '${namePrefix}-orchestrator-logs'
+  scope: host
+  properties: {
+    dataCollectionRuleId: orchestratorLogRule.id
+  }
+  dependsOn: [monitorAgent]
 }
 
 // ---------------------------------------------------------------------------
@@ -651,9 +800,11 @@ resource budget 'Microsoft.Consumption/budgets@2023-05-01' = if (enableBudget &&
 output hostName string = host.name
 output hostResourceId string = host.id
 output hostPublicIp string = publicIp.properties.ipAddress
+output hostPublicHost string = publicHost
 output keyVaultName string = vault.name
 output keyVaultUri string = vault.properties.vaultUri
 output credentialKeyId string = credentialKey.properties.keyUriWithVersion
 output artifactAccount string = storage.name
 output logWorkspaceId string = logs.id
+output orchestratorLogTable string = 'CodevOrchestrator_CL'
 output releaseVersionDeployed string = releaseVersion
