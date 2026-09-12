@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getConnectedClaudeRuntime } from "./claude-connection-session";
+import { logEvent } from "./observability";
 import {
   decodeClaudeRuntimeReference,
   claudeRuntimeReferenceSchema,
@@ -199,13 +200,18 @@ export async function startClaudeExecution(
       sessionId,
     };
     return encode(run);
-  } catch {
+  } catch (error) {
+    // The curated messages thrown below are all a caller ever sees; record the
+    // real cause (redacted) so operators can tell a host cold-start/timeout from
+    // an exec-transport rejection or a bad model alias.
+    logStartFailure("start", reference.backend, error);
     if (run) await cleanupClaudeExecution(encode(run));
     else {
       if (reference.backend === "orchestrator") {
         try {
           await destroySandbox(reference.profileId);
-        } catch {
+        } catch (cleanupError) {
+          logStartFailure("cleanup", reference.backend, cleanupError);
           throw new Error(
             "Claude runtime cleanup is pending. Wait for the execution lease to expire before retrying.",
           );
@@ -217,6 +223,23 @@ export async function startClaudeExecution(
       "Official Claude Code could not start. Verify your connection and runtime deployment.",
     );
   }
+}
+
+function logStartFailure(
+  phase: "start" | "cleanup",
+  backend: string,
+  error: unknown,
+) {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? (error as { status?: unknown }).status
+      : undefined;
+  logEvent("error", "claude_execution_start_failed", {
+    phase,
+    backend,
+    status: typeof status === "number" ? status : undefined,
+    detail: error instanceof Error ? error.message : String(error),
+  });
 }
 
 export async function pollClaudeExecution(id: string, after: number) {

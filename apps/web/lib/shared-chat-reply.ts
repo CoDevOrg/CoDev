@@ -49,6 +49,9 @@ export async function failRoomReply(id: string, error: unknown) {
     replyId: id,
     category: failure.category,
     status: "status" in failure ? failure.status : undefined,
+    // Redacted by logEvent (secret-shaped substrings stripped, truncated). The
+    // member only ever sees the curated failure.message; this is for operators.
+    detail: error instanceof Error ? error.message : String(error),
   });
   await finishRoomReply(id, failure.message, true);
 }
