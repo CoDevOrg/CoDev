@@ -1,10 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${CODEV_ARTIFACT_BUCKET:?CODEV_ARTIFACT_BUCKET is required}"
-: "${CODEV_RELEASE_VERSION:?CODEV_RELEASE_VERSION is required}"
+# Which cloud this host runs on. Everything below is written against the four
+# shim functions defined further down rather than against a provider's CLI, so
+# the Firecracker, jailer, networking and Orca logic -- the overwhelming
+# majority of this script -- stays single-sourced across both. Defaults to aws
+# so an existing EC2 deploy behaves exactly as it did before the shim existed.
+readonly codev_cloud="${CODEV_CLOUD:-aws}"
 
-readonly release_prefix="s3://${CODEV_ARTIFACT_BUCKET}/releases/${CODEV_RELEASE_VERSION}"
+: "${CODEV_RELEASE_VERSION:?CODEV_RELEASE_VERSION is required}"
+case "${codev_cloud}" in
+  aws)
+    : "${CODEV_ARTIFACT_BUCKET:?CODEV_ARTIFACT_BUCKET is required}"
+    readonly release_prefix="s3://${CODEV_ARTIFACT_BUCKET}/releases/${CODEV_RELEASE_VERSION}"
+    ;;
+  azure)
+    : "${CODEV_ARTIFACT_ACCOUNT:?CODEV_ARTIFACT_ACCOUNT is required}"
+    readonly release_prefix="${CODEV_RELEASE_VERSION}"
+    ;;
+  *)
+    echo "Unsupported CODEV_CLOUD: ${codev_cloud}" >&2
+    exit 1
+    ;;
+esac
 readonly firecracker_version="v1.13.2"
 readonly host_arch="${CODEV_HOST_ARCH:-$(uname -m)}"
 case "${host_arch}" in
@@ -34,8 +52,134 @@ readonly host_log_group="${CODEV_HOST_LOG_GROUP:-/codev/orchestrator/codev-runti
 readonly orca_dir="/opt/orca"
 readonly orca_workspaces_root="/srv/codev/workspaces"
 
-# Bare-metal instances can initially inherit the AMI build clock. Wait for the
-# EC2 time source before making signed AWS requests or validating apt metadata.
+# ---------------------------------------------------------------------------
+# Cloud shim
+#
+# Four operations differ between clouds; everything else in this script does
+# not. Keeping them behind functions is what lets one bootstrap serve both
+# runtimes instead of two copies drifting apart.
+# ---------------------------------------------------------------------------
+
+# Fetch one release artifact to a local path.
+codev_fetch() {
+  local name="$1" destination="$2"
+  case "${codev_cloud}" in
+    aws)
+      aws s3 cp "${release_prefix}/${name}" "${destination}"
+      ;;
+    azure)
+      az storage blob download \
+        --account-name "${CODEV_ARTIFACT_ACCOUNT}" \
+        --container-name releases \
+        --name "${release_prefix}/${name}" \
+        --file "${destination}" \
+        --auth-mode login --only-show-errors --no-progress >/dev/null
+      ;;
+  esac
+}
+
+# This host's own public IPv4, used to derive the nip.io hostname Orca
+# advertises to browsers. Both clouds answer on 169.254.169.254 but with
+# different paths and a different anti-SSRF header.
+codev_public_ipv4() {
+  case "${codev_cloud}" in
+    aws)
+      local token
+      token="$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 60")"
+      curl -fsS -H "X-aws-ec2-metadata-token: ${token}" \
+        "http://169.254.169.254/latest/meta-data/public-ipv4"
+      ;;
+    azure)
+      curl -fsS -H "Metadata: true" \
+        "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text"
+      ;;
+  esac
+}
+
+# Read the orchestrator's direct-route bearer token. SSM Parameter Store on
+# AWS, Key Vault on Azure; both authenticate as the host's own instance
+# identity, so no secret is baked into an image or a template.
+codev_read_direct_secret() {
+  case "${codev_cloud}" in
+    aws)
+      [[ -n "${CODEV_DIRECT_SECRET_PARAMETER:-}" ]] || return 0
+      aws ssm get-parameter \
+        --name "${CODEV_DIRECT_SECRET_PARAMETER}" \
+        --with-decryption \
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null || true
+      ;;
+    azure)
+      [[ -n "${CODEV_KEY_VAULT_NAME:-}" ]] || return 0
+      az keyvault secret show \
+        --vault-name "${CODEV_KEY_VAULT_NAME}" \
+        --name orchestrator-direct-secret \
+        --query value --output tsv 2>/dev/null || true
+      ;;
+  esac
+}
+
+# Caddy certificate persistence, in both directions.
+codev_caddy_sync() {
+  local direction="$1" local_dir="$2"
+  case "${codev_cloud}" in
+    aws)
+      if [[ "${direction}" == "down" ]]; then
+        aws s3 sync "s3://${CODEV_ARTIFACT_BUCKET}/caddy-data/" "${local_dir}/" --only-show-errors
+      else
+        aws s3 sync "${local_dir}/" "s3://${CODEV_ARTIFACT_BUCKET}/caddy-data/" --sse AES256 --only-show-errors
+      fi
+      ;;
+    azure)
+      if [[ "${direction}" == "down" ]]; then
+        az storage blob download-batch \
+          --account-name "${CODEV_ARTIFACT_ACCOUNT}" --source caddy-data \
+          --destination "${local_dir}" --auth-mode login --only-show-errors --no-progress >/dev/null
+      else
+        az storage blob upload-batch \
+          --account-name "${CODEV_ARTIFACT_ACCOUNT}" --destination caddy-data \
+          --source "${local_dir}" --overwrite --auth-mode login --only-show-errors --no-progress >/dev/null
+      fi
+      ;;
+  esac
+}
+
+# The host authenticates to Azure as its own system-assigned managed identity.
+# This is the Azure analogue of the EC2 instance profile: nothing to rotate,
+# nothing stored on disk.
+if [[ "${codev_cloud}" == "azure" ]]; then
+  until az login --identity >/dev/null 2>&1; do sleep 5; done
+fi
+
+# How this host powers itself down when the orchestrator's idle timer fires.
+#
+# This is not cosmetic on Azure. EC2 instances carry
+# `InstanceInitiatedShutdownBehavior: stop`, so a guest `systemctl poweroff`
+# stops the instance and stops the bill. An Azure VM shut down from inside the
+# guest stays *allocated* -- the platform keeps reserving its cores and keeps
+# charging for them -- so the same call would produce a host that looks off,
+# costs full price, and never appears in any stopped-instance report. Only a
+# control-plane deallocate actually releases it, which is why the Azure branch
+# calls ARM instead of the init system.
+install -d -m 0755 /usr/local/sbin
+cat >/usr/local/sbin/codev-host-poweroff <<'POWEROFF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${CODEV_CLOUD:-aws}" == "azure" ]]; then
+  resource_id="$(curl -fsS -H "Metadata: true" \
+    "http://169.254.169.254/metadata/instance/compute/resourceId?api-version=2021-02-01&format=text")"
+  # --no-wait: the deallocate tears down the very machine making the request,
+  # so waiting for completion means waiting to be killed.
+  exec az vm deallocate --ids "${resource_id}" --no-wait
+fi
+exec systemctl poweroff
+POWEROFF
+sed -i "1a export CODEV_CLOUD=${codev_cloud}" /usr/local/sbin/codev-host-poweroff
+chmod 0755 /usr/local/sbin/codev-host-poweroff
+
+# Instances can initially inherit the image build clock. Wait for the platform
+# time source before making signed cloud requests or validating apt metadata.
 timedatectl set-ntp true
 systemctl restart chrony
 chronyc -a makestep
@@ -43,7 +187,9 @@ if ! chronyc waitsync 60 1.0 0.0 2; then
   echo "system clock did not synchronize" >&2
   exit 1
 fi
-systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+if [[ "${codev_cloud}" == "aws" ]]; then
+  systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
+fi
 
 install -d -m 0755 /usr/local/libexec
 cat >/usr/local/libexec/codev-git-askpass <<'ASKPASS'
@@ -189,10 +335,10 @@ if ! xfs_info "${jailer_dir}" 2>/dev/null | grep -q 'reflink=1'; then
   exit 1
 fi
 
-aws s3 cp "${release_prefix}/codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/codev-orchestrator
-aws s3 cp "${release_prefix}/codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
+codev_fetch "codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/codev-orchestrator
+codev_fetch "codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
-aws s3 cp "${release_prefix}/verify-lifecycle.sh" /opt/codev-verify-lifecycle.sh
+codev_fetch "verify-lifecycle.sh" /opt/codev-verify-lifecycle.sh
 chmod 0755 /opt/codev-verify-lifecycle.sh
 
 work_dir="$(mktemp -d)"
@@ -203,8 +349,8 @@ trap 'rm -rf "${work_dir}"' EXIT
 # prebuilt third-party AppImage release asset. codev-orchestrator spawns one
 # instance of this per workspace (services/orchestrator/src/backend/orca.rs).
 readonly orca_archive="orca-serve-linux-${artifact_arch}.tar.gz"
-aws s3 cp "${release_prefix}/${orca_archive}" "${work_dir}/${orca_archive}"
-aws s3 cp "${release_prefix}/${orca_archive}.sha256" "${work_dir}/${orca_archive}.sha256"
+codev_fetch "${orca_archive}" "${work_dir}/${orca_archive}"
+codev_fetch "${orca_archive}.sha256" "${work_dir}/${orca_archive}.sha256"
 (
   cd "${work_dir}"
   echo "$(cat "${orca_archive}.sha256")  ${orca_archive}" | sha256sum --check
@@ -260,10 +406,7 @@ apt-get -o DPkg::Lock::Timeout=300 install -y caddy
 # Orca's browser client connects to a `nip.io` hostname that resolves to
 # this instance's own current public IP, so a real domain/DNS record is not
 # required. Caddy obtains its own TLS certificate for that hostname.
-public_ipv4_token="$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
-  -H "X-aws-ec2-metadata-token-ttl-seconds: 60")"
-public_ipv4="$(curl -fsS -H "X-aws-ec2-metadata-token: ${public_ipv4_token}" \
-  "http://169.254.169.254/latest/meta-data/public-ipv4")"
+public_ipv4="$(codev_public_ipv4)"
 orca_public_host="${public_ipv4//./-}.nip.io"
 
 # Bearer token for the /v1/* bypass around API Gateway's hard 29-second
@@ -271,17 +414,10 @@ orca_public_host="${public_ipv4//./-}.nip.io"
 # which is the same posture as before the bypass existed. Anything other than
 # an alphanumeric token is rejected rather than interpolated -- a quote or
 # brace would otherwise escape the header matcher into the Caddyfile.
-direct_secret=""
-if [[ -n "${CODEV_DIRECT_SECRET_PARAMETER:-}" ]]; then
-  direct_secret="$(aws ssm get-parameter \
-    --name "${CODEV_DIRECT_SECRET_PARAMETER}" \
-    --with-decryption \
-    --query 'Parameter.Value' \
-    --output text 2>/dev/null || true)"
-  if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
-    echo "direct secret missing or not alphanumeric; not serving /v1/*" >&2
-    direct_secret=""
-  fi
+direct_secret="$(codev_read_direct_secret)"
+if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
+  echo "direct secret missing or not alphanumeric; not serving /v1/*" >&2
+  direct_secret=""
 fi
 
 # This block must stay byte-identical to direct_route() in
@@ -330,9 +466,8 @@ chmod 0640 /etc/caddy/Caddyfile
 # Elastic IP keeps the hostname stable, so a restored certificate is still
 # valid for the replacement.
 readonly caddy_data_dir="/var/lib/caddy/.local/share/caddy"
-readonly caddy_backup_prefix="s3://${CODEV_ARTIFACT_BUCKET}/caddy-data"
 install -d -m 0700 -o caddy -g caddy "${caddy_data_dir}"
-aws s3 sync "${caddy_backup_prefix}/" "${caddy_data_dir}/" --only-show-errors || \
+codev_caddy_sync down "${caddy_data_dir}" || \
   echo "no stored Caddy certificates to restore; a new one will be requested" >&2
 chown -R caddy:caddy /var/lib/caddy
 
@@ -340,11 +475,21 @@ chown -R caddy:caddy /var/lib/caddy
 # asynchronously after Caddy starts, so a one-shot copy here would miss the
 # first issuance; a timer also covers renewals. No --delete: an empty or
 # half-populated local directory must never wipe the stored copy.
+# The timer runs this outside the bootstrap process, so it re-derives the
+# shim rather than inheriting it: certificates arrive asynchronously after
+# Caddy starts and renew long after bootstrap has exited.
 cat >/usr/local/sbin/codev-caddy-cert-sync <<SYNC
 #!/usr/bin/env bash
 set -euo pipefail
-aws s3 sync "${caddy_data_dir}/" "${caddy_backup_prefix}/" \
-  --sse AES256 --only-show-errors
+if [[ "${codev_cloud}" == "azure" ]]; then
+  az storage blob upload-batch \
+    --account-name "${CODEV_ARTIFACT_ACCOUNT:-}" --destination caddy-data \
+    --source "${caddy_data_dir}" --overwrite --auth-mode login \
+    --only-show-errors --no-progress >/dev/null
+else
+  aws s3 sync "${caddy_data_dir}/" "s3://${CODEV_ARTIFACT_BUCKET:-}/caddy-data/" \
+    --sse AES256 --only-show-errors
+fi
 SYNC
 chmod 0700 /usr/local/sbin/codev-caddy-cert-sync
 

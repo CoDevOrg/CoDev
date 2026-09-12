@@ -44,6 +44,8 @@ export const serverEnvironmentSchema = z.object({
     .optional(),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   CREDENTIAL_KMS_KEY_ID: z.string().min(1).optional(),
+  /** Key Vault key identifier; the Azure counterpart of CREDENTIAL_KMS_KEY_ID. */
+  CREDENTIAL_KEY_VAULT_KEY_ID: z.string().url().optional(),
   PLATFORM_FALLBACK_API_KEY: z.string().min(1).optional(),
   PLATFORM_FALLBACK_BEDROCK_ROLE_ARN: z
     .string()
@@ -81,6 +83,24 @@ export const serverEnvironmentSchema = z.object({
     .string()
     .regex(/^i-[0-9a-f]+$/)
     .optional(),
+  /**
+   * Which cloud hosts the Firecracker runtime. Unset means AWS, because that
+   * is what serves production; see apps/web/lib/cloud.ts for why an absent
+   * value must never resolve to Azure by accident.
+   */
+  CLOUD_PROVIDER: z.enum(["aws", "azure"]).optional(),
+  AZURE_TENANT_ID: z.string().uuid().optional(),
+  /**
+   * Application (client) id of the Entra app registration apps/web federates
+   * into. Paired with AZURE_TENANT_ID it selects workload identity
+   * federation over the ambient credential chain; there is deliberately no
+   * client-secret variable, because the Vercel OIDC token is the assertion.
+   */
+  AZURE_CLIENT_ID: z.string().uuid().optional(),
+  AZURE_SUBSCRIPTION_ID: z.string().uuid().optional(),
+  AZURE_RESOURCE_GROUP: z.string().min(1).optional(),
+  /** Pins host resolution to one VM; unset resolves through the stack tags. */
+  AZURE_HOST_VM_NAME: z.string().min(1).optional(),
   ORCHESTRATOR_URL: optionalUrl,
   /**
    * Direct HTTPS path to the Firecracker host's orchestrator, bypassing the
@@ -110,8 +130,15 @@ export function readServerEnvironment(
 export function isGitHubAuthConfigured(
   input: Record<string, string | undefined> = process.env,
 ) {
+  // Production must have a managed key on whichever cloud is configured.
+  // Checking only the AWS one would let an Azure deployment fall through to
+  // the development key and write credentials the platform cannot protect.
+  const managedKeyConfigured =
+    input.CLOUD_PROVIDER === "azure"
+      ? input.CREDENTIAL_KEY_VAULT_KEY_ID
+      : input.CREDENTIAL_KMS_KEY_ID;
   const productionStorageReady =
-    input.NODE_ENV !== "production" || input.CREDENTIAL_KMS_KEY_ID;
+    input.NODE_ENV !== "production" || managedKeyConfigured;
 
   return Boolean(
     input.AUTH_SECRET &&

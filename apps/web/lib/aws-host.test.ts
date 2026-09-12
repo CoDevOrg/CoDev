@@ -26,7 +26,7 @@ vi.mock("./aws", () => ({
   getAwsConfiguration: () => ({ region: "us-east-2" }),
 }));
 
-import { requestHostWake } from "./host";
+import { requestHostWake } from "./aws-host";
 
 describe("Firecracker host resolution", () => {
   beforeEach(() => {
