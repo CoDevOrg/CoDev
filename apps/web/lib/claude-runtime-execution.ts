@@ -159,15 +159,32 @@ export async function startClaudeExecution(
       child.stdin.end(prompt);
     } else {
       await ensureHostReady();
+      // A resume restores the workspace disk from the Firecracker snapshot and
+      // ignores this source entirely (see prepare_and_start), but the
+      // orchestrator's create validation still requires exactly one repository
+      // source and rejects a request with none ("provide exactly one repository
+      // source"). Mirror the connect flow's placeholder so provisioning passes;
+      // the 4h lifecycle matches the connect flow the deployed host accepts.
+      const placeholder = "Claude runtime execution.\n";
       await provisionSandbox({
         workspaceId: reference.profileId,
         ephemeral: true,
         repositoryUrl: null,
+        repositorySnapshot: {
+          files: [
+            {
+              path: "README.md",
+              mode: "100644",
+              contentBase64: Buffer.from(placeholder).toString("base64"),
+            },
+          ],
+          totalBytes: Buffer.byteLength(placeholder),
+        },
         baseSha: "0".repeat(40),
         expiresAt: new Date(leaseUntil).toISOString(),
         resumeFromSnapshot: true,
         lifecycle: {
-          timeoutMs: 600_000,
+          timeoutMs: 4 * 60 * 60_000,
           lifecycle: { onTimeout: "pause", autoResume: true },
         },
       });
