@@ -76,6 +76,12 @@ describe("private Claude execution", () => {
       expect.objectContaining({
         workspaceId: profileId,
         resumeFromSnapshot: true,
+        // The orchestrator's create validation requires exactly one repository
+        // source even for a resume (which ignores it), so a placeholder must
+        // always be present or provisioning fails with HTTP 400.
+        repositorySnapshot: expect.objectContaining({
+          files: expect.any(Array),
+        }),
       }),
     );
     const input = mocks.start.mock.calls[0]![1];
