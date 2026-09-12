@@ -178,6 +178,34 @@ az role assignment create \
 Creating a role assignment itself needs Owner or User Access Administrator
 on the scope; plain Contributor cannot grant roles, including to itself.
 
+### The deploy principal also has to be able to grant the host its roles
+
+`main.bicep` assigns three roles to the host's managed identity (Key Vault
+Secrets User on the vault, Storage Blob Data Reader on the artifact account,
+Virtual Machine Contributor on the host itself). Applying the template
+therefore needs `Microsoft.Authorization/roleAssignments/write`, which
+Contributor does not include. The first CI deploy failed exactly there with
+`InvalidTemplateDeployment ... Authorization failed for template resource ...
+of type 'Microsoft.Authorization/roleAssignments'`, after working every time
+from a laptop whose user happened to be Owner.
+
+Grant the deploy principal **Role Based Access Control Administrator** on the
+resource group, constrained so it can only hand out those three roles and
+nothing broader:
+
+```bash
+az role assignment create \
+  --assignee-object-id <deploy principal object id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "Role Based Access Control Administrator" \
+  --scope /subscriptions/<sub>/resourceGroups/<rg> \
+  --condition-version 2.0 \
+  --condition "((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6, 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1, 9980e02c-c2be-4d73-94e8-173b1dc7cf3c})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6, 2a2b9908-6ea1-4ae2-8e65-a410df84e7d1, 9980e02c-c2be-4d73-94e8-173b1dc7cf3c}))"
+```
+
+The three GUIDs are the built-in role definition ids of Key Vault Secrets
+User, Storage Blob Data Reader and Virtual Machine Contributor.
+
 ## Retiring the AWS key
 
 Once both runtimes have been live, credentials exist in both envelope formats.
