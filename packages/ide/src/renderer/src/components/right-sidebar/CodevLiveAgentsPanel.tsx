@@ -17,6 +17,7 @@ import {
 import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import { describeAgentStopPlan, planAgentStop } from '../../web/codev-agent-stop-plan'
 import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
+import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
 import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
@@ -463,6 +464,26 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     (key: string) => agents.find((agent) => agent.key === key) ?? null,
     [agents]
   )
+
+  // An activity jump names a session; open its drawer once the row is here.
+  // Until the first workboard snapshot lands the row may simply not have
+  // arrived, so "not running" is only concluded after that.
+  const focus = useCodevSurfaceFocus('mission-control-agent')
+  useEffect(() => {
+    if (!focus) {
+      return
+    }
+    const key = `managed:${focus.target.sessionId}`
+    if (agents.some((agent) => agent.key === key)) {
+      setOpenKey(key)
+      consumeCodevSurfaceFocus(focus.id)
+      return
+    }
+    if (hadWorkboardRef.current) {
+      toast.message('That agent session is no longer running.')
+      consumeCodevSurfaceFocus(focus.id)
+    }
+  }, [agents, focus, managed])
 
   // The confirmation the drawer shows is the plan Stop will run, not a
   // generic promise about slots.

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
 import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
@@ -24,6 +26,12 @@ export function CodevPathClaimsPanel(): JSX.Element | null {
   const [bridge, setBridge] = useState(() => getCodevBridgeSnapshot())
   const [snapshot, setSnapshot] = useState<CodevPathClaimsSnapshot | null>(null)
   const [busy, setBusy] = useState('')
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  // The claim is for the file in front of the member, in the checkout they
+  // are in — not a default path the backend happens to share.
+  const activeWorktree = useActiveWorktree()
+  const activeFileId = useAppStore((s) => s.activeFileId)
+  const openFiles = useAppStore((s) => s.openFiles)
 
   useEffect(() => {
     return subscribeCodevBridge(() => {
@@ -32,7 +40,9 @@ export function CodevPathClaimsPanel(): JSX.Element | null {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!embedded || bridge.status !== 'connected') return
+    if (!embedded || bridge.status !== 'connected') {
+      return
+    }
     setBusy('refresh')
     try {
       const result = await requestCodevBridge<CodevPathClaimsSnapshot>('claims.list')
@@ -47,7 +57,9 @@ export function CodevPathClaimsPanel(): JSX.Element | null {
   }, [bridge.status, embedded])
 
   useEffect(() => {
-    if (!embedded || bridge.status !== 'connected') return
+    if (!embedded || bridge.status !== 'connected') {
+      return
+    }
     void refresh()
   }, [bridge.status, embedded, refresh])
 
@@ -72,45 +84,69 @@ export function CodevPathClaimsPanel(): JSX.Element | null {
   }
 
   const slots = (snapshot?.slots ?? []).filter((slot) => slot.occupied && slot.sessionId)
-  const group = targetPathClaimGroup(snapshot?.groups ?? [], snapshot?.defaultPath)
+  const activeFile = activeFileId
+    ? (openFiles.find((file) => file.id === activeFileId) ?? null)
+    : null
+  const targetPath =
+    activeFile && activeWorktree && activeFile.worktreeId === activeWorktree.id
+      ? activeFile.relativePath
+      : null
+  const agent = slots.find((slot) => slot.sessionId === selectedSessionId) ?? slots[0] ?? null
+  const otherAgent = slots.find((slot) => slot.sessionId !== agent?.sessionId) ?? null
+  const group = targetPathClaimGroup(snapshot?.groups ?? [], targetPath)
   const canCoSteer = Boolean(snapshot?.viewer?.canCoSteer)
 
   return (
     <CodevPathClaimsViewPanel
       connected={bridge.status === 'connected'}
       snapshot={snapshot}
+      targetPath={targetPath}
+      agentSessionId={agent?.sessionId ?? null}
+      onSelectAgent={setSelectedSessionId}
       busy={busy}
       canCoSteer={canCoSteer}
       onRefresh={() => {
         void refresh()
       }}
       onClaim={() => {
-        const sessionId = slots[0]?.sessionId
-        if (!sessionId) return
+        const sessionId = agent?.sessionId
+        if (!sessionId || !targetPath) {
+          return
+        }
         void run('create', () =>
-          requestCodevBridge<CodevPathClaimsSnapshot>('claims.create', { sessionId })
+          requestCodevBridge<CodevPathClaimsSnapshot>('claims.create', {
+            sessionId,
+            path: targetPath
+          })
         )
       }}
       onOverlap={() => {
-        const sessionId = slots[1]?.sessionId
-        if (!sessionId) return
+        const sessionId = otherAgent?.sessionId
+        if (!sessionId || !targetPath) {
+          return
+        }
         void run('overlap', () =>
           requestCodevBridge<CodevPathClaimsSnapshot>('claims.create', {
             sessionId,
+            path: targetPath,
             contest: true
           })
         )
       }}
       onReassign={() => {
         const claimId = group?.reassignClaimId
-        if (!claimId) return
+        if (!claimId) {
+          return
+        }
         void run('reassign', () =>
           requestCodevBridge<CodevPathClaimsSnapshot>('claims.reassign', { claimId })
         )
       }}
       onCancel={() => {
         const claimId = group?.overlappingClaimId
-        if (!claimId) return
+        if (!claimId) {
+          return
+        }
         void run('cancel', () =>
           requestCodevBridge<CodevPathClaimsSnapshot>('claims.cancel', { claimId })
         )

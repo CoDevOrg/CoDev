@@ -7,8 +7,16 @@ import {
   type JSX,
   type KeyboardEvent
 } from 'react'
-import { ArrowLeft, Hash, Lock, Send, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowLeft, Hash, Lock, Send, Sparkles } from 'lucide-react'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { requestCodevBridge } from '@/web/codev-bridge-singleton'
+import {
+  CHANNEL_PAGE_SIZE,
+  countNewMessages,
+  mergeChannelMessages,
+  olderPageCursor,
+  pageMayHaveMore
+} from '@/web/codev-channel-transcript'
 import { closeCodevChannel, useCodevChannelId } from '@/web/codev-channel-view'
 import {
   getCodevChannelDraft,
@@ -17,14 +25,15 @@ import {
 } from '@/web/codev-channel-drafts'
 import {
   AGENT_MENTION,
-  formatChatTime,
   groupMessages,
-  MemberAvatar,
   type ChannelMessage,
   type ChannelSummary
 } from './codev-team-shared'
+import { ChannelTranscriptLog, type ChannelTranscriptState } from './CodevChannelTranscriptLog'
 
 const MESSAGE_POLL_MS = 3_000
+/** How close to the bottom still counts as "following" new messages. */
+const FOLLOW_THRESHOLD_PX = 48
 
 /**
  * A team channel, rendered in the middle of the workspace.
@@ -52,15 +61,35 @@ export function CodevChannelPane(): JSX.Element | null {
 
 function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
   const [channel, setChannel] = useState<ChannelSummary | null>(null)
-  const [messages, setMessages] = useState<ChannelMessage[]>([])
+  const [messages, setMessagesState] = useState<ChannelMessage[]>([])
+  // Every write goes through the ref so a poll, a send and an older page
+  // reconcile against the same latest transcript, without side effects in
+  // a state updater.
+  const messagesRef = useRef<ChannelMessage[]>([])
+  const applyMessages = useCallback((incoming: readonly ChannelMessage[]): ChannelMessage[] => {
+    const previous = messagesRef.current
+    const next = mergeChannelMessages(previous, incoming)
+    messagesRef.current = next
+    setMessagesState(next)
+    return previous
+  }, [])
   const [notice, setNotice] = useState<string | null>(null)
   // Metadata and transcript fail independently, so each has its own error;
   // a transcript poll succeeding must not erase a channel-metadata failure.
   const [channelError, setChannelError] = useState<string | null>(null)
-  const [transcript, setTranscript] = useState<
-    { status: 'loading' } | { status: 'ready' } | { status: 'failed'; message: string }
-  >({ status: 'loading' })
+  const [transcript, setTranscript] = useState<ChannelTranscriptState>({ status: 'loading' })
   const [transcriptAttempt, setTranscriptAttempt] = useState(0)
+  // Older history: a full first page means there may be more before it.
+  const [mayHaveOlder, setMayHaveOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState<'idle' | 'loading' | 'failed'>('idle')
+  // New-message handling for a reader who has scrolled up: the log stays put
+  // and a pill counts what arrived below, instead of yanking them down.
+  const [unseen, setUnseen] = useState(0)
+  const followRef = useRef(true)
+  const scrollToBottomRef = useRef(false)
+  // Restores the reader's place after an older page is prepended.
+  const prependAnchorRef = useRef<{ height: number; top: number } | null>(null)
+  const pollInFlightRef = useRef(false)
   const [sending, setSending] = useState(false)
   // The draft outlives this component: it is remounted on every channel
   // switch and every "Back to chat", which used to discard unsent text.
@@ -102,15 +131,37 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
 
   useEffect(() => {
     let cancelled = false
+    let first = true
     const load = async (): Promise<void> => {
+      // Polls are serialized: an overlapping read could return out of order
+      // and put an older page on top of a newer one.
+      if (pollInFlightRef.current) {
+        return
+      }
+      pollInFlightRef.current = true
       try {
         const payload = await requestCodevBridge<{ messages?: ChannelMessage[] }>('team.messages', {
-          channelId
+          channelId,
+          limit: CHANNEL_PAGE_SIZE
         })
-        if (!cancelled) {
-          setMessages(payload.messages ?? [])
-          setTranscript({ status: 'ready' })
+        if (cancelled) {
+          return
         }
+        const page = payload.messages ?? []
+        if (first) {
+          first = false
+          setMayHaveOlder(pageMayHaveMore(page))
+        }
+        // Merge, never replace: the latest page must not erase older pages
+        // the reader loaded, nor a message this client just sent.
+        const previous = applyMessages(page)
+        if (!followRef.current) {
+          const arrived = countNewMessages(previous, page)
+          if (arrived > 0) {
+            setUnseen((count) => count + arrived)
+          }
+        }
+        setTranscript({ status: 'ready' })
       } catch (cause) {
         // A failed load is a failed load, not an empty channel. Messages
         // already on screen stay; the state says they may be behind.
@@ -120,6 +171,8 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
             message: cause instanceof Error ? cause.message : 'Team chat is offline.'
           })
         }
+      } finally {
+        pollInFlightRef.current = false
       }
     }
     void load()
@@ -128,7 +181,31 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
       cancelled = true
       clearInterval(timer)
     }
-  }, [channelId, transcriptAttempt])
+  }, [applyMessages, channelId, transcriptAttempt])
+
+  const loadOlder = useCallback(async (): Promise<void> => {
+    const before = olderPageCursor(messages)
+    if (!before || loadingOlder === 'loading') {
+      return
+    }
+    setLoadingOlder('loading')
+    const node = scrollRef.current
+    prependAnchorRef.current = node ? { height: node.scrollHeight, top: node.scrollTop } : null
+    try {
+      const payload = await requestCodevBridge<{ messages?: ChannelMessage[] }>('team.messages', {
+        channelId,
+        before,
+        limit: CHANNEL_PAGE_SIZE
+      })
+      const page = payload.messages ?? []
+      setMayHaveOlder(pageMayHaveMore(page))
+      applyMessages(page)
+      setLoadingOlder('idle')
+    } catch {
+      prependAnchorRef.current = null
+      setLoadingOlder('failed')
+    }
+  }, [applyMessages, channelId, loadingOlder, messages])
 
   // Focus moves into the composer while the channel is up, and goes back to
   // whatever had it — usually the agent composer — when the layer drops.
@@ -144,9 +221,43 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
 
   const groups = useMemo(() => groupMessages(messages), [messages])
 
-  useEffect(() => {
+  const onScroll = useCallback((): void => {
+    const node = scrollRef.current
+    if (!node) {
+      return
+    }
+    const distance = node.scrollHeight - node.scrollTop - node.clientHeight
+    const following = distance <= FOLLOW_THRESHOLD_PX
+    followRef.current = following
+    if (following) {
+      setUnseen(0)
+    }
+  }, [])
+
+  const scrollToBottom = useCallback((): void => {
     const node = scrollRef.current
     if (node) {
+      node.scrollTop = node.scrollHeight
+    }
+    followRef.current = true
+    setUnseen(0)
+  }, [])
+
+  // Follow new messages only while the reader is at the bottom or has just
+  // sent one; keep their place when an older page lands above them.
+  useEffect(() => {
+    const node = scrollRef.current
+    if (!node) {
+      return
+    }
+    const anchor = prependAnchorRef.current
+    if (anchor) {
+      prependAnchorRef.current = null
+      node.scrollTop = anchor.top + (node.scrollHeight - anchor.height)
+      return
+    }
+    if (followRef.current || scrollToBottomRef.current) {
+      scrollToBottomRef.current = false
       node.scrollTop = node.scrollHeight
     }
   }, [groups.length, messages.length])
@@ -164,7 +275,9 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         message: ChannelMessage
         agentDispatch?: { dispatched: boolean; reason?: string } | null
       }>('team.send', { channelId, body })
-      setMessages((current) => [...current, payload.message])
+      // Reconciled by id: a poll may already have delivered this message.
+      scrollToBottomRef.current = true
+      applyMessages([payload.message])
       if (payload.agentDispatch) {
         setNotice(
           payload.agentDispatch.dispatched
@@ -181,9 +294,13 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
     } finally {
       setSending(false)
     }
-  }, [channelId, draft, sending, setDraft])
+  }, [applyMessages, channelId, draft, sending, setDraft])
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    // Enter that only commits an IME candidate must not send.
+    if (isImeCompositionKeyDown(event)) {
+      return
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       void submit()
@@ -221,75 +338,31 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
         ) : null}
       </header>
 
-      <div
-        ref={scrollRef}
-        role="log"
-        className="scrollbar-sleek mx-auto w-full max-w-3xl min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4"
-      >
-        {channelError ? <p className="text-xs text-destructive">{channelError}</p> : null}
-        {transcript.status === 'failed' ? (
-          <p role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive">
-            <span>
-              {groups.length === 0
-                ? `Couldn’t load this channel’s messages: ${transcript.message}`
-                : `Messages may be behind — the last refresh failed: ${transcript.message}`}
-            </span>
-            <button
-              type="button"
-              onClick={() => setTranscriptAttempt((attempt) => attempt + 1)}
-              className="rounded border border-border px-1.5 py-0.5 text-xs text-foreground hover:bg-accent"
-            >
-              Retry
-            </button>
-          </p>
-        ) : null}
-        {transcript.status === 'loading' && groups.length === 0 ? (
-          <p role="status" className="text-xs text-muted-foreground">
-            Loading #{slug}…
-          </p>
-        ) : null}
-        {transcript.status === 'ready' && groups.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            This is the start of #{slug}. Say hello, or mention{' '}
-            <code className="rounded bg-accent px-1">{AGENT_MENTION}</code> to pull in the coding
-            agent.
-          </p>
-        ) : null}
-        {groups.map((group) => (
-          <article key={group.key} className="flex gap-2.5">
-            {group.authorKind === 'member' ? (
-              <MemberAvatar
-                avatarUrl={group.avatarUrl}
-                name={group.authorName}
-                online={false}
-                size={26}
-              />
-            ) : (
-              <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                <Sparkles aria-hidden className="size-3.5" />
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <strong className="text-foreground">{group.authorName}</strong>
-                {group.authorKind === 'agent' ? (
-                  <span className="rounded bg-accent px-1 text-[9px] uppercase">agent</span>
-                ) : null}
-                <time dateTime={group.createdAt}>{formatChatTime(group.createdAt)}</time>
-              </p>
-              {group.messages.map((message) => (
-                <p
-                  key={message.id}
-                  className="whitespace-pre-wrap break-words text-sm text-foreground/90"
-                >
-                  {message.body}
-                </p>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
+      <ChannelTranscriptLog
+        scrollRef={scrollRef}
+        onScroll={onScroll}
+        slug={slug}
+        groups={groups}
+        channelError={channelError}
+        transcript={transcript}
+        mayHaveOlder={mayHaveOlder}
+        loadingOlder={loadingOlder}
+        onLoadOlder={() => void loadOlder()}
+        onRetry={() => setTranscriptAttempt((attempt) => attempt + 1)}
+      />
 
+      {unseen > 0 ? (
+        <div className="mx-auto flex w-full max-w-3xl justify-center px-4">
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-foreground shadow-sm hover:bg-accent"
+          >
+            <ArrowDown aria-hidden className="size-3" />
+            {unseen === 1 ? '1 new message' : `${unseen} new messages`}
+          </button>
+        </div>
+      ) : null}
       {notice ? (
         <p className="mx-auto w-full max-w-3xl px-4 py-1 text-xs text-muted-foreground">{notice}</p>
       ) : null}

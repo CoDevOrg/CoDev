@@ -41,7 +41,9 @@ export function claimGroupForPath(
 ): CodevPathClaimGroup | null {
   return (
     groups.find((group) => {
-      if (group.path === relativePath) return true
+      if (group.path === relativePath) {
+        return true
+      }
       if (group.path.endsWith('/**')) {
         const directory = group.path.slice(0, -3)
         return relativePath === directory || relativePath.startsWith(`${directory}/`)
@@ -61,11 +63,17 @@ export function CodevExplorerPathClaimBadge({
   if (!group) {
     return null
   }
-  const live = group.claims.some((claim) => claim.status === 'active' || claim.status === 'contested')
+  const live = group.claims.some(
+    (claim) => claim.status === 'active' || claim.status === 'contested'
+  )
   if (!live && !group.claims.length) {
     return null
   }
-  const label = group.contested ? 'Contested' : group.claims.some((claim) => claim.status === 'active') ? 'Claimed' : 'Released'
+  const label = group.contested
+    ? 'Contested'
+    : group.claims.some((claim) => claim.status === 'active')
+      ? 'Claimed'
+      : 'Released'
   return (
     <span
       className="ml-1 shrink-0 rounded-sm border border-border px-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
@@ -86,7 +94,8 @@ function claimsForWorktree(
   const slotClaims = (claims?.claims ?? []).filter((claim) => claim.worktreeId === worktreeId)
   const group =
     groups.find((entry) => entry.claims.some((claim) => claim.worktreeId === worktreeId)) ??
-    targetPathClaimGroup(groups)
+    // No file context here: a contested group first, then any group.
+    targetPathClaimGroup(groups, null)
   return { slotClaims, group }
 }
 
@@ -101,8 +110,14 @@ export function CodevWorktreePathClaims({
     return null
   }
   const thisClaim = slotClaims[0] ?? null
-  const canReassign = Boolean(group?.contested && thisClaim && (thisClaim.status === 'active' || thisClaim.status === 'contested'))
-  const canCancel = Boolean(group?.contested && thisClaim && thisClaim.id === group?.overlappingClaimId)
+  const canReassign = Boolean(
+    group?.contested &&
+    thisClaim &&
+    (thisClaim.status === 'active' || thisClaim.status === 'contested')
+  )
+  const canCancel = Boolean(
+    group?.contested && thisClaim && thisClaim.id === group?.overlappingClaimId
+  )
 
   return (
     <div
@@ -111,7 +126,10 @@ export function CodevWorktreePathClaims({
       data-codev-worktree-claims="true"
     >
       {group?.contested && group.warningTitle ? (
-        <div className="mb-1 rounded-sm border border-destructive/40 bg-destructive/10 p-1.5" role="alert">
+        <div
+          className="mb-1 rounded-sm border border-destructive/40 bg-destructive/10 p-1.5"
+          role="alert"
+        >
           <strong>{group.warningTitle}</strong>
         </div>
       ) : claims?.notice ? (

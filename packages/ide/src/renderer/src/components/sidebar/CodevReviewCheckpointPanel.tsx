@@ -8,6 +8,7 @@ import {
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
 import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
+import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
 import { CodevReviewCheckpointViewPanel } from './CodevReviewCheckpointView'
 import type { CodevReviewSnapshot } from './codev-review-checkpoint-snapshot'
 import {
@@ -68,6 +69,18 @@ export function CodevReviewCheckpointPanel({
     }
     void refresh()
   }, [bridge.status, embedded, refresh])
+
+  // An activity jump names a checkpoint's session: that is a deliberate
+  // choice, scoped like any other to the checkout it was made in.
+  const focus = useCodevSurfaceFocus('review-checkpoint')
+  useEffect(() => {
+    if (!focus) {
+      return
+    }
+    setChoice({ worktreeId, sessionId: focus.target.sessionId })
+    consumeCodevSurfaceFocus(focus.id)
+    void refresh()
+  }, [focus, refresh, worktreeId])
 
   if (!embedded) {
     return null

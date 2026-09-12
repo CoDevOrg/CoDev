@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   phaseLabel,
   runtimeText,
@@ -221,6 +222,10 @@ export function AgentDrawer({
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
+                  // Enter that only commits an IME candidate must not steer.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     void submit()
