@@ -17,6 +17,7 @@ vi.mock("./orchestrator", () => ({
   submitClaudeSetupTokenCodeInSandbox: vi.fn(),
 }));
 import {
+  isClaudeRunnerDisposableHere,
   orchestratorClaudeRunner,
   resolveClaudeRunner,
   subprocessClaudeRunner,
@@ -69,6 +70,22 @@ describe("official Claude runtime references", () => {
     expect(resolveClaudeRunner()).toBe(subprocessClaudeRunner);
     vi.stubEnv("VERCEL", "1");
     expect(() => resolveClaudeRunner()).toThrow(/persistent local runtime/);
+  });
+  it("treats a subprocess profile as disposable only off Vercel", () => {
+    const subprocessRunnerId = encodeClaudeRuntimeReference({
+      version: 1,
+      backend: "subprocess",
+      profileId,
+    });
+    vi.stubEnv("VERCEL", "");
+    expect(isClaudeRunnerDisposableHere(subprocessRunnerId)).toBe(true);
+    vi.stubEnv("VERCEL", "1");
+    // A local profile is unreachable from Vercel; disconnect must clear the row
+    // rather than resolve a runner that would throw.
+    expect(isClaudeRunnerDisposableHere(subprocessRunnerId)).toBe(false);
+    // Orchestrator references are always disposable; legacy tokens never are.
+    expect(isClaudeRunnerDisposableHere(runnerId)).toBe(true);
+    expect(isClaudeRunnerDisposableHere("sk-ant-oat01-secret")).toBe(false);
   });
   it("does not inherit provider credentials or endpoint overrides", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "secret");
