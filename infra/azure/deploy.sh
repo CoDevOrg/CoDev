@@ -141,6 +141,25 @@ az storage container create \
   --auth-mode login --only-show-errors >/dev/null || true
 
 # ---------------------------------------------------------------------------
+# Roll the host onto the new release
+#
+# The stack above updated the VM's ReleaseVersion tag, but a running host
+# read its tag at boot and is still on the old one. cloud-init's runcmd fires
+# only on a VM's first boot, so the bootstrap is a systemd unit instead and a
+# restart is what re-runs it. This is the Azure equivalent of CloudFormation
+# replacing the EC2 instance on a UserData change, minus the replacement.
+#
+# Deliberately after the upload: a host that reboots into a release prefix
+# that is still half-uploaded fails its bootstrap.
+# ---------------------------------------------------------------------------
+
+echo "==> Restarting the host onto ${release_version}"
+az vm restart \
+  --resource-group "${resource_group}" \
+  --name codev-runtime-host \
+  --only-show-errors --output none
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 

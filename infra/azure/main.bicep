@@ -352,10 +352,16 @@ resource hostAvailabilityAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if
 // the release coordinates. Azure CLI replaces AWS CLI for the download,
 // authenticating as the VM's own managed identity so no key is baked into
 // the image or the template.
-// Bicep's triple-quoted strings do not interpolate, which is the right
-// property for a shell script full of its own ${...} expansions: the only
-// values that come from the template are substituted explicitly below, so
-// nothing else can be swallowed by accident.
+// cloud-init, and deliberately free of anything that changes between
+// deploys.
+//
+// Azure treats osProfile.customData as immutable once a VM exists: a second
+// deployment carrying a different value is rejected outright with
+// PropertyChangeNotAllowed, where EC2 UserData can simply be updated. So the
+// release version must not live in here -- baking it in makes the first
+// deploy succeed and every later one fail. It travels as a VM tag instead,
+// which is mutable, and the boot script reads it back through IMDS. The only
+// substitutions below are values fixed for the life of the stack.
 var cloudInitTemplate = '''#cloud-config
 package_update: true
 packages:
@@ -363,13 +369,13 @@ packages:
   - curl
   - chrony
   - xfsprogs
+  - jq
 write_files:
   - path: /etc/codev/bootstrap.env
     permissions: '0600'
     content: |
       CODEV_CLOUD=azure
       CODEV_ARTIFACT_ACCOUNT=__ARTIFACT_ACCOUNT__
-      CODEV_RELEASE_VERSION=__RELEASE_VERSION__
       CODEV_KEY_VAULT_NAME=__KEY_VAULT_NAME__
       CODEV_HOST_ARCH=x86_64
   - path: /usr/local/sbin/codev-fetch-bootstrap.sh
@@ -385,8 +391,16 @@ write_files:
       chronyc -a makestep
       chronyc waitsync 60 1.0 0.0 2
       export DEBIAN_FRONTEND=noninteractive
-      curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+      command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
       until az login --identity >/dev/null 2>&1; do sleep 5; done
+      # The release to run comes from this VM's own ReleaseVersion tag, which
+      # the deploy updates in place. Reading it at boot rather than baking it
+      # into customData is what lets the same VM be rolled forward.
+      CODEV_RELEASE_VERSION="$(curl -fsS -H 'Metadata: true' \
+        'http://169.254.169.254/metadata/instance/compute/tagsList?api-version=2021-02-01' \
+        | jq -r '.[] | select(.name=="ReleaseVersion") | .value')"
+      export CODEV_RELEASE_VERSION
+      test -n "$CODEV_RELEASE_VERSION"
       until az storage blob download \
         --account-name "$CODEV_ARTIFACT_ACCOUNT" \
         --container-name releases \
@@ -397,16 +411,30 @@ write_files:
       done
       chmod 0700 /tmp/codev-bootstrap-host.sh
       exec /tmp/codev-bootstrap-host.sh
+  - path: /etc/systemd/system/codev-bootstrap.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Fetch and run the CoDev host bootstrap
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/codev-fetch-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
-  - [ /usr/local/sbin/codev-fetch-bootstrap.sh ]
+  - [ systemctl, enable, --now, codev-bootstrap.service ]
 '''
 
+// A boot-time service rather than a bare runcmd, because cloud-init's runcmd
+// fires only on a VM's very first boot. Rolling a release works by updating
+// the tag and restarting the host, so the bootstrap has to run every boot.
 var cloudInit = replace(
-  replace(
-    replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
-    '__RELEASE_VERSION__',
-    releaseVersion
-  ),
+  replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
   '__KEY_VAULT_NAME__',
   '${namePrefix}-kv'
 )
@@ -414,7 +442,12 @@ var cloudInit = replace(
 resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-host'
   location: location
-  tags: union(tags, { Name: 'codev-firecracker-host' })
+  tags: union(tags, {
+    Name: 'codev-firecracker-host'
+    // Mutable, unlike customData. The boot script reads this back through
+    // IMDS to decide which release to install.
+    ReleaseVersion: releaseVersion
+  })
   identity: { type: 'SystemAssigned' }
   properties: {
     hardwareProfile: { vmSize: hostVmSize }

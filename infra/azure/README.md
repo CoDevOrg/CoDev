@@ -80,6 +80,30 @@ Required repository variables:
 | `AZURE_RESOURCE_GROUP`      | Resource group to deploy into     |
 | `CODEV_HOST_SSH_PUBLIC_KEY` | Key authorised on the host        |
 
+### The deploy principal needs a data-plane role, not just Contributor
+
+Azure separates control-plane RBAC from data-plane RBAC, and this catches
+people out: **Contributor lets you create a storage account but not write a
+blob into it.** Uploading the release fails with "You do not have the
+required permissions needed to perform this operation" until whoever runs
+the deploy — the CI service principal, and any human running `deploy.sh`
+locally — also holds **Storage Blob Data Contributor**.
+
+This cannot live in `main.bicep`, because the template would have to grant
+the role to the very principal already deploying it. Grant it once per
+principal:
+
+```bash
+az role assignment create \
+  --assignee-object-id <principal object id> \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" \
+  --scope /subscriptions/<sub>/resourceGroups/<rg>
+```
+
+Creating a role assignment itself needs Owner or User Access Administrator
+on the scope; plain Contributor cannot grant roles, including to itself.
+
 ## Retiring the AWS key
 
 Once both runtimes have been live, credentials exist in both envelope formats.
