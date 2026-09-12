@@ -458,6 +458,26 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   letter-spacing: -0.01em;
 }
 
+.codev-mc-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Agents and worktree slots are two different numbers (WUI-07); a dot keeps
+   them from reading as one when they sit side by side. */
+.codev-mc-counts .is-slots::before {
+  content: "·";
+  opacity: 0.4;
+  font-weight: 400;
+}
+
+.codev-agents-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
 .codev-agents-count strong {
   font-size: 17px;
   font-weight: 650;
