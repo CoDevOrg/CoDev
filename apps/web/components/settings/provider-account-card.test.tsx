@@ -371,10 +371,20 @@ describe("ProviderAccountCard", () => {
           failureReason: null,
         }),
       )
+      // The status poll fires as soon as the session opens, before the member
+      // could have pasted anything, so it has to keep reporting
+      // `awaiting_code`: `exchanging` means authorization already finished
+      // elsewhere, which correctly tears down the paste-code form this test
+      // needs to submit through.
       .mockResolvedValueOnce(
-        jsonResponse({ id: "sess-poll", status: "exchanging" }),
+        jsonResponse({
+          id: "sess-poll",
+          status: "awaiting_code",
+          authorizeUrl: "https://platform.claude.com/oauth/authorize?x=1",
+          failureReason: null,
+        }),
       )
-      .mockReturnValueOnce(pendingPoll);
+      .mockReturnValue(pendingPoll);
     vi.stubGlobal("fetch", fetchMock);
 
     const { unmount } = render(
@@ -392,10 +402,16 @@ describe("ProviderAccountCard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
-    const input = await screen.findByPlaceholderText("Paste code");
-    fireEvent.change(input, { target: { value: "code123#state" } });
+    // Fake timers go in before the session opens. Installing them afterwards
+    // leaves the poll's own setTimeout on the real clock, so it fires for
+    // real partway through advanceTimersByTimeAsync below and issues a fetch
+    // this test never mocked.
     vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: "Connect Claude" }));
+    const input = await vi.waitFor(() =>
+      screen.getByPlaceholderText("Paste code"),
+    );
+    fireEvent.change(input, { target: { value: "code123#state" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Submit" }));
       await Promise.resolve();
