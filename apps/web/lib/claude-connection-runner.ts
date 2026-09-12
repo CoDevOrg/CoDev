@@ -129,6 +129,24 @@ export function resolveClaudeRunner(runnerId?: string): ClaudeLoginRunner {
   return unavailableClaudeRunner;
 }
 
+/**
+ * Whether the runner for a stored reference can run in this environment.
+ * A `subprocess` profile lives on the persistent local host that created it, so
+ * from Vercel serverless it can be neither executed nor disposed. Disconnect and
+ * reaping use this to clear such a stranded record instead of resolving a runner
+ * that would throw. Unknown/legacy references are not disposable here either.
+ */
+export function isClaudeRunnerDisposableHere(runnerId: string): boolean {
+  let backend: string;
+  try {
+    backend = decodeClaudeRuntimeReference(runnerId).backend;
+  } catch {
+    return false;
+  }
+  if (backend === "subprocess") return !process.env.VERCEL;
+  return true;
+}
+
 export function isHostedClaudeConnectEnabled() {
   if (
     process.env.VERCEL &&

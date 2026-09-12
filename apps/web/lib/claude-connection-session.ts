@@ -211,7 +211,15 @@ export async function reapExpiredClaudeConnectionSessions(
         .returning();
       if (!claimed) continue;
       if (session.runnerId) {
-        if (suppliedRunner || isClaudeRuntimeReference(session.runnerId)) {
+        const { isClaudeRunnerDisposableHere } =
+          await import("./claude-connection-runner");
+        // A subprocess profile from another host cannot be disposed here; skip
+        // straight to deleting the already-failed row instead of throwing.
+        if (
+          suppliedRunner ||
+          (isClaudeRuntimeReference(session.runnerId) &&
+            isClaudeRunnerDisposableHere(session.runnerId))
+        ) {
           const runner = await sessionRunner(session.runnerId, suppliedRunner);
           await runner.dispose({ runnerId: session.runnerId });
         }
@@ -494,11 +502,18 @@ export async function disconnectClaudeRuntime(userId: string) {
         eq(schema.claudeConnectionSessions.status, "connected"),
       ),
     );
+  const { isClaudeRunnerDisposableHere } =
+    await import("./claude-connection-runner");
   for (const row of rows) {
     if (!isClaudeRuntimeReference(row.runnerId)) continue;
-    const runner = await sessionRunner(row.runnerId);
-    // Leave the record connected if runtime cleanup fails, so it can be retried.
-    await runner.dispose({ runnerId: row.runnerId });
+    if (isClaudeRunnerDisposableHere(row.runnerId)) {
+      const runner = await sessionRunner(row.runnerId);
+      // Leave the record connected if runtime cleanup fails, so it can be retried.
+      await runner.dispose({ runnerId: row.runnerId });
+    }
+    // A subprocess profile is unreachable from here (e.g. a local connection
+    // seen from Vercel): there is nothing to dispose remotely, so clear the
+    // record rather than stranding it "connected" forever.
     await markFailed(row.id, "Disconnected.");
   }
 }
