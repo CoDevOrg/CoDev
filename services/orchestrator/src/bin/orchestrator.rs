@@ -111,7 +111,8 @@ async fn configure_backend() -> Result<Backend> {
     }
 }
 
-/// Power the EC2 host off once nothing has been used on it for `idle_timeout`.
+/// Power the runtime host off once nothing has been used on it for
+/// `idle_timeout`.
 ///
 /// Two things have to be true for this to behave the way somebody using CoDev
 /// expects. A live sandbox blocks shutdown outright — it holds VM state, and
@@ -146,9 +147,15 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             continue;
         }
         info!(?idle_timeout, "stopping idle Firecracker host");
+        // Not `systemctl poweroff` directly. The helper the host bootstrap
+        // installs knows which cloud this is: on EC2 it powers off (the
+        // instance's shutdown behaviour stops it and stops the bill), and on
+        // Azure it asks ARM to deallocate, because a guest-initiated
+        // poweroff there leaves the VM allocated and still charging for its
+        // cores. See codev-host-poweroff in infra/aws/scripts/bootstrap-host.sh.
         match time::timeout(
             Duration::from_secs(30),
-            Command::new("systemctl").arg("poweroff").output(),
+            Command::new("/usr/local/sbin/codev-host-poweroff").output(),
         )
         .await
         {

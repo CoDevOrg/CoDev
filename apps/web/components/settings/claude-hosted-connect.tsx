@@ -16,7 +16,6 @@ type Phase = "idle" | "starting" | "awaiting_code" | "polling" | "failed";
 
 const BASE = "/api/personal/claude-connection/session";
 const POLL_MS = 2_000;
-const POLL_TIMEOUT_MS = 3 * 60 * 1_000;
 
 /**
  * Best-effort teardown of a hosted session on the server. Used when the member
@@ -49,6 +48,9 @@ export function ClaudeHostedConnect({
   const [submitting, setSubmitting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const attempt = useRef(0);
+  // Mirrors `submitting` for the poll loop, which closes over the effect's
+  // first render and would otherwise read a stale value.
+  const submittingRef = useRef(false);
   const sessionRef = useRef<SessionView | null>(null);
   const notifyConnected = useEffectEvent(onConnected);
   const activeSessionId =
@@ -75,9 +77,16 @@ export function ClaudeHostedConnect({
     const sessionId = activeSessionId;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const startedAt = Date.now();
 
     async function poll() {
+      // One request against the session at a time. A status poll racing a
+      // code submission can observe the session mid-exchange and rewrite the
+      // phase out from under the member's own submit, so the poll waits its
+      // turn rather than overlapping it.
+      if (submittingRef.current) {
+        timer = setTimeout(() => void poll(), POLL_MS);
+        return;
+      }
       try {
         const response = await fetch(`${BASE}/${sessionId}`, {
           signal: controller.signal,
@@ -98,6 +107,7 @@ export function ClaudeHostedConnect({
           setCode("");
           setError("");
           setSubmitting(false);
+          submittingRef.current = false;
           setPhase("idle");
           notifyConnected();
           return;
@@ -107,22 +117,21 @@ export function ClaudeHostedConnect({
             payload.failureReason ?? "The connection attempt failed.",
           );
         }
-        if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
-          attempt.current += 1;
-          deleteSession(sessionId);
-          setSubmitting(false);
-          setPhase("failed");
-          setError("Timed out waiting for Claude. Start again.");
-          return;
-        }
         if (payload.status === "exchanging") setPhase("polling");
         // One request at a time. The server owns the session expiry, including
-        // time spent authorizing in a background tab.
+        // time spent authorizing in a background tab -- it issues a ten minute
+        // window (claude-connection-runner.ts) and reports `failed` with a
+        // reason once that lapses, which the branch above already surfaces.
+        // A client-side deadline used to sit here and fired at three minutes,
+        // so a member who spent longer than that approving in a background
+        // tab was told to start over while the session still had seven
+        // minutes left on it.
         timer = setTimeout(() => void poll(), POLL_MS);
       } catch (error) {
         if (controller.signal.aborted) return;
         attempt.current += 1;
         setSubmitting(false);
+        submittingRef.current = false;
         setPhase("failed");
         setError(
           error instanceof Error
@@ -147,6 +156,7 @@ export function ClaudeHostedConnect({
     setCode("");
     setError("");
     setSubmitting(false);
+    submittingRef.current = false;
     setPhase("idle");
   }
 
@@ -159,6 +169,7 @@ export function ClaudeHostedConnect({
     setCode("");
     setError("");
     setSubmitting(false);
+    submittingRef.current = false;
     setCanceling(false);
     setPhase("idle");
   }
@@ -197,6 +208,7 @@ export function ClaudeHostedConnect({
     if (!session || !code.trim() || submitting) return;
     const currentAttempt = attempt.current;
     setSubmitting(true);
+    submittingRef.current = true;
     setError("");
     try {
       const response = await fetch(`${BASE}/${session.id}/code`, {
@@ -221,6 +233,7 @@ export function ClaudeHostedConnect({
       );
     } finally {
       if (attempt.current === currentAttempt) setSubmitting(false);
+      submittingRef.current = false;
     }
   }
 

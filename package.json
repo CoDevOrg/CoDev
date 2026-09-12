@@ -23,7 +23,8 @@
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
     "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "rewrap:credentials": "tsx --conditions react-server scripts/rewrap-credentials.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
@@ -32,6 +33,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.4.1",
     "prettier": "3.8.1",
+    "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.65.0"
   },
