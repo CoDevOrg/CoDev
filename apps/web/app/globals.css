@@ -377,6 +377,78 @@
   min-width: 0;
 }
 
+/* Provider preflight notice, overlaid on the IDE iframe. Absolutely positioned
+   so it never becomes a flex sibling of `.workspace-iframe` — as an in-flow
+   sibling it would eat the row's width and squeeze the IDE into a column.
+   Sits above `.workspace-boot-overlay` (z-index 2) and the boot pill (3). */
+.workspace-provider-preflight {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(237, 238, 240, 0.14);
+  border-radius: 10px;
+  background: rgba(18, 20, 23, 0.94);
+  backdrop-filter: blur(6px);
+  color: var(--workspace-ink);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+.workspace-provider-preflight-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--workspace-muted);
+}
+
+.workspace-provider-preflight-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-provider-preflight-body p {
+  margin: 0;
+}
+
+.workspace-provider-preflight-headline {
+  font-weight: 500;
+}
+
+.workspace-provider-preflight-detail {
+  color: var(--workspace-muted);
+}
+
+.workspace-provider-preflight-detail a {
+  color: var(--workspace-ink);
+  text-decoration: underline;
+}
+
+.workspace-provider-preflight-detail a:hover {
+  color: var(--gold-bright);
+}
+
+.workspace-provider-preflight-dismiss {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--workspace-muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.workspace-provider-preflight-dismiss:hover {
+  color: var(--workspace-ink);
+}
+
 .workspace-body {
   display: flex;
   flex: 1;

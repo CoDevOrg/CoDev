@@ -65,24 +65,19 @@ export function ProviderPreflightBanner({
 
   return (
     <div
-      className="pointer-events-auto absolute inset-x-3 top-3 z-20 flex items-start gap-3 rounded-lg border border-border bg-background/95 px-3 py-2 text-xs shadow-md backdrop-blur"
+      className="workspace-provider-preflight"
       role="status"
       aria-live="polite"
       data-testid="provider-preflight"
     >
-      <KeyRound
-        aria-hidden
-        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{headline}</p>
+      <KeyRound aria-hidden className="workspace-provider-preflight-icon" />
+      <div className="workspace-provider-preflight-body">
+        <p className="workspace-provider-preflight-headline">{headline}</p>
         {detail ? (
-          <p className="text-muted-foreground">
+          <p className="workspace-provider-preflight-detail">
             {detail}{" "}
             {actionable ? (
-              <a className="underline" href={SETTINGS_HREF}>
-                Open provider settings
-              </a>
+              <a href={SETTINGS_HREF}>Open provider settings</a>
             ) : null}
           </p>
         ) : null}
@@ -90,11 +85,11 @@ export function ProviderPreflightBanner({
       {phase === "ready" ? (
         <button
           aria-label="Dismiss"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          className="workspace-provider-preflight-dismiss"
           onClick={() => setDismissed(true)}
           type="button"
         >
-          <X className="size-3.5" />
+          <X size={14} />
         </button>
       ) : null}
     </div>
