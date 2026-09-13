@@ -11,7 +11,17 @@ import {
   coordinationMessages,
   designPartnerFeedback,
   githubIssueAssignments,
+  featureOverrideAuditEvents,
+  organizationFeatureOverrides,
+  organizationMembers,
+  organizationRole,
+  organizations,
+  organizationSubscriptionStatus,
+  organizationSubscriptions,
   pathClaims,
+  planEntitlements,
+  plans,
+  subscriptionPlan,
   publishedBranches,
   providerCredentialEvents,
   providerCredentials,
@@ -23,6 +33,8 @@ import {
   sharedChats,
   userComputeUsage,
   userEnvironmentVariables,
+  userFeatureOverrides,
+  featureKey,
   users,
   workspaceMembers,
   workspaceRuntimes,
@@ -32,8 +44,53 @@ import {
 } from "./schema";
 
 describe("database schema", () => {
+  it("keeps entitlement enum values aligned with the public contracts", () => {
+    expect(organizationRole.enumValues).toEqual([
+      "owner",
+      "admin",
+      "billing_admin",
+      "member",
+    ]);
+    expect(subscriptionPlan.enumValues).toEqual([
+      "free",
+      "pro",
+      "team",
+      "enterprise",
+    ]);
+    expect(organizationSubscriptionStatus.enumValues).toEqual([
+      "trialing",
+      "active",
+      "past_due",
+      "canceled",
+    ]);
+    expect(featureKey.enumValues).toEqual(["hosted_codex_subscription"]);
+  });
+
   it("defines the core workspace tables", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
+    expect(getTableName(organizations)).toBe("organizations");
+    expect(getTableName(organizationMembers)).toBe("organization_members");
+    expect(getTableName(plans)).toBe("plans");
+    expect(getTableName(planEntitlements)).toBe("plan_entitlements");
+    expect(getTableName(organizationSubscriptions)).toBe(
+      "organization_subscriptions",
+    );
+    expect(getTableName(organizationFeatureOverrides)).toBe(
+      "organization_feature_overrides",
+    );
+    expect(getTableName(userFeatureOverrides)).toBe("user_feature_overrides");
+    expect(getTableName(featureOverrideAuditEvents)).toBe(
+      "feature_override_audit_events",
+    );
+    expect(workspaces.organizationId.name).toBe("organization_id");
+    expect(organizationMembers.role.name).toBe("role");
+    expect(organizationSubscriptions.planId.name).toBe("plan_id");
+    expect(planEntitlements.feature.name).toBe("feature");
+    expect(organizationFeatureOverrides.expiresAt.name).toBe("expires_at");
+    expect(userFeatureOverrides.createdBy.name).toBe("created_by");
+    expect(featureOverrideAuditEvents.previousEnabled.name).toBe(
+      "previous_enabled",
+    );
     expect(getTableName(conversations)).toBe("conversations");
     expect(getTableName(conversationMessages)).toBe("conversation_messages");
     expect(getTableName(conversationArtifacts)).toBe("conversation_artifacts");
