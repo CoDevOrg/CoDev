@@ -114,12 +114,11 @@ async function resolveCodexAuthCacheForIde(
       userId,
       workspaceId,
     });
-    // Browser and CLI logins store the same auth cache, so provenance is the
-    // only thing telling them apart: only a `cli` login the member enabled
-    // for workspaces may be materialized as CODEX_HOME on the shared host.
+    // Browser and CLI Codex logins store the same refreshable auth cache. The
+    // orchestrator materializes it in this member's private CODEX_HOME, so
+    // either provenance is valid when the member enabled it for workspaces.
     if (
       !hosted ||
-      hosted.credential.connectedVia !== "cli" ||
       !hosted.credential.enabledForWorkspace ||
       !hosted.credential.encryptedMaterial
     ) {

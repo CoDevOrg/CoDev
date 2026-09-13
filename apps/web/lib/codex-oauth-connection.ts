@@ -98,8 +98,10 @@ export async function persistCodexSubscriptionFromOAuth(input: {
     // sharingEnabled: defaults to true for ORGANIZATION, false for USER.
     material: { authCacheJson },
     accountLabel: "ChatGPT",
-    // In-sandbox browser OAuth: rooms-only, never materialized on a workspace host.
+    // Codex OAuth produces the same refreshable auth cache as `codex login`.
+    // The workspace runtime materializes it into the member-scoped CODEX_HOME,
+    // so one browser sign-in can power both rooms and coding workspaces.
     connectedVia: "browser",
-    enabledFor: { rooms: true, workspace: false },
+    enabledFor: { rooms: true, workspace: true },
   });
 }

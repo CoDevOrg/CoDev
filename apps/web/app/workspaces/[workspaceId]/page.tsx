@@ -31,9 +31,9 @@ export default async function WorkspacePage({
   }
 
   // What the workspace chat tab can actually *run*, not merely what the member
-  // has connected: a workspace-enabled API key or local-CLI login. A browser
-  // subscription never reaches the shared host, so advertising it here would
-  // land the member on a `claude`/`codex` process that boots "Not logged in".
+  // has connected: a workspace-enabled API key or supported subscription.
+  // Codex browser OAuth and local-CLI login both provide the same auth cache;
+  // browser-only Claude and Cursor runtimes remain unavailable here.
   const availableProviders = workspaceReadyProviders(providerSnapshot).filter(
     (provider): provider is "openai" | "anthropic" => provider !== "cursor",
   );

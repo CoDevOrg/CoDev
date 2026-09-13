@@ -140,7 +140,7 @@ export function NativeChatComposerActions({
           onClick={isWorking ? onStop : onSend}
           variant={isWorking ? 'secondary' : 'default'}
           size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
+          className="size-8 rounded-full pointer-coarse:size-11"
         >
           {isWorking ? (
             <Square className="size-3.5 fill-current" />

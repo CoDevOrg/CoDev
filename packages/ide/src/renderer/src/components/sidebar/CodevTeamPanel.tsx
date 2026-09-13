@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent, type JSX } from 'react'
+/* eslint-disable max-lines -- Why: the CoDev team panel keeps roster, channel creation, and channel navigation in one sidebar surface. */
+import { useCallback, useEffect, useRef, useState, type FormEvent, type JSX } from 'react'
 import { Check, Hash, Lock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { requestCodevBridge } from '@/web/codev-bridge-singleton'
@@ -183,8 +184,13 @@ function useCodevTeam(active: boolean): {
   const [roster, setRoster] = useState<TeamRoster | null>(null)
   const [channels, setChannels] = useState<ChannelSummary[]>([])
   const [error, setError] = useState<string | null>(null)
+  const refreshInFlightRef = useRef(false)
 
   const refresh = useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      return
+    }
+    refreshInFlightRef.current = true
     try {
       const [nextRoster, channelPayload] = await Promise.all([
         requestCodevBridge<TeamRoster>('team.roster'),
@@ -195,6 +201,8 @@ function useCodevTeam(active: boolean): {
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Team chat is offline.')
+    } finally {
+      refreshInFlightRef.current = false
     }
   }, [])
 

@@ -11,8 +11,9 @@ import type {
  *
  * The rule, uniform across providers:
  *  - A coding workspace runs on a shared host, so it may use a credential only
- *    when the member enabled it there AND it is not a browser login. Browser
- *    (in-sandbox OAuth) subscriptions are rooms-only, every provider.
+ *    when the member enabled it there. Codex browser OAuth is workspace-capable
+ *    because it yields the same auth cache as `codex login`; other browser
+ *    subscription runtimes remain rooms-only.
  *  - A chat room runs on the member's own credential, so it accepts a browser
  *    or local-CLI subscription the member enabled for rooms.
  *
@@ -81,9 +82,9 @@ export function providerSurfaceCapability(
   if (
     subConnected &&
     subscription.enabledForWorkspace &&
-    subscription.provenance === "cli"
+    (subscription.provenance === "cli" || provider === "openai")
   ) {
-    personalWorkspace.push("cli");
+    personalWorkspace.push(subscription.provenance ?? "cli");
   }
   if (claudeCli?.enabledForWorkspace) personalWorkspace.push("cli");
 

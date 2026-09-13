@@ -5,9 +5,9 @@ export type ProviderConnectionStatus = "connected" | "not_connected";
 export type ProviderConnectionCredentialType = "API_KEY" | "OAUTH_TOKEN";
 
 /**
- * How a credential was obtained. Provenance decides which surfaces it may
- * power: a browser (in-sandbox OAuth) login is rooms-only; a local-CLI login
- * or an API key may also power a coding workspace.
+ * How a credential was obtained. Surface support also depends on the provider:
+ * Codex browser OAuth produces a workspace-capable auth cache, while the
+ * browser runtimes for Claude and Cursor remain rooms-only.
  */
 export type CredentialProvenance = "browser" | "cli" | "api_key";
 

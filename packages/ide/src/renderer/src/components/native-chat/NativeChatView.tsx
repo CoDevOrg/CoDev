@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the native chat controller keeps session transport, composer actions, and fallback recovery coordinated in one place. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -22,7 +23,6 @@ import {
 import {
   applyCommandMarkerBoundaries,
   appendPendingSendCache,
-  commandMarkersAsMessages,
   appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
@@ -163,7 +163,9 @@ function NativeChatResolvedView({
     return () => window.clearInterval(timer)
   }, [agent, readTerminalScreen])
   const sessionWithTerminalFallback = useMemo<typeof session>(() => {
-    if (terminalFallbackMessages.length === 0) return session
+    if (terminalFallbackMessages.length === 0) {
+      return session
+    }
     const assembled = assembleNativeChatSession({
       sources: { transcript: session.messages, scrape: terminalFallbackMessages },
       sessionId: session.sessionId,
@@ -240,8 +242,9 @@ function NativeChatResolvedView({
   const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
     readPendingSendCache(pendingScope)
   )
-  // Slash commands aren't chat turns, so they get a small local "Ran /clear"
-  // system line instead of a user bubble. Capped + cached per conversation.
+  // Slash commands are implementation details, not chat turns. Keep their
+  // markers only for transcript boundaries such as /clear; never echo them in
+  // the conversation when a person changes model, effort, or another option.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
     readCommandMarkerCache(commandMarkerScope)
   )
@@ -361,19 +364,18 @@ function NativeChatResolvedView({
     })
   }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
   const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
+    if (pending.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
     }
     return {
       ...sessionAfterCommandBoundaries,
       messages: [
         ...sessionAfterCommandBoundaries.messages,
-        ...commandMarkersAsMessages(commandMarkers),
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
         ...pendingMessages
       ]
     }
-  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
+  }, [sessionAfterCommandBoundaries, pending, pendingMessages, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -441,7 +443,9 @@ function NativeChatResolvedView({
   const openBrowser = useCallback(() => {
     const store = useAppStore.getState()
     const worktreeId = store.activeWorktreeId
-    if (!worktreeId) return
+    if (!worktreeId) {
+      return
+    }
     const groupId =
       store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
     if (groupId) {
