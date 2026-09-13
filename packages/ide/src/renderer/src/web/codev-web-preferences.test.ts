@@ -26,15 +26,17 @@ describe('CoDev owned web preferences', () => {
     })
     expect(JSON.parse(store.getItem('orca.web.ui.v1')!)).toEqual({
       rightSidebarTab: 'codev-agents',
-      rightSidebarOpen: true,
-      codevLiveAgentsDefaultApplied: true
+      rightSidebarOpen: false,
+      codevLiveAgentsDefaultApplied: true,
+      codevLiveAgentsCollapsedDefaultApplied: true
     })
     store.setItem(
       'orca.web.ui.v1',
       JSON.stringify({
         rightSidebarTab: 'codev-activity',
-        rightSidebarOpen: false,
-        codevLiveAgentsDefaultApplied: true
+        rightSidebarOpen: true,
+        codevLiveAgentsDefaultApplied: true,
+        codevLiveAgentsCollapsedDefaultApplied: true
       })
     )
     store.setItem(
@@ -43,7 +45,26 @@ describe('CoDev owned web preferences', () => {
     )
     seedCodevWebPreferences(store)
     expect(JSON.parse(store.getItem('orca.web.settings.v1')!).showMobileButton).toBe(true)
-    expect(JSON.parse(store.getItem('orca.web.ui.v1')!).rightSidebarOpen).toBe(false)
+    expect(JSON.parse(store.getItem('orca.web.ui.v1')!).rightSidebarOpen).toBe(true)
+  })
+
+  it('collapses the live agents sidebar once for browsers with the old default', () => {
+    const store = storage()
+    store.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        rightSidebarTab: 'codev-agents',
+        rightSidebarOpen: true,
+        codevLiveAgentsDefaultApplied: true
+      })
+    )
+    seedCodevWebPreferences(store)
+    expect(JSON.parse(store.getItem('orca.web.ui.v1')!)).toEqual({
+      rightSidebarTab: 'codev-agents',
+      rightSidebarOpen: false,
+      codevLiveAgentsDefaultApplied: true,
+      codevLiveAgentsCollapsedDefaultApplied: true
+    })
   })
 
   it('preserves dismissed education across workspace hydration without mutating incoming state', () => {

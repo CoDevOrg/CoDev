@@ -15,7 +15,7 @@ if (!index.includes("<title>Orca Web</title>")) {
 }
 index = index.replace(
   "<title>Orca Web</title>",
-  "<title>CoDev Workspace</title>",
+  '<title>CoDev Workspace</title>\n    <link id="codev-orca-theme" rel="stylesheet" href="/orca-theme-overrides.css" />',
 );
 await writeFile(indexPath, index);
 

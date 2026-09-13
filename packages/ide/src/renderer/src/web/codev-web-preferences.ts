@@ -35,12 +35,13 @@ export function seedCodevWebPreferences(storage: PreferenceStorage): void {
     })
   }
   const ui = read(storage, 'orca.web.ui.v1')
-  if (!ui.codevLiveAgentsDefaultApplied) {
+  if (!ui.codevLiveAgentsCollapsedDefaultApplied) {
     write(storage, 'orca.web.ui.v1', {
       ...ui,
       rightSidebarTab: ui.rightSidebarTab ?? 'codev-agents',
-      rightSidebarOpen: ui.rightSidebarOpen ?? true,
-      codevLiveAgentsDefaultApplied: true
+      rightSidebarOpen: false,
+      codevLiveAgentsDefaultApplied: true,
+      codevLiveAgentsCollapsedDefaultApplied: true
     })
   }
 }
