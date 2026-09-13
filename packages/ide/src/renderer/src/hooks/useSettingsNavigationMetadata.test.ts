@@ -99,6 +99,7 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('mobile')
     expect(webIds).not.toContain('computer-use')
     expect(webIds).not.toContain('voice')
+    expect(webIds).not.toContain('floating-workspace')
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')

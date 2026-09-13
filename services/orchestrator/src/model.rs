@@ -70,6 +70,10 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 #[serde(rename_all = "camelCase")]
 pub struct CreateRequest {
     pub workspace_id: String,
+    /// Short-lived infrastructure work with no durable workspace state, such
+    /// as a hosted provider-auth runner. The host may destroy it at expiry.
+    #[serde(default)]
+    pub ephemeral: bool,
     pub repository_url: Option<String>,
     pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,
@@ -312,6 +316,7 @@ pub struct CodexExecStartRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+    #[serde(default)]
     pub codex_auth_cache_json: String,
     /// The caller's Vercel Workflow DevKit step id. A retried "start" step
     /// reuses the same id, letting the guest reattach to the still-running
@@ -350,6 +355,38 @@ pub struct CodexExecPollResponse {
     pub codex_auth_cache_json: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupStartRequest {
+    /// Retries from the same web session reattach instead of spawning another
+    /// interactive OAuth process.
+    pub idempotency_key: String,
+    #[cfg(test)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupCodeRequest {
+    pub code: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeSetupPollRequest {
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum ClaudeSetupPollResponse {
+    Pending,
+    Ready,
+    Failed { reason: String },
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeStartRequest {
@@ -376,6 +413,11 @@ pub struct IdeStartRequest {
     /// credential types on the Next.js side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anthropic_api_key: Option<String>,
+    /// The member's `claude setup-token`, uploaded with `codev claude-auth`,
+    /// set as `CLAUDE_CODE_OAUTH_TOKEN`. The web layer sends it only for a
+    /// CLI-connected credential the member enabled for coding workspaces —
+    /// never a browser subscription. A plain `anthropic_api_key` wins if both
+    /// are present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code_oauth_token: Option<String>,
     /// Present when the requesting member connected Cursor through its browser

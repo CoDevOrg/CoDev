@@ -3,7 +3,15 @@ import "server-only";
 import { mintWorkspaceCoordinationToken } from "./cli-agent-session";
 import { openOrcaInterval } from "./compute-credits";
 import { getPublicAppOrigin } from "./password-reset";
-import { resolveAgentCredential, resolveCursorCliAuth } from "./credentials";
+import {
+  resolveClaudeCliTokenForIde,
+  resolveCursorCliAuth,
+  resolveWorkspaceApiKey,
+} from "./credentials";
+import {
+  decryptHostedMaterial,
+  resolveHostedCodexSubscription,
+} from "./hosted-codex-subscription-credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import {
@@ -13,6 +21,7 @@ import {
 } from "./orca-pairing";
 import {
   OrchestratorError,
+  getIde,
   startIde,
   stopIde,
   touchIde,
@@ -21,6 +30,7 @@ import {
   type StartIdeInput,
 } from "./orchestrator";
 import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
+import { WorkspaceOpenTiming } from "./workspace-open-timing";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
@@ -100,14 +110,24 @@ async function resolveCodexAuthCacheForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
+    const hosted = await resolveHostedCodexSubscription({
       userId,
       workspaceId,
-      "openai",
+    });
+    // Browser and CLI Codex logins store the same refreshable auth cache. The
+    // orchestrator materializes it in this member's private CODEX_HOME, so
+    // either provenance is valid when the member enabled it for workspaces.
+    if (
+      !hosted ||
+      !hosted.credential.enabledForWorkspace ||
+      !hosted.credential.encryptedMaterial
+    ) {
+      return undefined;
+    }
+    const material = await decryptHostedMaterial(
+      hosted.credential.encryptedMaterial,
     );
-    return credential.authType === "HOSTED_CODEX_SUBSCRIPTION"
-      ? credential.codexAuthCacheJson
-      : undefined;
+    return material.authCacheJson || undefined;
   } catch {
     return undefined;
   }
@@ -134,7 +154,9 @@ async function resolveCursorAuthJsonForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const auth = await resolveCursorCliAuth(userId, workspaceId);
+    // Only a workspace-enabled, non-browser login (the API-key exchange)
+    // reaches the host; Cursor's deeplink browser login is rooms-only.
+    const auth = await resolveCursorCliAuth(userId, workspaceId, "workspace");
     if (!auth) return undefined;
     return JSON.stringify({
       accessToken: auth.accessToken,
@@ -152,14 +174,10 @@ async function resolveCursorApiKeyForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
-      userId,
-      workspaceId,
-      "cursor",
+    return (
+      (await resolveWorkspaceApiKey(userId, workspaceId, "cursor"))?.trim() ||
+      undefined
     );
-    return credential.authType === "API_KEY"
-      ? credential.apiKeyOrToken?.trim() || undefined
-      : undefined;
   } catch {
     return undefined;
   }
@@ -177,26 +195,21 @@ async function resolveOpenAiApiKeyForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
-      userId,
-      workspaceId,
-      "openai",
+    return (
+      (await resolveWorkspaceApiKey(userId, workspaceId, "openai"))?.trim() ||
+      undefined
     );
-    return credential.authType === "API_KEY"
-      ? credential.apiKeyOrToken?.trim() || undefined
-      : undefined;
   } catch {
     return undefined;
   }
 }
 
 /**
- * Same idea as resolveCodexAuthCacheForIde, for a linked Anthropic
- * credential. Both the BYOK API key and the OAuth token from `claude
- * setup-token`/browser login resolve through the same generic lookup,
- * distinguished only by authType — the Claude Code CLI expects a different
- * env var for each (ANTHROPIC_API_KEY vs CLAUDE_CODE_OAUTH_TOKEN), so the
- * orchestrator needs to know which one it's setting.
+ * What the shared IDE host may run Claude with: a pasted API key, else the
+ * `claude setup-token` the member uploaded with `codev claude-auth` (as
+ * CLAUDE_CODE_OAUTH_TOKEN). A browser subscription stays in its private
+ * runtime and is never copied to a shared IDE session — its credential is a
+ * runtime reference CoDev never holds, so it could not be sent even by mistake.
  */
 async function resolveClaudeEnvForIde(
   userId: string,
@@ -205,18 +218,14 @@ async function resolveClaudeEnvForIde(
   { anthropicApiKey: string } | { claudeCodeOauthToken: string } | undefined
 > {
   try {
-    const credential = await resolveAgentCredential(
+    const apiKey = await resolveWorkspaceApiKey(
       userId,
       workspaceId,
       "anthropic",
     );
-    if (!credential.apiKeyOrToken) return undefined;
-    if (credential.authType === "API_KEY") {
-      return { anthropicApiKey: credential.apiKeyOrToken };
-    }
-    if (credential.authType === "OAUTH_TOKEN") {
-      return { claudeCodeOauthToken: credential.apiKeyOrToken };
-    }
+    if (apiKey?.trim()) return { anthropicApiKey: apiKey.trim() };
+    const token = await resolveClaudeCliTokenForIde(userId, workspaceId);
+    if (token?.trim()) return { claudeCodeOauthToken: token.trim() };
     return undefined;
   } catch {
     return undefined;
@@ -263,9 +272,12 @@ export async function ensureOrcaSession(
     defaultBranch: string | null;
   },
   userId: string,
+  timing = new WorkspaceOpenTiming(),
 ): Promise<OrcaRuntimeState> {
   try {
-    await assertWorkspaceCreditQuota(workspace.id);
+    await timing.measure("quota", () =>
+      assertWorkspaceCreditQuota(workspace.id),
+    );
   } catch (error) {
     if (error instanceof QuotaError) {
       throw new OrcaHostError(error.message, 429);
@@ -278,17 +290,38 @@ export async function ensureOrcaSession(
   // capacity refusal, a host still booting its services. None of it is an
   // error from their point of view - it just means "not ready yet" - so any
   // failure reports `host-starting` and the client keeps polling.
+  // A live session proves host readiness without EC2 discovery and health polling.
+  let running = false;
   try {
-    const hostState = await getHostState();
-    if (hostState !== "running") {
-      const wake = await requestHostWake();
-      if (wake !== "running") {
-        return { state: "host-starting" };
-      }
+    const existing = await timing.measure("session_probe", () =>
+      getIde(workspace.id, 1_500),
+    );
+    running = existing.workspaceId === workspace.id;
+  } catch (error) {
+    if (
+      error instanceof OrchestratorError &&
+      [401, 403].includes(error.status)
+    ) {
+      throw new OrcaHostError(error.message, error.status);
     }
-    await waitForOrchestrator();
-  } catch {
-    return { state: "host-starting" };
+  }
+  if (!running) {
+    try {
+      const available = await timing.measure("host", async () => {
+        const hostState = await getHostState();
+        if (
+          hostState !== "running" &&
+          (await requestHostWake()) !== "running"
+        ) {
+          return false;
+        }
+        await waitForOrchestrator();
+        return true;
+      });
+      if (!available) return { state: "host-starting" };
+    } catch {
+      return { state: "host-starting" };
+    }
   }
 
   const workspacePath = orcaWorkspacePath(workspace.id);
@@ -310,13 +343,15 @@ export async function ensureOrcaSession(
     cursorApiKey,
     openaiApiKey,
     claudeEnv,
-  ] = await Promise.all([
-    resolveCodexAuthCacheForIde(userId, workspace.id),
-    resolveCursorAuthJsonForIde(userId, workspace.id),
-    resolveCursorApiKeyForIde(userId, workspace.id),
-    resolveOpenAiApiKeyForIde(userId, workspace.id),
-    resolveClaudeEnvForIde(userId, workspace.id),
-  ]);
+  ] = await timing.measure("credentials", () =>
+    Promise.all([
+      resolveCodexAuthCacheForIde(userId, workspace.id),
+      resolveCursorAuthJsonForIde(userId, workspace.id),
+      resolveCursorApiKeyForIde(userId, workspace.id),
+      resolveOpenAiApiKeyForIde(userId, workspace.id),
+      resolveClaudeEnvForIde(userId, workspace.id),
+    ]),
+  );
 
   const coordinationMcpUrl = new URL(
     `/api/workspaces/${workspace.id}/mcp/coordination`,
@@ -324,21 +359,25 @@ export async function ensureOrcaSession(
   ).toString();
 
   try {
-    const session = await startIdeRecoveringStaleProcess(workspace.id, {
-      projectRoot: workspacePath,
-      memberId: userId,
-      coordinationMcpUrl,
-      coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
-      ...(clone ? { clone } : {}),
-      ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
-      ...(cursorAuthJson ? { cursorAuthJson } : {}),
-      ...(cursorApiKey ? { cursorApiKey } : {}),
-      ...(openaiApiKey ? { openaiApiKey } : {}),
-      ...claudeEnv,
-    });
+    const session = await timing.measure("connect", () =>
+      startIdeRecoveringStaleProcess(workspace.id, {
+        projectRoot: workspacePath,
+        memberId: userId,
+        coordinationMcpUrl,
+        coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
+        ...(clone ? { clone } : {}),
+        ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+        ...(cursorAuthJson ? { cursorAuthJson } : {}),
+        ...(cursorApiKey ? { cursorApiKey } : {}),
+        ...(openaiApiKey ? { openaiApiKey } : {}),
+        ...claudeEnv,
+      }),
+    );
     const pairing = parseOrcaReady(session.ready, workspace.id);
     // Best-effort: a metering hiccup must never block the IDE from opening.
-    await openOrcaInterval(userId, workspace.id).catch(() => {});
+    await timing.measure("metering", () =>
+      openOrcaInterval(userId, workspace.id).catch(() => {}),
+    );
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {

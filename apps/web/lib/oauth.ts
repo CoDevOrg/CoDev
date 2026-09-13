@@ -408,6 +408,11 @@ export async function exchangeOAuthCode(
       typeof payload.refresh_token === "string"
         ? payload.refresh_token
         : undefined,
+    // OpenAI returns an id_token whenever the `openid` scope is requested; the
+    // Codex CLI's auth.json stores it (and derives the ChatGPT account id from
+    // its claims), so surface it for callers that materialize that file.
+    idToken:
+      typeof payload.id_token === "string" ? payload.id_token : undefined,
     expiresAt: expiresAtFrom(payload.expires_in),
   };
 }
@@ -665,6 +670,9 @@ export async function exchangeCursorApiKey(apiKey: string): Promise<{
 export async function persistCursorTokens(
   scope: { scopeType: ScopeType; scopeId: string },
   tokens: { accessToken: string; refreshToken: string },
+  /** `browser` for the deeplink login (rooms-only); `api_key` when the pair
+   *  was exchanged from a pasted key, which may also power a workspace. */
+  connectedVia: "browser" | "api_key",
 ) {
   await saveProviderCredential({
     scopeType: scope.scopeType,
@@ -673,6 +681,10 @@ export async function persistCursorTokens(
     credentialType: "OAUTH_TOKEN",
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
+    connectedVia,
+    ...(connectedVia === "browser"
+      ? { enabledFor: { rooms: true, workspace: false } }
+      : {}),
     // Cursor's token response carries no expiry and `cursor-agent` refreshes
     // its own tokens from the copy CoDev files on the workspace host, so no
     // control-plane refresh is scheduled.

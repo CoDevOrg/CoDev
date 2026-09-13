@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: message rendering keeps transcript grouping, streaming state, and scroll anchoring in one component so turn order remains consistent. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon } from 'lucide-react'
 import CommentMarkdown, {
@@ -125,8 +126,8 @@ function TypingIndicatorRow(): React.JSX.Element {
 }
 
 /** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
+ *  turn's tool activity. User prompts use a quiet message bubble while agent
+ *  answers remain plain reading copy, matching familiar assistant UIs. */
 function MessageRow({
   message,
   expandSignal,
@@ -177,12 +178,10 @@ function MessageRow({
     // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
     // transcript caught up.)
     return (
-      <div ref={rowRef} data-codev-chat-row="user" className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
+      <div ref={rowRef} data-codev-chat-row="user" className="flex flex-col items-end gap-1">
         <div
           data-codev-chat-bubble="user"
-          className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground"
+          className="max-w-[78%] rounded-[20px] rounded-br-md bg-muted/80 px-4 py-3 text-[15px] leading-relaxed text-foreground"
         >
           {markdown ? (
             <>
@@ -190,7 +189,7 @@ function MessageRow({
               <CommentMarkdown
                 content={markdown}
                 variant="document"
-                className="text-sm"
+                className="text-[15px] leading-relaxed"
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
@@ -220,7 +219,7 @@ function MessageRow({
       ref={rowRef}
       data-codev-chat-row={isReasoning ? 'reasoning' : isSystem ? 'system' : 'assistant'}
       className={cn(
-        'group relative max-w-full text-sm leading-relaxed text-foreground',
+        'group relative w-full max-w-[46rem] px-1 text-[15px] leading-7 text-foreground',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
@@ -294,7 +293,9 @@ export function NativeChatMessageList({
   // second buys nothing.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    if (!isWorking) return
+    if (!isWorking) {
+      return
+    }
     setNow(Date.now())
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
@@ -426,7 +427,7 @@ export function NativeChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
+        className="scrollbar-sleek h-full overflow-y-auto px-4 pt-8 pb-6 sm:px-6"
       >
         <div
           ref={contentRef}
@@ -435,7 +436,7 @@ export function NativeChatMessageList({
           data-codev-chat-column="true"
           // Why: same max width as the composer column; horizontal inset comes
           // from the scroll container so content aligns with the composer field.
-          className="mx-auto flex w-full max-w-4xl flex-col gap-5"
+          className="mx-auto flex w-full max-w-3xl flex-col gap-7"
           // Why: `zoom` scales the chat transcript's text and layout together,
           // scoped to this container so the rest of the app is untouched. It's
           // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).

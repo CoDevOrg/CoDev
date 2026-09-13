@@ -387,17 +387,24 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    {
-      id: 'floating-workspace',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
-        'Global terminal, browser, and markdown tabs.'
-      ),
-      icon: PanelsTopLeft,
-      searchEntries: getFloatingWorkspaceSearchEntries(),
-      group: 'workflows'
-    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'floating-workspace',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.65b19f5bde',
+              'Floating Workspace'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
+              'Global terminal, browser, and markdown tabs.'
+            ),
+            icon: PanelsTopLeft,
+            searchEntries: getFloatingWorkspaceSearchEntries(),
+            group: 'workflows'
+          }
+        ]
+      : []),
     {
       id: 'appearance',
       title: translate('auto.hooks.useSettingsNavigationMetadata.93d88d20bf', 'Appearance'),
@@ -408,6 +415,8 @@ export function buildSettingsNavigationMetadata({
       icon: Palette,
       searchEntries: getAppearancePaneSearchEntries({
         showWarpImport: showDesktopOnlySettings,
+        showGhosttyImport: showDesktopOnlySettings,
+        showAppIcon: showDesktopOnlySettings,
         showSystemTray: showDesktopOnlySettings && isWindows,
         showMenuBarIcon: showDesktopOnlySettings && isMac
       }),

@@ -38,12 +38,29 @@ case "${host_arch}" in
     ;;
 esac
 
+mkdir -p "${output_dir}"
+
+# Already on Linux with the target architecture — the container exists only to
+# provide that, so build in place instead. This is the CI path
+# (.github/workflows/deploy-runtime.yml runs on an Ubuntu x86_64 runner, which
+# is the same ubuntu:24.04 the Containerfile starts from), and it keeps the
+# deploy free of any Docker requirement.
+if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "${artifact_arch/arm64/aarch64}" ]]; then
+  echo "Building orca serve natively for ${host_arch} (already on a matching Linux host)..."
+  TARGET_ARCH="${electron_arch}" ARTIFACT_ARCH="${artifact_arch}" \
+    "${build_context}/scripts/build-orca-serve-artifact.sh"
+  cp \
+    "${build_context}/dist/orca-serve-linux-${artifact_arch}.tar.gz" \
+    "${build_context}/dist/orca-serve-linux-${artifact_arch}.tar.gz.sha256" \
+    "${output_dir}/"
+  echo "orca serve artifact ready at ${output_dir}/orca-serve-linux-${artifact_arch}.tar.gz"
+  exit 0
+fi
+
 command -v container >/dev/null 2>&1 || {
   echo "Apple's 'container' CLI is required to build orca serve from source (https://github.com/apple/container)." >&2
   exit 1
 }
-
-mkdir -p "${output_dir}"
 
 # Apple's `container` runs builds inside a long-lived builder VM whose size is
 # fixed when it starts, and it defaults to 2 CPUs / 2 GiB. Orca's `tsc` pass

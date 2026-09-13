@@ -26,17 +26,87 @@ use tracing::{info, warn};
 use crate::{
     guest_client::GuestClient,
     model::{
-        CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest, CreateRequest,
-        ExecRequest, ExecResponse, FileResponse, Instance, PublicationExportRequest,
-        PublicationExportResponse, RepositorySnapshot, Result, RuntimeError, TerminalInputRequest,
-        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
+        ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse,
+        CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
+        PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
+        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+        WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
         WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
 const GUEST_PORT: u32 = 52;
+
+/// Firecracker reserves CIDs 0-2, so guest CIDs start here and the slot index
+/// is recoverable as `guest_cid - GUEST_CID_BASE`.
+const GUEST_CID_BASE: u32 = 3;
+
+/// Each slot gets its own /30 out of 10.200.0.0/16: `.1` on the host tap,
+/// `.2` in the guest. A /30 is the smallest subnet that carries both, so two
+/// guests can never address each other -- the only route out of a guest is the
+/// host, where codev-firecracker-network-isolation filters what may leave.
+const GUEST_NETMASK: &str = "255.255.255.252";
+
+fn tap_name(slot: usize) -> String {
+    format!("codev-tap{slot}")
+}
+
+fn host_ip(slot: usize) -> String {
+    format!("10.200.{slot}.1")
+}
+
+fn guest_ip(slot: usize) -> String {
+    format!("10.200.{slot}.2")
+}
+
+/// Create (or re-create) the tap backing a slot's guest NIC.
+///
+/// Called before every launch, including a snapshot restore: a restored VM
+/// keeps the slot recorded in its snapshot metadata, so it comes back to a tap
+/// of the same name, which is what Firecracker requires to reattach the
+/// device. The interface is torn down with the machine, so `add` normally
+/// starts from nothing; the delete first keeps a leaked tap from a hard crash
+/// from failing the next boot with EEXIST.
+async fn ensure_tap(slot: usize) -> Result<()> {
+    let name = tap_name(slot);
+    remove_tap(slot).await;
+    let mut add = Command::new("ip");
+    add.args(["tuntap", "add", "dev", &name, "mode", "tap"]);
+    run_command(add, "create guest tap").await?;
+    let mut address = Command::new("ip");
+    address.args([
+        "addr",
+        "add",
+        &format!("{}/30", host_ip(slot)),
+        "dev",
+        &name,
+    ]);
+    run_command(address, "address guest tap").await?;
+    let mut up = Command::new("ip");
+    up.args(["link", "set", "dev", &name, "up"]);
+    run_command(up, "bring up guest tap").await?;
+    Ok(())
+}
+
+/// Best-effort teardown. A tap that outlives its machine would keep an address
+/// bound and block the slot's next boot, but failing a destroy over it would
+/// strand the sandbox instead, so this only warns.
+async fn remove_tap(slot: usize) {
+    let name = tap_name(slot);
+    let mut delete = Command::new("ip");
+    delete
+        .args(["link", "del", &name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    match delete.status().await {
+        Ok(_) => {}
+        Err(error) => warn!(tap = %name, %error, "failed to remove guest tap"),
+    }
+}
 
 pub struct FirecrackerConfig {
     pub runtime_dir: PathBuf,
@@ -50,6 +120,10 @@ pub struct FirecrackerConfig {
     pub memory_mib: u32,
     pub workspace_disk_gib: u8,
     pub idle_timeout: Duration,
+    /// Whether guests get a NAT'd tap interface. Off leaves them with only a
+    /// vsock to the host, which is how they ran before outbound access was
+    /// needed for OAuth device flows like `claude setup-token`.
+    pub guest_network: bool,
 }
 
 impl FirecrackerConfig {
@@ -68,6 +142,10 @@ impl FirecrackerConfig {
             vcpu_count: environment_number("CODEV_VM_VCPU", 2)?,
             memory_mib: environment_number("CODEV_VM_MEMORY_MIB", 2048)?,
             workspace_disk_gib: environment_number("CODEV_VM_DISK_GIB", 10)?,
+            guest_network: !matches!(
+                std::env::var("CODEV_GUEST_NETWORK").as_deref(),
+                Ok("0") | Ok("false")
+            ),
             idle_timeout: environment_duration(
                 "CODEV_IDLE_TIMEOUT",
                 Duration::from_secs(4 * 60 * 60),
@@ -112,6 +190,7 @@ struct RunningMachine {
     workspace_dir: PathBuf,
     jail_dir: PathBuf,
     slot: u32,
+    reap_on_expiry: bool,
 }
 
 impl RunningMachine {
@@ -341,6 +420,41 @@ impl FirecrackerBackend {
         self.machines.read().await.len()
     }
 
+    pub async fn reap_expired(&self) -> usize {
+        let _guard = self.provision.lock().await;
+        let now = Utc::now();
+        let expired = {
+            let machines = self.machines.read().await;
+            machines
+                .iter()
+                .filter(|&(_, machine)| {
+                    machine.reap_on_expiry
+                        && machine.instance.read().expect("machine lock").expires_at <= now
+                })
+                .map(|(workspace_id, machine)| (workspace_id.clone(), machine.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        let mut reaped = 0;
+        for (workspace_id, machine) in expired {
+            // Activity may have refreshed the deadline after collection.
+            if machine.instance.read().expect("machine lock").expires_at > Utc::now() {
+                continue;
+            }
+            match self.stop_machine(machine).await {
+                Ok(()) => {
+                    self.machines.write().await.remove(&workspace_id);
+                    reaped += 1;
+                    info!(%workspace_id, "stopped expired Firecracker sandbox");
+                }
+                Err(error) => {
+                    warn!(%workspace_id, %error, "failed to stop expired Firecracker sandbox");
+                }
+            }
+        }
+        reaped
+    }
+
     pub async fn create(&self, request: CreateRequest) -> Result<Instance> {
         let _guard = self.provision.lock().await;
         if let Some(machine) = self.machines.read().await.get(&request.workspace_id) {
@@ -517,6 +631,54 @@ impl FirecrackerBackend {
     pub async fn close_codex_exec(&self, workspace_id: &str, session_id: &str) -> Result<()> {
         let machine = self.machine(workspace_id).await?;
         machine.guest.close_codex_exec(session_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn start_claude_setup(
+        &self,
+        workspace_id: &str,
+        request: ClaudeSetupStartRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.start_claude_setup(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn input_claude_setup_code(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupCodeRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine
+            .guest
+            .input_claude_setup_code(session_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn poll_claude_setup(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        request: ClaudeSetupPollRequest,
+    ) -> Result<ClaudeSetupPollResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine
+            .guest
+            .poll_claude_setup(session_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn close_claude_setup(&self, workspace_id: &str, session_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.close_claude_setup(session_id).await?;
         self.mark_activity(&machine);
         Ok(())
     }
@@ -781,7 +943,7 @@ impl FirecrackerBackend {
             }
         };
         let uid = 20_000 + slot;
-        let guest_cid = 3 + slot;
+        let guest_cid = GUEST_CID_BASE + slot;
         let id = request.workspace_id.replace('-', "");
         let workspace_dir = self
             .config
@@ -862,6 +1024,10 @@ impl FirecrackerBackend {
             .map_err(RuntimeError::internal)?;
         }
 
+        if self.config.guest_network {
+            ensure_tap(slot as usize).await?;
+        }
+
         let mut command = Command::new(&self.config.jailer_bin);
         command
             .arg("--id")
@@ -908,6 +1074,7 @@ impl FirecrackerBackend {
             workspace_dir,
             jail_dir,
             slot,
+            reap_on_expiry: request.ephemeral,
         };
 
         if restore_snapshot {
@@ -1066,11 +1233,37 @@ impl FirecrackerBackend {
             .await
             .map_err(RuntimeError::internal)?;
 
+        // Guests reach the internet through a per-slot tap the host NATs.
+        // The address is handed over as a kernel `ip=` argument so eth0 is up
+        // before init runs -- there is no DHCP client, and no userspace in the
+        // guest that would configure it. `off` is the autoconf field: static
+        // only. DNS comes from /etc/resolv.conf baked into the base rootfs by
+        // bootstrap-host.sh, since `ip=` carries no resolver.
+        let slot = (guest_cid - GUEST_CID_BASE) as usize;
+        let base_boot_args = "keep_bootcon console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw";
+        let (boot_args, network_interfaces) = if self.config.guest_network {
+            (
+                format!(
+                    "{base_boot_args} ip={}::{}:{}::eth0:off",
+                    guest_ip(slot),
+                    host_ip(slot),
+                    GUEST_NETMASK
+                ),
+                json!([{
+                    "iface_id": "eth0",
+                    "host_dev_name": tap_name(slot),
+                }]),
+            )
+        } else {
+            (base_boot_args.to_string(), json!([]))
+        };
+
         let config = json!({
             "boot-source": {
                 "kernel_image_path": "/vmlinux",
-                "boot_args": "keep_bootcon console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw"
+                "boot_args": boot_args
             },
+            "network-interfaces": network_interfaces,
             "drives": [
                 {
                     "drive_id": "rootfs",
@@ -1134,6 +1327,9 @@ impl FirecrackerBackend {
     async fn cleanup_failed_machine(&self, machine: &RunningMachine) {
         let _ = machine.child.lock().await.kill().await;
         let _ = machine.child.lock().await.wait().await;
+        if self.config.guest_network {
+            remove_tap(machine.slot as usize).await;
+        }
         let _ = remove_directory_if_present(&machine.jail_dir).await;
         let _ = remove_directory_if_present(&machine.workspace_dir).await;
     }
@@ -1143,6 +1339,9 @@ impl FirecrackerBackend {
             let mut child = machine.child.lock().await;
             let _ = child.kill().await;
             let _ = child.wait().await;
+        }
+        if self.config.guest_network {
+            remove_tap(machine.slot as usize).await;
         }
         remove_directory_if_present(&machine.jail_dir).await?;
         remove_directory_if_present(&machine.workspace_dir).await
@@ -1392,7 +1591,9 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_available_slot, parse_duration};
+    use super::{
+        GUEST_CID_BASE, first_available_slot, guest_ip, host_ip, parse_duration, tap_name,
+    };
 
     #[test]
     fn parses_runtime_durations() {
@@ -1406,5 +1607,30 @@ mod tests {
         assert_eq!(first_available_slot([0, 1], 3), Some(2));
         assert_eq!(first_available_slot([1], 3), Some(0));
         assert_eq!(first_available_slot([0, 1], 2), None);
+    }
+
+    #[test]
+    fn guest_slots_get_non_overlapping_point_to_point_subnets() {
+        // Each slot is its own /30, so a guest's only on-link neighbour is the
+        // host tap. If two slots ever shared a subnet, guests could address one
+        // another directly and bypass the host's filtering entirely.
+        for slot in 0..8 {
+            assert_eq!(host_ip(slot), format!("10.200.{slot}.1"));
+            assert_eq!(guest_ip(slot), format!("10.200.{slot}.2"));
+            assert_eq!(tap_name(slot), format!("codev-tap{slot}"));
+        }
+        let all: std::collections::HashSet<String> = (0..8).map(guest_ip).collect();
+        assert_eq!(all.len(), 8, "guest addresses must be unique per slot");
+    }
+
+    #[test]
+    fn slot_is_recoverable_from_the_guest_cid() {
+        // The boot arguments derive the slot back out of guest_cid; a restored
+        // machine keeps its recorded slot, which is what makes its tap name
+        // stable across a snapshot restore.
+        for slot in 0u32..8 {
+            let guest_cid = GUEST_CID_BASE + slot;
+            assert_eq!((guest_cid - GUEST_CID_BASE) as usize, slot as usize);
+        }
     }
 }

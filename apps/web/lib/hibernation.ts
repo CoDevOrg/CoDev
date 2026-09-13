@@ -16,10 +16,18 @@ import {
 import { getDatabase } from "./database";
 import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
 import { closeSandboxInterval } from "./vm-usage";
-import { workspaceHibernateIdleMs, workspaceRuntimeTtlMs } from "./workspaces";
+import { workspaceRuntimeTtlMs } from "./workspaces";
+
+// The orchestrator's sandbox-create validation requires exactly a four-hour
+// pause/auto-resume lifecycle (validate_create in services/orchestrator). This
+// is a fixed contract value, deliberately independent of workspaceHibernateIdleMs:
+// the control-plane reaper may hibernate an idle workspace sooner, but the
+// lifecycle the guest is *created* with must be this exact value or the
+// orchestrator rejects provisioning with HTTP 400.
+const SANDBOX_PAUSE_LIFECYCLE_MS = 4 * 60 * 60 * 1000;
 
 export const E2B_LIFECYCLE_OPTIONS = {
-  timeoutMs: workspaceHibernateIdleMs,
+  timeoutMs: SANDBOX_PAUSE_LIFECYCLE_MS,
   lifecycle: { onTimeout: "pause", autoResume: true },
 } as const;
 

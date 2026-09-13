@@ -222,6 +222,8 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
 
 type AppearancePaneSearchOptions = {
   showWarpImport?: boolean
+  showGhosttyImport?: boolean
+  showAppIcon?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
 }
@@ -240,7 +242,7 @@ function buildAppearancePaneSearchEntries(
     ...getTitlebarEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
-    ...getAppIconEntries(),
+    ...((options.showAppIcon ?? true) ? getAppIconEntries() : []),
     ...getSystemTrayEntries(options),
     ...getMenuBarIconEntries(options)
   ]
@@ -251,6 +253,8 @@ export function getAppearancePaneSearchEntries(
 ): SettingsSearchEntry[] {
   return buildAppearancePaneSearchEntries({
     showWarpImport: options.showWarpImport ?? true,
+    showGhosttyImport: options.showGhosttyImport ?? true,
+    showAppIcon: options.showAppIcon ?? true,
     showSystemTray: options.showSystemTray,
     showMenuBarIcon: options.showMenuBarIcon
   })

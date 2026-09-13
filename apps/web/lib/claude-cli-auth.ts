@@ -1,20 +1,15 @@
 import "server-only";
 
+import {
+  ClaudeConnectionError,
+  persistClaudeOAuthToken,
+  resolveClaudeConnectionScope,
+  validateClaudeOAuthToken,
+} from "./claude-connection";
 import { authenticateCliRequest, CliAuthError } from "./cli-auth";
-import { saveProviderCredential } from "./credentials";
-import { requireOrganizationSettingsWrite } from "./settings-access";
 
-const CLAUDE_TOKEN_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/;
-
-export function validateClaudeOAuthToken(value: unknown) {
-  const token = typeof value === "string" ? value.trim() : "";
-  if (!CLAUDE_TOKEN_PATTERN.test(token)) {
-    throw new CliAuthError(
-      "Claude Code did not return a usable token. Run `claude setup-token` manually and try again.",
-    );
-  }
-  return token;
-}
+// Re-exported so existing callers and tests keep their import path.
+export { validateClaudeOAuthToken };
 
 export async function saveClaudeCliAuth(request: Request) {
   const cli = await authenticateCliRequest(request);
@@ -23,35 +18,24 @@ export async function saveClaudeCliAuth(request: Request) {
     organizationId?: unknown;
     oauthToken?: unknown;
   };
-  const scopeType =
-    input.scopeType === "ORGANIZATION" ? "ORGANIZATION" : "USER";
-  const scopeId =
-    scopeType === "USER"
-      ? cli.userId
-      : typeof input.organizationId === "string"
-        ? input.organizationId
-        : "";
-  if (!scopeId) throw new CliAuthError("Organization id is required.");
-  if (scopeType === "ORGANIZATION") {
-    try {
-      await requireOrganizationSettingsWrite(cli.userId, scopeId);
-    } catch {
-      throw new CliAuthError(
-        "Only an organization maintainer can connect shared Claude Code authentication.",
-        403,
-      );
+  try {
+    const { scopeType, scopeId } = await resolveClaudeConnectionScope({
+      userId: cli.userId,
+      scopeType: input.scopeType,
+      organizationId: input.organizationId,
+    });
+    const oauthToken = validateClaudeOAuthToken(input.oauthToken);
+    return await persistClaudeOAuthToken({
+      scopeType,
+      scopeId,
+      oauthToken,
+      source: "cli",
+    });
+  } catch (error) {
+    // The CLI route renders CliAuthError; keep the status the shared layer chose.
+    if (error instanceof ClaudeConnectionError) {
+      throw new CliAuthError(error.message, error.status);
     }
+    throw error;
   }
-
-  const oauthToken = validateClaudeOAuthToken(input.oauthToken);
-
-  await saveProviderCredential({
-    scopeType,
-    scopeId,
-    provider: "anthropic",
-    credentialType: "OAUTH_TOKEN",
-    accessToken: oauthToken,
-    lastFour: "Claude CLI",
-  });
-  return { scopeType, scopeId };
 }

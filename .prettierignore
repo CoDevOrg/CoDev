@@ -4,6 +4,8 @@ coverage
 node_modules
 playwright-report
 test-results
+.claude/worktrees
+.planning
 pnpm-lock.yaml
 apps/mobile/.expo
 apps/mobile/expo-env.d.ts

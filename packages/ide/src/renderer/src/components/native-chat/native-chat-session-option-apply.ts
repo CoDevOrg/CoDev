@@ -53,8 +53,7 @@ type SessionOptionApplyContext = {
   ) => string | null
 }
 
-/** Why: ordered applies make a later absolute target observe the result of an
- * earlier flip instead of dispatching against a stale baseline. */
+/** Serialize applies so an absolute target observes the prior flip result. */
 function createSerializedApplyQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
   let tail: Promise<unknown> = Promise.resolve()
   return <T>(fn: () => Promise<T>): Promise<T> => {
@@ -79,7 +78,9 @@ function currentApply(
   const model = modelId
     ? findCatalogModel({ ...ctx.catalog, models: ctx.getModels() }, modelId)
     : undefined
-  const option = findCatalogOption(model, optionId)
+  const option =
+    findCatalogOption(model, optionId) ??
+    ctx.catalog.unknownModelOptions?.find((candidate) => candidate.id === optionId)
   return option ? { apply: option.apply, modelId } : null
 }
 

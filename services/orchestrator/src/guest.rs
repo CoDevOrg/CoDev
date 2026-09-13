@@ -15,33 +15,40 @@ use std::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+use regex::Regex;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
 use crate::model::{
-    CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
+    ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
+    CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, PublicationExportRequest,
+    PublicationExportResponse, PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest,
+    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+    WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
 const MAX_OUTPUT_BYTES: usize = 2 << 20;
 const MAX_TERMINAL_BUFFER_BYTES: usize = 1 << 20;
 const MAX_TERMINAL_INPUT_BYTES: usize = 64 << 10;
+const MAX_CLAUDE_CODE_BYTES: usize = 4 << 10;
 /// Soft cap on concurrent PTYs per guest. New starts always reclaim older
 /// sessions instead of failing with capacity exceeded.
 const MAX_LIVE_TERMINALS: usize = 4;
 /// A Codex exec's allowed wall-clock runtime, enforced by its own watchdog
 /// thread rather than blocking the RPC that started it.
 const CODEX_EXEC_TIMEOUT: Duration = Duration::from_secs(900);
+const CLAUDE_SETUP_TIMEOUT: Duration = Duration::from_secs(600);
+const CLAUDE_SETUP_START_TIMEOUT: Duration = Duration::from_secs(30);
 const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CODEX_AUTH_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CODEX_EXEC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static CLAUDE_SETUP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 struct TemporaryCodexHome(PathBuf);
 
@@ -101,6 +108,8 @@ pub struct GuestService {
     /// reattaches to the still-running session instead of spawning a second
     /// Codex process.
     codex_idempotency: Mutex<HashMap<String, String>>,
+    claude_setups: Mutex<HashMap<String, Arc<ClaudeSetupSession>>>,
+    claude_setup_idempotency: Mutex<HashMap<String, String>>,
 }
 
 impl GuestService {
@@ -119,6 +128,8 @@ impl GuestService {
             codex_busy: Arc::new(Mutex::new(false)),
             codex_busy_changed: Arc::new(Condvar::new()),
             codex_idempotency: Mutex::new(HashMap::new()),
+            claude_setups: Mutex::new(HashMap::new()),
+            claude_setup_idempotency: Mutex::new(HashMap::new()),
         })
     }
 
@@ -145,6 +156,7 @@ impl GuestService {
             ("POST", "/v1/pty/exec") => self.exec(body),
             ("POST", "/v1/terminals") => self.start_terminal(body),
             ("POST", "/v1/codex-execs") => self.start_codex_exec(body),
+            ("POST", "/v1/claude-auth-login") => self.start_claude_setup(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
@@ -183,6 +195,15 @@ impl GuestService {
                         ("POST", "poll") => self.poll_codex_exec(session_id, body),
                         ("DELETE", "") => self.close_codex_exec(session_id),
                         _ => Err(RuntimeError::BadRequest("invalid codex exec action".into())),
+                    }
+                } else if let Some((session_id, action)) = claude_setup_route(path) {
+                    match (method, action) {
+                        ("POST", "code") => self.input_claude_setup_code(session_id, body),
+                        ("POST", "poll") => self.poll_claude_setup(session_id, body),
+                        ("DELETE", "") => self.close_claude_setup(session_id),
+                        _ => Err(RuntimeError::BadRequest(
+                            "invalid Claude setup action".into(),
+                        )),
                     }
                 } else {
                     return GuestResponse::error(404, "route not found");
@@ -1068,9 +1089,10 @@ impl GuestService {
                 "command must contain between 1 and 32 arguments".into(),
             ));
         }
-        if request.codex_auth_cache_json.len() > (128 << 10)
-            || !serde_json::from_str::<serde_json::Value>(&request.codex_auth_cache_json)
-                .is_ok_and(|value| value.is_object())
+        if !request.codex_auth_cache_json.is_empty()
+            && (request.codex_auth_cache_json.len() > (128 << 10)
+                || !serde_json::from_str::<serde_json::Value>(&request.codex_auth_cache_json)
+                    .is_ok_and(|value| value.is_object()))
         {
             return Err(RuntimeError::BadRequest(
                 "Codex auth cache is invalid or too large".into(),
@@ -1143,9 +1165,12 @@ impl GuestService {
         fs::set_permissions(&codex_home_path, fs::Permissions::from_mode(0o700))
             .map_err(RuntimeError::internal)?;
         let auth_path = codex_home_path.join("auth.json");
-        fs::write(&auth_path, &request.codex_auth_cache_json).map_err(RuntimeError::internal)?;
-        fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
-            .map_err(RuntimeError::internal)?;
+        if !request.codex_auth_cache_json.is_empty() {
+            fs::write(&auth_path, &request.codex_auth_cache_json)
+                .map_err(RuntimeError::internal)?;
+            fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
+                .map_err(RuntimeError::internal)?;
+        }
         let codex_home = TemporaryCodexHome(codex_home_path);
 
         let pty = native_pty_system()
@@ -1344,6 +1369,321 @@ impl GuestService {
         // already checks, which kills the process directly.
         session.cancel_requested.store(true, Ordering::Relaxed);
         Ok(serde_json::json!({ "closed": true }))
+    }
+
+    fn start_claude_setup(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: ClaudeSetupStartRequest = decode(body)?;
+        if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
+            return Err(RuntimeError::BadRequest(
+                "invalid Claude setup idempotency key".into(),
+            ));
+        }
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        {
+            let idempotency = self
+                .claude_setup_idempotency
+                .lock()
+                .expect("claude setup idempotency lock");
+            if let Some(session_id) = idempotency.get(&request.idempotency_key)
+                && let Ok(session) = self.claude_setup(session_id)
+            {
+                let output = session.output.lock().expect("claude setup output lock");
+                if let Some(authorize_url) = output.authorize_url.clone() {
+                    return Ok(serde_json::json!({
+                        "sessionId": session_id,
+                        "authorizeUrl": authorize_url,
+                        "claudeVersion": output.claude_version
+                    }));
+                }
+            }
+        }
+        self.wait_for_codex_idle();
+        {
+            let mut setups = self.claude_setups.lock().expect("claude setup map lock");
+            setups.retain(|_, session| {
+                !session
+                    .output
+                    .lock()
+                    .expect("claude setup output lock")
+                    .terminal()
+            });
+            let live_session_ids: Vec<String> = setups.keys().cloned().collect();
+            drop(setups);
+            self.claude_setup_idempotency
+                .lock()
+                .expect("claude setup idempotency lock")
+                .retain(|_, value| live_session_ids.contains(&*value));
+        }
+
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 4096,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(RuntimeError::internal)?;
+        let claude_command = claude_setup_command(&request);
+        let claude_version = claude_version(&claude_command);
+        // A private HOME per session. CommandBuilder starts from an empty
+        // environment, so without this `claude` runs with no HOME at all and
+        // falls back to whatever passwd says -- /root, which the base rootfs
+        // ships as mode 000. Point it somewhere it certainly owns, and keep it
+        // out of the workspace so a credential file can never be picked up by
+        // the repository snapshot.
+        let session_id = format!(
+            "claude-{}-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(RuntimeError::internal)?
+                .as_millis(),
+            CLAUDE_SETUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        );
+        let claude_home = std::env::temp_dir().join(&session_id);
+        std::fs::create_dir_all(&claude_home).map_err(RuntimeError::internal)?;
+        fs::set_permissions(&claude_home, fs::Permissions::from_mode(0o700))
+            .map_err(RuntimeError::internal)?;
+
+        let mut command = CommandBuilder::new(&claude_command);
+        command.args(["auth", "login", "--claudeai"]);
+        command.cwd(&claude_home);
+        command.env("PATH", GUEST_PATH);
+        command.env("HOME", &claude_home);
+        command.env("CLAUDE_CONFIG_DIR", claude_home.join("config"));
+        command.env("TERM", "xterm-256color");
+        command.env("HISTFILE", "/dev/null");
+        command.env("HISTSIZE", "0");
+        command.env("CI", "1");
+        command.env("FORCE_COLOR", "0");
+        let mut child = match pty.slave.spawn_command(command) {
+            Ok(child) => child,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&claude_home);
+                return Err(RuntimeError::BadRequest(format!(
+                    "unable to spawn claude auth login: {error}"
+                )));
+            }
+        };
+        drop(pty.slave);
+        let mut reader = pty
+            .master
+            .try_clone_reader()
+            .map_err(RuntimeError::internal)?;
+        let writer = pty.master.take_writer().map_err(RuntimeError::internal)?;
+        let session = Arc::new(ClaudeSetupSession {
+            profile_path: claude_home.clone(),
+            _master: Mutex::new(pty.master),
+            writer: Mutex::new(writer),
+            output: Mutex::new(ClaudeSetupOutput {
+                claude_version,
+                ..ClaudeSetupOutput::default()
+            }),
+            output_changed: Condvar::new(),
+            cancel_requested: std::sync::atomic::AtomicBool::new(false),
+        });
+        self.claude_setups
+            .lock()
+            .expect("claude setup map lock")
+            .insert(session_id.clone(), session.clone());
+        self.claude_setup_idempotency
+            .lock()
+            .expect("claude setup idempotency lock")
+            .insert(request.idempotency_key, session_id.clone());
+
+        let reader_session = session.clone();
+        thread::spawn(move || {
+            let mut buffer = [0_u8; 8 << 10];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) | Err(_) => {
+                        let mut output = reader_session
+                            .output
+                            .lock()
+                            .expect("claude setup output lock");
+                        output.reader_closed = true;
+                        reader_session.output_changed.notify_all();
+                        break;
+                    }
+                    Ok(length) => {
+                        let chunk = String::from_utf8_lossy(&buffer[..length]);
+                        let mut output = reader_session
+                            .output
+                            .lock()
+                            .expect("claude setup output lock");
+                        output.absorb(&chunk);
+                        reader_session.output_changed.notify_all();
+                    }
+                }
+            }
+        });
+
+        let waiter_session = session.clone();
+        thread::spawn(move || {
+            let deadline = Instant::now() + CLAUDE_SETUP_TIMEOUT;
+            let exit_code = loop {
+                if let Ok(Some(status)) = child.try_wait() {
+                    break status.exit_code() as i32;
+                }
+                if Instant::now() >= deadline
+                    || waiter_session.cancel_requested.load(Ordering::Relaxed)
+                {
+                    let _ = child.kill();
+                    break child
+                        .wait()
+                        .map(|status| status.exit_code() as i32)
+                        .unwrap_or(1);
+                }
+                thread::sleep(Duration::from_millis(25));
+            };
+            let authenticated = exit_code == 0
+                && !waiter_session.cancel_requested.load(Ordering::Relaxed)
+                && claude_authenticated(&claude_command, &claude_home);
+            if !authenticated {
+                let _ = fs::remove_dir_all(&claude_home);
+            }
+            let mut output = waiter_session
+                .output
+                .lock()
+                .expect("claude setup output lock");
+            output.authenticated = authenticated;
+            output.exit_code = Some(exit_code);
+            output.buffer.clear();
+            if !authenticated {
+                output.failure = Some(
+                    "Claude login was not verified. Reconnect using the official login.".into(),
+                );
+            }
+            waiter_session.output_changed.notify_all();
+        });
+
+        let mut output = session.output.lock().expect("claude setup output lock");
+        let start_deadline = Instant::now() + CLAUDE_SETUP_START_TIMEOUT;
+        while output.authorize_url.is_none() && !output.terminal() {
+            let now = Instant::now();
+            if now >= start_deadline {
+                session.cancel_requested.store(true, Ordering::Relaxed);
+                self.claude_setups
+                    .lock()
+                    .expect("claude setup map lock")
+                    .remove(&session_id);
+                return Err(RuntimeError::Timeout(
+                    "Timed out waiting for claude auth login to print an authorization URL.".into(),
+                ));
+            }
+            let wait = start_deadline.saturating_duration_since(now);
+            let (next_output, _) = session
+                .output_changed
+                .wait_timeout(output, wait.min(Duration::from_millis(250)))
+                .expect("claude setup output lock");
+            output = next_output;
+        }
+        if let Some(authorize_url) = output.authorize_url.clone() {
+            Ok(serde_json::json!({
+                "sessionId": session_id,
+                "authorizeUrl": authorize_url,
+                "claudeVersion": output.claude_version
+            }))
+        } else {
+            session.cancel_requested.store(true, Ordering::Relaxed);
+            self.claude_setups
+                .lock()
+                .expect("claude setup map lock")
+                .remove(&session_id);
+            Err(RuntimeError::Unavailable(
+                output
+                    .failure
+                    .clone()
+                    .unwrap_or_else(|| "claude auth login exited before printing a URL.".into()),
+            ))
+        }
+    }
+
+    fn input_claude_setup_code(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: ClaudeSetupCodeRequest = decode(body)?;
+        if request.code.trim().is_empty()
+            || request.code.len() > MAX_CLAUDE_CODE_BYTES
+            || request.code.contains(['\r', '\n'])
+        {
+            return Err(RuntimeError::BadRequest(
+                "invalid Claude authorization code".into(),
+            ));
+        }
+        let session = self.claude_setup(session_id)?;
+        let mut writer = session.writer.lock().expect("claude setup writer lock");
+        // CR, not LF. `claude auth login` is an ink TUI reading a raw-mode
+        // pty, where the Enter key is a carriage return and no line-ending
+        // translation happens. Sending "\n" put the code into the field and
+        // never submitted it: the characters echoed back as asterisks and the
+        // session sat in `exchanging` until it expired. Verified against the
+        // real binary in a guest -- LF leaves it at the prompt indefinitely,
+        // CR gets the code evaluated.
+        writer
+            .write_all(format!("{}\r", request.code.trim()).as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(RuntimeError::internal)?;
+        Ok(serde_json::json!({ "accepted": true }))
+    }
+
+    fn poll_claude_setup(
+        &self,
+        session_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        let request: ClaudeSetupPollRequest = decode(body)?;
+        let session = self.claude_setup(session_id)?;
+        let mut output = session.output.lock().expect("claude setup output lock");
+        if !output.terminal() && request.wait_milliseconds > 0 {
+            let wait = Duration::from_millis(request.wait_milliseconds.min(25_000));
+            let (next_output, _) = session
+                .output_changed
+                .wait_timeout(output, wait)
+                .expect("claude setup output lock");
+            output = next_output;
+        }
+        // Never log terminal output: it may contain authorization codes.
+        let result = output.poll_response();
+        serde_json::to_value(result).map_err(RuntimeError::internal)
+    }
+
+    fn close_claude_setup(&self, session_id: &str) -> crate::model::Result<serde_json::Value> {
+        let session = self.claude_setup(session_id)?;
+        session.cancel_requested.store(true, Ordering::Relaxed);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut output = session.output.lock().expect("claude setup output lock");
+        while output.exit_code.is_none() {
+            if Instant::now() >= deadline {
+                return Err(RuntimeError::Timeout(
+                    "Claude login is still stopping.".into(),
+                ));
+            }
+            output = session
+                .output_changed
+                .wait_timeout(output, Duration::from_millis(100))
+                .expect("claude setup output lock")
+                .0;
+        }
+        drop(output);
+        if session.profile_path.exists() {
+            fs::remove_dir_all(&session.profile_path).map_err(RuntimeError::internal)?;
+        }
+        self.claude_setups
+            .lock()
+            .expect("claude setup map lock")
+            .remove(session_id);
+        Ok(serde_json::json!({ "closed": true }))
+    }
+
+    fn claude_setup(&self, session_id: &str) -> crate::model::Result<Arc<ClaudeSetupSession>> {
+        self.claude_setups
+            .lock()
+            .expect("claude setup map lock")
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| RuntimeError::BadRequest("Claude setup session not found".into()))
     }
 
     fn codex_exec(&self, session_id: &str) -> crate::model::Result<Arc<CodexExecSession>> {
@@ -1645,6 +1985,202 @@ impl Default for CodexExecOutput {
             codex_auth_cache_json: None,
         }
     }
+}
+
+struct ClaudeSetupSession {
+    profile_path: PathBuf,
+    // Keep the PTY master alive for the duration of the interactive setup.
+    _master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
+    writer: Mutex<Box<dyn Write + Send>>,
+    output: Mutex<ClaudeSetupOutput>,
+    output_changed: Condvar,
+    cancel_requested: std::sync::atomic::AtomicBool,
+}
+
+#[derive(Default)]
+struct ClaudeSetupOutput {
+    buffer: String,
+    authorize_url: Option<String>,
+    authenticated: bool,
+    failure: Option<String>,
+    reader_closed: bool,
+    exit_code: Option<i32>,
+    claude_version: Option<String>,
+}
+
+impl ClaudeSetupOutput {
+    fn absorb(&mut self, chunk: &str) {
+        self.buffer.push_str(chunk);
+        if self.authorize_url.is_none()
+            && let Some(captures) = claude_authorize_url_pattern().captures(&self.buffer)
+            && let Some(match_) = captures.get(1)
+        {
+            self.authorize_url = Some(match_.as_str().to_owned());
+        }
+        // `claude auth login` does not exit when it rejects a code: it prints
+        // an error and waits at a "Press Enter to retry" prompt. Nothing else
+        // sets `failure` until the process ends, so without this the session
+        // sat Pending until the start timeout and the member was told nothing
+        // about what went wrong. Catching it here turns a silent wait into an
+        // immediate, actionable failure.
+        if self.failure.is_none()
+            && claude_oauth_error_pattern().is_match(&strip_ansi(&self.buffer))
+        {
+            self.failure = Some(
+                "Claude rejected the authorization code. Copy the full code from the Claude tab, including any part after the # character, and try again."
+                    .into(),
+            );
+        }
+        self.buffer = redact_claude_secrets(&self.buffer);
+        if self.buffer.len() > MAX_OUTPUT_BYTES {
+            let mut overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
+            while !self.buffer.is_char_boundary(overflow) {
+                overflow += 1;
+            }
+            self.buffer.drain(0..overflow);
+        }
+    }
+
+    fn terminal(&self) -> bool {
+        self.reader_closed && self.exit_code.is_some()
+    }
+
+    fn poll_response(&self) -> ClaudeSetupPollResponse {
+        if self.terminal() && self.authenticated {
+            return ClaudeSetupPollResponse::Ready;
+        }
+        if let Some(reason) = &self.failure {
+            return ClaudeSetupPollResponse::Failed {
+                reason: reason.clone(),
+            };
+        }
+        if self.terminal() {
+            return ClaudeSetupPollResponse::Failed {
+                reason: self
+                    .failure
+                    .clone()
+                    .unwrap_or_else(|| "Claude login stopped before sign-in was verified.".into()),
+            };
+        }
+        ClaudeSetupPollResponse::Pending
+    }
+}
+
+fn claude_setup_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/claude-auth-login/")?;
+    let (session_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!session_id.is_empty()).then_some((session_id, action))
+}
+
+fn claude_setup_command(_request: &ClaudeSetupStartRequest) -> String {
+    #[cfg(test)]
+    if let Some(command) = _request.command.as_ref() {
+        return command.clone();
+    }
+    std::env::var("CODEV_CLAUDE_SETUP_COMMAND")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "claude".into())
+}
+
+fn claude_version(command: &str) -> Option<String> {
+    let mut child = Command::new(command)
+        .arg("--version")
+        .env("PATH", GUEST_PATH)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let status = child.wait_timeout(Duration::from_secs(2)).ok()??;
+    if !status.success() {
+        return None;
+    }
+    let mut output = String::new();
+    child.stdout.take()?.read_to_string(&mut output).ok()?;
+    Some(output.trim().to_owned()).filter(|value| !value.is_empty() && value.len() <= 128)
+}
+
+/// Ask the unmodified CLI about its own isolated profile. Never read credentials.
+fn claude_authenticated(command: &str, profile: &Path) -> bool {
+    let Ok(mut child) = Command::new(command)
+        .args(["auth", "status"])
+        .env_clear()
+        .env("PATH", GUEST_PATH)
+        .env("HOME", profile)
+        .env("CLAUDE_CONFIG_DIR", profile.join("config"))
+        .current_dir(profile)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+    let success =
+        matches!(child.wait_timeout(Duration::from_secs(10)), Ok(Some(status)) if status.success());
+    if !success {
+        let _ = child.kill();
+        let _ = child.wait();
+        return false;
+    }
+    let mut output = String::new();
+    let Some(stdout) = child.stdout.take() else {
+        return false;
+    };
+    if stdout.take(16384).read_to_string(&mut output).is_err() {
+        return false;
+    }
+    serde_json::from_str::<serde_json::Value>(&output)
+        .is_ok_and(|value| value["loggedIn"] == true && value["authMethod"] == "claude.ai")
+}
+
+fn claude_authorize_url_pattern() -> &'static Regex {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    PATTERN.get_or_init(|| {
+        // The character class stops at any control byte, not just
+        // whitespace. `claude auth login` prints the URL as an OSC-8
+        // terminal hyperlink -- ESC ] 8 ; ; <url> BEL <visible text> ESC ] 8
+        // ; ; BEL -- and BEL and ESC are neither whitespace nor quotes, so a
+        // `[^\s'"]*` tail ran straight through the terminator and captured
+        // the escape sequence plus the truncated copy the terminal displays.
+        Regex::new(
+            r#"(https://(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com)/[^\x00-\x20'"\x7f]*(?:oauth|authorize)[^\x00-\x20'"\x7f]*)[\x00-\x20'"\x7f]"#,
+        )
+        .expect("Claude authorize URL regex")
+    })
+}
+
+/// Strips CSI escape sequences so a message split across cursor-positioning
+/// jumps reads as one line.
+///
+/// `claude auth login` renders its error screen by moving the cursor to a
+/// column and printing a fragment, so the raw PTY bytes for one sentence look
+/// like `OAuth error: Invalid\x1b[23Gcode. Please make\x1b[41Gsure...`. A
+/// plain substring search over that finds neither the whole phrase nor most
+/// of its words.
+fn strip_ansi(value: &str) -> String {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    let pattern = PATTERN.get_or_init(|| {
+        // CSI (ESC [ ... final byte) plus OSC (ESC ] ... BEL), which is how
+        // the authorize URL is emitted.
+        Regex::new(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07").expect("ANSI escape regex")
+    });
+    pattern.replace_all(value, "").into_owned()
+}
+
+fn claude_oauth_error_pattern() -> &'static Regex {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"(?i)oauth error").expect("Claude OAuth error regex"))
+}
+
+fn claude_token_pattern() -> &'static Regex {
+    static PATTERN: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"sk-ant-[A-Za-z0-9_-]{20,}").expect("Claude token regex"))
+}
+
+fn redact_claude_secrets(value: &str) -> String {
+    claude_token_pattern()
+        .replace_all(value, "[REDACTED_CLAUDE_TOKEN]")
+        .into_owned()
 }
 
 fn codex_exec_route(path: &str) -> Option<(&str, &str)> {
@@ -2474,6 +3010,207 @@ mod tests {
         }
     }
 
+    fn fake_claude(directory: &Path, body: &str) -> PathBuf {
+        let path = directory.join("fake-claude.sh");
+        fs::write(&path, body).expect("fake claude");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("chmod fake claude");
+        path
+    }
+
+    fn start_claude_setup(
+        service: &GuestService,
+        command: &Path,
+        idempotency_key: &str,
+    ) -> serde_json::Value {
+        let body = serde_json::to_vec(&serde_json::json!({
+            "idempotencyKey": idempotency_key,
+            "command": command.to_string_lossy()
+        }))
+        .expect("start body");
+        let start = service.handle("POST", "/v1/claude-auth-login", &body);
+        assert_eq!(
+            start.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&start.body)
+        );
+        serde_json::from_slice(&start.body).expect("start json")
+    }
+
+    #[test]
+    fn claude_login_retains_private_profile_without_returning_credentials() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let command = fake_claude(
+            directory.path(),
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then echo "Claude Code 2.1.236"; exit 0; fi
+if [ "$1 $2" = "auth status" ]; then
+  test -f "$CLAUDE_CONFIG_DIR/signed-in" || exit 1
+  printf '{"loggedIn":true,"authMethod":"claude.ai"}\n'
+  exit 0
+fi
+test "$1 $2 $3" = "auth login --claudeai" || exit 2
+mkdir -p "$CLAUDE_CONFIG_DIR"
+printf 'Open this URL:\n'
+printf 'https://claude.ai/oauth/authorize?client_id=abc\n'
+IFS= read code
+if [ "$code" = "good" ]; then
+  touch "$CLAUDE_CONFIG_DIR/signed-in"
+  printf 'Login successful. Token: sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+  exit 0
+fi
+printf 'Invalid authorization code\n' >&2
+exit 1
+"#,
+        );
+        let start = start_claude_setup(&service, &command, "claude-good");
+        let session_id = start["sessionId"].as_str().expect("session id");
+        assert!(
+            start["authorizeUrl"]
+                .as_str()
+                .expect("authorize")
+                .contains("oauth")
+        );
+        assert_eq!(start["claudeVersion"], "Claude Code 2.1.236");
+
+        // Note what this does *not* prove. The fake reads in canonical mode,
+        // where the pty's ICRNL rewrites the CR we send into the NL its `read`
+        // wants, so it would pass either way. The real binary puts the pty in
+        // raw mode and only accepts CR; that was verified directly against
+        // claude 2.1.236 inside a guest, where LF left it sitting at the
+        // prompt with the code echoed as asterisks and CR got it evaluated.
+        let code = service.handle(
+            "POST",
+            &format!("/v1/claude-auth-login/{session_id}/code"),
+            br#"{"code":"good"}"#,
+        );
+        assert_eq!(code.status, 200);
+
+        // Poll to a deadline rather than once. A single fixed wait raced the
+        // fake claude whenever the suite ran in parallel: the child had not
+        // written its token yet, poll answered Pending, and the assertion
+        // below failed as though the product were broken. What is asserted is
+        // unchanged -- a real sk-ant-oat token still has to arrive.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let result = loop {
+            let poll = service.handle(
+                "POST",
+                &format!("/v1/claude-auth-login/{session_id}/poll"),
+                br#"{"waitMilliseconds":5000}"#,
+            );
+            assert_eq!(poll.status, 200, "{}", String::from_utf8_lossy(&poll.body));
+            let parsed: ClaudeSetupPollResponse =
+                serde_json::from_slice(&poll.body).expect("poll response");
+            if !matches!(parsed, ClaudeSetupPollResponse::Pending) {
+                break parsed;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "claude auth login never verified sign-in"
+            );
+        };
+        assert!(matches!(result, ClaudeSetupPollResponse::Ready));
+        assert_eq!(
+            serde_json::to_value(&result).unwrap(),
+            serde_json::json!({"status":"ready"})
+        );
+        let profile = service
+            .claude_setup(session_id)
+            .unwrap()
+            .profile_path
+            .clone();
+        assert!(profile.join("config/signed-in").exists());
+        assert!(!profile.starts_with(directory.path()));
+        assert_eq!(
+            fs::metadata(&profile).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+
+        let buffered = service
+            .claude_setup(session_id)
+            .expect("session")
+            .output
+            .lock()
+            .expect("output")
+            .buffer
+            .clone();
+        assert!(!buffered.contains("sk-ant-oat"));
+        service.close_claude_setup(session_id).unwrap();
+        assert!(!profile.exists());
+    }
+
+    #[test]
+    fn claude_setup_start_is_idempotent() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let command = fake_claude(
+            directory.path(),
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then echo "Claude Code test"; exit 0; fi
+printf 'https://claude.ai/oauth/authorize?client_id=abc\n'
+sleep 1
+"#,
+        );
+        let first = start_claude_setup(&service, &command, "same-key");
+        let second = start_claude_setup(&service, &command, "same-key");
+        assert_eq!(first["sessionId"], second["sessionId"]);
+    }
+
+    #[test]
+    fn claude_setup_close_removes_session() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let command = fake_claude(
+            directory.path(),
+            r#"#!/bin/sh
+if [ "$1" = "--version" ]; then echo "Claude Code test"; exit 0; fi
+printf 'https://claude.ai/oauth/authorize?client_id=abc\n'
+sleep 5
+"#,
+        );
+        let start = start_claude_setup(&service, &command, "close-key");
+        let session_id = start["sessionId"].as_str().expect("session id");
+        let close = service.handle(
+            "DELETE",
+            &format!("/v1/claude-auth-login/{session_id}"),
+            b"",
+        );
+        assert_eq!(close.status, 200);
+        let poll = service.handle(
+            "POST",
+            &format!("/v1/claude-auth-login/{session_id}/poll"),
+            br#"{}"#,
+        );
+        assert_eq!(poll.status, 400);
+    }
+
+    #[test]
+    fn async_exec_without_codex_credentials_does_not_create_an_auth_cache() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&serde_json::json!({
+                "command": ["/bin/sh", "-c", "test ! -f \"$CODEX_HOME/auth.json\" && printf native-runtime"],
+                "idempotencyKey": "native-runtime"
+            }))
+            .expect("request")
+            .as_slice(),
+        );
+        assert_eq!(response.status, 200);
+        let body: serde_json::Value = serde_json::from_slice(&response.body).expect("response");
+        let result = poll_codex_exec_until_exited(
+            &service,
+            body["sessionId"].as_str().expect("session id"),
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(result.exit_code, Some(0));
+        assert!(result.output.contains("native-runtime"));
+        assert!(result.codex_auth_cache_json.is_none());
+    }
+
     #[test]
     fn codex_exec_streams_and_reports_updated_auth_cache() {
         let directory = tempdir().expect("tempdir");
@@ -2516,22 +3253,56 @@ mod tests {
 
     #[test]
     fn codex_exec_blocks_other_mutations_until_it_exits() {
-        let directory = tempdir().expect("tempdir");
-        let service = GuestService::new(directory.path()).expect("service");
-        let session_id =
-            start_codex_exec(&service, serde_json::json!(["sleep", "0.3"]), "busy-key");
+        struct ReleaseOnDrop(PathBuf);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                let _ = fs::write(&self.0, b"release");
+            }
+        }
 
-        let started_at = Instant::now();
-        let plain = service.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
+        let directory = tempdir().expect("tempdir");
+        let release = directory.path().join("release-codex-exec");
+        let _release_on_drop = ReleaseOnDrop(release.clone());
+        let service = Arc::new(GuestService::new(directory.path()).expect("service"));
+        let session_id = start_codex_exec(
+            &service,
+            serde_json::json!([
+                "/bin/sh",
+                "-c",
+                "while [ ! -e \"$1\" ]; do sleep 0.01; done",
+                "sh",
+                release
+            ]),
+            "busy-key",
+        );
+
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let service_for_plain = service.clone();
+        let plain_thread = thread::spawn(move || {
+            started_tx.send(()).expect("announce plain exec");
+            let response =
+                service_for_plain.handle("POST", "/v1/pty/exec", br#"{"command":["echo","hi"]}"#);
+            done_tx.send(response).expect("send plain exec response");
+        });
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("plain exec thread did not start");
+        assert!(
+            done_rx.recv_timeout(Duration::from_millis(100)).is_err(),
+            "a plain exec must stay blocked while the Codex exec is running"
+        );
+
+        fs::write(&release, b"release").expect("release Codex exec");
+        let plain = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("plain exec did not unblock after the Codex exec exited");
+        plain_thread.join().expect("plain exec thread");
         assert_eq!(
             plain.status,
             200,
             "{}",
             String::from_utf8_lossy(&plain.body)
-        );
-        assert!(
-            started_at.elapsed() >= Duration::from_millis(250),
-            "a plain exec must wait for the in-flight Codex exec to finish"
         );
 
         poll_codex_exec_until_exited(
@@ -2678,5 +3449,43 @@ mod tests {
             String::from_utf8_lossy(&response.body)
         );
         serde_json::from_slice(&response.body).expect("checkpoint")
+    }
+
+    #[test]
+    fn authorize_url_stops_at_the_osc8_hyperlink_terminator() {
+        // `claude auth login` prints the URL as a clickable terminal
+        // hyperlink. Captured verbatim from a guest, the pty carries:
+        //   ESC ] 8 ; ; <url> BEL <truncated visible copy> ESC ] 8 ; ; BEL
+        // The scraped value is handed to the browser, so anything past the
+        // BEL makes the link the member opens unusable.
+        let url = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a&state=abc";
+        let pty = format!(
+            "\x1b]8;;{url}\x07https://claude.com/cai/oauth/authorize?code=true&clie\x1b]8;;\x07"
+        );
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(&pty);
+        assert_eq!(output.authorize_url.as_deref(), Some(url));
+    }
+
+    #[test]
+    fn authorize_url_still_matches_a_plain_printed_url() {
+        let url = "https://claude.com/cai/oauth/authorize?code=true&state=xyz";
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(&format!("Open this URL:\n{url}\n"));
+        assert_eq!(output.authorize_url.as_deref(), Some(url));
+    }
+
+    #[test]
+    fn oauth_error_screen_becomes_a_failed_poll() {
+        let mut output = ClaudeSetupOutput::default();
+        output.absorb(
+            "\x1b[2KOAuth error: Invalid\x1b[23Gcode. Please make\x1b[41Gsure the full\x1b[55Gcode was copied\r\nPress Enter to retry.",
+        );
+
+        assert!(matches!(
+            output.poll_response(),
+            ClaudeSetupPollResponse::Failed { reason }
+                if reason.contains("Copy the full code")
+        ));
     }
 }

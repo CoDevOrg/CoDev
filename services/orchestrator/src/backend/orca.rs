@@ -70,6 +70,13 @@ pub struct OrcaConfig {
     pub port_range_end: u16,
     pub max_sessions: usize,
     pub idle_timeout: Duration,
+    /// Bearer token gating the public `/v1/*` bypass described on
+    /// `direct_route`. Empty disables the route entirely, which is the safe
+    /// default: this API performs no authentication of its own.
+    pub direct_secret: String,
+    /// Port this orchestrator's own HTTP API listens on, i.e. what the
+    /// bypass route proxies to. Mirrors `PORT` in bin/orchestrator.rs.
+    pub api_port: u16,
 }
 
 impl OrcaConfig {
@@ -94,6 +101,8 @@ impl OrcaConfig {
                 "CODEV_IDE_IDLE_TIMEOUT",
                 Duration::from_secs(1_800),
             )?,
+            direct_secret: std::env::var("CODEV_DIRECT_SECRET").unwrap_or_default(),
+            api_port: environment_number("PORT", 8_080)?,
         };
         if config.public_host.trim().is_empty() {
             return Err(RuntimeError::BadRequest(
@@ -173,31 +182,13 @@ impl OrcaBackend {
             ));
         }
 
-        // Serialize start attempts for this backend: cheap (there are at most
-        // `max_sessions` of these at once) and avoids double-spawning a
-        // session or racing two Caddy config reloads for the same workspace.
+        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+            return Ok(session);
+        }
+        // Only provisioning and routing changes need the global capacity lock.
         let _guard = self.provision.lock().await;
-
-        if let Some(session) = self.sessions.read().await.get(workspace_id).cloned()
-            && session.is_running().await
-        {
-            // A shared workspace runs one session, but each member's coding
-            // subscription is their own. Re-file this member's credentials on
-            // every open — including this join-an-existing-session path, which
-            // is the *only* path a second member ever takes — so an agent they
-            // launch runs on their subscription instead of whichever member
-            // started the session. Best-effort: a member with nothing linked
-            // (or a rotated credential) must never fail the open.
-            if let Err(error) =
-                write_member_agent_credentials(&linux_user_for(workspace_id), &request).await
-            {
-                warn!(
-                    workspace_id,
-                    %error, "could not file this member's agent credentials"
-                );
-            }
-            session.touch();
-            return Ok(session.to_model(workspace_id));
+        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+            return Ok(session);
         }
         // Either absent or the process died since the last check; drop any
         // stale entry before re-provisioning.
@@ -253,14 +244,21 @@ impl OrcaBackend {
         if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
             warn!(workspace_id, %error, "could not file this member's agent credentials");
         }
-        let claude_env = if let Some(api_key) = &request.anthropic_api_key {
-            Some(("ANTHROPIC_API_KEY", api_key.as_str()))
-        } else {
-            request
-                .claude_code_oauth_token
-                .as_deref()
-                .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
-        };
+        // Claude Code reads its credential from the environment; at most one
+        // form is present, and a plain key wins. The OAuth token is the
+        // member's `claude setup-token` uploaded with `codev claude-auth`; the
+        // web layer only sends it for a CLI-connected, workspace-enabled
+        // credential, never a browser subscription.
+        let claude_env = request
+            .anthropic_api_key
+            .as_deref()
+            .map(|api_key| ("ANTHROPIC_API_KEY", api_key))
+            .or_else(|| {
+                request
+                    .claude_code_oauth_token
+                    .as_deref()
+                    .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
+            });
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -297,6 +295,26 @@ impl OrcaBackend {
         self.reload_caddy_routes().await?;
         info!(workspace_id, port, "started per-workspace Orca IDE session");
         Ok(session.to_model(workspace_id))
+    }
+
+    async fn reconnect(
+        &self,
+        workspace_id: &str,
+        request: &IdeStartRequest,
+    ) -> Result<Option<IdeSession>> {
+        // Keep stop from removing the session while member credentials are refreshed.
+        let sessions = self.sessions.read().await;
+        let Some(session) = sessions.get(workspace_id) else {
+            return Ok(None);
+        };
+        if !session.is_running().await {
+            return Ok(None);
+        }
+        session.touch();
+        if let Err(error) = write_member_agent_credentials(&session.linux_user, request).await {
+            warn!(workspace_id, %error, "could not file this member's agent credentials");
+        }
+        Ok(Some(session.to_model(workspace_id)))
     }
 
     pub async fn status(&self, workspace_id: &str) -> Result<IdeSession> {
@@ -486,13 +504,23 @@ impl OrcaBackend {
     }
 
     pub async fn stop(&self, workspace_id: &str) -> Result<()> {
+        self.stop_session(workspace_id, false).await
+    }
+
+    async fn stop_session(&self, workspace_id: &str, only_if_idle: bool) -> Result<()> {
         let _guard = self.provision.lock().await;
-        let session = self
-            .sessions
-            .write()
-            .await
+        let mut sessions = self.sessions.write().await;
+        if only_if_idle
+            && sessions
+                .get(workspace_id)
+                .is_some_and(|session| session.idle_for() < self.config.idle_timeout)
+        {
+            return Ok(());
+        }
+        let session = sessions
             .remove(workspace_id)
             .ok_or(RuntimeError::SandboxNotFound)?;
+        drop(sessions);
         self.destroy_session(workspace_id, &session).await;
         self.reload_caddy_routes().await
     }
@@ -554,11 +582,44 @@ impl OrcaBackend {
         }
         drop(sessions);
         let caddyfile = format!(
-            "{{\n  admin {}\n}}\n\n{} {{\n{routes}  respond 404\n}}\n",
-            self.config.caddy_admin_addr, self.config.public_host
+            "{{\n  admin {}\n}}\n\n{} {{\n{}{routes}  respond 404\n}}\n",
+            self.config.caddy_admin_addr,
+            self.config.public_host,
+            direct_route(&self.config.direct_secret, self.config.api_port),
         );
         caddy_load(&self.config.caddy_admin_addr, &caddyfile).await
     }
+}
+
+/// The public `/v1/*` bypass around API Gateway.
+///
+/// Vercel normally reaches this orchestrator through an API Gateway + Lambda
+/// proxy, which imposes a hard, non-configurable 29-second integration
+/// timeout. Two calls legitimately run longer: an authenticated Codex exec
+/// turn (up to 900s) and the hosted `claude setup-token` flow, whose start
+/// measured 27s against that 29s ceiling. This route lets those go straight
+/// to the host, gated by a bearer token because the orchestrator itself
+/// performs no request authentication -- everywhere else it relies on the
+/// Lambda's security-group-restricted network path.
+///
+/// Every reload replaces Caddy's whole configuration, so this has to be
+/// re-emitted here rather than living in the Caddyfile bootstrap-host.sh
+/// writes. That file emits a byte-identical block for the window before the
+/// first workspace triggers a reload; the two must be changed together.
+///
+/// An empty or non-token-shaped secret emits nothing, leaving `/v1/*`
+/// unreachable from the internet. The shape check is what keeps a stray
+/// quote or brace in the secret from breaking out into the surrounding
+/// Caddyfile.
+fn direct_route(secret: &str, api_port: u16) -> String {
+    if secret.is_empty() || !secret.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return String::new();
+    }
+    format!(
+        "  @codev_direct {{\n    path /v1/* /healthz\n    header Authorization \"Bearer {secret}\"\n  }}\n\
+         \x20 handle @codev_direct {{\n    reverse_proxy 127.0.0.1:{api_port} {{\n      transport http {{\n        dial_timeout 10s\n        response_header_timeout 900s\n      }}\n    }}\n  }}\n\
+         \x20 handle /v1/* {{\n    respond 401\n  }}\n"
+    )
 }
 
 async fn reap_idle_sessions(backend: Arc<OrcaBackend>) {
@@ -575,7 +636,7 @@ async fn reap_idle_sessions(backend: Arc<OrcaBackend>) {
             .collect();
         for workspace_id in idle {
             info!(workspace_id, "stopping idle Orca IDE session");
-            if let Err(error) = backend.stop(&workspace_id).await {
+            if let Err(error) = backend.stop_session(&workspace_id, true).await {
                 warn!(workspace_id, %error, "failed to stop idle Orca IDE session");
             }
         }
@@ -901,16 +962,30 @@ fn member_agent_env_map(
     }
 
     // Claude Code takes its credential from the environment rather than a
-    // config file. At most one of the two forms is ever present.
+    // config file. At most one of the two forms is ever present: a plain key
+    // wins, else the member's `claude setup-token` (uploaded with
+    // `codev claude-auth`; the web layer only sends it for a CLI-connected,
+    // workspace-enabled credential). Otherwise the token is blanked so one
+    // inherited from an older shared IDE process cannot leak in — browser
+    // subscription profiles are never copied into this filesystem.
     if let Some(api_key) = &request.anthropic_api_key {
         env.insert(
             "ANTHROPIC_API_KEY".to_string(),
             Value::String(api_key.clone()),
         );
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(String::new()),
+        );
     } else if let Some(token) = &request.claude_code_oauth_token {
         env.insert(
             "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
             Value::String(token.clone()),
+        );
+    } else {
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(String::new()),
         );
     }
 
@@ -1537,12 +1612,66 @@ fn environment_duration(name: &str, fallback: Duration) -> Result<Duration> {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn reconnect_does_not_wait_for_another_workspace_provisioning() {
+        use super::*;
+        let root = tempfile::tempdir().unwrap();
+        let backend = OrcaBackend {
+            config: OrcaConfig {
+                app_run_bin: "/unused".into(),
+                workspaces_root: root.path().into(),
+                public_host: "localhost".into(),
+                caddy_admin_addr: "127.0.0.1:1".into(),
+                display: ":99".into(),
+                port_range_start: 7000,
+                port_range_end: 7999,
+                max_sessions: 1,
+                idle_timeout: Duration::from_secs(60),
+                direct_secret: String::new(),
+                api_port: 8080,
+            },
+            sessions: AsyncRwLock::new(HashMap::new()),
+            provision: AsyncMutex::new(()),
+        };
+        let child = Command::new("sleep")
+            .arg("60")
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        backend.sessions.write().await.insert(
+            "test".into(),
+            Arc::new(RunningSession {
+                port: 7000,
+                linux_user: "unused".into(),
+                child: AsyncMutex::new(child),
+                ready: serde_json::json!({"type": "orca_server_ready"}),
+                created_at: Utc::now(),
+                last_activity_at: std::sync::RwLock::new(Utc::now()),
+            }),
+        );
+        let request: IdeStartRequest = serde_json::from_value(serde_json::json!({
+            "projectRoot": root.path().join("test")
+        }))
+        .unwrap();
+        let guard = backend.provision.lock().await;
+        let session = timeout(Duration::from_millis(250), backend.start("test", request))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.port, 7000);
+        drop(guard);
+        // An idle scan made before a reconnect must not reap the refreshed session.
+        backend.stop_session("test", true).await.unwrap();
+        assert!(backend.sessions.read().await.contains_key("test"));
+    }
+
     use super::{
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
         claude_settings_with_theme, codex_config_with_coordination_mcp, create_dir_all_within,
-        linux_user_for, linux_user_process_command, member_agent_dir, member_agent_env_map,
-        member_id_pattern, merge_coordination_mcp_server, orca_serve_command_line,
-        orca_serve_sudo_command, repository_pattern, resolve_within, shell_quote, token_pattern,
+        direct_route, linux_user_for, linux_user_process_command, member_agent_dir,
+        member_agent_env_map, member_id_pattern, merge_coordination_mcp_server,
+        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, resolve_within,
+        shell_quote, token_pattern,
     };
     use crate::model::{IdeStartRequest, RuntimeError};
     use serde_json::json;
@@ -1947,8 +2076,32 @@ mod tests {
     }
 
     #[test]
-    fn nothing_linked_yields_an_empty_bundle_that_clears_a_stale_one() {
-        assert!(member_agent_env_map(&ide_start_request(json!({})), None, None).is_empty());
+    fn nothing_linked_clears_a_stale_claude_token() {
+        let env = member_agent_env_map(&ide_start_request(json!({})), None, None);
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!(""));
+        assert_eq!(env.len(), 1);
+    }
+
+    // The web layer only sends a Claude OAuth token for a CLI-connected,
+    // workspace-enabled `claude setup-token`; a browser subscription never
+    // reaches this request. So a token that arrives is forwarded as-is.
+    #[test]
+    fn a_cli_claude_token_is_forwarded_to_member_agents() {
+        let request = ide_start_request(json!({ "claudeCodeOauthToken": "sk-ant-cli-token" }));
+        let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!("sk-ant-cli-token"));
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn a_plain_api_key_wins_over_a_claude_token() {
+        let request = ide_start_request(json!({
+            "anthropicApiKey": "sk-ant-api-key",
+            "claudeCodeOauthToken": "sk-ant-cli-token"
+        }));
+        let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["ANTHROPIC_API_KEY"], json!("sk-ant-api-key"));
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!(""));
     }
 
     #[test]
@@ -1958,5 +2111,40 @@ mod tests {
         let chosen = claude_settings_with_theme(Some(json!({ "theme": "light", "model": "opus" })));
         assert_eq!(chosen["theme"], json!("light"));
         assert_eq!(chosen["model"], json!("opus"));
+    }
+
+    #[test]
+    fn direct_route_is_omitted_without_a_secret() {
+        assert_eq!(direct_route("", 8080), "");
+    }
+
+    #[test]
+    fn direct_route_rejects_a_secret_that_could_escape_the_caddyfile() {
+        // A quote or brace would otherwise terminate the header matcher and
+        // let the rest of the value be parsed as Caddyfile directives.
+        for hostile in [
+            "abc\"}\nrespond 200 {",
+            "has space",
+            "semi;colon",
+            "quote\"",
+        ] {
+            assert_eq!(direct_route(hostile, 8080), "", "accepted {hostile:?}");
+        }
+    }
+
+    #[test]
+    fn direct_route_gates_v1_on_the_bearer_token_and_denies_otherwise() {
+        let route = direct_route("deadbeefcafe0123", 8080);
+        // /healthz is on the bearer route too: on Azure the direct path is
+        // the only path, and apps/web's health check has to get through it.
+        assert!(route.contains("path /v1/* /healthz"));
+        assert!(route.contains("header Authorization \"Bearer deadbeefcafe0123\""));
+        assert!(route.contains("reverse_proxy 127.0.0.1:8080"));
+        // Anything reaching /v1/* without the token must be refused rather
+        // than falling through to the workspace routes or the 404.
+        assert!(route.contains("handle /v1/*"));
+        assert!(route.contains("respond 401"));
+        // Long Codex exec turns must not be cut off waiting for headers.
+        assert!(route.contains("response_header_timeout 900s"));
     }
 }

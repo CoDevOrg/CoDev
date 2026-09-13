@@ -16,7 +16,6 @@ set -euo pipefail
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 readonly source_dir="${repo_root}/packages/ide"
-readonly preload_file="${repo_root}/infra/aws/orca-build/codev-preload.js"
 readonly brand_script="${repo_root}/infra/aws/orca-build/brand-web.mjs"
 readonly target_dir="${repo_root}/apps/web/public/orca"
 readonly -a pnpm_cmd=(corepack pnpm@10.24.0)
@@ -35,7 +34,6 @@ fi
 "${pnpm_cmd[@]}" --dir "${source_dir}" typecheck:web
 "${pnpm_cmd[@]}" --dir "${source_dir}" build:web
 
-cp "${preload_file}" "${source_dir}/out/web/codev-preload.js"
 node "${brand_script}" "${source_dir}/out/web"
 rsync -a --delete "${source_dir}/out/web/" "${target_dir}/"
 

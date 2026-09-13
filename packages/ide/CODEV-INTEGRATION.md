@@ -189,13 +189,12 @@ CoDev-owned and neither is a patch any more, but they still run post-build:
   Renaming the *display text* for these would send users looking for a `codev`
   command or a `codev.yaml` that doesn't exist.
 
-`infra/aws/orca-build/codev-preload.js` is a classic script loaded before the
-app's module script. It silences the "star us on GitHub" nag, normalizes the
-`gh`-not-authenticated preflight banner (CoDev's sandbox is deliberately
-credential-free and shows PRs through its own UI), and keeps one-time feature
-tips and tours to once per browser rather than once per workspace — each
-workspace is a separate `orca serve`, so hydration would otherwise resurrect
-them on every entry.
+`src/renderer/src/web/codev-web-preferences.ts` owns the browser defaults,
+GitHub preflight adaptation, and dismissed-tip persistence. The web API composes
+these behaviors explicitly for embedded CoDev sessions, without an injected
+script or a setter intercepting `window.api`. GitHub operations still use the
+authenticated CoDev control plane; this preflight display adaptation grants no
+runtime permissions. The normal browser API already disables the GitHub star nag.
 
 `apps/web/components/orca-workspace.tsx` also renders a first-party
 `workspace-topbar` above the iframe with a persistent "← CoDev" link back to

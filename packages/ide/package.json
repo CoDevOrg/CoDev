@@ -26,6 +26,7 @@
     "lint:react-doctor": "oxlint --config config/oxlint-react-doctor.json",
     "lint:react-doctor:changed": "node config/scripts/lint-react-doctor-changed.mjs",
     "prepare": "husky",
+    "prepare:build-toolchain": "node config/scripts/prepare-pnpm-native-build.mjs",
     "test": "node config/scripts/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
     "test:repro:remote-agent-session": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",

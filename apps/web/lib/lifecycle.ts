@@ -6,6 +6,7 @@ import { getRun } from "workflow/api";
 import { schema } from "@codev/db";
 
 import { appendWorkspaceEvent } from "./audit";
+import { reapExpiredClaudeConnectionSessions } from "./claude-connection-session";
 import { closeOrphanOrcaIntervals } from "./compute-credits";
 import { getDatabase } from "./database";
 import { getHostState } from "./host";
@@ -228,6 +229,7 @@ export async function reconcileLifecycle() {
   const orphanOrcaIntervalsClosed = hostRunning
     ? await closeOrphanOrcaIntervals()
     : 0;
+  const claudeConnections = await reapExpiredClaudeConnectionSessions();
 
   const result = {
     hostState,
@@ -237,6 +239,8 @@ export async function reconcileLifecycle() {
     cancellationFailures,
     orphanIntervalsClosed,
     orphanOrcaIntervalsClosed,
+    expiredClaudeConnectionsCleaned: claudeConnections.cleaned,
+    expiredClaudeConnectionCleanupFailures: claudeConnections.failures,
     durationMs: Date.now() - startedAt,
   };
   logEvent("info", "lifecycle.reconciled", result);

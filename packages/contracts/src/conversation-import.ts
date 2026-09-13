@@ -15,6 +15,13 @@ export type ConversationImportPreviewInput = z.infer<
 export const sharedChatMessageInputSchema = z
   .object({
     body: z.string().trim().min(1).max(20_000),
+    reply: z
+      .object({
+        provider: z.enum(["claude", "codex"]),
+        model: z.string().trim().min(1).max(200),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -51,6 +58,13 @@ export const importedConversationMessageSchema = z.object({
   sourceContentType: z.string().trim().min(1).max(100).nullable(),
   createdAt: timestampSchema.nullable(),
   artifacts: z.array(importedConversationArtifactSchema),
+  generation: z
+    .object({
+      status: z.enum(["pending", "completed", "failed"]),
+      provider: z.enum(["claude", "codex"]),
+      model: z.string().min(1).max(200),
+    })
+    .optional(),
 });
 
 export const importedConversationSchema = z.object({

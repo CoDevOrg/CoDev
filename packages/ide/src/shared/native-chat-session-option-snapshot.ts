@@ -184,6 +184,17 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     }
   ]
   if (typeof modelTracked?.value !== 'string') {
+    for (const option of catalog.unknownModelOptions ?? []) {
+      const descriptor = optionDescriptor({
+        option,
+        tracked: undefined,
+        mode,
+        composedModelApply: catalog.modelApply
+      })
+      if (descriptor) {
+        snapshot.push(descriptor)
+      }
+    }
     return snapshot
   }
   const model = models.find((candidate) => candidate.id === modelTracked.value)

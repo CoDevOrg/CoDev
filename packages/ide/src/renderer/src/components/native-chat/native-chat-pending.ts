@@ -363,23 +363,3 @@ export function applyCommandMarkerBoundaries(
   // transcript too, since none of them carry a timestamp either.
   return messages.filter((message) => message.timestamp === null || message.timestamp > clearSentAt)
 }
-
-/** Render command markers as compact `system` messages. The `system` role draws
- *  as a muted aside (not a user bubble); the text avoids the harness noise
- *  prefixes so stripNoiseMessages keeps it. */
-export function commandMarkersAsMessages(
-  markers: readonly NativeChatCommandMarker[]
-): NativeChatMessage[] {
-  return markers.map((marker) => ({
-    id: `command:${marker.id}`,
-    role: 'system' as const,
-    blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
-    timestamp: marker.sentAt,
-    source: 'scrape' as const
-  }))
-}
-
-/** True when a message id was minted for a slash-command marker. */
-export function isCommandMarkerId(id: string): boolean {
-  return id.startsWith('command:')
-}

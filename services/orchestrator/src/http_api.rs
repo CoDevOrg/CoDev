@@ -20,6 +20,7 @@ use tracing::info;
 use crate::{
     backend::{IdeBackend, SharedBackend},
     model::{
+        ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupStartRequest,
         CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest,
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdeStartRequest,
         IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result, RuntimeError,
@@ -128,6 +129,22 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/codex-execs/{session_id}",
             delete(close_codex_exec),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/claude-auth-login",
+            post(start_claude_setup),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}/code",
+            post(input_claude_setup_code),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}/poll",
+            post(poll_claude_setup),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/claude-auth-login/{session_id}",
+            delete(close_claude_setup),
         )
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
@@ -530,6 +547,64 @@ async fn close_codex_exec(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn start_claude_setup(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<ClaudeSetupStartRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
+        return Err(RuntimeError::BadRequest(
+            "invalid Claude setup idempotency key".into(),
+        ));
+    }
+    let response = backend.start_claude_setup(&workspace_id, request).await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn input_claude_setup_code(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<ClaudeSetupCodeRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_claude_setup_id(&session_id)?;
+    if request.code.trim().is_empty() || request.code.len() > 4_096 {
+        return Err(RuntimeError::BadRequest(
+            "invalid Claude authorization code".into(),
+        ));
+    }
+    backend
+        .input_claude_setup_code(&workspace_id, &session_id, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn poll_claude_setup(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    Json(request): Json<ClaudeSetupPollRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_claude_setup_id(&session_id)?;
+    let result = backend
+        .poll_claude_setup(&workspace_id, &session_id, request)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
+}
+
+async fn close_claude_setup(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_claude_setup_id(&session_id)?;
+    backend
+        .close_claude_setup(&workspace_id, &session_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn git_status(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -583,6 +658,12 @@ async fn start_ide(
     {
         return Err(RuntimeError::BadRequest(
             "Codex auth cache is invalid or too large".into(),
+        ));
+    }
+    if request.claude_code_oauth_token.is_some() {
+        return Err(RuntimeError::BadRequest(
+            "Claude subscriptions run only in private backend runtimes, never shared IDE sessions."
+                .into(),
         ));
     }
     if request
@@ -796,6 +877,16 @@ fn validate_codex_exec_id(session_id: &str) -> Result<()> {
     }
 }
 
+fn validate_claude_setup_id(session_id: &str) -> Result<()> {
+    if claude_setup_id_pattern().is_match(session_id) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest(
+            "invalid Claude setup session ID".into(),
+        ))
+    }
+}
+
 fn validate_optional_worktree_id(worktree_id: Option<&str>) -> Result<()> {
     worktree_id.map_or(Ok(()), validate_worktree_id)
 }
@@ -839,6 +930,11 @@ fn codex_exec_id_pattern() -> &'static Regex {
     PATTERN.get_or_init(|| Regex::new(r"^codex-[0-9]+-[0-9]+$").expect("codex exec regex"))
 }
 
+fn claude_setup_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| Regex::new(r"^claude-[0-9]+-[0-9]+$").expect("claude setup regex"))
+}
+
 fn worktree_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
@@ -872,6 +968,7 @@ mod tests {
     fn validates_credential_free_private_snapshots() {
         let request = CreateRequest {
             workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
+            ephemeral: false,
             repository_url: None,
             repository_snapshot: Some(RepositorySnapshot {
                 files: vec![RepositorySnapshotFile {
@@ -1073,6 +1170,48 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(invalid_merge.status(), StatusCode::BAD_REQUEST);
+
+        let claude_start = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-auth-login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "idempotencyKey": "claude-test" }).to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(claude_start.status(), StatusCode::CREATED);
+        let claude_body = to_bytes(claude_start.into_body(), 1 << 20)
+            .await
+            .expect("body");
+        let claude_body: serde_json::Value =
+            serde_json::from_slice(&claude_body).expect("claude start body");
+        assert_eq!(claude_body["sessionId"], "claude-1-1");
+        assert!(
+            claude_body["authorizeUrl"]
+                .as_str()
+                .expect("authorize URL")
+                .contains("oauth")
+        );
+
+        let invalid_claude_session = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/claude-auth-login/bad/poll")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(invalid_claude_session.status(), StatusCode::BAD_REQUEST);
 
         let invalid_worktree = app
             .oneshot(

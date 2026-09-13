@@ -197,7 +197,12 @@ describe('RPC optional pipe schemas', () => {
       preserveBranchOnDelete: true
     })
     expect(preserving.success).toBe(true)
-    expect(preserving.success ? preserving.data.preserveBranchOnDelete : undefined).toBe(true)
+    // methodParams returns an unparameterised ZodType, so narrow the parsed
+    // payload to the one field under test.
+    const preserved = preserving.success
+      ? (preserving.data as { preserveBranchOnDelete?: boolean }).preserveBranchOnDelete
+      : undefined
+    expect(preserved).toBe(true)
     // Omitting it is legal and leaves the host on its existing behavior.
     expectParses(create, { repo: 'id:repo-1', name: 'plain' })
     expectParses(create, {

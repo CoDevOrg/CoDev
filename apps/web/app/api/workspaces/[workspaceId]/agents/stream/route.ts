@@ -9,6 +9,7 @@ import {
   getAgentModel,
   getAgentProvider,
   parseAgentProvider,
+  resolveSelectableAgentModel,
 } from "@/lib/ai-model";
 import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
@@ -156,7 +157,10 @@ export async function POST(
       workspaceId,
       provider,
     );
-    const selectedModel = input.model?.trim() || getAgentModel(provider);
+    const selectedModel =
+      credential.authType === "CLAUDE_RUNTIME"
+        ? await resolveSelectableAgentModel(input.model, provider, credential)
+        : input.model?.trim() || getAgentModel(provider);
 
     if (provider === "cursor") {
       if (!workspace.repository) {
@@ -287,6 +291,7 @@ export async function POST(
     const model = createAgentModel(credential, selectedModel);
     const result = streamText({
       model,
+      maxRetries: credential.authType === "CLAUDE_RUNTIME" ? 0 : 2,
       maxOutputTokens: 4096,
       abortSignal: request.signal,
       stopWhen: stepCountIs(3),

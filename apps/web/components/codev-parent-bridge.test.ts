@@ -1203,6 +1203,101 @@ describe("codev parent bridge", () => {
     });
   });
 
+  it("relays the Claude connect flow to the member's personal routes", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      {
+        type: "codev:bridge-hello",
+        generation: 1,
+      },
+    ).session;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "sess-1",
+          status: "awaiting_code",
+          authorizeUrl: "u",
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ id: "sess-1", status: "exchanging" }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ id: "sess-1", status: "connected" }),
+      );
+
+    await executePersonalCodevBridgeRequest(
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-start",
+        method: "claudeConnect.start",
+      },
+      connected,
+      fetcher,
+    );
+    await executePersonalCodevBridgeRequest(
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-code",
+        method: "claudeConnect.submitCode",
+        params: { sessionId: "sess-1", code: " abc " },
+      },
+      connected,
+      fetcher,
+    );
+    const status = await executePersonalCodevBridgeRequest(
+      {
+        type: "codev:bridge-request",
+        generation: 1,
+        requestId: "req-status",
+        method: "claudeConnect.status",
+        params: { sessionId: "sess-1" },
+      },
+      connected,
+      fetcher,
+    );
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe(
+      "/api/personal/claude-connection/session",
+    );
+    expect(fetcher.mock.calls[1]?.[0]).toBe(
+      "/api/personal/claude-connection/session/sess-1/code",
+    );
+    expect(
+      JSON.parse((fetcher.mock.calls[1]?.[1] as RequestInit).body as string),
+    ).toEqual({ code: "abc" });
+    expect(fetcher.mock.calls[2]?.[0]).toBe(
+      "/api/personal/claude-connection/session/sess-1",
+    );
+    expect(status).toMatchObject({ ok: true, result: { status: "connected" } });
+  });
+
+  it("rejects a Claude connect code step with no session id", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      {
+        type: "codev:bridge-hello",
+        generation: 1,
+      },
+    ).session;
+    await expect(
+      executePersonalCodevBridgeRequest(
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-bad",
+          method: "claudeConnect.submitCode",
+          params: { code: "abc" },
+        },
+        connected,
+        vi.fn<typeof fetch>(),
+      ),
+    ).resolves.toMatchObject({ ok: false });
+  });
+
   it("proxies the team rail (roster, channels, messages, send) for the folded-in sidebar", async () => {
     const connected = replyToCodevBridgeMessage(
       EMPTY_CODEV_PARENT_BRIDGE_SESSION,
@@ -1289,6 +1384,43 @@ describe("codev parent bridge", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ body: "hello team" }),
       },
+    );
+  });
+
+  it("pages older channel history with the server's before cursor", async () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 1 },
+    ).session;
+    const channelId = "3c1c4f2a-8d5e-4a7b-9c1d-2e3f4a5b6c7d";
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ messages: [{ id: "m0" }] }));
+
+    await expect(
+      executeCodevBridgeRequest(
+        "workspace-1",
+        {
+          type: "codev:bridge-request",
+          generation: 1,
+          requestId: "req-team-older",
+          method: "team.messages",
+          params: {
+            channelId,
+            before: "2026-09-12T07:00:00.000Z",
+            limit: 60,
+          },
+        },
+        connected,
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { messages: [{ id: "m0" }] },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      `/api/workspaces/workspace-1/channels/${channelId}/messages?before=2026-09-12T07%3A00%3A00.000Z&limit=60`,
+      { cache: "no-store" },
     );
   });
 

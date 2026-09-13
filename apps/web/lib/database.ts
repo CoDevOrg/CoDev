@@ -4,10 +4,20 @@ import { readServerEnvironment } from "@codev/config";
 import { createDatabase } from "@codev/db";
 import { attachDatabasePool } from "@vercel/functions";
 
-let database: ReturnType<typeof createDatabase> | undefined;
+type DatabaseClient = ReturnType<typeof createDatabase>;
+
+// Next.js development compiles route handlers into separate module graphs. A
+// module-local singleton therefore creates one five-connection pool per route,
+// which quickly starves a remote Postgres pooler when the workspace's live
+// panels refresh together. globalThis is shared by those graphs in the same
+// server process, while each production function instance still gets its own
+// appropriately scoped pool.
+const databaseState = globalThis as typeof globalThis & {
+  __codevDatabaseClient?: DatabaseClient;
+};
 
 function getDatabaseClient() {
-  if (!database) {
+  if (!databaseState.__codevDatabaseClient) {
     const environment = readServerEnvironment();
     const connectionString =
       environment.POSTGRES_URL ?? environment.DATABASE_URL;
@@ -16,11 +26,12 @@ function getDatabaseClient() {
       throw new Error("A PostgreSQL connection URL is not configured.");
     }
 
-    database = createDatabase(connectionString);
+    const database = createDatabase(connectionString);
     attachDatabasePool(database.pool);
+    databaseState.__codevDatabaseClient = database;
   }
 
-  return database;
+  return databaseState.__codevDatabaseClient!;
 }
 
 export function getDatabase() {

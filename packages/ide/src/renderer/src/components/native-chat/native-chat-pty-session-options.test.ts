@@ -42,6 +42,55 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('shows Codex model and reasoning effort in a draft before the first message', () => {
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'codex',
+      scopeKey: 'pty-codex-draft',
+      mode: 'draft',
+      dispatchCommand: vi.fn()
+    })!
+
+    expect(surface.getSnapshot().map(({ id }) => id)).toEqual(['model', 'effort'])
+    expect(surface.getSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'model',
+          kind: expect.objectContaining({ currentValue: 'gpt-5.6-luna' })
+        }),
+        expect.objectContaining({
+          id: 'effort',
+          settable: true,
+          kind: expect.objectContaining({ currentValue: 'medium' })
+        })
+      ])
+    )
+  })
+
+  it('seeds the selected Codex model effort when changing models in a draft', async () => {
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'codex',
+      scopeKey: 'pty-codex-draft-model',
+      mode: 'draft',
+      dispatchCommand: vi.fn()
+    })!
+
+    await surface.setOption('model', 'gpt-5.5')
+
+    expect(surface.getSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'model',
+          kind: expect.objectContaining({ currentValue: 'gpt-5.5' })
+        }),
+        expect.objectContaining({
+          id: 'effort',
+          settable: true,
+          kind: expect.objectContaining({ choices: expect.any(Array) })
+        })
+      ])
+    )
+  })
+
   it('uses model and effort reported by the live Claude terminal', () => {
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
@@ -159,6 +208,25 @@ describe('native chat PTY session options', () => {
     )
   })
 
+  it('allows Codex effort selection before a live PTY reports its model', async () => {
+    const applyAgentPickerChoice = vi.fn().mockResolvedValue(undefined)
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'codex',
+      scopeKey: 'pty-codex-unreported',
+      mode: 'live',
+      dispatchCommand: vi.fn(),
+      applyAgentPickerChoice
+    })!
+
+    await surface.setOption('effort', 'high')
+
+    expect(applyAgentPickerChoice).toHaveBeenCalledWith({
+      optionId: 'effort',
+      value: 'high',
+      modelId: null
+    })
+  })
+
   it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'sonnet',
@@ -258,7 +326,7 @@ describe('native chat PTY session options', () => {
       'Could not verify the model change; open the terminal to check.'
     )
 
-    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()).toHaveLength(2)
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
     expect(persist).not.toHaveBeenCalled()
     expect(onAgentPicker).not.toHaveBeenCalled()
@@ -596,7 +664,7 @@ describe('native chat PTY session options', () => {
     const result = await surface.invokeAction('effort')
     expect(dispatch).toHaveBeenCalledWith('/model')
     expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(result.snapshot).toHaveLength(1)
+    expect(result.snapshot).toHaveLength(2)
     expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
@@ -639,7 +707,7 @@ describe('native chat PTY session options', () => {
     surface.recordOutgoingCommand('/model')
 
     expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(surface.getSnapshot()).toHaveLength(1)
+    expect(surface.getSnapshot()).toHaveLength(2)
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 

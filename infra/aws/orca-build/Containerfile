@@ -37,33 +37,7 @@ WORKDIR /build
 # developer's local IDE install never leaks into the image.
 COPY . /build
 
-RUN pnpm install --frozen-lockfile
-
-# ORCA_LINUX_ARM64_RELEASE controls electron-builder's ARM artifact naming.
-# TARGET_ARCH is either arm64 or x64 and matches the architecture of the
-# build container so the resulting AppImage can be extracted below.
-RUN if [ "${TARGET_ARCH}" = arm64 ]; then export ORCA_LINUX_ARM64_RELEASE=1; fi; \
-    pnpm run build:linux -- --"${TARGET_ARCH}"
-
-# `orca serve` is what the orchestrator (services/orchestrator/src/backend/orca.rs)
-# spawns per workspace. `--appimage-extract` unpacks the AppImage into a plain
-# squashfs-root/ directory with no FUSE mount required, which is exactly the
-# layout production already runs `AppRun` out of, so the orchestrator needs no
-# AppImage-specific runtime handling on the host. Extract the appended
-# SquashFS directly instead of executing the AppImage's static ELF launcher;
-# the latter cannot run under Apple Container's cross-architecture emulation.
-RUN set -eu; \
-    appimage="$(find dist -maxdepth 1 -name '*.AppImage' -print -quit)"; \
-    test -n "${appimage}"; \
-    squashfs_offset=""; \
-    for candidate in $(grep -aob 'hsqs' "${appimage}" | cut -d: -f1); do \
-      if unsquashfs -s -o "${candidate}" "${appimage}" >/dev/null 2>&1; then \
-        squashfs_offset="${candidate}"; \
-        break; \
-      fi; \
-    done; \
-    test -n "${squashfs_offset}"; \
-    unsquashfs -no-progress -o "${squashfs_offset}" -d dist/squashfs-root "${appimage}" >/dev/null; \
-    archive="dist/orca-serve-linux-${ARTIFACT_ARCH}.tar.gz"; \
-    tar -C dist -czf "${archive}" squashfs-root; \
-    sha256sum "${archive}" | awk '{print $1}' > "${archive}.sha256"
+# One script builds the artifact, shared with the non-container Linux path in
+# infra/aws/scripts/build-orca-serve.sh so the two cannot drift.
+RUN TARGET_ARCH="${TARGET_ARCH}" ARTIFACT_ARCH="${ARTIFACT_ARCH}" \
+    bash scripts/build-orca-serve-artifact.sh

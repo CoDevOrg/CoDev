@@ -26,6 +26,8 @@ async fn main() -> Result<()> {
 
     let ide = configure_ide_backend();
 
+    tokio::spawn(reap_expired_sandboxes(backend.clone()));
+
     if !host_idle_timeout.is_zero() {
         tokio::spawn(stop_idle_host(
             backend.clone(),
@@ -43,6 +45,18 @@ async fn main() -> Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(RuntimeError::internal)
+}
+
+async fn reap_expired_sandboxes(backend: SharedBackend) {
+    let mut interval = time::interval(Duration::from_secs(30));
+    interval.tick().await;
+    loop {
+        interval.tick().await;
+        let reaped = backend.reap_expired().await;
+        if reaped > 0 {
+            info!(reaped, "reaped expired Firecracker sandboxes");
+        }
+    }
 }
 
 /// The Orca IDE backend is optional: a host that has not been provisioned
@@ -97,7 +111,8 @@ async fn configure_backend() -> Result<Backend> {
     }
 }
 
-/// Power the EC2 host off once nothing has been used on it for `idle_timeout`.
+/// Power the runtime host off once nothing has been used on it for
+/// `idle_timeout`.
 ///
 /// Two things have to be true for this to behave the way somebody using CoDev
 /// expects. A live sandbox blocks shutdown outright — it holds VM state, and
@@ -132,9 +147,15 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             continue;
         }
         info!(?idle_timeout, "stopping idle Firecracker host");
+        // Not `systemctl poweroff` directly. The helper the host bootstrap
+        // installs knows which cloud this is: on EC2 it powers off (the
+        // instance's shutdown behaviour stops it and stops the bill), and on
+        // Azure it asks ARM to deallocate, because a guest-initiated
+        // poweroff there leaves the VM allocated and still charging for its
+        // cores. See codev-host-poweroff in infra/aws/scripts/bootstrap-host.sh.
         match time::timeout(
             Duration::from_secs(30),
-            Command::new("systemctl").arg("poweroff").output(),
+            Command::new("/usr/local/sbin/codev-host-poweroff").output(),
         )
         .await
         {

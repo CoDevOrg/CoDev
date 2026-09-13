@@ -11,6 +11,7 @@ import { recordWorkspaceHeartbeat } from "./heartbeat";
 import { requireWorkspacePermission } from "./access";
 import {
   createSandboxWorktree,
+  ensureHostReady,
   getSandbox,
   OrchestratorError,
   provisionSandbox,
@@ -68,25 +69,18 @@ async function materializeAgentWorktrees(workspaceId: string, headSha: string) {
   }
 }
 
-const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
-
 async function waitForHostAndOrchestrator() {
-  const deadline = Date.now() + HOST_START_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    // `requestHostWake` absorbs transient EC2 failures itself and reports the
-    // host as starting, so a capacity refusal or a mid-restart instance just
-    // costs another turn of this loop instead of failing the action.
-    const state = await requestHostWake().catch(() => "starting" as const);
-    if (state === "running") {
-      await waitForOrchestrator();
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  // Shared with the hosted Claude connection flow; see ensureHostReady. The
+  // wording here stays workspace-specific because that is what the caller is
+  // opening.
+  try {
+    await ensureHostReady();
+  } catch {
+    throw new WorkspaceLifecycleError(
+      "Your workspace is still waking up. Try the action again shortly.",
+      503,
+    );
   }
-  throw new WorkspaceLifecycleError(
-    "Your workspace is still waking up. Try the action again shortly.",
-    503,
-  );
 }
 
 /**

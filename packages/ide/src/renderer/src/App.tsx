@@ -51,6 +51,7 @@ import {
 } from './web/codev-project-bootstrap'
 import { launchCodevDefaultChatTab, waitForCodevDefaultChatTab } from './web/codev-default-chat-tab'
 import { isCodevEmbedded } from './web/codev-embedded'
+import { CodevCenterUnderlay } from './components/codev/CodevCenterUnderlay'
 import { reportCodevStartupFailure } from './web/codev-host-state'
 import { isCodevPendingShell } from './web/codev-pending-shell'
 
@@ -2490,7 +2491,9 @@ function App(): React.JSX.Element {
                           </div>
                         )}
                         {workspaceProfileSwitcher}
-                        <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                        {/* CoDev: inert while a team channel covers it, so the
+                            hidden chat is not reachable by Tab or a screen reader. */}
+                        <CodevCenterUnderlay className="flex flex-1 min-w-0 min-h-0 flex-col">
                           {shouldMountTerminalWorkbench ? (
                             <div
                               className={
@@ -2559,7 +2562,7 @@ function App(): React.JSX.Element {
                               ) : null}
                             </RecoverableRenderErrorBoundary>
                           </Suspense>
-                        </div>
+                        </CodevCenterUnderlay>
                         {showFloatingTerminalButton ? (
                           <FloatingTerminalToggleButton
                             open={floatingTerminalOpen}

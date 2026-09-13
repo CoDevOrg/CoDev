@@ -1,10 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import {
-  CodevReviewCheckpointViewPanel,
-  selectCodevReviewCheckpoint,
-  type CodevReviewCheckpoint
-} from './CodevReviewCheckpointView'
+import { CodevReviewCheckpointViewPanel } from './CodevReviewCheckpointView'
+import type { CodevReviewCheckpoint } from './codev-review-checkpoint-snapshot'
+import { selectCodevReviewCheckpoint } from './codev-review-checkpoint-selection'
 
 const prepared: CodevReviewCheckpoint = {
   sessionId: 's1',
@@ -47,7 +45,9 @@ describe('CodevReviewCheckpointViewPanel', () => {
     expect(html).toContain('Further writes must create a new checkpoint.')
     expect(html).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     expect(html).toContain('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
-    expect(html).toContain('sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4a')
+    expect(html).toContain(
+      'sha256:3f7a2c8d9b1e4f605a7c9d2e8b6f104c3d5e7a9b1c2d4f608e9a7b5c3d1f2e4a'
+    )
     expect(html).toContain('Checkpoint prepared')
     expect(html).toContain('Open diff review')
     expect(html).not.toContain('GIT binary patch')
@@ -79,14 +79,6 @@ describe('CodevReviewCheckpointViewPanel', () => {
     )
     expect(html).toContain('Diff review open')
     expect(html).not.toContain('zcmV-')
-    expect(selectCodevReviewCheckpoint([prepared], 'w2')?.slot).toBe(2)
-    expect(selectCodevReviewCheckpoint([prepared], null)?.slot).toBe(2)
-    expect(
-      selectCodevReviewCheckpoint(
-        [{ ...prepared, sessionId: 's0', slot: 1, worktreeId: 'w1', prepared: false }, prepared],
-        null
-      )?.slot
-    ).toBe(2)
   })
 
   it('renders stale-review rejection after the integration head advances', () => {
@@ -95,7 +87,13 @@ describe('CodevReviewCheckpointViewPanel', () => {
         surface="source-control"
         connected
         snapshot={{
-          viewer: { id: 'u1', name: 'Jordan Lee', role: 'Maintainer', canReview: true, canMerge: true },
+          viewer: {
+            id: 'u1',
+            name: 'Jordan Lee',
+            role: 'Maintainer',
+            canReview: true,
+            canMerge: true
+          },
           checkpoints: [{ ...prepared, stale: true }],
           integrationHeadRevision: 'cccccccccccccccccccccccccccccccccccccccc',
           approval: { state: 'stale', blocked: true, mergeStarted: false }
@@ -129,7 +127,13 @@ describe('CodevReviewCheckpointViewPanel', () => {
         surface="source-control"
         connected
         snapshot={{
-          viewer: { id: 'u1', name: 'Jordan Lee', role: 'Maintainer', canReview: true, canMerge: true },
+          viewer: {
+            id: 'u1',
+            name: 'Jordan Lee',
+            role: 'Maintainer',
+            canReview: true,
+            canMerge: true
+          },
           checkpoints: [],
           integrationHeadRevision: 'dddddddddddddddddddddddddddddddddddddddd',
           approval: { state: 'integrated', blocked: false, mergeStarted: false },
@@ -155,11 +159,123 @@ describe('CodevReviewCheckpointViewPanel', () => {
       />
     )
     expect(html).toContain('Integrated exactly one current reviewed checkpoint')
-    expect(html).toContain('The integration head advanced to dddddddddddddddddddddddddddddddddddddddd')
+    expect(html).toContain(
+      'The integration head advanced to dddddddddddddddddddddddddddddddddddddddd'
+    )
     expect(html).toContain('Jordan Lee · Maintainer')
     expect(html).toContain('agent.review_merged')
-    expect(html).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa → bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    expect(html).toContain(
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa → bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    )
     expect(html).toContain('Duplicate approval is disabled for this checkpoint.')
     expect(html).toContain('Checkpoint integrated')
+  })
+})
+
+/**
+ * The checkpoint a checkout's controls act on must be that checkout's own, or
+ * one the member picked on purpose. The old selector fell back to the last
+ * prepared checkpoint of whatever worktree had one, so Prepare and Approve in
+ * one worktree's Source Control could act on another proposal.
+ */
+describe('selectCodevReviewCheckpoint', () => {
+  const other: CodevReviewCheckpoint = {
+    ...prepared,
+    sessionId: 'other-session',
+    slot: 1,
+    worktreeId: 'other',
+    worktree: 'agent-managed-proposal-one'
+  }
+
+  it("uses the active worktree's own checkpoint", () => {
+    expect(selectCodevReviewCheckpoint([other, prepared], 'w2')).toEqual({
+      source: 'worktree',
+      checkpoint: prepared
+    })
+  })
+
+  it('produces an empty state for a proposal worktree with no checkpoint, never another worktree’s', () => {
+    expect(selectCodevReviewCheckpoint([other], 'selected')).toEqual({
+      source: 'none',
+      checkpoint: null,
+      reason: 'no-checkpoint-for-worktree'
+    })
+  })
+
+  it('does not substitute a prepared checkpoint when the checkout is not a proposal', () => {
+    expect(selectCodevReviewCheckpoint([other, prepared], null)).toEqual({
+      source: 'none',
+      checkpoint: null,
+      reason: 'not-a-proposal'
+    })
+    expect(selectCodevReviewCheckpoint([], null)).toEqual({
+      source: 'none',
+      checkpoint: null,
+      reason: 'no-checkpoints'
+    })
+  })
+
+  it('honours a deliberate choice, scoped to the checkout it was made in', () => {
+    const choice = { worktreeId: null, sessionId: 'other-session' }
+    expect(selectCodevReviewCheckpoint([other, prepared], null, choice)).toEqual({
+      source: 'chosen',
+      checkpoint: other
+    })
+    // Switching to a proposal worktree drops the pick made elsewhere.
+    expect(selectCodevReviewCheckpoint([other, prepared], 'selected', choice).source).toBe('none')
+    // The worktree's own checkpoint still wins over a stale pick.
+    expect(
+      selectCodevReviewCheckpoint([other, prepared], 'w2', {
+        worktreeId: 'w2',
+        sessionId: 'other-session'
+      })
+    ).toEqual({
+      source: 'worktree',
+      checkpoint: prepared
+    })
+  })
+
+  it('offers a labelled picker instead of a silent fallback', () => {
+    const html = renderToStaticMarkup(
+      <CodevReviewCheckpointViewPanel
+        surface="source-control"
+        connected
+        snapshot={{ checkpoints: [other, prepared] }}
+        checkpoint={null}
+        selection={{ source: 'none', checkpoint: null, reason: 'not-a-proposal' }}
+        onChooseCheckpoint={() => undefined}
+        busy=""
+        canReview
+        diffOpen={false}
+        onRefresh={() => undefined}
+        onPrepare={() => undefined}
+        onOpenDiff={() => undefined}
+      />
+    )
+    expect(html).toContain('This checkout is not an agent proposal.')
+    expect(html).toContain('Proposal to review')
+    expect(html).toContain('Choose a proposal…')
+    expect(html).not.toContain('Review ready · immutable checkpoint')
+  })
+
+  it('says when the checkpoint on screen was chosen from another worktree', () => {
+    const html = renderToStaticMarkup(
+      <CodevReviewCheckpointViewPanel
+        surface="source-control"
+        connected
+        snapshot={{ checkpoints: [other, prepared] }}
+        checkpoint={other}
+        selection={{ source: 'chosen', checkpoint: other }}
+        onChooseCheckpoint={() => undefined}
+        busy=""
+        canReview
+        diffOpen={false}
+        onRefresh={() => undefined}
+        onPrepare={() => undefined}
+        onOpenDiff={() => undefined}
+      />
+    )
+    expect(html).toContain('from worktree agent-managed-proposal-one, chosen by you')
+    expect(html).toContain('Proposal to review')
   })
 })

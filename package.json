@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "pnpm --filter @codev/web dev",
+    "dev": "dotenv -e .env.local -- pnpm --filter @codev/web dev",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
@@ -15,20 +15,26 @@
     "test:infra": "node --test infra/aws/runtime-config.test.mjs",
     "test:e2e": "pnpm --filter @codev/web test:e2e",
     "orca:web": "infra/aws/scripts/build-orca-web.sh",
+    "ide:dev": "bash scripts/ide.sh dev:web",
+    "ide:check": "bash scripts/ide.sh typecheck:web",
+    "ide:test:web": "bash scripts/ide.sh exec vitest run --config config/vitest.config.ts src/renderer/src/web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
     "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "rewrap:credentials": "tsx --conditions react-server scripts/rewrap-credentials.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
     "@types/node": "24.10.13",
+    "dotenv-cli": "11.0.0",
     "eslint": "9.39.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.4.1",
     "prettier": "3.8.1",
+    "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.65.0"
   },

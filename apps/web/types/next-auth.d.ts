@@ -17,5 +17,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     localUserId?: string;
     githubLogin?: string;
+    githubConnectionCheckedAt?: number;
   }
 }

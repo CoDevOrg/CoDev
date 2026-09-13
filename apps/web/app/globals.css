@@ -328,6 +328,12 @@
   background: #3fbf7a;
 }
 
+/* The connect poll is failing, not merely waiting. */
+.workspace-boot-pill-dot.is-failing {
+  background: #e0805c;
+  animation: none;
+}
+
 .workspace-boot-pill-retry {
   margin-left: 4px;
   padding: 2px 8px;
@@ -369,6 +375,104 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+
+.provider-preflight {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 44px;
+  align-items: start;
+  width: min(440px, calc(100% - 24px));
+  overflow: hidden;
+  border: 1px solid rgba(237, 238, 240, 0.14);
+  border-radius: 12px;
+  background: rgba(26, 29, 33, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  color: var(--workspace-ink);
+  font-family: inherit;
+  backdrop-filter: blur(16px) saturate(130%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+.provider-preflight-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 12px 0 0 12px;
+  border-radius: 8px;
+  background: var(--gold-soft);
+  color: var(--gold-bright);
+}
+
+.provider-preflight-copy {
+  min-width: 0;
+  padding: 12px;
+}
+
+.provider-preflight-title,
+.provider-preflight-detail {
+  margin: 0;
+}
+
+.provider-preflight-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.provider-preflight-detail {
+  margin-top: 2px;
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.provider-preflight-link {
+  color: var(--workspace-ink);
+  font-weight: 600;
+  text-decoration-color: rgba(237, 238, 240, 0.45);
+  text-underline-offset: 2px;
+}
+
+.provider-preflight-link:hover {
+  color: var(--gold-bright);
+}
+
+.provider-preflight-dismiss {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-muted);
+  cursor: pointer;
+}
+
+.provider-preflight-dismiss:hover {
+  background: rgba(237, 238, 240, 0.06);
+  color: var(--workspace-ink);
+}
+
+.provider-preflight-link:focus-visible,
+.provider-preflight-dismiss:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .provider-preflight {
+    top: 8px;
+    left: 8px;
+    width: calc(100% - 16px);
+  }
 }
 
 .workspace-body {

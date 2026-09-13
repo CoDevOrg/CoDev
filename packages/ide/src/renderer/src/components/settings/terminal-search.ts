@@ -64,37 +64,29 @@ export {
 
 type TerminalAppearanceSearchOptions = {
   showWarpImport?: boolean
+  showGhosttyImport?: boolean
 }
 
-const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [
-    ...getTerminalTypographySearchEntries(),
-    ...getTerminalCursorSearchEntries(),
-    ...getTerminalPaneAppearanceSearchEntries(),
-    ...getTerminalThemeTargetSearchEntries(),
-    ...getTerminalDarkThemeSearchEntries(),
-    ...getTerminalLightThemeSearchEntries(),
-    ...getTerminalWindowSearchEntries(),
-    ...getTerminalGhosttyImportSearchEntries()
-  ]
-)
-
-// Why: compose rather than filter — entry titles are localized, so matching on
-// an English title would leak the Warp entry back in under non-English locales.
-const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [
-    ...getTerminalAppearanceSearchEntriesWithoutWarp(),
-    ...getTerminalWarpImportSearchEntries(),
-    ...getTerminalYamlImportSearchEntries()
-  ]
-)
+const getTerminalAppearanceSearchEntriesBase = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  ...getTerminalTypographySearchEntries(),
+  ...getTerminalCursorSearchEntries(),
+  ...getTerminalPaneAppearanceSearchEntries(),
+  ...getTerminalThemeTargetSearchEntries(),
+  ...getTerminalDarkThemeSearchEntries(),
+  ...getTerminalLightThemeSearchEntries(),
+  ...getTerminalWindowSearchEntries()
+])
 
 export function getTerminalAppearanceSearchEntries(
   options: TerminalAppearanceSearchOptions = {}
 ): SettingsSearchEntry[] {
-  return (options.showWarpImport ?? true)
-    ? getTerminalAppearanceSearchEntriesWithWarp()
-    : getTerminalAppearanceSearchEntriesWithoutWarp()
+  return [
+    ...getTerminalAppearanceSearchEntriesBase(),
+    ...((options.showGhosttyImport ?? true) ? getTerminalGhosttyImportSearchEntries() : []),
+    ...((options.showWarpImport ?? true)
+      ? [...getTerminalWarpImportSearchEntries(), ...getTerminalYamlImportSearchEntries()]
+      : [])
+  ]
 }
 
 export function getTerminalPaneSearchEntries(platform: {

@@ -5,10 +5,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    return Response.json({
-      status: "connected",
-      ...(await saveClaudeCliAuth(request)),
-    });
+    await saveClaudeCliAuth(request);
   } catch (error) {
     return cliAuthErrorResponse(error);
   }

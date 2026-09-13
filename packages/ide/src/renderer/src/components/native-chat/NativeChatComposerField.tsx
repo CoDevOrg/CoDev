@@ -105,8 +105,8 @@ export function NativeChatComposerField({
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
-      <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-4xl">
+      <div className="px-4 pt-2 pb-5 sm:px-6">
+        <div className="relative mx-auto w-full max-w-3xl">
           {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -126,13 +126,12 @@ export function NativeChatComposerField({
             </div>
           ) : null}
           <div
+            data-codev-chat-composer="true"
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             className={cn(
-              // Why: always-on hairline (token-level border, not focus ring) —
-              // no focus/click border flash. The box is a container, not a
-              // focus target.
-              'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              'rounded-[18px] border border-border bg-card p-2 shadow-sm',
+              'transition-[border-color,box-shadow] duration-200',
+              'focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/15'
             )}
           >
             {imageAttachments.length > 0 ? (
@@ -197,7 +196,7 @@ export function NativeChatComposerField({
               // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
               // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-[15px] leading-6 outline-none pointer-coarse:min-h-14',
                 '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}

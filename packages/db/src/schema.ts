@@ -144,6 +144,14 @@ export const credentialType = pgEnum("credential_type", [
   "AZURE_ENDPOINT",
   "HOSTED_CODEX_SUBSCRIPTION",
 ]);
+// How a credential was obtained. Provenance is authoritative for whether it may
+// power a coding workspace: a browser (in-sandbox OAuth) subscription never can;
+// an API key or a local-CLI login can. Chat rooms accept any provenance.
+export const credentialConnectedVia = pgEnum("credential_connected_via", [
+  "browser",
+  "cli",
+  "api_key",
+]);
 export const providerCredentialStatus = pgEnum("provider_credential_status", [
   "active",
   "reauthorization_required",
@@ -473,6 +481,17 @@ export const providerCredentials = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     sharingEnabled: boolean("sharing_enabled").default(false).notNull(),
     unavailableUntil: timestamp("unavailable_until", { withTimezone: true }),
+    // Provenance (see credentialConnectedVia). Nullable for pre-existing rows;
+    // the 0042 migration backfills them and code treats NULL conservatively
+    // (not workspace-eligible).
+    connectedVia: credentialConnectedVia("connected_via"),
+    // Per-surface applicability — the isolation + opt-in-sharing toggles. Default
+    // on so existing credentials keep working on both surfaces after deploy;
+    // provider capability and the explicit toggle determine eligibility.
+    enabledForRooms: boolean("enabled_for_rooms").default(true).notNull(),
+    enabledForWorkspace: boolean("enabled_for_workspace")
+      .default(true)
+      .notNull(),
     ...timestamps,
   },
   (table) => [
@@ -1543,5 +1562,45 @@ export const sandboxRuntimeIntervals = pgTable(
       table.workspaceId,
       table.endedAt,
     ),
+  ],
+);
+
+export const claudeConnectionSessionStatus = pgEnum(
+  "claude_connection_session_status",
+  ["starting", "awaiting_code", "exchanging", "connected", "failed"],
+);
+
+/**
+ * One in-progress "Connect Claude" attempt: a hosted runner executing the
+ * official `claude setup-token` flow on the member's behalf. Rows are
+ * short-lived — the flow either reaches `connected` (token persisted to
+ * `provider_credentials`) or `failed`, and stale rows past `expiresAt` are
+ * swept.
+ */
+export const claudeConnectionSessions = pgTable(
+  "claude_connection_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    scopeType: credentialScopeType("scope_type").default("USER").notNull(),
+    scopeId: uuid("scope_id").notNull(),
+    status: claudeConnectionSessionStatus("status")
+      .default("starting")
+      .notNull(),
+    /** Opaque id handed back by the runner implementation (Step 3). */
+    runnerId: text("runner_id"),
+    /** The URL the member opens to approve access, once the runner emits it. */
+    authorizeUrl: text("authorize_url"),
+    /** Populated only when `status = 'failed'`. */
+    failureReason: text("failure_reason"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("claude_connection_sessions_user_idx").on(table.userId, table.status),
+    index("claude_connection_sessions_expiry_idx").on(table.expiresAt),
   ],
 );

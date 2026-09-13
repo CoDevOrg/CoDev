@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getConnectedClaudeRuntime: vi.fn(),
+  disconnectClaudeRuntime: vi.fn(),
   deleteProviderCredential: vi.fn(),
   getProviderCredentialStatus: vi.fn(),
   saveAnthropicCredential: vi.fn(),
@@ -13,6 +15,10 @@ const hostedCodexMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./credentials", () => mocks);
+vi.mock("./claude-connection-session", () => mocks);
+vi.mock("./claude-connection-runner", () => ({
+  isHostedClaudeConnectEnabled: () => true,
+}));
 vi.mock("./hosted-codex-subscription-credentials", () => hostedCodexMocks);
 vi.mock("./shared-session-view", () => ({
   displayMemberName: (name?: string | null) => name ?? "Unknown user",
@@ -36,6 +42,7 @@ const LOOKUPS = [
   ["cursor", "API_KEY"],
   ["openai", "HOSTED_CODEX_SUBSCRIPTION"],
   ["openai", "OAUTH_TOKEN"],
+  // The Claude CLI setup-token; only a `cli`-stamped row is ever reported.
   ["anthropic", "OAUTH_TOKEN"],
   ["cursor", "OAUTH_TOKEN"],
 ] as const;
@@ -43,6 +50,7 @@ const LOOKUPS = [
 describe("provider connection server", () => {
   beforeEach(() => {
     mocks.getProviderCredentialStatus.mockResolvedValue(null);
+    mocks.getConnectedClaudeRuntime.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -83,6 +91,9 @@ describe("provider connection server", () => {
   });
 
   it("loads subscription sign-in status alongside API keys", async () => {
+    mocks.getConnectedClaudeRuntime.mockResolvedValue({
+      runnerId: "private-reference",
+    });
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce(null) // openai API_KEY
       .mockResolvedValueOnce(null) // anthropic API_KEY
@@ -92,10 +103,7 @@ describe("provider connection server", () => {
         lastFour: "Codex CLI",
       })
       .mockResolvedValueOnce(null) // openai OAUTH_TOKEN
-      .mockResolvedValueOnce({
-        credentialType: "OAUTH_TOKEN",
-        lastFour: "Claude CLI",
-      })
+      .mockResolvedValueOnce(null) // anthropic OAUTH_TOKEN (CLI setup-token)
       .mockResolvedValueOnce({
         credentialType: "OAUTH_TOKEN",
         lastFour: "Cursor",
@@ -104,9 +112,17 @@ describe("provider connection server", () => {
     await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
       cliSubscriptions: [
         { provider: "codex", status: "connected" },
-        { provider: "claude", status: "connected" },
+        // The browser runtime is inherently rooms-only.
+        {
+          provider: "claude",
+          status: "connected",
+          provenance: "browser",
+          enabledForRooms: true,
+          enabledForWorkspace: false,
+        },
         { provider: "cursor", status: "connected" },
       ],
+      claudeCliToken: { status: "not_connected" },
     });
   });
 

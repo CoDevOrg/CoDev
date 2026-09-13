@@ -92,12 +92,14 @@ version in S3.
 
 ## Orca IDE runtime
 
-`orca serve` (Orca's Electron main process / IDE backend) is built by CoDev
-from `stablyai/orca`'s real MIT source at a pinned tag —
+`orca serve` (the workspace IDE backend) is built from CoDev's owned source
+in `packages/ide`, originally forked from the MIT-licensed `stablyai/orca` —
 [`infra/aws/orca-build/Containerfile`](orca-build/Containerfile), run via
 Apple's `container` tool by
 [`infra/aws/scripts/build-orca-serve.sh`](scripts/build-orca-serve.sh) —
 instead of downloading an upstream prebuilt AppImage release asset.
+Both browser and server build from this repository. Their deployments remain
+independent, so shared source alone does not guarantee matching deployed versions.
 `deploy.sh` uploads the resulting architecture-specific archive alongside the
 orchestrator/guestd binaries;
 `bootstrap-host.sh` fetches, checksum-verifies, and extracts it to
@@ -108,6 +110,15 @@ real X display even though it's driven headlessly: `codev-orca-xvfb.service`
 runs a virtual display on `:99` (`codev-orchestrator.service` requires and
 starts after it), and every `orca serve` process is spawned with
 `DISPLAY=:99` and `LIBGL_ALWAYS_SOFTWARE=1`.
+
+The runtime artifact build repairs the pinned pnpm distribution's missing gyp
+execute permission before installing native dependencies and packages only the
+AppImage needed for extraction. `Verify workspace runtime` builds this artifact
+on pull requests without AWS credentials and smoke-tests packaged PTY input/output
+and server readiness. Production rollout remains in `Deploy runtime` after merge.
+
+See [workspace consolidation](../../docs/WORKSPACE_CONSOLIDATION.md) for the
+implemented integration improvements and the remaining runtime migration gates.
 
 `codev-orchestrator` spawns, tracks, and reaps one `orca serve` process per
 _workspace_ (not one shared instance) via

@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
-  CodevMissionControlView,
   distinctLocalAgentEntries,
   mergeMissionControlAgents,
   missionControlContestNotice,
@@ -11,7 +11,7 @@ import {
   sortMissionControlAgents,
   type MissionControlAgent,
   type MissionControlCoordination
-} from './CodevMissionControlView'
+} from './codev-mission-control-model'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -22,6 +22,7 @@ function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
     origin: 'managed',
     sessionId: 's1',
     worktreeId: 'w1',
+    tabId: null,
     ownerName: 'Alex Morgan',
     ownerHue: 200,
     providerLabel: 'Claude',
@@ -76,6 +77,22 @@ describe('distinctLocalAgentEntries', () => {
       [`tab-one:${LEAF_A}`, { worktreeId: 'w1' }]
     ]).map(([paneKey]) => paneKey)
     expect(kept).toEqual([`tab-one:${LEAF_B}`])
+  })
+
+  it('keeps two legacy-keyed tabs in one worktree as two agents', () => {
+    const kept = distinctLocalAgentEntries([
+      ['tab-a:0', { worktreeId: 'w' }],
+      ['tab-b:0', { worktreeId: 'w' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual(['tab-a:0', 'tab-b:0'])
+  })
+
+  it('collapses a legacy row onto the stable row for the same tab', () => {
+    const kept = distinctLocalAgentEntries([
+      [`tab-a:${LEAF_A}`, { worktreeId: 'w' }],
+      ['tab-a:0', { worktreeId: 'w' }]
+    ]).map(([paneKey]) => paneKey)
+    expect(kept).toEqual([`tab-a:${LEAF_A}`])
   })
 
   it('falls back to worktree, then paneKey, for rows with no derivable tab', () => {
@@ -140,7 +157,7 @@ describe('CodevMissionControlView', () => {
         ]}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -164,7 +181,7 @@ describe('CodevMissionControlView', () => {
         agents={[agent({ key: 'managed:s1', canSteer: true })]}
         now={Date.now()}
         openKey="managed:s1"
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -176,6 +193,141 @@ describe('CodevMissionControlView', () => {
     expect(html).toContain('codev-mc-drawer')
     expect(html).toContain('Add a test for that case')
     expect(html).toContain('co-steer turn')
+    // A real dialog: the primitive owns focus, Escape, the scrim, and hides
+    // the rest of the page while open; its title is the agent's own.
+    const drawerTag = html.match(/<div[^>]*codev-mc-drawer[^>]*>/)?.[0] ?? ''
+    expect(drawerTag).toContain('role="dialog"')
+    expect(drawerTag).toContain('aria-labelledby=')
+    expect(drawerTag).toContain('tabindex="-1"')
+  })
+
+  it('offers to open the agent’s own chat when it has a tab, its worktree otherwise', () => {
+    const local = agent({
+      key: 'local:tab:t1',
+      origin: 'you',
+      sessionId: null,
+      worktreeId: 'w1',
+      tabId: 't1',
+      canSteer: false
+    })
+    const withTab = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[local]}
+        now={Date.now()}
+        openKey={local.key}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(withTab).toContain('Open this chat')
+    expect(withTab).not.toContain('Open this worktree')
+
+    const managedOnly = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(managedOnly).toContain('Open this worktree')
+  })
+
+  it('counts agents and worktree slots as two different numbers', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'a' }), agent({ key: 'b', worktreeId: 'w1' })]}
+        slots={{ used: 1, total: 3 }}
+        now={Date.now()}
+        openKey={null}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('<strong>2</strong><span>agents</span>')
+    expect(html).toContain('<strong>1</strong><span>/ 3 slots</span>')
+    expect(html).not.toContain('/ 3</span>')
+  })
+
+  it('labels the data as old when a feed has stopped refreshing', () => {
+    const now = Date.now()
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({})]}
+        feed={{ staleSince: now - 65_000, message: 'bridge closed' }}
+        onRetryFeed={noop}
+        now={now}
+        openKey={null}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('Live data last refreshed 1m 05s ago — bridge closed')
+    expect(html).toContain('Retry now')
+  })
+
+  it('confirms a stop with what the plan will actually do', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction={null}
+        stopDescription={{
+          allowed: true,
+          button: 'Stop agent',
+          detail:
+            'Ends this agent only. The worktree stays for the other agent in it, so no slot is freed.'
+        }}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).not.toContain('Stop and free the slot')
+  })
+
+  it('shows a stop in progress instead of snapping back to the button', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[agent({ key: 'managed:s1' })]}
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction="stop"
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('Stopping…')
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Pause<\/button>/)
   })
 
   it('shows the empty state when nothing is running', () => {
@@ -184,7 +336,7 @@ describe('CodevMissionControlView', () => {
         agents={[]}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -226,8 +378,70 @@ describe('attachMissionControlHolds', () => {
       })
     )
     expect(row?.holds).toEqual([
-      { claimId: 'c1', path: 'app/api/webhooks/route.ts', status: 'active' }
+      {
+        claimId: 'c1',
+        path: 'app/api/webhooks/route.ts',
+        status: 'active',
+        attribution: 'session',
+        shared: false
+      }
     ])
+  })
+
+  /**
+   * Managed sessions A and B share worktree W and A owns a claim. Matching W
+   * used to attach A's claim to B as well, so the panel named the wrong owner.
+   * A session id is authoritative: B has one, and the claim is not under it.
+   */
+  it('never attaches a claim to a session-bearing agent on worktree alone', () => {
+    const rows = attachMissionControlHolds(
+      [
+        agent({ key: 'managed:a', sessionId: 'a', worktreeId: 'w', branch: 'shared' }),
+        agent({ key: 'managed:b', sessionId: 'b', worktreeId: 'w', branch: 'shared' })
+      ],
+      coordination({
+        claims: [
+          {
+            id: 'c-a',
+            sessionId: 'a',
+            worktreeId: 'w',
+            branch: 'shared',
+            agentLabel: 'A',
+            path: 'a.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    expect(rows[0]?.holds.map((hold) => hold.claimId)).toEqual(['c-a'])
+    expect(rows[1]?.holds).toEqual([])
+  })
+
+  it('marks a checkout-matched hold as shared when another session-less agent fits it too', () => {
+    const rows = attachMissionControlHolds(
+      [
+        agent({ key: 'local:tab:1', origin: 'you', sessionId: null, worktreeId: 'w', branch: 'b' }),
+        agent({ key: 'local:tab:2', origin: 'you', sessionId: null, worktreeId: 'w', branch: 'b' })
+      ],
+      coordination({
+        claims: [
+          {
+            id: 'c9',
+            sessionId: 'cli-1',
+            worktreeId: 'w',
+            branch: 'b',
+            agentLabel: 'claude · b',
+            path: 'x.ts',
+            status: 'active'
+          }
+        ]
+      })
+    )
+    for (const row of rows) {
+      expect(row.holds).toEqual([
+        { claimId: 'c9', path: 'x.ts', status: 'active', attribution: 'checkout', shared: true }
+      ])
+    }
   })
 
   /**
@@ -253,7 +467,13 @@ describe('attachMissionControlHolds', () => {
       })
     )
     expect(row?.holds).toEqual([
-      { claimId: 'c9', path: 'apps/web/lib/auth.ts', status: 'contested' }
+      {
+        claimId: 'c9',
+        path: 'apps/web/lib/auth.ts',
+        status: 'contested',
+        attribution: 'checkout',
+        shared: false
+      }
     ])
   })
 
@@ -387,7 +607,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         coordination={coordination()}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -405,7 +625,15 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
       <CodevMissionControlView
         agents={[
           agent({
-            holds: [{ claimId: 'c1', path: 'apps/web/lib/auth.ts', status: 'contested' }]
+            holds: [
+              {
+                claimId: 'c1',
+                path: 'apps/web/lib/auth.ts',
+                status: 'contested',
+                attribution: 'session',
+                shared: false
+              }
+            ]
           })
         ]}
         coordination={coordination({
@@ -421,7 +649,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         })}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}
@@ -435,6 +663,40 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
     expect(html).toContain('apps/web/lib/auth.ts')
   })
 
+  it('draws a shared hold as tentative and says why', () => {
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[
+          agent({
+            key: 'local:tab:1',
+            origin: 'you',
+            sessionId: null,
+            holds: [
+              {
+                claimId: 'c1',
+                path: 'x.ts',
+                status: 'active',
+                attribution: 'checkout',
+                shared: true
+              }
+            ]
+          })
+        ]}
+        now={Date.now()}
+        openKey={null}
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('codev-mc-hold is-active is-shared')
+    expect(html).toContain('CoDev cannot tell which one holds it')
+  })
+
   it('renders no holds list for an agent that has claimed nothing', () => {
     const html = renderToStaticMarkup(
       <CodevMissionControlView
@@ -442,7 +704,7 @@ describe('CodevMissionControlView — collisions are read, not inferred', () => 
         coordination={coordination()}
         now={Date.now()}
         openKey={null}
-        steerBusy={false}
+        pendingAction={null}
         onOpen={noop}
         onClose={noop}
         onStepIn={noop}

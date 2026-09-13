@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState, type JSX } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { History, MessageSquarePlus, Search } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   useActiveRepo,
   useActiveWorktree,
@@ -23,7 +25,13 @@ import {
 } from './ai-vault-session-projects'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
+import { resolveAiVaultSessionResumeState } from './ai-vault-session-resume'
+import { resolveAiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
+import {
+  codevChatHistoryFallbackNotice,
+  resolveCodevChatHistoryResumeTarget
+} from './codev-chat-history-resume-target'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from './ai-vault-session-limit'
 import {
   buildCodevChatHistoryEntries,
@@ -42,7 +50,9 @@ import {
  * This section lists past chats from the *current project only* (scope
  * 'project', which the vault filter resolves against the active repo), newest
  * first, and resumes one on click through the same launch path the stock
- * panel uses. Every chat listed here belongs to a worktree that already
+ * panel uses. A chat reopens in the worktree its transcript was recorded in;
+ * only when that checkout is gone does it fall back to the active one, and
+ * then it says so. Every chat listed here belongs to a worktree that already
  * exists, so reopening one never touches agent capacity.
  */
 export function CodevChatHistorySection({
@@ -145,13 +155,12 @@ export function CodevChatHistorySection({
   )
   const sessionById = useMemo(() => {
     const map = new Map<string, AiVaultSession>()
-    for (const session of scopedSessions) {map.set(session.id, session)}
+    for (const session of scopedSessions) {
+      map.set(session.id, session)
+    }
     return map
   }, [scopedSessions])
-  const entries = useMemo(
-    () => buildCodevChatHistoryEntries(scopedSessions),
-    [scopedSessions]
-  )
+  const entries = useMemo(() => buildCodevChatHistoryEntries(scopedSessions), [scopedSessions])
 
   const launchActions = useAiVaultSessionLaunchActions({
     activeWorktree: activeWorktree ?? null,
@@ -159,10 +168,39 @@ export function CodevChatHistorySection({
     targetState: resumeTargetState,
     agentCmdOverrides: settings?.agentCmdOverrides
   })
+  const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
   const openChat = useCallback(
     (entry: CodevChatHistoryEntry) => {
       const session = sessionById.get(entry.id)
       if (!session) {
+        return
+      }
+      // The transcript's own checkout first. The list spans the project, so
+      // the chat may belong to a worktree other than the active one, and
+      // resuming it there — not here — is what keeps it on its own branch
+      // and files. The active worktree is the fallback, announced below.
+      const worktreeInfo = resolveAiVaultSessionWorktreeInfo({
+        session,
+        repos,
+        worktrees: allWorktrees,
+        activeWorktreeId: effectiveActiveWorktreeId
+      })
+      const target = resolveCodevChatHistoryResumeTarget({
+        worktreeInfo,
+        resumeState: resolveAiVaultSessionResumeState({
+          sessionFilePath: session.filePath,
+          sessionExecutionHostId: session.executionHostId,
+          worktreeInfo,
+          activeWorktreeId: effectiveActiveWorktreeId,
+          worktrees: allWorktrees,
+          repos,
+          targetState: resumeTargetState
+        })
+      })
+      if (target.kind === 'blocked') {
+        toast.error('This chat cannot be reopened here', {
+          description: 'Open a checkout on the same host as the chat, then try again.'
+        })
         return
       }
       // Reopening a chat resumes it in the worktree it belongs to. Without
@@ -170,17 +208,17 @@ export function CodevChatHistorySection({
       // beside the new one, so reading an old conversation silently costs an
       // agent. Inside CoDev the worktree keeps one agent; stock Orca, where
       // parallel agents in a worktree are a normal thing to want, is untouched.
-      // `handleResume` resolves the same target when no explicit worktree is
-      // passed, which is the case here.
-      const targetWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
-      const retire =
-        isCodevEmbedded() && targetWorktreeId
-          ? supersedeWorktreeAgentTabs(targetWorktreeId)
-          : null
-      launchActions.handleResume(session)
+      const retire = isCodevEmbedded() ? supersedeWorktreeAgentTabs(target.worktreeId) : null
+      launchActions.handleResume(session, target.worktreeId)
       retire?.()
+      if (target.kind === 'active-worktree') {
+        const branch =
+          findWorktreeById(resumeTargetState.worktreesByRepo, target.worktreeId)?.branch ?? null
+        const notice = codevChatHistoryFallbackNotice(target.reason, branch)
+        toast.message(notice.title, { description: notice.description })
+      }
     },
-    [activeWorktree?.id, activeWorktreeId, launchActions, sessionById]
+    [allWorktrees, effectiveActiveWorktreeId, launchActions, repos, resumeTargetState, sessionById]
   )
 
   return (

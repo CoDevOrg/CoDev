@@ -29,6 +29,50 @@ const liveMessage = {
 };
 
 describe("SharedChatTranscript", () => {
+  it("revisits pending replies even when later human messages exist", async () => {
+    const pending = {
+      ...initialMessage,
+      sequence: 1,
+      role: "assistant" as const,
+      authorName: "Claude",
+      text: "",
+      generation: {
+        provider: "claude" as const,
+        model: "m",
+        status: "pending" as const,
+      },
+    };
+    const finished = {
+      ...pending,
+      text: "The answer",
+      generation: { ...pending.generation, status: "completed" },
+    };
+    const later = { ...liveMessage, sequence: 2 };
+    const fetchMock = vi.fn(async (url: string) =>
+      Response.json(
+        url.endsWith("reply-options")
+          ? { options: [] }
+          : { messages: [finished, later] },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <SharedChatTranscript
+        roomId="room-123"
+        initialMessages={[initialMessage, pending, later]}
+      />,
+    );
+    expect(screen.getByText("Claude is replying…")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHANNEL_MESSAGE_POLL_MS);
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/rooms/room-123/messages?after=0",
+      expect.anything(),
+    );
+    expect(screen.queryByText("Claude is replying…")).not.toBeInTheDocument();
+    expect(screen.getAllByText("The answer")).toHaveLength(1);
+  });
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -39,10 +83,12 @@ describe("SharedChatTranscript", () => {
   });
 
   it("polls from the latest sequence and displays another member's message", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ messages: [liveMessage] }), {
-        status: 200,
-      }),
+    const fetchMock = vi.fn().mockImplementation(async (url: string) =>
+      url.endsWith("reply-options")
+        ? Response.json({ options: [] })
+        : new Response(JSON.stringify({ messages: [liveMessage] }), {
+            status: 200,
+          }),
     );
     vi.stubGlobal("fetch", fetchMock);
     render(

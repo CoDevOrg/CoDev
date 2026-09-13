@@ -8,6 +8,9 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { AuthProvider } from "@codev/shared-types";
 
 import type { ResolvedCredential } from "./credentials";
+import { getAnthropicModels } from "./anthropic-models";
+import { createClaudeRuntimeModel } from "./claude-runtime-model";
+import { CLAUDE_RUNTIME_MODELS } from "./claude-runtime-execution";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.6-luna";
 export const DEFAULT_CURSOR_MODEL = "composer-2.5";
@@ -155,6 +158,13 @@ export async function getSelectableAgentModels(
   provider: AuthProvider = getAgentProvider(),
   credential?: ResolvedCredential,
 ) {
+  // Subscription choices must come from this connection, not a global list or
+  // the historical single-model default. Never fabricate an available catalog.
+  if (provider === "anthropic" && credential) {
+    if (credential.authType === "CLAUDE_RUNTIME")
+      return [...CLAUDE_RUNTIME_MODELS];
+    return getAnthropicModels(credential);
+  }
   const configured = process.env.CODEV_AGENT_MODELS?.split(",")
     .map((model) => model.trim())
     .filter(Boolean);
@@ -175,8 +185,11 @@ export async function resolveSelectableAgentModel(
   credential?: ResolvedCredential,
 ) {
   const available = await getSelectableAgentModels(provider, credential);
-  const selected = requested?.trim() || getAgentModel(provider);
-  if (!available.includes(selected)) {
+  const defaultModel = getAgentModel(provider);
+  const selected =
+    requested?.trim() ||
+    (available.includes(defaultModel) ? defaultModel : available[0]);
+  if (!selected || !available.includes(selected)) {
     throw new Error(`Model ${selected} is not available for this workspace.`);
   }
   return selected;
@@ -196,6 +209,15 @@ export function createAgentModel(
       }
       return createOpenAI({ apiKey: credential.apiKeyOrToken })(model);
     case "anthropic": {
+      if (credential.authType === "CLAUDE_RUNTIME") {
+        if (!credential.claudeUserId || credential.source !== "USER")
+          throw new Error("A personal Claude runtime is required.");
+        return createClaudeRuntimeModel(credential.claudeUserId, model);
+      }
+      if (credential.authType === "OAUTH_TOKEN")
+        throw new Error(
+          "Claude subscription tokens cannot be used through the API. Reconnect with official login.",
+        );
       if (!credential.apiKeyOrToken) {
         throw new Error(
           "The Anthropic credential has no API key or bearer token.",
@@ -204,11 +226,10 @@ export function createAgentModel(
       const endpoint = credential.endpointUrl
         ? { baseURL: credential.endpointUrl }
         : {};
-      const anthropic = createAnthropic(
-        credential.authType === "OAUTH_TOKEN"
-          ? { authToken: credential.apiKeyOrToken, ...endpoint }
-          : { apiKey: credential.apiKeyOrToken, ...endpoint },
-      );
+      const anthropic = createAnthropic({
+        apiKey: credential.apiKeyOrToken,
+        ...endpoint,
+      });
       return anthropic(model);
     }
     case "bedrock": {

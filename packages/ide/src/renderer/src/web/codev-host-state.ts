@@ -14,6 +14,10 @@ export type CodevHostState = {
   phase: 'starting' | 'ready'
   /** The parent's own slow-start threshold has passed. */
   slow: boolean
+  /** The parent's connect poll is failing outright — not a host that is
+   *  merely booting — with the last reason and how many times in a row. Null
+   *  while the wait is an ordinary one. */
+  failure: { message: string; attempts: number } | null
 }
 
 const CODEV_HOST_STATE_MESSAGE = 'codev:host-state'
@@ -39,7 +43,35 @@ function parseHostState(data: unknown): CodevHostState | null {
   if (message.phase !== 'starting' && message.phase !== 'ready') {
     return null
   }
-  return { phase: message.phase, slow: message.slow === true }
+  return {
+    phase: message.phase,
+    slow: message.slow === true,
+    failure: parseFailure(message.failure)
+  }
+}
+
+function parseFailure(value: unknown): CodevHostState['failure'] {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const failure = value as Record<string, unknown>
+  if (typeof failure.message !== 'string' || !failure.message.trim()) {
+    return null
+  }
+  const attempts =
+    typeof failure.attempts === 'number' && Number.isFinite(failure.attempts)
+      ? Math.max(1, Math.floor(failure.attempts))
+      : 1
+  return { message: failure.message.slice(0, 300), attempts }
+}
+
+function sameHostState(left: CodevHostState | null, right: CodevHostState): boolean {
+  return (
+    left?.phase === right.phase &&
+    left.slow === right.slow &&
+    left.failure?.message === right.failure?.message &&
+    left.failure?.attempts === right.failure?.attempts
+  )
 }
 
 /**
@@ -60,7 +92,7 @@ export function installCodevHostStateListener(): void {
     if (!next) {
       return
     }
-    if (hostState?.phase === next.phase && hostState.slow === next.slow) {
+    if (sameHostState(hostState, next)) {
       return
     }
     hostState = next
@@ -94,6 +126,22 @@ export function resetCodevHostStateForTest(): void {
 export function setCodevHostStateForTest(next: CodevHostState | null): void {
   hostState = next
   emit()
+}
+
+/**
+ * Asks the CoDev shell to restart its connect poll. The parent owns that poll,
+ * so this is the one recovery the embedded cover can offer for a host the
+ * parent cannot reach; re-running the project handoff would not touch it.
+ */
+export function requestCodevHostRetry(): void {
+  if (typeof window === 'undefined' || window.parent === window) {
+    return
+  }
+  try {
+    window.parent.postMessage({ type: 'codev:retry-connect' }, window.location.origin)
+  } catch {
+    // A retry request that cannot be sent is not itself a failure to show.
+  }
 }
 
 /**

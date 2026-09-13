@@ -36,6 +36,7 @@ afterEach(() => {
   })
   container.remove()
   Reflect.deleteProperty(window, 'api')
+  Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
 })
 
 function renderWorkspaceDirectorySetting(args: {
@@ -112,6 +113,14 @@ async function clickBrowseAfterInputBlur(): Promise<void> {
 }
 
 describe('WorkspaceDirectorySetting', () => {
+  it('hides the native folder picker in the web client', () => {
+    Object.assign(window, { __ORCA_WEB_CLIENT__: true })
+    renderWorkspaceDirectorySetting({ updateSettings: vi.fn() })
+
+    expect(container.textContent).not.toContain('Browse')
+    expect(getInput()).toBeTruthy()
+  })
+
   it('keeps typed workspace paths local until blur', () => {
     const updateSettings = vi.fn()
     renderWorkspaceDirectorySetting({ updateSettings })

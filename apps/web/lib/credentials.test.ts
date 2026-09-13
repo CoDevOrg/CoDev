@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockRows = vi.hoisted(() => [] as Array<Record<string, unknown>[]>);
+const mockClaudeRuntime = vi.hoisted(() =>
+  vi.fn(async () => null as null | { id: string }),
+);
+vi.mock("./claude-connection-session", () => ({
+  getConnectedClaudeRuntime: mockClaudeRuntime,
+}));
 const mockHostedSubscription = vi.hoisted(() =>
   vi.fn<
     (input: { userId: string; workspaceId: string }) => Promise<{
@@ -42,7 +48,11 @@ vi.mock("./hosted-codex-subscription-credentials", () => ({
   })),
 }));
 
-import { resolveAgentCredential } from "./credentials";
+import {
+  getClaudeCliTokenPublicStatus,
+  resolveAgentCredential,
+  resolvePersonalChatSubscription,
+} from "./credentials";
 
 const baseCredential = (overrides: Record<string, unknown> = {}) => ({
   id: "credential-1",
@@ -66,6 +76,8 @@ const baseCredential = (overrides: Record<string, unknown> = {}) => ({
 });
 
 afterEach(() => {
+  mockClaudeRuntime.mockResolvedValue(null);
+  vi.clearAllMocks();
   mockRows.length = 0;
   mockHostedSubscription.mockReset();
   mockHostedSubscription.mockResolvedValue(null);
@@ -74,6 +86,56 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
+  it("uses only the requesting member's Claude profile for rooms and workspaces", async () => {
+    mockClaudeRuntime.mockResolvedValue({ id: "personal-runtime" });
+    for (const resolved of [
+      await resolvePersonalChatSubscription("sender", "claude"),
+      await resolveAgentCredential("sender", "workspace", "anthropic"),
+    ]) {
+      expect(resolved).toMatchObject({
+        authType: "CLAUDE_RUNTIME",
+        source: "USER",
+        claudeUserId: "sender",
+        credentialId: "personal-runtime",
+      });
+      expect(resolved.apiKeyOrToken).toBeUndefined();
+    }
+    expect(mockClaudeRuntime).toHaveBeenCalledTimes(2);
+    expect(mockClaudeRuntime).toHaveBeenCalledWith("sender");
+    expect(mockDatabase.select).not.toHaveBeenCalled();
+  });
+  it("refuses legacy Claude tokens and requires official runtime reconnect", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        status: "active",
+        encryptedAccessToken: "ciphertext",
+      }),
+    ]);
+    await expect(
+      resolvePersonalChatSubscription("sender", "claude"),
+    ).rejects.toThrow(/Reconnect Claude/);
+    mockRows.length = 0;
+    await expect(
+      resolvePersonalChatSubscription("sender", "claude"),
+    ).rejects.toThrow("Reconnect Claude");
+    expect(mockRows).toHaveLength(0);
+  });
+
+  it("room Codex resolution never requests an organization credential", async () => {
+    mockHostedSubscription.mockResolvedValueOnce({
+      source: "USER",
+      credential: { id: "personal", encryptedMaterial: "encrypted" },
+    });
+    expect(
+      await resolvePersonalChatSubscription("sender", "codex"),
+    ).toMatchObject({ authType: "HOSTED_CODEX_SUBSCRIPTION", source: "USER" });
+    expect(mockHostedSubscription).toHaveBeenLastCalledWith({
+      userId: "sender",
+      includeBusy: true,
+    });
+  });
   it("resolves the encrypted official Codex auth cache", async () => {
     mockHostedSubscription.mockResolvedValueOnce({
       source: "USER",
@@ -211,10 +273,67 @@ describe("resolveAgentCredential", () => {
       }),
     );
 
-    await resolveAgentCredential("user-1", "workspace-1", "anthropic");
+    await expect(
+      resolveAgentCredential("user-1", "workspace-1", "anthropic"),
+    ).rejects.toThrow(/Reconnect Claude/);
+    expect(seenBody).toBeUndefined();
+  });
+});
 
-    expect(seenBody?.get("scope")).toBe(
-      "org:create_api_key user:profile user:inference",
-    );
+describe("getClaudeCliTokenPublicStatus", () => {
+  it("reports a connected CLI setup-token, and whether it is shared", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        connectedVia: "cli",
+        sharingEnabled: true,
+        lastFour: "wxyz",
+      }),
+    ]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "ORGANIZATION",
+        scopeId: "workspace-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({
+      status: "connected",
+      scopeType: "ORGANIZATION",
+      lastFour: "wxyz",
+      sharingEnabled: true,
+      stateText: "Connected for this workspace",
+    });
+  });
+
+  it("does not count a browser-era token as connected", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        connectedVia: "browser",
+      }),
+    ]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "USER",
+        scopeId: "user-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({
+      status: "not_connected",
+      sharingEnabled: false,
+    });
+  });
+
+  it("reports not connected when nothing is stored", async () => {
+    mockRows.push([]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "USER",
+        scopeId: "user-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({ status: "not_connected", lastFour: null });
   });
 });

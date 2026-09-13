@@ -5,6 +5,7 @@ const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  ...(process.env.CI ? { workers: 2 } : {}),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
@@ -17,7 +18,7 @@ export default defineConfig({
     : {
         webServer: {
           command:
-            "AUTH_SECRET=playwright-auth-secret CODEV_ENABLE_VERIFICATION_FIXTURES=true pnpm start",
+            "AUTH_SECRET=playwright-auth-secret-32-characters-long CODEV_ENABLE_VERIFICATION_FIXTURES=true pnpm start",
           url: "http://127.0.0.1:3000/api/health",
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

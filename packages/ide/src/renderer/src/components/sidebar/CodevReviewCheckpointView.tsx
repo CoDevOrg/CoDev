@@ -1,92 +1,26 @@
 import type { JSX } from 'react'
 import { Button } from '@/components/ui/button'
-
-export type CodevReviewDiffPath = {
-  path: string
-  kind: 'added' | 'deleted' | 'modified' | 'binary'
-  detail: string
-}
-
-export type CodevReviewCheckpoint = {
-  sessionId: string
-  slot: 1 | 2 | 3 | null
-  assignment: string
-  worktreeId: string
-  worktree: string
-  worktreeStatus: string
-  prepared: boolean
-  stale?: boolean
-  baseRevision: string | null
-  headRevision: string | null
-  diffDigest: string | null
-  summary: string | null
-  additions: number
-  deletions: number
-  paths: CodevReviewDiffPath[]
-}
-
-export type CodevReviewSlot = {
-  slot: 1 | 2 | 3
-  occupied: boolean
-  sessionId: string | null
-  worktreeId: string | null
-  assignment: string
-}
-
-export type CodevReviewApproval = {
-  state: 'current' | 'stale' | 'integrated'
-  blocked: boolean
-  mergeStarted: boolean
-}
-
-export type CodevReviewIntegration = {
-  actor: string
-  role: string
-  event: 'agent.review_merged'
-  baseRevision: string
-  headRevision: string
-  mergedHeadSha: string
-}
-
-export type CodevReviewSnapshot = {
-  viewer?: {
-    id: string
-    name: string
-    role?: string
-    canReview: boolean
-    canMerge?: boolean
-  }
-  slots?: CodevReviewSlot[]
-  checkpoints?: CodevReviewCheckpoint[]
-  integrationHeadRevision?: string | null
-  approval?: CodevReviewApproval
-  integration?: CodevReviewIntegration | null
-}
-
-export function selectCodevReviewCheckpoint(
-  checkpoints: CodevReviewCheckpoint[],
-  worktreeId: string | null
-): CodevReviewCheckpoint | null {
-  if (worktreeId) {
-    const matched = checkpoints.find((checkpoint) => checkpoint.worktreeId === worktreeId)
-    if (matched) return matched
-  }
-  const prepared = checkpoints.filter((checkpoint) => checkpoint.prepared)
-  if (prepared.length > 0) {
-    return prepared[prepared.length - 1] ?? null
-  }
-  return (
-    checkpoints.find((checkpoint) => !checkpoint.prepared) ??
-    checkpoints.find((checkpoint) => Boolean(checkpoint.sessionId)) ??
-    null
-  )
-}
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import type { CodevReviewCheckpoint, CodevReviewSnapshot } from './codev-review-checkpoint-snapshot'
+import {
+  checkpointChoiceLabel,
+  unmatchedNotice,
+  type CodevReviewCheckpointSelection
+} from './codev-review-checkpoint-selection'
 
 export function CodevReviewCheckpointViewPanel({
   surface,
   connected,
   snapshot,
   checkpoint,
+  selection,
+  onChooseCheckpoint,
   busy,
   canReview,
   canMerge = false,
@@ -101,6 +35,10 @@ export function CodevReviewCheckpointViewPanel({
   connected: boolean
   snapshot: CodevReviewSnapshot | null
   checkpoint: CodevReviewCheckpoint | null
+  /** How `checkpoint` was chosen. Omitted by callers that pass an explicit
+   *  checkpoint and have no cross-worktree picker. */
+  selection?: CodevReviewCheckpointSelection
+  onChooseCheckpoint?: (sessionId: string) => void
   busy: string
   canReview: boolean
   canMerge?: boolean
@@ -113,17 +51,26 @@ export function CodevReviewCheckpointViewPanel({
 }): JSX.Element {
   const headingId =
     surface === 'source-control' ? 'codev-review-checkpoint-heading' : 'codev-review-diff-heading'
+  const pickerId = `${headingId}-picker`
+  const choices = snapshot?.checkpoints ?? []
+  // The picker appears only where a deliberate cross-worktree choice is the
+  // way forward: nothing matched the active checkout, or a choice is in force.
+  const showPicker =
+    Boolean(onChooseCheckpoint) &&
+    choices.length > 0 &&
+    (selection?.source === 'none' || selection?.source === 'chosen')
   const integration = snapshot?.integration ?? null
   const approval = snapshot?.approval
   const integrationHead =
-    snapshot?.integrationHeadRevision ?? (integration ? integration.mergedHeadSha : checkpoint?.baseRevision)
+    snapshot?.integrationHeadRevision ??
+    (integration ? integration.mergedHeadSha : checkpoint?.baseRevision)
   const stale = Boolean(
     approval?.state === 'stale' ||
-      checkpoint?.stale ||
-      (checkpoint?.prepared &&
-        checkpoint.baseRevision &&
-        integrationHead &&
-        checkpoint.baseRevision !== integrationHead)
+    checkpoint?.stale ||
+    (checkpoint?.prepared &&
+      checkpoint.baseRevision &&
+      integrationHead &&
+      checkpoint.baseRevision !== integrationHead)
   )
   const integrated = Boolean(integration || approval?.state === 'integrated')
   const prepared = Boolean(checkpoint?.prepared) || integrated
@@ -134,7 +81,8 @@ export function CodevReviewCheckpointViewPanel({
     connected &&
     !integrated &&
     (!checkpoint?.prepared || stale)
-  const canAdvance = Boolean(onAdvance) && canMerge && connected && prepared && !integrated && !stale
+  const canAdvance =
+    Boolean(onAdvance) && canMerge && connected && prepared && !integrated && !stale
   const canApprove = Boolean(onMerge) && canMerge && connected && prepared && !integrated && !stale
   const approvalState = integrated ? 'Integrated' : stale ? 'Stale' : 'Current'
 
@@ -153,19 +101,55 @@ export function CodevReviewCheckpointViewPanel({
             {surface === 'source-control' ? 'Source Control checkpoint' : 'Checks diff review'}
           </h2>
         </div>
-        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy === 'refresh'}
+          onClick={onRefresh}
+        >
           {busy === 'refresh' ? 'Refreshing…' : 'Refresh review'}
         </Button>
       </div>
       <p className="mb-2 text-[11px] text-muted-foreground">
         {connected
           ? checkpoint
-            ? `Agent slot ${checkpoint.slot ?? '—'} · ${checkpoint.assignment}`
+            ? selection?.source === 'chosen'
+              ? `Agent slot ${checkpoint.slot ?? '—'} · ${checkpoint.assignment} · from worktree ${checkpoint.worktree}, chosen by you`
+              : `Agent slot ${checkpoint.slot ?? '—'} · ${checkpoint.assignment}`
             : integrated
               ? 'The reviewed checkpoint is now the integration head.'
-              : 'Select a managed proposal worktree to mark it review-ready.'
+              : selection?.source === 'none'
+                ? unmatchedNotice(selection.reason)
+                : 'Select a managed proposal worktree to mark it review-ready.'
           : 'Waiting for the workspace-bound CoDev bridge.'}
       </p>
+      {showPicker ? (
+        <div className="mb-2">
+          <label
+            htmlFor={pickerId}
+            className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground"
+          >
+            Proposal to review
+          </label>
+          <Select
+            value={selection?.source === 'chosen' ? selection.checkpoint.sessionId : ''}
+            onValueChange={(value) => onChooseCheckpoint?.(value)}
+            disabled={!connected || Boolean(busy)}
+          >
+            <SelectTrigger id={pickerId} size="sm" className="h-8 w-full text-xs">
+              <SelectValue placeholder="Choose a proposal…" />
+            </SelectTrigger>
+            <SelectContent>
+              {choices.map((choice) => (
+                <SelectItem key={choice.sessionId} value={choice.sessionId}>
+                  {checkpointChoiceLabel(choice)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
       {prepared && !integrated ? (
         <div className="mb-2 space-y-2" role="status" aria-label="Immutable review checkpoint">
           <div>
@@ -196,7 +180,12 @@ export function CodevReviewCheckpointViewPanel({
       )}
       <div className="flex flex-wrap items-center gap-2">
         {surface === 'source-control' ? (
-          <Button type="button" size="sm" disabled={!canPrepare || Boolean(busy)} onClick={onPrepare}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canPrepare || Boolean(busy)}
+            onClick={onPrepare}
+          >
             {busy === 'prepare'
               ? 'Preparing…'
               : stale
@@ -220,8 +209,12 @@ export function CodevReviewCheckpointViewPanel({
         <div className="mt-2 space-y-2" role="region" aria-label="Review diff and affected paths">
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div>
-              <span className="block text-[10px] uppercase text-muted-foreground">Diff summary</span>
-              <strong>{checkpoint.summary ?? 'Diff summary unavailable until the sandbox is reachable.'}</strong>
+              <span className="block text-[10px] uppercase text-muted-foreground">
+                Diff summary
+              </span>
+              <strong>
+                {checkpoint.summary ?? 'Diff summary unavailable until the sandbox is reachable.'}
+              </strong>
             </div>
             <div>
               <span className="block text-[10px] uppercase text-muted-foreground">Text delta</span>
@@ -231,7 +224,9 @@ export function CodevReviewCheckpointViewPanel({
             </div>
           </div>
           <div>
-            <span className="block text-[10px] uppercase text-muted-foreground">Affected paths</span>
+            <span className="block text-[10px] uppercase text-muted-foreground">
+              Affected paths
+            </span>
             <ul className="mt-1 space-y-1 text-[11px]">
               {checkpoint.paths.map((entry) => (
                 <li key={entry.path} className="flex items-center justify-between gap-2">
@@ -244,7 +239,8 @@ export function CodevReviewCheckpointViewPanel({
             </ul>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Binary content is not rendered as text; review remains safe for binary and generated files.
+            Binary content is not rendered as text; review remains safe for binary and generated
+            files.
           </p>
         </div>
       ) : null}
@@ -252,7 +248,9 @@ export function CodevReviewCheckpointViewPanel({
         <div className="mt-3 space-y-2" role="region" aria-label="Review approval gate">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <span className="block text-[10px] uppercase text-muted-foreground">Integration head</span>
+              <span className="block text-[10px] uppercase text-muted-foreground">
+                Integration head
+              </span>
               <strong className="text-[11px]">
                 <code>{integrationHead ?? 'unavailable'}</code>
               </strong>
@@ -276,7 +274,12 @@ export function CodevReviewCheckpointViewPanel({
                   ? 'Integration head advanced'
                   : 'Advance integration head'}
             </Button>
-            <Button type="button" size="sm" disabled={!canApprove || Boolean(busy)} onClick={onMerge}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canApprove || Boolean(busy)}
+              onClick={onMerge}
+            >
               {busy === 'merge'
                 ? 'Integrating…'
                 : stale
@@ -290,16 +293,23 @@ export function CodevReviewCheckpointViewPanel({
             <div className="space-y-1 text-[11px]" role="alert">
               <strong className="block">Stale checkpoint · approval blocked</strong>
               <span className="block">
-                The integration worktree advanced from {checkpoint?.baseRevision} to {integrationHead}.
+                The integration worktree advanced from {checkpoint?.baseRevision} to{' '}
+                {integrationHead}.
               </span>
               <span className="block">Rebase and review again before approval.</span>
               <span className="block">No merge action started.</span>
             </div>
           ) : null}
           {integrated && integration ? (
-            <div className="space-y-1 text-[11px]" role="status" aria-label="Integration and audit result">
+            <div
+              className="space-y-1 text-[11px]"
+              role="status"
+              aria-label="Integration and audit result"
+            >
               <strong className="block">Integrated exactly one current reviewed checkpoint</strong>
-              <span className="block">The integration head advanced to {integration.mergedHeadSha}.</span>
+              <span className="block">
+                The integration head advanced to {integration.mergedHeadSha}.
+              </span>
               <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
                 <dt className="text-muted-foreground">Merge actor</dt>
                 <dd>
@@ -320,7 +330,9 @@ export function CodevReviewCheckpointViewPanel({
         </div>
       ) : null}
       {snapshot?.viewer && !canReview ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">Reviewer capability is required to mark a checkpoint.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Reviewer capability is required to mark a checkpoint.
+        </p>
       ) : null}
       {snapshot?.viewer && prepared && !canMerge ? (
         <p className="mt-2 text-[11px] text-muted-foreground">

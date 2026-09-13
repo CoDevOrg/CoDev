@@ -8,6 +8,8 @@ import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
 import { getAwsConfiguration } from "./aws";
+import { isAzure } from "./cloud";
+import { requestHostWake } from "./host";
 import type { RepositorySnapshot } from "./github";
 
 const errorSchema = z.object({
@@ -28,6 +30,7 @@ export class OrchestratorError extends Error {
 
 export interface ProvisionSandboxInput {
   workspaceId: string;
+  ephemeral?: boolean;
   repositoryUrl: string | null;
   repositorySnapshot?: RepositorySnapshot;
   baseSha: string;
@@ -73,6 +76,12 @@ const codexExecPollSchema = z.object({
   codexAuthCacheJson: z.string().optional(),
 });
 
+const claudeSetupPollSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("pending") }),
+  z.object({ status: z.literal("ready") }).strict(),
+  z.object({ status: z.literal("failed"), reason: z.string() }),
+]);
+
 const publicationExportSchema = z.object({
   headSha: z.string().regex(/^[0-9a-f]{40}$/),
   files: z
@@ -109,6 +118,13 @@ async function orchestratorRequest(
   body?: unknown,
   timeoutMs = 70_000,
 ) {
+  // On Azure there is no API Gateway or Lambda proxy to sign for: the
+  // bearer-authenticated direct path is the only path, for every call, not
+  // just the long-running exec ones. Deciding here, at the single choke
+  // point, is what lets the 30-odd exported functions stay cloud-agnostic.
+  if (isAzure()) {
+    return orchestratorDirectRequest(method, path, body, timeoutMs);
+  }
   const configuration = getOrchestratorConfiguration();
   const url = new URL(path, configuration.endpoint);
   const encodedBody = body === undefined ? undefined : JSON.stringify(body);
@@ -160,10 +176,12 @@ async function orchestratorRequest(
 }
 
 /**
- * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL), used
- * only for calls that can legitimately run longer than the API Gateway
- * Lambda proxy's hard 29-second integration timeout — currently just the
- * authenticated Codex exec. Everything else keeps using orchestratorRequest.
+ * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL). On
+ * AWS it is used only for calls that can legitimately run longer than the
+ * API Gateway Lambda proxy's hard 29-second integration timeout — currently
+ * just the authenticated Codex exec — and everything else keeps using the
+ * signed orchestratorRequest. On Azure it is the only path and every call
+ * comes through here.
  */
 async function orchestratorDirectRequest(
   method: string,
@@ -230,6 +248,15 @@ async function codexExecRequest(
     : orchestratorRequest(method, path, body, timeoutMs);
 }
 
+async function claudeSetupRequest(
+  method: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+) {
+  return codexExecRequest(method, path, body, timeoutMs);
+}
+
 export async function checkOrchestratorConnection(timeoutMs = 4_000) {
   const response = await orchestratorRequest(
     "GET",
@@ -244,6 +271,38 @@ export async function checkOrchestratorConnection(timeoutMs = 4_000) {
     })
     .parse(await response.json());
 }
+
+/**
+ * Wait until the Firecracker host is running *and* its orchestrator answers.
+ *
+ * The host stops itself after ten minutes idle, so the first call after any
+ * quiet period lands on a stopped instance. Starting it takes roughly ten
+ * seconds before the orchestrator is even up, and longer before it serves --
+ * far longer than a single provision attempt is willing to wait. Callers that
+ * skip this see "Firecracker host unavailable" on the first click and success
+ * on the second, which is the whole of that bug.
+ *
+ * `requestHostWake` absorbs transient EC2 failures itself and reports the host
+ * as starting, so a capacity refusal or a mid-restart instance costs another
+ * turn of this loop rather than failing the action outright.
+ */
+export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = await requestHostWake().catch(() => "starting" as const);
+    if (state === "running") {
+      await waitForOrchestrator();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new OrchestratorError(
+    "The workspace runtime is still starting. Try again in a moment.",
+    503,
+  );
+}
+
+const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
 export async function waitForOrchestrator() {
   const deadline = Date.now() + 45_000;
@@ -388,10 +447,15 @@ export async function startIde(
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
 
-export async function getIde(workspaceId: string): Promise<IdeSession> {
+export async function getIde(
+  workspaceId: string,
+  timeoutMs = 70_000,
+): Promise<IdeSession> {
   const response = await orchestratorRequest(
     "GET",
     `/v1/sandboxes/${workspaceId}/ide`,
+    undefined,
+    timeoutMs,
   );
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
@@ -706,7 +770,7 @@ export async function executeCodexInSandbox(
 export async function startCodexExecInSandbox(
   workspaceId: string,
   input: SandboxExecInput & {
-    codexAuthCacheJson: string;
+    codexAuthCacheJson?: string;
     idempotencyKey: string;
   },
 ) {
@@ -743,6 +807,65 @@ export async function closeCodexExecInSandbox(
   await codexExecRequest(
     "DELETE",
     `/v1/sandboxes/${workspaceId}/codex-execs/${sessionId}`,
+    undefined,
+    20_000,
+  );
+}
+
+export async function startClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  input: { idempotencyKey: string },
+) {
+  const response = await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-auth-login`,
+    input,
+    35_000,
+  );
+  return z
+    .object({
+      sessionId: z.string(),
+      authorizeUrl: z.string().url(),
+      claudeVersion: z.string().optional(),
+    })
+    .parse(await response.json());
+}
+
+export async function submitClaudeSetupTokenCodeInSandbox(
+  workspaceId: string,
+  sessionId: string,
+  code: string,
+) {
+  await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}/code`,
+    { code },
+    20_000,
+  );
+}
+
+export async function pollClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  sessionId: string,
+) {
+  const response = await claudeSetupRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}/poll`,
+    { waitMilliseconds: 25_000 },
+    35_000,
+  );
+  return z
+    .object({ result: claudeSetupPollSchema })
+    .parse(await response.json()).result;
+}
+
+export async function closeClaudeSetupTokenInSandbox(
+  workspaceId: string,
+  sessionId: string,
+) {
+  await claudeSetupRequest(
+    "DELETE",
+    `/v1/sandboxes/${workspaceId}/claude-auth-login/${sessionId}`,
     undefined,
     20_000,
   );

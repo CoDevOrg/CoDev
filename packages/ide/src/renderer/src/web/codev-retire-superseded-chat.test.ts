@@ -25,19 +25,57 @@ afterEach(() => {
 
 describe('supersedeWorktreeAgentTabs', () => {
   it('closes the agent tab the resumed chat replaced, once the new one exists', () => {
-    const closeTab = vi.fn()
-    mocks.getState.mockReturnValue(state([{ id: 'old', launchAgent: 'claude' }], closeTab))
+    // The store really removes the tab, as it does for a 'cleanup' close.
+    const closeTab = vi.fn((id: string) => {
+      mocks.getState.mockReturnValue(
+        state(
+          current.filter((tab) => tab.id !== id),
+          closeTab
+        )
+      )
+    })
+    let current = [{ id: 'old', launchAgent: 'claude' }]
+    mocks.getState.mockReturnValue(state(current, closeTab))
     const retire = supersedeWorktreeAgentTabs('wt-1')
 
     // The replacement lands only after the launch, as it does on a paired host.
-    mocks.getState.mockReturnValue(
-      state([{ id: 'old', launchAgent: 'claude' }, { id: 'new', launchAgent: 'claude' }], closeTab)
-    )
+    current = [
+      { id: 'old', launchAgent: 'claude' },
+      { id: 'new', launchAgent: 'claude' }
+    ]
+    mocks.getState.mockReturnValue(state(current, closeTab))
     retire()
     vi.advanceTimersByTime(2_000)
 
     expect(closeTab).toHaveBeenCalledTimes(1)
-    expect(closeTab).toHaveBeenCalledWith('old', { reason: 'user' })
+    // 'cleanup', never 'user': the embed refuses a user-close of a chat tab,
+    // which is how superseded agents used to survive their replacement.
+    expect(closeTab).toHaveBeenCalledWith('old', { reason: 'cleanup' })
+
+    vi.advanceTimersByTime(20_000)
+    expect(closeTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a close the store declined instead of assuming it happened, then gives up', () => {
+    const closeTab = vi.fn()
+    mocks.getState.mockReturnValue(state([{ id: 'old', launchAgent: 'claude' }], closeTab))
+    const retire = supersedeWorktreeAgentTabs('wt-1')
+
+    mocks.getState.mockReturnValue(
+      state(
+        [
+          { id: 'old', launchAgent: 'claude' },
+          { id: 'new', launchAgent: 'claude' }
+        ],
+        closeTab
+      )
+    )
+    retire()
+    vi.advanceTimersByTime(4_000)
+    expect(closeTab).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(60_000)
+    expect(closeTab).toHaveBeenCalledTimes(6)
   })
 
   it('waits for the replacement rather than leaving the worktree agentless', () => {

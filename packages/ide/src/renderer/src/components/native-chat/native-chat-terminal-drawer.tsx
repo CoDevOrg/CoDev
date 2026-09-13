@@ -40,6 +40,19 @@ const PREVIEW_SCROLLBACK_BUFFER_ROWS = 2000
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
 
+export function handleTerminalDrawerSetupFailure(
+  error: unknown,
+  disposed: boolean,
+  setUnavailable: (unavailable: boolean) => void,
+  reportError: (message: string, error: unknown) => void = console.error
+): void {
+  if (disposed) {
+    return
+  }
+  setUnavailable(true)
+  reportError('[native-chat-terminal-drawer] setup failed', error)
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
@@ -290,7 +303,10 @@ export function NativeChatTerminalDrawer({
       terminal.focus()
     }
 
-    void setup()
+    void setup().catch((error: unknown) => {
+      // Why: cleanup closes the stream while its initial snapshot may still be pending.
+      handleTerminalDrawerSetupFailure(error, disposed, setUnavailable)
+    })
 
     return () => {
       disposed = true
