@@ -57,7 +57,7 @@ export async function belongsToSharedScope(
 export async function resolvePersonalOrSharedCredential<
   T extends { sharingEnabled: boolean | null },
 >(
-  input: { userId: string; workspaceId?: string },
+  input: { userId: string; workspaceId?: string | undefined },
   lookup: {
     findPersonal: (userId: string) => Promise<T | null>;
     findShared: (workspaceId: string) => Promise<T | null>;
@@ -78,9 +78,12 @@ export async function resolvePersonalOrSharedCredential<
 
 /** The default a caller applies unless a member explicitly overrides it: a
  *  workspace-scoped login is shared by default (that is the point of
- *  connecting one that way), a personal one is not. */
+ *  connecting one that way), a personal one is not. Takes the full credential
+ *  scope type — a plain fallback key can be "WORKSPACE"-scoped too, which is a
+ *  different, older mechanism (`WorkspaceCredentialForm`) and is never shared
+ *  by this rule. */
 export function defaultSharingEnabled(
-  scopeType: "USER" | "ORGANIZATION",
+  scopeType: "USER" | "WORKSPACE" | "ORGANIZATION",
 ): boolean {
   return scopeType === "ORGANIZATION";
 }

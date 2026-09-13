@@ -42,7 +42,7 @@ function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs">
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[11px]">
       <span>
         <span className="text-emerald-400">$</span> {command}
       </span>
@@ -56,11 +56,7 @@ function CopyableCommand({ command }: { command: string }) {
         }}
         type="button"
       >
-        {copied ? (
-          <Check className="size-3.5" />
-        ) : (
-          <Copy className="size-3.5" />
-        )}
+        {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
       </button>
     </div>
   );
@@ -85,10 +81,12 @@ function SurfaceToggle({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-t border-border/60 py-3">
+    <div className="flex items-start justify-between gap-3 border-t border-border/60 py-2">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium">{label}</p>
-        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+        <p className="text-xs font-medium">{label}</p>
+        {note ? (
+          <p className="text-[11px] text-muted-foreground">{note}</p>
+        ) : null}
       </div>
       <button
         aria-checked={checked}
@@ -142,21 +140,21 @@ function FallbackRow({
 }) {
   return (
     <details className="group border-t border-border/60" open={defaultOpen}>
-      <summary className="flex cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden">
-        <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 py-2.5 [&::-webkit-details-marker]:hidden">
+        <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-xs font-medium">{title}</p>
+          <p className="text-[11px] text-muted-foreground">{description}</p>
         </div>
         {connected ? (
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <StatusDot connected />
             Connected
           </span>
         ) : null}
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
-      <div className="space-y-3 pb-4">{children}</div>
+      <div className="space-y-2.5 pb-3">{children}</div>
     </details>
   );
 }
@@ -514,14 +512,14 @@ export function ProviderAccountCard({
           : "Connect with an API key or the CoDev CLI below";
 
   return (
-    <OrcaCard className="px-6 py-5">
-      <div className="flex items-center gap-3">
-        <span className="flex size-7 items-center justify-center text-foreground">
+    <OrcaCard className="px-4 py-3.5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-6 items-center justify-center text-foreground">
           {logo}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold">{label}</h3>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <h3 className="text-sm font-semibold">{label}</h3>
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <StatusDot connected={surfaceReady ?? workspaceLoginConnected} />
             {headerStatus}
           </p>
@@ -609,7 +607,7 @@ export function ProviderAccountCard({
       ) : null}
 
       {flow?.kind === "polling" ? (
-        <div className="mt-4 flex items-center gap-3 rounded-md border border-border bg-background/60 p-4">
+        <div className="mt-3 flex items-center gap-2.5 rounded-md border border-border bg-background/60 p-3">
           <p className="flex-1 text-xs text-muted-foreground">
             Finish signing in on the {label} tab (
             <a
@@ -633,11 +631,11 @@ export function ProviderAccountCard({
         </div>
       ) : null}
 
-      <div className="mt-4">
+      <div className="mt-3">
         {!offerApiKey ? (
-          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
-            API keys power coding workspaces. Chat rooms run on a subscription
-            signed in above or from your terminal.
+          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
+            API key support for chat rooms is coming soon. For now, sign in with
+            your subscription above or from your terminal.
           </p>
         ) : null}
         {offerApiKey ? (
@@ -768,7 +766,7 @@ export function ProviderAccountCard({
               }
             />
           ) : (
-            <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+            <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
               Browser sign-ins stay in chat rooms. To use {label} in coding
               workspaces, add an API key or sign in from your terminal there.
             </p>
@@ -791,7 +789,7 @@ export function ProviderAccountCard({
         subscription.provider === "codex" &&
         connected &&
         subscription.provenance === "browser" ? (
-          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
             {label} is signed in for chat rooms through the browser, which
             cannot reach the workspace host. Add an API key or run{" "}
             {subscription.command} to use it here.
@@ -799,7 +797,7 @@ export function ProviderAccountCard({
         ) : null}
 
         {workspaceSurface && apiKeyState.status === "connected" ? (
-          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
             API keys stay in coding workspaces; chat rooms run on a
             subscription.
           </p>
@@ -807,7 +805,7 @@ export function ProviderAccountCard({
       </div>
 
       {message ? (
-        <p className="pt-3 text-xs text-muted-foreground" role="status">
+        <p className="pt-2.5 text-[11px] text-muted-foreground" role="status">
           {message}
         </p>
       ) : null}

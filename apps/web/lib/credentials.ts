@@ -574,11 +574,18 @@ export async function resolveWorkspaceApiKey(
  * token (`codev claude-auth --org`), the same personal-or-shared rule Codex
  * uses — see `resolvePersonalOrSharedCredential`.
  */
+type ProviderCredentialRow = NonNullable<
+  Awaited<ReturnType<typeof findCredential>>
+>;
+
 export async function resolveClaudeCliTokenForIde(
   userId: string,
   workspaceId?: string,
 ): Promise<string | null> {
-  const findCliToken = async (scopeType: ScopeType, scopeId: string) => {
+  const findCliToken = async (
+    scopeType: ScopeType,
+    scopeId: string,
+  ): Promise<ProviderCredentialRow | null> => {
     const credential = await findCredential(
       scopeType,
       scopeId,
@@ -588,7 +595,7 @@ export async function resolveClaudeCliTokenForIde(
     );
     return credential?.connectedVia === "cli" ? credential : null;
   };
-  const result = await resolvePersonalOrSharedCredential(
+  const result = await resolvePersonalOrSharedCredential<ProviderCredentialRow>(
     { userId, workspaceId },
     {
       findPersonal: (id) => findCliToken("USER", id),

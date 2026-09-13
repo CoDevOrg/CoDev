@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { persistHostedCodexConnection } = vi.hoisted(() => ({
-  persistHostedCodexConnection: vi.fn(async () => {}),
+  // An explicit parameter, even unused, keeps the mock's inferred call-args
+  // tuple at length 1 instead of 0, so `mock.calls[n]?.[0]` type-checks.
+  persistHostedCodexConnection: vi.fn(
+    async (input: Record<string, unknown>) => {
+      void input;
+    },
+  ),
 }));
 vi.mock("./hosted-codex-subscription-credentials", () => ({
   persistHostedCodexConnection,

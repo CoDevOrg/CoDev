@@ -91,7 +91,10 @@ export function providerSurfaceCapability(
   // workspace's own shared (`--org`) login, if one is connected and shared.
   // `loadProviderConnectionSnapshot` only sets this when a workspace id was
   // given and the viewer reached this workspace (so membership already holds).
-  const sharedWorkspace = snapshot.sharedWorkspaceLogin?.[provider] ?? false;
+  // Cursor has no shared-login concept, so it is never a valid key here.
+  const sharedWorkspace =
+    (provider === "anthropic" || provider === "openai") &&
+    Boolean(snapshot.sharedWorkspaceLogin?.[provider]);
 
   const workspace: SurfaceReadiness =
     personalWorkspace.length > 0
@@ -133,7 +136,7 @@ export type WorkspaceProviderPreflight = {
   /** The agent the default chat tab opens with; null when nothing can run. */
   starting: WorkspaceAgent | null;
   /** Whose login `starting` will run on — see `SurfaceReadiness.source`. */
-  startingSource?: "personal" | "shared";
+  startingSource?: "personal" | "shared" | undefined;
   /** Agents connected for chat rooms (or not at all) but not for workspaces. */
   notReady: Array<{ agent: WorkspaceAgent; connectedForRooms: boolean }>;
 };

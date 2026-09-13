@@ -8,6 +8,7 @@ import {
   OrcaPageHeader,
   OrcaPageShell,
 } from "@/components/settings/orca-style";
+import { ProviderSurfaceTabs } from "@/components/settings/provider-surface-tabs";
 import { isHostedClaudeConnectEnabled } from "@/lib/claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "@/lib/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
@@ -46,7 +47,9 @@ const CARDS = [
  *    terminal (`codev <provider>-auth`) does.
  *
  * A connection made in one section applies to that section only; the member
- * opts it into the other with a toggle where the method allows.
+ * opts it into the other with a toggle where the method allows. The two
+ * surfaces are segmented tabs, not stacked sections — the workspace section
+ * used to sit below the fold every time.
  */
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
@@ -58,14 +61,14 @@ export default async function PersonalProvidersPage() {
     {
       id: "chat-rooms",
       surface: "rooms",
-      title: "Chat rooms",
+      label: "Chat rooms",
       description:
         "Sign in with your Claude, ChatGPT, or Cursor subscription right in the browser — no terminal needed — or connect from your own terminal with the CoDev CLI.",
     },
     {
       id: "coding-workspaces",
       surface: "workspace",
-      title: "Coding workspaces",
+      label: "Coding workspaces",
       description:
         "Workspaces run on a shared host, so a browser sign-in never reaches them. Connect with an API key, or sign in from your own terminal with the CoDev CLI.",
     },
@@ -78,56 +81,47 @@ export default async function PersonalProvidersPage() {
         description="Connect the accounts your agents run on. Chat rooms and coding workspaces are set up separately; a connection made in one can be enabled for the other where the sign-in method allows. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
-      {sections.map((section) => (
-        <section
-          aria-labelledby={`${section.id}-heading`}
-          className="space-y-4"
-          id={section.id}
-          key={section.id}
-        >
-          <div>
-            <h2
-              className="text-base font-semibold"
-              id={`${section.id}-heading`}
-            >
-              {section.title}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {section.description}
-            </p>
-          </div>
-          {CARDS.map((card) => {
-            const subscription = snapshot.cliSubscriptions.find(
-              (row) => row.provider === card.subscription,
-            );
-            const connection = snapshot.connections.find(
-              (row) => row.provider === card.connection,
-            );
-            if (!subscription || !connection) return null;
-            return (
-              <ProviderAccountCard
-                capability={providerSurfaceCapability(
-                  snapshot,
-                  card.connection,
-                )}
-                claudeCliToken={snapshot.claudeCliToken}
-                connection={connection}
-                hostedClaudeConnect={
-                  hostedClaudeConnect && card.connection === "anthropic"
-                }
-                hostedOpenAIConnect={
-                  hostedOpenAIConnect && card.connection === "openai"
-                }
-                key={`${section.id}-${card.label}`}
-                label={card.label}
-                logo={card.logo}
-                subscription={subscription}
-                surface={section.surface}
-              />
-            );
-          })}
-        </section>
-      ))}
+      <ProviderSurfaceTabs
+        tabs={sections.map((section) => ({
+          id: section.id,
+          label: section.label,
+          description: section.description,
+          content: (
+            <>
+              {CARDS.map((card) => {
+                const subscription = snapshot.cliSubscriptions.find(
+                  (row) => row.provider === card.subscription,
+                );
+                const connection = snapshot.connections.find(
+                  (row) => row.provider === card.connection,
+                );
+                if (!subscription || !connection) return null;
+                return (
+                  <ProviderAccountCard
+                    capability={providerSurfaceCapability(
+                      snapshot,
+                      card.connection,
+                    )}
+                    claudeCliToken={snapshot.claudeCliToken}
+                    connection={connection}
+                    hostedClaudeConnect={
+                      hostedClaudeConnect && card.connection === "anthropic"
+                    }
+                    hostedOpenAIConnect={
+                      hostedOpenAIConnect && card.connection === "openai"
+                    }
+                    key={`${section.id}-${card.label}`}
+                    label={card.label}
+                    logo={card.logo}
+                    subscription={subscription}
+                    surface={section.surface}
+                  />
+                );
+              })}
+            </>
+          ),
+        }))}
+      />
     </OrcaPageShell>
   );
 }
