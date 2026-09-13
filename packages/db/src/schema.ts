@@ -855,9 +855,11 @@ export const workspaces = pgTable(
     ownerId: uuid("owner_id")
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
-    organizationId: uuid("organization_id").references(() => organizations.id, {
-      onDelete: "restrict",
-    }),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, {
+        onDelete: "restrict",
+      })
+      .notNull(),
     githubInstallationId: bigint("github_installation_id", {
       mode: "bigint",
     }),

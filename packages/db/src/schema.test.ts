@@ -83,6 +83,7 @@ describe("database schema", () => {
       "feature_override_audit_events",
     );
     expect(workspaces.organizationId.name).toBe("organization_id");
+    expect(workspaces.organizationId.notNull).toBe(true);
     expect(organizationMembers.role.name).toBe("role");
     expect(organizationSubscriptions.planId.name).toBe("plan_id");
     expect(planEntitlements.feature.name).toBe("feature");
