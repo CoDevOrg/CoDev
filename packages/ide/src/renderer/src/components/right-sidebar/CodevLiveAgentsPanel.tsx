@@ -202,6 +202,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   }>({ workboard: null, coordination: null })
   const hadWorkboardRef = useRef(false)
   const hadCoordinationRef = useRef(false)
+  const managedRefreshInFlightRef = useRef(false)
+  const coordinationRefreshInFlightRef = useRef(false)
 
   const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
   const tabsByWorktree = useAppStore(useShallow((state) => state.tabsByWorktree))
@@ -315,6 +317,10 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     if (bridgeStatus !== 'connected') {
       return
     }
+    if (managedRefreshInFlightRef.current) {
+      return
+    }
+    managedRefreshInFlightRef.current = true
     try {
       const snapshot = await requestCodevBridge<WorkboardSnapshot>('workboard.list')
       if (snapshot?.viewer?.name) {
@@ -362,6 +368,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           workboard: current.workboard ?? { at: Date.now(), message }
         }))
       }
+    } finally {
+      managedRefreshInFlightRef.current = false
     }
   }, [bridgeStatus])
 
@@ -369,6 +377,10 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     if (bridgeStatus !== 'connected') {
       return
     }
+    if (coordinationRefreshInFlightRef.current) {
+      return
+    }
+    coordinationRefreshInFlightRef.current = true
     try {
       const snapshot = await requestCodevBridge<MissionControlCoordination>('coordination.list')
       setCoordination({
@@ -391,6 +403,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           coordination: current.coordination ?? { at: Date.now(), message }
         }))
       }
+    } finally {
+      coordinationRefreshInFlightRef.current = false
     }
   }, [bridgeStatus])
 

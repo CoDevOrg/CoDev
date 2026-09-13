@@ -47,6 +47,7 @@ type TerminalAppearanceSectionProps = {
   ghostty: UseGhosttyImportReturn
   warpThemes: UseWarpThemeImportReturn
   forceVisiblePrimary?: boolean
+  showGhosttyImport?: boolean
 }
 
 type TerminalThemeTarget = 'dark' | 'light'
@@ -77,7 +78,8 @@ export function TerminalAppearanceSection({
   onRequestFontSuggestions,
   ghostty,
   warpThemes,
-  forceVisiblePrimary = false
+  forceVisiblePrimary = false,
+  showGhosttyImport = true
 }: TerminalAppearanceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
@@ -123,7 +125,8 @@ export function TerminalAppearanceSection({
     primaryTypographyMatches ||
     typographyMatches ||
     ghosttyImportMatches
-  const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
+  const shouldShowGhosttyImport =
+    showGhosttyImport && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = [
@@ -182,7 +185,7 @@ export function TerminalAppearanceSection({
               'Terminal Typography'
             )}
             action={
-              showGhosttyImport ? (
+              shouldShowGhosttyImport ? (
                 <Button
                   variant="outline"
                   size="sm"

@@ -22,6 +22,7 @@ import {
   type HostSettingScope
 } from './host-scoped-setting-scope'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type WorkspaceDirectorySettingProps = {
   settings: GlobalSettings
@@ -35,6 +36,7 @@ export function WorkspaceDirectorySetting({
   const { hostOptions } = useSidebarHostScopeOptions()
   const [scope, setScope] = useState<HostSettingScope>(CLIENT_DEFAULT_SCOPE)
   const inputId = useId()
+  const canBrowse = !isWebClientLocation()
 
   const clientDefaultLabel = translate(
     'auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e',
@@ -217,21 +219,23 @@ export function WorkspaceDirectorySetting({
           }}
           className="flex-1 text-xs"
         />
-        <Button
-          variant="outline"
-          size="sm"
-          onPointerDown={() => {
-            skipNextBlurCommitRef.current = true
-          }}
-          onClick={() => void handleBrowse()}
-          className="shrink-0 gap-1.5"
-        >
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
-            'Browse'
-          )}
-        </Button>
+        {canBrowse ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onPointerDown={() => {
+              skipNextBlurCommitRef.current = true
+            }}
+            onClick={() => void handleBrowse()}
+            className="shrink-0 gap-1.5"
+          >
+            <FolderOpen className="size-3.5" />
+            {translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
+              'Browse'
+            )}
+          </Button>
+        ) : null}
       </div>
       {editingHost && (
         <div className="flex items-center justify-between gap-2">

@@ -147,7 +147,10 @@ export function AppearancePane({
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },
-    ...getTerminalAppearanceSearchEntries({ showWarpImport: !isWebClient })
+    ...getTerminalAppearanceSearchEntries({
+      showWarpImport: !isWebClient,
+      showGhosttyImport: !isWebClient
+    })
   ]
   const windowSearchEntries = [
     {
@@ -253,6 +256,7 @@ export function AppearancePane({
             onRequestFontSuggestions={onRequestFontSuggestions}
             ghostty={ghostty}
             warpThemes={warpThemes}
+            showGhosttyImport={!isWebClient}
             forceVisiblePrimary={terminalLabelMatches}
           />
         </AppearanceSection>
@@ -278,7 +282,7 @@ export function AppearancePane({
 
       {/* App icon stays at the bottom of Appearance as a small easter egg,
           matching production — not buried inside Interface advanced. */}
-      {appIconMatches ? (
+      {!isWebClient && appIconMatches ? (
         <SearchableSetting
           title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
           description={translate(

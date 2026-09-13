@@ -754,13 +754,12 @@ export function ProviderAccountCard({
         ) : null}
 
         {roomsSurface && connected && subscription.provenance ? (
-          subscription.provenance === "cli" &&
-          subscription.provider !== "claude" ? (
+          subscription.provider === "codex" ? (
             <SurfaceToggle
               checked={subscription.enabledForWorkspace ?? true}
               disabled={disabled}
               label="Also use in coding workspaces"
-              note="Your terminal login can run on the workspace host."
+              note="Your Codex sign-in runs in your private workspace session."
               onChange={(next) =>
                 void setSurface("subscription", "workspace", next)
               }
@@ -783,17 +782,6 @@ export function ProviderAccountCard({
             note="Your terminal login can answer in chat rooms too."
             onChange={(next) => void setSurface("subscription", "rooms", next)}
           />
-        ) : null}
-
-        {workspaceSurface &&
-        subscription.provider === "codex" &&
-        connected &&
-        subscription.provenance === "browser" ? (
-          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
-            {label} is signed in for chat rooms through the browser, which
-            cannot reach the workspace host. Add an API key or run{" "}
-            {subscription.command} to use it here.
-          </p>
         ) : null}
 
         {workspaceSurface && apiKeyState.status === "connected" ? (

@@ -24,8 +24,9 @@ function fixFor(agent: WorkspaceAgent) {
  * agent the default chat tab opens with and, when an agent they connected for
  * chat rooms cannot run here (a browser subscription never reaches the shared
  * host), says so and names the fix — instead of letting the agent boot to
- * "Not logged in". While starting it always shows; once the workspace is up it
- * stays only when there is something to act on, and can be dismissed.
+ * "Not logged in". It waits for the workspace shell so setup guidance never
+ * obscures boot progress, then appears as a compact, dismissible card only
+ * when there is something to act on.
  */
 export function ProviderPreflightBanner({
   preflight,
@@ -38,20 +39,20 @@ export function ProviderPreflightBanner({
   const gaps = preflight.notReady.filter((entry) => entry.connectedForRooms);
   const actionable = preflight.starting === null || gaps.length > 0;
 
-  if (phase === "ready" && (!actionable || dismissed)) return null;
+  if (phase === "starting" || !actionable || dismissed) return null;
 
   let headline: string;
   let detail: string | null = null;
   if (preflight.starting === null) {
-    headline = "No agent is set up for coding workspaces yet.";
+    headline = "Set up a coding agent";
     detail =
       gaps.length > 0
         ? `${gaps.map((gap) => AGENT_LABEL[gap.agent]).join(" and ")} ${
             gaps.length > 1 ? "are" : "is"
-          } connected for chat rooms only. To use ${
+          } connected to rooms only. To use ${
             gaps.length > 1 ? "them" : "it"
-          } here, ${fixFor(gaps[0]!.agent)}.`
-        : `${fixFor("claude")} (or codex-auth) in Settings › Coding workspaces.`;
+          } in this workspace, ${fixFor(gaps[0]!.agent)}.`
+        : `Connect Claude or Codex in Settings to start coding here.`;
   } else if (gaps.length > 0) {
     const gap = gaps[0]!;
     headline = `Starting ${AGENT_LABEL[preflight.starting]}.`;
@@ -64,34 +65,36 @@ export function ProviderPreflightBanner({
   }
 
   return (
-    <div
-      className="workspace-provider-preflight"
+    <aside
+      className="provider-preflight"
       role="status"
       aria-live="polite"
       data-testid="provider-preflight"
     >
-      <KeyRound aria-hidden className="workspace-provider-preflight-icon" />
-      <div className="workspace-provider-preflight-body">
-        <p className="workspace-provider-preflight-headline">{headline}</p>
+      <span className="provider-preflight-icon" aria-hidden="true">
+        <KeyRound size={16} strokeWidth={1.8} />
+      </span>
+      <div className="provider-preflight-copy">
+        <p className="provider-preflight-title">{headline}</p>
         {detail ? (
-          <p className="workspace-provider-preflight-detail">
+          <p className="provider-preflight-detail">
             {detail}{" "}
             {actionable ? (
-              <a href={SETTINGS_HREF}>Open provider settings</a>
+              <a className="provider-preflight-link" href={SETTINGS_HREF}>
+                Set up agent
+              </a>
             ) : null}
           </p>
         ) : null}
       </div>
-      {phase === "ready" ? (
-        <button
-          aria-label="Dismiss"
-          className="workspace-provider-preflight-dismiss"
-          onClick={() => setDismissed(true)}
-          type="button"
-        >
-          <X size={14} />
-        </button>
-      ) : null}
-    </div>
+      <button
+        aria-label="Dismiss"
+        className="provider-preflight-dismiss"
+        onClick={() => setDismissed(true)}
+        type="button"
+      >
+        <X aria-hidden="true" size={16} strokeWidth={1.8} />
+      </button>
+    </aside>
   );
 }

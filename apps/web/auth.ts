@@ -420,12 +420,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // branches above on this pass, and even a fresh GitHub sign-in
       // only sets githubLogin here once — a session's JWT otherwise
       // never revisits it. Backfilling from the same connected-accounts
-      // check Settings uses keeps the header in sync on the very next
-      // request, without requiring the member to sign in again.
-      if (token.localUserId && !token.githubLogin) {
-        const github = await resolveGithubConnection(token.localUserId);
-        if (github.connected && github.login) {
-          token.githubLogin = github.login;
+      // check Settings uses keeps the header in sync shortly afterward,
+      // without requiring the member to sign in again.
+      const githubConnectionCheckExpired =
+        !token.githubConnectionCheckedAt ||
+        Date.now() - token.githubConnectionCheckedAt >= 60_000;
+      if (
+        token.localUserId &&
+        !token.githubLogin &&
+        githubConnectionCheckExpired
+      ) {
+        token.githubConnectionCheckedAt = Date.now();
+        try {
+          const github = await resolveGithubConnection(token.localUserId);
+          if (github.connected && github.login) {
+            token.githubLogin = github.login;
+          }
+        } catch {
+          // GitHub is optional profile enrichment. A slow database must not
+          // invalidate the member's Auth.js session and turn every workspace
+          // request into a 401; retry after the short timestamp throttle.
+          console.warn(
+            "[auth] Skipped optional GitHub profile enrichment after a database lookup failure.",
+          );
         }
       }
 

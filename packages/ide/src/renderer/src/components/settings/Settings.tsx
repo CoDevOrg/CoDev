@@ -92,10 +92,7 @@ import {
   isWebClientLocation,
   useSettingsNavigationMetadata
 } from '@/hooks/useSettingsNavigationMetadata'
-import {
-  filterPersonalSettingsSections,
-  isCodevSettingsOnly
-} from './codev-personal-settings'
+import { filterPersonalSettingsSections, isCodevSettingsOnly } from './codev-personal-settings'
 import type {
   SettingsNavGroup,
   SettingsNavInstallStatus,
@@ -845,7 +842,12 @@ function Settings(): React.JSX.Element {
         const installStatus = capabilityInstallStatusBySectionId.get(section.id)
         return installStatus ? { ...section, installStatus } : section
       }),
-    [baseNavSections, capabilityInstallStatusBySectionId, codevSettingsOnly, codevExtraPersonalSections]
+    [
+      baseNavSections,
+      capabilityInstallStatusBySectionId,
+      codevSettingsOnly,
+      codevExtraPersonalSections
+    ]
   )
   const navSectionById = useMemo(
     () => new Map(navSections.map((section) => [section.id, section] as const)),
@@ -1283,6 +1285,7 @@ function Settings(): React.JSX.Element {
                       wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
                       wslDistros={localWindowsRuntimeCapabilities.wslDistros}
                       wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
+                      showDesktopOnlySettings={showDesktopOnlySettings}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1596,22 +1599,24 @@ function Settings(): React.JSX.Element {
                   </SettingsSection>
                 ) : null}
 
-                <SettingsSection
-                  id="floating-workspace"
-                  title={translate(
-                    'auto.components.settings.Settings.3eb22a3ada',
-                    'Floating Workspace'
-                  )}
-                  description={translate(
-                    'auto.components.settings.Settings.3d9adfe6a5',
-                    'Global terminal, browser, and markdown tabs.'
-                  )}
-                  searchEntries={getSectionSearchEntries('floating-workspace')}
-                >
-                  {isSectionMounted('floating-workspace') ? (
-                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="floating-workspace"
+                    title={translate(
+                      'auto.components.settings.Settings.3eb22a3ada',
+                      'Floating Workspace'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.3d9adfe6a5',
+                      'Global terminal, browser, and markdown tabs.'
+                    )}
+                    searchEntries={getSectionSearchEntries('floating-workspace')}
+                  >
+                    {isSectionMounted('floating-workspace') ? (
+                      <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="appearance"

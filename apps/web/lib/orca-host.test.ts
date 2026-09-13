@@ -230,12 +230,7 @@ describe("ensureOrcaSession", () => {
     expect(input?.openaiApiKey).toBeUndefined();
   });
 
-  /**
-   * Browser and CLI Codex logins store a byte-identical auth cache; provenance
-   * is the only thing separating them. A browser subscription is rooms-only
-   * and must never reach the shared workspace host.
-   */
-  it("never materializes a browser-connected Codex subscription on the host", async () => {
+  it("materializes a browser-connected Codex subscription in the member session", async () => {
     mocks.resolveHostedCodexSubscription.mockResolvedValue(
       hostedCodex("browser"),
     );
@@ -249,8 +244,8 @@ describe("ensureOrcaSession", () => {
     const input = mocks.startIde.mock.calls.at(0)?.at(1) as
       | Record<string, unknown>
       | undefined;
-    expect(input?.codexAuthCacheJson).toBeUndefined();
-    expect(mocks.decryptHostedMaterial).not.toHaveBeenCalled();
+    expect(input?.codexAuthCacheJson).toBe('{"tokens":{}}');
+    expect(mocks.decryptHostedMaterial).toHaveBeenCalledWith("enc");
   });
 
   it("forwards a Claude CLI setup-token as CLAUDE_CODE_OAUTH_TOKEN, unless an API key wins", async () => {

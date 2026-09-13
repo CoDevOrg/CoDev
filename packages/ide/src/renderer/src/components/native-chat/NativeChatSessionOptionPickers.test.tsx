@@ -212,7 +212,9 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('Effort')
+    expect(screen.getByRole('button', { name: 'Effort Default effort' }).textContent).toContain(
+      'Default effort'
+    )
   })
 
   it('disables both picker triggers while the agent is working', () => {
@@ -245,10 +247,11 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model')
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).not.toContain('Model: Model')
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).not.toContain(
-      'Effort: Effort'
+    expect(screen.getByRole('button', { name: 'Model Default model' }).textContent).toContain(
+      'Default model'
+    )
+    expect(screen.getByRole('button', { name: 'Effort Default effort' }).textContent).toContain(
+      'Default effort'
     )
 
     rerender(

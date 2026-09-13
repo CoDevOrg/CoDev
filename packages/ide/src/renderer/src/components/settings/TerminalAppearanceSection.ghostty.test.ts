@@ -519,10 +519,12 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       systemPrefersDark: true,
       terminalFontSuggestions: [],
       ghostty: ghosttyMock,
-      warpThemes: warpThemesMock
+      warpThemes: warpThemesMock,
+      showGhosttyImport: false
     })
 
     expect(findTerminalThemeCatalogSection(element)?.props.showThemeImport).toBe(false)
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
     expect(findWarpThemeImportModal(element)).toBeNull()
   })
 

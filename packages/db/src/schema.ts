@@ -487,7 +487,7 @@ export const providerCredentials = pgTable(
     connectedVia: credentialConnectedVia("connected_via"),
     // Per-surface applicability — the isolation + opt-in-sharing toggles. Default
     // on so existing credentials keep working on both surfaces after deploy;
-    // workspace eligibility is still gated by connectedVia in the resolvers.
+    // provider capability and the explicit toggle determine eligibility.
     enabledForRooms: boolean("enabled_for_rooms").default(true).notNull(),
     enabledForWorkspace: boolean("enabled_for_workspace")
       .default(true)

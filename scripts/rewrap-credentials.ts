@@ -65,6 +65,13 @@ const HOSTED_CODEX_CONTEXT = {
 const PLANS: Array<{
   name: string;
   table: typeof schema.providerCredentials;
+  /**
+   * Column that identifies a row for the UPDATE. Every table here has `id`
+   * except github_connections, whose primary key is `userId`; without this
+   * the update was built with an empty WHERE clause and Postgres rejected
+   * it, which is the failure you want over an unfiltered update.
+   */
+  key?: string;
   columns: ColumnPlan[];
 }> = [
   {
@@ -112,6 +119,7 @@ const PLANS: Array<{
   {
     name: "github_connections",
     table: schema.githubConnections as never,
+    key: "userId",
     columns: [
       // github.ts calls encryptSecret with no context at all, so these must
       // be re-wrapped without one. Passing PROVIDER_CONTEXT here would fail
@@ -167,8 +175,17 @@ async function main() {
         conditions.length === 1 ? conditions[0] : or(...conditions),
       )) as Array<Record<string, unknown>>;
 
+    const key = plan.key ?? "id";
+
     for (const row of rows) {
       const updates: Record<string, string> = {};
+      if (row[key] === undefined || row[key] === null) {
+        failures.push({
+          where: `${plan.name}/?`,
+          reason: `row has no ${key}; refusing to build an UPDATE without one`,
+        });
+        continue;
+      }
 
       for (const entry of plan.columns) {
         const stored = row[entry.column];
@@ -190,7 +207,7 @@ async function main() {
           // decrypted is already broken, and stopping here would leave the
           // table half-migrated with no record of which half.
           failures.push({
-            where: `${plan.name}/${String(row.id)}.${entry.column}`,
+            where: `${plan.name}/${String(row[key])}.${entry.column}`,
             reason: error instanceof Error ? error.message : String(error),
           });
         }
@@ -202,8 +219,8 @@ async function main() {
           .set(updates as never)
           .where(
             eq(
-              (plan.table as unknown as Record<string, never>).id,
-              row.id as never,
+              (plan.table as unknown as Record<string, never>)[key],
+              row[key] as never,
             ),
           );
       }

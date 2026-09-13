@@ -7,8 +7,18 @@ const themeOverrides = readFileSync(
   resolve(process.cwd(), "public/orca-theme-overrides.css"),
   "utf8",
 );
+const bundledIndex = readFileSync(
+  resolve(process.cwd(), "public/orca/web-index.html"),
+  "utf8",
+);
 
 describe("Orca theme overrides", () => {
+  it("loads the CoDev theme as part of the embedded document", () => {
+    expect(bundledIndex).toContain(
+      '<link id="codev-orca-theme" rel="stylesheet" href="/orca-theme-overrides.css" />',
+    );
+  });
+
   it("replaces Orca's active dark-mode design tokens with CoDev tokens", () => {
     expect(themeOverrides).toContain("html.dark {");
     expect(themeOverrides).toContain(

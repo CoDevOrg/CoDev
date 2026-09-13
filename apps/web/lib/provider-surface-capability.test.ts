@@ -69,15 +69,27 @@ function snapshot(
 }
 
 describe("providerSurfaceCapability", () => {
-  it("a browser subscription powers rooms only, for every provider", () => {
+  it("a Codex browser subscription powers rooms and workspaces", () => {
+    const capability = providerSurfaceCapability(
+      snapshot({ cliSubscriptions: [sub("codex")] }),
+      "openai",
+    );
+    expect(capability.rooms).toEqual({ ready: true, via: ["browser"] });
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["browser"],
+      source: "personal",
+    });
+  });
+
+  it("Claude and Cursor browser subscriptions power rooms only", () => {
     const view = snapshot({
       cliSubscriptions: [
-        sub("codex", { provenance: "browser" }),
         sub("claude", { provenance: "browser", enabledForWorkspace: false }),
         sub("cursor", { provenance: "browser" }),
       ],
     });
-    for (const provider of ["openai", "anthropic", "cursor"] as const) {
+    for (const provider of ["anthropic", "cursor"] as const) {
       const capability = providerSurfaceCapability(view, provider);
       expect(capability.rooms).toEqual({ ready: true, via: ["browser"] });
       expect(capability.workspace.ready).toBe(false);
@@ -199,12 +211,12 @@ describe("workspaceReadyProviders", () => {
     expect(workspaceReadyProviders(view)).toEqual(["anthropic", "openai"]);
   });
 
-  it("is empty when the member has only browser subscriptions", () => {
+  it("lists Codex when the member connected it in the browser", () => {
     expect(
       workspaceReadyProviders(
         snapshot({ cliSubscriptions: [sub("codex"), sub("claude")] }),
       ),
-    ).toEqual([]);
+    ).toEqual(["openai"]);
   });
 });
 

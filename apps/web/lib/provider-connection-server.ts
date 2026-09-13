@@ -100,8 +100,8 @@ export async function loadProviderConnectionSnapshot(
     },
     cliSubscriptionStatuses: {
       // Codex counts as signed in whether the login arrived through the CoDev
-      // CLI (hosted auth cache) or the in-page device-code flow; provenance on
-      // the row says which, and only a CLI login may power a workspace.
+      // CLI or the in-page device-code flow. Both produce the refreshable auth
+      // cache that the member-scoped workspace runtime consumes.
       codex: hostedCodex ?? codexOAuth,
       // The browser runtime keeps its credential outside provider_credentials
       // and can never reach a workspace host, so it is inherently rooms-only.
