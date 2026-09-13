@@ -2,6 +2,7 @@ export * from "./collaboration";
 export * from "./conversation-import";
 export * from "./domain";
 export * from "./events";
+export * from "./entitlements";
 export * from "./providers";
 export * from "./shared-session";
 export * from "./team-chat";
