@@ -16,6 +16,19 @@ accessibility decisions (searchable via
 checked into `.claude/skills/`, so every session in this repo has them; use them
 instead of improvising design decisions.
 
+## Verification is expensive — budget it
+
+See "Verifying a Change" in [`AGENTS.md`](AGENTS.md) for the commands. The point
+worth repeating here, because it is a habit rather than a rule: **run the full
+suites once, when the change is finished.** A full `apps/web` typecheck is ~2
+minutes and a `packages/ide` test sweep is several more; re-running them after
+each edit is where a ten-minute task becomes an hour. Iterate on the single test
+file that covers what you changed.
+
+Two searches to avoid: `grep -r` from the repo root (it walks ~4 GB of
+`node_modules` and times out — use the `Grep` tool) and `du`/`find` over the
+working tree (`apps/web/.next` has reached 6 GB).
+
 ## Deploy & CI Cost Hygiene
 
 `apps/web` deploys through the **Deploy web** GitHub Actions workflow

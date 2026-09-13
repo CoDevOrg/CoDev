@@ -17,6 +17,29 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 
+# Verifying a Change
+
+This package has ~10.5k sources and its own node_modules; a full test run is
+minutes. Iterate narrowly and verify once.
+
+- Run the smallest scope that covers the change:
+  `vitest run --config config/vitest.config.ts src/renderer/src/<area>`.
+  Save a full `pnpm test` for the end, if at all.
+- Prefer `pnpm run tc:web` over a bare `tsc` invocation — running `tsc` against
+  a config by hand pulls test files into the program and reports pre-existing
+  `TS6307` project-reference noise that is not your change.
+- A source change here is not shippable until `pnpm orca:web` regenerates
+  `apps/web/public/orca/**` and both land in **one** commit. Batch edits and
+  rebuild once; the build is ~90s.
+- The pre-commit hook lints staged files, so pre-existing violations in a file
+  you touch become your problem. `oxlint` `curly` and `max-lines` are the usual
+  ones. Never add a `max-lines` disable to get past it — pick a smaller seam, or
+  put the logic in a new module.
+- Module-scope imports in hot paths (`components/native-chat`,
+  `components/terminal-pane`) can shift listener-count baselines and break
+  unrelated retention tests. Import heavy or side-effecting libraries lazily
+  inside the branch that needs them.
+
 # Considerations
 ## Worktree Safety
 
