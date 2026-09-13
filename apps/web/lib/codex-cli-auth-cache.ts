@@ -76,6 +76,7 @@ export async function saveCodexCliAuthCache(request: Request) {
     sharingEnabled: scopeType === "ORGANIZATION",
     material: { authCacheJson },
     accountLabel: "Codex CLI",
+    connectedVia: "cli",
   });
   return { scopeType, scopeId };
 }

@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => {
     assertWorkspaceCreditQuota: vi.fn().mockResolvedValue(undefined),
     openOrcaInterval: vi.fn().mockResolvedValue(undefined),
     resolveAgentCredential: vi.fn(),
+    resolveWorkspaceApiKey: vi.fn(),
+    resolveCursorCliAuth: vi.fn(),
+    resolveClaudeCliTokenForIde: vi.fn(),
+    resolveHostedCodexSubscription: vi.fn(),
+    decryptHostedMaterial: vi.fn(),
   };
 });
 
@@ -32,6 +37,13 @@ vi.mock("./host", () => ({
 vi.mock("./github", () => ({ getGitHubUserToken: vi.fn() }));
 vi.mock("./credentials", () => ({
   resolveAgentCredential: mocks.resolveAgentCredential,
+  resolveWorkspaceApiKey: mocks.resolveWorkspaceApiKey,
+  resolveCursorCliAuth: mocks.resolveCursorCliAuth,
+  resolveClaudeCliTokenForIde: mocks.resolveClaudeCliTokenForIde,
+}));
+vi.mock("./hosted-codex-subscription-credentials", () => ({
+  resolveHostedCodexSubscription: mocks.resolveHostedCodexSubscription,
+  decryptHostedMaterial: mocks.decryptHostedMaterial,
 }));
 vi.mock("./orchestrator", () => ({
   OrchestratorError: mocks.OrchestratorError,
@@ -94,9 +106,13 @@ describe("ensureOrcaSession", () => {
     );
     mocks.waitForOrchestrator.mockResolvedValue(undefined);
     mocks.stopIde.mockResolvedValue(undefined);
-    // Default: nothing linked, so a resolution throws exactly as the real
-    // lookup does without a database.
+    // Default: nothing linked, so every workspace lookup resolves to nothing —
+    // exactly as the real lookups do without a database.
     mocks.resolveAgentCredential.mockRejectedValue(new Error("no credential"));
+    mocks.resolveWorkspaceApiKey.mockResolvedValue(null);
+    mocks.resolveCursorCliAuth.mockResolvedValue(null);
+    mocks.resolveClaudeCliTokenForIde.mockResolvedValue(null);
+    mocks.resolveHostedCodexSubscription.mockResolvedValue(null);
   });
 
   it("reconnects a live workspace without EC2 discovery while refreshing member credentials and metering", async () => {
@@ -113,7 +129,7 @@ describe("ensureOrcaSession", () => {
       workspaceId,
       expect.objectContaining({ memberId: userId }),
     );
-    expect(mocks.resolveAgentCredential).toHaveBeenCalled();
+    expect(mocks.resolveWorkspaceApiKey).toHaveBeenCalled();
     expect(mocks.openOrcaInterval).toHaveBeenCalledWith(userId, workspaceId);
   });
 
@@ -162,25 +178,14 @@ describe("ensureOrcaSession", () => {
     expect(mocks.getHostState).toHaveBeenCalledOnce();
   });
 
-  it("forwards a member's linked Cursor and plain OpenAI keys to the host", async () => {
-    mocks.resolveAgentCredential.mockImplementation(
-      async (_userId: string, _workspaceId: string, provider: string) => {
-        if (provider === "cursor") {
-          return {
-            provider,
-            authType: "API_KEY",
-            apiKeyOrToken: "key_cursor_abc",
-          };
-        }
-        if (provider === "openai") {
-          return {
-            provider,
-            authType: "API_KEY",
-            apiKeyOrToken: "sk-openai-xyz",
-          };
-        }
-        throw new Error("no credential");
-      },
+  it("forwards a member's workspace-enabled Cursor and OpenAI keys to the host", async () => {
+    mocks.resolveWorkspaceApiKey.mockImplementation(
+      async (_userId: string, _workspaceId: string, provider: string) =>
+        provider === "cursor"
+          ? "key_cursor_abc"
+          : provider === "openai"
+            ? "sk-openai-xyz"
+            : null,
     );
     mocks.startIde.mockResolvedValueOnce(session);
 
@@ -195,19 +200,22 @@ describe("ensureOrcaSession", () => {
     );
   });
 
-  it("omits the plain OpenAI key when the member has a hosted Codex subscription", async () => {
-    mocks.resolveAgentCredential.mockImplementation(
-      async (_userId: string, _workspaceId: string, provider: string) => {
-        if (provider === "openai") {
-          return {
-            provider,
-            authType: "HOSTED_CODEX_SUBSCRIPTION",
-            codexAuthCacheJson: '{"tokens":{}}',
-          };
-        }
-        throw new Error("no credential");
+  function hostedCodex(connectedVia: "cli" | "browser") {
+    return {
+      credential: {
+        connectedVia,
+        enabledForWorkspace: true,
+        encryptedMaterial: "enc",
       },
-    );
+      source: "USER" as const,
+    };
+  }
+
+  it("materializes a CLI-connected hosted Codex subscription as the host's auth cache", async () => {
+    mocks.resolveHostedCodexSubscription.mockResolvedValue(hostedCodex("cli"));
+    mocks.decryptHostedMaterial.mockResolvedValue({
+      authCacheJson: '{"tokens":{}}',
+    });
     mocks.startIde.mockResolvedValueOnce(session);
 
     await ensureOrcaSession(workspace, userId);
@@ -220,6 +228,56 @@ describe("ensureOrcaSession", () => {
       | Record<string, unknown>
       | undefined;
     expect(input?.openaiApiKey).toBeUndefined();
+  });
+
+  /**
+   * Browser and CLI Codex logins store a byte-identical auth cache; provenance
+   * is the only thing separating them. A browser subscription is rooms-only
+   * and must never reach the shared workspace host.
+   */
+  it("never materializes a browser-connected Codex subscription on the host", async () => {
+    mocks.resolveHostedCodexSubscription.mockResolvedValue(
+      hostedCodex("browser"),
+    );
+    mocks.decryptHostedMaterial.mockResolvedValue({
+      authCacheJson: '{"tokens":{}}',
+    });
+    mocks.startIde.mockResolvedValueOnce(session);
+
+    await ensureOrcaSession(workspace, userId);
+
+    const input = mocks.startIde.mock.calls.at(0)?.at(1) as
+      | Record<string, unknown>
+      | undefined;
+    expect(input?.codexAuthCacheJson).toBeUndefined();
+    expect(mocks.decryptHostedMaterial).not.toHaveBeenCalled();
+  });
+
+  it("forwards a Claude CLI setup-token as CLAUDE_CODE_OAUTH_TOKEN, unless an API key wins", async () => {
+    mocks.resolveClaudeCliTokenForIde.mockResolvedValue("sk-ant-cli-token");
+    mocks.startIde.mockResolvedValueOnce(session);
+    await ensureOrcaSession(workspace, userId);
+    expect(mocks.startIde).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ claudeCodeOauthToken: "sk-ant-cli-token" }),
+    );
+    const first = mocks.startIde.mock.calls.at(0)?.at(1) as
+      | Record<string, unknown>
+      | undefined;
+    expect(first?.anthropicApiKey).toBeUndefined();
+
+    mocks.startIde.mockClear();
+    mocks.resolveWorkspaceApiKey.mockImplementation(
+      async (_userId: string, _workspaceId: string, provider: string) =>
+        provider === "anthropic" ? "sk-ant-api-key" : null,
+    );
+    mocks.startIde.mockResolvedValueOnce(session);
+    await ensureOrcaSession(workspace, userId);
+    const second = mocks.startIde.mock.calls.at(0)?.at(1) as
+      | Record<string, unknown>
+      | undefined;
+    expect(second?.anthropicApiKey).toBe("sk-ant-api-key");
+    expect(second?.claudeCodeOauthToken).toBeUndefined();
   });
 
   it("never passes a personal Claude runtime or legacy subscription token to the shared IDE", async () => {

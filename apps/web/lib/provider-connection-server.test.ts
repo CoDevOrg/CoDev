@@ -42,6 +42,8 @@ const LOOKUPS = [
   ["cursor", "API_KEY"],
   ["openai", "HOSTED_CODEX_SUBSCRIPTION"],
   ["openai", "OAUTH_TOKEN"],
+  // The Claude CLI setup-token; only a `cli`-stamped row is ever reported.
+  ["anthropic", "OAUTH_TOKEN"],
   ["cursor", "OAUTH_TOKEN"],
 ] as const;
 
@@ -101,6 +103,7 @@ describe("provider connection server", () => {
         lastFour: "Codex CLI",
       })
       .mockResolvedValueOnce(null) // openai OAUTH_TOKEN
+      .mockResolvedValueOnce(null) // anthropic OAUTH_TOKEN (CLI setup-token)
       .mockResolvedValueOnce({
         credentialType: "OAUTH_TOKEN",
         lastFour: "Cursor",
@@ -109,9 +112,17 @@ describe("provider connection server", () => {
     await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
       cliSubscriptions: [
         { provider: "codex", status: "connected" },
-        { provider: "claude", status: "connected" },
+        // The browser runtime is inherently rooms-only.
+        {
+          provider: "claude",
+          status: "connected",
+          provenance: "browser",
+          enabledForRooms: true,
+          enabledForWorkspace: false,
+        },
         { provider: "cursor", status: "connected" },
       ],
+      claudeCliToken: { status: "not_connected" },
     });
   });
 

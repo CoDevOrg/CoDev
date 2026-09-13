@@ -3,7 +3,15 @@ import "server-only";
 import { mintWorkspaceCoordinationToken } from "./cli-agent-session";
 import { openOrcaInterval } from "./compute-credits";
 import { getPublicAppOrigin } from "./password-reset";
-import { resolveAgentCredential, resolveCursorCliAuth } from "./credentials";
+import {
+  resolveClaudeCliTokenForIde,
+  resolveCursorCliAuth,
+  resolveWorkspaceApiKey,
+} from "./credentials";
+import {
+  decryptHostedMaterial,
+  resolveHostedCodexSubscription,
+} from "./hosted-codex-subscription-credentials";
 import { getGitHubUserToken } from "./github";
 import { getHostState, requestHostWake } from "./host";
 import {
@@ -102,14 +110,25 @@ async function resolveCodexAuthCacheForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
+    const hosted = await resolveHostedCodexSubscription({
       userId,
       workspaceId,
-      "openai",
+    });
+    // Browser and CLI logins store the same auth cache, so provenance is the
+    // only thing telling them apart: only a `cli` login the member enabled
+    // for workspaces may be materialized as CODEX_HOME on the shared host.
+    if (
+      !hosted ||
+      hosted.credential.connectedVia !== "cli" ||
+      !hosted.credential.enabledForWorkspace ||
+      !hosted.credential.encryptedMaterial
+    ) {
+      return undefined;
+    }
+    const material = await decryptHostedMaterial(
+      hosted.credential.encryptedMaterial,
     );
-    return credential.authType === "HOSTED_CODEX_SUBSCRIPTION"
-      ? credential.codexAuthCacheJson
-      : undefined;
+    return material.authCacheJson || undefined;
   } catch {
     return undefined;
   }
@@ -136,7 +155,9 @@ async function resolveCursorAuthJsonForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const auth = await resolveCursorCliAuth(userId, workspaceId);
+    // Only a workspace-enabled, non-browser login (the API-key exchange)
+    // reaches the host; Cursor's deeplink browser login is rooms-only.
+    const auth = await resolveCursorCliAuth(userId, workspaceId, "workspace");
     if (!auth) return undefined;
     return JSON.stringify({
       accessToken: auth.accessToken,
@@ -154,14 +175,10 @@ async function resolveCursorApiKeyForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
-      userId,
-      workspaceId,
-      "cursor",
+    return (
+      (await resolveWorkspaceApiKey(userId, workspaceId, "cursor"))?.trim() ||
+      undefined
     );
-    return credential.authType === "API_KEY"
-      ? credential.apiKeyOrToken?.trim() || undefined
-      : undefined;
   } catch {
     return undefined;
   }
@@ -179,39 +196,37 @@ async function resolveOpenAiApiKeyForIde(
   workspaceId: string,
 ): Promise<string | undefined> {
   try {
-    const credential = await resolveAgentCredential(
-      userId,
-      workspaceId,
-      "openai",
+    return (
+      (await resolveWorkspaceApiKey(userId, workspaceId, "openai"))?.trim() ||
+      undefined
     );
-    return credential.authType === "API_KEY"
-      ? credential.apiKeyOrToken?.trim() || undefined
-      : undefined;
   } catch {
     return undefined;
   }
 }
 
 /**
- * API-key support is unchanged. Personal Claude subscriptions stay in their
- * private backend runtime and are never copied to a shared IDE session.
+ * What the shared IDE host may run Claude with: a pasted API key, else the
+ * `claude setup-token` the member uploaded with `codev claude-auth` (as
+ * CLAUDE_CODE_OAUTH_TOKEN). A browser subscription stays in its private
+ * runtime and is never copied to a shared IDE session — its credential is a
+ * runtime reference CoDev never holds, so it could not be sent even by mistake.
  */
 async function resolveClaudeEnvForIde(
   userId: string,
   workspaceId: string,
-): Promise<{ anthropicApiKey: string } | undefined> {
+): Promise<
+  { anthropicApiKey: string } | { claudeCodeOauthToken: string } | undefined
+> {
   try {
-    const credential = await resolveAgentCredential(
+    const apiKey = await resolveWorkspaceApiKey(
       userId,
       workspaceId,
       "anthropic",
     );
-    if (!credential.apiKeyOrToken) return undefined;
-    if (credential.authType === "API_KEY") {
-      return { anthropicApiKey: credential.apiKeyOrToken };
-    }
-    // Shared IDE sessions must never receive a member's subscription profile
-    // or token. Subscription-backed work runs through isolated backend agents.
+    if (apiKey?.trim()) return { anthropicApiKey: apiKey.trim() };
+    const token = await resolveClaudeCliTokenForIde(userId);
+    if (token?.trim()) return { claudeCodeOauthToken: token.trim() };
     return undefined;
   } catch {
     return undefined;

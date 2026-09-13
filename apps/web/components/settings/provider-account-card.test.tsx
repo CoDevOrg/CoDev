@@ -27,6 +27,9 @@ function subscription(
     status: "not_connected",
     connectMode: "cursor_deeplink",
     command: null,
+    provenance: null,
+    enabledForRooms: false,
+    enabledForWorkspace: false,
     ...overrides,
   };
 }
@@ -42,7 +45,24 @@ function connection(
     lastFour: null,
     suppliedBy: null,
     scope: "personal",
+    provenance: null,
+    enabledForRooms: false,
+    enabledForWorkspace: false,
     ...overrides,
+  };
+}
+
+const NO_CLI_TOKEN = {
+  status: "not_connected",
+  lastFour: null,
+  enabledForRooms: false,
+  enabledForWorkspace: false,
+} as const;
+
+function capability(input: { rooms?: boolean; workspace?: boolean }) {
+  return {
+    rooms: { ready: input.rooms ?? false, via: [] },
+    workspace: { ready: input.workspace ?? false, via: [] },
   };
 }
 
@@ -515,6 +535,221 @@ describe("ProviderAccountCard", () => {
       expect(
         screen.getByRole("button", { name: "Connect Cursor" }),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("surface sections", () => {
+    it("the workspace section offers no browser sign-in, only an API key and the CLI", () => {
+      render(
+        <ProviderAccountCard
+          capability={capability({})}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          hostedClaudeConnect
+          label="Claude"
+          logo={null}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            connectMode: "manual_code",
+            command: "codev claude-auth",
+          })}
+          surface="workspace"
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "Connect Claude" }),
+      ).toBeNull();
+      expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
+      expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
+      expect(
+        screen.getByText("Connect with an API key or from your terminal below"),
+      ).toBeInTheDocument();
+    });
+
+    it("the rooms section offers the browser sign-in and the CLI, but no API key", () => {
+      render(
+        <ProviderAccountCard
+          capability={capability({})}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          hostedClaudeConnect
+          label="Claude"
+          logo={null}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            connectMode: "manual_code",
+            command: "codev claude-auth",
+          })}
+          surface="rooms"
+        />,
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Connect Claude" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Use an API key instead")).toBeNull();
+      expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
+    });
+
+    it("explains that a browser sign-in cannot be enabled for workspaces", () => {
+      render(
+        <ProviderAccountCard
+          capability={capability({ rooms: true })}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "openai", label: "OpenAI" })}
+          label="Codex"
+          logo={null}
+          subscription={subscription({
+            provider: "codex",
+            label: "Codex",
+            status: "connected",
+            connectMode: "device_code",
+            command: "codev codex-auth",
+            provenance: "browser",
+            enabledForRooms: true,
+            enabledForWorkspace: false,
+          })}
+          surface="rooms"
+        />,
+      );
+
+      expect(screen.queryByRole("switch")).toBeNull();
+      expect(
+        screen.getByText(/Browser sign-ins stay in chat rooms/),
+      ).toBeInTheDocument();
+    });
+
+    it("lets a terminal login be enabled for the other surface", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ connections: [] }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ProviderAccountCard
+          capability={capability({ rooms: true, workspace: true })}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "openai", label: "OpenAI" })}
+          label="Codex"
+          logo={null}
+          subscription={subscription({
+            provider: "codex",
+            label: "Codex",
+            status: "connected",
+            connectMode: "device_code",
+            command: "codev codex-auth",
+            provenance: "cli",
+            enabledForRooms: true,
+            enabledForWorkspace: false,
+          })}
+          surface="rooms"
+        />,
+      );
+
+      const toggle = screen.getByRole("switch", {
+        name: "Also use in coding workspaces",
+      });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      fireEvent.click(toggle);
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/personal/connections",
+          expect.objectContaining({ method: "PATCH" }),
+        );
+      });
+      expect(
+        JSON.parse(
+          (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
+        ),
+      ).toEqual({
+        provider: "openai",
+        kind: "subscription",
+        surface: "workspace",
+        enabled: true,
+      });
+    });
+
+    it("shows and revokes Claude's CLI login in the workspace section", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ProviderAccountCard
+          capability={capability({ workspace: true })}
+          claudeCliToken={{
+            status: "connected",
+            lastFour: "wxyz",
+            enabledForRooms: false,
+            enabledForWorkspace: true,
+          }}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          label="Claude"
+          logo={null}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            connectMode: "manual_code",
+            command: "codev claude-auth",
+          })}
+          surface="workspace"
+        />,
+      );
+
+      expect(
+        screen.getByText("Ready for coding workspaces"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Connected via codev claude-auth · ending wxyz/),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Revoke CLI login" }));
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/personal/connections?provider=anthropic&kind=claude_cli_token",
+          { method: "DELETE" },
+        );
+      });
+    });
+
+    it("sends the originating section with a pasted key", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ connections: [] }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ProviderAccountCard
+          capability={capability({})}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "openai", label: "OpenAI" })}
+          label="Codex"
+          logo={null}
+          subscription={subscription({
+            provider: "codex",
+            label: "Codex",
+            connectMode: "device_code",
+            command: "codev codex-auth",
+          })}
+          surface="workspace"
+        />,
+      );
+
+      fireEvent.change(screen.getByPlaceholderText("Paste API key"), {
+        target: { value: "sk-openai-a-long-enough-key" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalled();
+      });
+      expect(
+        JSON.parse(
+          (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
+        ),
+      ).toMatchObject({ provider: "openai", surface: "workspace" });
     });
   });
 });

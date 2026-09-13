@@ -5,6 +5,10 @@ import { WorkspaceHome } from "@/components/workspace-home";
 import { permissionsForRole } from "@/lib/access";
 import { hasLinkedCursorCredential } from "@/lib/credentials";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
+import {
+  workspaceProviderPreflight,
+  workspaceReadyProviders,
+} from "@/lib/provider-surface-capability";
 import { requireUser } from "@/lib/session";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
@@ -26,24 +30,18 @@ export default async function WorkspacePage({
     notFound();
   }
 
-  const availableProviders = (["openai", "anthropic"] as const).filter(
-    (provider) => {
-      const cli = provider === "openai" ? "codex" : "claude";
-      const cliConnected = providerSnapshot.cliSubscriptions.some(
-        (subscription) =>
-          subscription.provider === cli && subscription.status === "connected",
-      );
-      const keyConnected = providerSnapshot.connections.some(
-        (connection) =>
-          connection.provider === provider && connection.status === "connected",
-      );
-      return cliConnected || keyConnected;
-    },
+  // What the workspace chat tab can actually *run*, not merely what the member
+  // has connected: a workspace-enabled API key or local-CLI login. A browser
+  // subscription never reaches the shared host, so advertising it here would
+  // land the member on a `claude`/`codex` process that boots "Not logged in".
+  const availableProviders = workspaceReadyProviders(providerSnapshot).filter(
+    (provider): provider is "openai" | "anthropic" => provider !== "cursor",
   );
 
   return (
     <WorkspaceHome
       availableProviders={availableProviders}
+      providerPreflight={workspaceProviderPreflight(providerSnapshot)}
       canInvite={permissionsForRole(workspace.accessRole).invite}
       cursorAvailable={cursorAvailable}
       repository={workspace.repository}

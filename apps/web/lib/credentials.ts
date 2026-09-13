@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, isNotNull, ne } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import {
@@ -82,17 +82,40 @@ function byokRequiredError(provider: AuthProvider) {
   );
 }
 
+/** The two product surfaces a credential can be enabled for. */
+export type CredentialSurface = "rooms" | "workspace";
+
+/**
+ * Predicates limiting a lookup to credentials usable on one surface. A coding
+ * workspace runs on a shared host, so it never sees a browser subscription —
+ * nor an unstamped legacy row, which is treated as browser by the migration.
+ * Rooms accept any provenance the member has enabled there.
+ */
+function surfacePredicates(surface: CredentialSurface | undefined) {
+  if (!surface) return [];
+  if (surface === "rooms") {
+    return [eq(schema.providerCredentials.enabledForRooms, true)];
+  }
+  return [
+    eq(schema.providerCredentials.enabledForWorkspace, true),
+    isNotNull(schema.providerCredentials.connectedVia),
+    ne(schema.providerCredentials.connectedVia, "browser"),
+  ];
+}
+
 async function findCredential(
   scopeType: ScopeType,
   scopeId: string,
   provider: AuthProvider,
   credentialType?: CredentialType,
+  surface?: CredentialSurface,
 ) {
   const predicates = [
     eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
     eq(schema.providerCredentials.scopeId, scopeId),
     eq(schema.providerCredentials.provider, parseProvider(provider)),
     eq(schema.providerCredentials.isConnected, true),
+    ...surfacePredicates(surface),
   ];
   if (credentialType) {
     predicates.push(
@@ -331,7 +354,13 @@ async function getCredentialValue(
   };
 }
 
-/** Resolve only the sender's subscription; never fall back to an API key or shared seat. */
+/**
+ * Resolve only the sender's subscription for a chat room; never fall back to
+ * an API key or shared seat. Rooms are the one surface a browser subscription
+ * may power, so any provenance is accepted — but only if the member left the
+ * credential enabled for rooms (the Claude browser runtime lives outside
+ * provider_credentials and is inherently rooms-only, so it carries no flag).
+ */
 export async function resolvePersonalChatSubscription(
   userId: string,
   provider: "claude" | "codex",
@@ -355,7 +384,10 @@ export async function resolvePersonalChatSubscription(
       userId,
       includeBusy: true,
     });
-    if (hosted?.credential.encryptedMaterial) {
+    if (
+      hosted?.credential.encryptedMaterial &&
+      hosted.credential.enabledForRooms !== false
+    ) {
       const material = await decryptHostedMaterial(
         hosted.credential.encryptedMaterial,
       );
@@ -374,6 +406,7 @@ export async function resolvePersonalChatSubscription(
     userId,
     "openai",
     "OAUTH_TOKEN",
+    "rooms",
   );
   if (!credential || credential.status !== "active")
     throw new Error(
@@ -455,13 +488,19 @@ export async function resolveAgentCredential(
 export async function resolveCursorCliAuth(
   userId: string,
   workspaceId: string,
+  surface?: CredentialSurface,
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
   const credential =
-    (await findCredential("USER", userId, "cursor")) ??
-    (await findCredential("WORKSPACE", workspaceId, "cursor"));
+    (await findCredential("USER", userId, "cursor", "OAUTH_TOKEN", surface)) ??
+    (await findCredential(
+      "WORKSPACE",
+      workspaceId,
+      "cursor",
+      "OAUTH_TOKEN",
+      surface,
+    ));
   if (
     !credential ||
-    credential.credentialType !== "OAUTH_TOKEN" ||
     !credential.encryptedAccessToken ||
     !credential.encryptedRefreshToken
   ) {
@@ -494,6 +533,59 @@ export async function hasLinkedCursorCredential(
   return credential != null;
 }
 
+/**
+ * A pasted API key the member enabled for coding workspaces, for the host env.
+ * Personal scope wins over workspace scope, matching resolveAgentCredential.
+ * Read directly rather than via resolveAgentCredential, which prefers a
+ * subscription — a workspace must never receive a browser subscription.
+ */
+export async function resolveWorkspaceApiKey(
+  userId: string,
+  workspaceId: string,
+  provider: AuthProvider,
+): Promise<string | null> {
+  const credential =
+    (await findCredential("USER", userId, provider, "API_KEY", "workspace")) ??
+    (await findCredential(
+      "WORKSPACE",
+      workspaceId,
+      provider,
+      "API_KEY",
+      "workspace",
+    ));
+  if (!credential?.encryptedApiKey) return null;
+  return decryptCredentialSecret(credential.encryptedApiKey);
+}
+
+/**
+ * The `claude setup-token` a member uploaded with `codev claude-auth`, for the
+ * workspace host's CLAUDE_CODE_OAUTH_TOKEN. Deliberately not routed through
+ * getCredentialValue, which rejects Anthropic OAuth tokens so they can never
+ * become a direct-API bearer — this host-only reader is the one legitimate
+ * consumer. Personal scope only; an org-scoped CLI token is not shared here.
+ */
+export async function resolveClaudeCliTokenForIde(
+  userId: string,
+): Promise<string | null> {
+  const credential = await findCredential(
+    "USER",
+    userId,
+    "anthropic",
+    "OAUTH_TOKEN",
+    "workspace",
+  );
+  if (!credential?.encryptedAccessToken || credential.connectedVia !== "cli") {
+    return null;
+  }
+  return decryptCredentialSecret(credential.encryptedAccessToken);
+}
+
+/** How a credential was obtained; mirrors `credentialConnectedVia` in the schema. */
+export type CredentialConnectedVia = "browser" | "cli" | "api_key";
+
+/** Which product surfaces a credential is enabled for (isolation + opt-in sharing). */
+export type CredentialSurfaces = { rooms: boolean; workspace: boolean };
+
 export async function saveProviderCredential(input: {
   scopeType: ScopeType;
   scopeId: string;
@@ -507,12 +599,31 @@ export async function saveProviderCredential(input: {
   awsRoleArn?: string | undefined;
   priorityOrder?: number | undefined;
   lastFour?: string | undefined;
+  /** Provenance. Key-like types default to `api_key`; an OAuth token defaults
+   *  to `browser` (rooms-only), the conservative choice for a flow that did not
+   *  declare itself. */
+  connectedVia?: CredentialConnectedVia | undefined;
+  /** Surfaces to enable on create. Defaults to both; on reconnect the member's
+   *  existing toggles are preserved unless this is given. */
+  enabledFor?: CredentialSurfaces | undefined;
 }) {
   const scopeType = parseScopeType(input.scopeType);
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
+  const connectedVia: CredentialConnectedVia =
+    input.connectedVia ??
+    (credentialType === "OAUTH_TOKEN" ? "browser" : "api_key");
 
-  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") {
+  // A consumer Claude OAuth token must never be used as a direct-API bearer, so
+  // the browser-era token flow stays retired. The one exception is the local
+  // CLI's `claude setup-token`: Anthropic's long-lived token whose intended use
+  // is CLAUDE_CODE_OAUTH_TOKEN on a host. Only the workspace-host resolver reads
+  // it (resolveClaudeCliTokenForIde); getCredentialValue still rejects it.
+  if (
+    provider === "anthropic" &&
+    credentialType === "OAUTH_TOKEN" &&
+    connectedVia !== "cli"
+  ) {
     throw new Error(
       "Token-based Claude connections are retired. Reconnect using official Claude login in Settings.",
     );
@@ -572,6 +683,9 @@ export async function saveProviderCredential(input: {
       isConnected: true,
       keyVersion: 2,
       lastFour: input.lastFour ?? null,
+      connectedVia,
+      enabledForRooms: input.enabledFor?.rooms ?? true,
+      enabledForWorkspace: input.enabledFor?.workspace ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -591,12 +705,23 @@ export async function saveProviderCredential(input: {
         isConnected: true,
         keyVersion: 2,
         lastFour: input.lastFour ?? null,
+        connectedVia,
+        ...(input.enabledFor
+          ? {
+              enabledForRooms: input.enabledFor.rooms,
+              enabledForWorkspace: input.enabledFor.workspace,
+            }
+          : {}),
         updatedAt: new Date(),
       },
     });
 }
 
-export async function saveOpenAICredential(userId: string, apiKey: string) {
+export async function saveOpenAICredential(
+  userId: string,
+  apiKey: string,
+  enabledFor?: CredentialSurfaces,
+) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-") || normalized.length < 20) {
     throw new Error("Enter a valid OpenAI API key.");
@@ -608,10 +733,15 @@ export async function saveOpenAICredential(userId: string, apiKey: string) {
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
+    enabledFor,
   });
 }
 
-export async function saveAnthropicCredential(userId: string, apiKey: string) {
+export async function saveAnthropicCredential(
+  userId: string,
+  apiKey: string,
+  enabledFor?: CredentialSurfaces,
+) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-ant-") || normalized.length < 20) {
     throw new Error("Enter a valid Anthropic API key.");
@@ -623,10 +753,15 @@ export async function saveAnthropicCredential(userId: string, apiKey: string) {
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
+    enabledFor,
   });
 }
 
-export async function saveCursorCredential(userId: string, apiKey: string) {
+export async function saveCursorCredential(
+  userId: string,
+  apiKey: string,
+  enabledFor?: CredentialSurfaces,
+) {
   const normalized = apiKey.trim();
   if (normalized.length < 20) {
     throw new Error("Enter a valid Cursor API key.");
@@ -638,7 +773,46 @@ export async function saveCursorCredential(userId: string, apiKey: string) {
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
+    enabledFor,
   });
+}
+
+/**
+ * Flip which surfaces a stored credential is enabled for. This records the
+ * member's intent only: workspace *eligibility* (never a browser login) is
+ * enforced by the resolvers regardless, so enabling a browser subscription for
+ * workspaces here would be a no-op — the settings UI disables that toggle and
+ * says why.
+ */
+export async function updateCredentialSurfaces(
+  scopeType: ScopeType,
+  scopeId: string,
+  provider: AuthProvider,
+  credentialType: CredentialType,
+  surfaces: Partial<CredentialSurfaces>,
+) {
+  await getDatabase()
+    .update(schema.providerCredentials)
+    .set({
+      ...(surfaces.rooms !== undefined
+        ? { enabledForRooms: surfaces.rooms }
+        : {}),
+      ...(surfaces.workspace !== undefined
+        ? { enabledForWorkspace: surfaces.workspace }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, parseScopeType(scopeType)),
+        eq(schema.providerCredentials.scopeId, scopeId),
+        eq(schema.providerCredentials.provider, parseProvider(provider)),
+        eq(
+          schema.providerCredentials.credentialType,
+          parseCredentialType(credentialType),
+        ),
+      ),
+    );
 }
 
 export async function getProviderCredentialStatus(
@@ -647,22 +821,32 @@ export async function getProviderCredentialStatus(
   provider: AuthProvider,
   credentialType?: CredentialType,
 ) {
-  if (provider === "anthropic" && credentialType === "OAUTH_TOKEN") return null;
   const credential = await findCredential(
     scopeType,
     scopeId,
     provider,
     credentialType,
   );
-  return credential
-    ? {
-        credentialType: credential.credentialType as CredentialType,
-        lastFour: credential.lastFour ?? undefined,
-        endpointUrl: credential.endpointUrl ?? undefined,
-        awsRoleArn: credential.awsRoleArn ?? undefined,
-        updatedAt: credential.updatedAt,
-      }
-    : null;
+  if (!credential) return null;
+  // A browser-era Claude token is retired; only a CLI setup-token (stamped
+  // `cli` by persistClaudeOAuthToken) counts as a live connection.
+  if (
+    provider === "anthropic" &&
+    credential.credentialType === "OAUTH_TOKEN" &&
+    credential.connectedVia !== "cli"
+  ) {
+    return null;
+  }
+  return {
+    credentialType: credential.credentialType as CredentialType,
+    lastFour: credential.lastFour ?? undefined,
+    endpointUrl: credential.endpointUrl ?? undefined,
+    awsRoleArn: credential.awsRoleArn ?? undefined,
+    updatedAt: credential.updatedAt,
+    connectedVia: credential.connectedVia ?? undefined,
+    enabledForRooms: credential.enabledForRooms,
+    enabledForWorkspace: credential.enabledForWorkspace,
+  };
 }
 
 export async function getOAuthCredentialStatus(

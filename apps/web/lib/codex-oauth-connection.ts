@@ -98,5 +98,8 @@ export async function persistCodexSubscriptionFromOAuth(input: {
     sharingEnabled: scopeType === "ORGANIZATION",
     material: { authCacheJson },
     accountLabel: "ChatGPT",
+    // In-sandbox browser OAuth: rooms-only, never materialized on a workspace host.
+    connectedVia: "browser",
+    enabledFor: { rooms: true, workspace: false },
   });
 }

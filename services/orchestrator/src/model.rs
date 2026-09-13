@@ -413,6 +413,11 @@ pub struct IdeStartRequest {
     /// credential types on the Next.js side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anthropic_api_key: Option<String>,
+    /// The member's `claude setup-token`, uploaded with `codev claude-auth`,
+    /// set as `CLAUDE_CODE_OAUTH_TOKEN`. The web layer sends it only for a
+    /// CLI-connected credential the member enabled for coding workspaces —
+    /// never a browser subscription. A plain `anthropic_api_key` wins if both
+    /// are present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code_oauth_token: Option<String>,
     /// Present when the requesting member connected Cursor through its browser

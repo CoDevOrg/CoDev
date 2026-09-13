@@ -16,10 +16,15 @@ import { ClaudeHostedConnect } from "@/components/settings/claude-hosted-connect
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
 import { OrcaCard } from "@/components/settings/orca-style";
 import type {
+  ClaudeCliTokenRecord,
   CliSubscriptionRecord,
   ProviderConnectionProvider,
   ProviderConnectionRecord,
 } from "@/lib/provider-connection-view";
+import type {
+  ProviderSurface,
+  ProviderSurfaceCapability,
+} from "@/lib/provider-surface-capability";
 import { cn } from "@/lib/utils";
 
 const RETURN_TO = "/settings/personal/providers";
@@ -56,6 +61,54 @@ function CopyableCommand({ command }: { command: string }) {
         ) : (
           <Copy className="size-3.5" />
         )}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * "Also use in <the other surface>". Rendered only where the method actually
+ * allows the flip; an impossible case (a browser sign-in into a workspace) is
+ * explained in plain text instead of a dead switch.
+ */
+function SurfaceToggle({
+  label,
+  note,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  note?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-t border-border/60 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium">{label}</p>
+        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+      </div>
+      <button
+        aria-checked={checked}
+        aria-label={label}
+        className={cn(
+          "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
+          checked ? "bg-emerald-500" : "bg-muted-foreground/30",
+          disabled && "cursor-not-allowed opacity-50",
+        )}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        role="switch"
+        type="button"
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+            checked ? "left-4" : "left-0.5",
+          )}
+        />
       </button>
     </div>
   );
@@ -115,6 +168,9 @@ export function ProviderAccountCard({
   connection,
   hostedClaudeConnect = false,
   hostedOpenAIConnect = false,
+  surface,
+  capability,
+  claudeCliToken,
 }: {
   logo: ReactNode;
   label: string;
@@ -124,6 +180,17 @@ export function ProviderAccountCard({
   hostedClaudeConnect?: boolean;
   /** Show the in-app "Connect ChatGPT" device-code flow (openai card only). */
   hostedOpenAIConnect?: boolean;
+  /**
+   * Which settings section this card sits in. `rooms` offers browser and CLI
+   * sign-ins; `workspace` offers an API key and CLI sign-in only, since a
+   * browser sign-in never reaches the shared host. Omitted renders the
+   * combined card with every method.
+   */
+  surface?: ProviderSurface;
+  /** Per-surface readiness, for the header line and the toggles. */
+  capability?: ProviderSurfaceCapability;
+  /** Claude's `codev claude-auth` setup-token — its workspace login. */
+  claudeCliToken?: ClaudeCliTokenRecord;
 }) {
   const router = useRouter();
   const [apiKeyState, setApiKeyState] = useState(connection);
@@ -146,11 +213,38 @@ export function ProviderAccountCard({
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedAt = useRef(0);
   const isCursor = subscription.provider === "cursor";
+  const roomsSurface = surface === "rooms";
+  const workspaceSurface = surface === "workspace";
+  // A browser sign-in (hosted Claude/Codex connect, Cursor's deeplink) never
+  // powers a coding workspace, so the workspace section does not offer one.
+  const offerBrowserConnect = !workspaceSurface;
+  // The rooms executor cannot run an API key yet, so the rooms section does
+  // not offer one; see ROOMS_ACCEPT_API_KEY in provider-surface-capability.
+  const offerApiKey = !roomsSurface;
   const showClaudeConnect =
-    hostedClaudeConnect && subscription.provider === "claude";
+    offerBrowserConnect &&
+    hostedClaudeConnect &&
+    subscription.provider === "claude";
   const showCodexConnect =
-    hostedOpenAIConnect && subscription.provider === "codex";
+    offerBrowserConnect &&
+    hostedOpenAIConnect &&
+    subscription.provider === "codex";
   const showHostedConnect = showClaudeConnect || showCodexConnect;
+  const cliTokenConnected = claudeCliToken?.status === "connected";
+  // In the workspace section "signed in" means a login the shared host can
+  // use: Codex's CLI login, or Claude's CLI setup-token. Cursor has neither.
+  const workspaceLoginConnected = workspaceSurface
+    ? subscription.provider === "claude"
+      ? cliTokenConnected
+      : subscription.provider === "codex"
+        ? connected && subscription.provenance === "cli"
+        : false
+    : connected;
+  const surfaceReady = capability
+    ? workspaceSurface
+      ? capability.workspace.ready
+      : capability.rooms.ready
+    : undefined;
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -306,7 +400,12 @@ export function ProviderAccountCard({
       const response = await fetch("/api/personal/connections", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider, apiKey: draft.trim() }),
+        // A key pasted in a section is enabled for that section only.
+        body: JSON.stringify({
+          provider,
+          apiKey: draft.trim(),
+          ...(surface ? { surface } : {}),
+        }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -348,6 +447,72 @@ export function ProviderAccountCard({
     }
   }
 
+  /** Flip a credential's "also use in <other surface>" toggle. */
+  async function setSurface(
+    kind: "api_key" | "subscription" | "claude_cli_token",
+    target: ProviderSurface,
+    enabled: boolean,
+  ) {
+    setBusy("save");
+    setMessage("");
+    try {
+      const response = await fetch("/api/personal/connections", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider, kind, surface: target, enabled }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMessage(payload?.error ?? "The setting could not be saved.");
+        return;
+      }
+      setMessage(
+        enabled
+          ? `${label} will also be used in ${target === "rooms" ? "chat rooms" : "coding workspaces"}.`
+          : `${label} is no longer used in ${target === "rooms" ? "chat rooms" : "coding workspaces"}.`,
+      );
+      router.refresh();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function revokeClaudeCliToken() {
+    setBusy("revoke");
+    setMessage("");
+    try {
+      const response = await fetch(
+        "/api/personal/connections?provider=anthropic&kind=claude_cli_token",
+        { method: "DELETE" },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setMessage(payload?.error ?? "The CLI login could not be revoked.");
+        return;
+      }
+      setMessage(`${label} CLI login revoked.`);
+      router.refresh();
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const headerStatus = workspaceSurface
+    ? surfaceReady
+      ? "Ready for coding workspaces"
+      : "Connect with an API key or from your terminal below"
+    : roomsSurface
+      ? surfaceReady
+        ? "Ready for chat rooms"
+        : isCursor || showHostedConnect
+          ? "Sign in with your subscription — no API key needed"
+          : "Connect from your terminal below"
+      : connected
+        ? "Signed in with your subscription"
+        : isCursor || showHostedConnect
+          ? "Sign in with your subscription — no API key needed"
+          : "Connect with an API key or the CoDev CLI below";
+
   return (
     <OrcaCard className="px-6 py-5">
       <div className="flex items-center gap-3">
@@ -357,15 +522,33 @@ export function ProviderAccountCard({
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold">{label}</h3>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <StatusDot connected={connected} />
-            {connected
-              ? "Signed in with your subscription"
-              : isCursor || showHostedConnect
-                ? "Sign in with your subscription — no API key needed"
-                : "Connect with an API key or the CoDev CLI below"}
+            <StatusDot connected={surfaceReady ?? workspaceLoginConnected} />
+            {headerStatus}
           </p>
         </div>
-        {isCursor ? (
+        {workspaceSurface ? (
+          subscription.provider === "claude" && cliTokenConnected ? (
+            <Button
+              disabled={disabled}
+              onClick={() => void revokeClaudeCliToken()}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {busy === "revoke" ? "Revoking…" : "Revoke CLI login"}
+            </Button>
+          ) : subscription.provider === "codex" && workspaceLoginConnected ? (
+            <Button
+              disabled={disabled}
+              onClick={() => void disconnect()}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
+            </Button>
+          ) : null
+        ) : isCursor && offerBrowserConnect ? (
           connected ? (
             <div className="flex shrink-0 gap-2">
               <Button
@@ -451,89 +634,175 @@ export function ProviderAccountCard({
       ) : null}
 
       <div className="mt-4">
-        <FallbackRow
-          connected={apiKeyState.status === "connected"}
-          defaultOpen={!connected && !showHostedConnect}
-          description={
-            isCursor
-              ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
-              : `Bill usage to your own ${connection.label} account instead of a subscription.`
-          }
-          icon={KeyRound}
-          title={
-            isCursor
-              ? "Connect with a Cursor API key"
-              : "Use an API key instead"
-          }
-        >
-          {apiKeyState.status === "connected" ? (
-            <p className="text-xs text-muted-foreground">
-              Saved by {apiKeyState.suppliedBy} · ending {apiKeyState.lastFour}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor={`api-key-${provider}`}>
-              {apiKeyLabel}
-            </label>
-            <Input
-              autoComplete="off"
-              className="min-w-[12rem] flex-1"
-              disabled={disabled}
-              id={`api-key-${provider}`}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={isCursor ? "key_…" : "Paste API key"}
-              spellCheck={false}
-              type="password"
-              value={draft}
-            />
-            <Button
-              disabled={disabled || !draft.trim()}
-              onClick={() => void save()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {busy === "save"
-                ? isCursor
-                  ? "Connecting…"
-                  : "Saving…"
-                : isCursor
-                  ? connected
-                    ? "Replace"
-                    : "Connect"
-                  : apiKeyState.status === "connected"
-                    ? "Replace key"
-                    : "Save key"}
-            </Button>
+        {!offerApiKey ? (
+          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+            API keys power coding workspaces. Chat rooms run on a subscription
+            signed in above or from your terminal.
+          </p>
+        ) : null}
+        {offerApiKey ? (
+          <FallbackRow
+            connected={apiKeyState.status === "connected"}
+            defaultOpen={
+              workspaceSurface
+                ? !workspaceLoginConnected && apiKeyState.status !== "connected"
+                : !connected && !showHostedConnect
+            }
+            description={
+              isCursor
+                ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
+                : `Bill usage to your own ${connection.label} account instead of a subscription.`
+            }
+            icon={KeyRound}
+            title={
+              isCursor
+                ? "Connect with a Cursor API key"
+                : "Use an API key instead"
+            }
+          >
             {apiKeyState.status === "connected" ? (
-              <Button
+              <p className="text-xs text-muted-foreground">
+                Saved by {apiKeyState.suppliedBy} · ending{" "}
+                {apiKeyState.lastFour}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="sr-only" htmlFor={`api-key-${provider}`}>
+                {apiKeyLabel}
+              </label>
+              <Input
+                autoComplete="off"
+                className="min-w-[12rem] flex-1"
                 disabled={disabled}
-                onClick={() => void revoke()}
+                id={`api-key-${provider}`}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={isCursor ? "key_…" : "Paste API key"}
+                spellCheck={false}
+                type="password"
+                value={draft}
+              />
+              <Button
+                disabled={disabled || !draft.trim()}
+                onClick={() => void save()}
                 size="sm"
                 type="button"
-                variant="secondary"
+                variant="outline"
               >
-                {busy === "revoke" ? "Revoking…" : "Revoke"}
+                {busy === "save"
+                  ? isCursor
+                    ? "Connecting…"
+                    : "Saving…"
+                  : isCursor
+                    ? connected
+                      ? "Replace"
+                      : "Connect"
+                    : apiKeyState.status === "connected"
+                      ? "Replace key"
+                      : "Save key"}
               </Button>
-            ) : null}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Keys are encrypted on the CoDev server and never shown again after
-            you save them.
-          </p>
-        </FallbackRow>
+              {apiKeyState.status === "connected" ? (
+                <Button
+                  disabled={disabled}
+                  onClick={() => void revoke()}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  {busy === "revoke" ? "Revoking…" : "Revoke"}
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Keys are encrypted on the CoDev server and never shown again after
+              you save them.
+            </p>
+          </FallbackRow>
+        ) : null}
 
         {subscription.command ? (
           <FallbackRow
-            defaultOpen={!connected && !showHostedConnect}
-            description="Run the same sign-in from the CoDev CLI."
+            connected={
+              workspaceSurface
+                ? workspaceLoginConnected
+                : connected && subscription.provenance === "cli"
+            }
+            defaultOpen={
+              workspaceSurface
+                ? !workspaceLoginConnected && apiKeyState.status !== "connected"
+                : !connected && !showHostedConnect
+            }
+            description={
+              workspaceSurface
+                ? "Sign in from your own terminal. This login can also power chat rooms."
+                : "Run the same sign-in from the CoDev CLI. A terminal login can also power coding workspaces."
+            }
             icon={Terminal}
             title="Connect from a terminal"
           >
+            {workspaceSurface &&
+            subscription.provider === "claude" &&
+            cliTokenConnected ? (
+              <p className="text-xs text-muted-foreground">
+                Connected via codev claude-auth
+                {claudeCliToken?.lastFour
+                  ? ` · ending ${claudeCliToken.lastFour}`
+                  : ""}
+              </p>
+            ) : null}
             <CopyableCommand command="npm install -g @trycodev/cli" />
             <CopyableCommand command="codev login" />
             <CopyableCommand command={subscription.command} />
           </FallbackRow>
+        ) : null}
+
+        {roomsSurface && connected && subscription.provenance ? (
+          subscription.provenance === "cli" &&
+          subscription.provider !== "claude" ? (
+            <SurfaceToggle
+              checked={subscription.enabledForWorkspace ?? true}
+              disabled={disabled}
+              label="Also use in coding workspaces"
+              note="Your terminal login can run on the workspace host."
+              onChange={(next) =>
+                void setSurface("subscription", "workspace", next)
+              }
+            />
+          ) : (
+            <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+              Browser sign-ins stay in chat rooms. To use {label} in coding
+              workspaces, add an API key or sign in from your terminal there.
+            </p>
+          )
+        ) : null}
+
+        {workspaceSurface &&
+        subscription.provider === "codex" &&
+        workspaceLoginConnected ? (
+          <SurfaceToggle
+            checked={subscription.enabledForRooms ?? true}
+            disabled={disabled}
+            label="Also use in chat rooms"
+            note="Your terminal login can answer in chat rooms too."
+            onChange={(next) => void setSurface("subscription", "rooms", next)}
+          />
+        ) : null}
+
+        {workspaceSurface &&
+        subscription.provider === "codex" &&
+        connected &&
+        subscription.provenance === "browser" ? (
+          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+            {label} is signed in for chat rooms through the browser, which
+            cannot reach the workspace host. Add an API key or run{" "}
+            {subscription.command} to use it here.
+          </p>
+        ) : null}
+
+        {workspaceSurface && apiKeyState.status === "connected" ? (
+          <p className="border-t border-border/60 py-3 text-xs text-muted-foreground">
+            API keys stay in coding workspaces; chat rooms run on a
+            subscription.
+          </p>
         ) : null}
       </div>
 

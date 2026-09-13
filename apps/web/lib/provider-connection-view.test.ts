@@ -31,6 +31,9 @@ describe("provider connection view", () => {
       lastFour: "9kQ2",
       suppliedBy: "CoDev Test Jordan",
       scope: "personal",
+      provenance: "api_key",
+      enabledForRooms: true,
+      enabledForWorkspace: true,
     });
     expect(secretKeysInValue(connection)).toEqual([]);
     expect(JSON.stringify(connection)).not.toMatch(/sk-live|ciphertext/i);

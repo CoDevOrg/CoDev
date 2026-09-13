@@ -1,0 +1,135 @@
+import type {
+  CredentialProvenance,
+  ProviderConnectionProvider,
+  ProviderConnectionSnapshot,
+} from "./provider-connection-view";
+
+/**
+ * Per-provider, per-surface readiness — the single source of truth the
+ * workspace page, both settings sections, and the workspace-start preflight
+ * read. Derived purely from the connection snapshot.
+ *
+ * The rule, uniform across providers:
+ *  - A coding workspace runs on a shared host, so it may use a credential only
+ *    when the member enabled it there AND it is not a browser login. Browser
+ *    (in-sandbox OAuth) subscriptions are rooms-only, every provider.
+ *  - A chat room runs on the member's own credential, so it accepts a browser
+ *    or local-CLI subscription the member enabled for rooms.
+ *
+ * `ROOMS_ACCEPT_API_KEY` is off: the rooms executor (shared-chat-reply)
+ * currently runs only the two subscription forms. Flip it once the executor
+ * can run an API key so the settings copy and this table stay truthful.
+ */
+const ROOMS_ACCEPT_API_KEY = false;
+
+export type ProviderSurface = "rooms" | "workspace";
+
+export type SurfaceReadiness = {
+  ready: boolean;
+  /** The connected methods that make this surface ready, for the UI. */
+  via: CredentialProvenance[];
+};
+
+export type ProviderSurfaceCapability = Record<
+  ProviderSurface,
+  SurfaceReadiness
+>;
+
+const SUBSCRIPTION_FOR: Record<
+  ProviderConnectionProvider,
+  "codex" | "claude" | "cursor"
+> = { openai: "codex", anthropic: "claude", cursor: "cursor" };
+
+function readiness(via: CredentialProvenance[]): SurfaceReadiness {
+  return { ready: via.length > 0, via };
+}
+
+export function providerSurfaceCapability(
+  snapshot: ProviderConnectionSnapshot,
+  provider: ProviderConnectionProvider,
+): ProviderSurfaceCapability {
+  const apiKey = snapshot.connections.find((row) => row.provider === provider);
+  const subscription = snapshot.cliSubscriptions.find(
+    (row) => row.provider === SUBSCRIPTION_FOR[provider],
+  );
+  const keyConnected = apiKey?.status === "connected";
+  const subConnected = subscription?.status === "connected";
+  // Claude's CLI setup-token is a second, workspace-capable login kept in its
+  // own slot; the browser runtime in `cliSubscriptions` is rooms-only.
+  const claudeCli =
+    provider === "anthropic" && snapshot.claudeCliToken.status === "connected"
+      ? snapshot.claudeCliToken
+      : null;
+
+  const rooms: CredentialProvenance[] = [];
+  if (subConnected && subscription.enabledForRooms && subscription.provenance) {
+    rooms.push(subscription.provenance);
+  }
+  if (claudeCli?.enabledForRooms) rooms.push("cli");
+  if (ROOMS_ACCEPT_API_KEY && keyConnected && apiKey.enabledForRooms) {
+    rooms.push("api_key");
+  }
+
+  const workspace: CredentialProvenance[] = [];
+  if (keyConnected && apiKey.enabledForWorkspace) workspace.push("api_key");
+  if (
+    subConnected &&
+    subscription.enabledForWorkspace &&
+    subscription.provenance === "cli"
+  ) {
+    workspace.push("cli");
+  }
+  if (claudeCli?.enabledForWorkspace) workspace.push("cli");
+
+  return {
+    rooms: readiness([...new Set(rooms)]),
+    workspace: readiness([...new Set(workspace)]),
+  };
+}
+
+/** Providers the coding workspace can actually run, in preference order. */
+export function workspaceReadyProviders(
+  snapshot: ProviderConnectionSnapshot,
+): ProviderConnectionProvider[] {
+  return (["anthropic", "openai", "cursor"] as const).filter(
+    (provider) => providerSurfaceCapability(snapshot, provider).workspace.ready,
+  );
+}
+
+export type WorkspaceAgent = "claude" | "codex";
+
+const AGENT_FOR: Record<"anthropic" | "openai", WorkspaceAgent> = {
+  anthropic: "claude",
+  openai: "codex",
+};
+
+/**
+ * What a member is told as a coding workspace starts: the agent its default
+ * chat tab will open with, and any agent they have connected *somewhere* that
+ * cannot run in a workspace yet (typically a browser subscription), so the
+ * fix — an API key or `codev <agent>-auth` — is named up front instead of the
+ * agent booting to "Not logged in".
+ */
+export type WorkspaceProviderPreflight = {
+  /** The agent the default chat tab opens with; null when nothing can run. */
+  starting: WorkspaceAgent | null;
+  /** Agents connected for chat rooms (or not at all) but not for workspaces. */
+  notReady: Array<{ agent: WorkspaceAgent; connectedForRooms: boolean }>;
+};
+
+export function workspaceProviderPreflight(
+  snapshot: ProviderConnectionSnapshot,
+): WorkspaceProviderPreflight {
+  const ready = workspaceReadyProviders(snapshot);
+  const first = ready.find(
+    (provider): provider is "anthropic" | "openai" => provider !== "cursor",
+  );
+  const notReady = (["anthropic", "openai"] as const)
+    .filter((provider) => !ready.includes(provider))
+    .map((provider) => ({
+      agent: AGENT_FOR[provider],
+      connectedForRooms: providerSurfaceCapability(snapshot, provider).rooms
+        .ready,
+    }));
+  return { starting: first ? AGENT_FOR[first] : null, notReady };
+}
