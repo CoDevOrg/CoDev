@@ -507,9 +507,20 @@ export async function disconnectClaudeRuntime(userId: string) {
   for (const row of rows) {
     if (!isClaudeRuntimeReference(row.runnerId)) continue;
     if (isClaudeRunnerDisposableHere(row.runnerId)) {
-      const runner = await sessionRunner(row.runnerId);
-      // Leave the record connected if runtime cleanup fails, so it can be retried.
-      await runner.dispose({ runnerId: row.runnerId });
+      try {
+        const runner = await sessionRunner(row.runnerId);
+        await runner.dispose({ runnerId: row.runnerId });
+      } catch (error) {
+        // The member asked to disconnect *their own* account; a stranded
+        // remote sandbox (orchestrator unreachable, already gone, etc.) is a
+        // leaked-resource problem to clean up later, not a reason to leave
+        // their credential looking connected forever with no way to retry
+        // out of it — the retry hits the exact same unreachable orchestrator.
+        logEvent("warn", "claude_connection.disconnect_cleanup_failed", {
+          runnerId: row.runnerId,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     // A subprocess profile is unreachable from here (e.g. a local connection
     // seen from Vercel): there is nothing to dispose remotely, so clear the
