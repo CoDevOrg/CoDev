@@ -28,6 +28,10 @@ export type SurfaceReadiness = {
   ready: boolean;
   /** The connected methods that make this surface ready, for the UI. */
   via: CredentialProvenance[];
+  /** Whose login this is when `ready` — "shared" means the workspace's own
+   *  `--org` login (see `scoped-credential-sharing.ts`), not the viewer's own.
+   *  Only meaningful for `workspace`; rooms are always the viewer's login. */
+  source?: "personal" | "shared";
 };
 
 export type ProviderSurfaceCapability = Record<
@@ -70,20 +74,35 @@ export function providerSurfaceCapability(
     rooms.push("api_key");
   }
 
-  const workspace: CredentialProvenance[] = [];
-  if (keyConnected && apiKey.enabledForWorkspace) workspace.push("api_key");
+  const personalWorkspace: CredentialProvenance[] = [];
+  if (keyConnected && apiKey.enabledForWorkspace) {
+    personalWorkspace.push("api_key");
+  }
   if (
     subConnected &&
     subscription.enabledForWorkspace &&
     subscription.provenance === "cli"
   ) {
-    workspace.push("cli");
+    personalWorkspace.push("cli");
   }
-  if (claudeCli?.enabledForWorkspace) workspace.push("cli");
+  if (claudeCli?.enabledForWorkspace) personalWorkspace.push("cli");
+
+  // No personal login for this workspace's host — fall back to the
+  // workspace's own shared (`--org`) login, if one is connected and shared.
+  // `loadProviderConnectionSnapshot` only sets this when a workspace id was
+  // given and the viewer reached this workspace (so membership already holds).
+  const sharedWorkspace = snapshot.sharedWorkspaceLogin?.[provider] ?? false;
+
+  const workspace: SurfaceReadiness =
+    personalWorkspace.length > 0
+      ? { ...readiness([...new Set(personalWorkspace)]), source: "personal" }
+      : sharedWorkspace
+        ? { ready: true, via: ["cli"], source: "shared" }
+        : readiness([]);
 
   return {
     rooms: readiness([...new Set(rooms)]),
-    workspace: readiness([...new Set(workspace)]),
+    workspace,
   };
 }
 
@@ -113,6 +132,8 @@ const AGENT_FOR: Record<"anthropic" | "openai", WorkspaceAgent> = {
 export type WorkspaceProviderPreflight = {
   /** The agent the default chat tab opens with; null when nothing can run. */
   starting: WorkspaceAgent | null;
+  /** Whose login `starting` will run on — see `SurfaceReadiness.source`. */
+  startingSource?: "personal" | "shared";
   /** Agents connected for chat rooms (or not at all) but not for workspaces. */
   notReady: Array<{ agent: WorkspaceAgent; connectedForRooms: boolean }>;
 };
@@ -131,5 +152,11 @@ export function workspaceProviderPreflight(
       connectedForRooms: providerSurfaceCapability(snapshot, provider).rooms
         .ready,
     }));
-  return { starting: first ? AGENT_FOR[first] : null, notReady };
+  return {
+    starting: first ? AGENT_FOR[first] : null,
+    startingSource: first
+      ? providerSurfaceCapability(snapshot, first).workspace.source
+      : undefined,
+    notReady,
+  };
 }

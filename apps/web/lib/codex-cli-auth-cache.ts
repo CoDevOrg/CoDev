@@ -73,7 +73,7 @@ export async function saveCodexCliAuthCache(request: Request) {
     userId: cli.userId,
     scopeType,
     scopeId,
-    sharingEnabled: scopeType === "ORGANIZATION",
+    // sharingEnabled: defaults to true for ORGANIZATION, false for USER.
     material: { authCacheJson },
     accountLabel: "Codex CLI",
     connectedVia: "cli",

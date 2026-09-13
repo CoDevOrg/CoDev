@@ -225,7 +225,7 @@ async function resolveClaudeEnvForIde(
       "anthropic",
     );
     if (apiKey?.trim()) return { anthropicApiKey: apiKey.trim() };
-    const token = await resolveClaudeCliTokenForIde(userId);
+    const token = await resolveClaudeCliTokenForIde(userId, workspaceId);
     if (token?.trim()) return { claudeCodeOauthToken: token.trim() };
     return undefined;
   } catch {

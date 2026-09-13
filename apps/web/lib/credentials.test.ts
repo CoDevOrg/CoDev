@@ -49,6 +49,7 @@ vi.mock("./hosted-codex-subscription-credentials", () => ({
 }));
 
 import {
+  getClaudeCliTokenPublicStatus,
   resolveAgentCredential,
   resolvePersonalChatSubscription,
 } from "./credentials";
@@ -276,5 +277,63 @@ describe("resolveAgentCredential", () => {
       resolveAgentCredential("user-1", "workspace-1", "anthropic"),
     ).rejects.toThrow(/Reconnect Claude/);
     expect(seenBody).toBeUndefined();
+  });
+});
+
+describe("getClaudeCliTokenPublicStatus", () => {
+  it("reports a connected CLI setup-token, and whether it is shared", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        connectedVia: "cli",
+        sharingEnabled: true,
+        lastFour: "wxyz",
+      }),
+    ]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "ORGANIZATION",
+        scopeId: "workspace-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({
+      status: "connected",
+      scopeType: "ORGANIZATION",
+      lastFour: "wxyz",
+      sharingEnabled: true,
+      stateText: "Connected for this workspace",
+    });
+  });
+
+  it("does not count a browser-era token as connected", async () => {
+    mockRows.push([
+      baseCredential({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        connectedVia: "browser",
+      }),
+    ]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "USER",
+        scopeId: "user-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({
+      status: "not_connected",
+      sharingEnabled: false,
+    });
+  });
+
+  it("reports not connected when nothing is stored", async () => {
+    mockRows.push([]);
+    await expect(
+      getClaudeCliTokenPublicStatus({
+        scopeType: "USER",
+        scopeId: "user-1",
+        canManage: true,
+      }),
+    ).resolves.toMatchObject({ status: "not_connected", lastFour: null });
   });
 });

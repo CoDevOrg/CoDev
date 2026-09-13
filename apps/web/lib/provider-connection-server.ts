@@ -4,6 +4,7 @@ import type { CredentialType } from "@codev/shared-types";
 
 import {
   deleteProviderCredential,
+  getClaudeCliTokenPublicStatus,
   getProviderCredentialStatus,
   saveAnthropicCredential,
   saveCursorCredential,
@@ -17,7 +18,10 @@ import {
   getConnectedClaudeRuntime,
   disconnectClaudeRuntime,
 } from "./claude-connection-session";
-import { disconnectHostedCodexSubscription } from "./hosted-codex-subscription-credentials";
+import {
+  disconnectHostedCodexSubscription,
+  getHostedCodexPublicStatus,
+} from "./hosted-codex-subscription-credentials";
 import { getOAuthFlowMode } from "./oauth";
 import {
   publicProviderConnectionPayload,
@@ -36,6 +40,12 @@ type ConnectionUser = {
 
 export async function loadProviderConnectionSnapshot(
   user: ConnectionUser,
+  /** When given, also reports whether *this* workspace has a connected,
+   *  shared (`--org`) login per provider — `sharedWorkspaceLogin` on the
+   *  result. The caller must already know the viewer belongs to this
+   *  workspace (e.g. `getWorkspaceForMember` succeeded); this does not
+   *  re-check membership. */
+  workspaceId?: string,
 ): Promise<ProviderConnectionSnapshot> {
   const [
     openai,
@@ -46,6 +56,8 @@ export async function loadProviderConnectionSnapshot(
     claudeRuntime,
     claudeCliToken,
     cursorOAuth,
+    sharedCodex,
+    sharedClaude,
   ] = await Promise.all([
     getProviderCredentialStatus("USER", user.id, "openai", "API_KEY"),
     getProviderCredentialStatus("USER", user.id, "anthropic", "API_KEY"),
@@ -61,6 +73,20 @@ export async function loadProviderConnectionSnapshot(
     // Only a CLI-stamped setup-token is reported; a browser-era token is not.
     getProviderCredentialStatus("USER", user.id, "anthropic", "OAUTH_TOKEN"),
     getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
+    workspaceId
+      ? getHostedCodexPublicStatus({
+          scopeType: "ORGANIZATION",
+          scopeId: workspaceId,
+          canManage: false,
+        })
+      : null,
+    workspaceId
+      ? getClaudeCliTokenPublicStatus({
+          scopeType: "ORGANIZATION",
+          scopeId: workspaceId,
+          canManage: false,
+        })
+      : null,
   ]);
   return toProviderConnectionSnapshot({
     viewer: {
@@ -97,6 +123,19 @@ export async function loadProviderConnectionSnapshot(
       cursor: "cursor_deeplink",
     },
     hostedClaudeConnect: isHostedClaudeConnectEnabled(),
+    ...(workspaceId
+      ? {
+          sharedWorkspaceLogin: {
+            openai: Boolean(
+              sharedCodex?.status === "connected" && sharedCodex.sharingEnabled,
+            ),
+            anthropic: Boolean(
+              sharedClaude?.status === "connected" &&
+              sharedClaude.sharingEnabled,
+            ),
+          },
+        }
+      : {}),
   });
 }
 

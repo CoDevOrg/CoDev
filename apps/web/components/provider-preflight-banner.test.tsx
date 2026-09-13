@@ -36,6 +36,24 @@ describe("ProviderPreflightBanner", () => {
     ).toHaveAttribute("href", "/settings/personal/providers#coding-workspaces");
   });
 
+  it("says when the workspace is running on its own shared login, not the member's", () => {
+    render(
+      <ProviderPreflightBanner
+        phase="starting"
+        preflight={{
+          starting: "claude",
+          startingSource: "shared",
+          notReady: [],
+        }}
+      />,
+    );
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Starting Claude…");
+    expect(status).toHaveTextContent(
+      "Running on this workspace's shared Claude login — every member here can use it.",
+    );
+  });
+
   it("stays up once the workspace is ready when there is something to fix, until dismissed", () => {
     render(
       <ProviderPreflightBanner

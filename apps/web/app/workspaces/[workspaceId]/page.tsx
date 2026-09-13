@@ -23,7 +23,7 @@ export default async function WorkspacePage({
   const { workspaceId } = await params;
   const [workspace, providerSnapshot, cursorAvailable] = await Promise.all([
     getWorkspaceForMember(workspaceId, user.id),
-    loadProviderConnectionSnapshot(user),
+    loadProviderConnectionSnapshot(user, workspaceId),
     hasLinkedCursorCredential(user.id, workspaceId),
   ]);
   if (!workspace) {

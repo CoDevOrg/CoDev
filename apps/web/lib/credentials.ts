@@ -18,6 +18,14 @@ import {
   decryptHostedMaterial,
   resolveHostedCodexSubscription,
 } from "./hosted-codex-subscription-credentials";
+import {
+  defaultSharingEnabled,
+  resolvePersonalOrSharedCredential,
+} from "./scoped-credential-sharing";
+import {
+  CLAUDE_CLI_TOKEN_KIND,
+  type ClaudeCliTokenPublicStatus,
+} from "./claude-cli-token-view";
 
 const FIVE_MINUTES_MS = 5 * 60 * 1_000;
 const CREDENTIAL_CONTEXT = {
@@ -562,22 +570,33 @@ export async function resolveWorkspaceApiKey(
  * workspace host's CLAUDE_CODE_OAUTH_TOKEN. Deliberately not routed through
  * getCredentialValue, which rejects Anthropic OAuth tokens so they can never
  * become a direct-API bearer — this host-only reader is the one legitimate
- * consumer. Personal scope only; an org-scoped CLI token is not shared here.
+ * consumer. The member's own token wins; otherwise the workspace's shared
+ * token (`codev claude-auth --org`), the same personal-or-shared rule Codex
+ * uses — see `resolvePersonalOrSharedCredential`.
  */
 export async function resolveClaudeCliTokenForIde(
   userId: string,
+  workspaceId?: string,
 ): Promise<string | null> {
-  const credential = await findCredential(
-    "USER",
-    userId,
-    "anthropic",
-    "OAUTH_TOKEN",
-    "workspace",
+  const findCliToken = async (scopeType: ScopeType, scopeId: string) => {
+    const credential = await findCredential(
+      scopeType,
+      scopeId,
+      "anthropic",
+      "OAUTH_TOKEN",
+      "workspace",
+    );
+    return credential?.connectedVia === "cli" ? credential : null;
+  };
+  const result = await resolvePersonalOrSharedCredential(
+    { userId, workspaceId },
+    {
+      findPersonal: (id) => findCliToken("USER", id),
+      findShared: (id) => findCliToken("ORGANIZATION", id),
+    },
   );
-  if (!credential?.encryptedAccessToken || credential.connectedVia !== "cli") {
-    return null;
-  }
-  return decryptCredentialSecret(credential.encryptedAccessToken);
+  if (!result?.credential.encryptedAccessToken) return null;
+  return decryptCredentialSecret(result.credential.encryptedAccessToken);
 }
 
 /** How a credential was obtained; mirrors `credentialConnectedVia` in the schema. */
@@ -606,6 +625,11 @@ export async function saveProviderCredential(input: {
   /** Surfaces to enable on create. Defaults to both; on reconnect the member's
    *  existing toggles are preserved unless this is given. */
   enabledFor?: CredentialSurfaces | undefined;
+  /** Whether every member of the scope (an ORGANIZATION credential's scope id
+   *  is a specific workspace) may use this login, not just whoever connected
+   *  it. Defaults to true for ORGANIZATION scope, false for USER — the same
+   *  rule `persistHostedCodexConnection` applies for Codex. */
+  sharingEnabled?: boolean | undefined;
 }) {
   const scopeType = parseScopeType(input.scopeType);
   const provider = parseProvider(input.provider);
@@ -613,6 +637,8 @@ export async function saveProviderCredential(input: {
   const connectedVia: CredentialConnectedVia =
     input.connectedVia ??
     (credentialType === "OAUTH_TOKEN" ? "browser" : "api_key");
+  const sharingEnabled =
+    input.sharingEnabled ?? defaultSharingEnabled(scopeType);
 
   // A consumer Claude OAuth token must never be used as a direct-API bearer, so
   // the browser-era token flow stays retired. The one exception is the local
@@ -684,6 +710,7 @@ export async function saveProviderCredential(input: {
       keyVersion: 2,
       lastFour: input.lastFour ?? null,
       connectedVia,
+      sharingEnabled,
       enabledForRooms: input.enabledFor?.rooms ?? true,
       enabledForWorkspace: input.enabledFor?.workspace ?? true,
     })
@@ -706,6 +733,7 @@ export async function saveProviderCredential(input: {
         keyVersion: 2,
         lastFour: input.lastFour ?? null,
         connectedVia,
+        ...(input.sharingEnabled !== undefined ? { sharingEnabled } : {}),
         ...(input.enabledFor
           ? {
               enabledForRooms: input.enabledFor.rooms,
@@ -846,6 +874,7 @@ export async function getProviderCredentialStatus(
     connectedVia: credential.connectedVia ?? undefined,
     enabledForRooms: credential.enabledForRooms,
     enabledForWorkspace: credential.enabledForWorkspace,
+    sharingEnabled: credential.sharingEnabled,
   };
 }
 
@@ -860,6 +889,40 @@ export async function getOAuthCredentialStatus(
     provider,
     "OAUTH_TOKEN",
   );
+}
+
+/**
+ * The `codev claude-auth` setup-token's status for a settings card — mirrors
+ * `getHostedCodexPublicStatus` (`hosted-codex-subscription-credentials.ts`) so
+ * Claude and Codex present org-sharing the same way. `getProviderCredentialStatus`
+ * already excludes a non-`cli` (browser-era) Claude token, so `connected` here
+ * means exactly "this scope's workspace host can use this token".
+ */
+export async function getClaudeCliTokenPublicStatus(input: {
+  scopeType: "USER" | "ORGANIZATION";
+  scopeId: string;
+  canManage: boolean;
+}): Promise<ClaudeCliTokenPublicStatus> {
+  const status = await getProviderCredentialStatus(
+    input.scopeType,
+    input.scopeId,
+    "anthropic",
+    "OAUTH_TOKEN",
+  );
+  const connected = Boolean(status);
+  return {
+    kind: CLAUDE_CLI_TOKEN_KIND,
+    scopeType: input.scopeType,
+    status: connected ? "connected" : "not_connected",
+    stateText: connected
+      ? input.scopeType === "ORGANIZATION"
+        ? "Connected for this workspace"
+        : "Connected · codev claude-auth"
+      : "Not connected",
+    lastFour: connected ? (status?.lastFour ?? null) : null,
+    sharingEnabled: Boolean(status?.sharingEnabled),
+    canManage: input.canManage,
+  };
 }
 
 export async function deleteProviderCredential(

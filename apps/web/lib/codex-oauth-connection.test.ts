@@ -76,17 +76,21 @@ describe("persistCodexSubscriptionFromOAuth", () => {
       scopeId: "user-1",
       tokens: { accessToken: "a", refreshToken: "r" },
     });
+    // sharingEnabled is not passed here — persistHostedCodexConnection now
+    // defaults it from scopeType itself (see scoped-credential-sharing.ts).
     expect(persistHostedCodexConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         scopeType: "USER",
         scopeId: "user-1",
-        sharingEnabled: false,
         accountLabel: "ChatGPT",
         material: expect.objectContaining({
           authCacheJson: expect.stringContaining('"refresh_token":"r"'),
         }),
       }),
+    );
+    expect(persistHostedCodexConnection.mock.calls[0]?.[0]).not.toHaveProperty(
+      "sharingEnabled",
     );
   });
 
@@ -101,7 +105,6 @@ describe("persistCodexSubscriptionFromOAuth", () => {
       expect.objectContaining({
         scopeType: "ORGANIZATION",
         scopeId: "workspace-1",
-        sharingEnabled: true,
       }),
     );
   });

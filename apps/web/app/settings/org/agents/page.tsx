@@ -9,7 +9,7 @@ import {
 } from "@/components/settings/settings-content";
 import { WorkspaceCredentialForm } from "@/components/workspace-credential-form";
 import {
-  getOAuthCredentialStatus,
+  getClaudeCliTokenPublicStatus,
   getProviderCredentialStatus,
 } from "@/lib/credentials";
 import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
@@ -27,40 +27,44 @@ export default async function OrganizationAgentsPage({
   const user = await requireUser();
   const context = await getActiveOrganizationSettingsContext(user.id);
   const params = await searchParams;
-  const [openai, anthropic, bedrock, cursor, claude, hostedCodex] = context
-    ? await Promise.all([
-        getProviderCredentialStatus(
-          "WORKSPACE",
-          context.workspace.id,
-          "openai",
-        ),
-        getProviderCredentialStatus(
-          "WORKSPACE",
-          context.workspace.id,
-          "anthropic",
-        ),
-        getProviderCredentialStatus(
-          "WORKSPACE",
-          context.workspace.id,
-          "bedrock",
-        ),
-        getProviderCredentialStatus(
-          "WORKSPACE",
-          context.workspace.id,
-          "cursor",
-        ),
-        getOAuthCredentialStatus(
-          "WORKSPACE",
-          context.workspace.id,
-          "anthropic",
-        ),
-        getHostedCodexPublicStatus({
-          scopeType: "ORGANIZATION",
-          scopeId: context.workspace.id,
-          canManage: context.canWrite,
-        }),
-      ])
-    : [null, null, null, null, null, null];
+  const [openai, anthropic, bedrock, cursor, claudeCliToken, hostedCodex] =
+    context
+      ? await Promise.all([
+          getProviderCredentialStatus(
+            "WORKSPACE",
+            context.workspace.id,
+            "openai",
+          ),
+          getProviderCredentialStatus(
+            "WORKSPACE",
+            context.workspace.id,
+            "anthropic",
+          ),
+          getProviderCredentialStatus(
+            "WORKSPACE",
+            context.workspace.id,
+            "bedrock",
+          ),
+          getProviderCredentialStatus(
+            "WORKSPACE",
+            context.workspace.id,
+            "cursor",
+          ),
+          // A shared Claude login is stored ORGANIZATION-scoped (its scope id
+          // is this workspace's id), not WORKSPACE — a separate scope used
+          // for the plain fallback keys above.
+          getClaudeCliTokenPublicStatus({
+            scopeType: "ORGANIZATION",
+            scopeId: context.workspace.id,
+            canManage: context.canWrite,
+          }),
+          getHostedCodexPublicStatus({
+            scopeType: "ORGANIZATION",
+            scopeId: context.workspace.id,
+            canManage: context.canWrite,
+          }),
+        ])
+      : [null, null, null, null, null, null];
 
   return (
     <OrganizationSettingsPage
@@ -106,10 +110,12 @@ export default async function OrganizationAgentsPage({
               workspaceId={context.workspace.id}
             />
           </SettingsCard>
-          <ClaudeCliSubscriptionCard
-            connected={claude?.credentialType === "OAUTH_TOKEN"}
-            isOrg
-          />
+          {claudeCliToken ? (
+            <ClaudeCliSubscriptionCard
+              organizationId={context.workspace.id}
+              status={claudeCliToken}
+            />
+          ) : null}
           {hostedCodex ? (
             <HostedCodexSubscriptionCard
               notice={parseHostedCodexNotice(params)}

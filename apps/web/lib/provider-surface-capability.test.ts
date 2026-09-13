@@ -90,7 +90,11 @@ describe("providerSurfaceCapability", () => {
       "openai",
     );
     expect(capability.rooms).toEqual({ ready: true, via: ["cli"] });
-    expect(capability.workspace).toEqual({ ready: true, via: ["cli"] });
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["cli"],
+      source: "personal",
+    });
   });
 
   it("an API key powers a workspace", () => {
@@ -98,7 +102,11 @@ describe("providerSurfaceCapability", () => {
       snapshot({ connections: [key("anthropic")] }),
       "anthropic",
     );
-    expect(capability.workspace).toEqual({ ready: true, via: ["api_key"] });
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["api_key"],
+      source: "personal",
+    });
   });
 
   it("the Claude CLI setup-token is a second, workspace-capable login", () => {
@@ -115,7 +123,11 @@ describe("providerSurfaceCapability", () => {
     });
     const capability = providerSurfaceCapability(view, "anthropic");
     expect(capability.rooms.via).toEqual(["browser"]);
-    expect(capability.workspace).toEqual({ ready: true, via: ["cli"] });
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["cli"],
+      source: "personal",
+    });
   });
 
   it("honours the member's per-surface toggles", () => {
@@ -127,7 +139,34 @@ describe("providerSurfaceCapability", () => {
     });
     const capability = providerSurfaceCapability(view, "openai");
     expect(capability.rooms.ready).toBe(false);
-    expect(capability.workspace).toEqual({ ready: true, via: ["cli"] });
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["cli"],
+      source: "personal",
+    });
+  });
+
+  it("falls back to the workspace's shared org login when the member has no personal one", () => {
+    const capability = providerSurfaceCapability(
+      snapshot({ sharedWorkspaceLogin: { anthropic: true, openai: false } }),
+      "anthropic",
+    );
+    expect(capability.workspace).toEqual({
+      ready: true,
+      via: ["cli"],
+      source: "shared",
+    });
+  });
+
+  it("prefers the member's own workspace login over the shared one", () => {
+    const capability = providerSurfaceCapability(
+      snapshot({
+        connections: [key("anthropic")],
+        sharedWorkspaceLogin: { anthropic: true, openai: false },
+      }),
+      "anthropic",
+    );
+    expect(capability.workspace).toMatchObject({ source: "personal" });
   });
 
   it("a disconnected provider is ready nowhere", () => {
@@ -207,5 +246,13 @@ describe("workspaceProviderPreflight", () => {
     );
     expect(preflight.starting).toBe("claude");
     expect(preflight.notReady).toEqual([]);
+  });
+
+  it("reports starting on the workspace's shared login when the member has no personal one", () => {
+    const preflight = workspaceProviderPreflight(
+      snapshot({ sharedWorkspaceLogin: { anthropic: true, openai: false } }),
+    );
+    expect(preflight.starting).toBe("claude");
+    expect(preflight.startingSource).toBe("shared");
   });
 });

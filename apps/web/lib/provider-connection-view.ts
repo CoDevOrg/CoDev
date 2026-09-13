@@ -138,6 +138,11 @@ export type ProviderConnectionSnapshot = {
   claudeCliToken: ClaudeCliTokenRecord;
   /** Whether the in-app "Connect Claude" flow can run in this deployment. */
   hostedClaudeConnect: boolean;
+  /** Whether the *current workspace* (not the viewer personally) has a
+   *  connected, shared (`--org`) login for this provider — only populated
+   *  when the snapshot was loaded with a workspace id; see
+   *  `loadProviderConnectionSnapshot` and `scoped-credential-sharing.ts`. */
+  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 };
 
 export type ProviderCredentialStatus = {
@@ -146,6 +151,7 @@ export type ProviderCredentialStatus = {
   connectedVia?: CredentialProvenance | null | undefined;
   enabledForRooms?: boolean | undefined;
   enabledForWorkspace?: boolean | undefined;
+  sharingEnabled?: boolean | undefined;
   encryptedApiKey?: string | null | undefined;
   encryptedAccessToken?: string | null | undefined;
   encryptedRefreshToken?: string | null | undefined;
@@ -248,6 +254,7 @@ export function toProviderConnectionSnapshot(input: {
   >;
   claudeCliToken?: ProviderCredentialStatus | null;
   hostedClaudeConnect?: boolean;
+  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -266,6 +273,9 @@ export function toProviderConnectionSnapshot(input: {
     ),
     claudeCliToken: toClaudeCliTokenRecord(input.claudeCliToken ?? null),
     hostedClaudeConnect: input.hostedClaudeConnect ?? false,
+    ...(input.sharedWorkspaceLogin
+      ? { sharedWorkspaceLogin: input.sharedWorkspaceLogin }
+      : {}),
   };
 }
 

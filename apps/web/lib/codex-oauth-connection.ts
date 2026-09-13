@@ -95,7 +95,7 @@ export async function persistCodexSubscriptionFromOAuth(input: {
     userId: input.userId,
     scopeType,
     scopeId: input.scopeId,
-    sharingEnabled: scopeType === "ORGANIZATION",
+    // sharingEnabled: defaults to true for ORGANIZATION, false for USER.
     material: { authCacheJson },
     accountLabel: "ChatGPT",
     // In-sandbox browser OAuth: rooms-only, never materialized on a workspace host.

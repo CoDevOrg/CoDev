@@ -56,6 +56,9 @@ export function ProviderPreflightBanner({
     const gap = gaps[0]!;
     headline = `Starting ${AGENT_LABEL[preflight.starting]}.`;
     detail = `${AGENT_LABEL[gap.agent]} is connected for chat rooms but not for coding workspaces — ${fixFor(gap.agent)} to use it here.`;
+  } else if (preflight.startingSource === "shared") {
+    headline = `Starting ${AGENT_LABEL[preflight.starting]}…`;
+    detail = `Running on this workspace's shared ${AGENT_LABEL[preflight.starting]} login — every member here can use it.`;
   } else {
     headline = `Starting ${AGENT_LABEL[preflight.starting]}…`;
   }
