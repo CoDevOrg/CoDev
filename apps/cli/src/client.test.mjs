@@ -6,6 +6,7 @@ import {
   configPath,
   describeSpawnError,
   extractClaudeOAuthToken,
+  organizationSharingWarning,
 } from "./client.mjs";
 
 test("uses an explicit CoDev API URL without a trailing slash", () => {
@@ -36,6 +37,14 @@ test("explains a missing codex/claude binary with an install hint", () => {
   const error = describeSpawnError("codex", { code: "ENOENT" });
   assert.match(error.message, /npm install -g @openai\/codex/);
   assert.match(error.message, /npm config set prefix/);
+});
+
+test("warns that an --org login is shared with the whole workspace, for either provider", () => {
+  for (const provider of ["Codex", "Claude"]) {
+    const message = organizationSharingWarning(provider);
+    assert.match(message, new RegExp(`connects ${provider}`));
+    assert.match(message, /every member of this CoDev workspace/);
+  }
 });
 
 test("passes through non-ENOENT spawn errors unchanged", () => {

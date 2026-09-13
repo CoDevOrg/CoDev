@@ -4,7 +4,20 @@ export type ProviderConnectionStatus = "connected" | "not_connected";
 
 export type ProviderConnectionCredentialType = "API_KEY" | "OAUTH_TOKEN";
 
-export type ProviderConnectionRecord = {
+/**
+ * How a credential was obtained. Provenance decides which surfaces it may
+ * power: a browser (in-sandbox OAuth) login is rooms-only; a local-CLI login
+ * or an API key may also power a coding workspace.
+ */
+export type CredentialProvenance = "browser" | "cli" | "api_key";
+
+/** Per-surface applicability a member toggles; the isolation + opt-in model. */
+export type ProviderSurfaceFlags = {
+  enabledForRooms: boolean;
+  enabledForWorkspace: boolean;
+};
+
+export type ProviderConnectionRecord = ProviderSurfaceFlags & {
   provider: ProviderConnectionProvider;
   label: string;
   status: ProviderConnectionStatus;
@@ -12,6 +25,7 @@ export type ProviderConnectionRecord = {
   lastFour: string | null;
   suppliedBy: string | null;
   scope: "personal";
+  provenance: CredentialProvenance | null;
 };
 
 export type ProviderConnectionViewer = {
@@ -35,7 +49,7 @@ export type SubscriptionConnectMode =
   | "device_code"
   | "cursor_deeplink";
 
-export type CliSubscriptionRecord = {
+export type CliSubscriptionRecord = ProviderSurfaceFlags & {
   provider: CliSubscriptionProvider;
   label: string;
   status: ProviderConnectionStatus;
@@ -43,6 +57,19 @@ export type CliSubscriptionRecord = {
   connectMode: SubscriptionConnectMode;
   /** Terminal fallback, or null when the provider has no CoDev CLI command. */
   command: string | null;
+  /** Where the connected login came from; null when not connected. */
+  provenance: Exclude<CredentialProvenance, "api_key"> | null;
+};
+
+/**
+ * The `claude setup-token` a member uploaded with `codev claude-auth`. Kept
+ * as its own slot because Claude can hold two logins at once — this token,
+ * which powers coding workspaces, and the browser runtime in
+ * `cliSubscriptions`, which is rooms-only — and one record cannot show both.
+ */
+export type ClaudeCliTokenRecord = ProviderSurfaceFlags & {
+  status: ProviderConnectionStatus;
+  lastFour: string | null;
 };
 
 const CLI_SUBSCRIPTIONS: Array<{
@@ -60,7 +87,7 @@ const CLI_SUBSCRIPTIONS: Array<{
   {
     provider: "claude",
     label: "Claude Code",
-    command: null,
+    command: "codev claude-auth",
     connectMode: "manual_code",
   },
   {
@@ -79,26 +106,52 @@ export function toCliSubscriptionRecords(
     Record<CliSubscriptionProvider, SubscriptionConnectMode>
   > = {},
 ): CliSubscriptionRecord[] {
-  return CLI_SUBSCRIPTIONS.map(({ provider, label, command, connectMode }) => ({
-    provider,
-    label,
-    status: statuses[provider] ? "connected" : "not_connected",
-    connectMode: connectModes[provider] ?? connectMode,
-    command,
-  }));
+  return CLI_SUBSCRIPTIONS.map(({ provider, label, command, connectMode }) => {
+    const status = statuses[provider] ?? null;
+    const provenance = status ? publicProvenance(status.connectedVia) : null;
+    return {
+      provider,
+      label,
+      status: status ? "connected" : "not_connected",
+      connectMode: connectModes[provider] ?? connectMode,
+      command,
+      provenance: provenance === "api_key" ? null : provenance,
+      ...surfaceFlags(status),
+    };
+  });
+}
+
+export function toClaudeCliTokenRecord(
+  status: ProviderCredentialStatus | null,
+): ClaudeCliTokenRecord {
+  return {
+    status: status ? "connected" : "not_connected",
+    lastFour: status?.lastFour?.trim() || null,
+    ...surfaceFlags(status),
+  };
 }
 
 export type ProviderConnectionSnapshot = {
   viewer: ProviderConnectionViewer;
   connections: ProviderConnectionRecord[];
   cliSubscriptions: CliSubscriptionRecord[];
+  claudeCliToken: ClaudeCliTokenRecord;
   /** Whether the in-app "Connect Claude" flow can run in this deployment. */
   hostedClaudeConnect: boolean;
+  /** Whether the *current workspace* (not the viewer personally) has a
+   *  connected, shared (`--org`) login for this provider — only populated
+   *  when the snapshot was loaded with a workspace id; see
+   *  `loadProviderConnectionSnapshot` and `scoped-credential-sharing.ts`. */
+  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 };
 
 export type ProviderCredentialStatus = {
   credentialType?: string | null | undefined;
   lastFour?: string | null | undefined;
+  connectedVia?: CredentialProvenance | null | undefined;
+  enabledForRooms?: boolean | undefined;
+  enabledForWorkspace?: boolean | undefined;
+  sharingEnabled?: boolean | undefined;
   encryptedApiKey?: string | null | undefined;
   encryptedAccessToken?: string | null | undefined;
   encryptedRefreshToken?: string | null | undefined;
@@ -145,6 +198,27 @@ function publicCredentialType(
   return null;
 }
 
+function publicProvenance(
+  value: string | null | undefined,
+): CredentialProvenance | null {
+  if (value === "browser" || value === "cli" || value === "api_key") {
+    return value;
+  }
+  return null;
+}
+
+/** A disconnected credential is enabled nowhere; a connected one defaults to
+ *  both surfaces when the row predates the per-surface flags. */
+function surfaceFlags(
+  status: ProviderCredentialStatus | null,
+): ProviderSurfaceFlags {
+  if (!status) return { enabledForRooms: false, enabledForWorkspace: false };
+  return {
+    enabledForRooms: status.enabledForRooms ?? true,
+    enabledForWorkspace: status.enabledForWorkspace ?? true,
+  };
+}
+
 export function toProviderConnectionRecord(input: {
   provider: ProviderConnectionProvider;
   label: string;
@@ -162,6 +236,8 @@ export function toProviderConnectionRecord(input: {
     lastFour: connected ? lastFour : null,
     suppliedBy: connected ? input.suppliedBy : null,
     scope: "personal",
+    provenance: connected ? "api_key" : null,
+    ...surfaceFlags(connected ? input.status : null),
   };
 }
 
@@ -176,7 +252,9 @@ export function toProviderConnectionSnapshot(input: {
   connectModes?: Partial<
     Record<CliSubscriptionProvider, SubscriptionConnectMode>
   >;
+  claudeCliToken?: ProviderCredentialStatus | null;
   hostedClaudeConnect?: boolean;
+  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -193,7 +271,11 @@ export function toProviderConnectionSnapshot(input: {
       input.cliSubscriptionStatuses ?? {},
       input.connectModes ?? {},
     ),
+    claudeCliToken: toClaudeCliTokenRecord(input.claudeCliToken ?? null),
     hostedClaudeConnect: input.hostedClaudeConnect ?? false,
+    ...(input.sharedWorkspaceLogin
+      ? { sharedWorkspaceLogin: input.sharedWorkspaceLogin }
+      : {}),
   };
 }
 

@@ -432,7 +432,7 @@ export async function completeCursorApiKey(request: Request) {
       await requireOrganizationSettingsWrite(user.id, scopeId);
     }
     const tokens = await exchangeCursorApiKey(apiKey);
-    await persistCursorTokens({ scopeType, scopeId }, tokens);
+    await persistCursorTokens({ scopeType, scopeId }, tokens, "api_key");
     return NextResponse.json({ status: "connected", provider: "cursor" });
   } catch (error) {
     return NextResponse.json(
@@ -495,6 +495,7 @@ export async function pollDeviceOAuth(
       await persistCursorTokens(
         { scopeType: state.scopeType, scopeId: state.scopeId },
         { accessToken: poll.accessToken, refreshToken: poll.refreshToken },
+        "browser",
       );
       return clearOAuthCookie(
         NextResponse.json({ status: "connected", provider }),

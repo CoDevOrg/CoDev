@@ -188,12 +188,26 @@ async function resolveOrganization(organizationId) {
   );
 }
 
+/**
+ * Printed before an `--org` login starts, and folded into the success line —
+ * a shared login is not a private connection, and this is the one moment a
+ * member is actively choosing that before it takes effect.
+ */
+export function organizationSharingWarning(provider) {
+  return `⚠ This connects ${provider} for every member of this CoDev workspace, not just you. Anyone in it can run agents on this login.\n`;
+}
+
+function warnOrganizationSharing(provider) {
+  process.stdout.write(organizationSharingWarning(provider));
+}
+
 export async function codexAuth({
   organization = false,
   organizationId,
   browser = false,
 } = {}) {
   await loadConfig();
+  if (organization) warnOrganizationSharing("Codex");
   const { mkdtemp } = await import("node:fs/promises");
   const codexHome = await mkdtemp(join(tmpdir(), "codev-codex-auth-"));
   await chmod(codexHome, 0o700);
@@ -227,7 +241,7 @@ export async function codexAuth({
     });
     process.stdout.write(
       organization
-        ? "Codex is connected to the CoDev organization.\n"
+        ? "Codex is connected to the CoDev organization — shared with every member of that workspace.\n"
         : "Codex is connected to your CoDev account.\n",
     );
   } finally {
@@ -240,6 +254,7 @@ export async function claudeAuth({
   organizationId,
 } = {}) {
   await loadConfig();
+  if (organization) warnOrganizationSharing("Claude");
   process.stdout.write("Starting the official Claude Code login flow…\n");
   const output = await runCapture("claude", ["setup-token"]);
   const oauthToken = extractClaudeOAuthToken(output);
@@ -264,7 +279,7 @@ export async function claudeAuth({
   });
   process.stdout.write(
     organization
-      ? "Claude Code is connected to the CoDev organization.\n"
+      ? "Claude Code is connected to the CoDev organization — shared with every member of that workspace.\n"
       : "Claude Code is connected to your CoDev account.\n",
   );
 }

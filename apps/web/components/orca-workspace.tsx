@@ -24,6 +24,8 @@ import { useLiveAgentActivity } from "@/components/workspace-agent-activity";
 import { watchOrcaProjectTree } from "@/components/orca-project-tree";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
+import { ProviderPreflightBanner } from "@/components/provider-preflight-banner";
+import type { WorkspaceProviderPreflight } from "@/lib/provider-surface-capability";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -843,6 +845,7 @@ export function OrcaWorkspace({
   canInvite,
   defaultAgent,
   cursorAvailable,
+  providerPreflight,
 }: {
   workspaceId: string;
   repository: string | null;
@@ -851,6 +854,9 @@ export function OrcaWorkspace({
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
   cursorAvailable?: boolean;
+  /** Which agent is about to run, and any the member must still connect for
+   *  workspaces — shown on the startup screen, and kept up when actionable. */
+  providerPreflight?: WorkspaceProviderPreflight;
 }) {
   const [connection, setConnection] = useState<ConnectionPhase>({
     phase: "connecting",
@@ -1415,6 +1421,12 @@ export function OrcaWorkspace({
       workspaceId={workspaceId}
     >
       <div className="workspace-iframe-wrap">
+        {providerPreflight ? (
+          <ProviderPreflightBanner
+            phase={shellReady ? "ready" : "starting"}
+            preflight={providerPreflight}
+          />
+        ) : null}
         <iframe
           key={iframeKey}
           ref={iframeRef}

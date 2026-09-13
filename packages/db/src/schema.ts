@@ -144,6 +144,14 @@ export const credentialType = pgEnum("credential_type", [
   "AZURE_ENDPOINT",
   "HOSTED_CODEX_SUBSCRIPTION",
 ]);
+// How a credential was obtained. Provenance is authoritative for whether it may
+// power a coding workspace: a browser (in-sandbox OAuth) subscription never can;
+// an API key or a local-CLI login can. Chat rooms accept any provenance.
+export const credentialConnectedVia = pgEnum("credential_connected_via", [
+  "browser",
+  "cli",
+  "api_key",
+]);
 export const providerCredentialStatus = pgEnum("provider_credential_status", [
   "active",
   "reauthorization_required",
@@ -473,6 +481,17 @@ export const providerCredentials = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     sharingEnabled: boolean("sharing_enabled").default(false).notNull(),
     unavailableUntil: timestamp("unavailable_until", { withTimezone: true }),
+    // Provenance (see credentialConnectedVia). Nullable for pre-existing rows;
+    // the 0042 migration backfills them and code treats NULL conservatively
+    // (not workspace-eligible).
+    connectedVia: credentialConnectedVia("connected_via"),
+    // Per-surface applicability — the isolation + opt-in-sharing toggles. Default
+    // on so existing credentials keep working on both surfaces after deploy;
+    // workspace eligibility is still gated by connectedVia in the resolvers.
+    enabledForRooms: boolean("enabled_for_rooms").default(true).notNull(),
+    enabledForWorkspace: boolean("enabled_for_workspace")
+      .default(true)
+      .notNull(),
     ...timestamps,
   },
   (table) => [

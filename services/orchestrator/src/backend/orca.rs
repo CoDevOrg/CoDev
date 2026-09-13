@@ -244,10 +244,21 @@ impl OrcaBackend {
         if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
             warn!(workspace_id, %error, "could not file this member's agent credentials");
         }
+        // Claude Code reads its credential from the environment; at most one
+        // form is present, and a plain key wins. The OAuth token is the
+        // member's `claude setup-token` uploaded with `codev claude-auth`; the
+        // web layer only sends it for a CLI-connected, workspace-enabled
+        // credential, never a browser subscription.
         let claude_env = request
             .anthropic_api_key
             .as_deref()
-            .map(|api_key| ("ANTHROPIC_API_KEY", api_key));
+            .map(|api_key| ("ANTHROPIC_API_KEY", api_key))
+            .or_else(|| {
+                request
+                    .claude_code_oauth_token
+                    .as_deref()
+                    .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
+            });
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -951,19 +962,32 @@ fn member_agent_env_map(
     }
 
     // Claude Code takes its credential from the environment rather than a
-    // config file. At most one of the two forms is ever present.
+    // config file. At most one of the two forms is ever present: a plain key
+    // wins, else the member's `claude setup-token` (uploaded with
+    // `codev claude-auth`; the web layer only sends it for a CLI-connected,
+    // workspace-enabled credential). Otherwise the token is blanked so one
+    // inherited from an older shared IDE process cannot leak in — browser
+    // subscription profiles are never copied into this filesystem.
     if let Some(api_key) = &request.anthropic_api_key {
         env.insert(
             "ANTHROPIC_API_KEY".to_string(),
             Value::String(api_key.clone()),
         );
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(String::new()),
+        );
+    } else if let Some(token) = &request.claude_code_oauth_token {
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(token.clone()),
+        );
+    } else {
+        env.insert(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Value::String(String::new()),
+        );
     }
-    // Override any token inherited from an older shared IDE process. Claude
-    // subscription profiles are never copied into this filesystem.
-    env.insert(
-        "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
-        Value::String(String::new()),
-    );
 
     // Cursor's browser login is filed as an auth.json under a per-member
     // XDG config home; a pasted API key is the fallback when there is none.
@@ -2058,16 +2082,26 @@ mod tests {
         assert_eq!(env.len(), 1);
     }
 
+    // The web layer only sends a Claude OAuth token for a CLI-connected,
+    // workspace-enabled `claude setup-token`; a browser subscription never
+    // reaches this request. So a token that arrives is forwarded as-is.
     #[test]
-    fn legacy_claude_tokens_are_never_forwarded_to_member_agents() {
-        let request = ide_start_request(json!({ "claudeCodeOauthToken": "private-subscription" }));
+    fn a_cli_claude_token_is_forwarded_to_member_agents() {
+        let request = ide_start_request(json!({ "claudeCodeOauthToken": "sk-ant-cli-token" }));
         let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!("sk-ant-cli-token"));
+        assert!(!env.contains_key("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn a_plain_api_key_wins_over_a_claude_token() {
+        let request = ide_start_request(json!({
+            "anthropicApiKey": "sk-ant-api-key",
+            "claudeCodeOauthToken": "sk-ant-cli-token"
+        }));
+        let env = member_agent_env_map(&request, None, None);
+        assert_eq!(env["ANTHROPIC_API_KEY"], json!("sk-ant-api-key"));
         assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], json!(""));
-        assert!(
-            !serde_json::to_string(&env)
-                .expect("env")
-                .contains("private-subscription")
-        );
     }
 
     #[test]

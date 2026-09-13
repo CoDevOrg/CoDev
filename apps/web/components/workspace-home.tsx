@@ -1,6 +1,7 @@
 "use client";
 
 import { OrcaWorkspace } from "@/components/orca-workspace";
+import type { WorkspaceProviderPreflight } from "@/lib/provider-surface-capability";
 
 type ChatProvider = "openai" | "anthropic";
 
@@ -25,12 +26,15 @@ export function WorkspaceHome({
   workspaceId,
   repository,
   availableProviders,
+  providerPreflight,
   canInvite,
   cursorAvailable,
 }: {
   workspaceId: string;
   repository: string | null;
   availableProviders: ChatProvider[];
+  /** What the startup screen tells the member about the agent about to run. */
+  providerPreflight: WorkspaceProviderPreflight;
   canInvite: boolean;
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
@@ -45,6 +49,7 @@ export function WorkspaceHome({
     <OrcaWorkspace
       canInvite={canInvite}
       cursorAvailable={cursorAvailable}
+      providerPreflight={providerPreflight}
       repository={repository}
       workspaceId={workspaceId}
       {...(defaultAgent ? { defaultAgent } : {})}

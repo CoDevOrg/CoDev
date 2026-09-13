@@ -1,5 +1,6 @@
 import "server-only";
 
+import { saveProviderCredential } from "./credentials";
 import { logEvent } from "./observability";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 
@@ -114,11 +115,29 @@ export async function persistClaudeOAuthToken(input: {
   oauthToken: string;
   source: ClaudeConnectionSource;
 }) {
-  void input;
-  throw new ClaudeConnectionError(
-    "Token-based Claude connections have been retired. Reconnect using the official runtime login in Settings.",
-    410,
-  );
+  // The hosted-runner token capture is retired: the browser flow now keeps
+  // the subscription in its private runtime (claude-connection-session) and
+  // never hands CoDev the token. Only the local CLI's `claude setup-token`
+  // upload lands here — Anthropic's long-lived token whose intended use is
+  // CLAUDE_CODE_OAUTH_TOKEN on a host, which is exactly what a coding
+  // workspace needs. It is stored with `cli` provenance and read only by the
+  // workspace-host resolver; it is never a direct-API bearer.
+  if (input.source !== "cli") {
+    throw new ClaudeConnectionError(
+      "Token-based Claude connections have been retired. Reconnect using the official runtime login in Settings.",
+      410,
+    );
+  }
+  await saveProviderCredential({
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+    provider: "anthropic",
+    credentialType: "OAUTH_TOKEN",
+    accessToken: input.oauthToken,
+    lastFour: input.oauthToken.slice(-4),
+    connectedVia: "cli",
+  });
+  return { scopeType: input.scopeType, scopeId: input.scopeId };
 }
 
 /**

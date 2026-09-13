@@ -13,6 +13,10 @@ import {
   type HostedCodexPublicStatus,
 } from "./hosted-codex-subscription-view";
 import { decryptSecret, encryptSecret } from "./kms";
+import {
+  defaultSharingEnabled,
+  resolvePersonalOrSharedCredential,
+} from "./scoped-credential-sharing";
 
 const HOSTED_CODEX_CONTEXT = {
   application: "codev",
@@ -113,11 +117,21 @@ export async function persistHostedCodexConnection(input: {
   userId: string;
   scopeType: HostedCodexScopeType;
   scopeId: string;
-  sharingEnabled: boolean;
+  /** Defaults to true for an ORGANIZATION scope, false for USER — see
+   *  `defaultSharingEnabled`. Override to connect a workspace-scoped login
+   *  that only its connector may use, or vice versa. */
+  sharingEnabled?: boolean;
   material: HostedCodexMaterial;
   accountLabel?: string;
+  /** Browser and CLI logins produce byte-identical auth caches, so the caller
+   *  must say which it was: only a `cli` login may power a coding workspace. */
+  connectedVia: "browser" | "cli";
+  /** Surfaces to enable on create; existing toggles are kept on reconnect. */
+  enabledFor?: { rooms: boolean; workspace: boolean };
 }) {
   validateAuthCache(input.material.authCacheJson);
+  const sharingEnabled =
+    input.sharingEnabled ?? defaultSharingEnabled(input.scopeType);
   const encryptedMaterial = await encryptHostedMaterial(input.material);
   const [credential] = await getDatabase()
     .insert(schema.providerCredentials)
@@ -133,9 +147,12 @@ export async function persistHostedCodexConnection(input: {
       status: "active",
       lastRefreshedAt: new Date(),
       createdBy: input.userId,
-      sharingEnabled: input.sharingEnabled,
+      sharingEnabled,
       unavailableUntil: null,
       revokedAt: null,
+      connectedVia: input.connectedVia,
+      enabledForRooms: input.enabledFor?.rooms ?? true,
+      enabledForWorkspace: input.enabledFor?.workspace ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -152,9 +169,16 @@ export async function persistHostedCodexConnection(input: {
         status: "active",
         lastRefreshedAt: new Date(),
         createdBy: input.userId,
-        sharingEnabled: input.sharingEnabled,
+        sharingEnabled,
         unavailableUntil: null,
         revokedAt: null,
+        connectedVia: input.connectedVia,
+        ...(input.enabledFor
+          ? {
+              enabledForRooms: input.enabledFor.rooms,
+              enabledForWorkspace: input.enabledFor.workspace,
+            }
+          : {}),
         updatedAt: new Date(),
       },
     })
@@ -201,47 +225,20 @@ async function findActiveHostedCredential(
   return credential ?? null;
 }
 
-async function userBelongsToOrganization(
-  userId: string,
-  organizationId: string,
-) {
-  const [membership] = await getDatabase()
-    .select({ userId: schema.workspaceMembers.userId })
-    .from(schema.workspaceMembers)
-    .where(
-      and(
-        eq(schema.workspaceMembers.workspaceId, organizationId),
-        eq(schema.workspaceMembers.userId, userId),
-      ),
-    )
-    .limit(1);
-  return Boolean(membership);
-}
-
 export async function resolveHostedCodexSubscription(input: {
   userId: string;
   workspaceId?: string;
   includeBusy?: boolean;
 }) {
   if (!isHostedCodexSubscriptionEnabled()) return null;
-  const personal = await findActiveHostedCredential(
-    "USER",
-    input.userId,
-    input.includeBusy,
-  );
-  if (personal) return { credential: personal, source: "USER" as const };
-  if (!input.workspaceId) return null;
-  const organization = await findActiveHostedCredential(
-    "ORGANIZATION",
-    input.workspaceId,
-  );
-  if (
-    organization?.sharingEnabled &&
-    (await userBelongsToOrganization(input.userId, input.workspaceId))
-  ) {
-    return { credential: organization, source: "ORGANIZATION" as const };
-  }
-  return null;
+  return resolvePersonalOrSharedCredential(input, {
+    findPersonal: (userId) =>
+      findActiveHostedCredential("USER", userId, input.includeBusy),
+    // A busy (in-use) shared login is unavailable the same as a personal one;
+    // includeBusy is only ever passed for a personal lookup's own caller need.
+    findShared: (workspaceId) =>
+      findActiveHostedCredential("ORGANIZATION", workspaceId),
+  });
 }
 
 export async function getHostedCodexPublicStatus(input: {
