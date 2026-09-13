@@ -4,7 +4,6 @@ import { createElement } from "react";
 
 import {
   applyOrcaWorkspaceBranding,
-  autoAddOrcaProject,
   buildOrcaIframeSource,
   buildOrcaPendingIframeSource,
   createOrcaManagedProposal,
@@ -142,19 +141,55 @@ describe("WorkspaceTopBar", () => {
     ).toHaveTextContent("3 agent worktree slots");
   });
 
-  it("shows how many agents are live without opening a panel", () => {
+  it("shows how many agents are working without opening a panel", () => {
     render(
       createElement(WorkspaceTopBar, {
         repository: "yousef20920/CoDev",
         workspaceId: "workspace-1",
         canInvite: true,
-        liveAgentCount: 2,
+        agents: { active: 2, idle: 0 },
       }),
     );
 
-    expect(screen.getByLabelText("Active agents: 2 live")).toHaveTextContent(
-      "2 agents live",
+    expect(screen.getByLabelText("2 agents working")).toHaveTextContent(
+      "2 agents working",
     );
+  });
+
+  /**
+   * Mission Control lists an open chat tab that has never run anything, so a
+   * bar that called every row "live" claimed "1 agent live" beside that same
+   * panel's "Idle". Idle sessions are reported as what they are.
+   */
+  it("does not call an idle chat tab a live agent", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        agents: { active: 0, idle: 1 },
+        slotsUsed: 0,
+        slotsTotal: 3,
+      }),
+    );
+
+    expect(
+      screen.getByLabelText("1 agent idle; worktree slots: 0 of 3 in use"),
+    ).toHaveTextContent("1 agent idle · 0 of 3 slots");
+    expect(screen.queryByText(/live/i)).not.toBeInTheDocument();
+  });
+
+  it("says so when the workspace is up with nothing running", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        agents: { active: 0, idle: 0 },
+      }),
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("No agents running");
   });
 
   /**
@@ -168,17 +203,15 @@ describe("WorkspaceTopBar", () => {
         repository: "yousef20920/CoDev",
         workspaceId: "workspace-1",
         canInvite: true,
-        liveAgentCount: 4,
+        agents: { active: 4, idle: 0 },
         slotsUsed: 1,
         slotsTotal: 3,
       }),
     );
 
     expect(
-      screen.getByLabelText(
-        "Active agents: 4 live; worktree slots: 1 of 3 in use",
-      ),
-    ).toHaveTextContent("4 agents live · 1 of 3 slots");
+      screen.getByLabelText("4 agents working; worktree slots: 1 of 3 in use"),
+    ).toHaveTextContent("4 agents working · 1 of 3 slots");
     expect(screen.queryByText(/4 of 3/)).not.toBeInTheDocument();
   });
 
@@ -188,7 +221,7 @@ describe("WorkspaceTopBar", () => {
         repository: "yousef20920/CoDev",
         workspaceId: "workspace-1",
         canInvite: true,
-        liveAgentCount: 0,
+        agents: { active: 0, idle: 0 },
         isStarting: true,
       }),
     );
@@ -301,306 +334,5 @@ describe("applyOrcaWorkspaceBranding", () => {
         .querySelector(".titlebar-app-name-main")
         ?.getAttribute("data-codev-workspace-name"),
     ).toBe("yousef20920/CoDev");
-  });
-});
-
-describe("autoAddOrcaProject", () => {
-  const WORKSPACE_PATH =
-    "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa";
-
-  // autoAddOrcaProject reads `doc.defaultView` (Document.prototype.value on a
-  // real iframe's contentDocument), which is only non-null for a document
-  // that is the *active* document of a browsing context. A detached document
-  // from `createHTMLDocument` has no defaultView, so these tests build
-  // fixtures directly in the real jsdom `document` instead, and clean up
-  // afterwards.
-  afterEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  /**
-   * Builds a jsdom document that mimics Orca's real "Add a project" flow
-   * (discovered by driving the live vendored client): an empty-state
-   * heading, an icon "Add Project" button that opens a dialog with a host
-   * picker, a "Browse folder" step that lands on a breadcrumb + filterable
-   * directory-listing file browser, and a "Select folder" button whose
-   * `title` always reflects the directory currently being browsed — the
-   * path field itself only *filters* that listing, it doesn't jump to an
-   * arbitrary absolute path.
-   */
-  function findButtonByText(root: ParentNode, pattern: RegExp) {
-    return (
-      Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
-        (button) => pattern.test(button.textContent ?? ""),
-      ) ?? null
-    );
-  }
-
-  const WORKSPACE_PATH_SEGMENTS: string[] =
-    WORKSPACE_PATH.split("/").filter(Boolean);
-
-  // A fake filesystem just deep enough to contain WORKSPACE_PATH, keyed by
-  // the joined segments navigated so far ("" is the root).
-  const FAKE_DIRECTORY_TREE: Record<string, string[]> = {};
-  FAKE_DIRECTORY_TREE[""] = [WORKSPACE_PATH_SEGMENTS[0]!, "home"];
-  for (let depth = 0; depth < WORKSPACE_PATH_SEGMENTS.length - 1; depth++) {
-    FAKE_DIRECTORY_TREE[WORKSPACE_PATH_SEGMENTS.slice(0, depth + 1).join("/")] =
-      [WORKSPACE_PATH_SEGMENTS[depth + 1]!];
-  }
-
-  function renderFileBrowser(
-    doc: Document,
-    dialog: HTMLElement,
-    currentSegments: string[],
-    steps: string[],
-  ) {
-    const resolvedPath = `/${currentSegments.join("/")}`;
-    const entries = FAKE_DIRECTORY_TREE[currentSegments.join("/")] ?? [];
-    dialog.innerHTML = `
-      <h2>Browse host filesystem</h2>
-      <button>/</button>
-      <input placeholder="Type to filter or enter a path…" />
-      <div>
-        ${entries
-          .map(
-            (name) =>
-              `<button><span class="truncate flex-1 min-w-0">${name}</span></button>`,
-          )
-          .join("")}
-      </div>
-      <button title="${resolvedPath}">Select folder</button>
-    `;
-
-    findButtonByText(dialog, /^\/$/)?.addEventListener("click", () => {
-      steps.push("go-to-root");
-      renderFileBrowser(doc, dialog, [], steps);
-    });
-
-    const filterInput = dialog.querySelector<HTMLInputElement>("input");
-    filterInput?.addEventListener("input", () => {
-      steps.push(`filter:${filterInput.value}`);
-    });
-
-    dialog
-      .querySelectorAll<HTMLSpanElement>("span.truncate.flex-1.min-w-0")
-      .forEach((span) => {
-        span.closest("button")?.addEventListener("click", () => {
-          const name = span.textContent ?? "";
-          steps.push(`navigate:${name}`);
-          renderFileBrowser(doc, dialog, [...currentSegments, name], steps);
-        });
-      });
-
-    findButtonByText(dialog, /select folder/i)?.addEventListener(
-      "click",
-      () => {
-        steps.push(`select-folder:${resolvedPath}`);
-        // Orca shows a confirmation step for a path that resolves to an
-        // existing git repository before actually registering it.
-        dialog.innerHTML = `
-          <h2>Add Git Project?</h2>
-          <button>Add Git Project</button>
-        `;
-        findButtonByText(dialog, /add git project/i)?.addEventListener(
-          "click",
-          () => {
-            steps.push("add-git-project");
-            doc.body.innerHTML = "<span>Project added.</span>";
-          },
-        );
-      },
-    );
-  }
-
-  function createOrcaDocument(steps: string[]) {
-    const doc = document;
-    doc.body.innerHTML = `
-      <h1>Add a project to get started.</h1>
-      <button>Add Project</button>
-    `;
-
-    findButtonByText(doc, /^add project$/i)?.addEventListener("click", () => {
-      steps.push("open-add-project-dialog");
-      doc.body.insertAdjacentHTML(
-        "beforeend",
-        `
-          <div role="dialog">
-            <h2>Add a project</h2>
-            <button role="combobox">Local Mac</button>
-          </div>
-          `,
-      );
-      const hostTrigger = doc.querySelector<HTMLButtonElement>(
-        '[role="dialog"] [role="combobox"]',
-      );
-      hostTrigger?.addEventListener("click", () => {
-        steps.push("open-host-picker");
-        doc.body.insertAdjacentHTML(
-          "beforeend",
-          `
-            <div role="option">Add remote host</div>
-            <div role="option">Local Mac Local - This computer</div>
-            <div role="option">CoDev Server Connected - CoDev server</div>
-            `,
-        );
-        doc.querySelectorAll('[role="option"]').forEach((option) => {
-          option.addEventListener("click", () => {
-            steps.push(`select-host:${option.textContent}`);
-            if (hostTrigger) hostTrigger.textContent = option.textContent;
-            doc
-              .querySelectorAll('[role="option"]')
-              .forEach((node) => node.remove());
-          });
-        });
-      });
-
-      const dialog = doc.querySelector<HTMLElement>('[role="dialog"]');
-      dialog?.insertAdjacentHTML(
-        "beforeend",
-        `<button>Browse folder Existing Git repository or folder on this host</button>`,
-      );
-      findButtonByText(dialog!, /browse folder/i)?.addEventListener(
-        "click",
-        () => {
-          steps.push(`browse-folder:${hostTrigger?.textContent}`);
-          renderFileBrowser(doc, dialog!, ["home", "orca"], steps);
-        },
-      );
-    });
-
-    return doc;
-  }
-
-  it("drives Orca's own Add Project dialog to open the cloned workspace path", async () => {
-    const steps: string[] = [];
-    const doc = createOrcaDocument(steps);
-    const automateCalls: number[] = [];
-
-    const result = await autoAddOrcaProject(doc, WORKSPACE_PATH, {
-      timeoutMs: 2_000,
-      onWillAutomate: () => automateCalls.push(Date.now()),
-    });
-
-    expect(result).toBe(true);
-    expect(doc.body.textContent).toContain("Project added.");
-    expect(automateCalls).toHaveLength(1);
-    // Selects the connected runtime host (not the "Local Mac" default)
-    // before browsing, clicks back to the filesystem root, then clicks
-    // into each path segment in turn (filtering the listing by name first)
-    // rather than typing the absolute path into the filter field directly.
-    expect(steps).toEqual([
-      "open-add-project-dialog",
-      "open-host-picker",
-      "select-host:CoDev Server Connected - CoDev server",
-      `browse-folder:CoDev Server Connected - CoDev server`,
-      "go-to-root",
-      `filter:${WORKSPACE_PATH_SEGMENTS[0]}`,
-      `navigate:${WORKSPACE_PATH_SEGMENTS[0]}`,
-      `filter:${WORKSPACE_PATH_SEGMENTS[1]}`,
-      `navigate:${WORKSPACE_PATH_SEGMENTS[1]}`,
-      `filter:${WORKSPACE_PATH_SEGMENTS[2]}`,
-      `navigate:${WORKSPACE_PATH_SEGMENTS[2]}`,
-      `filter:${WORKSPACE_PATH_SEGMENTS[3]}`,
-      `navigate:${WORKSPACE_PATH_SEGMENTS[3]}`,
-      `select-folder:${WORKSPACE_PATH}`,
-      "add-git-project",
-    ]);
-  });
-
-  it("aborts without confirming if the browser lands on the wrong directory", async () => {
-    // Regression test for the bug where the dialog silently fell through to
-    // a default directory (e.g. /home/orca) instead of the cloned repo:
-    // even if every segment click appears to succeed, this must never
-    // click "Select folder" through unless the resolved directory the
-    // dialog reports matches the workspace path exactly.
-    const doc = document;
-    doc.body.innerHTML = `
-      <h1>Add a project to get started.</h1>
-      <button aria-label="Add Project">+</button>
-    `;
-    doc
-      .querySelector<HTMLButtonElement>('button[aria-label="Add Project"]')
-      ?.addEventListener("click", () => {
-        doc.body.insertAdjacentHTML(
-          "beforeend",
-          `<div role="dialog"><button role="combobox">CoDev Server Connected</button><button>Browse folder</button></div>`,
-        );
-        const dialog = doc.querySelector<HTMLElement>('[role="dialog"]');
-        findButtonByText(dialog!, /browse folder/i)?.addEventListener(
-          "click",
-          () => {
-            // Every segment appears clickable, but the dialog's resolved
-            // path never actually changes — simulating a picker bug that
-            // leaves it parked on an unrelated default directory.
-            dialog!.innerHTML = `
-              <button>/</button>
-              <input placeholder="Type to filter or enter a path…" />
-              <div>
-                ${WORKSPACE_PATH_SEGMENTS.map(
-                  (name) =>
-                    `<button><span class="truncate flex-1 min-w-0">${name}</span></button>`,
-                ).join("")}
-              </div>
-              <button title="/home/orca">Select folder</button>
-            `;
-          },
-        );
-      });
-
-    const result = await autoAddOrcaProject(doc, WORKSPACE_PATH, {
-      timeoutMs: 500,
-      navigationStepTimeoutMs: 500,
-    });
-
-    expect(result).toBe(false);
-    expect(doc.body.textContent).not.toContain("Project added.");
-  });
-
-  it("does nothing when Orca already has a project open", async () => {
-    document.body.innerHTML = `
-      <button>Add Project</button>
-      <span class="titlebar-app-name-main">CoDev</span>
-    `;
-
-    const result = await autoAddOrcaProject(document, WORKSPACE_PATH, {
-      timeoutMs: 200,
-      emptyStateTimeoutMs: 200,
-    });
-
-    expect(result).toBe(false);
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it("aborts gracefully if the Add Project control never renders", async () => {
-    document.body.innerHTML = "";
-
-    const result = await autoAddOrcaProject(document, WORKSPACE_PATH, {
-      timeoutMs: 200,
-      emptyStateTimeoutMs: 200,
-    });
-
-    expect(result).toBe(false);
-  });
-
-  it("keeps polling past an iframe load event that fires before Orca has rendered anything", async () => {
-    // Regression test: the iframe's `load` event fires as soon as its
-    // scripts finish executing, before Orca's React app renders anything
-    // (it still has to boot and negotiate the pairing connection). A naive
-    // one-shot DOM check at that point would see an empty document and bail
-    // out immediately instead of waiting for Orca to actually boot.
-    document.body.innerHTML = "";
-    const steps: string[] = [];
-
-    const resultPromise = autoAddOrcaProject(document, WORKSPACE_PATH, {
-      timeoutMs: 2_000,
-      emptyStateTimeoutMs: 2_000,
-    });
-
-    // Simulate Orca's app finishing its boot/pairing sequence shortly after
-    // the iframe's load event already fired with an empty document.
-    setTimeout(() => createOrcaDocument(steps), 100);
-
-    expect(await resultPromise).toBe(true);
-    expect(document.body.textContent).toContain("Project added.");
   });
 });

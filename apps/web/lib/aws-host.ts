@@ -11,6 +11,18 @@ import { getAwsConfiguration } from "./aws";
 import type { HostState } from "./cloud";
 
 /**
+ * RETIRED: the Firecracker runtime runs on Azure. Nothing reaches this file
+ * unless `CLOUD_PROVIDER=aws` is set deliberately, and no deployed
+ * environment sets it — `getCloudProvider` now defaults to Azure.
+ *
+ * It is kept only so the cutover stays reversible. When that is no longer
+ * worth carrying, this file, `aws.ts`'s host half, the `isAzure()` branching
+ * in `host.ts` and `kms.ts`, the signed API Gateway path in `orchestrator.ts`,
+ * and the `AWS_REGION` / `AWS_ROLE_ARN` / `AWS_HOST_INSTANCE_ID` /
+ * `ORCHESTRATOR_URL` variables all go together.
+ */
+
+/**
  * `AWS_HOST_INSTANCE_ID` pins resolution to one instance; leaving it unset is
  * the normal configuration, because `resolveHost` finds the host through the
  * stack's tags instead. This used to fall back to a hardcoded instance ID,

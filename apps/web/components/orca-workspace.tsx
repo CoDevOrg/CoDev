@@ -25,7 +25,10 @@ import { watchOrcaProjectTree } from "@/components/orca-project-tree";
 import { WorkspaceRepositoryDialog } from "@/components/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace-share-dialog";
 import { ProviderPreflightBanner } from "@/components/provider-preflight-banner";
-import type { WorkspaceProviderPreflight } from "@/lib/provider-surface-capability";
+import {
+  workspaceProviderReadiness,
+  type WorkspaceProviderPreflight,
+} from "@/lib/provider-surface-capability";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -103,6 +106,7 @@ const ORCA_WEB_CLIENT_PATH = "/orca/web-index.html";
 const SHELL_READY_FALLBACK_MS = 8_000;
 
 type OrcaConnectResponse = {
+  /** "ready" | "host-starting" | "unavailable" — see the orca route. */
   state?: string;
   pairingCode?: string;
   webClientPath?: string;
@@ -119,6 +123,12 @@ type CodevOrcaMessage =
   | { type: "codev:startup-failure"; step?: string | null; message?: string }
   | {
       type: "codev:agent-count";
+      /** Agents doing work right now. */
+      active?: number;
+      /** Agent sessions open but idle between turns. */
+      idle?: number;
+      /** `active + idle`. The only field an older bundle sends, where it means
+       *  "rows in Mission Control" — which is why it is not an agent count. */
       count?: number;
       slotsUsed?: number;
       slotsTotal?: number;
@@ -156,6 +166,12 @@ type CodevProposalCreateResult =
 
 const WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** A non-negative whole number arriving over `postMessage`, where anything is
+ *  possible. */
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
 
 export async function discardOrcaManagedProposal(
   workspaceId: string,
@@ -447,254 +463,29 @@ function injectOrcaThemeAndBranding(
   }
 }
 
-const ADD_PROJECT_BUTTON_SELECTOR = 'button[aria-label="Add Project"]';
-const HOST_SELECTOR = '[role="combobox"]';
-const OPTION_SELECTOR = '[role="option"]';
-const DIALOG_SELECTOR = '[role="dialog"]';
-const PATH_INPUT_SELECTOR = 'input[placeholder*="enter a path" i]';
-const LISTING_ENTRY_NAME_SELECTOR = "button span.truncate.flex-1.min-w-0";
-const AUTO_ADD_PROJECT_TIMEOUT_MS = 25_000;
-const EMPTY_STATE_TIMEOUT_MS = 20_000;
-const NAVIGATION_STEP_TIMEOUT_MS = 6_000;
-
-function findAddProjectButton(doc: Document): HTMLButtonElement | null {
-  return (
-    doc.querySelector<HTMLButtonElement>(ADD_PROJECT_BUTTON_SELECTOR) ??
-    findButtonByText(doc.body, /^\s*add project\s*$/i)
-  );
-}
-
-function isOrcaShowingEmptyProjectState(doc: Document): boolean {
-  return Array.from(doc.querySelectorAll("h1, h2, p, span")).some((node) =>
-    /add a project to get started/i.test(node.textContent ?? ""),
-  );
-}
-
-function findButtonByText(
-  root: ParentNode,
-  pattern: RegExp,
-): HTMLButtonElement | null {
-  return (
-    Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) => pattern.test(button.textContent ?? ""),
-    ) ?? null
-  );
-}
-
 /**
- * The lone breadcrumb segment button rendered with the literal text "/" for
- * the filesystem root. Unlike every other breadcrumb segment and listing
- * row (which wrap an icon or a name `<span>`), it has no child elements, so
- * an exact-text-with-no-children check disambiguates it from unrelated
- * buttons that might also read "/".
+ * How the top bar names what the embedded IDE reported. "Live" was the word
+ * that broke this: Mission Control's list deliberately includes chat tabs
+ * sitting idle between turns, so a bar that called every row live claimed
+ * "1 agent live" next to a card reading "Idle". Working and idle are counted
+ * as the different things they are, and a workspace with neither says so.
  */
-function findRootBreadcrumbButton(root: ParentNode): HTMLButtonElement | null {
-  return (
-    Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) =>
-        button.children.length === 0 && button.textContent?.trim() === "/",
-    ) ?? null
-  );
-}
-
-/**
- * A directory/file row in Orca's filesystem browser listing, matched by its
- * exact visible name. Listing rows render the name inside a dedicated
- * `<span>` (as opposed to breadcrumb segments, which are plain-text
- * buttons), so this can't accidentally match a breadcrumb.
- */
-function findListingEntryButton(
-  doc: Document,
-  name: string,
-): HTMLButtonElement | null {
-  const nameSpan = Array.from(
-    doc.querySelectorAll<HTMLSpanElement>(LISTING_ENTRY_NAME_SELECTOR),
-  ).find((span) => span.textContent?.trim() === name);
-  return nameSpan?.closest("button") ?? null;
-}
-
-async function waitFor<T>(
-  win: Window,
-  find: () => T | null | undefined,
-  { timeoutMs, intervalMs = 150 }: { timeoutMs: number; intervalMs?: number },
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const found = find();
-    if (found) {
-      return found;
-    }
-    if (Date.now() > deadline) {
-      throw new Error("Timed out waiting for the Orca project dialog.");
-    }
-    await new Promise((resolve) => win.setTimeout(resolve, intervalMs));
-  }
-}
-
-/**
- * Best-effort automation of Orca's own "Add a project" dialog so the
- * workspace repository CoDev already cloned onto this workspace's own
- * dedicated Orca IDE process (see `ensureOrcaSession` in
- * `apps/web/lib/orca-host.ts`) opens automatically instead of leaving the
- * user stuck at Orca's empty "Add a project to get started" state.
- *
- * This drives the real, unmodified UI a person would click through (host
- * picker -> Browse folder -> navigate to the directory -> Select folder)
- * rather than reaching for the IDE's internal store/RPC calls, which aren't
- * reachable from outside the built bundle. Any missing/renamed selector
- * just aborts silently and leaves the manual "Add Project" flow as the
- * fallback. Re-check these selectors after UI changes in `packages/ide`
- * (see packages/ide/CODEV-INTEGRATION.md).
- *
- * The dialog's path field is a *filter* over the current directory's
- * listing, not an absolute-path navigator — typing the full cloned path
- * into it directly resolves nothing and silently leaves the browser on
- * whatever directory it started in. So instead this clicks through the
- * breadcrumb to the filesystem root, then clicks into each path segment's
- * listing row in turn (filtering the listing by name first to find it),
- * mirroring how a person would navigate the picker by hand.
- *
- * `onWillAutomate` fires once, right before the dialog is opened, so a
- * caller can hide the iframe for the (sub-second) duration of the
- * automation instead of visibly flashing through Orca's own dialog.
- */
-export async function autoAddOrcaProject(
-  doc: Document,
-  workspacePath: string,
-  {
-    timeoutMs = AUTO_ADD_PROJECT_TIMEOUT_MS,
-    emptyStateTimeoutMs = EMPTY_STATE_TIMEOUT_MS,
-    navigationStepTimeoutMs = NAVIGATION_STEP_TIMEOUT_MS,
-    onWillAutomate,
-  }: {
-    timeoutMs?: number;
-    emptyStateTimeoutMs?: number;
-    navigationStepTimeoutMs?: number;
-    onWillAutomate?: () => void;
-  } = {},
-): Promise<boolean> {
-  const win = doc.defaultView;
-  if (!win) {
-    return false;
-  }
-
-  try {
-    // The iframe's `load` event fires as soon as its scripts finish
-    // executing, well before Orca's React app has rendered anything (it
-    // still has to boot and negotiate the pairing connection). Poll for the
-    // toolbar's "Add Project" button as a boot signal instead of checking
-    // once for the empty state, which would otherwise race an empty DOM.
-    const addProjectButton = await waitFor(
-      win,
-      () => findAddProjectButton(doc),
-      {
-        timeoutMs: emptyStateTimeoutMs,
-      },
-    );
-    if (!isOrcaShowingEmptyProjectState(doc)) {
-      // A project is already open; nothing to do.
-      return false;
-    }
-    onWillAutomate?.();
-    addProjectButton.click();
-
-    const dialog = await waitFor(
-      win,
-      () => doc.querySelector<HTMLElement>(DIALOG_SELECTOR),
-      { timeoutMs },
-    );
-
-    const hostTrigger = dialog.querySelector<HTMLElement>(HOST_SELECTOR);
-    if (hostTrigger && !/connected/i.test(hostTrigger.textContent ?? "")) {
-      hostTrigger.click();
-      const connectedOption = await waitFor(
-        win,
-        () =>
-          Array.from(doc.querySelectorAll<HTMLElement>(OPTION_SELECTOR)).find(
-            (option) => /connected/i.test(option.textContent ?? ""),
-          ) ?? null,
-        { timeoutMs },
-      );
-      connectedOption.click();
-    }
-
-    const browseFolderButton = await waitFor(
-      win,
-      () => findButtonByText(dialog, /browse folder/i),
-      { timeoutMs },
-    );
-    browseFolderButton.click();
-
-    const rootBreadcrumbButton = await waitFor(
-      win,
-      () => findRootBreadcrumbButton(dialog),
-      { timeoutMs: navigationStepTimeoutMs },
-    );
-    rootBreadcrumbButton.click();
-
-    const setNativeValue = Object.getOwnPropertyDescriptor(
-      win.HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    const segments = workspacePath.split("/").filter(Boolean);
-    for (const segment of segments) {
-      const filterInput = await waitFor(
-        win,
-        () => doc.querySelector<HTMLInputElement>(PATH_INPUT_SELECTOR),
-        { timeoutMs: navigationStepTimeoutMs },
-      );
-      setNativeValue?.call(filterInput, segment);
-      filterInput.dispatchEvent(new win.Event("input", { bubbles: true }));
-
-      const entryButton = await waitFor(
-        win,
-        () => findListingEntryButton(doc, segment),
-        { timeoutMs: navigationStepTimeoutMs },
-      );
-      entryButton.click();
-    }
-
-    const selectFolderButton = await waitFor(
-      win,
-      () => {
-        const button = findButtonByText(doc.body, /select folder/i);
-        return button && !button.disabled ? button : null;
-      },
-      { timeoutMs: navigationStepTimeoutMs },
-    );
-
-    // Confirm the browser actually landed on the exact directory we
-    // navigated to before handing off — Orca surfaces the resolved path as
-    // this button's `title`. Never click through on a mismatch: that's
-    // exactly how an earlier version of this function ended up silently
-    // confirming a fallback directory instead of the cloned repo.
-    if (selectFolderButton.getAttribute("title") !== workspacePath) {
-      return false;
-    }
-    selectFolderButton.click();
-
-    // For a path that resolves to an existing git repository, Orca shows a
-    // second confirmation step ("Add Git Project" / "Open as Folder") before
-    // it actually registers the project.
-    const confirmButton = await waitFor(
-      win,
-      () =>
-        findButtonByText(doc.body, /add git project/i) ??
-        findButtonByText(doc.body, /open as folder/i),
-      { timeoutMs },
-    );
-    confirmButton.click();
-    return true;
-  } catch {
-    return false;
-  }
+export function agentActivityText(
+  agents: { active: number; idle: number } | null,
+): string | null {
+  if (agents == null) return null;
+  const { active, idle } = agents;
+  const working = active === 1 ? "1 agent working" : `${active} agents working`;
+  if (active > 0) return idle > 0 ? `${working} · ${idle} idle` : working;
+  if (idle > 0) return idle === 1 ? "1 agent idle" : `${idle} agents idle`;
+  return "No agents running";
 }
 
 export function WorkspaceTopBar({
   repository,
   workspaceId,
   canInvite,
-  liveAgentCount = null,
+  agents = null,
   slotsUsed = null,
   slotsTotal = MAX_PARALLEL_AGENT_SESSIONS,
   isStarting = false,
@@ -702,8 +493,9 @@ export function WorkspaceTopBar({
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
-  /** Agents running, every chat tab and managed session counted. */
-  liveAgentCount?: number | null;
+  /** What the embedded Mission Control reports: agents working now, and agent
+   *  sessions open but idle. `null` until it has reported at all. */
+  agents?: { active: number; idle: number } | null;
   /** Worktree slots in use. Not the same number: several agents share one
    *  checkout, and a chat in the workspace's own checkout holds no slot. The
    *  bar used to print the agent count over the slot denominator. */
@@ -712,10 +504,7 @@ export function WorkspaceTopBar({
   isStarting?: boolean;
 }) {
   const [shareOpen, setShareOpen] = useState(false);
-  const agentsText =
-    liveAgentCount == null
-      ? null
-      : `${liveAgentCount} ${liveAgentCount === 1 ? "agent" : "agents"} live`;
+  const agentsText = agentActivityText(agents);
   const slotsText =
     slotsUsed == null ? null : `${slotsUsed} of ${slotsTotal} slots`;
   const liveLabel = isStarting
@@ -729,7 +518,7 @@ export function WorkspaceTopBar({
     ? "Workspace is starting"
     : agentsText == null
       ? `Agent worktree capacity: ${slotsTotal} slots`
-      : `Active agents: ${liveAgentCount} live${slotsText ? `; worktree slots: ${slotsUsed} of ${slotsTotal} in use` : ""}`;
+      : `${agentsText}${slotsText ? `; worktree slots: ${slotsUsed} of ${slotsTotal} in use` : ""}`;
 
   return (
     <header className="workspace-topbar">
@@ -756,7 +545,7 @@ export function WorkspaceTopBar({
       ) : null}
       <div className="workspace-topbar-actions">
         <span
-          className={`workspace-topbar-capacity${!isStarting && liveAgentCount ? " is-live" : ""}`}
+          className={`workspace-topbar-capacity${!isStarting && agents && agents.active > 0 ? " is-live" : ""}`}
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -794,7 +583,7 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
-  embeddedAgentCount = null,
+  embeddedAgents = null,
   embeddedSlots = null,
   isStarting = false,
   children,
@@ -802,10 +591,11 @@ function WorkspaceChrome({
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
-  /** The embedded Mission Control's merged count, when the IDE has reported
-   *  one. It sees this client's own chat-tab agents, which the server-side
-   *  workboard never registers, so it is the more complete of the two. */
-  embeddedAgentCount?: number | null;
+  /** The embedded Mission Control's merged report, when the IDE has sent one.
+   *  It sees this client's own chat-tab agents, which the server-side
+   *  workboard never registers, so it is the only source that can count
+   *  agents at all — see the fallback note below. */
+  embeddedAgents?: { active: number; idle: number } | null;
   /** Worktree slots in use, as the embedded IDE read them off the workboard. */
   embeddedSlots?: { used: number; total: number } | null;
   isStarting?: boolean;
@@ -817,7 +607,11 @@ function WorkspaceChrome({
     <div className="workspace-page">
       <WorkspaceTopBar
         canInvite={canInvite}
-        liveAgentCount={embeddedAgentCount ?? activity?.occupied ?? null}
+        // Only the IDE can count agents. The workboard's `occupied` is
+        // `capacity.activeSessions` — worktree slots held by managed sessions
+        // — so the old fallback printed a slot count as an agent count, and
+        // then printed the very same number again as the slot count.
+        agents={embeddedAgents}
         slotsUsed={embeddedSlots?.used ?? activity?.occupied ?? null}
         slotsTotal={embeddedSlots?.total ?? MAX_PARALLEL_AGENT_SESSIONS}
         isStarting={isStarting}
@@ -872,9 +666,10 @@ export function OrcaWorkspace({
   // skeleton covers the iframe. `iframeKey` forces a fresh iframe load when a
   // reaped session has to be replaced under an open tab.
   const [shellReady, setShellReady] = useState(false);
-  const [embeddedAgentCount, setEmbeddedAgentCount] = useState<number | null>(
-    null,
-  );
+  const [embeddedAgents, setEmbeddedAgents] = useState<{
+    active: number;
+    idle: number;
+  } | null>(null);
   const [embeddedSlots, setEmbeddedSlots] = useState<{
     used: number;
     total: number;
@@ -964,6 +759,22 @@ export function OrcaWorkspace({
     },
     [],
   );
+
+  // Whether an agent can actually run here, which only this page can know.
+  // Sent rather than merely rendered in the banner: without it the embedded
+  // IDE opened a chat tab and took messages for an agent that could not reply.
+  const readiness = useMemo(
+    () =>
+      providerPreflight ? workspaceProviderReadiness(providerPreflight) : null,
+    [providerPreflight],
+  );
+  const reportProviderReadiness = useCallback(() => {
+    if (!readiness) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "codev:provider-readiness", ...readiness },
+      window.location.origin,
+    );
+  }, [readiness]);
 
   // Time-to-shell / time-to-project, measured from this component's first
   // paint (which is when the iframe starts loading the static bundle).
@@ -1069,6 +880,9 @@ export function OrcaWorkspace({
         );
         setShellReady(true);
         reportBootMark("workspace_shell_ready");
+        // Same reasoning as the pairing below: a report sent before the shell
+        // attached its listener was dropped silently.
+        reportProviderReadiness();
         // The pairing can already be sitting in pendingPairRef by the time the
         // shell announces itself (a warm host resolves the wake-poll almost
         // instantly, well before the iframe has loaded its bundle, mounted
@@ -1087,9 +901,18 @@ export function OrcaWorkspace({
         // client's own chat-tab agents; the workboard the top bar polls only
         // knows the managed half. Prefer the merged figure so the two never
         // contradict each other.
-        const count = event.data.count;
-        if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
-          setEmbeddedAgentCount(count);
+        //
+        // It reports the split because its list includes open-but-idle chat
+        // tabs. An older bundle sends only `count` (the total); treat that as
+        // all-idle rather than all-live — understating activity is the safe
+        // direction, and the bar re-reads the truth on the next report.
+        const { active, idle, count } = event.data;
+        if (typeof active === "number" && typeof idle === "number") {
+          if (isCount(active) && isCount(idle)) {
+            setEmbeddedAgents({ active, idle });
+          }
+        } else if (isCount(count)) {
+          setEmbeddedAgents({ active: 0, idle: count });
         }
         const { slotsUsed, slotsTotal } = event.data;
         if (
@@ -1125,7 +948,13 @@ export function OrcaWorkspace({
 
     window.addEventListener("message", receiveOrcaMessage);
     return () => window.removeEventListener("message", receiveOrcaMessage);
-  }, [workspaceId, reportBootMark, deliverPairing, reportHostState]);
+  }, [
+    workspaceId,
+    reportBootMark,
+    deliverPairing,
+    reportHostState,
+    reportProviderReadiness,
+  ]);
 
   // Fallback reveal: if the iframe never sends `codev:shell-ready` (older
   // bundle, or a shell that failed to paint), stop covering it once the wait
@@ -1161,6 +990,12 @@ export function OrcaWorkspace({
     iframeKey,
   ]);
 
+  // Re-report readiness when it changes (the member connected a provider in
+  // another tab and came back) or when the iframe is replaced under us.
+  useEffect(() => {
+    reportProviderReadiness();
+  }, [reportProviderReadiness, shellReady, iframeKey]);
+
   // Re-hand the pairing whenever we newly have one (the poll may resolve after
   // the iframe has already loaded, so `onLoad` alone is not enough).
   useEffect(() => {
@@ -1173,6 +1008,11 @@ export function OrcaWorkspace({
     waitingSinceRef.current = null;
     setIsSlowStart(false);
     setShellReady(false);
+    // The counts described the IDE that is being torn down. Leaving them up
+    // meant a re-provisioned workspace showed the dead session's agents until
+    // the fresh embed happened to report.
+    setEmbeddedAgents(null);
+    setEmbeddedSlots(null);
     pendingPairRef.current = null;
     connectFailureRef.current = null;
     setConnectFailure(null);
@@ -1216,6 +1056,8 @@ export function OrcaWorkspace({
         if (!cancelled && payload?.session === "gone") {
           setIsOpeningProject(false);
           setShellReady(false);
+          setEmbeddedAgents(null);
+          setEmbeddedSlots(null);
           pendingPairRef.current = null;
           setIframeKey((current) => current + 1);
           setConnection({ phase: "connecting" });
@@ -1319,6 +1161,18 @@ export function OrcaWorkspace({
           waitAndRetry();
           return;
         }
+        // The runtime is not reachable from this environment at all. Polling
+        // is what turned this into "still starting… it will open on its own"
+        // forever, so stop and say what is wrong — it is usually missing
+        // configuration, and nothing here will change without a person.
+        if (payload?.state === "unavailable") {
+          setConnection({
+            phase: "error",
+            message:
+              payload.error || "This workspace's runtime is not reachable.",
+          });
+          return;
+        }
         if (ACTIONABLE_CONNECT_STATUSES.has(response.status)) {
           setConnection({
             phase: "error",
@@ -1415,7 +1269,7 @@ export function OrcaWorkspace({
     <WorkspaceChrome
       canInvite={canInvite}
       isStarting={!hostReady || isOpeningProject}
-      embeddedAgentCount={embeddedAgentCount}
+      embeddedAgents={embeddedAgents}
       embeddedSlots={embeddedSlots}
       repository={repository}
       workspaceId={workspaceId}

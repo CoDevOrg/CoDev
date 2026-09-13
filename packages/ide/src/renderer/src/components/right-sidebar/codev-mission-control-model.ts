@@ -379,6 +379,27 @@ export function missionControlElapsed(since: number, now: number): string {
 }
 
 /**
+ * The one definition of "this agent is doing something", read by the top bar,
+ * the runtime ticker and the agent-count report. Sharing it is what stops the
+ * bar printing "1 agent live" beside a card reading "Idle".
+ */
+export function isAgentWorking(agent: Pick<MissionControlAgent, 'phase'>): boolean {
+  return agent.phase !== 'done' && agent.phase !== 'waiting'
+}
+
+/** Agents doing work now, agents merely open, and the total. */
+export type AgentActivitySummary = { active: number; idle: number; total: number }
+
+/** Split a merged list into working vs merely open. An untouched chat tab is
+ *  a real row here, but it is not an agent doing work. */
+export function summarizeAgentActivity(
+  agents: readonly Pick<MissionControlAgent, 'phase'>[]
+): AgentActivitySummary {
+  const active = agents.filter(isAgentWorking).length
+  return { active, idle: agents.length - active, total: agents.length }
+}
+
+/**
  * A local `done` agent is not "ready to merge" — it is a chat session sitting
  * idle between turns. Only managed sessions reach a real merge-ready state.
  */

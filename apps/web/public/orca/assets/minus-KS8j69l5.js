@@ -1,0 +1,1 @@
+import{Gv as e}from"./web-index-CucEQGu0.js";var t=e(`minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};

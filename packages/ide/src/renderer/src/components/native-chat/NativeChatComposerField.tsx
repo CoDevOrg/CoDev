@@ -14,6 +14,7 @@ import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-c
 import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
+import { useCodevAgentSendGate } from '@/web/codev-provider-readiness'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -102,6 +103,7 @@ export function NativeChatComposerField({
   agent,
   terminalTabId
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const sendGate = useCodevAgentSendGate()
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -189,7 +191,7 @@ export function NativeChatComposerField({
                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
                   : undefined
               }
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
+              placeholder={nativeChatComposerPlaceholder(hasPty, canSend, sendGate.reason)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // field-sizing:content grows the field with the draft; the 8lh cap (plus
               // py-1) turns further growth into internal scrolling, and scrollbar-sleek

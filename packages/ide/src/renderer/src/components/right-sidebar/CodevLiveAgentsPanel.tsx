@@ -26,6 +26,7 @@ import {
   mergeMissionControlAgents,
   missionControlPhaseFromState,
   missionControlPhaseFromStatus,
+  summarizeAgentActivity,
   type MissionControlAgent,
   type MissionControlCoordination,
   type MissionControlFeedHealth,
@@ -442,11 +443,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [managed, local, coordination]
   )
 
-  // Keep the workspace top bar's "N of 3 agents live" honest. It reads the
-  // server workboard, which only knows managed sessions — so a workspace whose
-  // agents are all local chat tabs showed "0 of 3 agents live" beside a Mission
-  // Control listing three of them. Reporting the merged count means both
-  // surfaces quote the same number because it is literally the same number.
+  const activity = useMemo(() => summarizeAgentActivity(agents), [agents])
+
+  // The workboard only knows managed sessions, so the bar needs this merged
+  // figure. Report the split, not a total: the list includes open-but-idle
+  // tabs. `count` stays on the wire for a parent on an older bundle.
   useEffect(() => {
     if (!embedded || typeof window === 'undefined' || window.parent === window) {
       return
@@ -454,16 +455,18 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     window.parent.postMessage(
       {
         type: 'codev:agent-count',
-        count: agents.length,
+        active: activity.active,
+        idle: activity.idle,
+        count: activity.total,
         // Slots are a different number from agents, and the top bar used to
         // print the agent count over a slot denominator.
         ...(slots ? { slotsUsed: slots.used, slotsTotal: slots.total } : {})
       },
       window.location.origin
     )
-  }, [agents.length, embedded, slots])
+  }, [activity, embedded, slots])
 
-  const busy = agents.some((agent) => agent.phase !== 'done' && agent.phase !== 'waiting')
+  const busy = activity.active > 0
 
   useEffect(() => {
     if (!busy) {

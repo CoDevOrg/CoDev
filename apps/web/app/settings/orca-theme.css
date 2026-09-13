@@ -1,8 +1,12 @@
 /*
- * Tailwind for the settings routes only. Imports theme + utilities but
- * skips preflight (Tailwind's global element reset) so it can't touch
- * anything outside settings pages — the rest of the app stays on its own
- * plain CSS. Color/radius values are Orca's own dark theme tokens
+ * Tailwind for the routes built on the Orca design system: the personal
+ * settings shell and the workspace activity feed. Imports theme + utilities
+ * but skips preflight (Tailwind's global element reset), and the reset rules
+ * below are scoped to `.orca-settings-scope`, so it cannot touch anything
+ * outside a route that opts in by importing this file — the rest of the app
+ * stays on its own plain CSS. A component that uses these utilities must
+ * render under one of those routes; the activity feed spent a release
+ * unstyled because it did not. Color/radius values are Orca's own dark theme tokens
  * (src/renderer/src/assets/main.css upstream), so the settings shell
  * matches what the personal settings page looked like when it was
  * rendered inside a live Orca client.

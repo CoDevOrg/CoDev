@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type JSX } from 'react'
 import { Check, Hash, Lock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { requestCodevBridge } from '@/web/codev-bridge-singleton'
+import {
+  getCodevBridgeSnapshot,
+  requestCodevBridge,
+  subscribeCodevBridge
+} from '@/web/codev-bridge-singleton'
 import { openCodevChannel, useCodevChannelId } from '@/web/codev-channel-view'
 import {
   canCreateChannelFor,
@@ -178,13 +182,27 @@ function useCodevTeam(active: boolean): {
   roster: TeamRoster | null
   channels: ChannelSummary[]
   error: string | null
+  /** The bridge has not completed its handshake yet, so there is nothing to
+   *  report — neither a roster nor a failure. */
+  connecting: boolean
   markChannelRead: (id: string) => void
   refresh: () => Promise<void>
 } {
   const [roster, setRoster] = useState<TeamRoster | null>(null)
   const [channels, setChannels] = useState<ChannelSummary[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [bridgeStatus, setBridgeStatus] = useState(() => getCodevBridgeSnapshot().status)
   const refreshInFlightRef = useRef(false)
+
+  // The bridge needs a hello/ack round trip first; asking through that window
+  // rendered "CoDev bridge is not connected." on every normal load.
+  useEffect(
+    () =>
+      subscribeCodevBridge(() => {
+        setBridgeStatus(getCodevBridgeSnapshot().status)
+      }),
+    []
+  )
 
   const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) {
@@ -207,7 +225,7 @@ function useCodevTeam(active: boolean): {
   }, [])
 
   useEffect(() => {
-    if (!active) {
+    if (!active || bridgeStatus !== 'connected') {
       return
     }
     let cancelled = false
@@ -222,7 +240,7 @@ function useCodevTeam(active: boolean): {
       cancelled = true
       clearInterval(timer)
     }
-  }, [active, refresh])
+  }, [active, bridgeStatus, refresh])
 
   // Opening a channel clears its badge here immediately; the next roster poll
   // confirms it from the server rather than leaving a stale count on screen.
@@ -232,12 +250,22 @@ function useCodevTeam(active: boolean): {
     )
   }, [])
 
-  return { roster, channels, error, markChannelRead, refresh }
+  const connecting = bridgeStatus !== 'connected' && roster === null
+
+  // A dropped bridge hellos again; the old failure must not sit on screen.
+  return {
+    roster,
+    channels,
+    error: bridgeStatus === 'connected' ? error : null,
+    connecting,
+    markChannelRead,
+    refresh
+  }
 }
 
 export function CodevTeamPanel(): JSX.Element | null {
   const active = isEmbedded()
-  const { roster, channels, error, markChannelRead, refresh } = useCodevTeam(active)
+  const { roster, channels, error, connecting, markChannelRead, refresh } = useCodevTeam(active)
   const openChannelId = useCodevChannelId()
   const [notice, setNotice] = useState<string | null>(null)
   const [newChannelOpen, setNewChannelOpen] = useState(false)
@@ -305,7 +333,11 @@ export function CodevTeamPanel(): JSX.Element | null {
           </span>
         </div>
 
-        {error ? (
+        {connecting ? (
+          <p className="px-3 py-1 text-[11px] text-worktree-sidebar-foreground/45" role="status">
+            Connecting to your team…
+          </p>
+        ) : error ? (
           <p className="px-3 py-1 text-[11px] text-worktree-sidebar-foreground/45">{error}</p>
         ) : null}
         {notice ? (
@@ -346,7 +378,7 @@ export function CodevTeamPanel(): JSX.Element | null {
               </li>
             )
           })}
-          {teammates.length === 0 ? (
+          {teammates.length === 0 && !connecting ? (
             <li className="px-2 py-1 text-[11px] text-worktree-sidebar-foreground/40">
               You are the only member. Use Share to invite your team.
             </li>
@@ -388,7 +420,7 @@ export function CodevTeamPanel(): JSX.Element | null {
               </button>
             </li>
           ))}
-          {channels.length === 0 ? (
+          {channels.length === 0 && !connecting ? (
             <li className="px-2 py-1 text-[11px] text-worktree-sidebar-foreground/40">
               No channels yet.
             </li>

@@ -11,7 +11,16 @@ export type NativeChatResolvedTarget = {
  *  pathological clipboard can't stall the round-trip. */
 export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
-export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean): string {
+/** `blockedReason` (CoDev: no provider can run an agent here) outranks the
+ *  rest and carries its own copy — only the parent knows the fix. */
+export function nativeChatComposerPlaceholder(
+  hasPty: boolean,
+  canSend: boolean,
+  blockedReason?: string | null
+): string {
+  if (blockedReason) {
+    return blockedReason
+  }
   if (!hasPty) {
     return translate(
       'components.native-chat.composer.noPty',

@@ -30,6 +30,10 @@ import {
   type StartIdeInput,
 } from "./orchestrator";
 import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
+import {
+  classifyRuntimeFailure,
+  type RuntimeUnavailable,
+} from "./runtime-availability";
 import { WorkspaceOpenTiming } from "./workspace-open-timing";
 
 const STALE_IDE_PROCESS_MESSAGE =
@@ -92,6 +96,13 @@ export class OrcaHostError extends Error {
 
 export type OrcaRuntimeState =
   | { state: "host-starting" }
+  /**
+   * The runtime cannot be reached at all and polling will not change that —
+   * missing configuration, an empty credential chain, a host that is not in
+   * the resource group. Distinct from `host-starting` because the client must
+   * stop waiting and say why; see `runtime-availability.ts`.
+   */
+  | ({ state: "unavailable" } & RuntimeUnavailable)
   | { state: "ready"; pairing: OrcaPairing; workspacePath: string };
 
 /**
@@ -259,7 +270,7 @@ export async function recordOrcaActivity(
 }
 
 /**
- * Ensure the EC2 host is running, the orchestrator is reachable, and this
+ * Ensure the runtime host is running, the orchestrator is reachable, and this
  * workspace has its own dedicated Orca IDE process (cloning its repository
  * first if needed). Returns `host-starting` while the instance boots so the
  * client can poll.
@@ -290,7 +301,7 @@ export async function ensureOrcaSession(
   // capacity refusal, a host still booting its services. None of it is an
   // error from their point of view - it just means "not ready yet" - so any
   // failure reports `host-starting` and the client keeps polling.
-  // A live session proves host readiness without EC2 discovery and health polling.
+  // A live session proves host readiness without host discovery and health polling.
   let running = false;
   try {
     const existing = await timing.measure("session_probe", () =>
@@ -304,6 +315,10 @@ export async function ensureOrcaSession(
     ) {
       throw new OrcaHostError(error.message, error.status);
     }
+    // A probe that failed because this environment has no runtime configured
+    // is the answer, not a reason to go on and wake a host that isn't there.
+    const unreachable = classifyRuntimeFailure(error);
+    if (unreachable) return { state: "unavailable", ...unreachable };
   }
   if (!running) {
     try {
@@ -319,7 +334,9 @@ export async function ensureOrcaSession(
         return true;
       });
       if (!available) return { state: "host-starting" };
-    } catch {
+    } catch (error) {
+      const unreachable = classifyRuntimeFailure(error);
+      if (unreachable) return { state: "unavailable", ...unreachable };
       return { state: "host-starting" };
     }
   }

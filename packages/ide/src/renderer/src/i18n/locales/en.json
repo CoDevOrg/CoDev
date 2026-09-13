@@ -14912,7 +14912,16 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "noAgent": {
+        "title": "No agent running here",
+        "subtitle": "Nothing is running in this workspace. Start a session to pick the work back up.",
+        "start": "Start a session"
+      },
+      "awaitingAgent": {
+        "message": "Still starting your agent — this is taking longer than usual.",
+        "retry": "Try again"
+      }
     },
     "tab": {
       "bar": {

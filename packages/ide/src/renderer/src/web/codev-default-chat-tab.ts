@@ -5,6 +5,7 @@ import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
 import type { CodevDefaultChatAgent } from './codev-bootstrap'
+import { clearCodevAgentLaunching, markCodevAgentLaunching } from './codev-agent-launch-state'
 import { isCodevEmbedded } from './codev-embedded'
 import { isCodevAgentWorktree, launchCodevAgentInOwnWorktree } from './codev-launch-agent-worktree'
 
@@ -82,7 +83,7 @@ type CodevChatTabWaitState = {
   tabsByWorktree: Record<string, { launchAgent?: unknown }[]>
   unifiedTabsByWorktree?: Record<string, { viewMode?: string }[]>
   worktreesByRepo: Record<string, { id: string; isMainWorktree?: boolean; branch?: string }[]>
-  pendingWorktreeCreations: Record<string, { status: 'creating' | 'error'; error?: string }>
+  pendingWorktreeCreations?: Record<string, { status: 'creating' | 'error'; error?: string }>
   allWorktrees?: () => { id: string; repoId?: string }[]
 }
 
@@ -110,7 +111,7 @@ export function codevWorkspaceHasChatTabInState(
 
 /** The error text of a worktree create that already failed, if any. */
 export function failedCodevWorktreeCreationError(state: CodevChatTabWaitState): string | null {
-  for (const creation of Object.values(state.pendingWorktreeCreations)) {
+  for (const creation of Object.values(state.pendingWorktreeCreations ?? {})) {
     if (creation.status === 'error') {
       return creation.error ?? 'The agent worktree could not be created.'
     }
@@ -202,9 +203,13 @@ function settleWorktreeOnChatTab(worktreeId: string): void {
     // accumulated in the worktree instead. `viewMode` survives the round trip.
     const chatTabIds = new Set<string>()
     for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
-      if (tab.viewMode !== 'chat') continue
+      if (tab.viewMode !== 'chat') {
+        continue
+      }
       chatTabIds.add(tab.id)
-      if (tab.entityId) chatTabIds.add(tab.entityId)
+      if (tab.entityId) {
+        chatTabIds.add(tab.entityId)
+      }
     }
     const isAgentTab = (tab: { id: string; launchAgent?: unknown }): boolean =>
       Boolean(tab.launchAgent) || chatTabIds.has(tab.id)
@@ -267,12 +272,16 @@ function ensureAgentTabsRenderAsChat(worktreeId: string): void {
       .filter((tab) => Boolean(tab.launchAgent))
       .map((tab) => tab.id)
   )
-  if (agentTabIds.size === 0) return
+  if (agentTabIds.size === 0) {
+    return
+  }
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
     const isAgentTab = agentTabIds.has(tab.entityId) || agentTabIds.has(tab.id)
-    if (!isAgentTab || tab.viewMode === 'chat') continue
+    if (!isAgentTab || tab.viewMode === 'chat') {
+      continue
+    }
     state.setTabViewMode(tab.id, 'chat')
     if (runtimeEnvironmentId) {
       // The host keeps its own copy and wins on the next hydration, so tell it
@@ -291,8 +300,16 @@ function ensureAgentTabsRenderAsChat(worktreeId: string): void {
  * the same launch path as the tab-bar quick-launch so paired (web-runtime)
  * sessions spawn the agent on the host correctly.
  */
-export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }): void {
-  const agent = codevDefaultChatAgent()
+export function launchCodevDefaultChatTab({
+  worktreeId,
+  agent: requested
+}: {
+  worktreeId: string
+  /** Explicit choice from a picker. Omitted only by the workspace-open
+   *  bootstrap, which has nobody to ask yet. */
+  agent?: TuiAgent
+}): void {
+  const agent = requested ?? codevDefaultChatAgent()
   if (!agent) {
     console.warn('CoDev resolved no default chat agent', {
       embedded: isCodevEmbedded(),
@@ -300,6 +317,17 @@ export function launchCodevDefaultChatTab({ worktreeId }: { worktreeId: string }
     })
     return
   }
+
+  // Every branch below is fire-and-forget, so this is the only point that
+  // reliably means "launching"; the wait decides when it stops.
+  markCodevAgentLaunching(worktreeId)
+  void waitForCodevDefaultChatTab({ worktreeId })
+    .catch((error: unknown) => {
+      console.warn('CoDev could not observe the default chat launch', error)
+    })
+    .finally(() => {
+      clearCodevAgentLaunching(worktreeId)
+    })
 
   const store = useAppStore.getState()
   const base = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)

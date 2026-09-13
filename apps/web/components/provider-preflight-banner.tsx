@@ -3,21 +3,13 @@
 import { useState } from "react";
 import { KeyRound, X } from "lucide-react";
 
-import type {
-  WorkspaceAgent,
-  WorkspaceProviderPreflight,
+import {
+  AGENT_LABEL,
+  WORKSPACE_PROVIDER_SETTINGS_HREF as SETTINGS_HREF,
+  workspaceProviderFix as fixFor,
+  type WorkspaceAgent,
+  type WorkspaceProviderPreflight,
 } from "@/lib/provider-surface-capability";
-
-const SETTINGS_HREF = "/settings/personal/providers#coding-workspaces";
-
-const AGENT_LABEL: Record<WorkspaceAgent, string> = {
-  claude: "Claude",
-  codex: "Codex",
-};
-
-function fixFor(agent: WorkspaceAgent) {
-  return `add an API key or run codev ${agent}-auth`;
-}
 
 /**
  * The provider line a member sees as a coding workspace starts. It names the

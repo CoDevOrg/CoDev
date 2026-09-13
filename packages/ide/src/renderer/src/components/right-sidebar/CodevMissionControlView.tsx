@@ -164,8 +164,8 @@ export function CodevMissionControlView({
 
       {agents.length === 0 ? (
         <p className="codev-agents-empty">
-          No agents are running yet. Start one from the chat tab, or open the agent workboard to
-          launch a managed session — it appears here the moment it moves.
+          No agents are running yet. Start a session, or open the agent workboard to launch a
+          managed one — it appears here the moment it moves.
         </p>
       ) : (
         <ul className="codev-mc-list">
