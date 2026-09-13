@@ -89,7 +89,22 @@ export async function POST(
       return apiError(error, error.status);
     }
     if (error instanceof OrcaHostError) {
-      return apiError(error, error.status);
+      if (error.detail !== error.message) {
+        logEvent("error", "workspace_runtime_error", {
+          workspaceId,
+          status: error.status,
+          detail: error.detail,
+          requestId: requestId(request),
+        });
+      }
+      // Same rule as the unavailable branch: the detail describes CoDev's
+      // infrastructure, so it leaves the server only on a development build.
+      return apiError(
+        process.env.NODE_ENV !== "production"
+          ? new OrcaHostError(error.detail, error.status)
+          : error,
+        error.status,
+      );
     }
     return apiError(error, 500);
   }

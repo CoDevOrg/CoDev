@@ -32,6 +32,7 @@ import {
 import { assertWorkspaceCreditQuota, QuotaError } from "./quotas";
 import {
   classifyRuntimeFailure,
+  RUNTIME_UNAVAILABLE_MESSAGE,
   type RuntimeUnavailable,
 } from "./runtime-availability";
 import { WorkspaceOpenTiming } from "./workspace-open-timing";
@@ -46,6 +47,24 @@ const STALE_IDE_PROCESS_MESSAGE =
  * (409) until the idle reaper frees one.
  */
 const TRANSIENT_ORCHESTRATOR_STATUSES = new Set([408, 409, 500, 502, 503, 504]);
+
+/**
+ * Orchestrator refusals whose own text is about the member, not about CoDev's
+ * infrastructure: out of credit, rate limited. Those pass through verbatim
+ * because they name something the person can actually act on. Every other
+ * status carries orchestrator-internal text and is reported generically.
+ */
+const MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES = new Set([402, 429]);
+
+function orcaHostErrorFor(error: OrchestratorError): OrcaHostError {
+  return MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES.has(error.status)
+    ? new OrcaHostError(error.message, error.status)
+    : new OrcaHostError(
+        RUNTIME_UNAVAILABLE_MESSAGE,
+        error.status,
+        error.message,
+      );
+}
 
 /**
  * `startIde` is meant to idempotently return an already-running session, but
@@ -86,8 +105,17 @@ async function startIdeRecoveringStaleProcess(
 
 export class OrcaHostError extends Error {
   constructor(
+    /** Safe to show whoever opened the workspace. */
     message: string,
     readonly status = 502,
+    /**
+     * What actually happened, for the log. Defaults to `message` because some
+     * of these — a credit quota, for one — are the member's own business and
+     * read the same either way. The orchestrator's own text is not: it
+     * describes CoDev's infrastructure and reached the workspace error panel
+     * verbatim before this existed.
+     */
+    readonly detail: string = message,
   ) {
     super(message);
     this.name = "OrcaHostError";
@@ -313,7 +341,7 @@ export async function ensureOrcaSession(
       error instanceof OrchestratorError &&
       [401, 403].includes(error.status)
     ) {
-      throw new OrcaHostError(error.message, error.status);
+      throw orcaHostErrorFor(error);
     }
     // A probe that failed because this environment has no runtime configured
     // is the answer, not a reason to go on and wake a host that isn't there.
@@ -405,7 +433,7 @@ export async function ensureOrcaSession(
       if (TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)) {
         return { state: "host-starting" };
       }
-      throw new OrcaHostError(error.message, error.status);
+      throw orcaHostErrorFor(error);
     }
     throw error;
   }

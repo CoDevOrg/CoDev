@@ -27,23 +27,23 @@ describe('isCodevProjectBootstrapReady', () => {
 })
 
 function createStore(
-  repos: Array<{
+  repos: {
     id: string
     path: string
     displayName: string
     executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
-  }> = []
+  }[] = []
 ) {
   return {
     repos,
     worktreesByRepo: {} as Record<
       string,
-      Array<{
+      {
         id: string
         repoId: string
         isMainWorktree: boolean
         hostId?: 'local' | `ssh:${string}` | `runtime:${string}`
-      }>
+      }[]
     >,
     activeWorktreeId: null as string | null,
     addRepoPath: vi.fn(),
@@ -103,7 +103,7 @@ describe('openCodevProject', () => {
     )
   })
 
-  it('opens the default chat tab once, after the checkout becomes active', async () => {
+  it('restores sessions once, after the checkout becomes active', async () => {
     const store = createStore([
       { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
     ])
@@ -112,7 +112,7 @@ describe('openCodevProject', () => {
     const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
       store.activeWorktreeId = worktreeId
     })
-    const launchDefaultChatTab = vi.fn()
+    const restoreChatTabs = vi.fn(() => false)
 
     await expect(
       openCodevProject({
@@ -122,15 +122,72 @@ describe('openCodevProject', () => {
         getStore: () => store,
         openDefaultCheckout,
         activateDefaultCheckoutFromSidebar,
-        launchDefaultChatTab
+        restoreChatTabs
       })
     ).resolves.toBe(true)
 
-    expect(launchDefaultChatTab).toHaveBeenCalledTimes(1)
-    expect(launchDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-1' })
+    expect(restoreChatTabs).toHaveBeenCalledTimes(1)
+    expect(restoreChatTabs).toHaveBeenCalledWith({ worktreeId: 'worktree-1' })
   })
 
-  it('completes the handoff even when opening the default chat tab throws', async () => {
+  /**
+   * Opening a workspace must not start anything. A member picks the agent, so
+   * an empty workspace reports ready and lands on the empty state rather than
+   * waiting out the chat-surface poll for a session nobody asked for.
+   */
+  it('reports ready without waiting when there is nothing to restore', async () => {
+    const store = createStore([
+      { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
+    ])
+    store.worktreesByRepo['repo-1'] = [{ id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }]
+    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
+      store.activeWorktreeId = worktreeId
+    })
+    const waitForDefaultChatTab = vi.fn(async () => true)
+
+    await expect(
+      openCodevProject({
+        projectPath,
+        projectKind: 'git',
+        store,
+        getStore: () => store,
+        openDefaultCheckout: vi.fn().mockResolvedValue(undefined),
+        activateDefaultCheckoutFromSidebar,
+        restoreChatTabs: vi.fn(() => false),
+        waitForDefaultChatTab
+      })
+    ).resolves.toBe(true)
+
+    expect(waitForDefaultChatTab).not.toHaveBeenCalled()
+  })
+
+  it('waits for a restored conversation to be on screen before reporting ready', async () => {
+    const store = createStore([
+      { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
+    ])
+    store.worktreesByRepo['repo-1'] = [{ id: 'worktree-1', repoId: 'repo-1', isMainWorktree: true }]
+    const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
+      store.activeWorktreeId = worktreeId
+    })
+    const waitForDefaultChatTab = vi.fn(async () => true)
+
+    await expect(
+      openCodevProject({
+        projectPath,
+        projectKind: 'git',
+        store,
+        getStore: () => store,
+        openDefaultCheckout: vi.fn().mockResolvedValue(undefined),
+        activateDefaultCheckoutFromSidebar,
+        restoreChatTabs: vi.fn(() => true),
+        waitForDefaultChatTab
+      })
+    ).resolves.toBe(true)
+
+    expect(waitForDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-1' })
+  })
+
+  it('completes the handoff even when restoring sessions throws', async () => {
     const store = createStore([
       { id: 'repo-1', path: projectPath, displayName: 'yousef20920/CoDev' }
     ])
@@ -139,8 +196,8 @@ describe('openCodevProject', () => {
     const activateDefaultCheckoutFromSidebar = vi.fn(async (worktreeId: string) => {
       store.activeWorktreeId = worktreeId
     })
-    const launchDefaultChatTab = vi.fn(() => {
-      throw new Error('agent launch failed')
+    const restoreChatTabs = vi.fn(() => {
+      throw new Error('session restore failed')
     })
 
     await expect(
@@ -151,11 +208,11 @@ describe('openCodevProject', () => {
         getStore: () => store,
         openDefaultCheckout,
         activateDefaultCheckoutFromSidebar,
-        launchDefaultChatTab
+        restoreChatTabs
       })
     ).resolves.toBe(true)
 
-    expect(launchDefaultChatTab).toHaveBeenCalledTimes(1)
+    expect(restoreChatTabs).toHaveBeenCalledTimes(1)
   })
 
   it('adds and activates a new project as one startup operation', async () => {
@@ -262,12 +319,12 @@ describe('openCodevProject', () => {
     expect(waitForActivationRetry).toHaveBeenCalledTimes(2)
   })
 
-  it('reports failure when the chat surface never appears', async () => {
+  it('reports failure when a restored conversation never appears', async () => {
     const store = createStore([{ id: 'repo-5', path: projectPath, displayName: 'workspace-id' }])
     store.worktreesByRepo['repo-5'] = [{ id: 'worktree-5', repoId: 'repo-5', isMainWorktree: true }]
-    const launchDefaultChatTab = vi.fn()
-    // The launch resolves fine — it only kicks off a background worktree create
-    // — so the handoff must not treat that as the workspace being open.
+    // Restore claimed a live session, so one has to reach the screen. Nothing
+    // to restore is a successful open now and is covered separately.
+    const restoreChatTabs = vi.fn(() => true)
     const waitForDefaultChatTab = vi.fn().mockResolvedValue(false)
 
     await expect(
@@ -280,12 +337,12 @@ describe('openCodevProject', () => {
           store.activeWorktreeId = 'worktree-5'
         }),
         activateDefaultCheckoutFromSidebar: vi.fn(),
-        launchDefaultChatTab,
+        restoreChatTabs,
         waitForDefaultChatTab
       })
     ).resolves.toBe(false)
 
-    expect(launchDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-5' })
+    expect(restoreChatTabs).toHaveBeenCalledWith({ worktreeId: 'worktree-5' })
     expect(waitForDefaultChatTab).toHaveBeenCalledWith({ worktreeId: 'worktree-5' })
   })
 
@@ -303,7 +360,7 @@ describe('openCodevProject', () => {
           store.activeWorktreeId = 'worktree-6'
         }),
         activateDefaultCheckoutFromSidebar: vi.fn(),
-        launchDefaultChatTab: vi.fn(),
+        restoreChatTabs: vi.fn(() => false),
         waitForDefaultChatTab: vi.fn().mockResolvedValue(true)
       })
     ).resolves.toBe(true)

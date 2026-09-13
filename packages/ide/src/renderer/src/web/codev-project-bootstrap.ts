@@ -34,22 +34,16 @@ type OpenDefaultCheckout = (args: {
 }) => Promise<void>
 
 /**
- * Opens the workspace's default chat tab in the just-activated worktree.
- *
- * CoDev workspaces are agent-first: the surface a member lands on when a
- * workspace opens is a native chat, not an idle shell. This runs once per
- * project handoff, immediately after the default checkout becomes the active
- * worktree, and is a no-op when that worktree already has an agent tab (e.g. a
- * reload that mirrored a still-running session).
+ * Puts a still-running conversation back on screen, and returns whether it
+ * found one. Opening a workspace deliberately starts nothing: a member picks
+ * the agent, so an empty workspace lands on the empty state instead of a
+ * session some default chose for them.
  */
-type LaunchDefaultChatTab = (args: { worktreeId: string }) => void | Promise<void>
+type RestoreChatTabs = (args: { worktreeId: string }) => boolean
 
 /**
- * Resolves once the workspace really has a chat surface. `launchDefaultChatTab`
- * creates the agent's worktree in the background and returns immediately, so
- * awaiting the launch proves nothing — without this the handoff reports success
- * onto an empty workspace and a silent failure is indistinguishable from a
- * healthy open.
+ * Resolves once a restored conversation is actually on screen. Only consulted
+ * when there was something to restore.
  */
 type WaitForDefaultChatTab = (args: { worktreeId: string }) => Promise<boolean>
 
@@ -99,7 +93,7 @@ export async function openCodevProject({
   getStore,
   openDefaultCheckout,
   activateDefaultCheckoutFromSidebar,
-  launchDefaultChatTab,
+  restoreChatTabs,
   waitForDefaultChatTab,
   waitForActivationRetry = waitForCodevActivationRetry
 }: {
@@ -110,7 +104,7 @@ export async function openCodevProject({
   getStore: () => CodevProjectStore
   openDefaultCheckout: OpenDefaultCheckout
   activateDefaultCheckoutFromSidebar: ActivateDefaultCheckoutFromSidebar
-  launchDefaultChatTab?: LaunchDefaultChatTab
+  restoreChatTabs?: RestoreChatTabs
   waitForDefaultChatTab?: WaitForDefaultChatTab
   waitForActivationRetry?: () => Promise<void>
 }): Promise<boolean> {
@@ -124,20 +118,26 @@ export async function openCodevProject({
     await store.updateRepo(repo.id, { displayName: projectName })
   }
 
-  let defaultChatTabLaunched = false
+  let activationFinished = false
   const finishActivation = async (worktreeId: string): Promise<boolean> => {
-    if (defaultChatTabLaunched) {
+    if (activationFinished) {
       return true
     }
-    defaultChatTabLaunched = true
+    activationFinished = true
+    let restored = false
     try {
-      await launchDefaultChatTab?.({ worktreeId })
+      restored = restoreChatTabs?.({ worktreeId }) ?? false
     } catch (error) {
-      console.warn('CoDev could not open the default chat tab:', error)
+      console.warn('CoDev could not restore the existing sessions:', error)
     }
-    // The chat is the workspace, so "opened" means a chat surface exists — not
-    // merely that a checkout activated. Reporting ready any earlier hands the
-    // parent page a success while the member stares at an empty workspace.
+    // Opening a workspace no longer starts a session, so an empty workspace is
+    // a correct landing, not a failure — waiting for a chat surface here would
+    // stall every open for the full poll budget before reporting ready.
+    if (!restored) {
+      return true
+    }
+    // A restored conversation should be on screen before the parent is told
+    // the project opened.
     return waitForDefaultChatTab ? waitForDefaultChatTab({ worktreeId }) : true
   }
 
