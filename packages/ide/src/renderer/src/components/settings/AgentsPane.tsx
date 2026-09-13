@@ -66,6 +66,7 @@ type AgentsPaneProps = {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
+  showDesktopOnlySettings?: boolean
 }
 
 type AgentAvailabilityUpdateQueueOptions = {
@@ -685,7 +686,8 @@ export function AgentsPane({
   wslSupportedPlatform,
   wslAvailable,
   wslDistros,
-  wslCapabilitiesLoading
+  wslCapabilitiesLoading,
+  showDesktopOnlySettings = true
 }: AgentsPaneProps): React.JSX.Element {
   // Why: the Active Server routes agent launches and provider checks through
   // that server, so this pane must list what THAT host can launch — detecting
@@ -867,7 +869,9 @@ export function AgentsPane({
 
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
-      <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      {showDesktopOnlySettings ? (
+        <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
 
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 

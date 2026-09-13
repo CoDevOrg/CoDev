@@ -11,6 +11,7 @@ import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-che
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -64,6 +65,24 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
     // if the IPC channel itself breaks. Log defensively; the user will notice
     // the app didn't restart and can retry.
     void window.api.updater.quitAndInstall().catch(console.error)
+  }
+
+  if (isWebClientLocation()) {
+    return (
+      <section key="updates" className="space-y-4">
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
+            'Updates'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralUpdateSettingsSection.webUpdates',
+            'The web app updates automatically.'
+          )}
+        />
+        <GeneralRemoteServerUpdates />
+      </section>
+    )
   }
 
   return (

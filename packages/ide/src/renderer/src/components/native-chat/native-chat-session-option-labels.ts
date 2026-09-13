@@ -68,7 +68,7 @@ export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): s
     descriptor.kind.type !== 'select' ||
     !descriptor.kind.currentValue
   ) {
-    return translate('components.native-chat.composer.model', 'Model')
+    return translate('components.native-chat.composer.defaultModel', 'Default model')
   }
   return nativeChatSessionChoiceLabel(
     descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue) ?? {
@@ -122,7 +122,7 @@ export function nativeChatOptionsPillLabel(
     return labels.join(' · ')
   }
   if (effort) {
-    return nativeChatSessionOptionLabel(effort)
+    return translate('components.native-chat.composer.defaultEffort', 'Default effort')
   }
   return translate('components.native-chat.composer.options', 'Options')
 }
