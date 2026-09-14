@@ -1,5 +1,9 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
+import {
+  type NextFetchEvent,
+  type NextRequest,
+  NextResponse,
+} from "next/server";
 
 import { auth as nextAuth } from "@/auth";
 import { apiEdgeLimiter, retryAfterSeconds } from "@/lib/upstash-rate-limit";
@@ -9,7 +13,7 @@ const clerkConfigured = Boolean(
 );
 
 const authenticationProxy = clerkConfigured ? clerkMiddleware() : nextAuth;
-const ADMIN_HOSTNAME = "admin.trycodev.com";
+const ADMIN_HOSTNAME = "admins.trycodev.com";
 
 function isAdminHostname(request: NextRequest): boolean {
   return request.nextUrl.hostname.toLowerCase() === ADMIN_HOSTNAME;

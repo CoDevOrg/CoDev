@@ -10,6 +10,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+const ADMIN_CONSOLE_URL = "https://admins.trycodev.com";
+
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
   { href: "/rooms", icon: MessagesSquare, label: "Rooms" },
@@ -20,12 +22,17 @@ const navItems = [
 export function AppSidebarNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
   const items = showAdmin
-    ? [...navItems, { href: "/admin", icon: ShieldCheck, label: "Admin" }]
+    ? [
+        ...navItems,
+        { href: ADMIN_CONSOLE_URL, icon: ShieldCheck, label: "Admin" },
+      ]
     : navItems;
   return (
     <nav className="app-sidebar-nav" aria-label="Application navigation">
       {items.map(({ href, icon: Icon, label }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
+        const active = href.startsWith("http")
+          ? false
+          : pathname === href || pathname.startsWith(href + "/");
         return (
           <Link
             key={href}
