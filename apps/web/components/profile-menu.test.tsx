@@ -88,4 +88,19 @@ describe("ProfileMenu", () => {
       "ada",
     );
   });
+
+  it("sends settings to the public host from the admin host", () => {
+    render(
+      <ProfileMenu
+        isAdminHost
+        useClerkAuth={false}
+        user={{ name: "Ada", image: null }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "https://www.trycodev.com/settings",
+    );
+  });
 });

@@ -7,18 +7,13 @@ import {
 
 import { auth as nextAuth } from "@/auth";
 import { apiEdgeLimiter, retryAfterSeconds } from "@/lib/upstash-rate-limit";
+import { isAdminHostname } from "@/lib/site-hosts";
 
 const clerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
 );
 
 const authenticationProxy = clerkConfigured ? clerkMiddleware() : nextAuth;
-const ADMIN_HOSTNAME = "admins.trycodev.com";
-
-function isAdminHostname(request: NextRequest): boolean {
-  return request.nextUrl.hostname.toLowerCase() === ADMIN_HOSTNAME;
-}
-
 function shouldAuthenticate(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard/") ||
@@ -43,7 +38,7 @@ function clientIdentifier(request: NextRequest) {
  */
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
-  const adminHost = isAdminHostname(request);
+  const adminHost = isAdminHostname(request.nextUrl.hostname);
 
   // The admin hostname is an application boundary, not just an alias. Only
   // the admin page, its sign-in flow, and framework assets are valid there.

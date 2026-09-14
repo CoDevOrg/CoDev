@@ -7,6 +7,7 @@ import { ChevronDown } from "lucide-react";
 import { connectGitHubAccount } from "@/app/actions/github";
 import { signOutToHome } from "@/app/actions/auth";
 import { ClerkSignOut } from "@/components/clerk-sign-out";
+import { publicAppHref } from "@/lib/site-hosts";
 
 export type ProfileMenuUser = {
   name?: string | null | undefined;
@@ -20,12 +21,14 @@ export function ProfileMenu({
   returnTo = "/dashboard",
   showConnectGitHub = false,
   useClerkAuth = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY),
+  isAdminHost = false,
 }: {
   user: ProfileMenuUser;
   compact?: boolean;
   returnTo?: string;
   showConnectGitHub?: boolean;
   useClerkAuth?: boolean;
+  isAdminHost?: boolean;
 }) {
   const displayName = user.name ?? user.githubLogin ?? "Your account";
   const initial = displayName.slice(0, 1).toUpperCase();
@@ -63,7 +66,10 @@ export function ProfileMenu({
           <span>Account</span>
           <strong>{user.name ?? user.githubLogin ?? "Your account"}</strong>
         </div>
-        <Link className="profile-menu-link" href="/settings">
+        <Link
+          className="profile-menu-link"
+          href={publicAppHref("/settings", isAdminHost)}
+        >
           Settings
         </Link>
         {showConnectGitHub ? (

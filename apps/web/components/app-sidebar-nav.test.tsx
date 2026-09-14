@@ -27,4 +27,17 @@ describe("AppSidebarNav", () => {
       "/rooms",
     );
   });
+
+  it("sends non-admin navigation to the public host from the admin host", () => {
+    render(<AppSidebarNav showAdmin isAdminHost />);
+
+    expect(screen.getByRole("link", { name: "Workspaces" })).toHaveAttribute(
+      "href",
+      "https://www.trycodev.com/dashboard",
+    );
+    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
+      "href",
+      "https://admins.trycodev.com",
+    );
+  });
 });
