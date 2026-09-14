@@ -1,6 +1,11 @@
 import "server-only";
 
-import { AZURE_VERSION, decryptWithAzure, encryptWithAzure } from "./azure-kms";
+import {
+  AZURE_VERSION,
+  decryptWithAzure,
+  encryptWithAzure,
+  getKeyVaultKeyId,
+} from "./azure-kms";
 import {
   decryptWithKms,
   encryptWithKms,
@@ -59,13 +64,17 @@ export async function encryptSecret(
   value: string,
   encryptionContext?: KmsEncryptionContext,
 ) {
-  if (isAzure()) {
-    return encryptWithAzure(value, encryptionContext);
-  }
-
-  const keyId = getKmsKeyId();
+  // The development fallback belongs to both clouds, not to the AWS branch.
+  // It only ever sat there because AWS was the default; when the default moved
+  // to Azure, an unconfigured local checkout — which has no Key Vault key —
+  // started throwing on the first credential it tried to store. Production
+  // still refuses either way: `getKeyVaultKeyId` and `getDevelopmentKey` both
+  // throw there rather than write an unmanaged envelope.
+  const keyId = isAzure() ? getKeyVaultKeyId() : getKmsKeyId();
   if (!keyId) return encryptWithKey(value, getDevelopmentKey(), LEGACY_VERSION);
-  return encryptWithKms(value, encryptionContext);
+  return isAzure()
+    ? encryptWithAzure(value, encryptionContext)
+    : encryptWithKms(value, encryptionContext);
 }
 
 /**

@@ -61,6 +61,7 @@ vi.mock("./compute-credits", () => ({
 }));
 
 import { ensureOrcaSession, OrcaHostError } from "./orca-host";
+import { RUNTIME_UNAVAILABLE_MESSAGE } from "./runtime-availability";
 
 const workspaceId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
 const userId = "5a946afa-6881-44a6-adbd-c1f9fe136881";
@@ -347,6 +348,33 @@ describe("ensureOrcaSession", () => {
 
     const result = ensureOrcaSession(workspace, userId);
     await expect(result).rejects.toBeInstanceOf(OrcaHostError);
-    await expect(result).rejects.toMatchObject({ status: 402 });
+    await expect(result).rejects.toMatchObject({
+      status: 402,
+      // Verbatim: being out of credit is the member's own business, and
+      // replacing it with the generic runtime line would hide a billing
+      // problem behind an infrastructure one.
+      message: "Workspace credit exhausted.",
+    });
+  });
+
+  /**
+   * The orchestrator's own text describes CoDev's infrastructure. It used to
+   * reach the "Could not open the workspace" panel verbatim on every
+   * non-transient status.
+   */
+  it("does not put orchestrator text in front of a member", async () => {
+    mocks.startIde.mockRejectedValueOnce(
+      new mocks.OrchestratorError(
+        "caddy route reload failed on host i-0abc",
+        400,
+      ),
+    );
+
+    const result = ensureOrcaSession(workspace, userId);
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      message: RUNTIME_UNAVAILABLE_MESSAGE,
+      detail: "caddy route reload failed on host i-0abc",
+    });
   });
 });

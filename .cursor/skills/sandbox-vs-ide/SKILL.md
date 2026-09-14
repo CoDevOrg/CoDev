@@ -1,11 +1,11 @@
 ---
 name: sandbox-vs-ide
-description: Use when touching agent execution, worktrees, publication exports, the embedded Orca IDE, its parent/iframe bridge, sandbox API routes, Firecracker, or anything files must be visible to `codex resume`. Activate for workspace runtime, isolation, or Vercel vs AWS boundary work.
+description: Use when touching agent execution, worktrees, publication exports, the embedded Orca IDE, its parent/iframe bridge, sandbox API routes, Firecracker, or anything files must be visible to `codex resume`. Activate for workspace runtime, isolation, or Vercel vs Azure boundary work.
 ---
 
 # Sandbox vs IDE
 
-A workspace has two AWS-hosted execution contexts that **do not share a disk**:
+A workspace has two Azure-hosted execution contexts that **do not share a disk**:
 
 1. **Firecracker sandbox** — backend-driven work: agent execution, worktrees,
    publication exports. `apps/web` talks to it directly over real Next.js API
@@ -31,3 +31,8 @@ it isn't one.
 Anything `codex resume` or a terminal must see — files, running processes —
 lives only inside the IDE session's runtime, not the sandbox's. Do not write
 sandbox files expecting the IDE session to see them, or the reverse.
+
+The runtime runs on **Azure** — the EC2 migration is done. `CLOUD_PROVIDER`
+defaults to Azure and the retired EC2 host is parked in
+`apps/web/lib/retired/`, outside the typecheck and test runs, so flipping that
+variable no longer moves the runtime by itself.

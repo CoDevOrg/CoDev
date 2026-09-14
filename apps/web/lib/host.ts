@@ -1,44 +1,45 @@
 import "server-only";
 
-import * as awsHost from "./aws-host";
 import * as azureHost from "./azure-host";
-import { isAzure, type HostState } from "./cloud";
+import type { HostState } from "./cloud";
 
 /**
- * The runtime host, whichever cloud it currently lives on.
+ * The runtime host. Azure — the migration is done.
  *
- * Everything that wakes, inspects or powers down the Firecracker host goes
- * through these three functions, and none of the eight call sites knows or
- * cares which implementation answers. `CLOUD_PROVIDER` picks; see `cloud.ts`
- * for why the default is AWS.
+ * The EC2 implementation is parked in `lib/retired/aws-host.ts`, out of the
+ * typecheck program. It was reachable from here through `isAzure()`, and that
+ * one import loaded `@aws-sdk/client-ec2` — 1012 declaration files, a fifth of
+ * this app's typecheck — to serve a branch nothing selects and a host that no
+ * longer exists.
+ *
+ * To bring it back: restore the import, put the `isAzure()` ternaries back on
+ * these three functions, and drop `lib/retired` from the tsconfig `exclude`.
+ * Nothing else moved.
  */
 
 export type { HostState };
 
 export function getHostInstanceId(): Promise<string> {
-  return isAzure()
-    ? azureHost.getHostInstanceId()
-    : awsHost.getHostInstanceId();
+  return azureHost.getHostInstanceId();
 }
 
 export function getHostState(): Promise<HostState> {
-  return isAzure() ? azureHost.getHostState() : awsHost.getHostState();
+  return azureHost.getHostState();
 }
 
 export function requestHostWake(): Promise<"running" | "starting"> {
-  return isAzure() ? azureHost.requestHostWake() : awsHost.requestHostWake();
+  return azureHost.requestHostWake();
 }
 
 /**
  * Power the host down for the idle lifecycle.
  *
- * Only Azure needs an explicit call here. The AWS host stops itself: its
- * instance carries `InstanceInitiatedShutdownBehavior: stop`, so the
- * orchestrator's own idle timer shutting the OS down is enough to stop
- * billing. An Azure VM shut down from inside the guest stays *allocated* and
- * keeps charging for compute, so the platform has to be told to deallocate
- * it from outside.
+ * Azure needs the explicit call: a VM shut down from inside the guest stays
+ * *allocated* and keeps charging for compute, so the platform has to be told
+ * to deallocate it from outside. (The EC2 host stopped itself — its instance
+ * carried `InstanceInitiatedShutdownBehavior: stop` — which is why this was
+ * once guarded by `isAzure()`.)
  */
 export async function releaseIdleHost(): Promise<void> {
-  if (isAzure()) await azureHost.deallocateHost();
+  await azureHost.deallocateHost();
 }

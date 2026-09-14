@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type JSX } from 'react'
+import { useCallback, useMemo, useState, type JSX, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { History, MessageSquarePlus, Search } from 'lucide-react'
 import { toast } from 'sonner'
@@ -58,11 +58,15 @@ import {
 export function CodevChatHistorySection({
   className,
   onNewChat,
+  newChatAction,
   newChatPending = false,
   canStartNewChat = false
 }: {
   className?: string
   onNewChat?: () => void
+  /** Replaces the New chat button outright — CoDev puts an agent picker here
+   *  so starting a session is a choice, not a default. */
+  newChatAction?: ReactNode
   newChatPending?: boolean
   canStartNewChat?: boolean
 }): JSX.Element {
@@ -228,22 +232,23 @@ export function CodevChatHistorySection({
           <History className="size-3.5 opacity-70" aria-hidden="true" />
           <h3>Chats</h3>
         </div>
-        {onNewChat ? (
-          <button
-            type="button"
-            className="codev-chat-history-new"
-            onClick={onNewChat}
-            disabled={!canStartNewChat || newChatPending}
-            title={
-              canStartNewChat
-                ? 'Start a fresh chat on this agent, same branch and files'
-                : 'Open an agent to start a fresh chat on it'
-            }
-          >
-            <MessageSquarePlus className="size-3.5" aria-hidden="true" />
-            {newChatPending ? 'Starting…' : 'New chat'}
-          </button>
-        ) : null}
+        {newChatAction ??
+          (onNewChat ? (
+            <button
+              type="button"
+              className="codev-chat-history-new"
+              onClick={onNewChat}
+              disabled={!canStartNewChat || newChatPending}
+              title={
+                canStartNewChat
+                  ? 'Start a fresh chat on this agent, same branch and files'
+                  : 'Open an agent to start a fresh chat on it'
+              }
+            >
+              <MessageSquarePlus className="size-3.5" aria-hidden="true" />
+              {newChatPending ? 'Starting…' : 'New chat'}
+            </button>
+          ) : null)}
       </header>
 
       <label className="codev-chat-history-search">

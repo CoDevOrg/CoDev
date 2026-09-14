@@ -44,11 +44,26 @@ describe("orchestrator transport selection", () => {
   });
 
   it("signs ordinary calls for the API Gateway on AWS", async () => {
+    environment.CLOUD_PROVIDER = "aws";
     await checkOrchestratorConnection();
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.toString()).toBe("https://gateway.example.test/healthz");
     const headers = init.headers as Record<string, string>;
     expect(headers.authorization).toMatch(/^AWS4-HMAC-SHA256 /);
+  });
+
+  /**
+   * The default moved to Azure when the migration finished. An environment
+   * that forgets the variable must land on the cloud that actually runs the
+   * host, not on the retired one — the old AWS default is what made a local
+   * checkout poll EC2 for a host that no longer exists.
+   */
+  it("treats an unset CLOUD_PROVIDER as Azure", async () => {
+    await checkOrchestratorConnection();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://host.example.test/healthz");
+    const headers = init.headers as Record<string, string>;
+    expect(headers.authorization).toMatch(/^Bearer /);
   });
 
   it("sends every call down the bearer-authenticated direct path on Azure", async () => {

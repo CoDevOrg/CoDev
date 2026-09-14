@@ -1,0 +1,1 @@
+import{l as e}from"./web-index-xoypUIAM.js";export{e as useAppStore};

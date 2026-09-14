@@ -121,6 +121,12 @@ export function workspaceReadyProviders(
 
 export type WorkspaceAgent = "claude" | "codex";
 
+/** How each agent is named in member-facing copy. */
+export const AGENT_LABEL: Record<WorkspaceAgent, string> = {
+  claude: "Claude",
+  codex: "Codex",
+};
+
 const AGENT_FOR: Record<"anthropic" | "openai", WorkspaceAgent> = {
   anthropic: "claude",
   openai: "codex",
@@ -162,5 +168,63 @@ export function workspaceProviderPreflight(
       ? providerSurfaceCapability(snapshot, first).workspace.source
       : undefined,
     notReady,
+  };
+}
+
+/** Where a member fixes a workspace provider gap. Shared by the startup
+ *  banner and the readiness report sent into the embedded IDE, so the two
+ *  never point at different places. */
+export const WORKSPACE_PROVIDER_SETTINGS_HREF =
+  "/settings/personal/providers#coding-workspaces";
+
+/** What an agent connected for rooms but not workspaces needs. */
+export function workspaceProviderFix(agent: WorkspaceAgent): string {
+  return `add an API key or run codev ${agent}-auth`;
+}
+
+/**
+ * Whether an agent can actually run in this workspace, in the shape the
+ * embedded IDE consumes.
+ *
+ * The parent page has always known this — it renders it in the startup banner
+ * — but never told the IDE, so the IDE opened a chat tab and accepted messages
+ * for an agent that could not reply. This is that answer, on the wire.
+ */
+export type WorkspaceProviderReadiness = {
+  ready: boolean;
+  agent: WorkspaceAgent | null;
+  reason: string | null;
+  settingsHref: string;
+};
+
+export function workspaceProviderReadiness(
+  preflight: WorkspaceProviderPreflight,
+): WorkspaceProviderReadiness {
+  if (preflight.starting !== null) {
+    return {
+      ready: true,
+      agent: preflight.starting,
+      reason: null,
+      settingsHref: WORKSPACE_PROVIDER_SETTINGS_HREF,
+    };
+  }
+  // Naming the rooms-only case specifically matters: the member *has*
+  // connected this agent and would otherwise read "not set up" as a bug.
+  const roomsOnly = preflight.notReady.filter(
+    (entry) => entry.connectedForRooms,
+  );
+  const reason =
+    roomsOnly.length > 0
+      ? `${roomsOnly.map((entry) => AGENT_LABEL[entry.agent]).join(" and ")} ${
+          roomsOnly.length > 1 ? "are" : "is"
+        } connected for chat rooms only — ${workspaceProviderFix(roomsOnly[0]!.agent)} to use ${
+          roomsOnly.length > 1 ? "them" : "it"
+        } in a coding workspace.`
+      : "No coding agent is set up for this workspace yet.";
+  return {
+    ready: false,
+    agent: null,
+    reason,
+    settingsHref: WORKSPACE_PROVIDER_SETTINGS_HREF,
   };
 }

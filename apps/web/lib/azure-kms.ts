@@ -28,6 +28,16 @@ export const AZURE_VERSION = "akv-v1";
 
 let cryptography: CryptographyClient | undefined;
 
+/**
+ * The configured Key Vault key, or undefined outside production where a
+ * developer checkout is expected to have none. Exported so `encryptSecret`
+ * can offer the same development-key fallback it has always offered on the
+ * AWS path — see the note there.
+ */
+export function getKeyVaultKeyId() {
+  return getKeyIdentifier();
+}
+
 function getKeyIdentifier() {
   const keyId = process.env.CREDENTIAL_KEY_VAULT_KEY_ID;
   if (!keyId && process.env.NODE_ENV === "production") {

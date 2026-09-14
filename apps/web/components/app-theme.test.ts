@@ -3,12 +3,23 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const appTheme = readFileSync(
-  resolve(process.cwd(), "app/app-theme.css"),
-  "utf8",
-);
-const globals = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
-const landing = readFileSync(resolve(process.cwd(), "app/landing.css"), "utf8");
+/**
+ * Several assertions below match multi-line selector lists, so they depend on
+ * the line endings on disk. Git checks these files out with CRLF wherever
+ * `core.autocrlf` is on (every default Windows clone), which failed three of
+ * these tests locally while CI stayed green — an environment difference, not a
+ * theme regression. Normalize on read so the assertions test the CSS.
+ */
+function readCss(name: string): string {
+  return readFileSync(resolve(process.cwd(), "app", name), "utf8").replace(
+    /\r\n/g,
+    "\n",
+  );
+}
+
+const appTheme = readCss("app-theme.css");
+const globals = readCss("globals.css");
+const landing = readCss("landing.css");
 
 describe("CoDev product theme", () => {
   it("sets one dark palette for every AppChrome product page", () => {

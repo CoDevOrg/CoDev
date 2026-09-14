@@ -19,6 +19,27 @@ Run from the repository root. Node.js 24+. pnpm only.
 - Rust checks: `pnpm rust:check`
 - Rebuild embedded Orca bundle: `pnpm orca:web`
 
+## Verifying a Change
+
+The full suites are expensive. Run them once, at the end — not per edit.
+
+- Iterate with targeted runs. `apps/web`:
+  `pnpm --filter @codev/web exec vitest run lib/<file>.test.ts`. `packages/ide`:
+  `pnpm run ide:test:web` or `vitest run --config config/vitest.config.ts <path>`
+  from that directory.
+- Run `pnpm typecheck` and a full `pnpm test` **once**, when the change is
+  otherwise finished. `apps/web` typechecks in ~20s cold and ~10s warm, and a
+  full `apps/web` test run is ~45s; `packages/ide` is minutes, so that is the
+  one to be sparing with.
+- Search with ripgrep (the `Grep` tool), never `grep -r` from the repo root.
+  `node_modules` is ~4 GB across two trees; a recursive grep times out before it
+  finishes, while ripgrep answers the same question in about a second.
+- A `packages/ide` source change also needs `pnpm orca:web` (~90s) and the
+  regenerated bundle committed with it. Batch IDE edits and rebuild once.
+- `apps/web/.next/dev` is a dev-server cache that grows without bound — it has
+  reached 5.4 GB here. Delete it when the tree feels slow; `pnpm dev` rebuilds
+  it, and `.next/cache` (the production build cache) is worth keeping.
+
 ## Container Policy
 
 Use Apple's open-source [container](https://github.com/apple/container) tool whenever local container execution is needed. Do not add Dockerfiles, Docker Compose configuration, or commands that require Docker.
@@ -30,7 +51,13 @@ Firecracker sandboxes and per-workspace Orca IDE sessions do **not** share a fil
 - Backend-driven work (agent execution, worktrees, publication exports) uses **sandbox API routes**.
 - Anything an interactive IDE session must see (terminals, Git, `codex resume`) uses **`/ide` file and execution routes**.
 
-Preserve the split between the Vercel-hosted web control plane and AWS-hosted Firecracker/Orca infrastructure.
+Preserve the split between the Vercel-hosted web control plane and the
+Azure-hosted Firecracker/Orca infrastructure. `CLOUD_PROVIDER` selects the cloud
+and defaults to Azure. The EC2 implementation is parked in
+`apps/web/lib/retired/`, which tsconfig and vitest both exclude — `host.ts` no
+longer branches on the cloud, so `CLOUD_PROVIDER=aws` does **not** restore the
+old runtime on its own; `host.ts` documents what to put back. Do not describe
+the runtime as AWS-hosted.
 
 ## packages/ide
 
@@ -46,6 +73,26 @@ Preserve the split between the Vercel-hosted web control plane and AWS-hosted Fi
 - Validate data crossing service or persistence boundaries (existing Zod/contracts). Do not add unchecked ad hoc types at those boundaries.
 - Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
 - Add or update tests with every behavior change.
+- New tests default to the `node` environment. `apps/web/vitest.config.ts` splits
+  `lib` (node, no setup file) from `components` (jsdom + Testing Library); a test
+  that genuinely needs a DOM belongs under `components/`, or declares
+  `// @vitest-environment jsdom` in its own docblock. Do not move the global
+  default back — booting a DOM for pure-logic tests cost this suite 4x its
+  runtime (253s to 45s) before the split.
+- A dependency's type surface is a standing cost on every typecheck.
+  `skipLibCheck` skips _checking_ `.d.ts` files but still parses and loads them:
+  `@aws-sdk/client-ec2` was 1012 files — a fifth of the `apps/web` program — for
+  one retired module, and taking it out of the program moved the typecheck from
+  171s to 20s. Prefer the narrowest client that does the job, and retire a
+  dependency in the same change as its last caller.
+- `apps/web/lib/retired/` holds code kept for reference and excluded from both
+  the typecheck and the test run. Nothing there is verified, so nothing may
+  import it. Do not add to it casually and do not "fix" what is in it — either
+  bring a module back properly (restore its imports, drop the excludes) or
+  delete it.
+- `@aws-sdk/client-kms` is **not** dead weight: `decryptSecret` dispatches on
+  the stored envelope prefix and must keep reading legacy `kms-v1.` credentials.
+  Leave it.
 
 ## UI & Design (required skills)
 

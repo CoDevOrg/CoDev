@@ -7,6 +7,7 @@ import {
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { getCodevProviderReadiness, isAgentSendBlocked } from '@/web/codev-provider-readiness'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 import {
@@ -125,12 +126,37 @@ function clearConfirmDurationMs(options?: NativeChatSendOptions): number {
  *
  * Serialized per PTY so rapid sends cannot glue before Enter.
  */
+function noopNativeChatSendHandle(): NativeChatSendHandle {
+  return { cancel: () => undefined, settleAfterMs: 0, settled: Promise.resolve() }
+}
+
+/** CoDev: the parent page says no provider can run an agent on this host, so
+ *  a send would go to something that can never answer. Guarding here rather
+ *  than in the composer covers every route into the PTY. */
+function blockedByProvider(): boolean {
+  const readiness = getCodevProviderReadiness()
+  if (!isAgentSendBlocked(readiness)) {
+    return false
+  }
+  // Imported lazily: this module is on the terminal-pane hot path, and pulling
+  // the toast library in at module scope shifted listener-count baselines.
+  void import('sonner').then(({ toast }) => {
+    toast.error('No agent is set up for this workspace', {
+      description: readiness?.reason ?? undefined
+    })
+  })
+  return true
+}
+
 export function sendNativeChatMessage(
   settings: RuntimeSettings,
   ptyId: string,
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
+  if (blockedByProvider()) {
+    return noopNativeChatSendHandle()
+  }
   return enqueueNativeChatPtySend(
     ptyId,
     NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
@@ -191,6 +217,9 @@ export async function sendNativeChatMessageVerified(
   text: string,
   signal?: AbortSignal
 ): Promise<boolean> {
+  if (blockedByProvider()) {
+    return false
+  }
   // Why: chat sends hold a delayed Enter for 500ms. Opening the model picker in
   // that window used to let that Enter hit Claude's confirmation UI, so
   // verification timed out with "Could not verify the model change".

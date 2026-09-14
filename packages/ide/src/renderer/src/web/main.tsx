@@ -27,6 +27,7 @@ import {
   type CodevPairPayload
 } from './codev-pair-message'
 import { installCodevHostStateListener } from './codev-host-state'
+import { installCodevProviderReadinessListener } from './codev-provider-readiness'
 
 const App = lazy(() => import('../App'))
 
@@ -43,6 +44,7 @@ function WebRoot(): React.JSX.Element {
   // the awaiting-workspace cover is still downloading is not lost.
   if (window.__CODEV_EMBEDDED__) {
     installCodevHostStateListener()
+    installCodevProviderReadinessListener()
   }
   window.__CODEV_PROJECT_PATH__ = codevBoot?.projectPath
   window.__CODEV_PROJECT_KIND__ = codevBoot?.projectKind

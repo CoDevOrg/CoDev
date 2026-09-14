@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { codevDefaultChatAgent } from '@/web/codev-default-chat-tab'
+import type { TuiAgent } from '../../../../shared/types'
 import { requestCodevBridge } from '@/web/codev-bridge-singleton'
 
 type WorkboardSlot = {
@@ -46,42 +46,44 @@ export function useCodevNewChat({
 }: {
   onStarted?: () => void
 } = {}): {
-  startNewChat: () => Promise<void>
+  startNewChat: (agent: TuiAgent) => Promise<void>
   pending: boolean
   canStart: boolean
 } {
   const [pending, setPending] = useState(false)
   const worktreeId = useAppStore((state) => state.activeWorktreeId) ?? null
 
-  const startNewChat = useCallback(async () => {
-    if (!worktreeId || pending) {
-      return
-    }
-    const agent = codevDefaultChatAgent()
-    if (!agent) {
-      return
-    }
-    setPending(true)
-    try {
-      launchAgentInNewTab({ agent, worktreeId })
-      const sessionId = await findManagedSessionId(worktreeId)
-      if (sessionId) {
-        // Best effort: the chat is already open locally either way, and a
-        // failure here only costs the room's view of it.
-        await requestCodevBridge('agents.newChat', { sessionId }).catch(() => undefined)
-        onStarted?.()
+  // The agent is the caller's choice, never a default: starting a session used
+  // to silently pick Claude, so a member with Codex linked got the wrong agent
+  // with no say in it.
+  const startNewChat = useCallback(
+    async (agent: TuiAgent) => {
+      if (!worktreeId || pending) {
+        return
       }
-      toast.success('Started a fresh chat on this agent', {
-        description: 'Same branch and files, empty context.'
-      })
-    } catch (error: unknown) {
-      toast.error('Could not start a new chat', {
-        description: error instanceof Error ? error.message : String(error)
-      })
-    } finally {
-      setPending(false)
-    }
-  }, [onStarted, pending, worktreeId])
+      setPending(true)
+      try {
+        launchAgentInNewTab({ agent, worktreeId })
+        const sessionId = await findManagedSessionId(worktreeId)
+        if (sessionId) {
+          // Best effort: the chat is already open locally either way, and a
+          // failure here only costs the room's view of it.
+          await requestCodevBridge('agents.newChat', { sessionId }).catch(() => undefined)
+          onStarted?.()
+        }
+        toast.success('Started a new session', {
+          description: 'Same branch and files, empty context.'
+        })
+      } catch (error: unknown) {
+        toast.error('Could not start the session', {
+          description: error instanceof Error ? error.message : String(error)
+        })
+      } finally {
+        setPending(false)
+      }
+    },
+    [onStarted, pending, worktreeId]
+  )
 
   return { startNewChat, pending, canStart: Boolean(worktreeId) }
 }

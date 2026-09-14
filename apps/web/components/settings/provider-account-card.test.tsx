@@ -594,7 +594,48 @@ describe("ProviderAccountCard", () => {
       expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
     });
 
-    it("explains that a browser sign-in cannot be enabled for workspaces", () => {
+    /**
+     * Claude's browser runtime lives in the member's own sandbox and never
+     * reaches the shared workspace host, so there is nothing to enable — the
+     * card says so instead of offering a toggle that `providerSurfaceCapability`
+     * would refuse to honour.
+     */
+    it("explains that a Claude browser sign-in cannot be enabled for workspaces", () => {
+      render(
+        <ProviderAccountCard
+          capability={capability({ rooms: true })}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          label="Claude"
+          logo={null}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            status: "connected",
+            connectMode: "manual_code",
+            command: "codev claude-auth",
+            provenance: "browser",
+            enabledForRooms: true,
+            enabledForWorkspace: false,
+          })}
+          surface="rooms"
+        />,
+      );
+
+      expect(screen.queryByRole("switch")).toBeNull();
+      expect(
+        screen.getByText(/Browser sign-ins stay in chat rooms/),
+      ).toBeInTheDocument();
+    });
+
+    /**
+     * Codex is the exception, and the card must track it: a browser OAuth
+     * login and a local CLI login materialize the same auth cache, so
+     * `providerSurfaceCapability` accepts either for a workspace
+     * (`provenance === "cli" || provider === "openai"`). Offering the toggle
+     * here is only correct for as long as that stays true.
+     */
+    it("lets a Codex browser sign-in be enabled for workspaces", () => {
       render(
         <ProviderAccountCard
           capability={capability({ rooms: true })}
@@ -616,10 +657,12 @@ describe("ProviderAccountCard", () => {
         />,
       );
 
-      expect(screen.queryByRole("switch")).toBeNull();
       expect(
-        screen.getByText(/Browser sign-ins stay in chat rooms/),
+        screen.getByRole("switch", { name: "Also use in coding workspaces" }),
       ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/Browser sign-ins stay in chat rooms/),
+      ).toBeNull();
     });
 
     it("lets a terminal login be enabled for the other surface", async () => {

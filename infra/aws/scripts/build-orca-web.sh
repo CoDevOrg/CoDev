@@ -35,6 +35,18 @@ fi
 "${pnpm_cmd[@]}" --dir "${source_dir}" build:web
 
 node "${brand_script}" "${source_dir}/out/web"
-rsync -a --delete "${source_dir}/out/web/" "${target_dir}/"
+
+# Mirror the build into the served directory: the bundle's filenames are
+# content-hashed, so the last build's chunks must go rather than pile up
+# beside this one's. `rsync` is absent from Git Bash on Windows, where this
+# step aborted after a full (slow) build had already succeeded, leaving a
+# stale bundle in the tree that looked regenerated. Fall back when missing.
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --delete "${source_dir}/out/web/" "${target_dir}/"
+else
+  rm -rf "${target_dir}"
+  mkdir -p "${target_dir}"
+  cp -a "${source_dir}/out/web/." "${target_dir}/"
+fi
 
 echo "CoDev IDE web client ready at ${target_dir}"
