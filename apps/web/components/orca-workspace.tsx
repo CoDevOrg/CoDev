@@ -76,7 +76,14 @@ const HOST_STATE_REPORT_MS = 2_000;
  * person can do something about. Every other status is infrastructure and is
  * retried silently.
  */
-const ACTIONABLE_CONNECT_STATUSES = new Set([401, 403, 404, 429]);
+// A 400 from the runtime is a request/configuration problem, not a cold-start
+// condition. Retrying it forever hides the useful server message (for
+// example, a provider credential that cannot be used by the shared IDE).
+const ACTIONABLE_CONNECT_STATUSES = new Set([400, 401, 403, 404, 429]);
+
+export function isActionableOrcaConnectStatus(status: number): boolean {
+  return ACTIONABLE_CONNECT_STATUSES.has(status);
+}
 /**
  * Bound on a single connect request. Without one, a request that never
  * settled kept the starting state up forever with nothing to report.
@@ -1173,7 +1180,7 @@ export function OrcaWorkspace({
           });
           return;
         }
-        if (ACTIONABLE_CONNECT_STATUSES.has(response.status)) {
+        if (isActionableOrcaConnectStatus(response.status)) {
           setConnection({
             phase: "error",
             message:

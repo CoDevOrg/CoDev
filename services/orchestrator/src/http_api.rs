@@ -660,12 +660,12 @@ async fn start_ide(
             "Codex auth cache is invalid or too large".into(),
         ));
     }
-    if request.claude_code_oauth_token.is_some() {
-        return Err(RuntimeError::BadRequest(
-            "Claude subscriptions run only in private backend runtimes, never shared IDE sessions."
-                .into(),
-        ));
-    }
+    // A Claude OAuth token here is only the long-lived `claude setup-token`
+    // uploaded through the CLI and explicitly enabled for workspace use. The
+    // web control plane never forwards a browser subscription token. The Orca
+    // backend maps this field to CLAUDE_CODE_OAUTH_TOKEN for the member's
+    // isolated workspace user, so rejecting it here would make the supported
+    // CLI flow fail with a misleading 400.
     if request
         .anthropic_api_key
         .as_ref()
@@ -1021,6 +1021,26 @@ mod tests {
     #[tokio::test]
     async fn health_and_lifecycle() {
         let app = router(Arc::new(Backend::fake()), IdeBackend::Disabled);
+        let cli_claude_token = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/ide")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "projectRoot": "/srv/codev/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb",
+                            "claudeCodeOauthToken": "sk-ant-cli-token"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(cli_claude_token.status(), StatusCode::SERVICE_UNAVAILABLE);
+
         let health = app
             .clone()
             .oneshot(

@@ -8,8 +8,16 @@ import {
   buildOrcaPendingIframeSource,
   createOrcaManagedProposal,
   discardOrcaManagedProposal,
+  isActionableOrcaConnectStatus,
   WorkspaceTopBar,
 } from "./orca-workspace";
+
+describe("isActionableOrcaConnectStatus", () => {
+  it("surfaces runtime configuration errors instead of retrying forever", () => {
+    expect(isActionableOrcaConnectStatus(400)).toBe(true);
+    expect(isActionableOrcaConnectStatus(503)).toBe(false);
+  });
+});
 
 describe("discardOrcaManagedProposal", () => {
   it("maps an Orca worktree to its session and invokes audited discard", async () => {
