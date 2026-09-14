@@ -89,6 +89,11 @@ export default async function SignInPage({
     reset?: string;
   }>;
 }) {
+  const { callbackUrl, error, mode, reset } = await searchParams;
+  const safeCallback =
+    callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
+      ? callbackUrl
+      : "/dashboard";
   const clerkEnabled = clerkAuthConfigured();
   let session: Session | null = null;
   let sessionCheckUnavailable = false;
@@ -102,15 +107,10 @@ export default async function SignInPage({
       sessionCheckUnavailable = true;
     }
   }
-  if (session?.user) redirect("/dashboard");
+  if (session?.user) redirect(safeCallback);
 
-  const { callbackUrl, error, mode, reset } = await searchParams;
   const githubConfigured = isGitHubAuthConfigured();
   const googleConfigured = isGoogleAuthConfigured();
-  const safeCallback =
-    callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
-      ? callbackUrl
-      : "/dashboard";
 
   const inviteGrant = await readInviteGrant();
   const inviteMessage = inviteErrorMessage(error);

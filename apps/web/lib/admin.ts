@@ -44,7 +44,7 @@ export const isUserAdmin = cache(async (userId: string): Promise<boolean> => {
  * existence is not advertised.
  */
 export async function requireAdmin(): Promise<AppUser> {
-  const user = await requireUser();
+  const user = await requireUser("/admin");
   if (!(await isUserAdmin(user.id))) {
     notFound();
   }

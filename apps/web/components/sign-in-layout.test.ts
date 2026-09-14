@@ -11,6 +11,7 @@ const signInErrorPage = readFileSync(
   resolve(process.cwd(), "app/sign-in/error.tsx"),
   "utf8",
 );
+const adminGuard = readFileSync(resolve(process.cwd(), "lib/admin.ts"), "utf8");
 const credentialsSignInForm = readFileSync(
   resolve(process.cwd(), "components/credentials-sign-in-form.tsx"),
   "utf8",
@@ -64,5 +65,10 @@ describe("sign-in provider layout", () => {
     expect(signInPage).toContain("AuthError");
     expect(signInErrorPage).toContain("We could not load sign-in.");
     expect(signInErrorPage).toContain("Try again");
+  });
+
+  it("preserves the admin deep link through sign-in", () => {
+    expect(adminGuard).toContain('requireUser("/admin")');
+    expect(signInPage).toContain("if (session?.user) redirect(safeCallback);");
   });
 });
