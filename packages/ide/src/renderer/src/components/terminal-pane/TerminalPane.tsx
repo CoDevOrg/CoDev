@@ -529,16 +529,15 @@ function TerminalPane(
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
-  // CoDev: while the workspace's default chat tab is still being launched (or
-  // that launch failed — see codev-project-bootstrap.ts's silent catch), this
-  // worktree's only tab is the host's raw shell. Cover it with a loading state
-  // instead of ever exposing a bare interactive terminal; the cover clears
-  // itself the instant a real agent/chat tab appears, reactively.
+  // CoDev: the center is only ever chat. A terminal tab not in chat view — the
+  // host's raw shell before the agent launches, or a stray shell fronted over
+  // an existing chat — is always covered; the cover moves back to the chat or
+  // offers to start one. The shell a member wants lives in the chat's drawer.
   const codevWorktreeHasAgentTab = useAppStore((store) =>
     worktreeHasAgentTabInState(worktreeId, store)
   )
   const showCodevAwaitingAgentCover =
-    isCodevEmbedded() && !effectiveChatViewMode && !codevWorktreeHasAgentTab
+    isCodevEmbedded() && !effectiveChatViewMode && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
   const unifiedTabLabel = useAppStore(
     (store) =>
       getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
@@ -3169,7 +3168,12 @@ function TerminalPane(
       {showCodevAwaitingAgentCover && activePane?.container
         ? createPortal(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-              <CodevAwaitingAgentCover worktreeId={worktreeId} />
+              <CodevAwaitingAgentCover
+                worktreeId={worktreeId}
+                tabId={tabId}
+                isActive={isActive && isolatedPaneKey === null}
+                hasChatTab={codevWorktreeHasAgentTab}
+              />
             </div>,
             activePane.container,
             `codev-awaiting-agent-${tabId}-${activePane.leafId}`

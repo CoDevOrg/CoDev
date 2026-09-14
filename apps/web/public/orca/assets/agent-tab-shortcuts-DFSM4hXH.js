@@ -1,0 +1,1 @@
+import{Gg as e,Nm as t,Wg as n,pm as r}from"./web-index-CY9PtTDh.js";function i(e,i){if(!e)return[];let a=new Set(n(i)),o=[];for(let n of t){if(a.has(n))continue;let t=r(n);(e[t]??[]).length>0&&o.push({agent:n,actionId:t})}return o}function a(t){return e(t.defaultTuiAgent===`blank`?null:t.defaultTuiAgent,t.detectedAgentIds??[],t.disabledTuiAgents)}export{a as n,i as t};

@@ -3,8 +3,8 @@ import { CodevChatHistorySection } from '@/components/right-sidebar/CodevChatHis
 import { useCodevNewChat } from '@/components/codev/codev-new-chat'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { codevSessionAgents } from '@/web/codev-session-agents'
 import type { TuiAgent } from '../../../../shared/types'
 
 /** The workspace's sessions, in the top half of the left rail. Discoverability:
@@ -19,7 +19,7 @@ export function CodevChatsSection(): JSX.Element | null {
     return null
   }
 
-  const agents = getAgentCatalog().filter((entry) => isNativeChatSupportedAgent(entry.id))
+  const agents = codevSessionAgents(getAgentCatalog())
 
   return (
     <CodevChatHistorySection
@@ -42,6 +42,7 @@ export function CodevChatsSection(): JSX.Element | null {
           triggerClassName="codev-chat-history-new"
           emptyLabel={pending ? 'Starting…' : 'New session'}
           allowNarrowTrigger
+          allowBlankTerminal={false}
         />
       }
     />

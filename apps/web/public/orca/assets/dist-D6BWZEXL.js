@@ -1,1 +1,0 @@
-import{Mv as e,ay as t,ly as n}from"./web-index-xoypUIAM.js";var r=n(t(),1);e();var i=r.createContext(void 0);function a(e){let t=r.useContext(i);return e||t||`ltr`}export{a as t};

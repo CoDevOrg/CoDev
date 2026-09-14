@@ -4,23 +4,35 @@ import { NativeChatEmptyState } from '../native-chat/NativeChatEmptyState'
 import { Button } from '@/components/ui/button'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../shared/types'
 import { useCodevAgentLaunching } from '@/web/codev-agent-launch-state'
+import { frontCodevChatTab } from '@/web/codev-center-chat-tab'
 import { launchCodevDefaultChatTab } from '@/web/codev-default-chat-tab'
+import { codevSessionAgents } from '@/web/codev-session-agents'
 
 /** Ordinary auto-launch latency; past this a silently-failed launch needs a
  *  way out (codev-project-bootstrap.ts catches and only warns). */
 const RETRY_OFFER_DELAY_MS = 10_000
 
 /**
- * Covers a CoDev worktree's raw host terminal when it has no agent tab.
- * Launching, stalled and "nothing running" are separate screens — conflating
- * them told a member who had just pressed Stop that their assistant was
- * still starting.
+ * Covers any CoDev terminal tab that is not showing chat: the center is only
+ * ever chat. When the worktree has a chat elsewhere, the center moves back to
+ * it; otherwise launching, stalled and "nothing running" are separate screens —
+ * conflating them told a member who had just pressed Stop that their assistant
+ * was still starting.
  */
-export function CodevAwaitingAgentCover({ worktreeId }: { worktreeId: string }): React.JSX.Element {
+export function CodevAwaitingAgentCover({
+  worktreeId,
+  tabId,
+  isActive,
+  hasChatTab
+}: {
+  worktreeId: string
+  tabId: string
+  isActive: boolean
+  hasChatTab: boolean
+}): React.JSX.Element {
   const launching = useCodevAgentLaunching(worktreeId)
   const [stalled, setStalled] = useState(false)
   // Why: bumping this restarts the wait-then-offer-retry cycle after a manual
@@ -29,6 +41,12 @@ export function CodevAwaitingAgentCover({ worktreeId }: { worktreeId: string }):
   const [cycle, setCycle] = useState(0)
   // Unselected on purpose: choosing the agent is what starts the session.
   const [agent, setAgent] = useState<TuiAgent | null>(null)
+
+  useEffect(() => {
+    if (isActive && hasChatTab) {
+      frontCodevChatTab(worktreeId, tabId)
+    }
+  }, [worktreeId, tabId, isActive, hasChatTab])
 
   useEffect(() => {
     if (!launching) {
@@ -45,7 +63,7 @@ export function CodevAwaitingAgentCover({ worktreeId }: { worktreeId: string }):
     setCycle((value) => value + 1)
   }
 
-  if (launching && !stalled) {
+  if (hasChatTab || (launching && !stalled)) {
     return <NativeChatEmptyState kind="loading" />
   }
 
@@ -77,7 +95,7 @@ export function CodevAwaitingAgentCover({ worktreeId }: { worktreeId: string }):
         )}
       </p>
       <AgentCombobox
-        agents={getAgentCatalog().filter((entry) => isNativeChatSupportedAgent(entry.id))}
+        agents={codevSessionAgents(getAgentCatalog())}
         value={agent}
         onValueChange={setAgent}
         onValueSelected={(selected) => {
@@ -89,6 +107,7 @@ export function CodevAwaitingAgentCover({ worktreeId }: { worktreeId: string }):
         }}
         emptyLabel={translate('components.native-chat.noAgent.start', 'Start a session')}
         allowNarrowTrigger
+        allowBlankTerminal={false}
       />
     </div>
   )
