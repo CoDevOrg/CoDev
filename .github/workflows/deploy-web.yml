@@ -109,7 +109,7 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          url="$(vercel deploy --prebuilt --scope="$VERCEL_SCOPE" ${{ steps.target.outputs.flag }})"
+          url="$(vercel deploy --prebuilt --archive=tgz --scope="$VERCEL_SCOPE" ${{ steps.target.outputs.flag }})"
           echo "Deployed to: ${url}"
           {
             echo "### Vercel ${{ steps.target.outputs.env }} deploy"
