@@ -424,6 +424,7 @@ import {
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
 import {
+  markClaudeProjectTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -21070,7 +21071,9 @@ export class OrcaRuntimeService {
       return
     }
     try {
-      if (preset === 'cursor') {
+      if (preset === 'claude') {
+        markClaudeProjectTrusted(workspacePath)
+      } else if (preset === 'cursor') {
         markCursorWorkspaceTrusted(workspacePath)
       } else if (preset === 'copilot') {
         markCopilotFolderTrusted(workspacePath)

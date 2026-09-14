@@ -2490,7 +2490,7 @@ export type PreloadApi = {
   }
   agentTrust: {
     markTrusted: (args: {
-      preset: 'cursor' | 'copilot' | 'codex'
+      preset: 'claude' | 'cursor' | 'copilot' | 'codex'
       workspacePath: string
       connectionId?: string
     }) => Promise<void>

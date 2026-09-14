@@ -5,7 +5,7 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+export type AgentTrustPreset = 'claude' | 'cursor' | 'copilot' | 'codex'
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
@@ -26,6 +26,46 @@ export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
  * Codex's `--dangerously-bypass-approvals-and-sandbox` would also change
  * approval/sandbox policy, so it is not equivalent to "trust this project".
  */
+
+/**
+ * Claude Code keeps per-project trust in its global config — `~/.claude.json`,
+ * or `$CLAUDE_CONFIG_DIR/.claude.json` — under
+ * `projects["<path>"].hasTrustDialogAccepted`. Its lookup walks parents only up
+ * to the checkout root (verified against the Claude Code 2.1.270 bundle), so a
+ * trusted repo does not cover a sibling agent worktree: each needs its own entry.
+ */
+export function markClaudeProjectTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim() || homedir()
+  const configPath = join(configDir, '.claude.json')
+  let config: Record<string, unknown> = {}
+  try {
+    if (existsSync(configPath)) {
+      const parsed: unknown = JSON.parse(readFileSync(configPath, 'utf-8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return
+      }
+      config = parsed as Record<string, unknown>
+    }
+  } catch {
+    // Why: never replace a config Claude itself could not parse; the prompt still works manually.
+    return
+  }
+  const projects = isPlainObject(config.projects) ? config.projects : {}
+  const entry = projects[absPath]
+  const existing = isPlainObject(entry) ? entry : {}
+  if (existing.hasTrustDialogAccepted === true) {
+    return
+  }
+  config.projects = { ...projects, [absPath]: { ...existing, hasTrustDialogAccepted: true } }
+  mkdirSync(configDir, { recursive: true })
+  // Why: this file carries MCP bearer tokens; keep it owner-only like Claude does.
+  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
 
 /**
  * Cursor's CLI keeps a per-workspace trust marker at:

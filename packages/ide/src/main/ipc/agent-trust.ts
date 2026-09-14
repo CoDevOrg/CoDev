@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import {
   type AgentTrustPreset,
+  markClaudeProjectTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -37,6 +38,8 @@ export function registerAgentTrustHandlers(): void {
             connectionId,
             workspacePath: args.workspacePath
           })
+        } else if (args.preset === 'claude') {
+          markClaudeProjectTrusted(args.workspacePath)
         } else if (args.preset === 'cursor') {
           markCursorWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'copilot') {

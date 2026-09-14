@@ -580,26 +580,32 @@ describe('staged background worktree creation', () => {
           resolveTrust = resolve
         })
     )
+    // Why: this stub's trust never settles on its own; leaving it installed hangs every later trust-gated launch in the file.
+    const previousWindow = globalThis.window
     globalThis.window = { api: { agentTrust: { markTrusted } } } as never
-    store.repos = [{ id: 'repo-1', connectionId: null }]
-    store.createWorktree.mockResolvedValueOnce({
-      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
-    })
+    try {
+      store.repos = [{ id: 'repo-1', connectionId: null }]
+      store.createWorktree.mockResolvedValueOnce({
+        worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo/wt-1' }
+      })
 
-    const started = continueBackgroundWorktreeCreation(
-      'creation-1',
-      makeRequest({ agent: 'codex' }),
-      { revealCreationSurface: false }
-    )
+      const started = continueBackgroundWorktreeCreation(
+        'creation-1',
+        makeRequest({ agent: 'codex' }),
+        { revealCreationSurface: false }
+      )
 
-    expect(started).toBe(true)
-    await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
-    delete store.pendingWorktreeCreations['creation-1']
-    store.activePendingCreationId = null
-    resolveTrust()
-    await vi.waitFor(() => expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledTimes(1))
+      expect(started).toBe(true)
+      await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
+      delete store.pendingWorktreeCreations['creation-1']
+      store.activePendingCreationId = null
+      resolveTrust()
+      await vi.waitFor(() => expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledTimes(1))
 
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+      expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    } finally {
+      globalThis.window = previousWindow
+    }
   })
 
   // Why: one-click "Start workspace from issue" commonly backgrounds, so the
