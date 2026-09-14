@@ -6,7 +6,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "./database";
-import { COST_TRACKING_START_DATE, getRealCodevAwsSpend } from "./aws-cost";
+import { COST_TRACKING_START_DATE, getRealCodevAzureSpend } from "./azure-cost";
 
 export interface AdminWorkspaceMember {
   userId: string;
@@ -31,20 +31,21 @@ export interface AdminWorkspaceRow {
   /** Minutes of sandbox/IDE runtime recorded since cost tracking began. */
   trackedMinutes: number;
   /**
-   * This workspace's share of the real EC2 bill, in proportion to its real
-   * recorded runtime minutes. Null until any workspace has recorded minutes
-   * in the tracked window (nothing to allocate yet).
+   * This workspace's share of the real Azure VM bill, in proportion to its
+   * recorded runtime minutes. Null until any workspace has recorded minutes in
+   * the tracked window (nothing to allocate yet).
    */
-  estimatedCostUsd: number | null;
+  allocatedCost: number | null;
 }
 
 export interface AdminWorkspacesReport {
   workspaces: AdminWorkspaceRow[];
   costTracking: {
     trackedSinceIso: string;
-    totalRealSpendUsd: number;
-    attributableEc2Usd: number;
-    platformOverheadUsd: number;
+    totalRealCost: number;
+    attributableComputeCost: number;
+    platformOverheadCost: number;
+    currency: string;
     totalTrackedMinutes: number;
   };
 }
@@ -104,7 +105,7 @@ export async function listAllWorkspacesForAdmin(): Promise<AdminWorkspacesReport
           ),
         ),
       ),
-    getRealCodevAwsSpend(),
+    getRealCodevAzureSpend(),
   ]);
 
   const trackingStart = new Date(COST_TRACKING_START_DATE);
@@ -156,9 +157,9 @@ export async function listAllWorkspacesForAdmin(): Promise<AdminWorkspacesReport
         (left, right) => left.joinedAt.localeCompare(right.joinedAt),
       ),
       trackedMinutes,
-      estimatedCostUsd:
+      allocatedCost:
         totalTrackedMinutes > 0
-          ? (trackedMinutes / totalTrackedMinutes) * spend.ec2Usd
+          ? (trackedMinutes / totalTrackedMinutes) * spend.computeCost
           : null,
     };
   });
@@ -167,9 +168,10 @@ export async function listAllWorkspacesForAdmin(): Promise<AdminWorkspacesReport
     workspaces,
     costTracking: {
       trackedSinceIso: trackingStart.toISOString(),
-      totalRealSpendUsd: spend.totalUsd,
-      attributableEc2Usd: spend.ec2Usd,
-      platformOverheadUsd: spend.overheadUsd,
+      totalRealCost: spend.totalCost,
+      attributableComputeCost: spend.computeCost,
+      platformOverheadCost: spend.overheadCost,
+      currency: spend.currency,
       totalTrackedMinutes,
     },
   };

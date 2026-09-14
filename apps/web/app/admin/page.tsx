@@ -22,16 +22,15 @@ export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
 
 const numberFmt = new Intl.NumberFormat("en-US");
-const usdFmt = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 4,
-});
-
-function formatUsd(value: number | null): string {
+function formatCost(value: number | null, currency: string): string {
   if (value === null) return "—";
-  return usdFmt.format(value);
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: safeCurrency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value);
 }
 
 function formatMinutes(minutes: number): string {
@@ -301,27 +300,31 @@ export default async function AdminPage() {
           <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
             Every workspace ever created, including closed ones — closing a
             workspace marks it deleted but keeps its record here permanently.
-            Cost is real AWS spend (Cost Explorer, the{" "}
-            <code>Project=CoDev</code> tag), not an estimate — but it has only
-            been tracked since{" "}
-            {formatDate(workspacesReport.costTracking.trackedSinceIso)}, since
-            that&rsquo;s when the tag was activated; AWS cannot retroactively
-            reconstruct tagged spend from before that date. Per-workspace
-            dollars are this workspace&rsquo;s share of the real{" "}
-            {formatUsd(workspacesReport.costTracking.attributableEc2Usd)} EC2
-            bill, split by its real recorded runtime minutes — the only slice
-            that can be honestly attributed to one workspace, since every
-            workspace shares one host. The remaining{" "}
-            {formatUsd(workspacesReport.costTracking.platformOverheadUsd)} of
-            real spend (networking, KMS, storage, tax) is shared platform
-            overhead with no honest per-workspace split, so it isn&rsquo;t
+            Cost is real Azure spend (Cost Management, scoped to the CoDev
+            resource group), not an estimate — but it has only been tracked
+            since {formatDate(workspacesReport.costTracking.trackedSinceIso)},
+            since that&rsquo;s when the Azure cost tracker was activated; Azure
+            cannot retroactively reconstruct a comparable allocation before that
+            date. Per-workspace amounts are each workspace&rsquo;s share of the
+            real Azure VM compute bill, split by its recorded runtime minutes —
+            the only slice that can be honestly attributed to one workspace,
+            since every workspace shares one host. The remaining{" "}
+            {formatCost(
+              workspacesReport.costTracking.platformOverheadCost,
+              workspacesReport.costTracking.currency,
+            )}{" "}
+            of real spend (networking, storage, Key Vault, and other shared
+            services) has no honest per-workspace split, so it isn&rsquo;t
             divided below.
           </p>
           <div className="admin-stat-grid" style={{ marginBottom: "1rem" }}>
             <div className="admin-stat">
-              <div className="admin-stat-label">Real AWS spend tracked</div>
+              <div className="admin-stat-label">Real Azure spend tracked</div>
               <div className="admin-stat-value">
-                {formatUsd(workspacesReport.costTracking.totalRealSpendUsd)}
+                {formatCost(
+                  workspacesReport.costTracking.totalRealCost,
+                  workspacesReport.costTracking.currency,
+                )}
               </div>
               <div className="admin-stat-hint">
                 since{" "}
@@ -330,10 +333,13 @@ export default async function AdminPage() {
             </div>
             <div className="admin-stat">
               <div className="admin-stat-label">
-                Attributable to workspaces (EC2)
+                Attributable to workspaces (VM compute)
               </div>
               <div className="admin-stat-value">
-                {formatUsd(workspacesReport.costTracking.attributableEc2Usd)}
+                {formatCost(
+                  workspacesReport.costTracking.attributableComputeCost,
+                  workspacesReport.costTracking.currency,
+                )}
               </div>
               <div className="admin-stat-hint">
                 split by real recorded runtime minutes
@@ -342,10 +348,14 @@ export default async function AdminPage() {
             <div className="admin-stat">
               <div className="admin-stat-label">Platform overhead</div>
               <div className="admin-stat-value">
-                {formatUsd(workspacesReport.costTracking.platformOverheadUsd)}
+                {formatCost(
+                  workspacesReport.costTracking.platformOverheadCost,
+                  workspacesReport.costTracking.currency,
+                )}
               </div>
               <div className="admin-stat-hint">
-                networking, KMS, storage, tax — not per-workspace
+                networking, storage, Key Vault, and other shared services — not
+                per-workspace
               </div>
             </div>
           </div>
@@ -358,7 +368,7 @@ export default async function AdminPage() {
                     <th>Owner</th>
                     <th>Members</th>
                     <th className="num">Tracked runtime</th>
-                    <th className="num">Est. cost</th>
+                    <th className="num">Allocated cost</th>
                     <th>Created</th>
                     <th>Status</th>
                   </tr>
@@ -412,7 +422,10 @@ export default async function AdminPage() {
                           {formatMinutes(workspace.trackedMinutes)}
                         </td>
                         <td className="num">
-                          {formatUsd(workspace.estimatedCostUsd)}
+                          {formatCost(
+                            workspace.allocatedCost,
+                            workspacesReport.costTracking.currency,
+                          )}
                         </td>
                         <td className="admin-time">
                           {formatDate(workspace.createdAt)}
