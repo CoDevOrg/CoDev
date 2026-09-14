@@ -1045,6 +1045,13 @@ fn member_agent_env_map(
 /// else's subscription, but does not stop a determined one from reading the
 /// files. Isolating that needs a Linux user per member.
 async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequest) -> Result<()> {
+    // Runs for the starting member and every member who joins, so each pasted
+    // Anthropic key is approved before a Claude agent can stall on asking.
+    if let Some(api_key) = request.anthropic_api_key.as_deref()
+        && let Err(error) = approve_claude_api_key(linux_user, api_key).await
+    {
+        warn!(%error, "could not pre-approve this member's Anthropic API key for Claude");
+    }
     let Some(member_id) = request.member_id.as_deref() else {
         return Ok(());
     };
@@ -1240,6 +1247,65 @@ fn claude_config_with_onboarding_skipped(existing: Option<Value>, project_root: 
     }
 
     config
+}
+
+/// Claude Code asks "use this API key?" the first time it sees an
+/// `ANTHROPIC_API_KEY` it has no recorded decision for, and that prompt
+/// swallows the member's first chat message. It records decisions as the last
+/// 20 characters of the trimmed key under `customApiKeyResponses` (verified
+/// against the Claude Code 2.1.270 bundle), so approving the member's own key
+/// up front skips the prompt. A stale rejection of the same key is dropped,
+/// since Claude would otherwise ignore the key the member connected.
+fn claude_config_with_api_key_approved(existing: Option<Value>, api_key: &str) -> Value {
+    let mut config = existing.unwrap_or_else(|| serde_json::json!({}));
+    let trimmed = api_key.trim();
+    let tail: String = trimmed
+        .chars()
+        .skip(trimmed.chars().count().saturating_sub(20))
+        .collect();
+    if tail.is_empty() {
+        return config;
+    }
+    let root = config
+        .as_object_mut()
+        .expect("existing is filtered to objects; default is an object");
+    let responses = root
+        .entry("customApiKeyResponses")
+        .or_insert_with(|| serde_json::json!({}));
+    if !responses.is_object() {
+        *responses = serde_json::json!({});
+    }
+    let responses = responses
+        .as_object_mut()
+        .expect("customApiKeyResponses was just made an object");
+    let approved = responses
+        .entry("approved")
+        .or_insert_with(|| serde_json::json!([]));
+    if !approved.is_array() {
+        *approved = serde_json::json!([]);
+    }
+    let approved = approved
+        .as_array_mut()
+        .expect("approved was just made an array");
+    if !approved
+        .iter()
+        .any(|value| value.as_str() == Some(tail.as_str()))
+    {
+        approved.push(Value::String(tail.clone()));
+    }
+    if let Some(rejected) = responses.get_mut("rejected").and_then(Value::as_array_mut) {
+        rejected.retain(|value| value.as_str() != Some(tail.as_str()));
+    }
+    config
+}
+
+async fn approve_claude_api_key(user: &str, api_key: &str) -> Result<()> {
+    let config_path = PathBuf::from(format!("/home/{user}/.claude.json"));
+    let config = claude_config_with_api_key_approved(
+        read_optional_json_object(&config_path).await?,
+        api_key,
+    );
+    write_private_json(&config_path, &config, user).await
 }
 
 /// Name the coordination MCP server is registered under in every agent CLI's
@@ -1666,12 +1732,12 @@ mod tests {
     }
 
     use super::{
-        USER_SUFFIX_LEN, branch_pattern, claude_config_with_onboarding_skipped,
-        claude_settings_with_theme, codex_config_with_coordination_mcp, create_dir_all_within,
-        direct_route, linux_user_for, linux_user_process_command, member_agent_dir,
-        member_agent_env_map, member_id_pattern, merge_coordination_mcp_server,
-        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, resolve_within,
-        shell_quote, token_pattern,
+        USER_SUFFIX_LEN, branch_pattern, claude_config_with_api_key_approved,
+        claude_config_with_onboarding_skipped, claude_settings_with_theme,
+        codex_config_with_coordination_mcp, create_dir_all_within, direct_route, linux_user_for,
+        linux_user_process_command, member_agent_dir, member_agent_env_map, member_id_pattern,
+        merge_coordination_mcp_server, orca_serve_command_line, orca_serve_sudo_command,
+        repository_pattern, resolve_within, shell_quote, token_pattern,
     };
     use crate::model::{IdeStartRequest, RuntimeError};
     use serde_json::json;
@@ -1864,6 +1930,45 @@ mod tests {
         assert_eq!(config["bypassPermissionsModeAccepted"], json!(true));
         // The theme lives in ~/.claude/settings.json, not here.
         assert!(config.get("theme").is_none());
+    }
+
+    #[test]
+    fn approves_the_members_api_key_so_claude_does_not_ask() {
+        let key = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789";
+        let tail = &key[key.len() - 20..];
+        let existing = json!({
+            "hasCompletedOnboarding": true,
+            "customApiKeyResponses": {
+                "approved": ["someone-elses-tail00"],
+                "rejected": [tail]
+            }
+        });
+
+        let config = claude_config_with_api_key_approved(Some(existing), &format!("  {key}\n"));
+
+        assert_eq!(config["hasCompletedOnboarding"], json!(true));
+        assert_eq!(
+            config["customApiKeyResponses"]["approved"],
+            json!(["someone-elses-tail00", tail])
+        );
+        assert_eq!(config["customApiKeyResponses"]["rejected"], json!([]));
+
+        let again = claude_config_with_api_key_approved(Some(config), key);
+        assert_eq!(
+            again["customApiKeyResponses"]["approved"]
+                .as_array()
+                .map(Vec::len),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn approves_a_key_on_a_fresh_config() {
+        let config = claude_config_with_api_key_approved(None, "sk-ant-api03-0123456789abcdefghij");
+        assert_eq!(
+            config["customApiKeyResponses"]["approved"],
+            json!(["0123456789abcdefghij"])
+        );
     }
 
     #[test]
