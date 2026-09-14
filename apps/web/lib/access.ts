@@ -66,10 +66,29 @@ export class WorkspaceAccessError extends Error {
   constructor(
     message = "You do not have permission to perform this workspace action.",
     readonly status = 403,
+    options?: { cause?: unknown },
   ) {
-    super(message);
+    super(message, options);
     this.name = "WorkspaceAccessError";
   }
+}
+
+/**
+ * What a member reads when the authorization service — not their permissions —
+ * is the thing that failed.
+ *
+ * `WorkspaceAccessError.message` is rendered verbatim in the UI (the delete
+ * confirmation dialog, most visibly), so naming OpenFGA, an HTTP status, or a
+ * missing environment variable there puts our infrastructure in front of
+ * someone who only asked to delete a workspace. The diagnosis goes to the
+ * server log and to `cause`; the reader gets a sentence and a next step.
+ */
+const AUTHORIZATION_UNAVAILABLE =
+  "Workspace permissions are temporarily unavailable. Please try again in a moment.";
+
+function authorizationUnavailable(detail: string, cause?: unknown) {
+  console.error("[access] " + detail, cause);
+  return new WorkspaceAccessError(AUTHORIZATION_UNAVAILABLE, 503, { cause });
 }
 
 type OpenFgaConfiguration = {
@@ -165,9 +184,8 @@ async function openFgaRequest(path: string, body: Record<string, unknown>) {
   const configuration = openFgaConfiguration();
   if (!configuration) {
     if (process.env.NODE_ENV === "production") {
-      throw new WorkspaceAccessError(
-        "OpenFGA authorization is not configured.",
-        503,
+      throw authorizationUnavailable(
+        "OpenFGA is not configured: set OPENFGA_API_URL, OPENFGA_STORE_ID and OPENFGA_AUTHORIZATION_MODEL_ID.",
       );
     }
     return null;
@@ -191,9 +209,14 @@ async function openFgaRequest(path: string, body: Record<string, unknown>) {
     },
   );
   if (!response.ok) {
-    throw new WorkspaceAccessError(
-      `OpenFGA authorization request failed with HTTP ${response.status}.`,
-      503,
+    // OpenFGA explains a 400 in the body (`code`/`message`, e.g. an unknown
+    // relation or a tuple that already exists). Reading it is the difference
+    // between a log line that identifies the bad request and one that only
+    // says a number.
+    const detail = await response.text().catch(() => "");
+    throw authorizationUnavailable(
+      `OpenFGA ${path} failed with HTTP ${response.status}.`,
+      detail || undefined,
     );
   }
   return (await response.json()) as { allowed?: boolean };
@@ -231,9 +254,9 @@ async function openFgaBearerToken(configuration: OpenFgaConfiguration) {
     signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) {
-    throw new WorkspaceAccessError(
+    throw authorizationUnavailable(
       "OpenFGA token request failed with HTTP " + response.status + ".",
-      503,
+      await response.text().catch(() => undefined),
     );
   }
   const payload = (await response.json()) as {
@@ -241,9 +264,8 @@ async function openFgaBearerToken(configuration: OpenFgaConfiguration) {
     expires_in?: unknown;
   };
   if (typeof payload.access_token !== "string") {
-    throw new WorkspaceAccessError(
+    throw authorizationUnavailable(
       "OpenFGA token response did not include an access token.",
-      503,
     );
   }
 
@@ -345,9 +367,8 @@ export async function getWorkspaceAccess(workspaceId: string, userId: string) {
   const permissions = permissionsForRole(role);
   const configured = openFgaConfiguration();
   if (!configured && process.env.NODE_ENV === "production") {
-    throw new WorkspaceAccessError(
-      "OpenFGA authorization is not configured.",
-      503,
+    throw authorizationUnavailable(
+      "OpenFGA is not configured: set OPENFGA_API_URL, OPENFGA_STORE_ID and OPENFGA_AUTHORIZATION_MODEL_ID.",
     );
   }
   const expectedRelation = openFgaRelationForRole(role);
@@ -362,7 +383,12 @@ export async function getWorkspaceAccess(workspaceId: string, userId: string) {
     // closed.
     await writeWorkspaceTuple({ workspaceId, userId, role });
     if (!(await checkOpenFga(workspaceId, userId, expectedRelation))) {
-      throw new WorkspaceAccessError("OpenFGA denied workspace access.");
+      console.error(
+        `[access] OpenFGA denied ${expectedRelation} on workspace ${workspaceId} for user ${userId} after a tuple repair.`,
+      );
+      throw new WorkspaceAccessError(
+        "You don't have access to this workspace.",
+      );
     }
   }
 
@@ -395,9 +421,10 @@ export async function requireWorkspacePermission(
       openFgaRelationForPermission(permission),
     ))
   ) {
-    throw new WorkspaceAccessError(
-      `OpenFGA denied the ${permission} workspace permission.`,
+    console.error(
+      `[access] OpenFGA denied the ${permission} permission on workspace ${workspaceId} for user ${userId}.`,
     );
+    throw new WorkspaceAccessError();
   }
   return access;
 }

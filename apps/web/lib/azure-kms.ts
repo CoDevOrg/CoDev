@@ -4,6 +4,7 @@ import { CryptographyClient } from "@azure/keyvault-keys";
 import { randomBytes } from "node:crypto";
 
 import { getAzureCredential } from "./azure";
+import { credentialStorageNotConfigured } from "./credential-storage-error";
 import {
   canonicalContext,
   decryptWithKey,
@@ -41,7 +42,7 @@ export function getKeyVaultKeyId() {
 function getKeyIdentifier() {
   const keyId = process.env.CREDENTIAL_KEY_VAULT_KEY_ID;
   if (!keyId && process.env.NODE_ENV === "production") {
-    throw new Error("CREDENTIAL_KEY_VAULT_KEY_ID is not configured.");
+    throw credentialStorageNotConfigured("CREDENTIAL_KEY_VAULT_KEY_ID");
   }
   return keyId;
 }
@@ -56,7 +57,7 @@ export async function encryptWithAzure(
 ) {
   const keyId = getKeyIdentifier();
   if (!keyId) {
-    throw new Error("CREDENTIAL_KEY_VAULT_KEY_ID is not configured.");
+    throw credentialStorageNotConfigured("CREDENTIAL_KEY_VAULT_KEY_ID");
   }
 
   const dataKey = randomBytes(32);
@@ -98,7 +99,7 @@ export async function decryptWithAzure(
   // key version from the wrapped blob itself.
   const keyId = getKeyIdentifier();
   if (!keyId) {
-    throw new Error("CREDENTIAL_KEY_VAULT_KEY_ID is not configured.");
+    throw credentialStorageNotConfigured("CREDENTIAL_KEY_VAULT_KEY_ID");
   }
 
   const unwrapped = await getCryptographyClient(keyId).unwrapKey(

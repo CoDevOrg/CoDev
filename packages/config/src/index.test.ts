@@ -86,7 +86,36 @@ describe("server environment", () => {
     expect(
       isGitHubAuthConfigured({
         ...base,
+        CLOUD_PROVIDER: "aws",
         CREDENTIAL_KMS_KEY_ID: "arn:aws:kms:us-east-2:014576992564:key/example",
+      }),
+    ).toBe(true);
+  });
+
+  it("checks the Key Vault key when CLOUD_PROVIDER is unset", () => {
+    // An unset CLOUD_PROVIDER means Azure (see `getCloudProvider`), so the AWS
+    // key alone must not satisfy the gate: the encryption path would go
+    // looking for CREDENTIAL_KEY_VAULT_KEY_ID and fail on the first credential
+    // it tried to store.
+    const base = {
+      NODE_ENV: "production",
+      AUTH_SECRET: "a-secret",
+      AUTH_GITHUB_ID: "github-client-id",
+      AUTH_GITHUB_SECRET: "github-client-secret",
+      CREDENTIAL_ENCRYPTION_KEY: "development-fallback-key",
+    };
+
+    expect(
+      isGitHubAuthConfigured({
+        ...base,
+        CREDENTIAL_KMS_KEY_ID: "arn:aws:kms:us-east-2:014576992564:key/example",
+      }),
+    ).toBe(false);
+    expect(
+      isGitHubAuthConfigured({
+        ...base,
+        CREDENTIAL_KEY_VAULT_KEY_ID:
+          "https://codev.vault.azure.net/keys/credentials/abc",
       }),
     ).toBe(true);
   });

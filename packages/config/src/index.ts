@@ -133,8 +133,14 @@ export function isGitHubAuthConfigured(
   // Production must have a managed key on whichever cloud is configured.
   // Checking only the AWS one would let an Azure deployment fall through to
   // the development key and write credentials the platform cannot protect.
+  // Unset means Azure, exactly as `getCloudProvider()` reads it. Treating an
+  // unset variable as AWS here — while the encryption path treated it as
+  // Azure — is how a production deployment could pass this gate with only
+  // CREDENTIAL_KMS_KEY_ID set and then fail on the first credential it tried
+  // to store, asking for CREDENTIAL_KEY_VAULT_KEY_ID. The two defaults have
+  // to agree or the check is checking the wrong cloud.
   const managedKeyConfigured =
-    input.CLOUD_PROVIDER === "azure"
+    (input.CLOUD_PROVIDER ?? "azure") === "azure"
       ? input.CREDENTIAL_KEY_VAULT_KEY_ID
       : input.CREDENTIAL_KMS_KEY_ID;
   const productionStorageReady =

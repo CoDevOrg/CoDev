@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-kms";
 
 import { getAwsConfiguration } from "./aws";
+import { credentialStorageNotConfigured } from "./credential-storage-error";
 import {
   decryptWithKey,
   encryptWithKey,
@@ -26,7 +27,7 @@ let kms: KMSClient | undefined;
 export function getKmsKeyId() {
   const keyId = process.env.CREDENTIAL_KMS_KEY_ID;
   if (!keyId && process.env.NODE_ENV === "production") {
-    throw new Error("CREDENTIAL_KMS_KEY_ID is not configured.");
+    throw credentialStorageNotConfigured("CREDENTIAL_KMS_KEY_ID");
   }
   return keyId;
 }
@@ -40,7 +41,7 @@ export async function encryptWithKms(
   encryptionContext?: EncryptionContext,
 ) {
   const keyId = getKmsKeyId();
-  if (!keyId) throw new Error("CREDENTIAL_KMS_KEY_ID is not configured.");
+  if (!keyId) throw credentialStorageNotConfigured("CREDENTIAL_KMS_KEY_ID");
 
   const dataKey = await getKmsClient().send(
     new GenerateDataKeyCommand({
