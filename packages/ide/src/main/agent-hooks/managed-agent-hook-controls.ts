@@ -24,6 +24,7 @@ type InstallOptions = {
   onInstallError?: (agent: AgentHookTarget, error: unknown) => void
   shouldContinue?: (agent: AgentHookTarget) => boolean
   agents?: readonly AgentHookTarget[]
+  knownPresentAgents?: readonly AgentHookTarget[]
 }
 
 type RemoveOptions = {
@@ -98,18 +99,18 @@ export async function installManagedAgentHooks(
     const target = getManagedAgentHookTarget(agent)
     return target ? [target] : []
   })
-  let presenceByAgent
-  try {
-    presenceByAgent = await detectLocalManagedAgentCliPresence(targets, settings, {
-      shouldHydrateShellPath: options.shouldHydrateShellPath
-    })
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    return installers.map(([agent]) =>
-      disabled.has(agent)
-        ? skippedStatus(agent, 'agent_disabled', 'Agent is disabled in Settings.')
-        : skippedStatus(agent, 'cli_presence_unknown', detail)
-    )
+  const knownPresent = new Set(options.knownPresentAgents ?? [])
+  const targetsToDetect = targets.filter((target) => !knownPresent.has(target.agent))
+  let presenceByAgent: Awaited<ReturnType<typeof detectLocalManagedAgentCliPresence>> = {}
+  let detectionError: string | null = null
+  if (targetsToDetect.length > 0) {
+    try {
+      presenceByAgent = await detectLocalManagedAgentCliPresence(targetsToDetect, settings, {
+        shouldHydrateShellPath: options.shouldHydrateShellPath
+      })
+    } catch (error) {
+      detectionError = error instanceof Error ? error.message : String(error)
+    }
   }
 
   const results: AgentHookInstallStatus[] = []
@@ -129,13 +130,15 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    const presence = presenceByAgent[agent]
+    const presence = knownPresent.has(agent) ? { state: 'found' as const } : presenceByAgent[agent]
     if (presence?.state !== 'found') {
       results.push(
         skippedStatus(
           agent,
-          presence?.state === 'unknown' ? 'cli_presence_unknown' : 'cli_not_found',
-          'CLI not found; managed hook install skipped.'
+          detectionError || presence?.state === 'unknown'
+            ? 'cli_presence_unknown'
+            : 'cli_not_found',
+          detectionError ?? 'CLI not found; managed hook install skipped.'
         )
       )
       continue

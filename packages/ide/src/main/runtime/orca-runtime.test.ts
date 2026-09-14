@@ -13769,6 +13769,18 @@ describe('OrcaRuntimeService', () => {
       }
     })
 
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+      true,
+      expect.anything(),
+      expect.objectContaining({
+        agents: ['claude'],
+        knownPresentAgents: ['claude'],
+        shouldContinue: expect.any(Function)
+      })
+    )
+    expect(applyAgentStatusHooksEnabledMock.mock.invocationCallOrder[0]).toBeLessThan(
+      spawn.mock.invocationCallOrder[0]!
+    )
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined

@@ -411,6 +411,7 @@ import {
   isTuiAgentEnabled,
   pickTuiAgent
 } from '../../shared/tui-agent-selection'
+import { isManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -3570,6 +3571,35 @@ export class OrcaRuntimeService {
             current !== undefined &&
             current.agentStatusHooksEnabled !== false &&
             !current.disabledTuiAgents?.includes(agent)
+          )
+        }
+      })
+    })
+    this.managedHookReconciliationTail = reconciliation.catch(() => {})
+    return reconciliation
+  }
+
+  private ensureManagedAgentHookBeforeLaunch(agent: TuiAgent): Promise<void> {
+    if (!isManagedAgentHookTarget(agent)) {
+      return Promise.resolve()
+    }
+    const reconciliation = this.managedHookReconciliationTail.then(async () => {
+      const settings = this.store?.getSettings()
+      if (!settings || settings.agentStatusHooksEnabled === false) {
+        return
+      }
+      await applyAgentStatusHooksEnabled(true, settings, {
+        agents: [agent],
+        knownPresentAgents: [agent],
+        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        onInstallError: recordManagedHookInstallFailure,
+        shouldContinue: (target) => {
+          const current = this.store?.getSettings()
+          return (
+            target === agent &&
+            current !== undefined &&
+            current.agentStatusHooksEnabled !== false &&
+            !current.disabledTuiAgents?.includes(target)
           )
         }
       })
@@ -25138,6 +25168,10 @@ export class OrcaRuntimeService {
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      if (launchOpts.launchAgent && !workspace.connectionId && !isWslUncPath(workspace.path)) {
+        // The CLI can appear after startup during an image update, so retry its hooks before spawn.
+        await this.ensureManagedAgentHookBeforeLaunch(launchOpts.launchAgent)
+      }
       let ptySpawnCommitReported = false
       const reportPtySpawnCommitted = (): void => {
         if (ptySpawnCommitReported) {
