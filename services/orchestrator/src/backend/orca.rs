@@ -914,10 +914,18 @@ async fn write_codex_credential(user: &str, codex_auth_cache_json: &str) -> Resu
     chown_recursive(&codex_home, user).await
 }
 
+fn member_agent_root_dir(linux_user: &str) -> PathBuf {
+    PathBuf::from(format!("/home/{linux_user}/.codev"))
+}
+
+fn member_agents_dir(linux_user: &str) -> PathBuf {
+    member_agent_root_dir(linux_user).join("agents")
+}
+
 /// Directory holding one CoDev member's own agent credentials inside the
 /// shared per-workspace Linux home.
 fn member_agent_dir(linux_user: &str, member_id: &str) -> PathBuf {
-    PathBuf::from(format!("/home/{linux_user}/.codev/agents/{member_id}"))
+    member_agents_dir(linux_user).join(member_id)
 }
 
 /// A CoDev member id as minted by the control plane (a UUID). Validated
@@ -1059,6 +1067,8 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
         return Err(RuntimeError::BadRequest("member id is malformed".into()));
     }
 
+    let codev_dir = member_agent_root_dir(linux_user);
+    let agents_dir = member_agents_dir(linux_user);
     let member_dir = member_agent_dir(linux_user, member_id);
     fs::create_dir_all(&member_dir)
         .await
@@ -1136,7 +1146,18 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
     fs::set_permissions(&member_dir, std::fs::Permissions::from_mode(0o700))
         .await
         .map_err(RuntimeError::internal)?;
-    chown_recursive(&member_dir, linux_user).await
+    // This function runs as root. create_dir_all therefore creates `.codev`
+    // and `agents` as root on a new workspace unless ownership is repaired.
+    // Orca must be able to add sibling state such as `.codev/agent-hooks`
+    // before an agent starts, so the whole private config tree belongs to the
+    // dedicated workspace user.
+    fs::set_permissions(&codev_dir, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    fs::set_permissions(&agents_dir, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    chown_recursive(&codev_dir, linux_user).await
 }
 
 /// Seeds the Claude Code CLI's own config so the interactive session Orca
@@ -1735,9 +1756,10 @@ mod tests {
         USER_SUFFIX_LEN, branch_pattern, claude_config_with_api_key_approved,
         claude_config_with_onboarding_skipped, claude_settings_with_theme,
         codex_config_with_coordination_mcp, create_dir_all_within, direct_route, linux_user_for,
-        linux_user_process_command, member_agent_dir, member_agent_env_map, member_id_pattern,
-        merge_coordination_mcp_server, orca_serve_command_line, orca_serve_sudo_command,
-        repository_pattern, resolve_within, shell_quote, token_pattern,
+        linux_user_process_command, member_agent_dir, member_agent_env_map, member_agent_root_dir,
+        member_agents_dir, member_id_pattern, merge_coordination_mcp_server,
+        orca_serve_command_line, orca_serve_sudo_command, repository_pattern, resolve_within,
+        shell_quote, token_pattern,
     };
     use crate::model::{IdeStartRequest, RuntimeError};
     use serde_json::json;
@@ -2107,6 +2129,14 @@ mod tests {
     fn files_each_member_agent_bundle_under_its_own_id() {
         let alice = "11111111-1111-4111-8111-111111111111";
         let bob = "22222222-2222-4222-8222-222222222222";
+        assert_eq!(
+            member_agent_root_dir("orca-ws-abc"),
+            Path::new("/home/orca-ws-abc/.codev")
+        );
+        assert_eq!(
+            member_agents_dir("orca-ws-abc"),
+            Path::new("/home/orca-ws-abc/.codev/agents")
+        );
         assert_eq!(
             member_agent_dir("orca-ws-abc", alice),
             Path::new("/home/orca-ws-abc/.codev/agents/11111111-1111-4111-8111-111111111111")
