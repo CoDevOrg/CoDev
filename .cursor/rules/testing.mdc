@@ -19,3 +19,20 @@ From repo root:
 
 Follow sibling test style (Vitest/Playwright/etc. already in that package). Do not add a second test runner.
 `packages/ide` uses its own tooling — do not assume root `pnpm test` covers it.
+
+## Run the full suites once, at the end
+
+Iterate on the single test file covering your change; run `pnpm typecheck` and a
+full `pnpm test` when the change is otherwise finished. `apps/web` is cheap
+(~20s typecheck, ~45s tests). `packages/ide` is minutes — be sparing there, and
+scope it: `vitest run --config config/vitest.config.ts src/renderer/src/<area>`.
+
+## Test environment
+
+`apps/web/vitest.config.ts` runs two projects: `lib` on `node` with no setup
+file, `components` on `jsdom` with Testing Library. Pure-logic tests go under
+`lib/`. Do not restore a global `jsdom` environment — booting a DOM for tests
+that never touch one cost this suite 4x its runtime (253s to 45s).
+
+`apps/web/lib/retired/` is excluded from both the typecheck and the vitest `lib`
+project. Code there is unverified and must not be imported.

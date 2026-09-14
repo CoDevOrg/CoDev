@@ -7,8 +7,8 @@ import {
 } from "@aws-sdk/client-ec2";
 import { readServerEnvironment } from "@codev/config";
 
-import { getAwsConfiguration } from "./aws";
-import type { HostState } from "./cloud";
+import { getAwsConfiguration } from "../aws";
+import type { HostState } from "../cloud";
 
 /**
  * RETIRED: the Firecracker runtime runs on Azure. Nothing reaches this file

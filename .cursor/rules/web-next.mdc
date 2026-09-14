@@ -13,3 +13,12 @@ alwaysApply: false
 - Hosted on Vercel. Do not assume a long-lived Node server in this app (collaboration sockets belong in `apps/hocuspocus-server`).
 - Server-only secrets: no `NEXT_PUBLIC_*` for keys.
 - Sandbox vs `/ide` route choice: see `runtime-sandbox-ide.mdc`.
+
+## Build cache and tests
+
+`apps/web/.next/dev` is the dev-server cache and grows without bound; it is
+gitignored and regenerable, so delete it when the tree feels slow and keep
+`.next/cache`. `vitest.config.ts` splits `lib` (node, no setup) from
+`components` (jsdom) — put pure-logic tests under `lib/`. `lib/retired/` is
+excluded from both the typecheck and the tests: unverified, and nothing may
+import it.

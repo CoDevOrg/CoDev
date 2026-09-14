@@ -26,3 +26,13 @@ Do not add Dockerfiles or Docker Compose. Use Apple `container` if local contain
 
 ## Git / Vercel
 Keep diffs scoped. Do not commit or push unless asked. Each branch push starts a Vercel preview; `main` is production. One coherent commit per change. Add or update tests when behavior changes.
+
+## Verification cost
+
+Run the full suites once, when the change is finished — not after each edit.
+`packages/ide` sweeps are minutes, and a `packages/ide` source change also needs
+`pnpm orca:web` (~90s) with the regenerated `apps/web/public/orca/**` committed
+alongside it, so batch those edits.
+
+Search with ripgrep, never `grep -r` from the repo root: `node_modules` is ~4 GB
+across two trees and a recursive grep times out before it finishes.

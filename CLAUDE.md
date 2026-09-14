@@ -20,10 +20,10 @@ instead of improvising design decisions.
 
 See "Verifying a Change" in [`AGENTS.md`](AGENTS.md) for the commands. The point
 worth repeating here, because it is a habit rather than a rule: **run the full
-suites once, when the change is finished.** A full `apps/web` typecheck is ~2
-minutes and a `packages/ide` test sweep is several more; re-running them after
-each edit is where a ten-minute task becomes an hour. Iterate on the single test
-file that covers what you changed.
+suites once, when the change is finished.** `apps/web` is cheap now (~20s
+typecheck, ~45s tests) but a `packages/ide` sweep is still minutes, and
+re-running that after each edit is where a ten-minute task becomes an hour.
+Iterate on the single test file that covers what you changed.
 
 Two searches to avoid: `grep -r` from the repo root (it walks ~4 GB of
 `node_modules` and times out — use the `Grep` tool) and `du`/`find` over the

@@ -28,8 +28,9 @@ The full suites are expensive. Run them once, at the end — not per edit.
   `pnpm run ide:test:web` or `vitest run --config config/vitest.config.ts <path>`
   from that directory.
 - Run `pnpm typecheck` and a full `pnpm test` **once**, when the change is
-  otherwise finished. A full `apps/web` typecheck is ~2 minutes and does not get
-  cheaper by being repeated.
+  otherwise finished. `apps/web` typechecks in ~20s cold and ~10s warm, and a
+  full `apps/web` test run is ~45s; `packages/ide` is minutes, so that is the
+  one to be sparing with.
 - Search with ripgrep (the `Grep` tool), never `grep -r` from the repo root.
   `node_modules` is ~4 GB across two trees; a recursive grep times out before it
   finishes, while ripgrep answers the same question in about a second.
@@ -52,8 +53,11 @@ Firecracker sandboxes and per-workspace Orca IDE sessions do **not** share a fil
 
 Preserve the split between the Vercel-hosted web control plane and the
 Azure-hosted Firecracker/Orca infrastructure. `CLOUD_PROVIDER` selects the cloud
-and defaults to Azure; the AWS implementation is retired but still in the tree
-(see `apps/web/lib/aws-host.ts`). Do not describe the runtime as AWS-hosted.
+and defaults to Azure. The EC2 implementation is parked in
+`apps/web/lib/retired/`, which tsconfig and vitest both exclude — `host.ts` no
+longer branches on the cloud, so `CLOUD_PROVIDER=aws` does **not** restore the
+old runtime on its own; `host.ts` documents what to put back. Do not describe
+the runtime as AWS-hosted.
 
 ## packages/ide
 
@@ -77,9 +81,18 @@ and defaults to Azure; the AWS implementation is retired but still in the tree
   runtime (253s to 45s) before the split.
 - A dependency's type surface is a standing cost on every typecheck.
   `skipLibCheck` skips _checking_ `.d.ts` files but still parses and loads them:
-  `@aws-sdk/client-ec2` alone is 1012 files, 20% of the `apps/web` program.
-  Prefer the narrowest client that does the job, and delete a dependency in the
-  same change as its last caller.
+  `@aws-sdk/client-ec2` was 1012 files — a fifth of the `apps/web` program — for
+  one retired module, and taking it out of the program moved the typecheck from
+  171s to 20s. Prefer the narrowest client that does the job, and retire a
+  dependency in the same change as its last caller.
+- `apps/web/lib/retired/` holds code kept for reference and excluded from both
+  the typecheck and the test run. Nothing there is verified, so nothing may
+  import it. Do not add to it casually and do not "fix" what is in it — either
+  bring a module back properly (restore its imports, drop the excludes) or
+  delete it.
+- `@aws-sdk/client-kms` is **not** dead weight: `decryptSecret` dispatches on
+  the stored envelope prefix and must keep reading legacy `kms-v1.` credentials.
+  Leave it.
 
 ## UI & Design (required skills)
 

@@ -22,7 +22,7 @@ vi.mock("@codev/config", () => ({
   readServerEnvironment: () => environment,
 }));
 
-vi.mock("./aws", () => ({
+vi.mock("../aws", () => ({
   getAwsConfiguration: () => ({ region: "us-east-2" }),
 }));
 
