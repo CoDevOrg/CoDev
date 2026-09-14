@@ -9,6 +9,24 @@ const clerkConfigured = Boolean(
 );
 
 const authenticationProxy = clerkConfigured ? clerkMiddleware() : nextAuth;
+const ADMIN_HOSTNAME = "admin.trycodev.com";
+
+function isAdminHostname(request: NextRequest): boolean {
+  return request.nextUrl.hostname.toLowerCase() === ADMIN_HOSTNAME;
+}
+
+function shouldAuthenticate(pathname: string): boolean {
+  return (
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/workspaces/") ||
+    pathname.startsWith("/api/workspace/create") ||
+    pathname.startsWith("/api/workspaces") ||
+    pathname.startsWith("/api/auth/")
+  );
+}
 
 function clientIdentifier(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -20,10 +38,36 @@ function clientIdentifier(request: NextRequest) {
  * boundary and must run before authentication handlers on sensitive routes.
  */
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const pathname = request.nextUrl.pathname;
+  const adminHost = isAdminHostname(request);
+
+  // The admin hostname is an application boundary, not just an alias. Only
+  // the admin page, its sign-in flow, and framework assets are valid there.
+  if (adminHost) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.rewrite(url);
+    }
+    if (
+      !pathname.startsWith("/admin") &&
+      !pathname.startsWith("/sign-in") &&
+      !pathname.startsWith("/api/auth/") &&
+      !pathname.startsWith("/_next/") &&
+      pathname !== "/favicon.ico"
+    ) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+  } else if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    // Do not leave a second entry point to the internal console on the public
+    // hostname. The direct server-side requireAdmin guard remains in place.
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
   const edgeLimited =
-    request.nextUrl.pathname === "/api/workspace/create" ||
-    request.nextUrl.pathname === "/api/workspaces" ||
-    request.nextUrl.pathname.startsWith("/api/auth/");
+    pathname === "/api/workspace/create" ||
+    pathname === "/api/workspaces" ||
+    pathname.startsWith("/api/auth/");
   if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
     return NextResponse.json(
       { error: "Rate limiting is temporarily unavailable." },
@@ -50,16 +94,11 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
       );
     }
   }
-  return authenticationProxy(request, event);
+  return shouldAuthenticate(pathname)
+    ? authenticationProxy(request, event)
+    : NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/settings/:path*",
-    "/workspaces/:path*",
-    "/api/workspace/create",
-    "/api/workspaces",
-    "/api/auth/:path*",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

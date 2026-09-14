@@ -46,6 +46,27 @@ export const sandboxRuntimeStatus = pgEnum("sandbox_runtime_status", [
   "failed",
 ]);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
+export const organizationRole = pgEnum("organization_role", [
+  "owner",
+  "admin",
+  "billing_admin",
+  "member",
+]);
+export const subscriptionPlan = pgEnum("subscription_plan", [
+  "free",
+  "pro",
+  "team",
+  "enterprise",
+]);
+export const organizationSubscriptionStatus = pgEnum(
+  "organization_subscription_status",
+  ["trialing", "active", "past_due", "canceled"],
+);
+export const featureKey = pgEnum("feature_key", ["hosted_codex_subscription"]);
+export const featureOverrideAuditAction = pgEnum(
+  "feature_override_audit_action",
+  ["created", "updated", "deleted"],
+);
 export const workspaceAccessRole = pgEnum("workspace_access_role", [
   "owner",
   "co_steer",
@@ -241,6 +262,167 @@ export const users = pgTable(
     uniqueIndex("users_google_user_id_idx").on(table.googleUserId),
     uniqueIndex("users_clerk_user_id_idx").on(table.clerkUserId),
     uniqueIndex("users_login_idx").on(table.login),
+  ],
+);
+
+/** Customer account and billing boundary. */
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("organizations_slug_idx").on(table.slug)],
+);
+
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    role: organizationRole("role").default("member").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.userId] }),
+    index("organization_members_user_idx").on(table.userId),
+  ],
+);
+
+export const plans = pgTable("plans", {
+  id: subscriptionPlan("id").primaryKey(),
+  name: text("name").notNull(),
+  active: boolean("active").default(true).notNull(),
+  ...timestamps,
+});
+
+export const planEntitlements = pgTable(
+  "plan_entitlements",
+  {
+    planId: subscriptionPlan("plan_id")
+      .references(() => plans.id, { onDelete: "cascade" })
+      .notNull(),
+    feature: featureKey("feature").notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [primaryKey({ columns: [table.planId, table.feature] })],
+);
+
+export const organizationSubscriptions = pgTable(
+  "organization_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    planId: subscriptionPlan("plan_id")
+      .references(() => plans.id, { onDelete: "restrict" })
+      .notNull(),
+    status: organizationSubscriptionStatus("status")
+      .default("active")
+      .notNull(),
+    provider: text("provider"),
+    providerCustomerId: text("provider_customer_id"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    canceledAt: timestamp("canceled_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("organization_subscriptions_org_idx").on(table.organizationId),
+    uniqueIndex("organization_subscriptions_provider_idx").on(
+      table.provider,
+      table.providerSubscriptionId,
+    ),
+  ],
+);
+
+export const organizationFeatureOverrides = pgTable(
+  "organization_feature_overrides",
+  {
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    feature: featureKey("feature").notNull(),
+    enabled: boolean("enabled").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.feature] })],
+);
+
+export const userFeatureOverrides = pgTable(
+  "user_feature_overrides",
+  {
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    feature: featureKey("feature").notNull(),
+    enabled: boolean("enabled").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.organizationId, table.userId, table.feature],
+    }),
+    index("user_feature_overrides_user_idx").on(table.userId),
+  ],
+);
+
+/** Immutable record of operator changes to targeted feature access. */
+export const featureOverrideAuditEvents = pgTable(
+  "feature_override_audit_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
+    targetUserId: uuid("target_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorUserId: uuid("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    feature: featureKey("feature").notNull(),
+    action: featureOverrideAuditAction("action").notNull(),
+    previousEnabled: boolean("previous_enabled"),
+    enabled: boolean("enabled"),
+    previousExpiresAt: timestamp("previous_expires_at", {
+      withTimezone: true,
+    }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("feature_override_audit_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    index("feature_override_audit_user_created_idx").on(
+      table.targetUserId,
+      table.createdAt,
+    ),
   ],
 );
 
@@ -673,6 +855,11 @@ export const workspaces = pgTable(
     ownerId: uuid("owner_id")
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, {
+        onDelete: "restrict",
+      })
+      .notNull(),
     githubInstallationId: bigint("github_installation_id", {
       mode: "bigint",
     }),
@@ -699,6 +886,7 @@ export const workspaces = pgTable(
   },
   (table) => [
     index("workspaces_owner_idx").on(table.ownerId),
+    index("workspaces_organization_idx").on(table.organizationId),
     index("workspaces_repository_idx").on(table.githubRepositoryId),
     index("workspaces_status_expiry_idx").on(table.status, table.expiresAt),
     index("workspaces_deleted_idx").on(table.deletedAt),

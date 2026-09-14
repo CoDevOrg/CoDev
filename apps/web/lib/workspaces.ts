@@ -15,6 +15,7 @@ import {
 import { createInviteToken, hashInviteToken } from "./crypto";
 import { getDatabase } from "./database";
 import { getRepository } from "./github";
+import { ensurePersonalOrganization } from "./organization-bootstrap";
 import { requireOrganizationSettingsWrite } from "./settings-access";
 import { assertWorkspaceQuota } from "./quotas";
 import { closeSandboxInterval, openSandboxInterval } from "./vm-usage";
@@ -98,6 +99,7 @@ export async function listWorkspacesForUser(userId: string) {
   const workspaces = await getDatabase()
     .select({
       id: schema.workspaces.id,
+      organizationId: schema.workspaces.organizationId,
       repository: schema.workspaces.repository,
       repositoryVisibility: schema.workspaces.repositoryVisibility,
       defaultBranch: schema.workspaces.defaultBranch,
@@ -155,10 +157,15 @@ export async function createWorkspace(
   const expiresAt = new Date(Date.now() + workspaceRuntimeTtlMs);
 
   const workspace = await getDatabase().transaction(async (transaction) => {
+    const organizationId = await ensurePersonalOrganization(
+      transaction,
+      userId,
+    );
     const [workspace] = await transaction
       .insert(schema.workspaces)
       .values({
         ownerId: userId,
+        organizationId,
         githubInstallationId:
           installationId === undefined ? null : BigInt(installationId),
         githubRepositoryId:
@@ -214,6 +221,7 @@ export async function getWorkspaceForMember(
   const [workspace] = await getDatabase()
     .select({
       id: schema.workspaces.id,
+      organizationId: schema.workspaces.organizationId,
       repository: schema.workspaces.repository,
       repositoryVisibility: schema.workspaces.repositoryVisibility,
       githubInstallationId: schema.workspaces.githubInstallationId,

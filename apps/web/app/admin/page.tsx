@@ -4,6 +4,7 @@ import Image from "next/image";
 import "./admin.css";
 
 import { AdminWaitlist } from "@/components/admin-waitlist";
+import { AdminFeatureControls } from "@/components/admin-feature-controls";
 import { AppChrome } from "@/components/app-chrome";
 import { listAccessRequests } from "@/lib/access-requests";
 import { requireAdmin } from "@/lib/admin";
@@ -15,6 +16,7 @@ import {
   getUserDirectory,
 } from "@/lib/admin-stats";
 import { listAllWorkspacesForAdmin } from "@/lib/admin-workspaces";
+import { getAdminFeatureAccessData } from "@/lib/admin-feature-access";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
@@ -78,6 +80,7 @@ export default async function AdminPage() {
     daily,
     waitlist,
     workspacesReport,
+    featureAccess,
   ] = await Promise.all([
     getAdminSummary(),
     getUserDirectory(),
@@ -86,6 +89,7 @@ export default async function AdminPage() {
     getDailyTraffic(30),
     listAccessRequests(),
     listAllWorkspacesForAdmin(),
+    getAdminFeatureAccessData(),
   ]);
 
   const waitlistPending = waitlist.filter(
@@ -149,6 +153,16 @@ export default async function AdminPage() {
             </div>
           ))}
         </div>
+
+        <section className="admin-section">
+          <h2>Feature access</h2>
+          <p className="admin-console-sub admin-section-intro">
+            Assign plan defaults, then add temporary or permanent organization
+            and user exceptions. User exceptions take precedence over
+            organization exceptions and plans.
+          </p>
+          <AdminFeatureControls data={featureAccess} />
+        </section>
 
         <section className="admin-section">
           <h2>Traffic · last 30 days</h2>
