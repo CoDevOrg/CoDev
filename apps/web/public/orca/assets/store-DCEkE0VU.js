@@ -1,0 +1,1 @@
+import{u as e}from"./web-index-BU7lus_i.js";export{e as useAppStore};

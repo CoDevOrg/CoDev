@@ -173,6 +173,10 @@ export function NativeChatComposerField({
               value={draft}
               disabled={disabled}
               rows={2}
+              // Why: writing-assistant extensions overlay their badge on the placeholder and action row.
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={onKeyDown}
               onCompositionStart={onCompositionStart}

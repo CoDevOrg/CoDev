@@ -21,6 +21,7 @@ import { installWebPreloadApi } from './web-preload-api'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
 import { readCodevBootstrap } from './codev-bootstrap'
+import { detachStoredEnvironmentForPendingShell } from './codev-pending-shell'
 import {
   parseCodevPairMessage,
   readCodevPendingEmbed,
@@ -54,6 +55,12 @@ function WebRoot(): React.JSX.Element {
   window.__CODEV_SETTINGS_ONLY__ = codevBoot?.settingsOnly === true
   window.__CODEV_CURSOR_AVAILABLE__ = codevBoot?.cursorAvailable === true
 
+  // Before the preload API installs: a waking workspace must not connect to
+  // the pairing some other workspace left in browser-wide storage.
+  const pendingPreviousEnvironment = useMemo(
+    () => (codevPending ? detachStoredEnvironmentForPendingShell() : null),
+    [codevPending]
+  )
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
   // the instant save path; mobile/legacy-unknown offers must be shown/probed.
@@ -107,7 +114,7 @@ function WebRoot(): React.JSX.Element {
         createStoredWebRuntimeEnvironment({
           name: 'CoDev workspace',
           offer,
-          previousEnvironment: readStoredWebRuntimeEnvironment()
+          previousEnvironment: pendingPreviousEnvironment ?? readStoredWebRuntimeEnvironment()
         })
       )
       setPairPayload(payload)
@@ -122,7 +129,7 @@ function WebRoot(): React.JSX.Element {
       window.cancelAnimationFrame(raf)
       window.removeEventListener('message', onMessage)
     }
-  }, [codevPending, pairPayload])
+  }, [codevPending, pairPayload, pendingPreviousEnvironment])
 
   // Pending shell: mount `<App>` now with no runtime environment so the IDE
   // chrome paints immediately. The `codev:pair` handler above then saves the

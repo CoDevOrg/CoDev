@@ -15,6 +15,8 @@ import {
   type CodevBridgeSnapshot
 } from '@/web/codev-bridge-singleton'
 import { runCodevBridgeCommand } from '@/web/codev-bridge-command-handler'
+import { codevConnectionSnapshot } from '@/web/codev-connection-status'
+import { useCodevRuntimeReachability } from '@/web/codev-runtime-reachability'
 
 function statusDotClass(status: CodevBridgeSnapshot['status']): string {
   if (status === 'connected') {
@@ -30,17 +32,21 @@ export function CodevBridgeStatusView({
   snapshot,
   compact,
   iconOnly,
+  showAction = true,
   onInterrupt,
   onReconnect
 }: {
   snapshot: CodevBridgeSnapshot
   compact: boolean
   iconOnly: boolean
+  /** False when the runtime, not the bridge, is the problem — the bridge buttons can't fix it. */
+  showAction?: boolean
   onInterrupt: () => void
   onReconnect: () => void
 }): JSX.Element {
-  const actionLabel =
-    snapshot.status === 'connected'
+  const actionLabel = !showAction
+    ? null
+    : snapshot.status === 'connected'
       ? 'Disconnect'
       : snapshot.status === 'disconnected'
         ? 'Reconnect'
@@ -61,7 +67,9 @@ export function CodevBridgeStatusView({
               ) : (
                 <Radio className="size-3 text-muted-foreground" />
               )}
-              <span className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`} />
+              <span
+                className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`}
+              />
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5">
@@ -75,7 +83,9 @@ export function CodevBridgeStatusView({
               {!compact ? (
                 <span className="text-[11px] text-muted-foreground">{snapshot.label}</span>
               ) : null}
-              <span className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`} />
+              <span
+                className={`inline-block size-1.5 rounded-full ${statusDotClass(snapshot.status)}`}
+              />
             </span>
           )}
         </button>
@@ -121,6 +131,7 @@ export function CodevBridgeStatusSegment({
     getCodevBridgeSnapshot,
     getCodevBridgeSnapshot
   )
+  const runtime = useCodevRuntimeReachability()
   useEffect(() => {
     if (!embedded) {
       return
@@ -131,11 +142,13 @@ export function CodevBridgeStatusSegment({
   if (!embedded) {
     return null
   }
+  const shown = codevConnectionSnapshot(snapshot, runtime)
   return (
     <CodevBridgeStatusView
-      snapshot={snapshot}
+      snapshot={shown.snapshot}
       compact={compact}
       iconOnly={iconOnly}
+      showAction={shown.bridgeActionable}
       onInterrupt={interruptCodevBridge}
       onReconnect={reconnectCodevBridge}
     />

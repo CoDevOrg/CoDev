@@ -279,7 +279,10 @@ export function CodevTeamPanel(): JSX.Element | null {
 
   const viewer = roster?.members.find((member) => member.isViewer) ?? null
   const teammates = roster?.members.filter((member) => !member.isViewer) ?? []
-  const onlineCount = roster?.members.filter((member) => member.online).length ?? 0
+  // The viewer is here by definition, even before their own presence ping lands.
+  const onlineCount = roster
+    ? roster.members.filter((member) => member.online || member.isViewer).length
+    : null
   const canCreateChannel = canCreateChannelFor(viewer?.accessRole)
 
   const handleOpenChannel = (id: string): void => {
@@ -328,9 +331,11 @@ export function CodevTeamPanel(): JSX.Element | null {
         <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5">
           <Users aria-hidden className="size-3 text-worktree-sidebar-foreground/40" />
           <span className="text-xs font-semibold text-worktree-sidebar-foreground/80">Team</span>
-          <span className="text-[11px] text-worktree-sidebar-foreground/45">
-            {onlineCount} here
-          </span>
+          {onlineCount !== null ? (
+            <span className="text-[11px] text-worktree-sidebar-foreground/45">
+              {onlineCount} here
+            </span>
+          ) : null}
         </div>
 
         {connecting ? (

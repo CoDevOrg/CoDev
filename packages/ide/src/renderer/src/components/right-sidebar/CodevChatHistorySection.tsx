@@ -14,6 +14,7 @@ import {
 } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { useCodevRuntimeReachability } from '@/web/codev-runtime-reachability'
 import { supersedeWorktreeAgentTabs } from '@/web/codev-retire-superseded-chat'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
@@ -86,6 +87,8 @@ export function CodevChatHistorySection({
     }))
   )
   const [query, setQuery] = useState('')
+  // Chats are read from the runtime; while it is unreachable an empty list says nothing.
+  const waitingOnRuntime = useCodevRuntimeReachability() !== 'connected' && isCodevEmbedded()
 
   const projectScopeContext = useMemo(
     () =>
@@ -262,15 +265,17 @@ export function CodevChatHistorySection({
         />
       </label>
 
-      {error ? (
+      {entries.length === 0 && waitingOnRuntime ? (
+        <p className="codev-chat-history-empty">Chats show up once your workspace connects.</p>
+      ) : error ? (
         <p className="codev-chat-history-empty">{error}</p>
       ) : entries.length === 0 ? (
         <p className="codev-chat-history-empty">
           {loading
-            ? 'Looking for earlier chats…'
+            ? 'Looking for chats…'
             : query
               ? 'No chat matches that search.'
-              : 'No earlier chats in this project yet.'}
+              : 'Chats in this project show up here once an agent replies.'}
         </p>
       ) : (
         <ul className="codev-chat-history-list">

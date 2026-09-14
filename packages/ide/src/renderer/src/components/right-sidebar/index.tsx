@@ -1,6 +1,15 @@
 /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Plug, Files, GitBranch, History, ListChecks, PanelRight, Workflow , Radio } from 'lucide-react'
+import {
+  Plug,
+  Files,
+  GitBranch,
+  History,
+  ListChecks,
+  PanelRight,
+  Workflow,
+  Radio
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
@@ -39,9 +48,10 @@ import {
 } from './right-sidebar-titlebar-drag-regions'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
-  clampRightSidebarPanelWidth,
+  computeCodevMaxRightSidebarPanelWidth,
   computeMaxRightSidebarPanelWidth
 } from './right-sidebar-width'
+import { isCodevEmbedded } from '@/web/codev-embedded'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
@@ -276,11 +286,13 @@ function RightSidebarInner(): React.JSX.Element {
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
-  const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
-  const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
-    rightSidebarWidth,
-    windowWidth,
-    activityBarSideWidth
+  const leftSidebarWidth = useAppStore((s) => (s.sidebarOpen ? s.sidebarWidth : 0))
+  const maxWidth = isCodevEmbedded()
+    ? computeCodevMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth, leftSidebarWidth)
+    : computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+  const renderedRightSidebarWidth = Math.min(
+    maxWidth,
+    Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth)
   )
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,

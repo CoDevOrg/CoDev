@@ -52,6 +52,10 @@ import {
 } from '../../../shared/constants'
 import { isCodevEmbedded } from './codev-embedded'
 import {
+  reportCodevRuntimeClientState,
+  resetCodevRuntimeReachability
+} from './codev-runtime-reachability'
+import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID
 } from '../../../shared/orca-profiles'
@@ -175,6 +179,8 @@ const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
+// Bumped whenever the active client is replaced or closed, so its late state reports are ignored.
+let activeClientGeneration = 0
 const manuallyDisconnectedEnvironmentIds = new Set<string>()
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
@@ -3564,14 +3570,25 @@ function getClientForEnvironment(environment: StoredWebRuntimeEnvironment): WebR
     throw new Error('runtime_manually_disconnected')
   }
   if (!activeClient || activeClientEnvironmentId !== environment.id) {
+    activeClientGeneration += 1
+    const generation = activeClientGeneration
     activeClient?.close()
-    activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment))
+    resetCodevRuntimeReachability()
+    activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
+      onStateChange: (state) => {
+        if (generation === activeClientGeneration) {
+          reportCodevRuntimeClientState(state)
+        }
+      }
+    })
     activeClientEnvironmentId = environment.id
   }
   return activeClient
 }
 
 function closeActiveRuntimeClients(): void {
+  activeClientGeneration += 1
+  resetCodevRuntimeReachability()
   activeClient?.close()
   activeClient = null
   activeClientEnvironmentId = null

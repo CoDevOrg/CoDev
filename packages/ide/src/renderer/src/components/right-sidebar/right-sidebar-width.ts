@@ -16,6 +16,20 @@ export function computeMaxRightSidebarPanelWidth(
   )
 }
 
+/** CoDev: the chat is the product, so this panel never grows wider than the center beside it. */
+export function computeCodevMaxRightSidebarPanelWidth(
+  windowWidth: number | null | undefined,
+  renderedExtraWidth: number,
+  leftSidebarWidth: number
+): number {
+  const stockMax = computeMaxRightSidebarPanelWidth(windowWidth, renderedExtraWidth)
+  if (typeof windowWidth !== 'number' || !Number.isFinite(windowWidth)) {
+    return stockMax
+  }
+  const halfOfRemaining = Math.floor((windowWidth - leftSidebarWidth - renderedExtraWidth) / 2)
+  return Math.min(stockMax, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, halfOfRemaining))
+}
+
 export function clampRightSidebarPanelWidth(
   width: number,
   windowWidth: number | null | undefined,

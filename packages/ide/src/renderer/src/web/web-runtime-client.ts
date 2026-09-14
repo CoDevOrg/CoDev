@@ -96,7 +96,10 @@ export class WebRuntimeClient {
   private readonly waiters: { resolve: () => void; reject: (error: Error) => void }[] = []
   private readonly serverPublicKey: Uint8Array
 
-  constructor(private readonly pairing: WebPairingOffer) {
+  constructor(
+    private readonly pairing: WebPairingOffer,
+    private readonly options: { onStateChange?: (state: WebRuntimeConnectionState) => void } = {}
+  ) {
     this.serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
     this.openConnection()
   }
@@ -660,6 +663,7 @@ export class WebRuntimeClient {
 
   private setState(next: WebRuntimeConnectionState): void {
     this.state = next
+    this.options.onStateChange?.(next)
     if (next === 'connected') {
       this.replayInterruptedSubscriptions()
       this.startHeartbeat()

@@ -8,6 +8,7 @@ import {
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
+import { nativeChatSendBlocked } from './native-chat-send-block'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
@@ -237,7 +238,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const send = useCallback(() => {
       const text = draft
       const imagePaths = imageAttachments.map((attachment) => attachment.path)
-      if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
+      // Why: a send that can never land keeps its draft instead of leaving an unanswered bubble.
+      const empty = text.trim() === '' && imagePaths.length === 0
+      if (empty || disabled || nativeChatSendBlocked()) {
         return
       }
       // Why: block a normal send while a session-option command (e.g. /model) is

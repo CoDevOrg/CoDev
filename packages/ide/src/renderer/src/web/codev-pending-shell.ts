@@ -1,5 +1,25 @@
-import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import {
+  clearStoredWebRuntimeEnvironment,
+  readStoredWebRuntimeEnvironment,
+  type StoredWebRuntimeEnvironment
+} from './web-runtime-environment'
 import { isCodevEmbedded } from './codev-embedded'
+
+let detached: { environment: StoredWebRuntimeEnvironment | null } | null = null
+
+/**
+ * The stored pairing is browser-wide, so a waking workspace's shell would
+ * otherwise connect to whichever workspace this browser opened last. Clears it
+ * once (StrictMode re-renders get the same answer) and hands it back only as
+ * continuity for the pairing that arrives over `codev:pair`.
+ */
+export function detachStoredEnvironmentForPendingShell(): StoredWebRuntimeEnvironment | null {
+  if (!detached) {
+    detached = { environment: readStoredWebRuntimeEnvironment() }
+    clearStoredWebRuntimeEnvironment()
+  }
+  return detached.environment
+}
 
 /**
  * True while the CoDev shell is showing the IDE *before* its workspace has a
