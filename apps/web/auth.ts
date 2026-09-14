@@ -13,7 +13,10 @@ import { encryptSecret } from "@/lib/crypto";
 import { getDatabase } from "@/lib/database";
 import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
 import { resolveGithubConnection } from "@/lib/github";
-import { getSharedAuthCookieDomain } from "@/lib/auth-cookie";
+import {
+  getSharedAuthCookieDomain,
+  getSharedAuthCookieName,
+} from "@/lib/auth-cookie";
 import {
   assertCanRegister,
   clearInviteGrantCookie,
@@ -77,6 +80,7 @@ const googleClientSecret =
 const sharedAuthCookieDomain = getSharedAuthCookieDomain(
   process.env.VERCEL_ENV,
 );
+const sharedAuthCookieName = getSharedAuthCookieName(process.env.VERCEL_ENV);
 
 async function getGithubLinkCookie() {
   try {
@@ -100,6 +104,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   cookies: {
     sessionToken: {
+      ...(sharedAuthCookieName ? { name: sharedAuthCookieName } : {}),
       options: {
         ...(sharedAuthCookieDomain ? { domain: sharedAuthCookieDomain } : {}),
       },
