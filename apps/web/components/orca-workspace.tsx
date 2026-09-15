@@ -692,7 +692,12 @@ export function OrcaWorkspace({
   const connectFailureRef = useRef(connectFailure);
   // The embed can ask for a fresh connect poll; `retry` is defined below.
   const retryRef = useRef<() => void>(() => undefined);
-  const [livePreflight, setLivePreflight] = useState(providerPreflight);
+  // The page supplies the initial snapshot; only a post-connect refresh needs
+  // local state. Keeping the prop as the base avoids an effect that mirrors
+  // props into state and briefly renders stale readiness after navigation.
+  const [refreshedPreflight, setRefreshedPreflight] =
+    useState<WorkspaceProviderPreflight | null>(null);
+  const livePreflight = refreshedPreflight ?? providerPreflight;
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
@@ -716,10 +721,6 @@ export function OrcaWorkspace({
       }),
     [repository, defaultAgent, cursorAvailable],
   );
-
-  useEffect(() => {
-    setLivePreflight(providerPreflight);
-  }, [providerPreflight]);
 
   // Hand the pairing to the embedded IDE. Safe to call repeatedly and before
   // the pairing exists — it no-ops until both the pairing and a live iframe
@@ -790,7 +791,7 @@ export function OrcaWorkspace({
   }, [readiness]);
   const refreshProviderPreflight = useCallback(() => {
     void refreshWorkspaceProviderPreflight().then((next) => {
-      if (next) setLivePreflight(next);
+      if (next) setRefreshedPreflight(next);
     });
   }, []);
 

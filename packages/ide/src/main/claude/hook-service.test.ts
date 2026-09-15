@@ -14,7 +14,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-import type { } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
 
@@ -273,4 +272,3 @@ describe('ClaudeHookService.install', () => {
     }
   )
 })
-
