@@ -270,7 +270,8 @@ impl OrcaBackend {
             &pairing_address,
             &expected_root,
             claude_env,
-        )?;
+        )
+        .await?;
         let ready = match wait_for_ready_line(&mut child).await {
             Ok(ready) => ready,
             Err(error) => {
@@ -1053,6 +1054,40 @@ fn member_agent_env_map(
 /// else's subscription, but does not stop a determined one from reading the
 /// files. Isolating that needs a Linux user per member.
 async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequest) -> Result<()> {
+    let filed = file_member_agent_credentials(linux_user, request).await;
+    // Always runs, even with no member id or after a failed write: a root-owned
+    // `.codev` silently stops Claude's status hooks from installing.
+    let repaired = repair_codev_dir_ownership(linux_user).await;
+    filed.and(repaired)
+}
+
+/// Hands `~/.codev` back to the workspace user. The orchestrator runs as root,
+/// so anything it creates there is root-owned, yet Orca (running as the
+/// workspace user) must add `.codev/agent-hooks` beside the member bundles.
+async fn repair_codev_dir_ownership(linux_user: &str) -> Result<()> {
+    let codev_dir = member_agent_root_dir(linux_user);
+    if !fs::try_exists(&codev_dir)
+        .await
+        .map_err(RuntimeError::internal)?
+    {
+        return Ok(());
+    }
+    fs::set_permissions(&codev_dir, std::fs::Permissions::from_mode(0o700))
+        .await
+        .map_err(RuntimeError::internal)?;
+    let agents_dir = member_agents_dir(linux_user);
+    if fs::try_exists(&agents_dir)
+        .await
+        .map_err(RuntimeError::internal)?
+    {
+        fs::set_permissions(&agents_dir, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(RuntimeError::internal)?;
+    }
+    chown_recursive(&codev_dir, linux_user).await
+}
+
+async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartRequest) -> Result<()> {
     // Runs for the starting member and every member who joins, so each pasted
     // Anthropic key is approved before a Claude agent can stall on asking.
     if let Some(api_key) = request.anthropic_api_key.as_deref()
@@ -1067,8 +1102,6 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
         return Err(RuntimeError::BadRequest("member id is malformed".into()));
     }
 
-    let codev_dir = member_agent_root_dir(linux_user);
-    let agents_dir = member_agents_dir(linux_user);
     let member_dir = member_agent_dir(linux_user, member_id);
     fs::create_dir_all(&member_dir)
         .await
@@ -1146,18 +1179,7 @@ async fn write_member_agent_credentials(linux_user: &str, request: &IdeStartRequ
     fs::set_permissions(&member_dir, std::fs::Permissions::from_mode(0o700))
         .await
         .map_err(RuntimeError::internal)?;
-    // This function runs as root. create_dir_all therefore creates `.codev`
-    // and `agents` as root on a new workspace unless ownership is repaired.
-    // Orca must be able to add sibling state such as `.codev/agent-hooks`
-    // before an agent starts, so the whole private config tree belongs to the
-    // dedicated workspace user.
-    fs::set_permissions(&codev_dir, std::fs::Permissions::from_mode(0o700))
-        .await
-        .map_err(RuntimeError::internal)?;
-    fs::set_permissions(&agents_dir, std::fs::Permissions::from_mode(0o700))
-        .await
-        .map_err(RuntimeError::internal)?;
-    chown_recursive(&codev_dir, linux_user).await
+    Ok(())
 }
 
 /// Seeds the Claude Code CLI's own config so the interactive session Orca
@@ -1461,7 +1483,7 @@ fn claude_settings_with_theme(existing: Option<Value>) -> Value {
     settings
 }
 
-fn spawn_orca_serve(
+async fn spawn_orca_serve(
     app_run_bin: &Path,
     user: &str,
     display: &str,
@@ -1470,17 +1492,45 @@ fn spawn_orca_serve(
     project_root: &Path,
     claude_env: Option<(&str, &str)>,
 ) -> Result<Child> {
-    orca_serve_sudo_command(
+    if let Some((name, value)) = claude_env
+        && (!is_env_var_name(name) || value.contains(['\n', '\r']))
+    {
+        return Err(RuntimeError::BadRequest(
+            "the linked Claude credential is malformed".into(),
+        ));
+    }
+    let mut child = orca_serve_sudo_command(
         app_run_bin,
         user,
         display,
         port,
         pairing_address,
         project_root,
-        claude_env,
+        claude_env.map(|(name, _)| name),
     )
     .spawn()
-    .map_err(RuntimeError::internal)
+    .map_err(RuntimeError::internal)?;
+    if let Some((_, value)) = claude_env {
+        let Some(mut stdin) = child.stdin.take() else {
+            let _ = child.kill().await;
+            return Err(RuntimeError::Internal(
+                "Orca IDE process has no stdin".into(),
+            ));
+        };
+        let written = async {
+            stdin.write_all(value.as_bytes()).await?;
+            stdin.write_all(b"\n").await?;
+            stdin.shutdown().await
+        }
+        .await;
+        // Closing the pipe leaves orca serve with an EOF stdin, as the null stdin did before.
+        drop(stdin);
+        if let Err(error) = written {
+            let _ = child.kill().await;
+            return Err(RuntimeError::internal(error));
+        }
+    }
+    Ok(child)
 }
 
 fn orca_serve_sudo_command(
@@ -1490,7 +1540,7 @@ fn orca_serve_sudo_command(
     port: u16,
     pairing_address: &str,
     project_root: &Path,
-    claude_env: Option<(&str, &str)>,
+    credential_name: Option<&str>,
 ) -> Command {
     // A shell wrapper (matching production's own `run-serve.sh`) is the only
     // way to merge stderr into the single piped stream we scan for the ready
@@ -1506,34 +1556,22 @@ fn orca_serve_sudo_command(
         port,
         pairing_address,
         project_root,
+        credential_name,
     );
     let mut command = Command::new("sudo");
-    command.stdin(Stdio::null());
+    // `sudo` journals its argv and every variable it forwards, value included:
+    // `--preserve-env=NAME` put a Claude OAuth token in the journal verbatim.
+    // A linked credential is written to the child's stdin instead, which sudo
+    // never logs, and the shell reads it into the environment before `exec`.
+    command.stdin(if credential_name.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     command.kill_on_drop(true);
-    // `sudo` logs its own full invocation (argv) to the system journal, so a
-    // linked provider credential must never appear as literal text in the
-    // command it runs — confirmed a Claude OAuth token doing exactly that
-    // when this was embedded as `env NAME='value'` in the shell string
-    // below. Set it directly on this Command instead: sudo inherits it from
-    // its own environment and `--preserve-env=NAME` (which logs only the
-    // variable's *name*, never its value) forwards it to the target user,
-    // so the secret only ever travels through envp, never argv.
-    if let Some((name, value)) = claude_env {
-        command.env(name, value);
-        command.args([
-            "-u",
-            user,
-            "-H",
-            &format!("--preserve-env={name}"),
-            "sh",
-            "-c",
-            &command_line,
-        ]);
-    } else {
-        command.args(["-u", user, "-H", "sh", "-c", &command_line]);
-    }
+    command.args(["-u", user, "-H", "sh", "-c", &command_line]);
     command
 }
 
@@ -1544,10 +1582,11 @@ fn orca_serve_command_line(
     port: u16,
     pairing_address: &str,
     project_root: &Path,
+    credential_name: Option<&str>,
 ) -> String {
     let npm_prefix = format!("/home/{user}/.npm-global");
     let path = format!("{npm_prefix}/bin:/usr/local/bin:/usr/bin:/bin");
-    format!(
+    let launch = format!(
         "exec env DISPLAY={} LIBGL_ALWAYS_SOFTWARE=1 NPM_CONFIG_PREFIX={} PATH={} {} --serve --serve-port {port} --serve-pairing-address {} --serve-project-root {} --serve-json",
         shell_quote(display),
         shell_quote(&npm_prefix),
@@ -1555,7 +1594,23 @@ fn orca_serve_command_line(
         shell_quote(&app_run_bin.to_string_lossy()),
         shell_quote(pairing_address),
         shell_quote(&project_root.to_string_lossy()),
-    )
+    );
+    match credential_name {
+        Some(name) => format!("{} && {launch}", read_credential_from_stdin(name)),
+        None => launch,
+    }
+}
+
+/// Shell that reads one line of stdin into `name` and exports it. `name` must
+/// already have passed `is_env_var_name`, since it is interpolated unquoted.
+fn read_credential_from_stdin(name: &str) -> String {
+    format!("IFS= read -r {name} && export {name}")
+}
+
+fn is_env_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_uppercase() || c == '_')
+        && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1859,8 +1914,10 @@ mod tests {
             17_000,
             "https://host.example/w/workspace-id",
             Path::new("/srv/codev/workspaces/workspace-id"),
+            None,
         );
 
+        assert!(command.starts_with("exec env "));
         assert!(
             command.contains("NPM_CONFIG_PREFIX='/home/orca-ws-e010bd2ca3c1438facef/.npm-global'")
         );
@@ -1871,15 +1928,12 @@ mod tests {
     }
 
     #[test]
-    fn never_puts_a_linked_credential_in_the_logged_sudo_command() {
-        // sudo logs its own full argv to the system journal (confirmed: a
-        // real Claude OAuth token leaked this way when it was embedded as
-        // `env NAME='value'` in the shell string). The secret must only
-        // ever travel through the child process's environment, passed via
-        // --preserve-env=NAME (which logs only the variable's name) and
-        // Command::env (never argv), never as literal text anywhere in the
-        // command that gets run or logged.
-        let secret = "sk-ant-oat01-super-secret-value";
+    fn never_hands_a_linked_credential_to_sudo() {
+        // sudo journals its argv and every variable it forwards with its
+        // value: a real Claude OAuth token leaked first as `env NAME='value'`
+        // in the shell string, then again through `--preserve-env=NAME`. The
+        // credential now reaches the shell only through stdin, so sudo sees
+        // neither the value nor a variable to forward.
         let command = orca_serve_sudo_command(
             Path::new("/opt/orca/AppRun"),
             "orca-ws-e010bd2ca3c1438facef",
@@ -1887,30 +1941,73 @@ mod tests {
             17_000,
             "https://host.example/w/workspace-id",
             Path::new("/srv/codev/workspaces/workspace-id"),
-            Some(("CLAUDE_CODE_OAUTH_TOKEN", secret)),
+            Some("CLAUDE_CODE_OAUTH_TOKEN"),
         );
         let std_command = command.as_std();
+        let args: Vec<String> = std_command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
 
-        for arg in std_command.get_args() {
-            assert!(
-                !arg.to_string_lossy().contains(secret),
-                "credential leaked into a logged sudo argument: {arg:?}"
-            );
-        }
+        assert!(
+            !args.iter().any(|arg| arg.starts_with("--preserve-env")),
+            "sudo must not be asked to forward (and so journal) a credential: {args:?}"
+        );
         assert!(
             std_command
-                .get_args()
-                .any(|arg| arg == "--preserve-env=CLAUDE_CODE_OAUTH_TOKEN"),
-            "expected --preserve-env to forward the credential by name"
-        );
-        assert_eq!(
-            std_command
                 .get_envs()
-                .find(|(name, _)| *name == "CLAUDE_CODE_OAUTH_TOKEN")
-                .and_then(|(_, value)| value),
-            Some(secret.as_ref()),
-            "expected the credential to be set via the environment, not argv"
+                .all(|(name, _)| name != "CLAUDE_CODE_OAUTH_TOKEN"),
+            "the credential must not be set on sudo's own environment"
         );
+        let script = args.last().expect("sudo runs a shell script");
+        assert!(
+            script.starts_with(
+                "IFS= read -r CLAUDE_CODE_OAUTH_TOKEN && export CLAUDE_CODE_OAUTH_TOKEN && exec env "
+            ),
+            "the shell must read the credential from stdin before exec: {script}"
+        );
+    }
+
+    #[tokio::test]
+    async fn hands_the_credential_to_orca_serve_through_stdin() {
+        use super::read_credential_from_stdin;
+        use tokio::io::AsyncWriteExt;
+
+        let script = format!(
+            "{} && exec printenv CLAUDE_CODE_OAUTH_TOKEN",
+            read_credential_from_stdin("CLAUDE_CODE_OAUTH_TOKEN")
+        );
+        let mut child = tokio::process::Command::new("sh")
+            .args(["-c", &script])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("sh spawns");
+        let mut stdin = child.stdin.take().expect("stdin is piped");
+        stdin
+            .write_all(b"sk-ant-oat01-test-value\n")
+            .await
+            .expect("credential written");
+        drop(stdin);
+        let output = child.wait_with_output().await.expect("sh exits");
+
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "sk-ant-oat01-test-value\n"
+        );
+    }
+
+    #[test]
+    fn only_accepts_plain_environment_variable_names() {
+        use super::is_env_var_name;
+
+        assert!(is_env_var_name("CLAUDE_CODE_OAUTH_TOKEN"));
+        assert!(is_env_var_name("ANTHROPIC_API_KEY"));
+        assert!(!is_env_var_name(""));
+        assert!(!is_env_var_name("1TOKEN"));
+        assert!(!is_env_var_name("TOKEN; rm -rf /"));
+        assert!(!is_env_var_name("lowercase"));
     }
 
     #[test]
