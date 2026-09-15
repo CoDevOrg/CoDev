@@ -27,7 +27,6 @@ import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
 import { registerTerminalPreviewHandlers } from './terminal-preview'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
-import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
 import {
   setTrustedBrowserRendererWebContentsId,
   setAgentBrowserBridgeRef,
@@ -157,7 +156,6 @@ export function registerCoreHandlers(
   // not load-bearing; both register independent ipcMain channels.
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
-  registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store)
   if (automations) {

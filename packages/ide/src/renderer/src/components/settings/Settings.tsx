@@ -57,7 +57,6 @@ import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSecti
 import { CodevProfileSection } from './CodevProfileSection'
 import { IntegrationsPane } from './IntegrationsPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
-import { ComputerUsePane } from './ComputerUsePane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
@@ -90,10 +89,7 @@ import type {
   SettingsNavSection,
   SettingsNavTarget
 } from '@/lib/settings-navigation-types'
-import {
-  COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -310,11 +306,6 @@ function Settings(): React.JSX.Element {
   const showDesktopOnlySettings = !isWebClient
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
-    enabled: showDesktopOnlySettings,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -677,8 +668,6 @@ function Settings(): React.JSX.Element {
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill
-  const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
-    computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
     const applicableFreshnessInventory = skillFreshnessApplies ? skillFreshnessInventory : null
     const next = new Map<string, SettingsNavInstallStatus>([
@@ -692,24 +681,10 @@ function Settings(): React.JSX.Element {
         })
       ]
     ])
-    if (showDesktopOnlySettings) {
-      next.set(
-        'computer-use',
-        getAgentSkillNavInstallStatus({
-          name: COMPUTER_USE_SKILL_NAME,
-          installed: computerUseSkillInstalled,
-          loading: computerUseSkillLoading,
-          inventory: applicableFreshnessInventory
-        })
-      )
-    }
     return next
   }, [
-    computerUseSkillInstalled,
-    computerUseSkillLoading,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
-    showDesktopOnlySettings,
     skillFreshnessApplies,
     skillFreshnessInventory
   ])
@@ -1071,20 +1046,6 @@ function Settings(): React.JSX.Element {
     ]
   )
 
-  const openComputerUseFromBrowser = useCallback(async () => {
-    if (!(await confirmDiscardSourceControlAiPromptChanges())) {
-      return
-    }
-    pendingNavSectionRef.current = 'computer-use'
-    pendingScrollTargetRef.current = 'computer-use'
-    if (settingsSearchQuery !== '') {
-      setSettingsSearchQuery('')
-      return
-    }
-    // Why: pending refs don't schedule a render; bump state to rerun the jump effect.
-    setPendingNavRequestTick((tick) => tick + 1)
-  }, [confirmDiscardSourceControlAiPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
-
   if (!settings) {
     return (
       <div
@@ -1236,23 +1197,6 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
 
-                {showDesktopOnlySettings ? (
-                  <SettingsSection
-                    id="computer-use"
-                    title={translate(
-                      'auto.components.settings.Settings.c9841721cb',
-                      'Computer Use'
-                    )}
-                    description={translate(
-                      'auto.components.settings.Settings.7118953f14',
-                      'Enable agents to control any app on your computer.'
-                    )}
-                    searchEntries={getSectionSearchEntries('computer-use')}
-                  >
-                    {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
-                  </SettingsSection>
-                ) : null}
-
                 {isSectionMounted('codev-profile') ? (
                   <SettingsSection
                     id="codev-profile"
@@ -1377,7 +1321,6 @@ function Settings(): React.JSX.Element {
                       <BrowserPane
                         settings={settings}
                         updateSettings={updateSettings}
-                        onOpenComputerUse={openComputerUseFromBrowser}
                       />
                     ) : null}
                   </SettingsSection>

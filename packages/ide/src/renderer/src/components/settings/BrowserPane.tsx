@@ -33,7 +33,6 @@ export { getBrowserPaneCombinedSearchEntries }
 type BrowserPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  onOpenComputerUse?: () => void
 }
 
 function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<number[]>): void {
@@ -45,8 +44,7 @@ function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<numbe
 
 export function BrowserPane({
   settings,
-  updateSettings,
-  onOpenComputerUse
+  updateSettings
 }: BrowserPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -198,10 +196,7 @@ export function BrowserPane({
   return (
     <div ref={setBrowserPaneRootNode} className="space-y-6">
       {showBrowserUse ? (
-        <BrowserUseSetup
-          onConfigureMoreBrowsers={scrollToSessionCookies}
-          onOpenComputerUse={onOpenComputerUse}
-        />
+        <BrowserUseSetup onConfigureMoreBrowsers={scrollToSessionCookies} />
       ) : null}
 
       {showHomePage ? (

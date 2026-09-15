@@ -1225,6 +1225,3 @@ export type BrowserErrorCode =
   | 'browser_timeout'
   | 'browser_error'
 
-// Keep the broad runtime-types import surface stable while letting computer-use
-// CI watch a narrow contract file instead of every runtime type change.
-export * from './computer-use-runtime-types'

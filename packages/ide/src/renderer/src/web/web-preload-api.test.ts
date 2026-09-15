@@ -2503,21 +2503,9 @@ describe('web UI preload API', () => {
       skills: [{ name: 'computer-use', installed: true }],
       scannedAt: 123
     })
-    const permissionsStatus = await globals.window.api.computerUsePermissions.getStatus()
-    expect(permissionsStatus.helperUnavailableReason).toBeNull()
-    expect(permissionsStatus.permissions).toContainEqual({ id: 'accessibility', status: 'granted' })
-    await expect(
-      globals.window.api.computerUsePermissions.openSetup({ id: 'accessibility' })
-    ).resolves.toMatchObject({
-      openedSettings: true,
-      launchedHelper: true,
-      permissionId: 'accessibility'
-    })
     expect(calls).toEqual(
       expect.arrayContaining([
-        { method: 'skills.discover', params: { cwd: '/repo/worktree' } },
-        { method: 'computer.permissionsStatus', params: {} },
-        { method: 'computer.permissions', params: { id: 'accessibility' } }
+        { method: 'skills.discover', params: { cwd: '/repo/worktree' } }
       ])
     )
   })
@@ -2551,34 +2539,6 @@ describe('web UI preload API', () => {
     )
   })
 
-  it('rejects paired web computer-use status failures instead of marking the helper unavailable', async () => {
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
-          if (method === 'computer.permissionsStatus') {
-            return Promise.reject(new Error('runtime disconnected'))
-          }
-          return Promise.resolve({
-            id: method,
-            ok: true,
-            result: {},
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.computerUsePermissions.getStatus()).rejects.toThrow(
-      'runtime disconnected'
-    )
-  })
 })
 
 describe('web repos preload API', () => {

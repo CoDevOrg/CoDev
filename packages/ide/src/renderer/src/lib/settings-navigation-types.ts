@@ -23,7 +23,6 @@ const SETTINGS_NAV_TARGETS = [
   'floating-workspace',
   'terminal',
   'notifications',
-  'computer-use',
   'developer-permissions',
   'privacy',
   'advanced',

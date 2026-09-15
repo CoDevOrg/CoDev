@@ -184,10 +184,6 @@ module.exports = {
       {
         from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
         to: 'agent-browser-linux-${arch}'
-      },
-      {
-        from: 'native/computer-use-linux/runtime.py',
-        to: 'computer-use-linux/runtime.py'
       }
     ],
     // Why: build-orca-serve-artifact.sh extracts the AppImage's SquashFS and

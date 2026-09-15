@@ -358,12 +358,6 @@ import type {
   LocalNetworkConnectionTestResult
 } from '../shared/developer-permissions-types'
 import type {
-  ComputerUsePermissionId,
-  ComputerUsePermissionResetResult,
-  ComputerUsePermissionSetupResult,
-  ComputerUsePermissionStatusResult
-} from '../shared/computer-use-permissions-types'
-import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
@@ -2038,13 +2032,6 @@ export type PreloadApi = {
       host: string
       port: number
     }) => Promise<LocalNetworkConnectionTestResult>
-  }
-  computerUsePermissions: {
-    getStatus: () => Promise<ComputerUsePermissionStatusResult>
-    openSetup: (args?: {
-      id?: ComputerUsePermissionId
-    }) => Promise<ComputerUsePermissionSetupResult>
-    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>

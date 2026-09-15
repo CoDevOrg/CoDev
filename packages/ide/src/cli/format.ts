@@ -1,6 +1,4 @@
 import type { CliStatusResult } from '../shared/runtime-types'
-import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
-import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -15,13 +13,6 @@ export {
   formatTabShow
 } from './browser-format'
 
-export {
-  formatComputerAction,
-  formatGetAppState,
-  formatListApps,
-  formatListWindows
-} from './computer-format'
-export type { ComputerActionFollowUpTarget } from './computer-format'
 export {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -69,13 +60,13 @@ export function printResult<TResult>(
   formatter: (value: TResult) => string
 ): void {
   if (json) {
-    console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
+    console.log(JSON.stringify(response, null, 2))
     return
   }
   console.log(formatter(response.result))
 }
 
-export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
+export function formatCliError(error: unknown, _context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
     return `${message}\nOrca is not running. Run 'orca open' first.`
@@ -85,12 +76,6 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     const nextSteps = nextStepsFromData(error.data)
     if (nextSteps.length > 0) {
       return formatMessageWithNextSteps(message, nextSteps)
-    }
-    if (error.code === 'invalid_argument' && context.commandPath?.[0] === 'computer') {
-      return formatMessageWithNextSteps(
-        message,
-        computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
-      )
     }
   }
   if (
@@ -149,17 +134,10 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
-function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+function localCliErrorData(error: unknown, _context: CliErrorContext): unknown {
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return error.data
-  }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return computerUseErrorRecoveryData('invalid_argument')
   }
   return undefined
 }

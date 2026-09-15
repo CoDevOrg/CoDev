@@ -31,11 +31,10 @@ function ids(
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 7)).toEqual([
+    expect(ids().slice(0, 6)).toEqual([
       'agents',
       'accounts',
       'orchestration',
-      'computer-use',
       'general',
       'integrations',
       'git'

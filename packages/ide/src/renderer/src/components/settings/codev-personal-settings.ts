@@ -14,7 +14,6 @@ const PERSONAL_SECTION_IDS = new Set([
   'agents',
   'accounts',
   'orchestration',
-  'computer-use',
   'general',
   'integrations',
   'appearance',
