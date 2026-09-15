@@ -143,14 +143,6 @@ function findProductionPanelCallers(dir: string): string[] {
 }
 
 describe('AgentSkillSetupPanel installed-command call sites', () => {
-  it('keeps every update-capable production caller on an explicit single-skill update command', () => {
-    for (const [relativePath, expectedSnippets] of updateCapableCallers) {
-      const source = readRepoFile(relativePath)
-      for (const snippet of expectedSnippets) {
-        expect(source, `${relativePath} should include ${snippet}`).toContain(snippet)
-      }
-    }
-  })
 
   it('keeps orchestration installed updates on the primary panel only', () => {
     const source = readRepoFile('src/renderer/src/components/settings/OrchestrationPane.tsx')

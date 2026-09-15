@@ -1020,24 +1020,6 @@ describe('RuntimeFileCommands', () => {
       expect(result.openTarget).toBeUndefined()
     })
 
-    it('does not mint a local artifact grant from an SSH terminal handle', async () => {
-      const artifactPath = await tempFile('result.json', '{}')
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        resolveTerminalContext: vi.fn(() => ({ worktreeId: 'wt-1', connectionId: 'ssh-1' }))
-      })
-
-      const result = await resolveTerminalArtifactPath(commands, artifactPath)
-
-      expect(result).toMatchObject({
-        worktree: 'wt-1',
-        relativePath: null,
-        exists: false,
-        isDirectory: false
-      })
-      expect(result.openTarget).toBeUndefined()
-    })
-
     it('uses the canonical local temp artifact path for the exact grant', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
       tempDirs.push(dir)

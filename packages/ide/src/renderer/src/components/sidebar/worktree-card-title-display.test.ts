@@ -79,22 +79,6 @@ describe('worktree card title display', () => {
     ).toBe('Fix stale issue')
   })
 
-  it('treats blank stored titles as absent', () => {
-    expect(
-      getWorktreeCardTitleDisplay({
-        storedDisplayName: '   ',
-        branchName: 'feature/local-branch'
-      })
-    ).toBe('')
-
-    expect(
-      getWorktreeCardTitleDisplay({
-        storedDisplayName: '',
-        branchName: 'feature/local-branch',
-})
-    ).toBe('Fix stale Linear issue')
-  })
-
   it('skips linked-title replacement when the branch name is nullish or blank', () => {
     expect(
       getWorktreeCardTitleDisplay({

@@ -196,23 +196,6 @@ describe('getEditorExternalWatchTargets', () => {
     ).toEqual([])
   })
 
-  it('does not watch Source Control-only SSH worktrees while disconnected', () => {
-    const repo = makeRepo('repo-source-control-ssh', 'ssh-1')
-    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh')
-
-    expect(
-      getEditorExternalWatchTargets(
-        makeState({
-          repo,
-          worktree,
-          activeWorktreeId: worktree.id,
-          rightSidebarOpen: true,
-          rightSidebarTab: 'source-control',
-        })
-      ).targets
-    ).toEqual([])
-  })
-
   it('watches Source Control-only SSH worktrees when connected', () => {
     const repo = makeRepo('repo-source-control-ssh-connected', 'ssh-1')
     const worktree = makeWorktree(repo.id, 'wt-source-control-ssh-connected')

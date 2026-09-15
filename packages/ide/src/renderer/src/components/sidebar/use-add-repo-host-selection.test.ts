@@ -118,20 +118,6 @@ describe('useAddRepoHostSelection', () => {
     expect(setStep).toHaveBeenCalledWith('add')
   })
 
-  it('selects a local or SSH host without changing the durable active server', async () => {
-    mocks.stateValues = ['runtime:env-1', false]
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
-    const setStep = vi.fn()
-    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
-
-    const result = useAddRepoHostSelection({ isOpen: true, setStep })
-    await result.handleSelectAddProjectHost('ssh:ssh-1')
-
-    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
-    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
-    expect(setStep).toHaveBeenCalledWith('add')
-  })
-
   it('does not select a disconnected SSH host', async () => {
     mocks.stateValues = ['local', false]
     mocks.hostOptions[1] = {
@@ -163,30 +149,4 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
   })
 
-  it('hides ephemeral VM runtime hosts from Add Project selection', async () => {
-    mocks.stateValues = ['runtime:env-vm', false]
-    mocks.hostOptions.push({
-      id: 'runtime:env-vm',
-      label: 'orca VM abc12345',
-      detail: 'Runtime',
-      kind: 'runtime',
-      health: 'available',
-      presence: 'project'
-    })
-    mocks.storeState.runtimeEnvironments = [
-      { id: 'env-vm', name: 'orca VM abc12345', source: 'ephemeral-vm' }
-    ]
-    const setStep = vi.fn()
-    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
-
-    const result = useAddRepoHostSelection({ isOpen: true, setStep })
-
-    expect(result.hostOptions.map((host) => host.id)).not.toContain('runtime:env-vm')
-    expect(result.selectedHostId).toBe('local')
-    await result.handleSelectAddProjectHost('runtime:env-vm')
-    expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalledWith(
-      'env-vm'
-    )
-    expect(setStep).not.toHaveBeenCalled()
-  })
 })

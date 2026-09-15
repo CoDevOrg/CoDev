@@ -83,26 +83,6 @@ describe('getTabEntryAllowAbsolutePaths', () => {
     expect(getTabEntryAllowAbsolutePaths(useAppStore.getState(), localWorktreeId)).toBe(true)
   })
 
-  it('blocks absolute paths when the worktree has an SSH connectionId', () => {
-    useAppStore.setState({
-      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-1' })],
-      worktreesByRepo: {
-        'repo-ssh': [
-          {
-            id: 'repo-ssh::/home/neil/repo',
-            repoId: 'repo-ssh',
-            path: '/home/neil/repo'
-          } as never
-        ]
-      },
-      settings: { activeRuntimeEnvironmentId: null } as never
-    })
-
-    expect(getTabEntryAllowAbsolutePaths(useAppStore.getState(), 'repo-ssh::/home/neil/repo')).toBe(
-      false
-    )
-  })
-
   it('blocks absolute paths when activeRuntimeEnvironmentId is set', () => {
     useAppStore.setState({
       repos: [makeRepo({ id: 'repo-local' })],

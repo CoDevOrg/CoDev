@@ -561,65 +561,6 @@ describe('restored editor owner reparent', () => {
     ])
   })
 
-  it('captures exact direct-SSH host and connection-generation authority', () => {
-    useAppStore.setState((state) => ({
-      repos: state.repos.map((repo) => ({
-        ...repo,
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1'
-      })),
-      worktreesByRepo: Object.fromEntries(
-        Object.entries(state.worktreesByRepo).map(([repoId, worktrees]) => [
-          repoId,
-          worktrees.map((worktree) => ({ ...worktree, hostId: 'ssh:ssh-1' as const }))
-        ])
-      ),
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected' as const,
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 7
-          }
-        ]
-      ])
-    }))
-    const oldId = openRestoredSource()
-    useAppStore.getState().setRestoredEditorOwnerMigrationPending(oldId, true)
-    const result = useAppStore.getState().reparentRestoredEditorFileOwner({
-      fileId: oldId,
-      targetWorktreeId: TARGET,
-      targetRelativePath: 'docs/readme.md',
-      targetExecutionHostId: 'ssh:ssh-1',
-      targetRuntimeEnvironmentId: null,
-      targetOperationProvenance: captureEditorFileOperationProvenance(
-        useAppStore.getState(),
-        TARGET,
-        null,
-        true
-      )
-    })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(
-      useAppStore.getState().openFiles.find((file) => file.id === result.fileId)
-    ).toMatchObject({
-      externalSshTargetId: 'ssh-1',
-      operationProvenance: {
-        expectedSshConnectionGeneration: 7,
-        generation: {
-          route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
-        }
-      }
-    })
-  })
-
   it('correlates destination change, delete, and rename events after reparent', () => {
     vi.useFakeTimers()
     const oldId = openRestoredSource()

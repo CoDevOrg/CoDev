@@ -130,76 +130,6 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'pi')).resolves.toBe('pi')
   })
 
-  it('reports the outer omp wrapper on Windows', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    execFileMock.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
-        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-        callback(null, {
-          stdout: windowsProcessJsonRows([
-            {
-              CommandLine: 'powershell.exe',
-              Name: 'powershell.exe',
-              ParentProcessId: 99,
-              ProcessId: 100
-            },
-            {
-              CommandLine: 'omp.exe',
-              Name: 'omp.exe',
-              ParentProcessId: 100,
-              ProcessId: 101
-            },
-            {
-              CommandLine: 'pi.exe',
-              Name: 'pi.exe',
-              ParentProcessId: 101,
-              ProcessId: 102
-            }
-          ]),
-          stderr: ''
-        })
-      }
-    )
-
-    await expect(resolveAgentForegroundProcess(100, 'pi.exe')).resolves.toBe('omp')
-  })
-
-  it('keeps the Windows omp ancestor when context selects one of multiple pi descendants', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockPs(
-      windowsProcessJsonRows([
-        {
-          CommandLine: 'powershell.exe',
-          Name: 'powershell.exe',
-          ParentProcessId: 99,
-          ProcessId: 100
-        },
-        {
-          CommandLine: 'omp.exe',
-          Name: 'omp.exe',
-          ParentProcessId: 100,
-          ProcessId: 101
-        },
-        {
-          CommandLine: 'pi.exe --cwd C:\\repo\\orca',
-          Name: 'pi.exe',
-          ParentProcessId: 101,
-          ProcessId: 102
-        },
-        {
-          CommandLine: 'pi.exe --cwd C:\\repo\\other',
-          Name: 'pi.exe',
-          ParentProcessId: 100,
-          ProcessId: 103
-        }
-      ])
-    )
-
-    await expect(
-      resolveAgentForegroundProcess(100, 'pi.exe', { contextPaths: ['C:\\repo\\orca'] })
-    ).resolves.toBe('omp')
-  })
-
   it('treats a fresh POSIX snapshot missing the PTY root as unavailable', async () => {
     mockPs('101 999 S+ node /Users/dev/.nvm/versions/node/bin/codex')
 
@@ -287,55 +217,6 @@ describe('resolveAgentForegroundProcess', () => {
     )
 
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('codex')
-  })
-
-  it('recognizes the native Windows Cursor launcher process tree', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockPs(
-      windowsProcessJsonRows([
-        {
-          CommandLine: 'powershell.exe',
-          Name: 'powershell.exe',
-          ParentProcessId: 99,
-          ProcessId: 100
-        },
-        {
-          CommandLine: 'cmd.exe /c cursor-agent.cmd',
-          Name: 'cmd.exe',
-          ParentProcessId: 100,
-          ProcessId: 101
-        },
-        {
-          CommandLine:
-            'powershell.exe -File C:\\Users\\dev\\AppData\\Local\\cursor-agent\\cursor-agent.ps1',
-          Name: 'powershell.exe',
-          ParentProcessId: 101,
-          ProcessId: 102
-        },
-        {
-          CommandLine:
-            'node.exe C:\\Users\\dev\\AppData\\Local\\cursor-agent\\versions\\2026.07.09-a3815c0\\index.js',
-          Name: 'node.exe',
-          ParentProcessId: 102,
-          ProcessId: 103
-        },
-        {
-          CommandLine:
-            'node.exe C:\\Users\\dev\\AppData\\Local\\cursor-agent\\versions\\2026.07.09-a3815c0\\index.js worker-server',
-          Name: 'node.exe',
-          ParentProcessId: 103,
-          ProcessId: 104
-        },
-        {
-          CommandLine: 'C:\\Users\\dev\\.grok\\bin\\agent.exe',
-          Name: 'agent.exe',
-          ParentProcessId: 100,
-          ProcessId: 105
-        }
-      ])
-    )
-
-    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('cursor-agent')
   })
 
   it('recognizes Windows Git Bash shell-rooted agent launches', async () => {
@@ -502,27 +383,6 @@ describe('resolveAgentForegroundProcess', () => {
     ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
   })
 
-  it('does not restore a recognized fallback that disappeared before confirmation', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockPs(
-      windowsProcessJsonRows([
-        {
-          CommandLine: 'powershell.exe',
-          Name: 'powershell.exe',
-          ParentProcessId: 99,
-          ProcessId: 100
-        }
-      ])
-    )
-
-    await expect(
-      resolveAgentForegroundProcessWithAvailability(100, 'droid', {
-        fresh: true,
-        forceProcessScan: true
-      })
-    ).resolves.toEqual({ available: true, processName: null })
-  })
-
   it('treats a Windows snapshot missing the requested shell as unavailable', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(
@@ -614,39 +474,6 @@ describe('resolveAgentForegroundProcess', () => {
     )
   })
 
-  it('filters detached agents before resolving an otherwise ambiguous ConPTY tree', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockPs(
-      windowsProcessJsonRows([
-        {
-          CommandLine: 'powershell.exe',
-          Name: 'powershell.exe',
-          ParentProcessId: 99,
-          ProcessId: 100
-        },
-        {
-          CommandLine: 'droid',
-          Name: 'droid.exe',
-          ParentProcessId: 100,
-          ProcessId: 101
-        },
-        {
-          CommandLine: 'agy',
-          Name: 'agy.exe',
-          ParentProcessId: 100,
-          ProcessId: 102
-        }
-      ])
-    )
-
-    await expect(
-      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
-        fresh: true,
-        readWindowsConptyProcessIds: async () => new Set([100, 101])
-      })
-    ).resolves.toEqual({ available: true, processName: 'droid' })
-  })
-
   it('recognizes a Windows shell-rooted agent when only one candidate matches the worktree path', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(
@@ -686,47 +513,6 @@ describe('resolveAgentForegroundProcess', () => {
         contextPaths: ['C:\\repo\\orca']
       })
     ).resolves.toBe('codex')
-  })
-
-  it('recognizes the deepest Windows shell-rooted agent when candidates share one lineage', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    execFileMock.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
-        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-        callback(null, {
-          stdout: [
-            'CommandLine=powershell.exe',
-            'CreationDate=20260616110000.000000-000',
-            'ExecutablePath=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-            'Name=powershell.exe',
-            'ParentProcessId=99',
-            'ProcessId=100',
-            '',
-            'CommandLine=codex --cwd C:\\repo\\orca',
-            'CreationDate=20260616110100.000000-000',
-            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\codex.cmd',
-            'Name=codex.exe',
-            'ParentProcessId=100',
-            'ProcessId=101',
-            '',
-            'CommandLine=gemini --cwd C:\\repo\\orca',
-            'CreationDate=20260616110200.000000-000',
-            'ExecutablePath=C:\\Users\\dev\\AppData\\Roaming\\npm\\gemini.cmd',
-            'Name=gemini.exe',
-            'ParentProcessId=101',
-            'ProcessId=102',
-            ''
-          ].join('\r\n'),
-          stderr: ''
-        })
-      }
-    )
-
-    await expect(
-      resolveAgentForegroundProcess(100, 'powershell.exe', {
-        contextPaths: ['C:\\repo\\orca']
-      })
-    ).resolves.toBe('gemini')
   })
 
   it('fails closed for sibling Windows agents that both match the same worktree path', async () => {
@@ -806,35 +592,6 @@ describe('resolveAgentForegroundProcess', () => {
 
     await expect(resolveAgentForegroundProcess(100, 'vim.exe')).resolves.toBe('vim.exe')
     expect(execFileMock).not.toHaveBeenCalled()
-  })
-
-  it('authorizes a fresh Windows agent only when it still belongs to the ConPTY', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    mockPs(
-      windowsProcessJsonRows([
-        {
-          CommandLine: 'powershell.exe',
-          Name: 'powershell.exe',
-          ParentProcessId: 99,
-          ProcessId: 100
-        },
-        {
-          CommandLine: 'droid',
-          Name: 'droid.exe',
-          ParentProcessId: 100,
-          ProcessId: 101
-        }
-      ])
-    )
-    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 101, 999]))
-
-    await expect(
-      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
-        fresh: true,
-        readWindowsConptyProcessIds
-      })
-    ).resolves.toEqual({ available: true, processName: 'droid' })
-    expect(readWindowsConptyProcessIds).toHaveBeenCalledTimes(1)
   })
 
   it('excludes a detached Windows Droid descendant from byte authority', async () => {

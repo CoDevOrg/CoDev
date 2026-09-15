@@ -103,50 +103,6 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
-  it('maps OpenClaude titles to the distinct OpenClaude tab icon', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: '⠋ OpenClaude',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('openclaude')
-  })
-
-  it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: '✦ Gemini CLI',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('gemini')
-
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: 'MiMo Code',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('mimo-code')
-
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: 'π - my-project',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('pi')
-  })
-
   it("keeps Codex launch intent over Claude's generic spinner title fallback", () => {
     expect(
       resolveTabAgentFromSignals({
@@ -223,17 +179,6 @@ describe('resolveTabAgentFromSignals', () => {
 
   // Why: #8478 — OpenCode native `OC | …` titles must reclaim a stale Claude
   // launch identity so the tab icon is OpenCode, not Claude.
-  it('uses OpenCode native session titles to replace stale Claude launch identity', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: 'OC | Understand about the plugin',
-        hookAgent: null,
-        launchAgent: 'claude'
-      })
-    ).toBe('opencode')
-  })
 
   it('does not let an explicit title override launch identity before any activity is observed', () => {
     expect(

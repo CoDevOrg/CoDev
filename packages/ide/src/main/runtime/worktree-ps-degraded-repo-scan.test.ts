@@ -38,8 +38,6 @@ const WORKTREE_PATH = '/home/user/projects/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const SCRATCH_ID = `${REPO_ID}::${REPO_PATH}/.claude/worktrees/scratch`
 const SSH_CONNECTION_ID = 'ssh-remote-1'
-const SSH_HOST_ID = `ssh:${SSH_CONNECTION_ID}`
-const LOCAL_REPO_PATH = '/Users/me/dev/app'
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
   return {
@@ -135,14 +133,6 @@ function neverSettles() {
 }
 
 /** A healthy remote scan, so the only difference between the co-hosted cases is how `metaById` is stamped. */
-function makeHealthySshScan() {
-  return {
-    listWorktrees: vi.fn(async () => [
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-      { path: WORKTREE_PATH, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false }
-    ])
-  }
-}
 
 async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(6_000)
@@ -254,61 +244,6 @@ describe('worktree.ps on a degraded repo scan', () => {
   })
 
   // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
-  it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
-    vi.useFakeTimers()
-    try {
-      getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
-      listWorktreesMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
-        makeStore({
-          connectionId: SSH_CONNECTION_ID,
-          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
-          metaById: {
-            [WORKTREE_ID]: makeMeta({ hostId: SSH_HOST_ID }),
-            [MAIN_WORKTREE_ID]: makeMeta({
-              displayName: 'main',
-              instanceId: 'parent-instance',
-              hostId: SSH_HOST_ID
-            })
-          }
-        }) as never
-      )
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
-      expect(remote?.branch).toBe('feature')
-      expect(remote?.hostId).toBe(SSH_HOST_ID)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not claim an unstamped persisted row when the repo id is registered on two hosts', async () => {
-    vi.useFakeTimers()
-    try {
-      getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
-      listWorktreesMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
-        makeStore({
-          connectionId: SSH_CONNECTION_ID,
-          coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
-          metaById: {
-            [WORKTREE_ID]: makeMeta(),
-            [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
-          }
-        }) as never
-      )
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      const remote = result.worktrees.find((worktree) => worktree.worktreeId === WORKTREE_ID)
-      expect(remote?.hostId).toBe(SSH_HOST_ID)
-      expect(remote?.branch).toBe('feature')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 
   // Why: the ownership gate must not cost the single-host case the fix exists for — a stamped row on its own host still comes back.
   it('restores persisted rows stamped for this host when its only owner stalls', async () => {

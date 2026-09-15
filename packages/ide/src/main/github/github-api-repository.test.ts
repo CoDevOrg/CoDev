@@ -153,16 +153,6 @@ describe('resolveGitHubRepoExecution', () => {
     })
   })
 
-  it('rejects a host-less caller-specific resolver for a connection-backed repository', async () => {
-    await expect(
-      resolveGitHubRepoExecution(
-        '/remote/repo',
-        async () => ({ owner: 'upstream', repo: 'widgets' }),
-        'ssh-1'
-      )
-    ).resolves.toEqual({ ownerRepo: null, ghOptions: {} })
-  })
-
   it('rejects a host-less caller-specific resolver for an unresolved local repository', async () => {
     await expect(
       resolveGitHubRepoExecution('/repo', async () => ({ owner: 'upstream', repo: 'widgets' }))

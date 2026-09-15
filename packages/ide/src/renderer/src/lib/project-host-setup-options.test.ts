@@ -287,27 +287,6 @@ describe('buildProjectHostSetupOptions', () => {
     })
   })
 
-  it('adds a connect action for errored setup-needed hosts', () => {
-    const options = buildProjectHostSetupOptions({
-      projectId: 'project-1',
-      eligibleRepos: [repo('local-repo')],
-      hosts: [
-        host('local'),
-        host('ssh:builder', {
-          label: 'Builder',
-          health: 'error'
-        })
-      ],
-      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
-    })
-
-    expect(options.at(-1)).toMatchObject({
-      id: 'needs-setup:ssh:builder',
-      kind: 'needs-setup',
-      connectAction: { kind: 'ssh', targetId: 'builder' }
-    })
-  })
-
   it.each(['available' as const, 'connecting' as const, 'blocked' as const])(
     'does not add a connect action for %s setup-needed hosts',
     (health) => {

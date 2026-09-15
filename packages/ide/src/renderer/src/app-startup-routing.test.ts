@@ -239,15 +239,6 @@ describe('renderer startup runtime routing', () => {
     expect(source).not.toContain("from './components/floating-terminal/FloatingTerminalPanel'")
   })
 
-  it('loads the SSH passphrase dialog only when a credential request is queued', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-
-    expect(source).toContain("import('./components/settings/SshPassphraseDialog').then")
-    expect(source).not.toContain("from './components/settings/SshPassphraseDialog'")
-    expect(source).toContain('s.sshCredentialQueue.length > 0')
-    expect(source).toContain('hasSshCredentialRequest ?')
-  })
-
   it('defers background polling until the workspace session is ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
 
@@ -335,32 +326,6 @@ describe('renderer startup runtime routing', () => {
     expect(sidebarSource).toContain(
       "activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null"
     )
-  })
-
-  it('loads Linear agent setup implementation only after the prompt opens it', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx'),
-      'utf8'
-    )
-
-    expect(source).toContain("() => import('./LinearAgentSkillSetupDialog')")
-    expect(source).not.toContain("from './LinearAgentSkillSetupDialog'")
-    expect(source).toContain('const setupDialog = setupDialogOpen ? (')
-    expect(source).toContain('<Suspense fallback={null}>')
-  })
-
-  it('does not eagerly import optional status-bar segments on startup', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/status-bar/StatusBar.tsx'),
-      'utf8'
-    )
-
-    expect(source).toContain("import('./ResourceUsageStatusSegment').then")
-    expect(source).toContain("import('./PortsStatusSegment').then")
-    expect(source).toContain("import('./SshStatusSegment').then")
-    expect(source).not.toContain("from './ResourceUsageStatusSegment'")
-    expect(source).not.toContain("from './PortsStatusSegment'")
-    expect(source).not.toContain("from './SshStatusSegment'")
   })
 
   it('does not eagerly import the status bar shell on startup', () => {

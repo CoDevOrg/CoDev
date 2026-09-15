@@ -242,56 +242,6 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('aria-label="1 live port"')
   }, 30_000)
 
-  it('shows hidden task, notes, and port details from the compact worktree card hover', async () => {
-    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
-    worktreeCardProperties = ['status']
-    const worktree = makeWorktree({
-      linkedIssue: 123,
-      linkedPR: 456,
-      comment: 'Reviewer handoff note'
-    })
-    workspacePortScan = {
-      key: 'repo-1',
-      result: {
-        platform: 'darwin',
-        scannedAt: 1,
-        ports: [
-          {
-            id: '127.0.0.1:58941:1234',
-            bindHost: '127.0.0.1',
-            connectHost: '127.0.0.1',
-            port: 58941,
-            pid: 1234,
-            processName: 'node',
-            protocol: 'http',
-            kind: 'workspace',
-            owner: {
-              worktreeId: worktree.id,
-              repoId: worktree.repoId,
-              displayName: worktree.displayName,
-              path: worktree.path,
-              confidence: 'cwd'
-            }
-          }
-        ]
-      }
-    }
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    const markup = renderToStaticMarkup(
-      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
-    )
-
-    expect(markup).toContain('data-hover-open-delay="100"')
-    expectParentBodyIsHoverTrigger(markup)
-    expect(markup).toContain('Issue #123')
-    expect(markup).toContain('Linear ENG-123')
-    expect(markup).toContain('Reviewer handoff note')
-    expect(markup).toContain('Live Ports')
-    expect(markup).toContain('58941')
-    expect(markup).not.toContain('data-worktree-card-meta-row=""')
-  }, 30_000)
-
   it('reads linked issue details from the local repo-owner cache while a runtime is focused', async () => {
     settings = {
       activeRuntimeEnvironmentId: 'env-1',

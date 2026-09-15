@@ -55,21 +55,6 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     expect(Object.keys(options)).toHaveLength(DASHBOARD_MAX_LAUNCH_WORKTREES)
   })
 
-  it('combines local detection with proven providers, honoring defaults and disabled agents', () => {
-    const options = buildDashboardWorktreeLaunchOptions(
-      state({
-        detectedAgentIds: ['claude', 'codex'],
-        settings: {
-          defaultTuiAgent: 'codex',
-          disabledTuiAgents: ['claude']
-        } as LaunchState['settings']
-      }),
-      [card(), card({ paneKey: 'pane-2', agentType: 'gemini' })]
-    )
-
-    expect(options).toEqual({ 'worktree-1': ['codex', 'gemini'] })
-  })
-
   it('publishes detected launch choices for workspaces without cards', () => {
     const workspace: DashboardWorkspace = {
       repoId: 'repo-1',

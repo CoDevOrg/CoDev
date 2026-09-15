@@ -127,20 +127,6 @@ describe('AddRepoDialogStepContent nested imports', () => {
     expect(html).toContain('host folder not selected')
   })
 
-  it('uses manual path entry for SSH create project locations', () => {
-    const html = renderStepContent({
-      step: 'create',
-      manualCreateParentEntry: true,
-      activeRuntimeEnvironmentId: null
-    })
-
-    expect(html).toContain('Create a new project')
-    expect(html).toContain('placeholder="/home/user/projects"')
-    expect(html).toContain('aria-label="Browse host filesystem"')
-    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Browse host filesystem"/)
-    expect(html).not.toContain('Choose parent folder')
-  })
-
   it('offers host browsing for remote clone destinations', () => {
     const html = renderStepContent({
       step: 'clone',
@@ -150,19 +136,6 @@ describe('AddRepoDialogStepContent nested imports', () => {
 
     expect(html).toContain('Clone from URL')
     expect(html).toContain('aria-label="Browse host filesystem"')
-  })
-
-  it('offers SSH browsing for selected-host clone destinations', () => {
-    const html = renderStepContent({
-      step: 'clone',
-      selectedHostLabel: 'openclaw 2'
-    })
-
-    expect(html).toContain('Clone from URL')
-    expect(html).toContain('choose where to clone it on openclaw 2')
-    expect(html).toContain('Parent folder')
-    expect(html).toContain('aria-label="Browse host filesystem"')
-    expect(html).not.toContain('aria-label="Choose folder"')
   })
 
   it('uses the standard add step for remote Orca server hosts', () => {

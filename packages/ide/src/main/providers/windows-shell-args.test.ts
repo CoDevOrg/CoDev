@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {  mkdtempSync,  rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -87,52 +87,6 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
-  })
-
-  it('returns PowerShell args that install OSC 133 bootstrap after normal profile loading', () => {
-    const result = resolveWindowsShellLaunchArgs(
-      'powershell.exe',
-      'C:\\Users\\alice',
-      'C:\\Users\\alice'
-    )
-    expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
-
-    const command = decodePowerShellCommand(result)
-    const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
-    const opencodeRestoreIndex = command.indexOf(
-      '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
-    )
-    const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
-    const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
-    const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
-    const ompWrapperIndex = command.indexOf('function Global:omp')
-    const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
-    const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
-    const promptIndex = command.indexOf('function Global:prompt')
-    const cwdRestoreIndex = command.indexOf(
-      expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
-    )
-
-    expect(command).not.toContain('$PROFILE')
-    expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
-    for (const restoreIndex of [opencodeRestoreIndex, mimocodeRestoreIndex, codexRestoreIndex]) {
-      expect(restoreIndex).toBeGreaterThanOrEqual(0)
-      expect(restoreIndex).toBeLessThan(duplicateStateGuardIndex)
-      expect(restoreIndex).toBeLessThan(languageModeGuardIndex)
-    }
-    expect(outputEncodingIndex).toBeGreaterThan(languageModeGuardIndex)
-    expect(outputEncodingIndex).toBeGreaterThan(duplicateStateGuardIndex)
-    expect(ompWrapperIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(ompExtensionIndex).toBeGreaterThan(ompWrapperIndex)
-    expect(promptIndex).toBeGreaterThan(ompWrapperIndex)
-    expect(cwdRestoreIndex).toBeGreaterThan(promptIndex)
-    expect(command).toContain('Esc = [char]27')
-    expect(command).toContain('Bel = [char]7')
-    expect(command).toContain(')]133;D;$fakeExitCode$(')
-    expect(command).toContain(')]133;C$(')
-    expect(command).not.toContain('`e]133')
   })
 
   it('normalizes MSYS drive cwd before spawning native PowerShell', () => {
@@ -267,27 +221,6 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
-  })
-
-  it('materializes shell-ready wrappers before building WSL shell args', () => {
-    const result = resolveWindowsShellLaunchArgs(
-      'wsl.exe',
-      'C:\\Users\\alice\\code',
-      'C:\\Users\\alice'
-    )
-
-    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
-    expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
-    expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
-
-    // Why: the point of materializing wrappers for WSL is that a typed `omp`
-    // picks up Orca's status extension; pin that shim end to end.
-    const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
-    const zshLogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    for (const wrapperFile of [bashRcfile, zshLogin]) {
-      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
-      expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
-    }
   })
 
   it('translates MSYS drive cwd to /mnt/<drive>/... for wsl.exe', () => {

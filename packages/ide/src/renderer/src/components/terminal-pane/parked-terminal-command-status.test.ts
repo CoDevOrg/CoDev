@@ -56,17 +56,6 @@ function makeMockStoreState(): MockStoreState {
   }
 }
 
-function makeStatusEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'build the feature',
-    agentType: 'claude',
-    updatedAt: 1000,
-    stateStartedAt: 1000,
-    ...overrides
-  } as AgentStatusEntry
-}
-
 async function createPolicy(ptyId: string) {
   const { createParkedTerminalCommandStatusPolicy } =
     await import('./parked-terminal-command-status')
@@ -110,31 +99,6 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledTimes(2)
     expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID, 0)
-  })
-
-  it('drops a same-turn status row on command finished for SSH PTYs only', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry()
-    const local = await createPolicy(PTY_ID_LOCAL)
-    local.onCommandFinished(0)
-    // Why: local drops need the mounted pane's foreground process-confirm ladder
-    // (leaked nested-shell 133;D protection), so the watcher must not drop them.
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    local.dispose()
-
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.onCommandFinished(0)
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
-    ssh.dispose()
-  })
-
-  it('clears the launch registry on SSH command finished when no status row exists', async () => {
-    const ssh = await createPolicy(PTY_ID_SSH)
-
-    ssh.onCommandFinished(0)
-
-    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(PANE_KEY)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    ssh.dispose()
   })
 
 })

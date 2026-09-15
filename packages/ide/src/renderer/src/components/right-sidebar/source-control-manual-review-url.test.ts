@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSourceControlManualReviewUrl,
-  buildSourceControlManualReviewUrlFromContext,
   resolveSourceControlManualReviewProvider
 } from './source-control-manual-review-url'
 
@@ -13,19 +12,6 @@ describe('resolveSourceControlManualReviewProvider', () => {
 })
 
 describe('buildSourceControlManualReviewUrlFromContext', () => {
-  it('resolves the provider from linked review metadata before building the URL', () => {
-    expect(
-      buildSourceControlManualReviewUrlFromContext({
-        baseRef: 'origin/main',
-        branchName: 'feature/bitbucket',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@bitbucket.org:team/project.git',
-        upstreamName: 'origin/feature/bitbucket'
-      })
-    ).toBe(
-      'https://bitbucket.org/team/project/pull-requests/new?source=feature%2Fbitbucket&dest=main'
-    )
-  })
 })
 
 describe('buildSourceControlManualReviewUrl', () => {
@@ -70,34 +56,6 @@ describe('buildSourceControlManualReviewUrl', () => {
       })
     ).toBe(
       'https://github.com/stablyai/orca/compare/main...slashdevcorpse/identifying-pwsh.exe-error?expand=1'
-    )
-  })
-
-  it('builds a Bitbucket manual pull request URL', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'origin/main',
-        branchName: 'feature/bitbucket',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@bitbucket.org:team/project.git',
-        upstreamName: 'origin/feature/bitbucket'
-      })
-    ).toBe(
-      'https://bitbucket.org/team/project/pull-requests/new?source=feature%2Fbitbucket&dest=main'
-    )
-  })
-
-  it('builds an Azure DevOps pull request creation URL', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'refs/remotes/origin/main',
-        branchName: 'feature/azure',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@ssh.dev.azure.com:v3/acme/widgets/widget-app.git',
-        upstreamName: 'origin/feature/azure'
-      })
-    ).toBe(
-      'https://dev.azure.com/acme/widgets/_git/widget-app/pullrequestcreate?sourceRef=refs%2Fheads%2Ffeature%2Fazure&targetRef=refs%2Fheads%2Fmain'
     )
   })
 

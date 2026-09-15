@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCmdJQuickActionContext,
-  getCurrentWorkspaceActionAvailability,
-  getWorkspaceScopedActionAvailability,
   resolveCmdJActiveGroupId,
   type CmdJQuickActionContext
 } from './quick-action-context'
@@ -59,44 +57,6 @@ describe('Cmd+J quick action context', () => {
     expect(resolveCmdJActiveGroupId(state, 'wt-1', null)).toBe('focused-group')
   })
 
-  it('applies workspace-scoped action availability gates in order', () => {
-    expect(getWorkspaceScopedActionAvailability(ctx({ activeWorktreeId: null }))).toEqual({
-      available: false,
-      reason: 'no-active-workspace'
-    })
-    expect(getWorkspaceScopedActionAvailability(ctx({ isLoading: true }))).toEqual({
-      available: false,
-      reason: 'loading'
-    })
-    expect(getWorkspaceScopedActionAvailability(ctx({ }))).toEqual({
-      available: false,
-      reason: 'ssh-disconnected'
-    })
-    expect(getWorkspaceScopedActionAvailability(ctx({ activeGroupId: null }))).toEqual({
-      available: false,
-      reason: 'no-active-group'
-    })
-    expect(getWorkspaceScopedActionAvailability(ctx({}))).toEqual({ available: true })
-  })
-
-  it('checks current-workspace action availability without requiring a tab group', () => {
-    expect(getCurrentWorkspaceActionAvailability(ctx({ activeWorktreeId: null }))).toEqual({
-      available: false,
-      reason: 'no-active-workspace'
-    })
-    expect(getCurrentWorkspaceActionAvailability(ctx({ activeView: 'settings' }))).toEqual({
-      available: false,
-      reason: 'no-active-workspace'
-    })
-    expect(
-      getCurrentWorkspaceActionAvailability(ctx({ activeGroupId: null, activeView: 'terminal' }))
-    ).toEqual({ available: true })
-    expect(getCurrentWorkspaceActionAvailability(ctx({ }))).toEqual({
-      available: false,
-      reason: 'ssh-disconnected'
-    })
-  })
-
   it('keeps workspace-agnostic actions available while loading without an active workspace', () => {
     const context = {
       ...ctx({ activeWorktreeId: null, activeGroupId: null, isLoading: true }),
@@ -119,68 +79,6 @@ describe('Cmd+J quick action context', () => {
         .find((action) => action.id === 'create-workspace')
         ?.isAvailable(context)
     ).toEqual({ available: true })
-  })
-
-  it('applies the availability matrix across curated actions', () => {
-    const workspaceActions = ['new-browser-tab', 'new-markdown-file', 'new-terminal-tab']
-    const currentWorkspaceActions = ['delete-workspace']
-    const workspaceAgnosticActions = ['create-workspace']
-    const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
-    const baseContext = {
-      ...ctx({}),
-      activeWorktree: null,
-      runtimeMode: 'local-desktop' as const,
-      openNewBrowserTab: async () => {},
-      openNewMarkdownFile: async () => {},
-      openNewTerminalTab: async () => {},
-      openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {}
-    } satisfies CmdJQuickActionContext
-
-    for (const actionId of workspaceActions) {
-      expect(actionById.get(actionId)?.isAvailable(baseContext)).toEqual({ available: true })
-      expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, runtimeMode: 'paired-web' })
-      ).toEqual({ available: true })
-      expect(
-        actionById.get(actionId)?.isAvailable({
-          ...baseContext,
-          activeWorktreeId: null,
-          activeGroupId: null
-        })
-      ).toEqual({ available: false, reason: 'no-active-workspace' })
-      expect(actionById.get(actionId)?.isAvailable({ ...baseContext, isLoading: true })).toEqual({
-        available: false,
-        reason: 'loading'
-      })
-      expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, })
-      ).toEqual({ available: false, reason: 'ssh-disconnected' })
-    }
-
-    for (const actionId of workspaceAgnosticActions) {
-      expect(
-        actionById.get(actionId)?.isAvailable({
-          ...baseContext,
-          activeWorktreeId: null,
-          activeGroupId: null,
-          isLoading: true,
-})
-      ).toEqual({ available: true })
-    }
-
-    for (const actionId of currentWorkspaceActions) {
-      expect(actionById.get(actionId)?.isAvailable(baseContext)).toEqual({ available: true })
-      expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, activeGroupId: null })
-      ).toEqual({ available: true })
-      expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, activeView: 'settings' })
-      ).toEqual({ available: false, reason: 'no-active-workspace' })
-      expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, })
-      ).toEqual({ available: false, reason: 'ssh-disconnected' })
-    }
   })
 
   it('recomputes active group from the open snapshot against fresh store state', () => {

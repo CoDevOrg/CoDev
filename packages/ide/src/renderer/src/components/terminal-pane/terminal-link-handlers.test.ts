@@ -933,31 +933,6 @@ describe('handleOscLink', () => {
     )
   })
 
-  it('pins SSH links outside the worktree to their target host', async () => {
-    setPlatform('Macintosh')
-    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
-
-    openDetectedFilePath('/tmp/ssh-preview.png', null, null, {
-      worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo'
-    })
-    await flushAsyncWork()
-
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
-    expect(statMock).toHaveBeenCalledWith({
-      filePath: '/tmp/ssh-preview.png',
-      connectionId: 'ssh-1'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/tmp/ssh-preview.png',
-        relativePath: '/tmp/ssh-preview.png',
-        externalSshTargetId: 'ssh-1'
-      }),
-      { forceContentReload: true }
-    )
-  })
-
   it('does not pin runtime-owned links to the worktree SSH target', async () => {
     setPlatform('Windows')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')

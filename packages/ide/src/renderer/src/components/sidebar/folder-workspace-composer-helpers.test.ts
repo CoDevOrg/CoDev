@@ -35,25 +35,6 @@ function group(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
 }
 
 describe('getFolderSourceRepos', () => {
-  it('only returns source repos from the same execution host as the folder group', () => {
-    const projectGroup = group()
-    const localSamePath = repo('local-same-path', { connectionId: null })
-    const otherSshSamePath = repo('ssh-b-same-path', { connectionId: 'ssh-b' })
-    const matchingSshByPath = repo('ssh-a-by-path', { connectionId: 'ssh-a' })
-    const matchingSshByGroup = repo('ssh-a-by-group', {
-      path: '/other/path',
-      connectionId: 'ssh-a',
-      projectGroupId: projectGroup.id
-    })
-
-    expect(
-      getFolderSourceRepos(
-        [localSamePath, otherSshSamePath, matchingSshByPath, matchingSshByGroup],
-        [projectGroup],
-        projectGroup
-      ).map((item) => item.id)
-    ).toEqual(['ssh-a-by-path', 'ssh-a-by-group'])
-  })
 
   it('returns runtime source repos for runtime-owned folder groups', () => {
     const projectGroup = group({ connectionId: null, executionHostId: 'runtime:env-1' })

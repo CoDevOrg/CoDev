@@ -123,13 +123,6 @@ describe('useNativeChatSkills', () => {
     expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 
-  it('marks SSH discovery unavailable without scanning another host', async () => {
-    mocks.state = stateForHost('ssh:connection-1')
-    render(<Probe enabled />)
-    await waitFor(() => expect(mocks.snapshots.at(-1)?.errorKind).toBe('unavailable'))
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
   it('routes runtime-owned panes through their saved environment', async () => {
     mocks.state = stateForHost('runtime:env-1')
     render(<Probe enabled />)

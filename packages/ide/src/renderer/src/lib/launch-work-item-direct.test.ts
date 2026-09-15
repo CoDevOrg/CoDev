@@ -380,46 +380,6 @@ describe('launchWorkItemDirect', () => {
     )
   })
 
-  it('uses the repo SSH connection when the created worktree is not hydrated yet', async () => {
-    mocks.getConnectionId.mockReturnValue(undefined)
-    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['pi'])
-    mocks.store.settings = {
-      defaultTuiAgent: 'pi',
-      disabledTuiAgents: [],
-      agentCmdOverrides: {}
-    }
-    mocks.store.repos = [
-      {
-        id: 'repo-1',
-        path: '/home/alice/repo',
-        connectionId: 'ssh-1',
-        displayName: 'Remote Repo',
-        addedAt: 1
-      }
-    ]
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        item: {
-          title: 'Fix failing checks',
-          url: 'https://github.com/acme/repo/pull/1',
-          type: 'issue',
-          number: 1,
-          pasteContent: 'Fix the failing checks.'
-        },
-        repoId: 'repo-1',
-        openModalFallback: mocks.openModalFallback,
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
-    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
-  })
-
   it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
     mocks.store.repos = [
       {

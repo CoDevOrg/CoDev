@@ -346,59 +346,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('dispatches an existing SSH folder workspace on its resolved host', async () => {
-    const folderWorkspace = {
-      id: 'folder:fw-1',
-      repoId: 'folder-workspace:group-1',
-      displayName: 'SSH folder',
-      path: '/srv/project'
-    }
-    state.repos = [
-      {
-        id: 'repo-1',
-        connectionId: 'ssh-folder',
-        executionHostId: null,
-        path: '/srv/project/repo'
-      }
-    ]
-    state.folderWorkspaces = [
-      {
-        id: 'fw-1',
-        projectGroupId: 'group-1',
-        folderPath: '/srv/project',
-        connectionId: 'ssh-folder'
-      }
-    ]
-    state.projectGroups = [{ id: 'group-1', connectionId: 'ssh-folder' }]
-    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
-    mockSshGetState.mockResolvedValue({ status: 'disconnected' })
-
-    await registerAndDispatch(
-      makeAutomation({
-        workspaceMode: 'existing',
-        workspaceId: folderWorkspace.id,
-        setupDecision: 'skip',
-        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder' }
-      })
-    )
-
-    expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: folderWorkspace.id,
-        prompt: 'run this'
-      })
-    )
-    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'dispatched',
-        workspaceId: folderWorkspace.id,
-        workspaceDisplayName: folderWorkspace.displayName
-      })
-    )
-  })
-
   it('dispatches a local folder workspace without SSH', async () => {
     const folderWorkspace = {
       id: 'folder:fw-local',

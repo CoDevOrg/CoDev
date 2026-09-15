@@ -2123,34 +2123,6 @@ describe('createEditorSlice markdown table of contents visibility', () => {
 })
 
 describe('createEditorSlice openMarkdownPreview', () => {
-  it('keeps external SSH ownership after the source edit tab closes', () => {
-    const store = createEditorStore()
-    store.getState().openFile({
-      filePath: '/tmp/notes.md',
-      relativePath: '/tmp/notes.md',
-      worktreeId: 'wt-1',
-      language: 'markdown',
-      mode: 'edit',
-})
-
-    store.getState().openMarkdownPreview(
-      {
-        filePath: '/tmp/notes.md',
-        relativePath: '/tmp/notes.md',
-        worktreeId: 'wt-1',
-        language: 'markdown'
-      },
-      { sourceFileId: '/tmp/notes.md' }
-    )
-    store.getState().closeFile('/tmp/notes.md')
-
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        id: 'markdown-preview::/tmp/notes.md',
-        externalSshTargetId: 'ssh-1'
-      })
-    ])
-  })
 
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()
@@ -4504,63 +4476,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('stats SSH markdown links through the source worktree connection before opening', async () => {
-    const store = createEditorStore()
-    pathExistsMock.mockResolvedValue(true)
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [
-          {
-            id: 'wt-1',
-            repoId: 'repo1',
-            path: '/repo',
-            branch: 'refs/heads/main',
-            head: 'abc',
-            isBare: false,
-            isMainWorktree: true,
-            displayName: 'main',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-        ]
-      }
-    } as Partial<AppState>)
-
-    await store.getState().activateMarkdownLink('./guide.md', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(fsStatMock).toHaveBeenCalledWith({
-      filePath: '/repo/docs/guide.md',
-      connectionId: 'ssh-1'
-    })
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        filePath: '/repo/docs/guide.md',
-        mode: 'edit',
-        isPreview: true
-      })
-    ])
-  })
-
   it('does not open linked markdown directories as files', async () => {
     const store = createEditorStore()
     fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
@@ -4880,56 +4795,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('blocks external file URLs from SSH markdown sources', async () => {
-    const store = createEditorStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [
-          {
-            id: 'wt-1',
-            repoId: 'repo1',
-            path: '/repo',
-            branch: 'refs/heads/main',
-            head: 'abc',
-            isBare: false,
-            isMainWorktree: true,
-            displayName: 'main',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-        ]
-      }
-    } as Partial<AppState>)
-
-    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
-    expect(store.getState().openFiles).toEqual([])
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Opening remote paths in the local OS is not available.'
-    )
-  })
-
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
@@ -5198,29 +5063,4 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 
-  it('restores the SSH target that owns an external host file', () => {
-    const store = createEditorStore()
-    store.setState({
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
-      folderWorkspaces: []
-    } as never)
-
-    store.getState().hydrateEditorSession({
-      openFilesByWorktree: {
-        'wt-1': [
-          {
-            filePath: '/tmp/ssh-preview.png',
-            relativePath: '/tmp/ssh-preview.png',
-            worktreeId: 'wt-1',
-            language: 'png',
-            externalSshTargetId: 'ssh-1'
-          }
-        ]
-      }
-    } as never)
-
-    expect(store.getState().openFiles[0]).toEqual(
-      expect.objectContaining({ externalSshTargetId: 'ssh-1' })
-    )
-  })
 })

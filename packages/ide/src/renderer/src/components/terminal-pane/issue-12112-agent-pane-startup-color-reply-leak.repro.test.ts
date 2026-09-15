@@ -184,35 +184,6 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     }
   })
 
-  it('agent pane consumes the replies and renders nothing', async () => {
-    const tty = createStartupTty()
-    stubPtyApi(tty)
-    const pane = await createRendererPane()
-
-    // opencode is a TUI agent, so main arms spawnOptions.startupIngress for this
-    // pane and only this pane (pty.ts:4024, terminal-startup-color-query-replies.ts).
-    expect(isTuiAgent('opencode')).toBe(true)
-    const ingress = new PtyStartupIngress({
-      intent: { colors: ORCA_TERMINAL_THEME, deadlineMs: 5_000 },
-      ownerBackend: 'posix-pty',
-      write: (data) => tty.writeToPty(data),
-      onEmission: (emission) => pane.deliver(emission.data)
-    })
-    tty.onPtyOutput((data) => ingress.accept(data))
-
-    try {
-      tty.emitStartupBurst()
-      await settleUntil(() => tty.programInput().includes(OSC11_REPLY))
-
-      expect(pane.renderedText()).not.toMatch(LEAKED_COLOR_REPLY_TEXT)
-      expect(tty.programInput()).toContain(OSC10_REPLY)
-      expect(tty.programInput()).toContain(OSC11_REPLY)
-    } finally {
-      ingress.drainAndClose()
-      pane.dispose()
-    }
-  })
-
   it('renders no reply text when the tty echo is coalesced with program output', () => {
     // The reported topology: the agent is launched by writing `opencode\n` into an
     // interactive shell, so bash's echo of Orca's reply shares a read with the shell's

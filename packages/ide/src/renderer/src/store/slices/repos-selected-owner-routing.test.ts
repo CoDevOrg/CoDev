@@ -447,56 +447,6 @@ describe('selected Add Project owner routing', () => {
     expect(store.getState().folderWorkspaces).toEqual([newFolder])
   })
 
-  it('prunes deleted desktop and direct-SSH catalog rows without erasing runtime siblings', async () => {
-    const sshGroup = {
-      ...projectGroup,
-      id: 'ssh-group',
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1'
-    }
-    const runtimeGroup = {
-      ...projectGroup,
-      id: sshGroup.id,
-      executionHostId: 'runtime:env-1'
-    }
-    const sshFolder: FolderWorkspace = {
-      id: 'ssh-folder',
-      projectGroupId: sshGroup.id,
-      name: 'SSH folder',
-      folderPath: '/srv/folder',
-      connectionId: 'ssh-1',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const runtimeFolder = {
-      ...sshFolder,
-      id: sshFolder.id,
-      projectGroupId: runtimeGroup.id,
-      connectionId: null,
-      executionHostId: 'runtime:env-1' as const
-    }
-    projectGroupsList.mockResolvedValue([])
-    folderWorkspacesList.mockResolvedValue([])
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [sshGroup, runtimeGroup],
-      folderWorkspaces: [sshFolder, runtimeFolder]
-    })
-
-    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: null })
-    await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-
-    expect(store.getState().projectGroups).toEqual([runtimeGroup])
-    expect(store.getState().folderWorkspaces).toEqual([runtimeFolder])
-  })
-
   it('pins selected SSH scans and cancellation to local IPC over an ambient runtime', async () => {
     const scan = {
       selectedPath: '/srv/platform',

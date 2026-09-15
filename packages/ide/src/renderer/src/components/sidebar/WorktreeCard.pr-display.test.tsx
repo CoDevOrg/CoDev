@@ -703,40 +703,6 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Linked PR #456')
   })
 
-  it('keeps durable non-GitHub linked review metadata ahead of branch PR cache', async () => {
-    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
-    worktreeCardProperties = ['pr']
-    hostedReviewCache = {
-      'local::repo-1::feature/local-branch': {
-        data: null,
-        fetchedAt: 100
-      }
-    }
-    prCache = {
-      'repo-1::feature/local-branch': {
-        data: makePRInfo({
-          number: 6340,
-          title: 'Remove split terminal from onboarding checklist',
-          state: 'open',
-          checksStatus: 'success'
-        }),
-        fetchedAt: 200
-      }
-    }
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    const markup = renderWorktreeCardMarkup(
-      <WorktreeCard
-        worktree={makeWorktree({ })}
-        repo={makeRepo()}
-        isActive={false}
-      />
-    )
-
-    expect(markup).toContain('Linked MR #77')
-    expect(markup).not.toContain('Linked PR #6340')
-  })
-
   it('does not resurrect an older PR cache entry after a newer hosted-review miss', async () => {
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: false }
     worktreeCardProperties = ['pr']

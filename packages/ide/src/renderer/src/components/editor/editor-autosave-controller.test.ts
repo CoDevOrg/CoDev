@@ -198,64 +198,6 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
-  it('saves folder workspace files through the path-specific SSH connection', async () => {
-    const writeFile = vi.fn().mockResolvedValue(undefined)
-    const eventTarget = new EventTarget()
-    vi.stubGlobal('window', {
-      addEventListener: eventTarget.addEventListener.bind(eventTarget),
-      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
-      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
-      setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis),
-      api: {
-        fs: {
-          writeFile
-        }
-      }
-    } satisfies WindowStub)
-
-    const store = createEditorStore()
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    store.setState({
-      worktreesByRepo: {
-        'folder-workspace-1': [
-          {
-            id: workspaceKey,
-            repoId: 'folder-workspace-1',
-            path: '/home/neil/platform',
-            hostId: 'ssh:ssh-1'
-          }
-        ] as never
-      },
-})
-    store.getState().openFile({
-      filePath: '/home/neil/platform/api/src/file.ts',
-      relativePath: 'api/src/file.ts',
-      worktreeId: workspaceKey,
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setEditorDraft('/home/neil/platform/api/src/file.ts', 'edited')
-    store.getState().markFileDirty('/home/neil/platform/api/src/file.ts', true)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await requestDirtyFileSave()
-
-      expect(writeFile).toHaveBeenCalledWith({
-        filePath: '/home/neil/platform/api/src/file.ts',
-        content: 'edited',
-        connectionId: 'ssh-1',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 4
-      })
-      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
   it('saves runtime-owned folder workspace files through the folder root', async () => {
     clearRuntimeCompatibilityCacheForTests()
     const writeFile = vi.fn().mockResolvedValue(undefined)

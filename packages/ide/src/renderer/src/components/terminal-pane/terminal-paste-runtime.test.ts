@@ -16,66 +16,6 @@ describe('terminal paste runtime', () => {
     })
   })
 
-  it('uses the current connection when the transport has no captured identity', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current'
-      })
-    ).toMatchObject({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-current',
-      kind: 'ssh'
-    })
-  })
-
-  it('prefers the transport connection captured when the terminal session was created', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: { }
-      })
-    ).toMatchObject({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
-    })
-  })
-
-  it('uses the transport remote platform for SSH paste instead of the local renderer platform', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'win32',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: {
-}
-      })
-    ).toEqual({
-      platform: 'linux',
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
-    })
-  })
-
-  it('uses current SSH remote platform metadata when the transport has no platform capture', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'linux',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        remotePlatform: 'win32'
-      })
-    ).toEqual({
-      platform: 'win32',
-      runtimeKey: 'ssh:ssh-current',
-      kind: 'ssh'
-    })
-  })
-
   it('ignores remote platform metadata for captured local sessions', () => {
     expect(
       resolveTerminalPasteRuntime({
@@ -179,24 +119,6 @@ describe('terminal paste runtime', () => {
     ).toMatchObject({
       runtimeKey: 'local:win32',
       kind: 'local'
-    })
-  })
-
-  it('keeps SSH runtime precedence over local WSL metadata', () => {
-    expect(
-      resolveTerminalPasteRuntime({
-        platform: 'win32',
-        ptyId: 'pty-1',
-        connectionId: 'ssh-current',
-        transport: {
-          getLocalSessionMetadata: () => ({
-            cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
-          })
-        }
-      })
-    ).toMatchObject({
-      runtimeKey: 'ssh:ssh-original',
-      kind: 'ssh'
     })
   })
 

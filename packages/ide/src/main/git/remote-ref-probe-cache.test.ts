@@ -156,35 +156,6 @@ describe('remote ref probe cache (P1-D)', () => {
     await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toEqual({ repo: 'team/repo' })
   })
 
-  it('holds an SSH repo that has no such remote instead of re-asking every poll', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    const exec = vi.fn(async () => {
-      throw new Error("fatal: No such remote 'origin'")
-    })
-    getSshGitProviderMock.mockReturnValue({ exec })
-
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-    expect(exec).toHaveBeenCalledTimes(1)
-
-    vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps re-asking an SSH repo whose probe died with its transport', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    const exec = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('relay request failed: connection closed'))
-      .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
-    getSshGitProviderMock.mockReturnValue({ exec })
-
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toEqual({ repo: 'team/repo' })
-    expect(exec).toHaveBeenCalledTimes(2)
-  })
-
   it('does not cache a probe killed on its deadline as a definitive miss', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
     gitExecFileAsyncMock

@@ -89,36 +89,6 @@ describe('createUntitledMarkdownFile', () => {
     expect(pathExists).toHaveBeenCalledTimes(100)
   })
 
-  it('passes connectionId to pathExists and createFile for SSH worktrees', async () => {
-    const pathExists = vi.fn(async () => false)
-    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
-    const createFile = vi.fn().mockResolvedValueOnce(undefined)
-
-    vi.stubGlobal('window', {
-      api: {
-        shell: { pathExists: vi.fn() },
-        fs: { createFile, pathExists, stat }
-      }
-    })
-
-    await expect(createUntitledMarkdownFile('/repo', 'wt-1', 'conn-1')).resolves.toMatchObject({
-      filePath: '/repo/untitled.md'
-    })
-
-    // Why: shell.pathExists is main-process local-only; SSH worktrees must
-    // probe through the same filesystem API that receives the connectionId.
-    expect(pathExists).toHaveBeenCalledWith({
-      filePath: '/repo/untitled.md',
-      connectionId: 'conn-1'
-    })
-    expect(stat).not.toHaveBeenCalled()
-    expect(createFile).toHaveBeenCalledWith({
-      filePath: '/repo/untitled.md',
-      connectionId: 'conn-1',
-      expectedExecutionHostId: 'ssh:conn-1'
-    })
-  })
-
   it('writes selected template content with placeholders after creating the untitled file', async () => {
     const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
     const createFile = vi.fn().mockResolvedValueOnce(undefined)

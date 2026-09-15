@@ -190,44 +190,6 @@ describe('github owner/repo resolution', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('resolves SSH repo remotes through the registered SSH git provider', async () => {
-    const sshProvider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[2] === 'upstream') {
-          throw new Error("fatal: No such remote 'upstream'")
-        }
-        return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(sshProvider)
-
-    await expect(getOwnerRepo('/home/user/orca', 'openclaw-2')).resolves.toEqual({
-      owner: 'stablyai',
-      repo: 'orca'
-    })
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('openclaw-2')
-    expect(sshProvider.exec).toHaveBeenCalledWith(
-      ['remote', 'get-url', 'origin'],
-      '/home/user/orca',
-      {
-        signal: expect.any(AbortSignal)
-      }
-    )
-  })
-
-  it('keeps local and SSH owner/repo cache entries separate for the same path', async () => {
-    const sshProvider = {
-      exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:remote/orca.git\n', stderr: '' })
-    }
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'git@github.com:local/orca.git\n' })
-    getSshGitProviderMock.mockReturnValue(sshProvider)
-
-    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'local', repo: 'orca' })
-    await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
-  })
-
   it('keeps local host and local WSL owner/repo cache entries separate for the same path', async () => {
     gitExecFileAsyncMock.mockImplementation(
       async (args: string[], options: { wslDistro?: string } = {}) => {

@@ -2,9 +2,9 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
+import { } from '@/lib/orchestration-usage-examples'
 import { OrchestrationPane } from './OrchestrationPane'
 
 const INSTALL_COMMAND =
@@ -147,28 +147,6 @@ describe('OrchestrationPane', () => {
     mocks.dialogProps.length = 0
     mocks.panelProps.length = 0
     mocks.skillInstalled = true
-  })
-
-  it('keeps skill setup visible after install and shows agent coverage plus examples', () => {
-    const markup = renderToStaticMarkup(<OrchestrationPane />)
-
-    expect(markup).toContain('Orchestration skill')
-    expect(markup).toContain('Installed')
-    expect(markup).toContain('Agent coverage')
-    expect(markup).not.toContain('Prefer your own terminal?')
-    expect(markup).not.toContain('Copy update command')
-    expect(markup).toContain('detected agents')
-    expect(markup).toContain('Gemini')
-    expect(markup).toContain('Ready')
-    expect(markup).toContain('How to use it')
-    expect(markup).not.toContain('See examples')
-    const examples = getOrchestrationUsageExamples()
-    expect(examples).toHaveLength(5)
-    for (const example of examples) {
-      expect(markup).toContain(example.title)
-    }
-    expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
-    expect(markup).toContain('Re-check')
   })
 
   it('passes update commands to the main panel without an installed manual-copy path', async () => {

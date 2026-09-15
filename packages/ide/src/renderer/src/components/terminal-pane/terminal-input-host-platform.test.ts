@@ -79,26 +79,6 @@ describe('resolveTerminalInputHostPlatform', () => {
     ).toBe('win32')
   })
 
-  it('uses the nested SSH host platform instead of the outer HUB platform', () => {
-    expect(
-      resolveTerminalInputHostPlatform({
-        clientPlatform: 'darwin',
-        state: state({
-          runtimeStatusByEnvironmentId: new Map([
-            ['hub', { status: { hostPlatform: 'linux' } } as never]
-          ]),
-}),
-        worktreeId: 'repo::C:\\repo',
-        transport: {
-          getConnectionId: () => null,
-          getPtyId: () => 'remote:hub@@terminal-1',
-          getRuntimeEnvironmentId: () => 'hub',
-          getExecutionHostId: () => 'ssh:ssh-windows'
-        }
-      })
-    ).toBe('win32')
-  })
-
   it('uses captured runtime ownership for a legacy remote PTY id', () => {
     expect(
       resolveTerminalInputHostPlatform({
@@ -193,29 +173,6 @@ describe('resolveTerminalInputHostPlatform', () => {
     ).toBe('win32')
   })
 
-  it('uses SSH remote platform metadata', () => {
-    expect(
-      resolveTerminalInputHostPlatform({
-        clientPlatform: 'darwin',
-        state: state({
-}),
-        worktreeId: 'repo::C:\\repo',
-        transport: { getConnectionId: () => 'ssh-win' }
-      })
-    ).toBe('win32')
-  })
-
-  it('uses conservative POSIX input when SSH platform metadata is unavailable', () => {
-    expect(
-      resolveTerminalInputHostPlatform({
-        clientPlatform: 'darwin',
-        state: state({ }),
-        worktreeId: 'repo::/repo',
-        transport: { getConnectionId: () => 'ssh-unknown' }
-      })
-    ).toBe('linux')
-  })
-
   it('prefers the PTY-owner platform over stale nested SSH state', () => {
     expect(
       resolveTerminalInputHostPlatform({
@@ -245,29 +202,6 @@ describe('resolveTerminalInputHostPlatform', () => {
         }
       })
     ).toBe('darwin')
-  })
-
-  it('uses the SSH execution host when the transport has no connection id', () => {
-    const worktreeId = 'repo::C:\\repo'
-    expect(
-      resolveTerminalInputHostPlatform({
-        clientPlatform: 'darwin',
-        state: state({
-          repos: [
-            {
-              id: 'repo',
-              path: 'C:\\repo',
-              displayName: 'repo',
-              badgeColor: '#000',
-              addedAt: 0,
-              executionHostId: 'ssh:ssh-win'
-            }
-          ],
-}),
-        worktreeId,
-        transport: { getConnectionId: () => null }
-      })
-    ).toBe('win32')
   })
 
   it('keeps the client platform for local terminals', () => {

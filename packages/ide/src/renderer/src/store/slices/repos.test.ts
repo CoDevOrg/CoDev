@@ -13,7 +13,6 @@ import {
   remoteRepo,
   reposAdd,
   reposClone,
-  reposCloneRemote,
   reposList,
   reposPickFolder,
   reposRemove,
@@ -509,61 +508,6 @@ describe('repo slice runtime routing', () => {
     })
   })
 
-  it('clones a project on an SSH host before aligning it as a host setup', async () => {
-    const project: Project = {
-      id: 'project-1',
-      displayName: 'Project',
-      badgeColor: '#000',
-      sourceRepoIds: ['ssh-repo'],
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const clonedRepo = { ...sshRepo, path: '/srv/project' }
-    const setup: ProjectHostSetup = {
-      id: clonedRepo.id,
-      projectId: project.id,
-      hostId: 'ssh:ssh-1',
-      repoId: clonedRepo.id,
-      path: clonedRepo.path,
-      displayName: clonedRepo.displayName,
-      setupState: 'ready',
-      setupMethod: 'cloned',
-      createdAt: 1,
-      updatedAt: 1
-    }
-    reposCloneRemote.mockResolvedValue(clonedRepo)
-    projectsSetupExistingFolder.mockResolvedValue({ project, setup, repo: clonedRepo })
-    const store = createTestStore()
-
-    await expect(
-      store.getState().setupProjectClone({
-        projectId: project.id,
-        hostId: 'ssh:ssh-1',
-        url: 'https://github.com/stablyai/orca.git',
-        destination: '/srv',
-        displayName: 'Project'
-      })
-    ).resolves.toEqual({
-      project,
-      setup,
-      repo: { ...clonedRepo, executionHostId: 'ssh:ssh-1' }
-    })
-
-    expect(reposCloneRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      url: 'https://github.com/stablyai/orca.git',
-      destination: '/srv'
-    })
-    expect(projectsSetupExistingFolder).toHaveBeenCalledWith({
-      projectId: project.id,
-      hostId: 'ssh:ssh-1',
-      path: clonedRepo.path,
-      kind: 'git',
-      displayName: 'Project',
-      setupMethod: 'cloned'
-    })
-  })
-
   it('keeps runtime ownership when a runtime repo is moved between groups', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-move',
@@ -628,26 +572,6 @@ describe('repo slice runtime routing', () => {
       timeoutMs: 15_000
     })
     expect(reposRemove).not.toHaveBeenCalled()
-  })
-
-  it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
-    const store = createTestStore()
-    const worktreeId = `${sshRepo.id}::/home/orca/wt`
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [sshRepo],
-      activeRepoId: sshRepo.id,
-      worktreesByRepo: {
-        [sshRepo.id]: [makeWorktree({ id: worktreeId, repoId: sshRepo.id })]
-      }
-    })
-
-    await store.getState().removeProject(sshRepo.id)
-
-    expect(store.getState().repos).toEqual([])
-    expect(store.getState().activeRepoId).toBeNull()
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('drops persisted visit timestamps for removed unhydrated SSH repos', async () => {

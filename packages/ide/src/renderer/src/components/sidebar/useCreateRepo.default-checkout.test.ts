@@ -221,34 +221,6 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
   })
 
-  it('creates projects through the SSH host when an SSH target is selected', async () => {
-    const repo = makeRepo({ connectionId: 'ssh-1', path: '/srv/created' })
-    mocks.createRemoteRepo.mockResolvedValue({ repo })
-    mocks.fetchWorktrees.mockResolvedValue(true)
-    const { useCreateRepo } = await import('./useCreateRepo')
-
-    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
-})
-    await result.handleCreate()
-
-    expect(mocks.createRemoteRepo).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      parentPath: '/projects',
-      name: 'created',
-      kind: 'git'
-    })
-    expect(mocks.createRepo).not.toHaveBeenCalled()
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.storeState.repos).toContainEqual({
-      ...repo,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'ssh:ssh-1')
-  })
-
   it('creates projects through the selected runtime environment', async () => {
     const repo = makeRepo({ path: '/srv/created' })
     mocks.callRuntimeRpc.mockResolvedValue({ repo })

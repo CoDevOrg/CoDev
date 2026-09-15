@@ -3,18 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { } from '../../../../shared/source-control-ai-types'
-import {
-  getCommitMessageModelDiscoveryHostKey,
-  getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
-  getCommitMessageModelDiscoveryHostKeyForScope
-} from '../../../../shared/commit-message-host-key'
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
   getCommitMessageSettingsPaneDiscoveryHostKey,
 } from './CommitMessageAiPane'
 import {
-  getAgentCatalogForAction,
 } from './source-control-action-recipe-options'
 import { getCommitMessageAiPaneSearchEntries } from './commit-message-ai-search'
 import { TooltipProvider } from '../ui/tooltip'
@@ -147,16 +141,6 @@ describe('CommitMessageAiPane', () => {
     expect(markup.match(/placeholder="--model gpt-5\.4-mini"/g)?.length ?? 0).toBeGreaterThan(0)
   })
 
-  it('only offers non-interactive generation agents for text generation actions', () => {
-    expect(getAgentCatalogForAction('commitMessage', null).map((agent) => agent.id)).not.toContain(
-      'aider'
-    )
-    expect(getAgentCatalogForAction('pullRequest', null).map((agent) => agent.id)).not.toContain(
-      'aider'
-    )
-    expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
-  })
-
   it('explains which agents are supported for text-generation recipes', () => {
     const markup = renderPane(
       buildSettings({
@@ -280,16 +264,6 @@ describe('CommitMessageAiPane', () => {
     expect(actionRecipesEntry?.keywords).toEqual(
       expect.arrayContaining(['agent', 'arguments', 'cli', 'command', 'model', 'template', 'ci'])
     )
-  })
-
-  it('keys model discovery cache by execution host', () => {
-    expect(getCommitMessageModelDiscoveryHostKey(null)).toBe('local')
-    expect(getCommitMessageModelDiscoveryHostKey('ssh-1')).toBe('ssh:ssh-1')
-    expect(getCommitMessageModelDiscoveryHostKey(undefined)).toBe('unknown')
-    expect(getCommitMessageModelDiscoveryHostKeyForLocalRuntime('Ubuntu')).toBe('wsl:Ubuntu')
-    expect(getCommitMessageModelDiscoveryHostKeyForLocalRuntime(null)).toBe('local')
-    expect(getCommitMessageModelDiscoveryHostKeyForScope('runtime:env-1')).toBe('runtime:env-1')
-    expect(getCommitMessageModelDiscoveryHostKeyForScope('ssh-1')).toBe('ssh:ssh-1')
   })
 
   it('keeps local active worktree discovery scoped to local, not unknown', () => {

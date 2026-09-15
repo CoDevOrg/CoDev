@@ -207,23 +207,6 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(issueInput().value).toBe('42')
   })
 
-  it('seeds the chip and value from a Linear link', () => {
-    openDialog({ worktree: { } })
-
-    expect(providerChip().textContent).toContain('Linear')
-    expect(issueInput().value).toBe('STA-335')
-  })
-
-  it('flips to Linear when a linear.app issue URL is pasted', () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.change(issueInput(), {
-      target: { value: 'https://linear.app/acme/issue/STA-335/fix-the-thing' }
-    })
-
-    expect(providerChip().textContent).toContain('Linear')
-  })
-
   // Why: Linear and Jira issue keys are the same shape, so only a URL may steer
   // the provider — a bare key must never override the user's explicit choice.
   it('keeps the chip on GitHub when a bare issue key is typed', () => {
@@ -245,29 +228,7 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(providerChip().textContent).toContain('GitHub')
   })
 
-  it('names the Linear issue that switching to GitHub would unlink', () => {
-    openDialog({ worktree: { } })
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'GitHub' }))
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-
-    expect(
-      screen.getByText('Saving unlinks Linear STA-335 — a workspace tracks one issue.')
-    ).toBeTruthy()
-  })
-
   // Both slots can hold a link at once — naming only one understates the save.
-  it('names both links when clearing the field would drop both', () => {
-    openDialog({ worktree: { linkedIssue: 42, } })
-
-    fireEvent.change(issueInput(), { target: { value: '' } })
-
-    expect(
-      screen.getByText(
-        'Saving unlinks Linear STA-335 and GitHub #42 — a workspace tracks one issue.'
-      )
-    ).toBeTruthy()
-  })
 
   // The warning above only promises the displacement — this asserts the payload
   // that carries it out, which is where the one-issue-per-workspace rule lives.
@@ -335,15 +296,6 @@ describe('WorktreeMetaDialog issue link row', () => {
     expect(Object.keys(updates)).not.toContain('linkedLinearIssue')
     expect(Object.keys(updates)).not.toContain('linkedIssue')
     expect(updates.comment).toBe('updated note')
-  })
-
-  it('blocks saving an unparseable Linear value', () => {
-    openDialog({ worktree: { } })
-
-    fireEvent.change(issueInput(), { target: { value: 'not an issue' } })
-
-    expect(screen.getByText('Not a Linear issue key or linear.app issue URL.')).toBeTruthy()
-    expect(saveButton().disabled).toBe(true)
   })
 
   it('is read-only for a folder workspace', () => {

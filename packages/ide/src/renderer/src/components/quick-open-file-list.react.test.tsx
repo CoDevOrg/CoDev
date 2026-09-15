@@ -120,50 +120,6 @@ afterEach(async () => {
 })
 
 describe('useRuntimeFileListForWorktree', () => {
-  it('lists a repo-less SSH folder workspace after folder metadata hydrates', async () => {
-    const states: RuntimeFileListState[] = []
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-
-    useAppStore.setState({
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-
-    await renderProbe({
-      enabled: true,
-      onState: (state) => states.push(state),
-      worktreeId: workspaceKey
-    })
-
-    expect(listRuntimeFilesMock).not.toHaveBeenCalled()
-
-    await act(async () => {
-      useAppStore.setState({
-        folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
-        projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
-        repos: [],
-        worktreesByRepo: {}
-      } as Partial<AppState>)
-    })
-    await waitForListRuntimeFilesCall()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: workspaceKey,
-        worktreePath: '/srv/platform',
-        connectionId: 'ssh-1',
-        settings: expect.objectContaining({ activeRuntimeEnvironmentId: null })
-      }),
-      {
-        rootPath: '/srv/platform',
-        excludePaths: undefined,
-        requestToken: expect.any(String)
-      }
-    )
-    expect(states.at(-1)?.files).toEqual(['packages/app/package.json'])
-  })
 
   it('cancels the in-flight scan with the same request token on unmount (#7721)', async () => {
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')

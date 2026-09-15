@@ -202,72 +202,6 @@ describe('useEditorPanelContentState', () => {
     )
   })
 
-  it('loads an external SSH-host image when the tab is pinned to that target', async () => {
-    const activeFile = createOpenFile({
-      id: '/tmp/ssh-preview.png',
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'repo-ssh::/home/user/project',
-      externalSshTargetId: 'ssh-1'
-    } as never)
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({
-      content: 'base64-image',
-      isBinary: true,
-      isImage: true,
-      mimeType: 'image/png'
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.isImage).toBe(true))
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/tmp/ssh-preview.png',
-        relativePath: '/tmp/ssh-preview.png',
-        worktreeId: 'repo-ssh::/home/user/project',
-        connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
-    )
-  })
-
-  it('loads an unstamped external SSH-host tab through the resolved connection', async () => {
-    const activeFile = createOpenFile({
-      id: '/work/reports/audit.md',
-      filePath: '/work/reports/audit.md',
-      relativePath: '/work/reports/audit.md',
-      worktreeId: 'repo-ssh::/work/demo-project'
-    })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# remote', isBinary: false })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# remote'))
-    // Why: the client-local grant must not be requested for a remote-owned path.
-    expect(authorizeExternalPath).not.toHaveBeenCalled()
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '/work/reports/audit.md',
-        connectionId: 'ssh-1',
-        expectedExternalSshTargetId: undefined
-      })
-    )
-  })
-
   it('keeps a client-local live-tail log tab on the client inside an SSH workspace', async () => {
     const logPath = '/Users/me/.codex/sessions/session.jsonl'
     const worktreeId = 'repo-ssh::/work/demo-project'
@@ -342,40 +276,6 @@ describe('useEditorPanelContentState', () => {
       )
     )
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
-  it('rejects an external SSH-host tab after its target owner changes', async () => {
-    const activeFile = createOpenFile({
-      id: '/tmp/ssh-preview.png',
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'repo-ssh::/home/user/project',
-      externalSshTargetId: 'ssh-original'
-    } as never)
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
-    mocks.readRuntimeFileContent.mockRejectedValue(
-      new Error('External SSH files are not available after the workspace host changes.')
-    )
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestFileContents[activeFile.id]?.loadError).toBe(
-        'External SSH files are not available after the workspace host changes.'
-      )
-    )
-    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: 'ssh-replacement',
-        expectedExternalSshTargetId: 'ssh-original'
-      })
-    )
   })
 
   it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {

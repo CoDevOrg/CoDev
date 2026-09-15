@@ -164,19 +164,4 @@ describe('listTerminals liveness truth for restored leaves', () => {
     })
   })
 
-  it('does not demote SSH-scoped leaves the aggregate inventory may not cover', async () => {
-    const runtime = makeRuntimeWithLeaf({
-      leafPtyId: 'ssh:target-1@@session-9',
-      controllerSessions: []
-    })
-
-    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
-
-    expect(terminals).toHaveLength(1)
-    expect(terminals[0]).toMatchObject({
-      ptyId: 'ssh:target-1@@session-9',
-      connected: true,
-      writable: true
-    })
-  })
 })

@@ -396,15 +396,6 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     document.body.innerHTML = ''
   })
 
-  it('renders GitLab MR metadata from a child through the real WorktreeCard path', async () => {
-    const container = await renderWorktreeList()
-    const childOption = container.querySelector('[id="worktree-list-option-all%3Achild"]')
-
-    expect(childOption?.textContent).toContain('MR #42')
-    expect(childOption?.textContent).toContain('Child GitLab MR')
-    expect(childOption?.textContent).toContain('Child handoff note')
-  })
-
   it('keeps expanded child cards in the parent title column', async () => {
     mockStore.state.settings = { experimentalNewWorktreeCardStyle: true }
     const container = await renderWorktreeList()

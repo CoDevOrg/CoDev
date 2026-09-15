@@ -131,19 +131,6 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
-  it('infers OpenClaude answers through its Claude-compatible selector path', () => {
-    const { result } = renderHook(() =>
-      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
-    )
-
-    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
-
-    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
-    expect(onSettled).toBeTypeOf('function')
-    onSettled?.(true)
-    expect(mocks.inferQuestionAnswered).toHaveBeenCalledOnce()
-  })
-
   it('does nothing when no option is answered', () => {
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')

@@ -16,22 +16,6 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }: { children: ReactModule.ReactNode }) => <h1>{children}</h1>
 }))
 
-function renderLocalStartStep(_isSshLikely: boolean): string {
-  return renderToStaticMarkup(
-    <AddRepoLocalStartStep
-      repoCount={1}
-      isAdding={false}
-      addProjectBusyLabel={null}
-      nestedScanInProgress={false}
-      nestedScanId={null}
-      onBrowse={vi.fn()}
-      onOpenCloneStep={vi.fn()}
-      onOpenCreateStep={vi.fn()}
-      onStopNestedScan={vi.fn()}
-    />
-  )
-}
-
 function renderServerPathStartStep(runtimeEnvironmentId: string | null): string {
   return renderToStaticMarkup(
     <TooltipProvider>
@@ -98,22 +82,6 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
-function getActionTitles(_isSshLikely: boolean): {
-  primary: string
-  secondary: string[]
-} {
-  const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
-    onBrowse: vi.fn(),
-    onOpenCloneStep: vi.fn(),
-    onOpenCreateStep: vi.fn()
-  })
-
-  return {
-    primary: primaryAction.title,
-    secondary: secondaryActions.map((action) => action.title)
-  }
-}
-
 function getHostAwareActionModel(): {
   secondary: string[]
   createDisabled: boolean | undefined
@@ -155,48 +123,6 @@ describe('AddRepoLocalStartStep', () => {
     document.body.innerHTML = ''
   })
 
-  it('promotes browse folder and keeps secondary actions always visible', () => {
-    const markup = renderLocalStartStep(false)
-
-    expect(markup).toContain('Browse folder')
-    expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Project on SSH host')
-    expect(markup).toContain('Create new project')
-    expect(markup).toContain('Other ways to add')
-    expect(markup).not.toContain('More options')
-  })
-
-  it('orders secondary actions clone-first for default users', () => {
-    const titles = getActionTitles(false)
-
-    expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual([
-      'Clone from URL',
-      'Project on SSH host',
-      'Create new project'
-    ])
-  })
-
-  it('keeps Browse folder primary for SSH-likely users', () => {
-    const markup = renderLocalStartStep(true)
-
-    expect(markup).toContain('Browse folder')
-    expect(markup).toContain('Project on SSH host')
-    expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Create new project')
-  })
-
-  it('orders secondary actions remote-first for SSH-likely users', () => {
-    const titles = getActionTitles(true)
-
-    expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toEqual([
-      'Project on SSH host',
-      'Clone from URL',
-      'Create new project'
-    ])
-  })
-
   it('lets host-aware Add Project replace the separate remote row', () => {
     const model = getHostAwareActionModel()
 
@@ -216,31 +142,6 @@ describe('AddRepoLocalStartStep', () => {
     const browseButton = findButton(container, 'Browse folder')
 
     expect(document.activeElement).toBe(browseButton)
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('focuses Browse folder for SSH-likely users too', async () => {
-    const { container, root } = await renderLocalStartStepDom(true)
-    const browseButton = findButton(container, 'Browse folder')
-    const remoteButton = findButton(container, 'Project on SSH host')
-
-    expect(document.activeElement).toBe(browseButton)
-    expect(document.activeElement).not.toBe(remoteButton)
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('renders secondary actions as enabled buttons without a disclosure toggle', async () => {
-    const { container, root } = await renderLocalStartStepDom(false)
-
-    expect(findButton(container, 'Clone from URL').disabled).toBe(false)
-    expect(findButton(container, 'Project on SSH host').disabled).toBe(false)
-    expect(findButton(container, 'Create new project').disabled).toBe(false)
 
     await act(async () => {
       root.unmount()

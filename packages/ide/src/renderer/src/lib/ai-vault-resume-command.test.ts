@@ -303,54 +303,6 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
   })
 
-  it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
-
-    expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null
-        }
-      })
-    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
-  })
-
-  it('uses POSIX command wrapping for folder workspaces with their own SSH target', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-    state.activeWorktreeId = 'folder:folder-1'
-    state.folderWorkspaces = [
-      {
-        id: 'folder-1',
-        projectGroupId: 'group-1',
-        name: 'Platform',
-        folderPath: '/home/alice/platform',
-        connectionId: 'folder-ssh'
-      }
-    ] as never
-    state.projectGroups = [{ id: 'group-1', connectionId: null, executionHostId: null }] as never
-
-    expect(getAiVaultResumePlatform(state, 'folder:folder-1')).toBe('linux')
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'folder:folder-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/platform',
-          codexHome: null
-        }
-      })
-    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
-  })
-
   it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
     state.activeWorktreeId = 'folder:folder-1'

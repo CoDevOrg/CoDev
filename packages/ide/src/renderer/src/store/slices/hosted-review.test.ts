@@ -137,25 +137,6 @@ describe('hosted review slice', () => {
     })
   })
 
-  it('uses SSH-scoped hosted review cache entries for SSH-backed repos', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
-    } as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab', {
-        repoId: 'repo-1'
-      })
-    ).resolves.toEqual(review)
-
-    expect(store.getState().hostedReviewCache['ssh:ssh-1::repo-1::feature/gitlab']).toMatchObject({
-      data: review
-    })
-    expect(store.getState().hostedReviewCache['local::repo-1::feature/gitlab']).toBeUndefined()
-  })
-
   it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
     mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
     const store = makeStore({

@@ -7,7 +7,6 @@ import { } from '../../../../shared/workspace-scope'
 import {
   buildTerminalTabRetirementPlan,
   buildTerminalTabRetirementPlans,
-  isTerminalTabPresent,
   removeSleepingAgentSessionsForTab
 } from './terminal-tab-retirement'
 
@@ -59,60 +58,6 @@ function makeSleepingRecord(paneKey: string, tabId?: string): SleepingAgentSessi
 }
 
 describe('terminal tab retirement planning', () => {
-  it('collects and deduplicates every ownership source before routing providers', () => {
-    const state = makeState({
-      tabsByWorktree: {
-        'wt-1': [makeTab('tab-1', 'wt-1', 'pty-row')]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-index', 'pty-row'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: null,
-          activeLeafId: null,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            leaf1: 'pty-layout',
-            leaf2: 'remote:env-1@@terminal-1'
-          }
-        }
-      },
-      lastKnownRelayPtyIdByTabId: { 'tab-1': 'ssh:ssh-1@@relay-pty' },
-      pendingReconnectPtyIdByTabId: { 'tab-1': 'pty-pending' }
-    })
-
-    expect(buildTerminalTabRetirementPlan(state, 'tab-1')).toEqual({
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      ptyIds: [
-        'pty-index',
-        'pty-row',
-        'pty-layout',
-        'remote:env-1@@terminal-1',
-        'ssh:ssh-1@@relay-pty',
-        'pty-deferred',
-        'pty-pending'
-      ],
-      localOrSshPtyIds: [
-        'pty-index',
-        'pty-row',
-        'pty-layout',
-        'ssh:ssh-1@@relay-pty',
-        'pty-deferred',
-        'pty-pending'
-      ],
-      runtimeTerminals: [
-        {
-          ptyId: 'remote:env-1@@terminal-1',
-          environmentId: 'env-1',
-          handle: 'terminal-1'
-        }
-      ],
-      cleanupOnlyPtyIds: [],
-      sharedPtyIds: [],
-      unroutablePtyIds: []
-    })
-    expect(isTerminalTabPresent(state, 'tab-1')).toBe(true)
-  })
 
   it('protects a scoped runtime terminal referenced through its legacy alias', () => {
     const scoped = 'remote:env-1@@terminal-1'

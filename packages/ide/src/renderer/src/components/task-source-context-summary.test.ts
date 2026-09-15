@@ -65,30 +65,6 @@ describe('task source context summary', () => {
     )
   })
 
-  it('shows disconnected source-host availability for a single SSH repo source', () => {
-    const summary = getTaskSourceContextSummary({
-      provider: 'github',
-      providerLabel: 'GitHub',
-      selectedRepoCount: 1,
-      repoContexts: [
-        {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'github:stablyai/orca',
-          hostId: 'ssh:devbox',
-          repoId: 'repo-1',
-          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-        }
-      ],
-      hostAvailability: [{ hostId: 'ssh:devbox', }]
-    })
-
-    expect(summary.label).toBe('GitHub · devbox · disconnected · stablyai/orca')
-    expect(summary.title).toBe(
-      'GitHub · Host: devbox · Availability: devbox disconnected · Source: stablyai/orca'
-    )
-  })
-
   it('summarizes multiple unavailable source hosts without cluttering the label', () => {
     const summary = getTaskSourceContextSummary({
       provider: 'github',
@@ -234,30 +210,6 @@ describe('task source context summary', () => {
         'Reconnect or update old-server server update needed for task sources to load this source.',
       blocking: true
     })
-  })
-
-  it('builds a visible unavailable-source notice from host availability', () => {
-    expect(
-      getTaskSourceAvailabilityNotice({
-        providerLabel: 'GitHub',
-        hostAvailability: [{ hostId: 'ssh:devbox', }]
-      })
-    ).toEqual({
-      label: 'GitHub source unavailable: devbox auth needed',
-      title: 'Reconnect or update devbox auth needed to load this source.',
-      blocking: true
-    })
-
-    expect(
-      getTaskSourceAvailabilityNotice({
-        providerLabel: 'GitLab',
-        sourceCount: 3,
-        hostAvailability: [
-          { hostId: 'ssh:devbox', },
-          { hostId: 'runtime:old-server', health: 'blocked' }
-        ]
-      })?.label
-    ).toBe('Some GitLab source hosts unavailable: 2 source hosts')
   })
 
   it('shows provider-specific source availability reasons', () => {

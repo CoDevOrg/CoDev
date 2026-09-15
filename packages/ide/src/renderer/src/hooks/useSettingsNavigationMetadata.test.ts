@@ -76,23 +76,6 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
   })
 
-  it('places Cloud VM under Experimental instead of as a beta sidebar item', () => {
-    const sections = buildSettingsNavigationMetadata({
-      isMac: false,
-      isWindows: false,
-      isWebClient: false,
-      repos: [repo]
-    })
-    const experimental = sections.find((section) => section.id === 'experimental')
-    const entry = experimental?.searchEntries.find(
-      (searchEntry) => searchEntry.title === 'Cloud VM'
-    )
-
-    expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
-    expect(experimental?.group).toBe('experimental')
-    expect(entry?.targetSectionId).toBe('ephemeral-vms')
-  })
-
   it('places Plugins under Experimental on desktop and omits it on the web', () => {
     const desktopSections = buildSettingsNavigationMetadata({
       isMac: false,

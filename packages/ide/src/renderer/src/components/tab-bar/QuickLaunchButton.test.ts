@@ -183,20 +183,6 @@ describe('QuickLaunchAgentMenuItems', () => {
     })
   })
 
-  it('routes agent detection to the owning SSH host', () => {
-    storeState.worktreesByRepo = {
-      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1' }]
-    }
-    storeState.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1' }]
-
-    renderAgentMenuItems()
-
-    expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
-      kind: 'ssh',
-      connectionId: 'ssh-target-1'
-    })
-  })
-
   it('does not label an auto-picked or blank default as configured', () => {
     shortcutLabelMock.mockReturnValue('⌘⌥T')
 

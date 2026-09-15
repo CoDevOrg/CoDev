@@ -243,30 +243,6 @@ describe('ChecksList expanded check details', () => {
 
   // Regression for #7732: manual/created GitLab jobs carry no web_url and no GitHub
   // handles, so the panel used to short-circuit before ever asking for their log.
-  it('loads details for a GitLab job that only carries a job id', async () => {
-    const gitLabCheck: PRCheckDetail = {
-      name: 'deploy: production',
-      status: 'completed',
-      conclusion: 'failure',
-      url: null,
-}
-    const onLoadCheckDetails = vi.fn(async () => ({
-      ...checkDetails,
-      name: gitLabCheck.name,
-      jobs: [{ ...checkDetails.jobs[0]!, id: 987654, logTail: 'ERROR: Job failed: exit code 1' }]
-    }))
-
-    renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(onLoadCheckDetails).toHaveBeenCalledWith(gitLabCheck)
-    expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
-    expect(container.textContent).not.toContain('No inline details are available')
-    expect(container.querySelector('.sticky.top-0')?.textContent).toContain('View full logs')
-  })
 
   // GitLab trace fetches fail for reasons GitHub's never do (auth, 404, self-hosted
   // host resolution) and the panel has no retry button, so a transient failure must

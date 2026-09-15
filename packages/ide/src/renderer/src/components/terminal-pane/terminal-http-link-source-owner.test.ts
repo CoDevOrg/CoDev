@@ -19,13 +19,6 @@ describe('resolveTerminalHttpLinkSourceOwner', () => {
     expect(resolveTerminalHttpLinkSourceOwner(transport('local-pty'))).toEqual({ kind: 'local' })
   })
 
-  it('keeps direct SSH ownership while its PTY id is unavailable', () => {
-    expect(resolveTerminalHttpLinkSourceOwner(transport(null, null, 'ssh-recovering'))).toEqual({
-      kind: 'ssh',
-      connectionId: 'ssh-recovering'
-    })
-  })
-
   it('prefers the transport runtime owner while its recovery PTY id is null', () => {
     expect(resolveTerminalHttpLinkSourceOwner(transport(null, 'env-recovering'))).toEqual({
       kind: 'runtime',

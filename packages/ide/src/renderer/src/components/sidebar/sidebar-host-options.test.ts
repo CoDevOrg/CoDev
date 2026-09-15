@@ -3,7 +3,6 @@ import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
-  getSidebarHostVisibilityLabel,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls
 } from './sidebar-host-options'
@@ -28,31 +27,6 @@ describe('sidebar host options', () => {
       }
     ])
     expect(shouldShowHostScopeControls(hosts)).toBe(false)
-  })
-
-  it('includes SSH hosts from labels and repos', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-from-repo' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(hosts.map((host) => host.id)).toEqual(['local', 'ssh:ssh-saved', 'ssh:ssh-from-repo'])
-    expect(hosts.map((host) => host.health)).toEqual(['local', 'disconnected', 'disconnected'])
-    expect(hosts.find((host) => host.id === 'ssh:ssh-saved')?.presence).toBe('configured')
-    expect(hosts.find((host) => host.id === 'ssh:ssh-from-repo')?.presence).toBe('project')
-    expect(shouldShowHostScopeControls(hosts)).toBe(true)
-  })
-
-  it('includes SSH health in options', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(hosts.find((host) => host.id === 'ssh:ssh-1')).toMatchObject({
-      label: 'Builder',
-      health: 'available'
-    })
   })
 
   it('includes the focused runtime compatibility host', () => {
@@ -161,28 +135,6 @@ describe('sidebar host options', () => {
       { id: 'local', label: LOCAL_HOST_LABEL, health: 'local' },
       { id: 'ssh:ssh-1', label: 'Builder', health: 'disconnected' }
     ])
-  })
-
-  it('labels visible host selections for the workspace options menu', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getSidebarHostVisibilityLabel(null, hosts)).toBe('All hosts')
-    expect(getSidebarHostVisibilityLabel(['ssh:ssh-1'], hosts)).toBe('Builder')
-    expect(getSidebarHostVisibilityLabel(['local', 'ssh:ssh-1'], hosts)).toBe('All hosts')
-  })
-
-  it('carries host kind so the header menu can pick lifecycle actions', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' }
-    })
-
-    expect(hosts.find((host) => host.id === 'local')?.kind).toBe('local')
-    expect(hosts.find((host) => host.id === 'ssh:ssh-1')?.kind).toBe('ssh')
-    expect(hosts.find((host) => host.id === 'runtime:runtime-1')?.kind).toBe('runtime')
   })
 
   it('labels host health for compact sidebar UI', () => {

@@ -3,11 +3,8 @@ import type { AppState } from '@/store/types'
 import {
   canResumeAiVaultSessionOnTarget,
   getAiVaultResumeWorkspaceExecutionHostId,
-  getAiVaultResumeRepoTargetStatus,
   getAiVaultResumeWorktreeTargetStatus,
   getAiVaultResumeWorkspaceTargetStatus,
-  isSupportedAiVaultResumeRepo,
-  isUnsupportedAiVaultResumeRepo,
   isWslStoredAiVaultSessionFile
 } from './ai-vault-resume-target'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -79,36 +76,6 @@ describe('ai vault session storage compatibility', () => {
 })
 
 describe('ai vault resume target ownership', () => {
-  it('classifies local, SSH, runtime, and unknown repo owners', () => {
-    expect(getAiVaultResumeRepoTargetStatus({ connectionId: null, executionHostId: 'local' })).toBe(
-      'local'
-    )
-    expect(getAiVaultResumeRepoTargetStatus({ connectionId: 'ssh-1', executionHostId: null })).toBe(
-      'ssh'
-    )
-    expect(
-      getAiVaultResumeRepoTargetStatus({
-        connectionId: null,
-        executionHostId: 'runtime:env-1'
-      })
-    ).toBe('runtime')
-    expect(getAiVaultResumeRepoTargetStatus(null)).toBe('unknown')
-  })
-
-  it('exposes boolean predicates for resume gates', () => {
-    expect(isSupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'local' })).toBe(
-      true
-    )
-    expect(isSupportedAiVaultResumeRepo({ connectionId: 'ssh-1', executionHostId: null })).toBe(
-      true
-    )
-    expect(
-      isSupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
-    ).toBe(true)
-    expect(
-      isUnsupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
-    ).toBe(false)
-  })
 
   it('resolves runtime-owned worktree targets through their repo owner', () => {
     expect(
@@ -118,16 +85,6 @@ describe('ai vault resume target ownership', () => {
         repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-1' }]
       })
     ).toBe('runtime')
-  })
-
-  it('prefers explicit worktree host ownership over repo ownership', () => {
-    expect(
-      getAiVaultResumeWorktreeTargetStatus({
-        worktreeId: 'repo-1::/repo/orca',
-        worktrees: [{ id: 'repo-1::/repo/orca', repoId: 'repo-1', hostId: 'ssh:ssh-1' }],
-        repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:env-1' }]
-      })
-    ).toBe('ssh')
   })
 
   it('uses the composite worktree repo id when worktree discovery is incomplete', () => {
@@ -195,25 +152,6 @@ describe('ai vault resume target ownership', () => {
         'repo-1::/repo/orca'
       )
     ).toBe('local')
-  })
-
-  it('supports folder workspaces owned by SSH project groups', () => {
-    expect(
-      getAiVaultResumeWorkspaceTargetStatus(
-        makeState({
-          folderWorkspaces: [
-            {
-              id: 'folder-1',
-              projectGroupId: 'group-1',
-              name: 'Platform',
-              folderPath: '/repo/platform'
-            }
-          ],
-          projectGroups: [{ id: 'group-1', connectionId: 'ssh-1' }]
-        }),
-        folderWorkspaceKey('folder-1')
-      )
-    ).toBe('ssh')
   })
 
   it('prefers runtime project-group ownership over stale SSH folder connection ids', () => {

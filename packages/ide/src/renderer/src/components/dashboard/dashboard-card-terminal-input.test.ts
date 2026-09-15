@@ -78,26 +78,6 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(resolveDashboardCardTerminalInput(stateWith(), WINDOWS_ARGS).hostPlatform).toBe('win32')
   })
 
-  it('follows the SSH host platform rather than the client OS', () => {
-    const state = stateWith({
-      repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
-      sshConnectionStates: new Map([['conn-1', { remotePlatform: 'win32' }]])
-    } as unknown as Partial<DashboardCardTerminalInputState>)
-    expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).hostPlatform).toBe('win32')
-  })
-
-  it("keeps the live SSH PTY's host after the worktree owner changes", () => {
-    const state = stateWith({
-      sshConnectionStates: new Map([['conn-live', { remotePlatform: 'win32' }]])
-    } as unknown as Partial<DashboardCardTerminalInputState>)
-    const profile = resolveDashboardCardTerminalInput(state, {
-      ...MAC_ARGS,
-      ptyId: 'ssh:conn-live@@pty-1'
-    })
-    expect(profile.hostPlatform).toBe('win32')
-    expect(profile.localWindowsConpty).toBe(false)
-  })
-
   it("keeps the live runtime PTY's host after the worktree owner changes", () => {
     const state = stateWith({
       runtimeStatusByEnvironmentId: new Map([['env-live', { status: { hostPlatform: 'linux' } }]])

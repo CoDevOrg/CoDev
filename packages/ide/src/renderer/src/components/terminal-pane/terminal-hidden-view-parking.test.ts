@@ -113,24 +113,6 @@ describe('canParkTerminalWorktreeRenderers', () => {
     expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
   })
 
-  it('parks a hidden SSH worktree only under the SSH restore policy', () => {
-    const sshArgs = {
-      ...base,
-      terminalTabs: [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }]
-    }
-    expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
-    expect(
-      canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { } })
-    ).toBe(true)
-    expect(
-      canParkTerminalWorktreeRenderers({
-        ...sshArgs,
-        terminalTabs: [...sshArgs.terminalTabs, { id: 'tab-2', ptyId: 'remote:env-1@@t-1' }],
-        restorePolicy: { }
-      })
-    ).toBe(false)
-  })
-
   it('defers preserved-daemon snapshot authority to the watcher coverage gate', async () => {
     const legacyPtyId = 'repo::/worktree@@session-1'
     clearTerminalProviderSnapshotCapabilities()

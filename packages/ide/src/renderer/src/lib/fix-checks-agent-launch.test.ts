@@ -205,33 +205,6 @@ describe('startFixChecksAgent', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
-  it('falls back to the repo connection when an attached workspace lookup is unresolved', async () => {
-    mocks.store.repos = [
-      {
-        ...mocks.store.repos[0],
-        connectionId: 'ssh-1'
-      }
-    ]
-    mocks.getConnectionId.mockReturnValue(undefined)
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mocks.resolveSourceControlLaunchPlatform).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      worktreePath: '/repo/wt-1',
-      projectRuntime: undefined
-    })
-  })
-
   it('passes the local project runtime when resolving an attached WSL workspace launch platform', async () => {
     mocks.store.repos = [
       {

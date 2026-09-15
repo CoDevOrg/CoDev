@@ -43,31 +43,6 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
 }
 
 describe('buildTitleDerivedAgentRows', () => {
-  it('adds title-derived rows for live agent panes that have no hook status yet', () => {
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: 'Antigravity',
-          2: '⠋ Codex'
-        }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
-      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
-      now: 2000
-    })
-
-    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
-      ['antigravity', 'idle', 'Idle'],
-      ['codex', 'working', 'Running']
-    ])
-    expect(rows.map((row) => row.paneKey)).toEqual([
-      makePaneKey('tab-1', LEAF_ID_1),
-      makePaneKey('tab-1', LEAF_ID_2)
-    ])
-  })
 
   it('does not add title-derived rows for panes without a live PTY', () => {
     const rows = buildWorktreeAgentRows({

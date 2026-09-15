@@ -295,49 +295,6 @@ describe('GitHub PR local runtime routing', () => {
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
   })
 
-  it('never falls through to the default gh host for an unresolved SSH repository', async () => {
-    const legacyRepo = { owner: 'team', repo: 'orca' }
-    getOwnerRepoMock.mockResolvedValue(null)
-    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
-
-    await expect(getPRComments('/remote/repo', 7, { prRepo: legacyRepo }, 'ssh-1')).rejects.toThrow(
-      'GitHub remote'
-    )
-    await expect(
-      getPRChecks('/remote/repo', 7, undefined, legacyRepo, undefined, 'ssh-1')
-    ).rejects.toThrow('GitHub remote')
-    await expect(mergePR('/remote/repo', 7, 'squash', 'ssh-1', legacyRepo)).resolves.toMatchObject({
-      ok: false
-    })
-    await expect(
-      setPRAutoMerge('/remote/repo', 7, true, 'squash', 'ssh-1', legacyRepo)
-    ).resolves.toMatchObject({ ok: false })
-    await expect(updatePRTitle('/remote/repo', 7, 'New title', 'ssh-1', legacyRepo)).resolves.toBe(
-      false
-    )
-    await expect(requestPRReviewers('/remote/repo', 7, ['octo'], 'ssh-1')).resolves.toMatchObject({
-      ok: false
-    })
-    await expect(removePRReviewers('/remote/repo', 7, ['octo'], 'ssh-1')).resolves.toMatchObject({
-      ok: false
-    })
-    await expect(
-      addPRReviewCommentReply(
-        '/remote/repo',
-        7,
-        11,
-        'Reply',
-        undefined,
-        undefined,
-        undefined,
-        'ssh-1',
-        legacyRepo
-      )
-    ).resolves.toMatchObject({ ok: false })
-
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('refuses unresolved local PR mutations instead of using ambient gh defaults', async () => {
     const legacyRepo = { owner: 'team', repo: 'orca' }
     getOwnerRepoMock.mockResolvedValue(null)

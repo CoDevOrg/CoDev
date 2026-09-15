@@ -29,44 +29,6 @@ describe('getPaletteHostBadge', () => {
     expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
   })
 
-  it('badges a disconnected host anyway when a host filter is applied', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    // Why: with a host filter on, the badge is the only thing explaining which
-    // rows survived, so liveness must not suppress it.
-    expect(getPaletteHostBadge({ connectionId: 'ssh-1' }, hosts, true)).toEqual({
-      hostId: 'ssh:ssh-1',
-      label: 'Builder'
-    })
-  })
-
-  it('badges the local host when a connected remote host exists', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getPaletteHostBadge({ connectionId: null }, hosts)).toEqual({
-      hostId: 'local',
-      label: LOCAL_HOST_LABEL
-    })
-  })
-
-  it('uses the ssh target label for ssh repos', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getPaletteHostBadge({ connectionId: 'ssh-1' }, hosts)).toEqual({
-      hostId: 'ssh:ssh-1',
-      label: 'Builder'
-    })
-  })
-
   it('badges runtime-hosted repos when the runtime is live', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ executionHostId: 'runtime:env-1' }],

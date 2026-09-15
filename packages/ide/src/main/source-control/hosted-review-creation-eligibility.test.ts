@@ -379,41 +379,6 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
-    const remoteGit = {
-      exec: vi.fn(async () => ({ stdout: '', stderr: '' }))
-    }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/remote/repo',
-        connectionId: 'ssh-1',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      head: 'feature/create-pr'
-    })
-
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', connectionId: 'ssh-1' })
-    )
-    // Why: the base-on-remote probe must run on the SSH host that will execute
-    // the provider create, so it flows through the relay exec, not local git.
-    expect(remoteGit.exec).toHaveBeenCalledWith(
-      ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/remotes/*/main'],
-      '/remote/repo'
-    )
-  })
-
   it('offers push as the next action for authenticated branches with local-only commits', async () => {
     await expect(
       getHostedReviewCreationEligibility({

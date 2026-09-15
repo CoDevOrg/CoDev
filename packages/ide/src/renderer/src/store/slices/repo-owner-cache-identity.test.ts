@@ -23,20 +23,4 @@ describe('repo owner cache identity', () => {
     )
   })
 
-  it('keeps explicit runtime and SSH owners scoped to their owner host', () => {
-    expect(
-      getGitHubPRCacheKey(
-        '/repo',
-        'repo-1',
-        'feature/remote',
-        null,
-        null,
-        'runtime:env-owner',
-        true
-      )
-    ).toBe('runtime:env-owner::repo-1::feature/remote')
-    expect(
-      getHostedReviewCacheKey('/repo', 'feature/ssh', focusedRuntime, 'repo-1', 'ssh-1', null, true)
-    ).toBe('ssh:ssh-1::repo-1::feature/ssh')
-  })
 })

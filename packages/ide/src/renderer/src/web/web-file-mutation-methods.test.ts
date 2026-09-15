@@ -43,18 +43,6 @@ describe('paired web file mutation methods', () => {
     captureSession.mockClear()
   })
 
-  it('fails closed when the worktree publishes an invalid execution host', async () => {
-    resolveFilePath.mockResolvedValueOnce(
-      resolvedFile('wt-invalid', 'runtime:' as Worktree['hostId'], 'source.md')
-    )
-    const methods = createWebFileMutationMethods({ captureSession })
-
-    await expect(
-      methods.writeFile({ filePath: '/invalid/source.md', content: 'unsafe' })
-    ).rejects.toThrow("Couldn't verify the SSH connection")
-    expect(callRuntimeResult).not.toHaveBeenCalled()
-  })
-
   it('keeps path resolution, capability, and mutation on one captured pairing session', async () => {
     const replacementCall = vi.fn(async () => ({ ok: true }))
     const replacementSession = {

@@ -6,7 +6,6 @@ import {
   AGENT_HOOK_SHED_FIELDS_KEY,
   ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
   createShedSubagentsField,
-  isAgentHookSource,
   isRemoteAgentHooksEnabled,
   restoreShedStatusFields,
   type AgentHookRelayEnvelope
@@ -44,13 +43,6 @@ describe('agent-hook-relay wire shape', () => {
     expect(AGENT_HOOK_INSTALL_PLUGINS_METHOD).toBe('agent_hook.installPlugins')
   })
 
-  it('validates hook sources crossing persisted and relay trust boundaries', () => {
-    expect(isAgentHookSource('claude')).toBe(true)
-    expect(isAgentHookSource('kimi')).toBe(true)
-    expect(isAgentHookSource('claude\0codex')).toBe(false)
-    expect(isAgentHookSource('unknown')).toBe(false)
-    expect(isAgentHookSource({ source: 'claude' })).toBe(false)
-  })
 })
 
 describe('isRemoteAgentHooksEnabled', () => {

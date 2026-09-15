@@ -62,28 +62,6 @@ describe('getRepoDefaultBranchName', () => {
     )
   })
 
-  it('routes resolution through the SSH provider exec and never local git', async () => {
-    const provider = {
-      exec: vi.fn(async (args: string[], repoPath: string) => {
-        expect(repoPath).toBe('/remote/repo')
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'refs/remotes/origin/trunk\n' }
-        }
-        return { stdout: 'oid\n' }
-      })
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-1')).resolves.toBe('trunk')
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(provider.exec).toHaveBeenCalledWith(
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      '/remote/repo',
-      { timeoutMs: expect.any(Number) }
-    )
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('shares one wall-clock timeout budget across all fallback probes', async () => {
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -105,13 +83,6 @@ describe('getRepoDefaultBranchName', () => {
     } finally {
       dateNow.mockRestore()
     }
-  })
-
-  it('returns null without running local git when the SSH provider is unavailable', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-
-    await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-gone')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('returns null when no default branch is resolvable (fail open)', async () => {

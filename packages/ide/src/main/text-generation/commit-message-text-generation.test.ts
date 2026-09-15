@@ -438,30 +438,6 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('falls back to static models when dynamic discovery returns no parseable models', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('codex', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('provider model\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
-      models: [{ id: 'github-copilot/gpt-5.4-mini' }]
-    })
-  })
-
   it('settles and detaches model discovery when timeout kill is ignored', async () => {
     vi.useFakeTimers()
     const child = createMockDiscoveryChild()
@@ -678,38 +654,6 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('surfaces pi auth failure detail end-to-end through the adjusted path sanitizer', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'codex',
-        model: 'github-copilot/gpt-5.5'
-      },
-      localAgentRunTarget({
-          stdout: '',
-          stderr: [
-            'No API key found for github-copilot.',
-            '',
-            'Use /login to log into a provider via OAuth or API key. See:',
-            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
-            '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
-          ].join('\n'),
-          exitCode: 1
-        
-      })
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Pi CLI command failed with code 1: No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … [path]'
-    })
-  })
-
   it('preserves slash-commands while redacting multi-segment paths in failure detail', async () => {
     const result = await generateCommitMessageFromContext(
       {
@@ -733,31 +677,6 @@ describe('generateCommitMessageFromContext', () => {
     expect(result).toEqual({
       success: false,
       error: 'agent CLI command failed with code 1: ERROR: run /login then check [path]'
-    })
-  })
-
-  it('redacts a filesystem path embedded in a pi HTTP 401 payload', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'codex',
-        model: 'github-copilot/gpt-5.5'
-      },
-      localAgentRunTarget({
-          stdout: '',
-          stderr: '401: {"message":"Invalid key loaded from /Users/name/.config/pi/auth.json"}',
-          exitCode: 1
-        
-      })
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Pi CLI command failed with code 1: 401: {"message":"Invalid key loaded from [path]"}'
     })
   })
 

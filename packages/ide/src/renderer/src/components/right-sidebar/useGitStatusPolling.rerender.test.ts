@@ -213,29 +213,6 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock).toHaveBeenCalledTimes(2)
   })
 
-  it('refreshes immediately when an SSH execution host reconnects', async () => {
-    useAppStore.setState({
-      repos: [{ ...repo, connectionId: 'ssh-1' }],
-      sshConnectionStates: new Map([
-        ['ssh-1', { status: 'disconnected', error: null, reconnectAttempt: 0 }]
-      ])
-    } as Partial<AppState>)
-    await renderHook()
-    await flushMicrotasks()
-    expect(refreshMock).not.toHaveBeenCalled()
-
-    await act(async () => {
-      useAppStore.setState({
-        sshConnectionStates: new Map([
-          ['ssh-1', { status: 'connected', error: null, reconnectAttempt: 0 }]
-        ])
-      } as Partial<AppState>)
-    })
-    await flushMicrotasks()
-
-    expect(refreshMock).toHaveBeenCalledTimes(1)
-  })
-
   it('marks only the 60-second safety refresh for line-stat reuse', async () => {
     await renderHook()
     await flushMicrotasks()

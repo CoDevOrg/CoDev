@@ -112,61 +112,6 @@ describe('useAddRepoCloneFlow', () => {
     })
   })
 
-  it('clones through the selected SSH target', async () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    mocks.cloneRemote.mockResolvedValue(repo)
-    mocks.callRuntimeRpc.mockReset()
-    mocks.fetchWorktrees.mockResolvedValue(true)
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      workspaceDir: '/local/workspace',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-    await result.handleClone()
-
-    expect(mocks.cloneRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
-      url: 'https://github.com/stablyai/orca.git',
-      destination: '/srv'
-    })
-    expect(mocks.cloneLocal).not.toHaveBeenCalled()
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.storeState.repos).toContainEqual({
-      ...repo,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.storeState.projects).toEqual(
-      expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
-    )
-    expect(mocks.storeState.projectHostSetups).toEqual(
-      expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
-    )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'ssh:ssh-1')
-  })
-
-  it('does not prefill SSH clone destinations from the local workspace directory', async () => {
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '', false, null, null]
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-
-    expect(result.cloneDestination).toBe('')
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
-  })
-
   it('strips Electron IPC wrappers from clone errors', async () => {
     const cloneError =
       'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'

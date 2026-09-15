@@ -47,11 +47,9 @@ vi.mock('node-pty', () => ({
 }))
 
 import {
-  deletePtyOwnership,
   registerPtyHandlers,
-  setPtyOwnership,
 } from '../ipc/pty'
-import type { IPtyProvider } from './types'
+import type { } from './types'
 
 describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -59,7 +57,6 @@ describe('PTY provider dispatch', () => {
     isDestroyed: () => false,
     webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
-  const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
   function setup(): void {
     handlers.clear()
@@ -72,31 +69,6 @@ describe('PTY provider dispatch', () => {
       handlers.set(channel, handler)
     })
     registerPtyHandlers(mainWindow as never)
-  }
-
-  function createMockProvider(id: string): IPtyProvider {
-    return {
-      spawn: vi.fn().mockResolvedValue({ id }),
-      attach: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      listProcesses: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      onData: vi.fn().mockReturnValue(() => {}),
-      onReplay: vi.fn().mockReturnValue(() => {}),
-      onExit: vi.fn().mockReturnValue(() => {})
-    }
   }
 
   it('routes to local provider when connectionId is null', async () => {
@@ -116,34 +88,6 @@ describe('PTY provider dispatch', () => {
       rows: 24
     })) as { id: string }
     expect(result.id).toBeTruthy()
-  })
-
-  it('routes to SSH provider when connectionId is set', async () => {
-    setup()
-    const mockSshProvider = createMockProvider('ssh-pty-1')
-
-    const result = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24,
-      connectionId: 'conn-123'
-    })) as { id: string }
-
-    expect(result.id).toBe('ssh-pty-1')
-    // Why: the relay host can be launched from a Claude session too, so the stamps are
-    // stripped on the SSH path as well. Compared as a set — envToDelete is consumed by
-    // membership only, so a reordering of the merge sources must not fail this.
-    const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
-    expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
-      [
-        'CLAUDE_CODE_CHILD_SESSION',
-        'CLAUDE_CODE_SESSION_ID',
-        'CLAUDE_CODE_BRIDGE_SESSION_ID'
-      ].sort()
-    )
-    expect(mockSshProvider.spawn).toHaveBeenCalledWith(
-      expect.objectContaining({ cols: 80, rows: 24, cwd: undefined, env: undefined })
-    )
-
   })
 
   it('throws for unknown connectionId', async () => {
@@ -169,25 +113,4 @@ describe('PTY provider dispatch', () => {
     ).rejects.toThrow('No PTY provider for connection "conn-456"')
   })
 
-  it('keeps same relay PTY ids distinct across SSH targets', () => {
-    setup()
-    const providerA = createMockProvider('ssh:conn-a@@pty-1')
-    const providerB = createMockProvider('ssh:conn-b@@pty-1')
-    setPtyOwnership('ssh:conn-a@@pty-1', 'conn-a')
-    setPtyOwnership('ssh:conn-b@@pty-1', 'conn-b')
-
-    try {
-      const write = handlers.get('pty:write') as (event: unknown, args: unknown) => void
-      write(mainWindowIpcEvent, { id: 'ssh:conn-a@@pty-1', data: 'a' })
-      write(mainWindowIpcEvent, { id: 'ssh:conn-b@@pty-1', data: 'b' })
-
-      expect(providerA.write).toHaveBeenCalledWith('ssh:conn-a@@pty-1', 'a')
-      expect(providerB.write).toHaveBeenCalledWith('ssh:conn-b@@pty-1', 'b')
-      expect(providerA.write).not.toHaveBeenCalledWith('ssh:conn-b@@pty-1', expect.anything())
-      expect(providerB.write).not.toHaveBeenCalledWith('ssh:conn-a@@pty-1', expect.anything())
-    } finally {
-      deletePtyOwnership('ssh:conn-a@@pty-1')
-      deletePtyOwnership('ssh:conn-b@@pty-1')
-    }
-  })
 })

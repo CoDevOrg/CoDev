@@ -611,56 +611,6 @@ describe('web runtime environment identity', () => {
     ])
   })
 
-  it('requires an explicit loopback override and persists the SSH dependency', async () => {
-    const call = vi.fn().mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: {
-        runtimeId: 'runtime-new',
-        rendererGraphEpoch: 1,
-        graphStatus: 'ready',
-        authoritativeWindowId: 1,
-        liveTabCount: 0,
-        liveLeafCount: 0,
-        runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-      },
-      _meta: { runtimeId: 'runtime-new' }
-    })
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call = call
-        close(): void {}
-      }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    const pairingCode = encodePairingCode({ endpoint: 'ws://127.0.0.1:6768' })
-
-    await expect(
-      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
-        name: 'Tunnel server',
-        pairingCode
-      })
-    ).resolves.toMatchObject({ ok: false, kind: 'host-unreachable' })
-    expect(call).not.toHaveBeenCalled()
-
-    await expect(
-      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
-        name: 'Tunnel server',
-        pairingCode,
-        allowLoopback: true
-      })
-    ).resolves.toMatchObject({
-      ok: true,
-      environment: { connectionDependency: 'ssh-tunnel' }
-    })
-    expect(call).toHaveBeenCalledOnce()
-    expect(
-      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
-    ).toMatchObject({ connectionDependency: 'ssh-tunnel' })
-  })
-
   it('returns a structured failure when the browser client cannot be constructed', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

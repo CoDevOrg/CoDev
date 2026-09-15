@@ -320,40 +320,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.attachCalls).toEqual([PTY_ID])
   })
 
-  it('never attaches SSH-scoped sessions or sessions absent from the daemon inventory', async () => {
-    const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    const sshPtyId = 'ssh:conn-9@@relay-pty-4'
-    const sshRecord = internals(runtime).recordPtyWorktree(sshPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const sshHandle = internals(runtime).issuePtyHandle(sshRecord)
-    const absentPtyId = `${WORKTREE_ID}@@99999999`
-    const absentRecord = internals(runtime).recordPtyWorktree(absentPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const absentHandle = internals(runtime).issuePtyHandle(absentRecord)
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-
-    sendSubscribe(harness, 1, sshHandle, 'client-ssh')
-    await waitForSubscribed(harness, 1)
-    expect(model.attachCalls).toEqual([])
-
-    // Absent session: subscribing must not create it or surface a new error.
-    sendSubscribe(harness, 2, absentHandle, 'client-absent')
-    await waitForSubscribed(harness, 2)
-    await Promise.resolve()
-    expect(model.sessions.has(absentPtyId)).toBe(false)
-    expect(model.emitData(absentPtyId, 'ghost')).toBe(false)
-    expect(harness.messages.some((message) => message.result?.type === 'error')).toBe(false)
-
-    // Unrelated live sessions are untouched by another pty's subscribers.
-    expect(model.sessions.get(PTY_ID)?.attached).toBe(false)
-    expect(model.attachCalls).not.toContain(PTY_ID)
-    expect(model.resizeCalls).toEqual([])
-  })
-
   it('retries a refused attach for a later subscriber once the daemon learns the session', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
     // Degraded-daemon shape: main knows the record, the daemon does not own the

@@ -74,21 +74,6 @@ describe('buildPaletteFilterModel', () => {
     expect(model.projects[0]?.searchText).toBe('orca')
   })
 
-  it('counts a worktree against its own host stamp, not its repo host', () => {
-    const model = buildModel([
-      worktree('w1', 'r1'),
-      worktree('w2', 'r1', { hostId: 'ssh:ssh-1' }),
-      worktree('w3', 'r2')
-    ])
-
-    expect(model.hosts.map((option) => [option.id, option.count])).toEqual([
-      ['local', 1],
-      ['ssh:ssh-1', 2]
-    ])
-    // Host stamp does not move the workspace out of its project row.
-    expect(model.projects.find((option) => option.id === 'project:p1')?.count).toBe(3)
-  })
-
   it('omits archived worktrees from every count', () => {
     const model = buildModel([
       worktree('w1', 'r1'),

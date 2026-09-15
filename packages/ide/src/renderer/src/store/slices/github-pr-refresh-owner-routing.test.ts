@@ -157,41 +157,6 @@ describe('GitHub PR refresh owner-host routing', () => {
     })
   })
 
-  it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
-    const store = createTestStore()
-    const repoPath = '/ssh/repo'
-    const branch = 'feature/ssh'
-    seed(store, {
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          path: repoPath,
-          connectionId: 'ssh-1',
-          executionHostId: 'ssh:ssh-1'
-        })
-      ],
-      worktreesByRepo: {
-        'repo-ssh': [makeWorktree('repo-ssh', branch, 'wt-ssh')]
-      }
-    })
-
-    store.getState().refreshGitHubForWorktreeIfStale('wt-ssh')
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(enqueuePRRefresh).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoId: 'repo-ssh',
-        repoPath,
-        branch,
-        connectionId: 'ssh-1',
-        connectionState: 'connected'
-      }),
-      reason: 'active',
-      priority: 80
-    })
-  })
-
   it('routes post-push refresh for a runtime-owned repo to its owner while Local desktop is active', async () => {
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',

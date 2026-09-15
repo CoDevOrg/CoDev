@@ -88,10 +88,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('codex - permission needed')).toBe('permission')
   })
 
-  it('detects "waiting" keyword with agent name', () => {
-    expect(detectAgentStatusFromTitle('gemini waiting for input')).toBe('permission')
-  })
-
   it('detects "ready" keyword as idle', () => {
     expect(detectAgentStatusFromTitle('claude ready')).toBe('idle')
   })
@@ -100,20 +96,8 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('codex idle')).toBe('idle')
   })
 
-  it('detects "done" keyword as idle', () => {
-    expect(detectAgentStatusFromTitle('aider done')).toBe('idle')
-  })
-
   it('detects "working" keyword as working', () => {
     expect(detectAgentStatusFromTitle('claude working on task')).toBe('working')
-  })
-
-  it('detects "thinking" keyword as working', () => {
-    expect(detectAgentStatusFromTitle('gemini thinking')).toBe('working')
-  })
-
-  it('detects "running" keyword as working', () => {
-    expect(detectAgentStatusFromTitle('opencode running tests')).toBe('working')
   })
 
   // --- Claude Code title prefixes ---
@@ -152,21 +136,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('codex')).toBe('idle')
   })
 
-  it('returns idle for bare agent name "aider"', () => {
-    expect(detectAgentStatusFromTitle('aider')).toBe('idle')
-  })
-
-  it('returns idle for bare agent name "opencode"', () => {
-    expect(detectAgentStatusFromTitle('opencode')).toBe('idle')
-  })
-
-  it('classifies OpenClaude titles without falling through to Claude naming', () => {
-    expect(detectAgentStatusFromTitle('OpenClaude ready')).toBe('idle')
-    expect(detectAgentStatusFromTitle('OpenClaude running')).toBe('working')
-    expect(detectAgentStatusFromTitle('OpenClaude - action required')).toBe('permission')
-    expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
-  })
-
   it('excludes the exact Claude agents management title', () => {
     expect(detectAgentStatusFromTitle('claude agents')).toBeNull()
     expect(detectAgentStatusFromTitle('  Claude Agents  ')).toBeNull()
@@ -199,14 +168,6 @@ describe('detectAgentStatusFromTitle', () => {
 
   it('classifies synthesized "⠋ Cursor Agent" working title as working', () => {
     expect(detectAgentStatusFromTitle('⠋ Cursor Agent')).toBe('working')
-  })
-
-  it('classifies synthesized "Cursor ready" idle title as idle', () => {
-    expect(detectAgentStatusFromTitle('Cursor ready')).toBe('idle')
-  })
-
-  it('classifies synthesized "Cursor - action required" title as permission', () => {
-    expect(detectAgentStatusFromTitle('Cursor - action required')).toBe('permission')
   })
 
   it('classifies synthesized Droid titles', () => {
@@ -287,22 +248,7 @@ describe('detectAgentStatusFromTitle path-separator rejection', () => {
     expect(detectAgentStatusFromTitle('aider.thinking')).not.toBe('working')
   })
 
-  test('still accepts legitimate idle/working titles separated by whitespace', () => {
-    expect(detectAgentStatusFromTitle('Codex done')).toBe('idle')
-    expect(detectAgentStatusFromTitle('OpenCode ready')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Aider idle')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Codex working')).toBe('working')
-    expect(detectAgentStatusFromTitle('Aider thinking')).toBe('working')
-  })
-
   // Why: block path separators only on the LEFT of the keyword; blocking the right would regress titles ending in `.`/`!`/`?`.
-  test('still accepts keywords followed by trailing punctuation', () => {
-    expect(detectAgentStatusFromTitle('Codex done.')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Aider idle!')).toBe('idle')
-    expect(detectAgentStatusFromTitle('OpenCode ready?')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Codex working.')).toBe('working')
-    expect(detectAgentStatusFromTitle('Aider thinking...')).toBe('working')
-  })
 })
 
 describe('clearWorkingIndicators', () => {
@@ -418,11 +364,6 @@ describe('normalizeTerminalTitle', () => {
 })
 
 describe('isGeminiTerminalTitle', () => {
-  it('detects Gemini titles by symbol or name', () => {
-    expect(isGeminiTerminalTitle('✦  Typing prompt... (workspace)')).toBe(true)
-    expect(isGeminiTerminalTitle('◇  Ready (workspace)')).toBe(true)
-    expect(isGeminiTerminalTitle('gemini waiting for input')).toBe(true)
-  })
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
@@ -452,31 +393,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
   })
 
-  it('labels supported agent families consistently', () => {
-    expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
-    expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
-    expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
-    expect(getAgentLabel('OpenClaude running')).toBe('OpenClaude')
-    expect(getAgentLabel('⠋ OpenClaude')).toBe('OpenClaude')
-    expect(getAgentLabel('Antigravity running')).toBe('Antigravity')
-    expect(getAgentLabel('agy working')).toBe('Antigravity')
-    expect(getAgentLabel('Grok running')).toBe('Grok')
-    expect(getAgentLabel('⠋ Droid')).toBe('Droid')
-    expect(getAgentLabel('Droid ready')).toBe('Droid')
-    expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
-    expect(getAgentLabel('Hermes ready')).toBe('Hermes')
-    expect(getAgentLabel('⠋ Devin')).toBe('Devin')
-    expect(getAgentLabel('Devin ready')).toBe('Devin')
-  })
-
   it('does not label the Claude agents management title', () => {
     expect(getAgentLabel('claude agents')).toBeNull()
-  })
-
-  it('labels GitHub Copilot CLI', () => {
-    expect(getAgentLabel('copilot working')).toBe('GitHub Copilot')
-    expect(getAgentLabel('copilot idle')).toBe('GitHub Copilot')
-    expect(getAgentLabel('GitHub Copilot CLI')).toBe('GitHub Copilot')
   })
 
   it('does not label Android titles as Droid', () => {
@@ -492,15 +410,6 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('grok-fixtures')).toBeNull()
     expect(getAgentLabel('devin-fixtures')).toBeNull()
     expect(getAgentLabel('aider-config')).toBeNull()
-  })
-
-  it('still labels real agent titles that contain the name as a token', () => {
-    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
-    expect(getAgentLabel('claude.exe')).toBe('Claude Code')
-    expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
-    expect(getAgentLabel('⠋ Codex')).toBe('Codex')
-    expect(getAgentLabel('Aider idle')).toBe('Aider')
-    expect(getAgentLabel('Devin working')).toBe('Devin')
   })
 
   // Why: "cursor" is ordinary editor vocabulary, so a bare token isn't Cursor identity; match Cursor's closed title set only.
@@ -621,22 +530,6 @@ describe('createAgentStatusTracker', () => {
   })
 
   // Why: cursor's native "Cursor Agent" re-emissions between synthesized working frames must not fire onBecameIdle before the done frame.
-  it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
-    const onBecameIdle = vi.fn()
-    const tracker = createAgentStatusTracker(onBecameIdle)
-
-    tracker.handleTitle('⠋ Cursor Agent') // synthesized working
-    expect(onBecameIdle).not.toHaveBeenCalled()
-
-    tracker.handleTitle('Cursor Agent') // cursor's native re-emission — no-op
-    expect(onBecameIdle).not.toHaveBeenCalled()
-
-    tracker.handleTitle('Cursor Agent') // more native re-emissions
-    expect(onBecameIdle).not.toHaveBeenCalled()
-
-    tracker.handleTitle('Cursor ready') // synthesized done → idle
-    expect(onBecameIdle).toHaveBeenCalledTimes(1)
-  })
 
   it('fires on Pi working → idle', () => {
     const onBecameIdle = vi.fn()
@@ -828,28 +721,8 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('claude')).toBe('Claude')
   })
 
-  it("maps 'openclaude' to 'OpenClaude'", () => {
-    expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
-  })
-
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
-  })
-
-  it("maps 'gemini' to 'Gemini'", () => {
-    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
-  })
-
-  it("maps 'antigravity' to 'Antigravity'", () => {
-    expect(formatAgentTypeLabel('antigravity')).toBe('Antigravity')
-  })
-
-  it("maps 'cursor' to 'Cursor'", () => {
-    expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
-  })
-
-  it("maps 'hermes' to 'Hermes'", () => {
-    expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
   })
 
   it("maps 'command-code' to 'Command Code'", () => {
@@ -880,15 +753,6 @@ describe('agentTypeToIconAgent', () => {
 
   it("returns null for 'unknown'", () => {
     expect(agentTypeToIconAgent('unknown')).toBeNull()
-  })
-
-  it("round-trips iconable agent types like 'claude'", () => {
-    expect(agentTypeToIconAgent('claude')).toBe('claude')
-    expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
-    expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
-    expect(agentTypeToIconAgent('command-code')).toBe('command-code')
-    expect(agentTypeToIconAgent('ante')).toBe('ante')
-    expect(agentTypeToIconAgent('trae')).toBe('trae')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

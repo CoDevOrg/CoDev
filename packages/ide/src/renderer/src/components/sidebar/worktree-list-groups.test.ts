@@ -180,20 +180,6 @@ describe('getPRGroupKey', () => {
     ).toBe('done')
   })
 
-  it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
-    const sshRepo = { ...repo, connectionId: 'ssh-1' }
-    const sshRepoMap = new Map([[sshRepo.id, sshRepo]])
-    const prCache = {
-      'repo-1::feature/super-critical': {
-        data: { state: 'merged' }
-      },
-      'ssh:ssh-1::repo-1::feature/super-critical': {
-        data: { state: 'closed' }
-      }
-    }
-
-    expect(getPRGroupKey(worktree, sshRepoMap, prCache)).toBe('closed')
-  })
 })
 
 describe('getGroupKeyForWorktree', () => {

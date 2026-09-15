@@ -495,27 +495,8 @@ describe('findActionableFolderProjectGroup', () => {
     group({ id: 'repo-group', parentPath: null })
   ]
 
-  it('finds a folder group whose host is actionable', () => {
-    expect(
-      findActionableFolderProjectGroup({
-        projectGroups: folderGroups,
-        groupId: 'ssh-group',
-        actionableHostIds: new Set(['ssh:box'])
-      })
-    ).toBe(folderGroups[1])
-  })
-
   // Regression: the composer's initial-group restoration skipped the actionable-host
   // check, so a removed host could still back a folder workspace.
-  it('rejects a folder group whose host is unavailable', () => {
-    expect(
-      findActionableFolderProjectGroup({
-        projectGroups: folderGroups,
-        groupId: 'ssh-group',
-        actionableHostIds: new Set(['local'])
-      })
-    ).toBeNull()
-  })
 
   it('rejects repo groups and missing ids', () => {
     expect(

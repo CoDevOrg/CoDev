@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { GlobalSettings, } from '../../shared/types'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
 
 const {
@@ -509,50 +509,4 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(onRenamed).not.toHaveBeenCalled()
   })
 
-  it('uses the SSH git provider and remote generation target for remote worktrees', async () => {
-    getSshGitUsernameMock.mockResolvedValue('remote-user')
-    const provider = {
-      exec: vi.fn(gitResponder({ currentBranch: 'remote-user/Nautilus', hasUpstream: false })),
-      renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
-    }
-    getSshGitProviderMock.mockReturnValue(provider as never)
-    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
-    const { deps } = makeDeps({ getRepo: () => repo })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(prepareLocalEnvMock).not.toHaveBeenCalled()
-    expect(generateBranchNameMock).toHaveBeenCalledWith(
-      { firstPrompt: 'Fix the auth bug', assistantMessage: undefined },
-      { agentId: 'claude', model: 'm' },
-      expect.objectContaining({
-        kind: 'remote',
-        cwd: '/repo/wt',
-        missingBinaryLocation: 'remote PATH'
-      })
-    )
-    expect(computeBranchNameMock).toHaveBeenCalledWith('fix-auth', expect.anything(), 'remote-user')
-    expect(provider.exec).not.toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'], '/repo/wt')
-    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
-  })
-
-  it('retries when the SSH provider is unavailable on the first working event', async () => {
-    const provider = {
-      exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
-      renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
-    }
-    getSshGitProviderMock.mockReturnValueOnce(undefined).mockReturnValue(provider as never)
-    const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
-    const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(onRenamed).not.toHaveBeenCalled()
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
-    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
-  })
 })

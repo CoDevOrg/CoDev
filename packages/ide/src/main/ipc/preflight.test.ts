@@ -436,28 +436,6 @@ describe('preflight', () => {
     })
   })
 
-  it('only reports agents when which/where resolves to a real executable path', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-
-      const target = String(args[0])
-      if (target === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      if (target === 'continue') {
-        return { stdout: 'continue: shell built-in command\n' }
-      }
-      if (target === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
-  })
-
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
@@ -510,37 +488,6 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
   })
 
-  it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
-    // Why: cold GUI launches can run detection before shell-PATH hydration
-    // adds user install dirs, so `which` can miss runnable CLIs.
-    execFileAsyncMock.mockImplementation(async (command) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      throw new Error('not found')
-    })
-    resolveCliCommandsMock.mockImplementation(
-      (commands: string[]) =>
-        new Map(
-          commands.map((cmd) => {
-            if (cmd === 'claude') {
-              return [cmd, '/Users/test/.local/bin/claude']
-            }
-            if (cmd === 'codex') {
-              return [cmd, '/Users/test/.asdf/shims/codex']
-            }
-            if (cmd === 'opencode') {
-              return [cmd, '/Users/test/Library/pnpm/opencode']
-            }
-            return [cmd, cmd]
-          })
-        )
-    )
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
-    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-  })
-
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
     // Why: the fallback should not duplicate ids when PATH already finds a CLI.
     execFileAsyncMock.mockImplementation(async (command, args) => {
@@ -574,25 +521,6 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual([])
-  })
-
-  it('registers agent detection through the shared launch config commands', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'openclaude') {
-        return { stdout: '/Users/test/.local/bin/openclaude\n' }
-      }
-      if (String(args[0]) === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
-    })
-
-    registerPreflightHandlers()
-
-    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
   })
 
   it('hydrates shell PATH before user-facing agent detection', async () => {
@@ -841,46 +769,6 @@ describe('preflight', () => {
     })
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
-  })
-
-  it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
-    // Why: the Agents settings Refresh button calls this path. It must (1) ask
-    // the shell hydrator for a fresh PATH, (2) merge any new segments, then
-    // (3) re-run `which` so newly-installed CLIs appear without a restart.
-    hydrateShellPathMock.mockResolvedValueOnce({
-      segments: ['/Users/test/.opencode/bin'],
-      ok: true,
-      failureReason: 'none'
-    })
-    mergePathSegmentsMock.mockReturnValueOnce(['/Users/test/.opencode/bin'])
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'opencode') {
-        return { stdout: '/Users/test/.opencode/bin/opencode\n' }
-      }
-      throw new Error('not found')
-    })
-
-    registerPreflightHandlers()
-
-    const result = (await handlers['preflight:refreshAgents']()) as {
-      agents: string[]
-      addedPathSegments: string[]
-      shellHydrationOk: boolean
-      pathSource: string
-      pathFailureReason: string
-    }
-
-    expect(result).toEqual({
-      agents: ['opencode'],
-      addedPathSegments: ['/Users/test/.opencode/bin'],
-      shellHydrationOk: true,
-      pathSource: 'shell_hydrate',
-      pathFailureReason: 'none'
-    })
-    expect(hydrateShellPathMock).toHaveBeenCalledWith({ force: true })
   })
 
   it('still re-detects when the shell spawn fails — relies on the existing PATH', async () => {

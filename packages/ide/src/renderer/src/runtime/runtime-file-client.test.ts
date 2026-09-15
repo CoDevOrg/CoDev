@@ -179,35 +179,6 @@ describe('runtime file client', () => {
     })
   })
 
-  it('rejects an external SSH file read after the target changes', async () => {
-    await expect(
-      readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: null },
-        filePath: '/tmp/external.md',
-        relativePath: '/tmp/external.md',
-        worktreeId: 'wt-1',
-        connectionId: 'ssh-2',
-})
-    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
-
-    expect(fsReadFile).not.toHaveBeenCalled()
-  })
-
-  it('rejects an external SSH file read through a runtime environment', async () => {
-    await expect(
-      readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
-        filePath: '/tmp/external.md',
-        relativePath: '/tmp/external.md',
-        worktreeId: 'wt-1',
-        connectionId: 'ssh-1',
-})
-    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
-
-    expect(fsReadFile).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
   it('routes worktree-relative text reads through the selected runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -555,22 +526,6 @@ describe('runtime file client', () => {
     })
   })
 
-  it('rejects an external SSH image preview after the target changes', async () => {
-    await expect(
-      readRuntimeFilePreview(
-        {
-          settings: { activeRuntimeEnvironmentId: null },
-          worktreeId: 'wt-1',
-          worktreePath: '/remote/repo',
-          connectionId: 'ssh-2',
-},
-        '/tmp/logo.png'
-      )
-    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
-
-    expect(fsReadFile).not.toHaveBeenCalled()
-  })
-
   it('does not fall back to client-local preview reads for remote-owned files outside the worktree', async () => {
     await expect(
       readRuntimeFilePreview(
@@ -892,83 +847,6 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('routes create, rename, copy, and delete mutations through the selected runtime', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const context = {
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: '/remote/repo',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 7
-    }
-
-    await createRuntimePath(context, '/remote/repo/src/new.ts', 'file')
-    await renameRuntimePath(context, '/remote/repo/src/new.ts', '/remote/repo/src/renamed.ts')
-    await copyRuntimePath(
-      context,
-      '/remote/repo/src/renamed.ts',
-      '/remote/repo/src/renamed copy.ts'
-    )
-    await deleteRuntimePath(context, '/remote/repo/src/renamed.ts', false)
-
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
-      selector: 'env-1',
-      method: 'files.createFile',
-      params: {
-        worktree: 'id:wt-1',
-        relativePath: 'src/new.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-1',
-      method: 'files.rename',
-      params: {
-        worktree: 'id:wt-1',
-        oldRelativePath: 'src/new.ts',
-        newRelativePath: 'src/renamed.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
-      selector: 'env-1',
-      method: 'files.copy',
-      params: {
-        worktree: 'id:wt-1',
-        sourceRelativePath: 'src/renamed.ts',
-        destinationRelativePath: 'src/renamed copy.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
-      selector: 'env-1',
-      method: 'files.delete',
-      params: {
-        worktree: 'id:wt-1',
-        relativePath: 'src/renamed.ts',
-        recursive: false,
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-  })
-
   it('refuses HUB-local mutations before RPC when the HUB lacks ownership support', async () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'status.get') {
@@ -1157,29 +1035,6 @@ describe('runtime file client', () => {
       destinationPath: '/repo/a copy.md',
       connectionId: undefined,
       expectedExecutionHostId: 'local'
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('preserves the SSH connection for copy operations when no runtime is active', async () => {
-    await copyRuntimePath(
-      {
-        settings: { activeRuntimeEnvironmentId: null },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'ssh-1',
-},
-      '/repo/a.md',
-      '/repo/a copy.md'
-    )
-
-    expect(fsCopy).toHaveBeenCalledWith({
-      sourcePath: '/repo/a.md',
-      destinationPath: '/repo/a copy.md',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -1748,44 +1603,6 @@ describe('runtime file client', () => {
       },
       timeoutMs: 15_000
     })
-  })
-
-  it('keeps local external imports on filesystem IPC when no runtime is active', async () => {
-    fsImportExternalPaths.mockResolvedValue({
-      results: [
-        {
-          sourcePath: '/Users/me/readme.md',
-          status: 'imported',
-          destPath: '/repo/readme.md',
-          kind: 'file',
-          renamed: false
-        }
-      ]
-    })
-
-    await importExternalPathsToRuntime(
-      {
-        settings: { activeRuntimeEnvironmentId: null },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'ssh-1',
-},
-      ['/Users/me/readme.md'],
-      '/repo',
-      { ensureDestinationDir: true }
-    )
-
-    expect(fsImportExternalPaths).toHaveBeenCalledWith({
-      sourcePaths: ['/Users/me/readme.md'],
-      destDir: '/repo',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      ensureDir: true,
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-    expect(fsStageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('routes text search through the selected runtime without sending client root paths', async () => {

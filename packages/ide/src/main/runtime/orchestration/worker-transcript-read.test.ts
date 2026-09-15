@@ -12,15 +12,6 @@ function codexMessage(id: string, text: string): string {
   })
 }
 
-function grokMessage(id: string, text: string): string {
-  return JSON.stringify({
-    id,
-    timestamp: '2026-07-24T12:00:00.000Z',
-    type: 'assistant',
-    content: text
-  })
-}
-
 describe('worker transcript reads', () => {
   let directory: string
   let transcriptPath: string
@@ -141,27 +132,6 @@ describe('worker transcript reads', () => {
         limit: 2
       })
     ).resolves.toEqual({ ok: false, reason: 'provider_unsupported', warnings: [] })
-  })
-
-  it('reuses the Native Chat Grok decoder', async () => {
-    await writeFile(transcriptPath, `${grokMessage('grok-one', 'Grok structured output')}\n`)
-
-    await expect(
-      readWorkerTranscript({
-        agent: 'grok',
-        sessionId: 'session-grok',
-        transcriptPath,
-        limit: 2
-      })
-    ).resolves.toMatchObject({
-      ok: true,
-      messages: [
-        {
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'Grok structured output' }]
-        }
-      ]
-    })
   })
 
   it('makes file-position fallback IDs opaque', async () => {

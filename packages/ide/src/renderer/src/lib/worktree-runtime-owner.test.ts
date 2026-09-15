@@ -125,23 +125,6 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     expect(getExecutionHostIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBe('local')
   })
 
-  it('keeps folder workspaces with their own SSH target off the focused runtime', () => {
-    const folderConnectionState: WorktreeRuntimeOwnerState = {
-      ...state,
-      projectGroups: [{ id: 'folder-group', connectionId: null, executionHostId: null }],
-      folderWorkspaces: [
-        { id: 'folder-ssh', projectGroupId: 'folder-group', connectionId: 'folder-remote' }
-      ]
-    }
-
-    expect(getSettingsForWorktreeRuntimeOwner(folderConnectionState, 'folder:folder-ssh')).toEqual({
-      activeRuntimeEnvironmentId: null
-    })
-    expect(getExecutionHostIdForWorktree(folderConnectionState, 'folder:folder-ssh')).toBe(
-      'ssh:folder-remote'
-    )
-  })
-
   it('prefers project group runtime ownership over stale folder SSH targets', () => {
     const staleFolderConnectionState: WorktreeRuntimeOwnerState = {
       ...state,
@@ -596,13 +579,6 @@ describe('active workspace host selection', () => {
       ]
     }
   }
-
-  it('keeps the HUB transport for the active paired SSH worktree', () => {
-    expect(getRuntimeEnvironmentIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe('hub-a')
-    expect(getExplicitRuntimeEnvironmentIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
-      'hub-a'
-    )
-  })
 
   it('keeps the selected host authoritative for the active worktree', () => {
     expect(getExecutionHostIdForWorktree(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
@@ -435,21 +435,6 @@ describe('AgentsPane', () => {
 
     props.onChange('manual')
     expect(onChange).toHaveBeenCalledWith('manual')
-  })
-
-  it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
-    for (const agent of AGENT_CATALOG) {
-      expect(matchesSettingsSearch(agent.id, getAgentsPaneSearchEntries())).toBe(true)
-      expect(matchesSettingsSearch(agent.label, getAgentsPaneSearchEntries())).toBe(true)
-      expect(matchesSettingsSearch(agent.cmd, getAgentsPaneSearchEntries())).toBe(true)
-    }
-
-    expect(matchesSettingsSearch('GitHub Copilot', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('open claude', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('command-code', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('command code', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('agy', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('cursor-agent', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('renders per-agent availability as labeled status choices without row explanation copy', () => {

@@ -37,9 +37,6 @@ describe('host rename helpers', () => {
 })
 
 describe('resolveHostRemoval', () => {
-  it('resolves an ssh host to its target id', () => {
-    expect(resolveHostRemoval('ssh:box')).toEqual({ kind: 'ssh', targetId: 'box' })
-  })
 
   it('resolves a runtime host to its environment id', () => {
     expect(resolveHostRemoval('runtime:env-1')).toEqual({

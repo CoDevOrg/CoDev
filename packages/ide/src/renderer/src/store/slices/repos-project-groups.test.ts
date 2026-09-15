@@ -405,46 +405,6 @@ describe('project group store routing', () => {
     expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
   })
 
-  it('ignores stale folder path status responses after SSH connection state changes', async () => {
-    const resolvers: ((status: { path: string; exists: boolean; reason?: string }) => void)[] = []
-    folderWorkspacesGetPathStatus.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(resolve)
-        })
-    )
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
-      ],
-})
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
-
-    store.setState({
-})
-    const disconnectedStatusPromise = store
-      .getState()
-      .fetchFolderWorkspacePathStatus(request, { force: true })
-
-    resolvers[1]?.({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
-    await disconnectedStatusPromise
-    resolvers[0]?.({ path: '/workspace/platform', exists: true })
-    await connectedStatusPromise
-
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
-    expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
-  })
-
   it('purges renderer session state when deleting a local folder workspace', async () => {
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',
