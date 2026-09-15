@@ -39,10 +39,6 @@ const bundledPluginResources = {
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
 const commonExtraResources = [bundledPluginResources, skillFreshnessResources]
-const linuxSpeechNativeResource = {
-  from: 'node_modules/sherpa-onnx-linux-${arch}',
-  to: 'node_modules/sherpa-onnx-linux-${arch}'
-}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -93,9 +89,6 @@ module.exports = {
   // before the GUI process starts, so those deps need the same treatment.
   // Why: out/package.json pins compiled output to CommonJS so parent
   // package.json files with type=module cannot change the packaged CLI loader.
-  // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
-  // unpacked because they ship .node addons + .so files that cannot be
-  // dlopen()'d from inside the asar archive.
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -113,8 +106,7 @@ module.exports = {
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
-    'node_modules/yaml/**',
-    'node_modules/sherpa-onnx*/**'
+    'node_modules/yaml/**'
   ],
   afterPack: async (context) => {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
@@ -185,7 +177,6 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
-      linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/codev',
         to: 'bin/codev'

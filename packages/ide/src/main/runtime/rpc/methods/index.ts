@@ -22,7 +22,6 @@ import { FILE_METHODS } from './files'
 import { GIT_METHODS } from './git'
 import { GITHUB_METHODS } from './github'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
-import { SPEECH_METHODS } from './speech'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports'
@@ -62,7 +61,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...GIT_METHODS,
   ...GITHUB_METHODS,
   ...HOSTED_REVIEW_METHODS,
-  ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...PLUGIN_METHODS,
   ...SKILL_METHODS,

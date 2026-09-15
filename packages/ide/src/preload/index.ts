@@ -6,7 +6,6 @@ import type { AppIdentity } from '../shared/app-identity'
 import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
 import type {
@@ -179,13 +178,6 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
-import type {
-  SpeechErrorEvent,
-  SpeechLifecycleEvent,
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechTranscriptEvent
-} from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type {
   PreflightRuntimeContext,
@@ -1960,65 +1952,6 @@ const api = {
   },
 
   dashboard: {
-    // Open the pop-out dashboard window, or focus it if already open.
-    openPopout: (view?: 'board' | 'map'): Promise<void> =>
-      ipcRenderer.invoke('dashboardPopout:open', view),
-
-    // ── Producer side (main window) ──────────────────────────────────────
-    publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
-      ipcRenderer.invoke('dashboard:publishSnapshot', snapshot),
-    getPopoutOpen: (): Promise<boolean> => ipcRenderer.invoke('dashboard:getPopoutOpen'),
-    onPopoutOpenChanged: (callback: (open: boolean) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, open: boolean): void => callback(open)
-      ipcRenderer.on('dashboard:popoutOpenChanged', listener)
-      return () => ipcRenderer.removeListener('dashboard:popoutOpenChanged', listener)
-    },
-    onSnapshotRequested: (callback: () => void): (() => void) => {
-      const listener = (): void => callback()
-      ipcRenderer.on('dashboard:snapshotRequested', listener)
-      return () => ipcRenderer.removeListener('dashboard:snapshotRequested', listener)
-    },
-    onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, args: DashboardRevealAgentArgs): void =>
-        callback(args)
-      ipcRenderer.on('ui:revealDashboardAgent', listener)
-      return () => ipcRenderer.removeListener('ui:revealDashboardAgent', listener)
-    },
-    onAckAgent: (callback: (paneKey: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void =>
-        callback(paneKey)
-      ipcRenderer.on('ui:ackDashboardAgent', listener)
-      return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
-    },
-    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
-        callback(args)
-      ipcRenderer.on('ui:spawnDashboardAgent', listener)
-      return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
-    },
-    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        args: DashboardSleepWorkspaceArgs
-      ): void => callback(args)
-      ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
-      return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
-    },
-
-    // ── Consumer side (pop-out window) ───────────────────────────────────
-    requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
-    onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, snapshot: DashboardSnapshot): void =>
-        callback(snapshot)
-      ipcRenderer.on('dashboard:snapshot', listener)
-      return () => ipcRenderer.removeListener('dashboard:snapshot', listener)
-    },
-    onViewRequested: (callback: (view: 'board' | 'map') => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, view: 'board' | 'map'): void =>
-        callback(view)
-      ipcRenderer.on('dashboard:viewRequested', listener)
-      return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
-    },
     revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
       ipcRenderer.invoke('dashboardPopout:revealAgent', args),
     ackAgent: (paneKey: string): Promise<void> =>
@@ -2612,7 +2545,6 @@ const api = {
     }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
   },
 
-
   cache: {
     getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
     setGitHub: (args) => ipcRenderer.invoke('cache:setGitHub', args)
@@ -2631,7 +2563,6 @@ const api = {
       ipcRenderer.sendSync('session:set-sync', args, hostId)
     }
   } satisfies PreloadApi['session'],
-
 
   updater: {
     dismissNudge: () => Promise.resolve(),
@@ -3806,8 +3737,6 @@ const api = {
       ipcRenderer.invoke('codexUsage:getRecentSessions', args)
   },
 
-
-
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args),
@@ -4024,11 +3953,6 @@ const api = {
     }
   },
 
-
-
-
-
-
   automations: {
     list: (): Promise<Automation[]> => ipcRenderer.invoke('automations:list'),
     listRuns: (args?: { automationId?: string }): Promise<AutomationRun[]> =>
@@ -4231,79 +4155,6 @@ const api = {
       ptyId?: string
     }): void => {
       ipcRenderer.send('agentStatus:transferPaneAuthority', args)
-    }
-  },
-
-  speech: {
-    getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
-    getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
-    getOpenAiApiKeyStatus: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:getOpenAiApiKeyStatus'),
-    saveOpenAiApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
-    clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
-      ipcRenderer.invoke('speech:clearOpenAiApiKey'),
-    downloadModel: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:downloadModel', modelId),
-    cancelDownload: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:cancelDownload', modelId),
-    deleteModel: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:deleteModel', modelId),
-    startDictation: (
-      modelId: string,
-      hotwords: string[] | undefined,
-      sessionId: string
-    ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
-    feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
-      // Why: Float32Array is zeroed crossing the contextBridge/IPC boundary; wrap in a Buffer to preserve bytes.
-      ipcRenderer.invoke(
-        'speech:feedAudio',
-        Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
-        sampleRate,
-        sessionId
-      ),
-    stopDictation: (sessionId = 'desktop'): Promise<void> =>
-      ipcRenderer.invoke('speech:stopDictation', sessionId),
-
-    onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
-        callback(data)
-      ipcRenderer.on('speech:partial', listener)
-      return () => ipcRenderer.removeListener('speech:partial', listener)
-    },
-    onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
-        callback(data)
-      ipcRenderer.on('speech:final', listener)
-      return () => ipcRenderer.removeListener('speech:final', listener)
-    },
-    onDownloadProgress: (
-      callback: (data: { modelId: string; progress: number }) => void
-    ): (() => void) => {
-      const listener = (
-        _event: Electron.IpcRendererEvent,
-        data: { modelId: string; progress: number }
-      ): void => callback(data)
-      ipcRenderer.on('speech:downloadProgress', listener)
-      return () => ipcRenderer.removeListener('speech:downloadProgress', listener)
-    },
-    onReady: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
-        callback(data)
-      ipcRenderer.on('speech:ready', listener)
-      return () => ipcRenderer.removeListener('speech:ready', listener)
-    },
-    onStopped: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
-        callback(data)
-      ipcRenderer.on('speech:stopped', listener)
-      return () => ipcRenderer.removeListener('speech:stopped', listener)
-    },
-    onError: (callback: (data: SpeechErrorEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: SpeechErrorEvent): void =>
-        callback(data)
-      ipcRenderer.on('speech:error', listener)
-      return () => ipcRenderer.removeListener('speech:error', listener)
     }
   }
 }

@@ -111,7 +111,6 @@ vi.mock('electron', () => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
-vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
 import {
   registerClipboardHandlers,

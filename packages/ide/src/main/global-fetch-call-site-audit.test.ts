@@ -19,7 +19,6 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
   ['main/source-control/hosted-review-api-request.ts', 1],
-  ['main/speech/openai-transcription-client.ts', 1],
   // fetch mentioned only in a comment
   ['main/ipc/feedback.ts', 1]
 ])

@@ -139,10 +139,6 @@ import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-t
 import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-runtime-target-sync'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import {
-  getDashboardPopoutWindow,
-  zoomDashboardPopoutIfFocused
-} from './window/dashboard-popout-window'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
@@ -242,7 +238,6 @@ import {
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
-import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -1263,9 +1258,6 @@ function openMainWindow(): BrowserWindow {
         ...(orchestration ? { orchestration } : {})
       }
       mainWindow?.webContents.send('agentStatus:set', statusEvent)
-      if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
-        getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      }
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
@@ -1283,7 +1275,6 @@ function openMainWindow(): BrowserWindow {
       return
     }
     mainWindow?.webContents.send('agentStatus:clear', clear)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {
@@ -2310,22 +2301,14 @@ void app.whenReady().then(async () => {
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
       sendOpenFeatureTour(targetBrowserWindow)
     },
-    // Why: menu zoom must act on the window the user is looking at — routing to
-    // the main window while the dashboard pop-out is focused zooms behind it.
     onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in')) {
-        mainWindow?.webContents.send('terminal:zoom', 'in')
-      }
+      mainWindow?.webContents.send('terminal:zoom', 'in')
     },
     onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out')) {
-        mainWindow?.webContents.send('terminal:zoom', 'out')
-      }
+      mainWindow?.webContents.send('terminal:zoom', 'out')
     },
     onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset')) {
-        mainWindow?.webContents.send('terminal:zoom', 'reset')
-      }
+      mainWindow?.webContents.send('terminal:zoom', 'reset')
     },
     onToggleLeftSidebar: () => {
       mainWindow?.webContents.send('ui:toggleLeftSidebar')

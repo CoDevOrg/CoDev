@@ -13,7 +13,6 @@ import type { BrowserFindSource } from '../shared/browser-find-source'
 import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
 import type {
@@ -380,13 +379,6 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
-import type {
-  SpeechErrorEvent,
-  SpeechLifecycleEvent,
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechTranscriptEvent
-} from '../shared/speech-types'
 import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
@@ -2017,18 +2009,6 @@ export type PreloadApi = {
     ) => Promise<OnboardingState>
   }
   dashboard: {
-    openPopout: (view?: 'board' | 'map') => Promise<void>
-    publishSnapshot: (snapshot: DashboardSnapshot) => Promise<void>
-    getPopoutOpen: () => Promise<boolean>
-    onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
-    onSnapshotRequested: (callback: () => void) => () => void
-    onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
-    onAckAgent: (callback: (paneKey: string) => void) => () => void
-    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
-    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
-    requestSnapshot: () => Promise<void>
-    onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
-    onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
     spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
@@ -3059,31 +3039,6 @@ export type PreloadApi = {
     consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
     /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
     onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void
-  }
-  speech: {
-    getCatalog: () => Promise<SpeechModelManifest[]>
-    getModelStates: () => Promise<SpeechModelState[]>
-    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
-    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
-    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
-    downloadModel: (modelId: string) => Promise<void>
-    cancelDownload: (modelId: string) => Promise<void>
-    deleteModel: (modelId: string) => Promise<void>
-    startDictation: (
-      modelId: string,
-      hotwords: string[] | undefined,
-      sessionId: string
-    ) => Promise<void>
-    feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<void>
-    stopDictation: (sessionId?: string) => Promise<void>
-    onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
-    onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
-    onDownloadProgress: (
-      callback: (data: { modelId: string; progress: number }) => void
-    ) => () => void
-    onReady: (callback: (data: SpeechLifecycleEvent) => void) => () => void
-    onStopped: (callback: (data: SpeechLifecycleEvent) => void) => () => void
-    onError: (callback: (data: SpeechErrorEvent) => void) => () => void
   }
 }
 

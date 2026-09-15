@@ -68,7 +68,6 @@
     "psl": "1.15.0",
     "react-i18next": "^17.0.8",
     "serve-sim": "^0.1.40",
-    "sherpa-onnx": "1.12.37",
     "tweetnacl": "^1.0.3",
     "ws": "^8.21.0",
     "yaml": "^2.8.4",
@@ -175,11 +174,6 @@
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
-    "sherpa-onnx-darwin-arm64": "1.12.37",
-    "sherpa-onnx-darwin-x64": "1.12.37",
-    "sherpa-onnx-linux-arm64": "1.12.37",
-    "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37",
     "windows-native-registry": "3.2.2"
   },
   "lint-staged": {
@@ -218,8 +212,7 @@
       "@parcel/watcher",
       "cpu-features",
       "esbuild",
-      "node-pty",
-      "sherpa-onnx"
+      "node-pty"
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",

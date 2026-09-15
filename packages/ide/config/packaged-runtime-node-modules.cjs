@@ -49,7 +49,6 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
 }
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
-const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -409,31 +408,6 @@ function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
   pruneMatchingFiles(nodeModulesDir, (filename) => TYPE_DECLARATION_ARTIFACT_RE.test(filename))
 }
 
-function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
-  if (electronPlatformName !== 'darwin') {
-    return
-  }
-  const nodeModulesDir = join(resourcesDir, 'node_modules')
-  if (!existsSync(nodeModulesDir)) {
-    return
-  }
-  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith('sherpa-onnx-darwin-')) {
-      continue
-    }
-    const packageDir = join(nodeModulesDir, entry.name)
-    const packageEntries = readdirSync(packageDir)
-    const hasVersionedOnnxRuntime = packageEntries.some((filename) =>
-      VERSIONED_ONNXRUNTIME_DYLIB_RE.test(filename)
-    )
-    if (hasVersionedOnnxRuntime) {
-      // Why: darwin sherpa-onnx binaries link to the versioned ONNX Runtime
-      // install name; the unversioned dylib is a duplicate fallback copy.
-      rmSync(join(packageDir, 'libonnxruntime.dylib'), { force: true })
-    }
-  }
-}
-
 function prunePackagedZodSources(resourcesDir) {
   // Why: Zod's src tree is TypeScript source only selected by the @zod/source
   // condition; packaged runtime import/require paths resolve to built JS.
@@ -445,7 +419,6 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
   prunePackagedRuntimeTypeDeclarations(resourcesDir)
-  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
   prunePackagedZodSources(resourcesDir)
 }
 
@@ -469,7 +442,6 @@ module.exports = {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
-  prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
