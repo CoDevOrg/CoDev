@@ -465,13 +465,7 @@ describe('buildNewWorkspaceCreateTargetOptions', () => {
       hosts: [{ id: 'local', label: 'Local Mac' }],
       projectGroups: [
         group({ id: 'folder-group', name: 'Platform', parentPath: '/tmp/platform' }),
-        group({ id: 'org-group', name: 'Org', parentPath: null }),
-        group({
-          id: 'removed-folder-group',
-          name: 'Removed Remote',
-          parentPath: '/srv/removed',
-          connectionId: 'removed'
-        })
+        group({ id: 'org-group', name: 'Org', parentPath: null })
       ]
     })
 

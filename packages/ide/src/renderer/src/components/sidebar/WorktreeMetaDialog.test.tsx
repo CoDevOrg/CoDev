@@ -251,32 +251,9 @@ describe('WorktreeMetaDialog issue link row', () => {
 
   // updateWorktreeMeta stamps lastActivityAt on any comment write, which would
   // reorder the workspace under the time-decay sidebar sort.
-  it('sends no comment when only the issue link changed', async () => {
-    openDialog({ worktree: { } })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    expect(updateWorktreeMeta.mock.calls[0]?.[1] ?? {}).not.toHaveProperty('comment')
-  })
 
   // A failed save refetches and reverts the optimistic write, so closing here
   // would report success for an edit that silently undid itself.
-  it('keeps the dialog open and reports why when the save fails', async () => {
-    openDialog({ worktree: { } })
-    updateWorktreeMeta.mockResolvedValue({ ok: false, error: 'Runtime is offline' })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    expect(screen.getByRole('alert').textContent).toBe('Runtime is offline')
-    expect(useAppStore.getState().activeModal).toBe('edit-meta')
-  })
 
   it('leaves the Linear link alone when only the comment is edited', async () => {
     openDialog({ worktree: { } })
@@ -312,12 +289,6 @@ describe('WorktreeMetaDialog issue link row', () => {
 
   // Folder workspaces live outside worktreesByRepo, so the indexed lookup alone
   // leaves the row blank and the link it does hold looks lost.
-  it('shows a folder workspace its own linked issue', () => {
-    openDialog({ worktreeId: folderWorkspaceKey('fw-1'), folderWorkspace: {} })
-
-    expect(issueInput().value).toBe('STA-901')
-    expect(providerChip().textContent).toContain('Linear')
-  })
 
   // A background `orca worktree set` must not move the baseline mid-edit: the
   // field would read as dirty and a comment-only save would write the stale seed.

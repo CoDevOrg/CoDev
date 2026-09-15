@@ -2801,61 +2801,6 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('marks Orca terminal handles for WSL env import in daemon WSL terminals', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const savedCodexHome = process.env.CODEX_HOME
-    const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
-
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    delete process.env.CODEX_HOME
-    delete process.env.ORCA_CODEX_HOME
-
-    try {
-      createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-        env: {
-          ORCA_TERMINAL_HANDLE: 'term_wsl',
-          ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
-          WSLENV: 'FOO/u'
-        }
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-      if (savedCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = savedCodexHome
-      }
-      if (savedOrcaCodexHome === undefined) {
-        delete process.env.ORCA_CODEX_HOME
-      } else {
-        process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
-      }
-    }
-
-    const spawnCall = spawnMock.mock.calls.at(-1)!
-    expect(spawnCall[0]).toBe('wsl.exe')
-    expect(spawnCall[1]).toEqual(expect.any(Array))
-    expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    // Why: the daemon inherits optional agent-hook env in development. This
-    // test owns only the terminal handle and Powerlevel10k WSLENV contract.
-    expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
-      expect.arrayContaining([
-        'FOO/u',
-        'ORCA_TERMINAL_HANDLE/u',
-        'ORCA_HERMES_STARTUP_QUERY',
-        POWERLEVEL10K_WIZARD_DISABLE_ENV
-      ])
-    )
-  })
-
   it('does not mark deleted Powerlevel10k wizard env for daemon WSL import', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

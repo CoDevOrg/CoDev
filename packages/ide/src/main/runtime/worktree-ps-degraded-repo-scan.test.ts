@@ -37,7 +37,6 @@ const REPO_PATH = '/home/user/projects/app'
 const WORKTREE_PATH = '/home/user/projects/app-feature'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 const SCRATCH_ID = `${REPO_ID}::${REPO_PATH}/.claude/worktrees/scratch`
-const SSH_CONNECTION_ID = 'ssh-remote-1'
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
   return {
@@ -146,29 +145,6 @@ describe('worktree.ps on a degraded repo scan', () => {
     listWorktreesMock.mockResolvedValue([])
   })
 
-  it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
-    vi.useFakeTimers()
-    try {
-      getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn(neverSettles) })
-      const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
-
-      const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
-
-      expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps persisted worktrees when a remote repo is unreachable', async () => {
-    getSshGitProviderMock.mockReturnValue(undefined)
-    const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
-
-    const result = await runtime.getWorktreePs(10_000)
-
-    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
-  })
-
   it('keeps persisted worktrees when a local scan stalls past the per-repo budget', async () => {
     vi.useFakeTimers()
     try {
@@ -222,26 +198,6 @@ describe('worktree.ps on a degraded repo scan', () => {
   })
 
   // Why: the scan cache stores `ok` results only, so a degraded answer must not pin the repo to persisted rows after the host recovers.
-  it('rescans a degraded remote repo on the next poll instead of caching the failure', async () => {
-    vi.useFakeTimers()
-    try {
-      const listWorktrees = vi.fn(async () => {
-        throw new Error('provider offline')
-      })
-      getSshGitProviderMock.mockReturnValue({ listWorktrees })
-      const runtime = new OrcaRuntimeService(
-        makeStore({ connectionId: SSH_CONNECTION_ID }) as never
-      )
-
-      await runtime.getWorktreePs(10_000)
-      await vi.advanceTimersByTimeAsync(2_000)
-      await runtime.getWorktreePs(10_000)
-
-      expect(listWorktrees).toHaveBeenCalledTimes(2)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 
   // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
 

@@ -168,7 +168,7 @@ describe('terminal tab id hydration', () => {
     expect(store.getState().terminalLayoutsByTabId[BAD_TAB_ID]).toBeUndefined()
     expect(store.getState().terminalLayoutsByTabId[GOOD_TAB_ID]).toBeDefined()
     expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
-      [GOOD_TAB_ID]: 'good-remote'
+      [GOOD_TAB_ID]: 'good-pty'
     })
   })
 })

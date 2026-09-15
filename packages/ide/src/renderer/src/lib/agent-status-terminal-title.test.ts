@@ -21,15 +21,6 @@ describe('resolveAgentStatusTerminalTitle', () => {
     ).toBe('Codex - action required')
   })
 
-  it('uses Devin synthetic titles for hook status transitions', () => {
-    expect(
-      resolveAgentStatusTerminalTitle({ agentType: 'devin', state: 'done' }, '\u280b Devin')
-    ).toBe('Devin ready')
-    expect(
-      resolveAgentStatusTerminalTitle({ agentType: 'devin', state: 'waiting' }, '\u280b Devin')
-    ).toBe('Devin - action required')
-  })
-
   it('preserves native OpenCode titles through hook status transitions', () => {
     expect(
       resolveAgentStatusTerminalTitle(

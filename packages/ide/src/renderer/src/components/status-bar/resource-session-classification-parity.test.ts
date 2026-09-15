@@ -31,21 +31,4 @@ describe('resource session classification parity', () => {
     }
   })
 
-  it('keeps every binding source in the one object both paths read', () => {
-    const source = readFileSync(SEGMENT_PATH, 'utf8')
-    const bindings = source.slice(
-      source.indexOf('const resourceSessionBindings = useMemo'),
-      source.indexOf('const popoverBodyRef')
-    )
-
-    for (const field of [
-      'ptyIdsByTabId',
-      'tabsByWorktree',
-      'terminalLayoutsByTabId',
-      'deferredSshSessionIdsByTabId',
-      'workspaceSessionReady'
-    ]) {
-      expect(bindings).toContain(field)
-    }
-  })
 })

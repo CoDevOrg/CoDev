@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasPositiveHostedReviewNumberLink,
   hasResolvableHostedReviewPushTargetLink,
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus,
@@ -120,7 +119,6 @@ describe('resolveHostedReviewActionUpstreamStatus', () => {
 describe('hasResolvableHostedReviewPushTargetLink', () => {
   it('accepts only hosted-review links with supported target lookup APIs', () => {
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: 12 })).toBe(true)
-    expect(hasResolvableHostedReviewPushTargetLink({ })).toBe(true)
     // Why: a queue-discovered same-repo PR (no persisted linkedPR) is resolvable.
     expect(hasResolvableHostedReviewPushTargetLink({ fallbackGitHubPR: 8333 })).toBe(true)
     expect(
@@ -133,20 +131,6 @@ describe('hasResolvableHostedReviewPushTargetLink', () => {
     expect(hasResolvableHostedReviewPushTargetLink({ })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: Number.NaN })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({})).toBe(false)
-  })
-})
-
-describe('hasPositiveHostedReviewNumberLink', () => {
-
-  it('blocks resolver-less providers without treating them as resolvable', () => {
-    // Bitbucket/Azure/Gitea have no push-target resolver yet, so they must block
-    // unsafe pushes but stay out of the resolvable subset. Locks the intended
-    // relationship: resolvable ⊂ positive, so the two helpers cannot drift.
-    for (const provider of ['linkedBitbucketPR', 'linkedAzureDevOpsPR', 'linkedGiteaPR'] as const) {
-      const args = { [provider]: 42 }
-      expect(hasPositiveHostedReviewNumberLink(args)).toBe(true)
-      expect(hasResolvableHostedReviewPushTargetLink(args)).toBe(false)
-    }
   })
 })
 

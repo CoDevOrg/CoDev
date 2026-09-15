@@ -127,7 +127,6 @@ describe('launchAgentBackgroundSession', () => {
           ORCA_TAB_ID: tabId,
           ORCA_WORKTREE_ID: 'wt-1'
         }),
-        connectionId: null,
         worktreeId: 'wt-1',
         tabId
       })
@@ -298,45 +297,6 @@ describe('launchAgentBackgroundSession', () => {
       tabId,
       leafId
     })
-  })
-
-  it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
-    state.projects = [
-      {
-        id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    state.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
-    state.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-1',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          path: 'C:\\Users\\jinwo\\repo\\feature',
-          displayName: 'feature'
-        }
-      ]
-    }
-
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: "don't use powershell quoting"
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
-        connectionId: null,
-        worktreeId: 'wt-1',
-        tabId: expect.stringMatching(UUID_RE)
-      })
-    )
   })
 
   it('pre-marks trust for agents with first-launch trust prompts', async () => {

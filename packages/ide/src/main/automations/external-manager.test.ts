@@ -332,9 +332,6 @@ describe('runExternalAutomationAction', () => {
   })
 })
 
-describe('listExternalAutomationRuns', () => {
-})
-
 describe('mapOpenClawJobs', () => {
   it('normalizes OpenClaw cron jobs into external automation rows', () => {
     const jobs = mapOpenClawJobs('openclaw:local', {

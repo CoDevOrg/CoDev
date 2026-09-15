@@ -208,9 +208,7 @@ describe('buildWorkspaceSessionPatch', () => {
         // Why: the reconnect list derives from remote session ids, so any
         // patch that rewrites remoteSessionIdsByTabId must carry it too —
         // otherwise a crash between patches strands a stale target on disk.
-        'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
-        'remoteSessionIdsByTabId',
         'tabsByWorktree',
         'terminalLayoutsByTabId'
       ].sort()

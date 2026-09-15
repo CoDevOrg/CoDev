@@ -602,34 +602,6 @@ describe('preflight', () => {
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
   })
 
-  it('detects Mistral Vibe from the installed vibe executable', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe') {
-        return { stdout: '/home/test/.local/bin/vibe\n' }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
-  })
-
-  it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
-        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
-  })
-
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,

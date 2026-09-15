@@ -212,8 +212,6 @@ describe('useDashboardPopoutBridge', () => {
     // derived from these. Not republishing leaves the pop-out encoding bytes
     // for the host the pty used to run on.
     const profileInputs: Partial<DashboardSnapshotWatchState>[] = [
-      { },
-      { },
       { runtimeStatusByEnvironmentId: new Map() },
       { paneForegroundAgentByPaneKey: {} },
       { detectedWorktreesByRepo: {} },

@@ -384,27 +384,6 @@ describe('project group store routing', () => {
     }
   })
 
-  it('treats current-state mismatched folder path cache entries as unknown', async () => {
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
-      ],
-})
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    await store.getState().fetchFolderWorkspacePathStatus(request)
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
-      path: '/workspace/platform',
-      exists: true
-    })
-
-    store.setState({
-})
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
-  })
-
   it('purges renderer session state when deleting a local folder workspace', async () => {
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',

@@ -115,8 +115,8 @@ describe('useAddRepoCloneFlow', () => {
   it('strips Electron IPC wrappers from clone errors', async () => {
     const cloneError =
       'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
-    mocks.cloneRemote.mockRejectedValue(
-      new Error(`Error invoking remote method 'repos:cloneRemote': Error: ${cloneError}`)
+    mocks.cloneLocal.mockRejectedValue(
+      new Error(`Error invoking remote method 'repos:clone': Error: ${cloneError}`)
     )
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
 

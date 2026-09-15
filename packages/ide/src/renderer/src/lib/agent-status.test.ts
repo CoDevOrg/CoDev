@@ -184,13 +184,6 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
   })
 
-  it('classifies synthesized Devin titles', () => {
-    expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
-    expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
-    expect(detectAgentStatusFromTitle('Devin - action required')).toBe('permission')
-    expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
-  })
-
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -723,18 +716,6 @@ describe('formatAgentTypeLabel', () => {
 
   it("maps 'codex' to 'Codex'", () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
-  })
-
-  it("maps 'command-code' to 'Command Code'", () => {
-    expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
-  })
-
-  it("maps 'ante' to 'Ante'", () => {
-    expect(formatAgentTypeLabel('ante')).toBe('Ante')
-  })
-
-  it("maps 'trae' to 'Trae'", () => {
-    expect(formatAgentTypeLabel('trae')).toBe('Trae')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {

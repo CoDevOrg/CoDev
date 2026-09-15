@@ -274,6 +274,3 @@ describe('ClaudeHookService.install', () => {
   )
 })
 
-describe('ClaudeHookService.installRemote', () => {
-
-})

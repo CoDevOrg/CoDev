@@ -284,10 +284,7 @@ describe('registerShellHandlers', () => {
       })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
         'editor-cli',
-        [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        [normalize(workspacePath)]
       )
       expect(spawnMock).toHaveBeenCalledWith('editor-cli', [normalize(workspacePath)], {
         detached: true,
@@ -311,10 +308,7 @@ describe('registerShellHandlers', () => {
       })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
         'editor-cli',
-        [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        [normalize(workspacePath)]
       )
       expect(spawnMock).toHaveBeenCalledWith('editor-cli', [normalize(workspacePath)], {
         detached: true,
@@ -341,10 +335,7 @@ describe('registerShellHandlers', () => {
       })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
         'custom-editor',
-        [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        [normalize(workspacePath)]
       )
     })
 
@@ -361,10 +352,7 @@ describe('registerShellHandlers', () => {
         })
         expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
           codeShim,
-          ['--remote', 'wsl+Ubuntu Preview', '/home/Ada Lovelace/project'],
-          {
-            detachedGui: false
-          }
+          ['--remote', 'wsl+Ubuntu Preview', '/home/Ada Lovelace/project']
         )
       }
     )
@@ -383,46 +371,12 @@ describe('registerShellHandlers', () => {
         expect(resolveCliCommandMock).not.toHaveBeenCalled()
         expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
           nvimPath,
-          [normalize(workspacePath)],
-          {
-            detachedGui: false
-          }
+          [normalize(workspacePath)]
         )
         expect(spawnMock).toHaveBeenCalledWith(nvimPath, [normalize(workspacePath)], {
           detached: true,
           stdio: 'ignore',
           windowsHide: false
-        })
-      } finally {
-        if (platformDescriptor) {
-          Object.defineProperty(process, 'platform', platformDescriptor)
-        }
-      }
-    })
-
-    it('detaches JetBrains batch shims on Windows but leaves other launchers waiting', async () => {
-      const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const workspacePath = normalize(resolve('workspace'))
-      const ideaShim = 'C:\\Users\\me\\AppData\\Local\\JetBrains\\Toolbox\\scripts\\idea.cmd'
-      const codeShim = 'C:\\Tools\\code.cmd'
-      const handler = getHandler('shell:openInExternalEditor')
-
-      try {
-        resolveCliCommandMock.mockReturnValueOnce(ideaShim)
-        await expect(handler({}, { path: workspacePath, command: 'idea' })).resolves.toEqual({
-          ok: true
-        })
-        expect(getSpawnArgsForWindowsMock).toHaveBeenLastCalledWith(ideaShim, [workspacePath], {
-          detachedGui: true
-        })
-
-        resolveCliCommandMock.mockReturnValueOnce(codeShim)
-        await expect(handler({}, { path: workspacePath, command: 'code' })).resolves.toEqual({
-          ok: true
-        })
-        expect(getSpawnArgsForWindowsMock).toHaveBeenLastCalledWith(codeShim, [workspacePath], {
-          detachedGui: false
         })
       } finally {
         if (platformDescriptor) {
@@ -457,10 +411,7 @@ describe('registerShellHandlers', () => {
       })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
         'editor-cli',
-        [normalize(workspacePath)],
-        {
-          detachedGui: false
-        }
+        [normalize(workspacePath)]
       )
       expect(spawnMock).toHaveBeenCalledWith('platform-runner', ['platform-arg'], {
         detached: true,

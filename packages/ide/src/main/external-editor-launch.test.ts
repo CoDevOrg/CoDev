@@ -292,10 +292,3 @@ describe('resolveExternalEditorLaunchSpec', () => {
   })
 })
 
-describe('resolveVsCodeRemoteSshLaunchSpec', () => {
-  beforeEach(() => {
-    resolveCliCommandMock.mockReset()
-    resolveCliCommandMock.mockImplementation((command: string) => command)
-  })
-
-})

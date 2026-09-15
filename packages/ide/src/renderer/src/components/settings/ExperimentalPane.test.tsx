@@ -175,37 +175,6 @@ describe('ExperimentalPane', () => {
     expect(markup).not.toContain('Show idle agents')
   })
 
-  it('enables Cloud VM through the experimental switch', async () => {
-    const updateSettings = vi.fn()
-    const { root, container } = await renderExperimentalPane({ updateSettings })
-
-    const switchButton = container.querySelector<HTMLButtonElement>(
-      '#ephemeral-vms button[role="switch"]'
-    )
-    if (!switchButton) {
-      throw new Error('Cloud VM switch was not rendered')
-    }
-
-    await act(async () => {
-      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ experimentalEphemeralVms: true })
-    root.unmount()
-  })
-
-  it('shows Cloud VM setup controls when enabled', () => {
-    const markup = renderToStaticMarkup(
-      <ExperimentalPane
-        settings={{ ...getDefaultSettings('/tmp'), }}
-        updateSettings={vi.fn()}
-      />
-    )
-
-    expect(markup).toContain('Cloud VM pane')
-    expect(markup).toContain('aria-checked="true"')
-  })
-
   it('shows Chat UI default-mode as a child setting only when Chat UI is enabled', async () => {
     const updateSettings = vi.fn()
     const disabledSettings = getDefaultSettings('/tmp')

@@ -404,13 +404,7 @@ function withRepoHostOwnership<
   const parsedOwner = parseExecutionHostId(hostId)
   const runtimeOwnerEnvironmentId =
     parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined
-  const worktreeHost = parseExecutionHostId(worktree.hostId)
-  // Why: a worktree reached through a paired HUB may carry an explicit execution host; retain it and stamp the HUB transport separately.
-  const nextHostId =
-    hostId === LOCAL_EXECUTION_HOST_ID ||
-    (runtimeOwnerEnvironmentId !== undefined && worktreeHost?.kind === 'local')
-      ? worktree.hostId
-      : hostId
+  const nextHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
   const projectId = worktree.projectId ?? setup?.projectId
   const projectHostSetupId = worktree.projectHostSetupId ?? setup?.id
   if (

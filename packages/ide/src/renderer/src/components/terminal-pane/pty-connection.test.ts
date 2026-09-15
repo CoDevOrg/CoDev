@@ -4819,7 +4819,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
       launchConfig: { agentArgs: '', agentEnv: {} },
-      identity: { agentType: 'droid' }
+      identity: { agentType: 'claude' }
     }
 
     // A SIGKILLed agent emits no mode teardown; only the shell's next prompt

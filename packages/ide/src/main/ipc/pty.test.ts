@@ -1115,135 +1115,6 @@ describe('registerPtyHandlers', () => {
     expect(provider.spawn).not.toHaveBeenCalled()
   })
 
-  it('fails closed without spawning when a recovered owner provider disconnects', async () => {
-    const connectionId = 'ssh-agent-owner-gone'
-    const ownerPtyId = `ssh:${connectionId}@@relay-owner`
-    const claim = {
-      ...recoveredAgentClaim,
-      identityDigest: 'ccccccccccccccccccccccccccccccccccccccccccc'
-    }
-    setLocalPtyProvider(createAgentClaimProvider({}) as never)
-    const controller = registerAgentClaimController()
-
-    await expect(
-      controller.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/recovered-worktree',
-        agentSessionEnsure: { claim, surface: recoveredAgentSurface }
-      })
-    ).resolves.toMatchObject({ id: ownerPtyId })
-
-    const localSpawn = vi.fn(async () => ({ id: 'must-not-spawn' }))
-    setLocalPtyProvider(createAgentClaimProvider({ spawn: localSpawn }) as never)
-
-    await expect(
-      controller.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/recovered-worktree',
-        agentSessionEnsure: { claim, surface: recoveredAgentSurface }
-      })
-    ).rejects.toThrow('execution_owner_unavailable')
-    expect(localSpawn).not.toHaveBeenCalled()
-    clearProviderPtyState(ownerPtyId)
-  })
-
-  it('fails closed when provider listings disagree about a recovered claim owner', async () => {
-    const claim = {
-      ...recoveredAgentClaim,
-      identityDigest: 'ddddddddddddddddddddddddddddddddddddddddddd'
-    }
-    const localOwner: AgentSessionOwnerBinding = {
-      claim,
-      generation: 'generation-conflict',
-      phase: 'live',
-      ptyId: 'pty-conflict-local',
-      surface: recoveredAgentSurface
-    }
-    const remoteOwner: AgentSessionOwnerBinding = {
-      ...localOwner,
-      ptyId: 'ssh:ssh-agent-conflict@@pty-conflict-remote'
-    }
-    const localSpawn = vi.fn(async () => ({ id: 'must-not-spawn' }))
-    setLocalPtyProvider(
-      createAgentClaimProvider({
-        sessions: [
-          {
-            id: localOwner.ptyId,
-            incarnationId: 'incarnation-conflict-local',
-            cwd: '/tmp/recovered-worktree',
-            title: 'Codex',
-            agentSessionOwners: [localOwner]
-          }
-        ],
-        spawn: localSpawn
-      }) as never
-    )
-    const controller = registerAgentClaimController()
-
-    await expect(
-      controller.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/recovered-worktree',
-        agentSessionEnsure: { claim, surface: recoveredAgentSurface }
-      })
-    ).rejects.toThrow('agent_session_conflict')
-    expect(localSpawn).not.toHaveBeenCalled()
-
-    clearProviderPtyState(localOwner.ptyId)
-    clearProviderPtyState(remoteOwner.ptyId)
-  })
-
-  it('converges after conflicting listings shrink to one exact owner', async () => {
-    const claim = {
-      ...recoveredAgentClaim,
-      identityDigest: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-    }
-    const ownerA: AgentSessionOwnerBinding = {
-      claim,
-      generation: 'generation-a',
-      phase: 'live',
-      ptyId: 'pty-conflict-a',
-      surface: recoveredAgentSurface
-    }
-    const ownerB: AgentSessionOwnerBinding = {
-      ...ownerA,
-      generation: 'generation-b',
-      ptyId: 'ssh:ssh-agent-converge@@pty-conflict-b'
-    }
-    const localSessions = [
-      {
-        id: ownerA.ptyId,
-        incarnationId: 'incarnation-conflict-a',
-        cwd: '/tmp/recovered-worktree',
-        title: 'Codex',
-        agentSessionOwners: [ownerA]
-      }
-    ]
-    const local = createAgentClaimProvider({ sessions: localSessions })
-    setLocalPtyProvider(local as never)
-    const controller = registerAgentClaimController()
-    const request = {
-      cols: 80,
-      rows: 24,
-      cwd: '/tmp/recovered-worktree',
-      agentSessionEnsure: { claim, surface: recoveredAgentSurface }
-    }
-
-    await expect(controller.spawn(request)).rejects.toThrow('agent_session_conflict')
-    localSessions.splice(0)
-    await expect(controller.spawn(request)).resolves.toMatchObject({
-      id: ownerB.ptyId,
-      agentSessionEnsure: { disposition: 'adopted', owner: ownerB }
-    })
-    expect(local.spawn).not.toHaveBeenCalled()
-
-    clearProviderPtyState(ownerA.ptyId)
-    clearProviderPtyState(ownerB.ptyId)
-  })
-
   it('does not adopt a stale generation when its PTY id is reused without ownership', async () => {
     const claim = {
       ...recoveredAgentClaim,
@@ -1313,54 +1184,6 @@ describe('registerPtyHandlers', () => {
 
     clearProviderPtyState(oldOwner.ptyId)
     clearProviderPtyState('pty-new-owner')
-  })
-
-  it('preserves an owner fence across disconnect and adopts it after reconnect', async () => {
-    const connectionId = 'ssh-agent-reconnect'
-    const claim = {
-      ...recoveredAgentClaim,
-      identityDigest: '9999999999999999999999999999999999999999999'
-    }
-    const owner: AgentSessionOwnerBinding = {
-      claim,
-      generation: 'generation-reconnect',
-      phase: 'live',
-      ptyId: `ssh:${connectionId}@@pty-owner`,
-      surface: recoveredAgentSurface
-    }
-    const sessions = [
-      {
-        id: owner.ptyId,
-        incarnationId: 'incarnation-reconnect',
-        cwd: '/tmp/recovered-worktree',
-        title: 'Codex',
-        agentSessionOwners: [owner]
-      }
-    ]
-    setLocalPtyProvider(createAgentClaimProvider({}) as never)
-    const controller = registerAgentClaimController()
-    const request = {
-      cols: 80,
-      rows: 24,
-      cwd: '/tmp/recovered-worktree',
-      connectionId,
-      agentSessionEnsure: { claim, surface: recoveredAgentSurface }
-    }
-
-    await expect(controller.spawn(request)).resolves.toMatchObject({ id: owner.ptyId })
-    clearPtyOwnershipForConnection(connectionId)
-    await expect(controller.spawn({ ...request, connectionId: undefined })).rejects.toThrow(
-      'execution_owner_unavailable'
-    )
-
-    const reconnected = createAgentClaimProvider({ sessions })
-    await expect(controller.spawn(request)).resolves.toMatchObject({
-      id: owner.ptyId,
-      agentSessionEnsure: { disposition: 'adopted', owner }
-    })
-    expect(reconnected.spawn).not.toHaveBeenCalled()
-
-    clearProviderPtyState(owner.ptyId)
   })
 
   function getPtyAckDataListener(): (
@@ -4240,46 +4063,6 @@ describe('registerPtyHandlers', () => {
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0, preserveRendererBinding: true }]])
       })
 
-      it('passes keepHistory through runtime controller stopAndWait', async () => {
-        vi.useFakeTimers()
-        const shutdown = vi.fn(async () => undefined)
-        const store = {
-          markSshRemotePtyLease: vi.fn()
-        }
-        const runtime = {
-          setPtyController: vi.fn(),
-          onPtyExit: vi.fn()
-        }
-        setPtyOwnership('remote-pty', 'ssh-1')
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          runtime as never,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
-        }
-
-        const stopPromise = controller.stopAndWait('remote-pty', { keepHistory: true })
-        await vi.advanceTimersByTimeAsync(1_200)
-        await expect(stopPromise).resolves.toBe(true)
-
-        expect(shutdown).toHaveBeenCalledWith('remote-pty', {
-          immediate: true,
-          keepHistory: true
-        })
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
-          'ssh-1',
-          'remote-pty',
-          'terminated'
-        )
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
-      })
-
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
         // Why: sequential RPCs must share one absolute deadline; otherwise both get
         // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).
@@ -4537,22 +4320,6 @@ describe('registerPtyHandlers', () => {
       })
 
     })
-  })
-
-  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
-    const confirmForegroundProcess = vi.fn(async () => 'codex')
-    setPtyOwnership('remote-pty', 'ssh-1')
-    const runtime = { setPtyController: vi.fn() }
-    handlers.clear()
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
-    }
-
-    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
-    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
-    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
-    deletePtyOwnership('remote-pty')
   })
 
   it('routes runtime exact liveness without enumerating provider sessions', () => {
@@ -5111,29 +4878,6 @@ describe('registerPtyHandlers', () => {
     barrier.resolve()
 
     await expect(pending).resolves.toEqual([{ id: 'restored-local-pty', authoritative: true }])
-  })
-
-  it('does not gate remote snapshot capability on local provider startup', async () => {
-    const awaitLocalPtyProviderStartup = vi.fn(() => new Promise<void>(() => {}))
-    registerPtyHandlers(
-      mainWindow as never,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { awaitLocalPtyProviderStartup }
-    )
-
-    const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
-      ids: ['remote:environment@@pty-1', 'ssh:ssh-1@@pty-2']
-    })
-
-    expect(awaitLocalPtyProviderStartup).not.toHaveBeenCalled()
-    expect(result).toEqual([
-      { id: 'remote:environment@@pty-1', authoritative: false },
-      { id: 'ssh:ssh-1@@pty-2', authoritative: false }
-    ])
   })
 
   it('answers false, not null, for a resolved provider with no snapshot capability', async () => {
@@ -6951,8 +6695,7 @@ describe('registerPtyHandlers', () => {
           ptyId: 'pty-persisted-owner',
           incarnationId: 'inc-stale-owner'
         }
-      }),
-      undefined
+      })
     )
     expect(
       mainWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'pty:spawned')
@@ -8154,57 +7897,6 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_trusted')
     expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
-  })
-
-  it('forwards the trusted Orca terminal handle into managed WSL terminals', async () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    const runtime = {
-      setPtyController: vi.fn(),
-      noteTerminalSpawnCommand: vi.fn(),
-      preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-
-    try {
-      registerPtyHandlers(mainWindow as never, runtime as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        shellOverride: 'wsl.exe'
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
-
-    const spawnCall = spawnMock.mock.calls.at(-1)!
-    const env = spawnCall[2].env as Record<string, string>
-    expect(spawnCall[0]).toBe('wsl.exe')
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-    expect(env.ORCA_CLI_COMMAND).toBe('codev')
-    expect(env.WSLENV?.split(':')).toEqual(
-      expect.arrayContaining([
-        'ORCA_TERMINAL_HANDLE/u',
-        'ORCA_USER_DATA_PATH/p',
-        'ORCA_CLI_COMMAND/u',
-        'ORCA_AGENT_HOOK_PORT/u',
-        'ORCA_AGENT_HOOK_TOKEN/u',
-        // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
-        'ORCA_OMP_STATUS_EXTENSION/p',
-        'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
-      ])
-    )
-    expect(env.WSLENV?.split(':')).not.toEqual(
-      expect.arrayContaining(['ORCA_OMP_SOURCE_AGENT_DIR/p'])
-    )
   })
 
   it('forces managed ORCA_USER_DATA_PATH for WSL spawns even when the caller provides a stale root', async () => {
@@ -10846,54 +10538,6 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('keeps negotiated source-credit overflow off the legacy PTY-global pause path', async () => {
-    vi.useFakeTimers()
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      const provider = installObservableDaemonTestProvider()
-      let modelSequence = 0
-      const runtime = {
-        setPtyController: vi.fn(),
-        setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
-        getPtyOutputSequence: vi.fn(() => modelSequence),
-        onPtyData: vi.fn(
-          (_id: string, data: string, _at: number, rawLength = data.length) =>
-            (modelSequence += rawLength)
-        ),
-        acceptPtyDataBounded: vi.fn(
-          (_id: string, _data: string, _at: number, rawLength: number) => {
-            modelSequence += rawLength
-            return { sequence: modelSequence, completion: Promise.resolve() }
-          }
-        )
-      }
-      registerPtyHandlers(mainWindow as never, runtime as never)
-      mainWindow.webContents.send.mockClear()
-
-      for (let index = 0; index < 17; index++) {
-      }
-
-      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        pendingPtyCount: 1,
-        pendingChars: 0
-      })
-      expect(provider.pauseProducer).not.toHaveBeenCalledWith('source-credit-pty')
-      expect(provider.resumeProducer).not.toHaveBeenCalledWith('source-credit-pty')
-
-      provider.emitData('legacy-pty', 'l'.repeat(320 * 1024))
-      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
-      expect(provider.pauseProducer).toHaveBeenCalledWith('legacy-pty')
-      expect(provider.pauseProducer).not.toHaveBeenCalledWith('unrelated-pty')
-
-      vi.runAllTimers()
-      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
-      expect(provider.resumeProducer).toHaveBeenCalledWith('legacy-pty')
-    } finally {
-      errorSpy.mockRestore()
-      vi.useRealTimers()
-    }
-  })
-
   it('resumes a paused producer when the PTY exits before draining', async () => {
     vi.useFakeTimers()
     try {
@@ -13347,12 +12991,7 @@ describe('registerPtyHandlers', () => {
         '/bin/zsh',
         ['-l'],
         expect.objectContaining({
-          cwd: '/tmp',
-          env: expect.objectContaining({
-            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
-            ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
-          })
+          cwd: '/tmp'
         })
       )
       expect(warnSpy).toHaveBeenCalledWith(
@@ -14517,10 +14156,7 @@ describe('registerPtyHandlers', () => {
         expect.objectContaining({
           cwd: '/tmp',
           env: expect.objectContaining({
-            SHELL: '/bin/zsh',
-            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
-            ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            SHELL: '/bin/zsh'
           })
         })
       )

@@ -152,24 +152,6 @@ describe('RuntimeGitCommands', () => {
     })
   })
 
-  it('does not resolve shared link paths for a remote runtime status', async () => {
-    const provider = { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        repo: { path: '/remote/repo', symlinkPaths: ['node_modules'] } as never,
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await commands.getRuntimeGitStatus('id:wt-1')
-
-    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
   it('aborts a local rebase through the resolved worktree', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)

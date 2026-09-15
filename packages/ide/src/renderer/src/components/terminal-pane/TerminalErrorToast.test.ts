@@ -6,10 +6,6 @@ import {
 
 // Relay loss reaches reportError already IPC-wrapped, so the marker is mid-string.
 
-describe('isSshReconnectOwnedTerminalError', () => {
-
-})
-
 describe('humanizeTerminalError', () => {
   it('replaces the pane-owner-unverified code with actionable copy', () => {
     const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
@@ -26,10 +22,6 @@ describe('humanizeTerminalError', () => {
   it('leaves other errors untouched', () => {
     expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
   })
-})
-
-describe('stripSshReconnectOwnedErrorLines', () => {
-
 })
 
 describe('shouldOfferDaemonRestart', () => {

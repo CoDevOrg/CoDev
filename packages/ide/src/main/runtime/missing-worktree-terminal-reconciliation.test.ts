@@ -69,7 +69,7 @@ describe('stopMissingWorktreeTerminals', () => {
       localRepo,
       ids,
       [],
-      { runtime: createRuntime(), getLocalProvider: () => null }
+      { runtime: createRuntime(), getLocalProvider: () => provider }
     )
 
     expect(result.stoppedWorktreeIds).toHaveLength(ids.length)
@@ -104,7 +104,7 @@ describe('stopMissingWorktreeTerminals', () => {
       [],
       {
         runtime: createRuntime(),
-        getLocalProvider: () => null
+        getLocalProvider: () => provider as unknown as IPtyProvider
       }
     )
 
@@ -136,7 +136,7 @@ describe('stopMissingWorktreeTerminals', () => {
 
     await stopMissingWorktreeTerminals(localRepo, ids, [], {
       runtime: createRuntime(),
-      getLocalProvider: () => null
+      getLocalProvider: () => provider as unknown as IPtyProvider
     })
 
     // One shared sweep scan, plus each shutdown's own live re-read.
@@ -155,7 +155,7 @@ describe('stopMissingWorktreeTerminals', () => {
 
     await stopMissingWorktreeTerminals(localRepo, ids, [], {
       runtime: createRuntime(),
-      getLocalProvider: () => null
+      getLocalProvider: () => provider
     })
 
     expect(listProcesses.mock.calls.length).toBeGreaterThan(1)

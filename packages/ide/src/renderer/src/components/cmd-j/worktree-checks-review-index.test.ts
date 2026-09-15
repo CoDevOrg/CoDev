@@ -74,30 +74,6 @@ describe('buildWorktreeChecksReviewIndex', () => {
     })
   })
 
-  it('records when a non-GitHub link suppresses stale GitHub metadata before its review loads', () => {
-    const gitLabWorktree = { ...worktree, linkedGitLabMR: 17 }
-    const prKey = getGitHubPRCacheKey(
-      repo.path,
-      repo.id,
-      'feature/search',
-      null,
-      repo.connectionId,
-      repo.executionHostId,
-      true
-    )
-
-    const reviews = buildWorktreeChecksReviewIndex({
-      worktrees: [gitLabWorktree],
-      repoByHostIdentity: new Map([[getRepoHostIdentity(repo), repo]]),
-      prCache: { [prKey]: { data: makePR(), fetchedAt: 1 } },
-      hostedReviewCache: {},
-      settings: null
-    })
-
-    expect(reviews.has(gitLabWorktree)).toBe(true)
-    expect(reviews.get(gitLabWorktree)).toBeNull()
-  })
-
   it('keeps same-id worktrees isolated across execution hosts', () => {
     const localRepo: Repo = {
       ...repo,

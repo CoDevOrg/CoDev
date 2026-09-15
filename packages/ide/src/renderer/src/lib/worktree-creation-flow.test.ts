@@ -200,43 +200,6 @@ describe('runBackgroundWorktreeCreation', () => {
     )
   })
 
-  it('preserves provider-backed VM start points after provisioning', async () => {
-    store.repos = [{ id: 'repo-1', connectionId: null }] as never
-    prepareEphemeralVmWorkspaceTargetMock.mockResolvedValue({
-      ok: true,
-      runtimeId: 'runtime-1',
-      environmentId: 'env-1',
-      stderr: '',
-      warnings: [],
-      setup: {
-        project: { id: 'project-1' },
-        setup: {
-          id: 'setup-runtime',
-          projectId: 'project-1',
-          hostId: 'runtime:env-1'
-        },
-        repo: { id: 'repo-runtime', path: '/workspace/repo' }
-      }
-    })
-    store.createWorktree.mockResolvedValue({
-      worktree: { id: 'repo-runtime::/workspace/repo/worktree', repoId: 'repo-runtime' }
-    })
-
-    runBackgroundWorktreeCreation(
-      makeRequest({
-        baseBranch: 'abc123',
-        compareBaseRef: 'refs/remotes/origin/main',
-        linkedPR: 42
-      })
-    )
-
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[0]).toBe('repo-runtime')
-    expect(createCall[2]).toBe('abc123')
-    expect(createCall[24]).toBe('refs/remotes/origin/main')
-  })
-
 })
 
 describe('staged background worktree creation', () => {
@@ -376,9 +339,7 @@ describe('staged background worktree creation', () => {
       { activateCreatedTabs: false }
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
-    })
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
   })
 
   it('reveals the completed workspace after the user switches to another workspace', async () => {
@@ -405,9 +366,7 @@ describe('staged background worktree creation', () => {
       sidebarRevealBehavior: 'auto'
     })
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
-    })
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
   })
 
   it('does not reveal a workspace cancelled during post-create trust preflight', async () => {

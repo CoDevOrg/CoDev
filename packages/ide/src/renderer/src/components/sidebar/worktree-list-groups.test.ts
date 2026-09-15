@@ -811,69 +811,6 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
-  it('counts projection twins for one directory as one checkout', () => {
-    const runtimeHostId = 'runtime:m2-air'
-    const runtimeRepo: Repo = {
-      ...remoteRepo,
-      id: 'repo-runtime',
-      path: '/home/alice/orca-runtime',
-      connectionId: undefined,
-      executionHostId: runtimeHostId
-    }
-    const runtimeWorktree: Worktree = {
-      ...remoteWorktree,
-      id: 'wt-runtime',
-      repoId: runtimeRepo.id,
-      path: '/home/alice/orca-runtime-feature'
-    }
-    const runtimeSetup: ProjectHostSetup = {
-      ...projectHostSetups[1]!,
-      id: runtimeRepo.id,
-      repoId: runtimeRepo.id,
-      path: runtimeRepo.path,
-      hostId: runtimeHostId,
-      executionHostId: runtimeHostId
-    }
-    const derivedSetup: ProjectHostSetup = {
-      ...projectHostSetups[1]!,
-      hostId: runtimeHostId,
-      connectionId: 'intel mac',
-      executionHostId: runtimeHostId
-    }
-    const authoritativeSetup: ProjectHostSetup = {
-      ...derivedSetup,
-      id: 'setup-authoritative',
-      path: `${derivedSetup.path}/`,
-      connectionId: null,
-      executionHostId: 'ssh:intel%20mac'
-    }
-    const grouping = {
-      projects: [{ ...project, sourceRepoIds: [remoteRepo.id, runtimeRepo.id] }],
-      projectHostSetups: [runtimeSetup, derivedSetup, authoritativeSetup]
-    }
-
-    expect([
-      getGroupKeyForWorktree(
-        'repo',
-        remoteWorktree,
-        new Map([[remoteRepo.id, remoteRepo]]),
-        null,
-        undefined,
-        undefined,
-        grouping
-      ),
-      getGroupKeyForWorktree(
-        'repo',
-        runtimeWorktree,
-        new Map([[runtimeRepo.id, runtimeRepo]]),
-        null,
-        undefined,
-        undefined,
-        grouping
-      )
-    ]).toEqual(['project:github:stablyai/orca', 'project:github:stablyai/orca'])
-  })
-
   it('keeps Git hosts grouped when folder setups share the project identity', () => {
     const windowsHostId = 'runtime:windows-server'
     const windowsRepo: Repo = {

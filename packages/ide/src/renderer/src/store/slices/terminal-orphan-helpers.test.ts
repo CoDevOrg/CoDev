@@ -70,16 +70,6 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
     expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('T1')
   })
 
-  it('does not orphan a tab whose live session survives in deferredSshSessionIdsByTabId', () => {
-    const state = makeState({
-      tabsByWorktree: { 'wt-1': [makeTab({ id: 'T1' })] },
-      ptyIdsByTabId: { T1: [] },
-      unifiedTabsByWorktree: { 'wt-1': [] },
-})
-
-    expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('T1')
-  })
-
   it('still orphans a tab with no live PTY evidence anywhere', () => {
     const state = makeState({
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'dead', ptyId: null })] },

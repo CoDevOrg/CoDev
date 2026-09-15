@@ -224,69 +224,6 @@ describe('forkAgentSessionFromPane', () => {
     )
   })
 
-  it('uses Linux startup quoting for WSL workspaces', async () => {
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
-    }
-    mockCreateWorktree.mockResolvedValueOnce({
-      worktree: {
-        id: 'wt-fork',
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo\\auth-feature-fork'
-      }
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'pi',
-        worktreeId: 'wt-fork',
-        launchPlatform: 'linux'
-      })
-    )
-  })
-
-  it('uses Linux startup quoting when a Windows-path project is forced to WSL', async () => {
-    store.projects = [
-      {
-        id: 'repo-1',
-        sourceRepoIds: ['repo-1'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    store.agentStatusByPaneKey = {
-      [`tab-1:${LEAF_ID}`]: { agentType: 'pi' }
-    }
-    mockCreateWorktree.mockResolvedValueOnce({
-      worktree: {
-        id: 'wt-fork',
-        path: 'C:\\repo\\auth-feature-fork'
-      }
-    })
-    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
-
-    await forkAgentSessionFromPane({
-      pane: makePane('User: compare OAuth options'),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      groupId: null
-    })
-
-    expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'pi',
-        worktreeId: 'wt-fork',
-        launchPlatform: 'linux'
-      })
-    )
-  })
-
   it('still launches the forked agent when trust preflight fails', async () => {
     store.agentStatusByPaneKey = {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }

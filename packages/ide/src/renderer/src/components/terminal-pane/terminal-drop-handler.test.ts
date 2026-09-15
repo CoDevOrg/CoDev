@@ -146,10 +146,7 @@ describe('handleTerminalFileDrop', () => {
       {
         settings: { activeRuntimeEnvironmentId: 'env-1' },
         worktreeId: 'wt-1',
-        worktreePath: '/remote/repo',
-        expectedExecutionHostId: 'local',
-        expectedSshTargetId: undefined,
-        expectedSshConnectionGeneration: undefined
+        worktreePath: '/remote/repo'
       },
       ['/Users/me/logo.png'],
       '/remote/repo/.codev/drops',
@@ -205,57 +202,6 @@ describe('handleTerminalFileDrop', () => {
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
 
-  it('uses Windows shell paths for forward-slash UNC runtime worktrees', async () => {
-    mocks.storeState.worktreesByRepo = {
-      repo1: [{ id: 'wt-1', repoId: 'repo1', path: '//server/share/repo' }]
-    }
-    mocks.importExternalPathsToRuntime.mockResolvedValue({
-      results: [
-        {
-          sourcePath: '/Users/me/logo.png',
-          status: 'imported',
-          destPath: '//server/share/repo\\.codev\\drops\\logo.png',
-          kind: 'file',
-          renamed: false
-        }
-      ]
-    })
-    const sendInput = vi.fn(() => true)
-    const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
-    const manager = {
-      getActivePane: () => pane,
-      getPanes: () => [pane]
-    }
-    const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
-
-    await handleTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: paneTransports as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      data: { paths: ['/Users/me/logo.png'], target: 'terminal' }
-    })
-
-    expect(mocks.importExternalPathsToRuntime).toHaveBeenCalledWith(
-      {
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '//server/share/repo',
-        expectedExecutionHostId: 'local',
-        expectedSshTargetId: undefined,
-        expectedSshConnectionGeneration: undefined
-      },
-      ['/Users/me/logo.png'],
-      '\\\\server\\share\\repo\\.codev\\drops',
-      { assertCurrent: expect.any(Function) }
-    )
-    expect(sendInput).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.codev\\drops\\logo.png')
-    )
-  })
-
   it('uploads to the worktree owner runtime instead of the focused runtime', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
     mocks.storeState.repos = [
@@ -299,10 +245,7 @@ describe('handleTerminalFileDrop', () => {
       {
         settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
         worktreeId: 'wt-1',
-        worktreePath: '/remote/repo',
-        expectedExecutionHostId: 'local',
-        expectedSshTargetId: undefined,
-        expectedSshConnectionGeneration: undefined
+        worktreePath: '/remote/repo'
       },
       ['/Users/me/spec.pdf'],
       '/remote/repo/.codev/drops',

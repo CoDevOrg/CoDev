@@ -80,6 +80,85 @@ vi.mock('./project-header-drag', () => ({
   })
 }))
 
+vi.mock('./WorktreeCard', () => ({
+  default: ({
+    worktree,
+    isActive,
+    contentIndent,
+    flushSurface,
+    renameRowKey,
+    lineageChildCount,
+    lineageCollapsed,
+    lineageChildren
+  }: {
+    worktree: Worktree
+    isActive?: boolean
+    contentIndent?: number
+    flushSurface?: boolean
+    renameRowKey?: string
+    lineageChildCount?: number
+    lineageCollapsed?: boolean
+    lineageChildren?: React.ReactNode
+  }) => {
+    const deleteStateByWorktreeId =
+      (mockStore.state.deleteStateByWorktreeId as Record<
+        string,
+        { isDeleting?: boolean } | undefined
+      >) ?? {}
+    const cardProps = (mockStore.state.worktreeCardProperties as string[] | undefined) ?? []
+    const isDeleting = deleteStateByWorktreeId[worktree.id]?.isDeleting === true
+    // Why: the real WorktreeCard owns the inline-rename surface and decides
+    // begin-editing from renameRowKey + renamingWorktreeId, so mirror that here
+    // to verify WorktreeList hands each row its row-scoped rename key.
+    const renamingRequest = mockStore.state.renamingWorktreeId as {
+      worktreeId: string
+      rowKey?: string
+    } | null
+    const beginEditing =
+      renamingRequest?.worktreeId === worktree.id &&
+      (renamingRequest.rowKey === undefined || renamingRequest.rowKey === renameRowKey)
+
+    return React.createElement(
+      'section',
+      {
+        'data-worktree-card-id': worktree.id,
+        'data-worktree-card-active': isActive ? 'true' : undefined,
+        'data-content-indent': contentIndent,
+        'data-flush-surface': flushSurface ? 'true' : undefined,
+        'data-begin-editing': beginEditing ? 'true' : undefined,
+        'data-lineage-child-count': lineageChildCount,
+        'data-lineage-collapsed':
+          lineageCollapsed === undefined ? undefined : String(lineageCollapsed),
+        'data-linked-pr': worktree.linkedPR ?? undefined,
+        'aria-busy': isDeleting ? 'true' : undefined
+      },
+      React.createElement('h2', null, worktree.displayName),
+      isDeleting ? React.createElement('span', null, 'Deleting') : null,
+      cardProps.includes('status') && worktree.isUnread
+        ? React.createElement('button', { 'aria-label': 'Mark as read' }, 'Unread')
+        : null,
+      lineageChildCount
+        ? React.createElement(
+            'button',
+            {
+              'data-lineage-toggle-for': worktree.id,
+              'aria-expanded': lineageCollapsed ? 'false' : 'true'
+            },
+            `${lineageChildCount} ${lineageChildCount === 1 ? 'child' : 'children'}`
+          )
+        : null,
+      lineageChildren
+    )
+  },
+  shouldBeginWorktreeRename: (
+    request: { worktreeId: string; rowKey?: string } | null,
+    worktreeId: string,
+    rowKey?: string
+  ) =>
+    request?.worktreeId === worktreeId &&
+    (request.rowKey === undefined || request.rowKey === rowKey)
+}))
+
 vi.mock('./WorktreeCardAgents', () => ({
   default: ({ worktreeId }: { worktreeId: string }) =>
     React.createElement(
@@ -894,7 +973,6 @@ describe('WorktreeList lineage child card renderer', () => {
     const childCard = getCardOpeningTag(markup, 'child')
 
     expect(childCard).toContain('data-linked-pr="456"')
-    expect(childCard).toContain('data-linked-gitlab-mr="42"')
   })
 
   it('uses shared nested-row indentation for child and grandchild cards', async () => {
@@ -935,23 +1013,6 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(childMarkup).toContain('aria-label="Mark as read"')
     expect(childMarkup).not.toContain('aria-label="Mark as unread"')
-  })
-
-  it('lets WorktreeCard own the reconnect dialog for an active disconnected lineage child', async () => {
-    setLineageFixtureState()
-    const repo = (mockStore.state.repos as Repo[])[0]!
-    repo.connectionId = 'ssh-target-1'
-    mockStore.state.activeWorktreeId = 'child'
-    mockStore.state.sshConnectionStates = new Map([['ssh-target-1', { status: 'disconnected' }]])
-    mockStore.state.sshTargetLabels = new Map([['ssh-target-1', 'Remote target']])
-
-    const markup = await renderWorktreeListMarkup()
-
-    expect(getCardOpeningTag(markup, 'child')).toContain('data-worktree-card-active="true"')
-    expect(markup).toContain('data-worktree-card-ssh-dialog="open"')
-    expect(markup).not.toContain('data-lineage-ssh-dialog="open"')
-    expect(markup).toContain('data-ssh-status="disconnected"')
-    expect(markup).toContain('data-ssh-target-id="ssh-target-1"')
   })
 
   it('points aria-activedescendant at the active lineage child row', async () => {

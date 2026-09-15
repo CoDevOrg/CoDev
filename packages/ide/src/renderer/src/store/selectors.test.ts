@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
@@ -286,36 +285,6 @@ describe('store selectors', () => {
     expect(
       selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local] }, 'same-repo')
     ).toBeNull()
-  })
-
-  it('keeps the repo when a paired-hub worktree reports a different execution host', () => {
-    // Why: withRepoHostOwnership deliberately keeps an SSH worktree's own host while its repo stays hub-owned.
-    const repo = makeRepo({
-      id: 'hub-repo',
-      path: '/hub/repo',
-      displayName: 'hub',
-      executionHostId: toRuntimeExecutionHostId('hub-a')
-    })
-    const local = makeRepo({
-      id: 'hub-repo',
-      path: '/local/repo',
-      displayName: 'local',
-      executionHostId: 'local'
-    })
-    const activeState = {
-      activeRepoId: 'hub-repo',
-      activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
-    }
-
-    for (const repos of [[repo], [local, repo], [repo, local]]) {
-      expect(selectRepoByIdForActiveWorkspace({ ...activeState, repos }, 'hub-repo')).toBe(repo)
-    }
-    // Why: useGitStatusPolling gates every lane on this exact expression, so a null repo silently stops polling.
-    const activeRepo = selectRepoByIdForActiveWorkspace(
-      { ...activeState, repos: [repo] },
-      'hub-repo'
-    )
-    expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
   })
 
   it('fails a paired-hub repo fallback closed when rival HUB rows share the repo ID', () => {

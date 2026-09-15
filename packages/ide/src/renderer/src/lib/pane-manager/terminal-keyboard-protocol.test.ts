@@ -17,9 +17,6 @@ const localWindowsConpty = {
   executionHostId: 'local' as const
 }
 
-describe('prefersKittyKeyboardDespiteWindowsConpty', () => {
-})
-
 describe('shouldDisableKittyKeyboardForTerminal', () => {
   it('disables Kitty keyboard for a local native Windows ConPTY pane', () => {
     // Regression for #2434: local Windows CLIs (e.g. Antigravity agy) read the

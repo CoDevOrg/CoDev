@@ -1,23 +1,12 @@
 // @vitest-environment happy-dom
 
-import { act, } from 'react'
-import {  type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
-import { } from '../../../shared/stable-pane-id'
-import type { } from '@/store/slices/pane-foreground-agent'
-import type {  } from '../../../shared/types'
+import { describe, expect, it } from 'vitest'
 import {
   resolveLaunchedAgentExitEvidence,
-  resolveTabAgentFromSignals,
+  resolveTabAgentFromSignals
 } from './use-tab-agent'
 
-const initialAppState = useAppStore.getInitialState()
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const hookRoots: Root[] = []
-
 describe('resolveTabAgentFromSignals process identity', () => {
-
   it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
     // Why: OSC 133;D is process-grade exit proof — a TUI that died without
     // restoring its title must not keep painting the tab.
@@ -96,33 +85,3 @@ describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
   })
 })
 
-describe('useTabAgent process signals', () => {
-  const clearTabLaunchAgent = vi.fn()
-
-  beforeEach(() => {
-    clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
-        }
-      },
-      agentStatusByPaneKey: {},
-      clearTabLaunchAgent
-    })
-  })
-
-  afterEach(() => {
-    hookRoots.splice(0).forEach((root) => {
-      act(() => root.unmount())
-    })
-    document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
-  })
-
-})

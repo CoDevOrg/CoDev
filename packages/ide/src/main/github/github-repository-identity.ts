@@ -42,10 +42,14 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   encoding?: BufferEncoding
   wslDistro?: string
 } {
-  return {
-    cwd: context.repoPath,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
-  }
+  // Why: a context with a connectionId (e.g. global project-host validation) has no
+  // repository cwd, so gh must run natively rather than inside an empty path.
+  return context.connectionId
+    ? {}
+    : {
+        cwd: context.repoPath,
+        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+      }
 }
 
 const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000

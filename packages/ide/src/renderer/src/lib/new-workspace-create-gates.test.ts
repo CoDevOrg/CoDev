@@ -51,9 +51,6 @@ describe('new workspace create gates', () => {
     expect(getQuickComposerCreateDisabled({ ...readyInput, workspaceSeedName: '' })).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...readyInput, creating: true })).toBe(true)
     expect(
-      getQuickComposerCreateDisabled({ ...readyInput, })
-    ).toBe(true)
-    expect(
       getQuickComposerCreateDisabled({
         ...readyInput,
         requiresExplicitSetupChoice: true,

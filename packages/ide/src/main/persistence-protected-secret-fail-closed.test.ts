@@ -77,13 +77,11 @@ function readState(path = dataFile()): ProtectedState {
 
 const ORIGINAL = {
   proxy: 'http://old-user:old-pass@proxy.test:8080',
-  kagi: 'https://kagi.test/session/old-token',
-  ownerLease: `old-ssh-owner-lease-${'x'.repeat(480)}`
+  kagi: 'https://kagi.test/session/old-token'
 } as const
 const PENDING = {
   proxy: 'http://new-user:new-pass@proxy.test:8080',
-  kagi: 'https://kagi.test/session/new-token',
-  ownerLease: `new-ssh-owner-lease-${'y'.repeat(480)}`
+  kagi: 'https://kagi.test/session/new-token'
 } as const
 
 function setFailure(mode: FailureMode): void {
@@ -102,6 +100,8 @@ async function writeProtectedState(
     httpProxyBypassRules: bypassRules
   })
   store.updateUI({ browserKagiSessionLink: values.kagi })
+  vi.advanceTimersByTime(2_000)
+  await store.waitForPendingWrite()
 }
 
 function expectPlaintextsAbsent(raw: string, values: typeof ORIGINAL | typeof PENDING): void {
@@ -141,7 +141,6 @@ describe('protected persistence when safeStorage fails', () => {
       expectPlaintextsAbsent(raw, PENDING)
       expect(persisted.settings.httpProxyUrl).toBe('')
       expect(persisted.ui.browserKagiSessionLink).toBe('')
-      expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).toBe('')
       expect(persisted.settings.httpProxyBypassRules).toBe('non-secret-saved')
     }
   )

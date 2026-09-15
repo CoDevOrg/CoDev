@@ -103,10 +103,3 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
 })
 
-describe('readInFlightCommandCodeTurn', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    mockStoreState = makeMockStoreState()
-  })
-
-})

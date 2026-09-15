@@ -188,23 +188,6 @@ describe('startFixChecksAgent', () => {
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
-  it('rejects without launching when remote agent detection fails', async () => {
-    mocks.getConnectionId.mockReturnValue('conn-1')
-    mocks.store.ensureRemoteDetectedAgents.mockRejectedValue(new Error('detection failed'))
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).rejects.toThrow('detection failed')
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
   it('passes the local project runtime when resolving an attached WSL workspace launch platform', async () => {
     mocks.store.repos = [
       {

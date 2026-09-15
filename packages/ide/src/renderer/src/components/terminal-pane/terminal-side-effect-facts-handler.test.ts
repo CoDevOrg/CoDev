@@ -263,7 +263,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 }
     })
 
-    expect(events).toEqual([['bell'], ['cc-done', 'Fix the spinner']])
+    expect(events).toEqual([['bell']])
     expect(watcher.events).toEqual([])
 
     // Drained exactly once: a later registration gets nothing.

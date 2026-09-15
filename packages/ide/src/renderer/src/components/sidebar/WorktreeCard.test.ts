@@ -53,7 +53,7 @@ describe('getWorktreeStatus', () => {
       )
     ).toBe('permission')
     expect(
-      getWorktreeStatus([makeTerminalTab('mimo working')], [{ id: 'browser-1' }], livePtyIds)
+      getWorktreeStatus([makeTerminalTab('⠋ Codex is thinking')], [{ id: 'browser-1' }], livePtyIds)
     ).toBe('working')
   })
 })

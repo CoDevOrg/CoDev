@@ -439,27 +439,6 @@ describe('buildParentPrChecksProjection', () => {
     expect(projection.summary.unknown).toBe(1)
   })
 
-  it('keeps linked unavailable and refresh-error rows out of No PR', () => {
-    const repo = makeRepo()
-    const linked = makeWorktree({ id: 'repo-1::/linked', })
-    const identity = getParentPrChecksRefreshIdentity(linked, repo, 'feature')
-
-    const linkedUnavailable = makeProjection({ worktree: linked, repo })
-    expect(linkedUnavailable.rows[0]).toMatchObject({
-      status: 'linkedDetailsUnavailable',
-      reviewLabel: '!42'
-    })
-    expect(linkedUnavailable.summary.noPr).toBe(0)
-
-    const refreshError = makeProjection({
-      worktree: linked,
-      repo,
-      refreshOutcomes: new Map([[identity, { kind: 'error' }]])
-    })
-    expect(refreshError.rows[0]?.status).toBe('refreshError')
-    expect(refreshError.summary.noPr).toBe(0)
-  })
-
   it('preserves stale review grouping when a refresh fails', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/feature' })

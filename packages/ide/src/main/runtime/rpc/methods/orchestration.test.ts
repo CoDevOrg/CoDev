@@ -2256,22 +2256,22 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
-    // shell command opened the IDE and left a blank shell (issue #11926).
+    // Why: an agent id on PATH can resolve to a desktop app; passing it as a shell
+    // command opened that app and left a blank shell (issue #11926).
     it('never passes the agent id to the worker terminal as a shell command', async () => {
       setup()
       mockCurrentWorkerStart()
-      const task = db.createTask({ spec: 'start a cursor worker' })
+      const task = db.createTask({ spec: 'start a codex worker' })
 
       await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'cursor'
+        agent: 'codex'
       })
 
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',
-        expect.objectContaining({ startupAgent: 'cursor' })
+        expect.objectContaining({ startupAgent: 'codex' })
       )
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',

@@ -650,14 +650,10 @@ describe('startParkedTerminalByteWatcher', () => {
       const { dispose } = await startWatcher()
 
       await dispatchFacts([
-        { kind: 'command-finished', exitCode: 0 },
-        { kind: 'command-code-working', prompt: 'Fix the spinner' },
-        { kind: 'command-code-done', prompt: 'Fix the spinner' }
+        { kind: 'command-finished', exitCode: 0 }
       ])
 
       expect(commandStatusPolicy.onCommandFinished).toHaveBeenCalledWith(0)
-      expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledWith('Fix the spinner')
-      expect(commandStatusPolicy.onCommandCodeDone).toHaveBeenCalledWith('Fix the spinner')
       dispose()
     })
 

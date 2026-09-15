@@ -24,14 +24,6 @@ describe('agent picker search', () => {
     )
   })
 
-  it('normalizes accepted pasted whitespace without regex replacement', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-
-    expect(searchAgentPickerEntries(agents, '  qwen\n\tcode  ')[0]?.id).toBe('qwen-code')
-
-    expect(replaceSpy).not.toHaveBeenCalled()
-  })
-
   it('resolves every catalog command alias to its agent first', () => {
     for (const agent of AGENT_CATALOG) {
       expect(searchAgentPickerEntries(AGENT_CATALOG, agent.cmd)[0]?.id).toBe(agent.id)

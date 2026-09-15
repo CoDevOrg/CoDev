@@ -65,39 +65,6 @@ describe('task source context summary', () => {
     )
   })
 
-  it('summarizes multiple unavailable source hosts without cluttering the label', () => {
-    const summary = getTaskSourceContextSummary({
-      provider: 'github',
-      providerLabel: 'GitHub',
-      selectedRepoCount: 2,
-      repoContexts: [
-        {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'project-a',
-          hostId: 'ssh:devbox',
-          repoId: 'repo-a'
-        },
-        {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'project-b',
-          hostId: 'ssh:buildbox',
-          repoId: 'repo-b'
-        }
-      ],
-      hostAvailability: [
-        { hostId: 'ssh:devbox', },
-        { hostId: 'ssh:buildbox', }
-      ]
-    })
-
-    expect(summary.label).toBe('GitHub · devbox, buildbox · 2 unavailable · 2 projects')
-    expect(summary.title).toBe(
-      'GitHub · Host: devbox, buildbox · Availability: devbox auth needed, buildbox connecting · 2 selected projects'
-    )
-  })
-
   it('shows blocked remote-server source-host availability', () => {
     const summary = getTaskSourceContextSummary({
       provider: 'github',

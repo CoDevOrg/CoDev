@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
-import type { IFilesystemProvider } from '../providers/types'
+
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessions: vi.fn(),
-  scanRemoteAiVaultSessions: vi.fn(),
   scanRuntimeAiVaultSessions: vi.fn(),
-  getSshFilesystemProvider: vi.fn(),
-  getActiveSshAiVaultHostInfo: vi.fn(),
-  getActiveSshAiVaultHostInfos: vi.fn(),
-  requestActiveSshAiVaultSessionList: vi.fn(),
   ipcHandle: vi.fn()
 }))
 
@@ -31,10 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   _internals.resetAiVaultCacheForTests()
   mocks.scanAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
-  mocks.scanRemoteAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
-  mocks.getSshFilesystemProvider.mockReturnValue({} as IFilesystemProvider)
-  mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(null)
 })
 
 describe('Agent Session History scan coalescing', () => {
@@ -85,8 +77,8 @@ describe('Agent Session History scan coalescing', () => {
     const second = _internals.listAiVaultSessions({ executionHostScope: 'all' })
     await vi.waitFor(() => expect(resolveRuntime).toBeDefined())
 
-    expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1)
-    expect(mocks.scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1)
+    // Why: the local leg starts after async host discovery, so wait for it rather than racing it.
+    await vi.waitFor(() => expect(mocks.scanAiVaultSessions).toHaveBeenCalledTimes(1))
     expect(mocks.scanRuntimeAiVaultSessions).toHaveBeenCalledTimes(1)
     controller.abort()
     await firstRejection

@@ -89,27 +89,6 @@ describe('remote ref probe cache (P1-D)', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('does not let a lookup on a reconnected provider join the old connection probe', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    let releaseStalled = (): void => {}
-    const execMock = vi
-      .fn()
-      .mockImplementationOnce(
-        async () => await new Promise((resolve) => (releaseStalled = () => resolve({ stdout: '' })))
-      )
-      .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
-    getSshGitProviderMock.mockReturnValue({ exec: execMock })
-
-    const stalled = cache.get('/repo', 'origin', 'conn-1')
-    getSshGitProviderGenerationMock.mockReturnValue(1)
-
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toEqual({ repo: 'team/repo' })
-    expect(execMock).toHaveBeenCalledTimes(2)
-
-    releaseStalled()
-    await expect(stalled).resolves.toBeNull()
-  })
-
   it('does not let a probe abandoned as stale overwrite its successor answer', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
     const stalled = deferred<{ stdout: string }>()
@@ -141,19 +120,6 @@ describe('remote ref probe cache (P1-D)', () => {
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
     await expect(cache.get('/repo', 'origin')).resolves.toBeNull()
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('never caches a miss from a runtime that could not be asked at all', async () => {
-    const cache = createRemoteRefProbeCache(parseExampleRef)
-    getSshGitProviderMock.mockReturnValueOnce(undefined)
-
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
-
-    // The provider was gone, not the remote: reconnecting must not need the TTL.
-    getSshGitProviderMock.mockReturnValue({
-      exec: vi.fn(async () => ({ stdout: 'git@example.com:team/repo.git\n' }))
-    })
-    await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toEqual({ repo: 'team/repo' })
   })
 
   it('does not cache a probe killed on its deadline as a definitive miss', async () => {

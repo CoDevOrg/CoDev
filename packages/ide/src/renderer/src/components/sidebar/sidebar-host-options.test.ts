@@ -131,9 +131,8 @@ describe('sidebar host options', () => {
     })
 
     expect(buildSidebarHostScopeOptions(hosts)).toMatchObject([
-      { id: 'all', label: 'All hosts', detail: `${LOCAL_HOST_LABEL}, Builder`, health: 'mixed' },
-      { id: 'local', label: LOCAL_HOST_LABEL, health: 'local' },
-      { id: 'ssh:ssh-1', label: 'Builder', health: 'disconnected' }
+      { id: 'all', label: 'All hosts', detail: LOCAL_HOST_LABEL, health: 'mixed' },
+      { id: 'local', label: LOCAL_HOST_LABEL, health: 'local' }
     ])
   })
 

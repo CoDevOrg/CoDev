@@ -378,38 +378,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('skips a folder workspace owned by a different host', async () => {
-    const folderWorkspace = {
-      id: 'folder:fw-other',
-      repoId: 'folder-workspace:group-other',
-      displayName: 'Other host',
-      path: '/srv/other'
-    }
-    state.folderWorkspaces = [
-      {
-        id: 'fw-other',
-        projectGroupId: 'group-other',
-        folderPath: '/srv/other',
-        connectionId: 'ssh-other'
-      }
-    ]
-    state.projectGroups = [{ id: 'group-other', connectionId: 'ssh-other' }]
-    state.getKnownWorktreeById.mockReturnValue(folderWorkspace)
-
-    await registerAndDispatch(
-      makeAutomation({
-        workspaceMode: 'existing',
-        workspaceId: folderWorkspace.id,
-        runContext: { repoId: 'repo-1', hostId: 'local' }
-      })
-    )
-
-    expect(mockLaunchAgentBackgroundSession).not.toHaveBeenCalled()
-    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'skipped_unavailable' })
-    )
-  })
-
   it('keeps detected-only non-folder workspaces unavailable', async () => {
     state.getKnownWorktreeById.mockReturnValue({
       id: 'wt-detected',

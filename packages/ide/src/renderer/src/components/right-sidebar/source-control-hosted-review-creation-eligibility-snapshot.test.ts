@@ -7,10 +7,6 @@ import { resolveCreatePrIntentEligibility } from './source-control-create-pr-int
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 
-describe('resolveHostedReviewCreationProviderForTarget', () => {
-
-})
-
 describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
   it('reports dirty with unavailable lookup while still allowing prepare-only Create PR intent', () => {
     const eligibility = buildLocalBlockerHostedReviewCreationEligibility('github', {

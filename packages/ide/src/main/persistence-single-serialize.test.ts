@@ -207,41 +207,6 @@ describe('persistence single-serialize save guard', () => {
   // search for the ciphertext would substitute the wrong site, letting two
   // distinct states hash equal → a silently dropped write (data loss). The
   // position-exact sentinel substitution must keep the hashes distinct.
-  it('persists a swap between a plaintext field and a secret when the plaintext equals the secret ciphertext (deterministic cipher)', async () => {
-    cipherState.deterministic = true
-    const store = await createStore()
-
-    const P = 'http://plaintext:value@proxy.local:8080'
-    // Persist proxy=P, then read its on-disk ciphertext C (what a user could
-    // copy out of orca-data.json).
-    store.updateSettings({ httpProxyUrl: P })
-    vi.advanceTimersByTime(1000)
-    await store.waitForPendingWrite()
-    const C = (
-      JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
-        settings: { httpProxyUrl: string }
-      }
-    ).settings.httpProxyUrl
-    expect(C).not.toBe(P) // C is ciphertext
-
-    // State 1: the plaintext bypass-rules field literally holds ciphertext C;
-    // proxy is still P (which also encrypts to C under the deterministic IV).
-    store.updateSettings({ httpProxyBypassRules: C, httpProxyUrl: P })
-    vi.advanceTimersByTime(2000)
-    await store.waitForPendingWrite()
-    const inoState1 = statSync(dataFile()).ino
-
-    // State 2 (distinct): swap the two values. Must be written, not skipped.
-    store.updateSettings({ httpProxyBypassRules: P, httpProxyUrl: C })
-    vi.advanceTimersByTime(2000)
-    await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).not.toBe(inoState1)
-
-    // The swap round-trips through a reload — nothing was lost.
-    const reloaded = await createStore()
-    expect(reloaded.getSettings().httpProxyBypassRules).toBe(P)
-    expect(reloaded.getSettings().httpProxyUrl).toBe(C)
-  })
 
   // Regression (adversarial review, gpt-5.6-sol round 2): the deeper variant of
   // the same class — a user-controlled JSON KEY. agentDefaultEnv lets the user

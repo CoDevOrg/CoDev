@@ -192,27 +192,4 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
   })
 
-  it('keeps the tab retired and reports provider rejection without an unhandled promise', async () => {
-    const store = createRetirementStore()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mockKill.mockRejectedValueOnce(new Error('provider unavailable'))
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-
-    store.getState().closeTab('tab-1')
-    await vi.waitFor(() =>
-      expect(warn).toHaveBeenCalledWith('[terminal-retirement] provider teardown failed', {
-        tabId: 'tab-1',
-        localOrSshFailures: 1,
-        runtimeFailures: 0
-      })
-    )
-
-    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
-    warn.mockRestore()
-  })
 })

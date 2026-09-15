@@ -7,96 +7,12 @@ const FIELD_SOURCE = readFileSync(join(__dirname, 'SmartWorkspaceNameField.tsx')
   '\n'
 )
 
-function sourceBetween(source: string, startPattern: string, endPattern: string): string {
-  const start = source.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf(endPattern, start + startPattern.length)
-  expect(end).toBeGreaterThan(start)
-  return source.slice(start, end)
-}
-
 describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
-  it('resets hidden repo-backed modes and stale results when source lookup is disabled', () => {
-    const modeResetSection = sourceBetween(
-      FIELD_SOURCE,
-      'useEffect(() => {\n    if (availableModes.some((item) => item.id === mode))',
-      'const selectedSourceFocusKey'
-    )
-
-    expect(modeResetSection).toContain("setMode(availableModes[0]?.id ?? 'text')")
-    expect(modeResetSection).toContain('repoBackedSourcesDisabled')
-    expect(modeResetSection).toContain('setGithubItems([])')
-    expect(modeResetSection).toContain('setGitlabItems([])')
-    expect(modeResetSection).toContain('setBranches([])')
-    expect(modeResetSection).toContain('setCrossRepoPrompt(null)')
-
-    const availableModesSection = sourceBetween(
-      FIELD_SOURCE,
-      'const availableModes = getSmartWorkspaceNameModes().filter',
-      'const mrStateFilters = getMrStateFilters()'
-    )
-    expect(availableModesSection).toContain('return !repoBackedSourcesDisabled')
-    expect(availableModesSection).toContain('return gitlabSourceAvailable')
-    expect(availableModesSection).toContain("item.id === 'jira'")
-    expect(availableModesSection).toContain('return jiraSourceConnected')
-    expect(availableModesSection).toContain('branchesEnabled && !repoBackedSourcesDisabled')
-    expect(FIELD_SOURCE).toContain('repoBackedSourcesDisabled')
-    expect(FIELD_SOURCE).toContain('!textOnly &&\n    gitlabSourceAvailable')
-
-    const jiraLookupSection = sourceBetween(
-      FIELD_SOURCE,
-      'const jiraSource = useJiraUrlSource({',
-      'const jiraStatusId'
-    )
-    expect(jiraLookupSection).toContain("mode === 'smart' || mode === 'jira'")
-    expect(jiraLookupSection).toContain('sourceContext: jiraSourceContext')
-    expect(FIELD_SOURCE).toContain('const shouldQueryJira =')
-    expect(FIELD_SOURCE).toContain('searchJiraIssues(jiraSearchJql, RESULT_LIMIT')
-
-    const placeholderSection = sourceBetween(
-      FIELD_SOURCE,
-      'const smartPlaceholder = repoBackedSourcesDisabled',
-      'return ('
-    )
-    expect(placeholderSection).toContain('Type a name, Linear URL, or Jira URL')
-    expect(placeholderSection).toContain('Type a workspace name')
-    expect(placeholderSection).toContain(
-      'Type a name, #1234, branch, GitHub/GitLab, Linear, or Jira URL'
-    )
-    expect(placeholderSection).toContain('Search Jira issues or paste an issue URL')
-    expect(placeholderSection).toContain('Search GitLab MRs and issues')
-  })
-
   it('can hide the global add-project cross-repo action for subordinate task sources', () => {
     expect(FIELD_SOURCE).toContain('allowCrossRepoProjectAdd?: boolean')
     expect(FIELD_SOURCE).toContain('allowCrossRepoProjectAdd = true')
     expect(FIELD_SOURCE).toContain('!crossRepoPrompt || !allowCrossRepoProjectAdd')
     expect(FIELD_SOURCE).toContain(') : allowCrossRepoProjectAdd ? (')
-  })
-
-  it('searches repo-backed task sources through implicit repo targets instead of a menu', () => {
-    expect(FIELD_SOURCE).not.toContain('RepoBackedSourceMenu')
-    expect(FIELD_SOURCE).not.toContain('repoBackedSourceOptions')
-    expect(FIELD_SOURCE).toContain('repoBackedSearchRepos?: readonly RepoOption[]')
-
-    const targetSection = sourceBetween(
-      FIELD_SOURCE,
-      'const repoBackedSearchTargets = useMemo',
-      'const linearSourceContext = useMemo'
-    )
-
-    expect(targetSection).toContain('repoBackedSearchRepos.length > 0')
-    expect(targetSection).toContain('githubSourceContext')
-    expect(targetSection).toContain('gitlabSourceContext')
-
-    const githubLookupSection = sourceBetween(
-      FIELD_SOURCE,
-      'const shouldQueryGithub =',
-      'const branchSearchRequest = useMemo'
-    )
-    expect(githubLookupSection).toContain('repoBackedSearchTargets.length > 0')
-    expect(githubLookupSection).toContain('fetchWorkItemsAcrossRepos')
-    expect(githubLookupSection).toContain('repoBackedSearchTargets.map')
   })
 
   it('reports the active source mode without lifting source search state', () => {

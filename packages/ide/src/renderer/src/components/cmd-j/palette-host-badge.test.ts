@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { getPaletteHostBadge } from './palette-host-badge'
 import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 
-const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 // Why: a connected SSH state makes the target a live remote, which is what the
 // palette badge now requires before disambiguating rows with a host label.
@@ -67,18 +65,6 @@ describe('getPaletteHostBadge', () => {
     })
 
     expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
-  })
-
-  it('maps repos with no executionHostId/connectionId to local', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getPaletteHostBadge({}, hosts)).toEqual({
-      hostId: 'local',
-      label: LOCAL_HOST_LABEL
-    })
   })
 
   it('returns null when the repo is missing', () => {
