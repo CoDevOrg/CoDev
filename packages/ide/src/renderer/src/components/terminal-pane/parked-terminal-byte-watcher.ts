@@ -16,12 +16,8 @@ import {
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
-import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
-import {
-  createParkedTerminalCommandStatusPolicy,
-  readInFlightCommandCodeTurn
-} from './parked-terminal-command-status'
+import { createParkedTerminalCommandStatusPolicy } from './parked-terminal-command-status'
 import { startParkedTerminalMode2031Responder } from './parked-terminal-mode2031-responder'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
 import { createPtyOutputProcessor } from './pty-transport'
@@ -241,16 +237,6 @@ export function startParkedTerminalByteWatcher(
   const commandFinishedScanner = factSideEffectAuthority
     ? null
     : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
-  // Why the seed: this detector is recreated per park cycle with no startup command
-  // to fast-arm it, and a Command Code TUI parked mid-turn is long past its banner —
-  // unseeded it would never scrape the turn's return to the idle composer.
-  const commandCodeOutputStatusDetector = factSideEffectAuthority
-    ? null
-    : createCommandCodeOutputStatusDetector({
-        inFlightTurn: readInFlightCommandCodeTurn(paneKey),
-        onWorking: commandStatusPolicy.onCommandCodeWorking,
-        onDone: commandStatusPolicy.onCommandCodeDone
-      })
   const unregisterFactConsumer = factSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
@@ -258,8 +244,6 @@ export function startParkedTerminalByteWatcher(
         callbacks: {
           ...sideEffectCallbacks,
           onCommandFinished: commandStatusPolicy.onCommandFinished,
-          onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
-          onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
             useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
           // Why (gate mode only): the 2031 subscribe arrives as a fact, but the reply stays here — query authority stays with the view/watcher (invariant 6).
@@ -286,7 +270,6 @@ export function startParkedTerminalByteWatcher(
     }
     processor.processData(data, {})
     commandFinishedScanner?.scan(data)
-    commandCodeOutputStatusDetector?.observe(data)
     if (observeTerminalGitHubPRLink) {
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)

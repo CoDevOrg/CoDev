@@ -24,10 +24,6 @@ export type SourceControlManualReviewContext = ManualReviewUrlInput & {
   hostedReviewCreationProvider?: HostedReviewProvider | null
   linkedGitHubPR?: number | null
   fallbackGitHubPRNumber?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
 }
 
 export function resolveSourceControlManualReviewProvider(input: {
@@ -35,25 +31,11 @@ export function resolveSourceControlManualReviewProvider(input: {
   hostedReviewCreationProvider?: HostedReviewProvider | null
   linkedGitHubPR?: number | null
   fallbackGitHubPRNumber?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
 }): HostedReviewProvider | null {
   return (
     input.hostedReviewProvider ??
     input.hostedReviewCreationProvider ??
-    (input.linkedGitLabMR != null
-      ? 'gitlab'
-      : input.linkedBitbucketPR != null
-        ? 'bitbucket'
-        : input.linkedAzureDevOpsPR != null
-          ? 'azure-devops'
-          : input.linkedGiteaPR != null
-            ? 'gitea'
-            : input.linkedGitHubPR != null || input.fallbackGitHubPRNumber != null
-              ? 'github'
-              : null)
+    (input.linkedGitHubPR != null || input.fallbackGitHubPRNumber != null ? 'github' : null)
   )
 }
 
@@ -65,10 +47,6 @@ export function buildSourceControlManualReviewUrlFromContext(
     hostedReviewCreationProvider,
     linkedGitHubPR,
     fallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
     ...urlInput
   } = input
   return buildSourceControlManualReviewUrl({
@@ -77,11 +55,7 @@ export function buildSourceControlManualReviewUrlFromContext(
       hostedReviewProvider,
       hostedReviewCreationProvider,
       linkedGitHubPR,
-      fallbackGitHubPRNumber,
-      linkedGitLabMR,
-      linkedBitbucketPR,
-      linkedAzureDevOpsPR,
-      linkedGiteaPR
+      fallbackGitHubPRNumber
     })
   })
 }
@@ -94,12 +68,7 @@ function githubHeadRef(base: RemoteRepoRef, head: RemoteRepoRef, branch: string)
   return owner ? `${owner}:${branch}` : branch
 }
 
-function appendQuery(url: string, values: Record<string, string>): string {
-  const search = new URLSearchParams(values)
-  return `${url}?${search.toString()}`
-}
-
-// GitHub/Gitea compare refs keep '/' (slashed branch names like feature/foo) and
+// GitHub compare refs keep '/' (slashed branch names like feature/foo) and
 // ':' (the owner:branch fork qualifier) literal; percent-encoding those separators
 // makes GitHub fail to resolve the branch. Only the segments between them are encoded.
 function encodeCompareRef(ref: string): string {
@@ -168,27 +137,5 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(
         githubHeadRef(baseRepo, headRepo, headBranch)
       )}?expand=1`
-    case 'gitlab':
-      // Why: the source branch lives in the head repo, so the New-MR page must
-      // be opened on that project — a fork's branch is invisible to the base
-      // project and its /-/merge_requests/new page would 404 the source_branch.
-      // GitLab defaults the target to the fork's upstream. headRepo === baseRepo
-      // for the non-fork case, so this is a no-op there.
-      return appendQuery(`${headRepo.webBaseUrl}/-/merge_requests/new`, {
-        'merge_request[source_branch]': headBranch,
-        'merge_request[target_branch]': baseBranch
-      })
-    case 'bitbucket':
-      return appendQuery(`${baseRepo.webBaseUrl}/pull-requests/new`, {
-        source: headBranch,
-        dest: baseBranch
-      })
-    case 'azure-devops':
-      return appendQuery(`${baseRepo.webBaseUrl}/pullrequestcreate`, {
-        sourceRef: `refs/heads/${headBranch}`,
-        targetRef: `refs/heads/${baseBranch}`
-      })
-    case 'gitea':
-      return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(headBranch)}`
   }
 }

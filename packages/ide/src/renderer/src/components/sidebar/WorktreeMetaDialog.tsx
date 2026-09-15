@@ -71,7 +71,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const {
     worktree,
     linkedIssue,
-    linkedLinearIssue,
     currentIssue,
     currentProvider,
     isFolderWorkspace,
@@ -98,10 +97,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       worktreeId,
       ownerRepoId,
       issueInput,
-      issueProvider,
-      linearOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
-      linkedLinearIssue: worktree?.linkedLinearIssue ?? null,
-      linearSourceContext: worktree?.linkedTaskSourceContext ?? null
+      issueProvider
     })
 
   const issueInputRef = useRef<HTMLInputElement>(null)
@@ -117,15 +113,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setPrInput(currentPR)
     setCommentInput(currentComment)
     // Why: the baseline is frozen with the seed instead of tracking the store.
-    // A background `orca worktree set --linear-issue` while the dialog is open
-    // would otherwise move it, making the untouched field read as dirty — and
-    // the next comment-only save would write the stale seed back over the new link.
+    // A background `orca worktree set` while the dialog is open would otherwise
+    // move it, making the untouched field read as dirty — and the next
+    // comment-only save would write the stale seed back over the new link.
     setSnapshot({
       displayName: currentDisplayName,
       comment: currentComment,
       issueInput: currentIssue,
-      issueProvider: currentProvider,
-      linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null
+      issueProvider: currentProvider
     })
     setSaveError(null)
     resetOpeningIssue()
@@ -196,10 +191,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         draft,
         snapshot,
         isFolderWorkspace,
-        linkedIssue,
-        linkedLinearIssue
+        linkedIssue
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue]
   )
 
   const handleOpenChange = useCallback(

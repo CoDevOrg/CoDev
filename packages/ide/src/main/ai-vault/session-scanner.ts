@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -12,11 +11,6 @@ import {
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
-import {
-  createAntigravityWorkspaceResolver,
-  type AntigravityWorkspaceResolver
-} from './session-scanner-antigravity-history'
-import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
 import {
   ensureSessionParseCacheLoaded,
@@ -48,9 +42,8 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 /**
  * Scan all supported AI agent session stores and return a unified, sorted,
  * deduplicated list of sessions for the AI Vault panel. Discovers sessions
- * from file-based stores (Claude, Codex, Gemini, etc.) and SQLite-based
- * stores (OpenCode 1.17.x). Results are sorted by session sort time DESC
- * and truncated to `limit`.
+ * from the Claude and Codex transcript stores. Results are sorted by session
+ * sort time DESC and truncated to `limit`.
  * @param options - Optional scan configuration (limits, custom dirs, platform).
  * @returns The list of sessions, scan issues, and a timestamp.
  */
@@ -71,7 +64,6 @@ export async function scanAiVaultSessions(
     const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
     const issues: AiVaultScanIssue[] = []
     const parseStats = createSessionParseStats()
-    const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(readOptionalTextFile)
     // Why: persisted entries must be seeded before any candidate is parsed, or
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
@@ -92,11 +84,7 @@ export async function scanAiVaultSessions(
                       discovery.rootDir,
                       options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
                     )
-                  : null,
-              antigravityHistoryPath:
-                discovery.agent === 'antigravity'
-                  ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                  : undefined
+                  : null
             })
           )
         )
@@ -116,8 +104,7 @@ export async function scanAiVaultSessions(
       executionHostId,
       issues,
       parseStats,
-      signal: options.signal,
-      antigravityWorkspaceResolver
+      signal: options.signal
     })
 
     const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
@@ -226,7 +213,6 @@ async function parseSessionCandidates(args: {
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
   signal?: AbortSignal
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
   let index = 0
@@ -243,13 +229,7 @@ async function parseSessionCandidates(args: {
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
       batch.map((candidate) =>
-        parseSessionCandidate(
-          candidate,
-          args.platform,
-          args.executionHostId,
-          args.parseStats,
-          args.antigravityWorkspaceResolver
-        )
+        parseSessionCandidate(candidate, args.platform, args.executionHostId, args.parseStats)
       )
     )
 
@@ -280,14 +260,10 @@ async function parseSessionCandidate(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   executionHostId: ExecutionHostId,
-  parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
+  parseStats: SessionParseStats
 ): Promise<SessionParseResult> {
   try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
-    if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
-      session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
-    }
+    const session = await parseAgentSessionFileCached(candidate, platform, parseStats)
     return {
       session: session ? withSessionExecutionHost(session, executionHostId) : null,
       issue: null
@@ -302,14 +278,6 @@ async function parseSessionCandidate(
         message: errorMessage(err)
       }
     }
-  }
-}
-
-async function readOptionalTextFile(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf-8')
-  } catch {
-    return null
   }
 }
 

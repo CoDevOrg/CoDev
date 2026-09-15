@@ -1,5 +1,4 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
@@ -52,7 +51,7 @@ export function isEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): boolean {
-  if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
     return false
   }
   return (

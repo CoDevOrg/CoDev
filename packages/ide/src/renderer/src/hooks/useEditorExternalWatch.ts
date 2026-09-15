@@ -96,7 +96,6 @@ export type EditorExternalWatchTargetState = Pick<
   | 'rightSidebarTab'
   | 'rightSidebarExplorerView'
   | 'gitStatusHugeByWorktree'
-  | 'sshConnectionStates'
   | 'folderWorkspaces'
   | 'projectGroups'
 >
@@ -110,13 +109,12 @@ let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
-let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
 let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
 let cachedProjectGroups: AppState['projectGroups'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
-  // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
+  // Why: include connectionId so a placeholder watch is replaced once the worktree's provider metadata hydrates.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
 }
 
@@ -138,7 +136,6 @@ export function getEditorExternalWatchTargets(
     cachedRightSidebarTab === state.rightSidebarTab &&
     cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
-    cachedSshConnectionStates === state.sshConnectionStates &&
     cachedFolderWorkspaces === state.folderWorkspaces &&
     cachedProjectGroups === state.projectGroups
   ) {
@@ -167,9 +164,7 @@ export function getEditorExternalWatchTargets(
     !!activeWorktreeId &&
     !!activeRepo &&
     isGitRepoKind(activeRepo) &&
-    !state.gitStatusHugeByWorktree[activeWorktreeId] &&
-    (!activeRepo.connectionId ||
-      state.sshConnectionStates.get(activeRepo.connectionId)?.status === 'connected')
+    !state.gitStatusHugeByWorktree[activeWorktreeId]
   const activeWorktreeNeedsSidebarWatch =
     activeWorktreeId !== null &&
     state.rightSidebarOpen &&
@@ -233,7 +228,6 @@ export function getEditorExternalWatchTargets(
   cachedRightSidebarTab = state.rightSidebarTab
   cachedRightSidebarExplorerView = state.rightSidebarExplorerView
   cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree
-  cachedSshConnectionStates = state.sshConnectionStates
   cachedFolderWorkspaces = state.folderWorkspaces
   cachedProjectGroups = state.projectGroups
 
@@ -336,7 +330,7 @@ export function useEditorExternalWatch(): void {
           connectionId: target.connectionId
         })
         .catch((err) => {
-          // Why: remote SSH providers can disappear while tabs still reference the worktree; degrade to a diagnostic, not an uncaught renderer promise.
+          // Why: remote providers can disappear while tabs still reference the worktree; degrade to a diagnostic, not an uncaught renderer promise.
           warnExternalWatchFailure(target, err)
         })
     }
@@ -640,14 +634,8 @@ function readFileForEchoVerification(args: {
   relativePath: string
   worktreeId: string | null | undefined
   connectionId: string | undefined
-  expectedExternalSshTargetId?: string
 }): ReturnType<typeof readRuntimeFileContent> {
-  const key = [
-    args.runtimeEnvironmentId ?? '',
-    args.connectionId ?? '',
-    args.expectedExternalSshTargetId ?? '',
-    args.filePath
-  ].join('::')
+  const key = [args.runtimeEnvironmentId ?? '', args.connectionId ?? '', args.filePath].join('::')
   let pending = inFlightEchoVerificationReads.get(key)
   if (!pending) {
     pending = readRuntimeFileContent({
@@ -657,8 +645,7 @@ function readFileForEchoVerification(args: {
       filePath: args.filePath,
       relativePath: args.relativePath,
       worktreeId: args.worktreeId ?? undefined,
-      connectionId: args.connectionId,
-      expectedExternalSshTargetId: args.expectedExternalSshTargetId
+      connectionId: args.connectionId
     })
     inFlightEchoVerificationReads.set(key, pending)
     const release = (): void => {
@@ -754,7 +741,7 @@ function resolveLiveMoveVerification(
     return
   }
   // Consume only when a real watcher event drove this check. The proactive post-commit verify must LEAVE the provenance,
-  // else the destination fs event (on FSEvents/SSH it lands after the faster local read) would raise a false conflict banner.
+  // else the destination fs event (on FSEvents it lands after the faster local read) would raise a false conflict banner.
   if (consumeProvenance) {
     state.clearSelfMoveEcho(fileId)
   }
@@ -821,8 +808,7 @@ function scheduleSelfMoveEchoVerification(
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
-      connectionId: target.connectionId,
-      expectedExternalSshTargetId: file.externalSshTargetId
+      connectionId: target.connectionId
     })
       .then((result) => {
         const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
@@ -857,8 +843,7 @@ function scheduleSelfWriteAwareExternalReload(
     filePath: file.filePath,
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
-    connectionId: target.connectionId,
-    expectedExternalSshTargetId: file.externalSshTargetId
+    connectionId: target.connectionId
   })
     .then((result) => {
       if (

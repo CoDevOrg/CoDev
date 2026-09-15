@@ -31,14 +31,6 @@ vi.mock('./filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn()
-}))
-
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: vi.fn()
-}))
-
 import { registerRepoHandlers } from './repos'
 
 describe('repos folder pickers', () => {

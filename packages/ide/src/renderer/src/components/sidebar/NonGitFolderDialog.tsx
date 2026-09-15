@@ -62,13 +62,11 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           if ('error' in result) {
             throw new Error(result.error)
           }
-          const { repo } = upsertAddedRepoWithProjectHostSetup(result.repo, {
-            sshConnectionId: connectionId
-          })
+          const { repo } = upsertAddedRepoWithProjectHostSetup(result.repo)
           const state = useAppStore.getState()
           const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           await markOnboardingProjectAdded('addedFolder')
-          const ownerOptions = worktreeRefreshOptions(undefined, connectionId)
+          const ownerOptions = worktreeRefreshOptions(undefined)
           await state.fetchWorktrees(repo.id, ownerOptions)
           // Why: mirror the local non-git folder flow — without this the
           // dialog closes and the UI shows no visible change, making the

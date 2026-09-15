@@ -803,26 +803,4 @@ describe('listWorkItems', () => {
     ])
   })
 
-  it('rejects unresolved SSH repositories without running unscoped GitHub work-item queries', async () => {
-    getIssueOwnerRepoMock.mockResolvedValue(null)
-    getOwnerRepoMock.mockResolvedValue(null)
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
-
-    await expect(
-      listWorkItems('/remote/repo', 10, undefined, undefined, undefined, 'ssh-1')
-    ).rejects.toThrow('GitHub work items require a GitHub remote for SSH repositories')
-
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-
-    ghExecFileAsyncMock.mockClear()
-    getIssueOwnerRepoMock.mockResolvedValue(null)
-    getOwnerRepoMock.mockResolvedValue(null)
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
-
-    await expect(
-      listWorkItems('/remote/repo', 10, 'is:open', undefined, undefined, 'ssh-1')
-    ).rejects.toThrow('GitHub work items require a GitHub remote for SSH repositories')
-
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
 })

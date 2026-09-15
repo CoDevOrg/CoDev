@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: local and SSH generation share cancellation,
+/* eslint-disable max-lines -- Why: generation paths share cancellation,
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -53,13 +53,11 @@ import {
 } from '../codex-cli/codex-home-process-lock'
 import {
   getSpawnArgsForWindows,
-  UnsafeWindowsBatchArgumentsError,
-  WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR
+  UnsafeWindowsBatchArgumentsError
 } from '../win32-utils'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { wslAwareSpawn } from '../git/runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -89,30 +87,14 @@ export type GeneratePullRequestFieldsResult =
     }
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
 
-export type RemoteCommitMessageExecResult = {
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  timedOut: boolean
-  canceled?: boolean
-  spawnError?: string
-}
-
 export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
-export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
-  | {
-      kind: 'remote'
-      cwd: string
-      execute: (
-        plan: CommitMessagePlan,
-        cwd: string,
-        timeoutMs: number,
-        operation: TextGenerationOperation
-      ) => Promise<RemoteCommitMessageExecResult>
-      missingBinaryLocation: string
-    }
+export type CommitMessageGenerationTarget = {
+  kind: 'local'
+  cwd: string
+  env?: NodeJS.ProcessEnv
+  wslDistro?: string
+}
 
 type ResolveCommitMessageSettingsResult =
   | { ok: true; params: GenerateCommitMessageParams }
@@ -200,7 +182,7 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
   if (!trimmed) {
     return null
   }
-  // Why: agent stderr often includes local or SSH repo paths. Persisting those
+  // Why: agent stderr often includes repo paths. Persisting those
   // into worktree metadata leaks environment details into synced renderer state.
   const redacted = trimmed
     .replace(
@@ -494,70 +476,6 @@ export async function discoverCommitMessageModelsLocal(
   return startDiscovery().result
 }
 
-export async function discoverCommitMessageModelsRemote(
-  agentId: TuiAgent,
-  cwd: string,
-  execute: (
-    plan: CommitMessagePlan,
-    cwd: string,
-    timeoutMs: number
-  ) => Promise<RemoteCommitMessageExecResult>,
-  agentCommandOverride?: string
-): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
-  if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
-  }
-  if (spec.modelSource === 'static' || !spec.modelDiscovery) {
-    return toModelDiscoveryCapability(spec)
-  }
-  const planned = planModelDiscovery(spec, agentCommandOverride)
-  if (!planned.ok) {
-    return { success: false, error: planned.error }
-  }
-  let result: RemoteCommitMessageExecResult
-  try {
-    result = await execute(planned.plan, cwd, GENERATION_TIMEOUT_MS)
-  } catch (error) {
-    console.error('[commit-message] Remote model discovery request failed:', error)
-    if (isSshMuxRequestTimeoutError(error)) {
-      return {
-        success: false,
-        error: `${spec.label} model discovery took longer than ${GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
-      }
-    }
-    return {
-      success: false,
-      error: `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
-    }
-  }
-  if (result.spawnError) {
-    if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
-      return { success: false, error: userFacingUnsafeWindowsBatchArgs(spec.label) }
-    }
-    if (/ENOENT/i.test(result.spawnError)) {
-      return {
-        success: false,
-        error: `${planned.plan.binary} not found on the remote PATH. Install ${spec.label} there.`
-      }
-    }
-    console.error('[commit-message] Remote model discovery spawn failed:', result.spawnError)
-    return {
-      success: false,
-      error: `${spec.label} model discovery could not be started on the remote PATH. Check the agent command there and try again.`
-    }
-  }
-  if (result.canceled) {
-    return { success: false, error: 'Model discovery canceled.' }
-  }
-  if (result.timedOut) {
-    return {
-      success: false,
-      error: `${spec.label} model discovery timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
-    }
-  }
-  return finalizeModelDiscoveryOutput(spec, result.stdout, result.stderr, result.exitCode)
-}
 
 // Why: on Windows, npm-installed CLIs like `claude` and `codex` are usually
 // `.cmd` shims. We route those through cmd.exe so Node can launch them, and
@@ -582,7 +500,7 @@ function killProcessTree(child: ChildProcess): Promise<void> {
 }
 
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
-// from SSH worktrees and from other generation features in the same worktree.
+// from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
 const WSL_LAUNCHER_ENV_KEYS = [
   'ComSpec',
@@ -818,7 +736,7 @@ function runLocalPlan(
   return { result, processClosed }
 }
 
-type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
+type LocalGenerationTarget = CommitMessageGenerationTarget
 
 function runLocalPlanForAgent(
   agentId: string,
@@ -991,73 +909,6 @@ function finalizeFromAgentOutput(args: {
   })
 }
 
-async function runRemotePlan(
-  plan: CommitMessagePlan,
-  target: Extract<CommitMessageGenerationTarget, { kind: 'remote' }>,
-  emptyResultName = 'message',
-  operation: TextGenerationOperation = 'commit-message'
-): Promise<InternalTextGenerationResult> {
-  const { binary, label } = plan
-  let result: RemoteCommitMessageExecResult
-  try {
-    result = await target.execute(plan, target.cwd, GENERATION_TIMEOUT_MS, operation)
-  } catch (error) {
-    console.error('[commit-message] Remote generator request failed:', error)
-    if (isSshMuxRequestTimeoutError(error)) {
-      return {
-        success: false,
-        error: `${label} took longer than ${GENERATION_TIMEOUT_MS / 1000}s to respond and may still be running on the remote host.`
-      }
-    }
-    return {
-      success: false,
-      error: `${label} could not be reached on the ${target.missingBinaryLocation}. Try again after the SSH connection recovers.`
-    }
-  }
-  if (result.spawnError) {
-    if (result.spawnError === WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR) {
-      return {
-        success: false,
-        error: userFacingUnsafeWindowsBatchArgs(label)
-      }
-    }
-    if (/ENOENT/i.test(result.spawnError)) {
-      return {
-        success: false,
-        error: `${binary} not found on the ${target.missingBinaryLocation}. Install ${label} there.`
-      }
-    }
-    console.error('[commit-message] Remote generator spawn failed:', result.spawnError)
-    return {
-      success: false,
-      error: `${label} could not be started on the ${target.missingBinaryLocation}. Check the agent command there and try again.`
-    }
-  }
-  if (result.canceled) {
-    return { success: false, error: 'Generation canceled.', canceled: true }
-  }
-  if (result.timedOut) {
-    return {
-      success: false,
-      error: `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
-    }
-  }
-
-  return new Promise((resolve) => {
-    finalizeFromAgentOutput({
-      code: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      label,
-      emptyResultName,
-      finalize: resolve,
-      // Why: remote agent output reflects the SSH target, not this Mac's DNS.
-      includeLocalMacDnsHint: false,
-      // Branch failures persist into synced metadata; stdout may echo the prompt.
-      includeStdoutDetail: operation !== 'branch-name'
-    })
-  })
-}
 
 function formatCommitMessageGenerationResult(
   result: InternalTextGenerationResult
@@ -1101,16 +952,13 @@ export async function generateCommitMessageFromContext(
     return { success: false, error: planned.error }
   }
 
-  const internalResult =
-    target.kind === 'remote'
-      ? await runRemotePlan(planned.plan, target)
-      : await runLocalPlanForAgent(
-          params.agentId,
-          planned.plan,
-          target,
-          'message',
-          'commit-message'
-        )
+  const internalResult = await runLocalPlanForAgent(
+    params.agentId,
+    planned.plan,
+    target,
+    'message',
+    'commit-message'
+  )
   return formatCommitMessageGenerationResult(internalResult)
 }
 
@@ -1177,16 +1025,13 @@ export async function generatePullRequestFieldsFromContext(
     }
   }
 
-  const internalResult =
-    target.kind === 'remote'
-      ? await runRemotePlan(planned.plan, target, 'details', 'pull-request-fields')
-      : await runLocalPlanForAgent(
-          params.agentId,
-          planned.plan,
-          target,
-          'details',
-          'pull-request-fields'
-        )
+  const internalResult = await runLocalPlanForAgent(
+    params.agentId,
+    planned.plan,
+    target,
+    'details',
+    'pull-request-fields'
+  )
   return formatPullRequestFieldsGenerationResult(internalResult, context)
 }
 
@@ -1223,16 +1068,13 @@ export async function generateBranchNameFromContext(
     return { success: false, error: planned.error }
   }
 
-  const internalResult =
-    target.kind === 'remote'
-      ? await runRemotePlan(planned.plan, target, 'branch name', 'branch-name')
-      : await runLocalPlanForAgent(
-          params.agentId,
-          planned.plan,
-          target,
-          'branch name',
-          'branch-name'
-        )
+  const internalResult = await runLocalPlanForAgent(
+    params.agentId,
+    planned.plan,
+    target,
+    'branch name',
+    'branch-name'
+  )
   if (!internalResult.success) {
     return internalResult
   }

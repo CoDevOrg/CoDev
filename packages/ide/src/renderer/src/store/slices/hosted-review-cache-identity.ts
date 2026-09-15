@@ -1,17 +1,12 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import {
   getSettingsFocusedExecutionHostId,
-  normalizeExecutionHostId,
-  toSshExecutionHostId
+  normalizeExecutionHostId
 } from '../../../../shared/execution-host'
 
 export type LinkedReviewHints = {
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
 }
 
 export function getHostedReviewCacheKey(
@@ -29,7 +24,7 @@ export function getHostedReviewCacheKey(
 
 function getHostedReviewCacheHostScope(
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   executionHostId?: string | null,
   hasRepoOwner = false
 ): string {
@@ -37,11 +32,7 @@ function getHostedReviewCacheHostScope(
   if (hostId) {
     return hostId
   }
-  const sshConnectionId = connectionId?.trim()
-  if (sshConnectionId) {
-    return toSshExecutionHostId(sshConnectionId)
-  }
-  // Why: a known repo owner with no SSH/runtime marker is local; absent owner
+  // Why: a known repo owner with no runtime marker is local; absent owner
   // context keeps the focused-runtime fallback for active-host operations.
   if (hasRepoOwner) {
     return 'local'
@@ -53,11 +44,7 @@ function getHostedReviewCacheHostScope(
 // linked review number. Track that distinction without changing the cache key.
 export function linkedReviewHintKey(options?: LinkedReviewHints): string {
   const hints = [
-    ['github', options?.linkedGitHubPR ?? options?.fallbackGitHubPR ?? null],
-    ['gitlab', options?.linkedGitLabMR ?? null],
-    ['bitbucket', options?.linkedBitbucketPR ?? null],
-    ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
-    ['gitea', options?.linkedGiteaPR ?? null]
+    ['github', options?.linkedGitHubPR ?? options?.fallbackGitHubPR ?? null]
   ] as const
   return hints
     .filter(([, number]) => number !== null)

@@ -36,83 +36,36 @@ describe('folderWorkspaceToWorktree', () => {
         }
       })
     )
-    const gitlabIssue = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'gitlab',
-          type: 'issue',
-          number: 7,
-          title: 'Import fails',
-          url: 'https://gitlab.com/acme/app/-/issues/7'
-        }
-      })
-    )
 
     expect(githubIssue).toMatchObject({
       linkedIssue: 42,
-      linkedPR: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null
-    })
-    expect(gitlabIssue).toMatchObject({
-      linkedIssue: null,
-      linkedPR: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: 7
+      linkedPR: null
     })
   })
 
-  it('projects Linear tasks by identifier', () => {
-    const worktree = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'linear',
-          type: 'issue',
-          number: 0,
-          title: 'Polish folder workspaces',
-          url: 'https://linear.app/acme/issue/ENG-123',
-          linearIdentifier: 'ENG-123'
-        }
-      })
-    )
-
-    expect(worktree.linkedLinearIssue).toBe('ENG-123')
-    expect(worktree.linkedPR).toBeNull()
-    expect(worktree.linkedGitLabMR).toBeNull()
-  })
-
-  it('projects durable Jira item and source context without legacy issue zero', () => {
+  it('projects durable linked item and source context', () => {
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
-      provider: 'jira' as const,
+      provider: 'github' as const,
       projectId: 'group-1',
       hostId: 'local' as const,
-      providerIdentity: {
-        provider: 'jira' as const,
-        siteId: 'site-1',
-        siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
-      }
+      providerIdentity: { provider: 'github' as const, owner: 'acme', repo: 'app' }
     }
     const worktree = folderWorkspaceToWorktree(
       makeFolderWorkspace({
         linkedTask: {
-          provider: 'jira',
+          provider: 'github',
           type: 'issue',
-          number: 0,
-          title: 'ORCA-123 Link Jira',
-          url: 'https://company.atlassian.net/browse/ORCA-123',
-          jiraIdentifier: 'ORCA-123'
+          number: 123,
+          title: 'Link GitHub',
+          url: 'https://github.com/acme/app/issues/123'
         },
         linkedTaskSourceContext
       })
     )
 
-    expect(worktree.linkedIssue).toBeNull()
-    expect(worktree.linkedWorkItem).toMatchObject({
-      provider: 'jira',
-      jiraIdentifier: 'ORCA-123'
-    })
+    expect(worktree.linkedIssue).toBe(123)
+    expect(worktree.linkedWorkItem).toMatchObject({ provider: 'github', number: 123 })
     expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
   })
 
@@ -144,21 +97,8 @@ describe('folderWorkspaceToWorktree', () => {
         }
       })
     )
-    const gitlabMr = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'gitlab',
-          type: 'mr',
-          number: 12,
-          title: 'Feature branch',
-          url: 'https://gitlab.com/acme/app/-/merge_requests/12'
-        }
-      })
-    )
 
     expect(githubPr.linkedPR).toBeNull()
     expect(githubPr.linkedIssue).toBeNull()
-    expect(gitlabMr.linkedGitLabMR).toBeNull()
-    expect(gitlabMr.linkedGitLabIssue).toBeNull()
   })
 })

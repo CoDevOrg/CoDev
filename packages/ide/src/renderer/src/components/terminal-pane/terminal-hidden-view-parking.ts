@@ -2,7 +2,6 @@ import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
@@ -66,14 +65,13 @@ function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
 }
 
 // Why: snapshot-backed = local daemon session owned by this worktree (foreign
-// ids reattach through a path parking cannot replay). SSH is restorable too,
-// via isParkRestorableTerminalPty + main's headless model; only remote-runtime
-// ptys, which never transit main, stay unrestorable.
+// ids reattach through a path parking cannot replay). Remote-runtime ptys, which
+// never transit main, are eligible only via isParkRestorableTerminalPty.
 export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: string): boolean {
   if (!ptyId) {
     return false
   }
-  if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (isRemoteRuntimePtyId(ptyId)) {
     return false
   }
   // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
@@ -84,8 +82,6 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
 }
 
 export type TerminalParkRestorePolicy = {
-  /** settings.terminalSshViewParking !== false — the C1 SSH-parking kill switch. */
-  sshParkingEnabled?: boolean
   /** Exact paired environments whose host advertises bounded snapshot restore. */
   pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }
@@ -102,8 +98,8 @@ export function selectPairedRuntimeParkingEnvironmentIds(
   return capable
 }
 
-// Why: SSH uses local main's model; paired PTYs are eligible only when their
-// exact host advertises authoritative bounded restore.
+// Why: paired PTYs are eligible only when their exact host advertises
+// authoritative bounded restore.
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
@@ -119,7 +115,7 @@ export function isParkRestorableTerminalPty(
       policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
     )
   }
-  return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
+  return false
 }
 
 export function canParkTerminalWorktreeRenderers(args: {

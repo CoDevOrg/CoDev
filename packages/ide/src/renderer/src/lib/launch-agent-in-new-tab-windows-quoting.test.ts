@@ -243,24 +243,6 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     )
   })
 
-  it('does not use the local Windows shell setting for remote Windows launches', async () => {
-    store.settings.terminalWindowsShell = 'cmd.exe'
-    store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: 'C:\\remote\\repo' }]
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      agent: 'claude',
-      worktreeId: 'wt-1'
-    })
-
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
-      })
-    )
-  })
-
   it('uses WSL launch quoting by default for Windows-path projects forced to WSL', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     store.projects = [

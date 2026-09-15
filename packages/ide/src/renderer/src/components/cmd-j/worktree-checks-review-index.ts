@@ -60,25 +60,12 @@ export function buildWorktreeChecksReviewIndex({
     // resolved, without starting another provider lookup from the search path.
     const review = selectChecksPanelReview({
       hostedReview: hostedReviewCache[hostedReviewKey]?.data,
-      pr: prCache[prKey]?.data,
-      linkedGitLabMR: worktree.linkedGitLabMR ?? null,
-      linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: worktree.linkedGiteaPR ?? null
+      pr: prCache[prKey]?.data
     })
     if (review) {
       // Why: persisted IDs can be identical across execution hosts; the search
       // scope preserves these object references while sorting and filtering.
       reviews.set(worktree, review)
-    } else if (
-      worktree.linkedGitLabMR != null ||
-      worktree.linkedBitbucketPR != null ||
-      worktree.linkedAzureDevOpsPR != null ||
-      worktree.linkedGiteaPR != null
-    ) {
-      // Why: an empty Checks selection for a non-GitHub link is authoritative;
-      // omitting it would let Cmd+J surface stale GitHub metadata as a fallback.
-      reviews.set(worktree, null)
     }
   }
 

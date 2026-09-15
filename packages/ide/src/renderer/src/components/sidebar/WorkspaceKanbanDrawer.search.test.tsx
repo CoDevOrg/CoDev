@@ -141,10 +141,6 @@ vi.mock('./use-workspace-kanban-outside-dismiss', () => ({
   useWorkspaceKanbanOutsideDismiss: vi.fn()
 }))
 
-vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
-  useContextualTour: vi.fn()
-}))
-
 vi.mock('./use-workspace-kanban-card-pointer-drag', () => ({
   useWorkspaceKanbanCardPointerDrag: (params: PointerDragCapture) => {
     pointerDragState.current = params
@@ -298,26 +294,6 @@ describe('WorkspaceKanbanDrawer search', () => {
 
     expect(headerState.current?.query).toBe('')
     expect(laneIds('todo')).toHaveLength(4)
-  })
-
-  it('still runs the Linear status sync for a drop made under an active query', () => {
-    renderDrawer()
-    typeQuery('gamma')
-
-    act(() => {
-      pointerDragState.current?.onDropWorktreesInStatus({
-        worktreeIds: [omega.id],
-        status: 'todo',
-        dropIndex: 0
-      })
-    })
-
-    expect(syncWorkspaceBoardTaskStatusesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeIds: [omega.id],
-        targetStatus: { id: 'todo', label: 'Todo' }
-      })
-    )
   })
 
   it('narrows the pointer-drag payload to the rendered cards', () => {

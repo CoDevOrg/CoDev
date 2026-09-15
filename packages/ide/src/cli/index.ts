@@ -25,7 +25,6 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'environment' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
-    commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'
   )
 }
@@ -39,10 +38,9 @@ async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
   return (await import('./runtime-client.js')).RuntimeClient
 }
 
-// Why: the SSH relay bridge executes this CLI on the Orca host while the
-// caller's shell cwd lives on the remote machine (which cannot be chdir'd
-// into). ORCA_CLI_CWD carries that remote cwd so cwd-based selectors like
-// `--worktree active` resolve against the caller's directory.
+// Why: a wrapper may execute this CLI from a different directory than the
+// caller's shell. ORCA_CLI_CWD carries the caller's cwd so cwd-based selectors
+// like `--worktree active` resolve against the caller's directory.
 function resolveInvocationCwd(): string {
   const override = process.env.ORCA_CLI_CWD
   return typeof override === 'string' && override.length > 0 ? override : process.cwd()

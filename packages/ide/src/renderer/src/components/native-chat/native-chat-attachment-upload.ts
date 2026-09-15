@@ -11,15 +11,10 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import type { AppState } from '@/store/types'
 import { reportTerminalDropUploadSkipsAndFailures } from '../terminal-pane/terminal-drop-upload-report'
 import {
-  findTerminalTabWorktreeId,
-  resolveNativeChatFileLinkContext
+  findTerminalTabWorktreeId
 } from './native-chat-file-link'
-import {
-  captureDirectSshMutationExpectation,
-  type DirectSshMutationExpectation
-} from '@/lib/ssh-mutation-expectation'
 
-export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
+export type NativeChatSshAttachmentOwner = {
   kind: 'ssh'
   connectionId: string
   worktreePath: string
@@ -43,7 +38,6 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'projectGroups'
   | 'repos'
   | 'settings'
-  | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
 >
@@ -68,16 +62,8 @@ export function resolveNativeChatAttachmentOwner(
   if (connectionId === null) {
     return { kind: 'local' }
   }
-  const worktreePath = resolveNativeChatFileLinkContext(state, terminalTabId)?.worktreePath
-  if (!worktreePath) {
-    return { kind: 'not-ready' }
-  }
-  return {
-    kind: 'ssh',
-    connectionId,
-    worktreePath,
-    ...captureDirectSshMutationExpectation(state, connectionId)
-  }
+  // Why: every worktree is host-local on this fork; a non-null connection id is stale metadata.
+  return { kind: 'not-ready' }
 }
 
 export function nativeChatWorktreeNotReadyNotice(): string {
@@ -108,10 +94,7 @@ export async function uploadNativeChatAttachmentPaths(
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths,
       worktreePath: owner.worktreePath,
-      connectionId: owner.connectionId,
-      expectedExecutionHostId: owner.expectedExecutionHostId,
-      expectedSshTargetId: owner.expectedSshTargetId,
-      expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration
+      connectionId: owner.connectionId
     })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     return resolvedPaths

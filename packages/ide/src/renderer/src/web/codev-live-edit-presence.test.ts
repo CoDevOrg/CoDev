@@ -5,7 +5,6 @@ import {
   CODEV_LIVE_EDIT_TTL_MS,
   codevAgentPresenceColor,
   codevLiveEditsByWorktree,
-  codevLiveEditsForFile,
   selectCodevLiveEdits,
 } from './codev-live-edit-presence'
 
@@ -98,15 +97,6 @@ describe('groupings', () => {
     ),
     NOW,
   )
-
-  it('codevLiveEditsForFile narrows to one file of one worktree', () => {
-    const inFile = codevLiveEditsForFile(
-      presence,
-      'wt-checkout-guard',
-      'src/checkout/reserve.ts',
-    )
-    expect(inFile.map((row) => row.agentKind).sort()).toEqual(['claude-code', 'cursor'])
-  })
 
   it('codevLiveEditsByWorktree nests worktree -> file -> agents', () => {
     const grouped = codevLiveEditsByWorktree(presence)

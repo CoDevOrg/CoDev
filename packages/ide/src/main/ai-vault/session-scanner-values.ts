@@ -1,5 +1,3 @@
-import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { asRecord } from './session-scanner-record-value'
 
@@ -120,39 +118,6 @@ export function timeObjectValue(value: unknown, key: string): string | null {
   return new Date(parsed).toISOString()
 }
 
-export function findOpenCodeStorageRoot(filePath: string): string | null {
-  const sessionDir = dirname(filePath)
-  const sessionRoot = dirname(sessionDir)
-  if (basename(sessionRoot) !== 'session') {
-    return null
-  }
-  return dirname(sessionRoot)
-}
-
-// Pi and OMP (a Pi fork) both store transcripts under
-// <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
-export function normalizeAgentSessionsDir(
-  rawValue: string,
-  agentHomeDirName: '.pi' | '.omp'
-): string {
-  const trimmed = rawValue.trim()
-  if (!trimmed) {
-    return join(homedir(), agentHomeDirName, 'agent', 'sessions')
-  }
-  const normalized = trimmed.replace(/[\\/]+$/, '')
-  const leaf = basename(normalized)
-  if (leaf === 'sessions') {
-    return normalized
-  }
-  if (leaf === 'agent') {
-    return join(normalized, 'sessions')
-  }
-  if (leaf === agentHomeDirName) {
-    return join(normalized, 'agent', 'sessions')
-  }
-  return normalized
-}
-
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
@@ -164,7 +129,6 @@ export function errorMessage(err: unknown): string {
 export {
   addCodexUsage,
   claudeUsageTotal,
-  copilotModelMetricsTotal,
   normalizeCodexUsage,
   numberValue,
   subtractCodexUsage,

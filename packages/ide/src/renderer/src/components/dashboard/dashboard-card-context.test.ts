@@ -30,7 +30,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -42,7 +41,7 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 
 function review(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
-    provider: 'bitbucket',
+    provider: 'github',
     number: 77,
     title: 'Review',
     state: 'open',
@@ -69,19 +68,6 @@ function state(
 }
 
 describe('resolveDashboardCardContext', () => {
-  it.each([
-    ['bitbucket', { linkedBitbucketPR: 77 }],
-    ['azure-devops', { linkedAzureDevOpsPR: 77 }],
-    ['gitea', { linkedGiteaPR: 77 }]
-  ] as const)('uses valid cached %s review metadata', (provider, link) => {
-    expect(
-      resolveDashboardCardContext(
-        state(review({ provider }), `${provider}:77`),
-        repo,
-        worktree(link)
-      ).review
-    ).toEqual({ number: 77, state: 'open' })
-  })
 
   it('keeps validated GitHub PR cache metadata as a fallback', () => {
     const pr: PRInfo = {
@@ -113,7 +99,7 @@ describe('resolveDashboardCardContext', () => {
       resolveDashboardCardContext(
         state(review({ number: 12 }), 'bitbucket:12'),
         repo,
-        worktree({ linkedBitbucketPR: 13 })
+        worktree({ })
       ).review
     ).toBeUndefined()
   })

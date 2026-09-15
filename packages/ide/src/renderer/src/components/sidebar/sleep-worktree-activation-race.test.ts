@@ -85,7 +85,6 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.state.ptyIdsByTabId['tab-parent']).toEqual([])
 
     await activateWorktreeFromSidebar('wt-parent')
-    expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
       revealInSidebar: false
@@ -96,15 +95,4 @@ describe('sleep flow vs slept-workspace activation', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
   })
 
-  it('does not activate a slept worktree when VM resume fails', async () => {
-    mocks.resumeWorkspace.mockRejectedValueOnce(new Error('provider unavailable'))
-
-    await activateWorktreeFromSidebar('wt-parent')
-
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'Failed to wake ephemeral VM workspace',
-      expect.objectContaining({ description: 'provider unavailable' })
-    )
-  })
 })

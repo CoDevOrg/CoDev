@@ -1,6 +1,5 @@
 import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 import { getFirstUserPromptCaptureMode } from './session-scanner-first-user-prompt-capture'
-import { stripGrokUserQueryEnvelope } from './session-scanner-grok-user-text'
 // Direct import: session-scanner-values re-exports this module, so going through
 // it here would close an import cycle.
 import { sliceAtCodeUnitLimit } from './session-scanner-text-normalization'
@@ -55,9 +54,9 @@ export function normalizeFullFirstUserPromptText(value: string): string | null {
 }
 
 function finalizeFullFirstUserPrompt(value: string): string | null {
-  // Why: Grok (and some pasted transcripts) wrap the real ask in <user_query>;
-  // strip that before copy so the clipboard is the typed prompt, not user_info.
-  const unwrapped = stripGrokUserQueryEnvelope(value.replace(/^\uFEFF/, ''))
+  // Why: some pasted transcripts wrap the real ask in <user_query>; strip that
+  // before copy so the clipboard is the typed prompt, not user_info.
+  const unwrapped = stripUserQueryEnvelope(value.replace(/^\uFEFF/, ''))
   const trimmed = unwrapped.trim()
   if (!trimmed) {
     return null
@@ -70,14 +69,32 @@ function finalizeFullFirstUserPrompt(value: string): string | null {
   }
   // Bound before scanning so a multi-MB paste cannot force a full lowercase copy.
   const bounded = sliceAtCodeUnitLimit(trimmed, FULL_FIRST_USER_PROMPT_SAFETY_LIMIT)
-  // Reject pure Grok bootstrap dumps even when they arrived via a non-Grok path.
-  // Safe on the bounded slice: stripGrokUserQueryEnvelope above already unwrapped
-  // any <user_query>, wherever it sat, so a match here means there was none.
+  // Reject pure <user_info> bootstrap dumps. Safe on the bounded slice:
+  // stripUserQueryEnvelope above already unwrapped any <user_query>, wherever
+  // it sat, so a match here means there was none.
   const lower = bounded.toLowerCase()
   if (lower.startsWith('<user_info>') && !lower.includes('<user_query>')) {
     return null
   }
   return bounded
+}
+
+/** Prefer the body of a `<user_query>` envelope when present (closing tag optional). */
+function stripUserQueryEnvelope(text: string): string {
+  const opener = '<user_query>'
+  const closer = '</user_query>'
+  const lower = text.toLowerCase()
+  const start = lower.indexOf(opener)
+  if (start === -1) {
+    return text
+  }
+  const bodyStart = start + opener.length
+  const end = lower.indexOf(closer, bodyStart)
+  // Why: incomplete closing tag still holds the real ask after the opener.
+  if (end === -1) {
+    return text.slice(bodyStart).trim()
+  }
+  return text.slice(bodyStart, end).trim()
 }
 
 function isSuppressedFullFirstUserPrompt(value: string): boolean {

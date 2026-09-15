@@ -26,8 +26,6 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { setTrayAttention } from '../tray/system-tray'
-import { isMainWindowVisible } from '../window/main-window-visibility'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
@@ -393,14 +391,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
-        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
-        if (!isMainWindowVisible(activeWindow)) {
-          setTrayAttention(true)
-        }
-      }
-
       const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }

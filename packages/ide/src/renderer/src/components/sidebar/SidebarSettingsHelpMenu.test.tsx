@@ -11,15 +11,8 @@ const mocks = vi.hoisted(() => ({
   openSettingsPage: vi.fn(),
   openSettingsTarget: vi.fn(),
   appRestart: vi.fn(),
-  updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
-  useShortcutKeyDetails: vi.fn(),
-  setupProgress: {
-    ready: true,
-    coreDoneCount: 2,
-    coreTotal: 5,
-    stepDone: {}
-  }
+  useShortcutKeyDetails: vi.fn()
 }))
 
 let updateStatus = { state: 'idle' } as const
@@ -41,18 +34,6 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 
 vi.mock('@/hooks/useMountedRef', () => ({
   useMountedRef: () => ({ current: true })
-}))
-
-vi.mock('../onboarding/show-onboarding-event', () => ({
-  showOnboardingFromRenderer: vi.fn()
-}))
-
-vi.mock('../setup-guide/use-setup-guide-progress', () => ({
-  useSetupGuideProgress: () => mocks.setupProgress
-}))
-
-vi.mock('../setup-guide/SetupGuideProgressRing', () => ({
-  SetupGuideProgressRing: () => <span data-testid="setup-guide-progress-ring" />
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -126,9 +107,6 @@ function installWindowApi(): void {
       },
       shell: {
         openUrl: mocks.shellOpenUrl
-      },
-      updater: {
-        check: mocks.updaterCheck
       }
     }
   })
@@ -162,12 +140,6 @@ describe('SidebarSettingsHelpMenu', () => {
     installWindowApi()
     mocks.useShortcutKeyDetails.mockReturnValue({ keys: ['⌘', ','], doubleTap: false })
     updateStatus = { state: 'idle' }
-    mocks.setupProgress = {
-      ready: true,
-      coreDoneCount: 2,
-      coreTotal: 5,
-      stepDone: {}
-    }
   })
 
   afterEach(() => {
@@ -203,28 +175,6 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Keyboard Shortcuts menu item', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Keyboard Shortcuts')
-  })
-
-  it('renders Milestones with progress when setup is incomplete', () => {
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Milestones')
-    expect(html).toContain('data-testid="setup-guide-progress-ring"')
-  })
-
-  it('hides Milestones when setup is complete', () => {
-    mocks.setupProgress = {
-      ready: true,
-      coreDoneCount: 5,
-      coreTotal: 5,
-      stepDone: {}
-    }
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).not.toContain('Milestones')
-  })
-
-  it('renders the Onboarding menu item by default', () => {
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Onboarding')
   })
 
   it('renders Restart Orca by default', () => {
@@ -268,48 +218,6 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders X link', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('>X<')
-  })
-
-  it('renders Check for Updates menu item', () => {
-    const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
-    expect(html).toContain('Check for Updates')
-    expect(html).toMatch(/(⇧\+click|Shift\+click) checks the latest RC/)
-    expect(html).toMatch(/(⌘\+click|Ctrl\+click) checks the latest perf build/)
-  })
-
-  it('passes update-check modifier options through the updater bridge', async () => {
-    const container = await renderMenu()
-    const checkButton = findMenuItem(container, 'Check for Updates')
-    const primaryModifier = navigator.userAgent.includes('Mac')
-      ? { metaKey: true }
-      : { ctrlKey: true }
-
-    await act(async () => {
-      checkButton.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, shiftKey: true }))
-      checkButton.click()
-    })
-    await act(async () => {
-      checkButton.dispatchEvent(
-        new MouseEvent('pointerdown', { bubbles: true, ...primaryModifier })
-      )
-      checkButton.click()
-    })
-    await act(async () => {
-      checkButton.click()
-    })
-
-    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(1, {
-      includePrerelease: true,
-      includePerfPrerelease: false
-    })
-    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(2, {
-      includePrerelease: false,
-      includePerfPrerelease: true
-    })
-    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(3, {
-      includePrerelease: false,
-      includePerfPrerelease: false
-    })
   })
 
   it('renders shortcut keys in the settings tooltip', () => {

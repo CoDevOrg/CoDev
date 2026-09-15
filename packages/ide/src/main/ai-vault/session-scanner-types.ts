@@ -14,25 +14,6 @@ export type AiVaultScanOptions = {
   // (codexHome null → unprefixed resume) is testable without the user's home.
   defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
-  geminiSessionsDir?: string
-  antigravityBrainDir?: string
-  copilotSessionsDir?: string
-  cursorProjectsDir?: string
-  opencodeStorageDir?: string
-  // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
-  // here so they don't depend on the real ~/.local/share/opencode.
-  opencodeDbPaths?: readonly string[]
-  grokSessionsDir?: string
-  devinTranscriptsDir?: string
-  hermesSessionsDir?: string
-  rovoSessionsDir?: string
-  openclawStateDir?: string
-  openclawLegacyStateDir?: string
-  piSessionsDir?: string
-  ompSessionsDir?: string
-  droidSessionsDir?: string
-  droidProjectsDir?: string
-  kimiSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number
@@ -51,8 +32,7 @@ export type FileWithMtime = {
   mtimeMs: number
   modifiedAt: string
   // Present when discovery statted the file; lets the parse cache detect
-  // unchanged/truncated files without a second stat. Synthetic candidates
-  // such as OpenCode SQLite rows omit it.
+  // unchanged/truncated files without a second stat.
   sizeBytes?: number
   // Present when discovery can prove filesystem identity. Codex dual-root
   // scans use a multi-link inode to collapse only actual hardlink aliases.
@@ -65,7 +45,6 @@ export type SessionFileCandidate = {
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
-  antigravityHistoryPath?: string
 }
 
 export type SessionFileDiscovery = {

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
@@ -153,82 +152,4 @@ describe('observeExistingAutomationSession', () => {
     expect(onAgentStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('stamps the exact SSH PTY in the legacy renderer fallback', async () => {
-    state.settings.terminalMainSideEffectAuthority = false
-    const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
-    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
-    state.terminalLayoutsByTabId = {
-      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
-    }
-    state.ptyIdsByTabId = { 'tab-1': [ptyId] }
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId,
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit: vi.fn()
-    })
-    const handleData = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    handleData(DONE_STATUS_OSC)
-
-    expect(state.setAgentStatus).toHaveBeenCalledWith(
-      PANE_KEY,
-      expect.objectContaining({ state: 'done' }),
-      undefined,
-      undefined,
-      { connectionId: 'ssh-a' }
-    )
-  })
-
-  it('leaves the row unchanged after the pane rebinds to another SSH host', async () => {
-    state.settings.terminalMainSideEffectAuthority = false
-    const oldPtyId = toAppSshPtyId('ssh-a', 'pty-1')
-    state.terminalLayoutsByTabId = {
-      'tab-1': {
-        ptyIdsByLeafId: { [LEAF_ID]: toAppSshPtyId('ssh-b', 'pty-1') }
-      }
-    }
-    state.ptyIdsByTabId = { 'tab-1': [toAppSshPtyId('ssh-b', 'pty-1')] }
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId: oldPtyId,
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit: vi.fn()
-    })
-    const handleData = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    handleData(DONE_STATUS_OSC)
-
-    expect(state.setAgentStatus).not.toHaveBeenCalled()
-  })
-
-  it('ignores a delayed callback after disconnect clears the live PTY index', async () => {
-    state.settings.terminalMainSideEffectAuthority = false
-    const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
-    state.terminalLayoutsByTabId = {
-      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
-    }
-    state.ptyIdsByTabId = { 'tab-1': [ptyId] }
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId,
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit: vi.fn()
-    })
-    const handleData = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    state.ptyIdsByTabId = { 'tab-1': [] }
-    handleData(DONE_STATUS_OSC)
-
-    expect(state.setAgentStatus).not.toHaveBeenCalled()
-  })
 })

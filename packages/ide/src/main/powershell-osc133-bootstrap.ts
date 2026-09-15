@@ -1,4 +1,3 @@
-import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
@@ -21,7 +20,6 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
         $OutputEncoding = [Console]::OutputEncoding
     } catch { Write-Error $_ -ErrorAction Continue }
 
-${getPowerShellOmpShellWrapper()}
 
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt

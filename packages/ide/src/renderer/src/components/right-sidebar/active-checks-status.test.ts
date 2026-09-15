@@ -76,29 +76,4 @@ describe('getActiveChecksStatus', () => {
     expect(getActiveChecksStatus(state)).toBe('success')
   })
 
-  it('does not show stale GitHub PR status for a linked GitLab MR while MR status is loading', () => {
-    const state = {
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'wt-1',
-            repoId: 'repo-1',
-            branch: 'refs/heads/feature/gitlab',
-            linkedGitLabMR: 7
-          }
-        ]
-      },
-      prCache: {
-        'repo-1::feature/gitlab': { data: makePR('failure'), fetchedAt: 2 }
-      },
-      hostedReviewCache: {}
-    } as unknown as Pick<
-      AppState,
-      'activeWorktreeId' | 'repos' | 'worktreesByRepo' | 'prCache' | 'hostedReviewCache'
-    >
-
-    expect(getActiveChecksStatus(state)).toBeNull()
-  })
 })

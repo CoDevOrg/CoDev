@@ -18,7 +18,6 @@ type AddRepoHostSelectorProps = {
   onOpenChange: (open: boolean) => void
   onSelectHost: (hostId: ExecutionHostId) => void
   onConnectHost?: (hostId: ExecutionHostId) => void
-  onAddSshHost?: () => void
   onAddRemoteServer?: () => void
 }
 
@@ -36,11 +35,10 @@ export function AddRepoHostSelector({
   onOpenChange,
   onSelectHost,
   onConnectHost,
-  onAddSshHost,
   onAddRemoteServer
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
-  const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer)
+  const showHostSetupActions = Boolean(onAddRemoteServer)
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
   }
@@ -85,7 +83,7 @@ export function AddRepoHostSelector({
                 <Popover open={addHostOpen} onOpenChange={setAddHostOpen}>
                   <PopoverTrigger asChild>
                     <CommandItem
-                      value="Add remote host SSH host Orca server"
+                      value="Add remote host Orca server"
                       onSelect={() => setAddHostOpen(true)}
                       className="items-start gap-2 px-3 py-2 text-xs text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
                     >
@@ -102,7 +100,7 @@ export function AddRepoHostSelector({
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                           {translate(
                             'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetail',
-                            'SSH host or Orca server'
+                            'Pair another Orca server'
                           )}
                         </span>
                       </span>
@@ -110,30 +108,6 @@ export function AddRepoHostSelector({
                     </CommandItem>
                   </PopoverTrigger>
                   <PopoverContent align="start" side="right" className="w-72 p-1" sideOffset={8}>
-                    {onAddSshHost ? (
-                      <button
-                        type="button"
-                        className="flex w-full flex-col rounded-sm px-2.5 py-2 text-left hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        onClick={() => {
-                          setAddHostOpen(false)
-                          onOpenChange(false)
-                          onAddSshHost()
-                        }}
-                      >
-                        <span className="text-xs font-medium">
-                          {translate(
-                            'auto.components.sidebar.AddRepoHostSelector.addSshHost',
-                            'Add SSH host'
-                          )}
-                        </span>
-                        <span className="mt-0.5 text-[11px] text-muted-foreground">
-                          {translate(
-                            'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
-                            'Use an existing machine over SSH.'
-                          )}
-                        </span>
-                      </button>
-                    ) : null}
                     {onAddRemoteServer ? (
                       <button
                         type="button"

@@ -110,8 +110,7 @@ describe('CoDev owned web preferences', () => {
   it('normalizes only hosted GitHub preflight and propagates runtime failures', async () => {
     const raw = {
       git: { installed: true },
-      gh: { installed: false, authenticated: false },
-      glab: { installed: false }
+      gh: { installed: false, authenticated: false }
     }
     const check = vi.fn().mockResolvedValue(raw)
     const base = { preflight: { check } } as unknown as Partial<PreloadApi>
@@ -119,7 +118,6 @@ describe('CoDev owned web preferences', () => {
     const result = await api.preflight!.check()
     expect(result.gh).toEqual({ installed: true, authenticated: true })
     expect(result.git).toEqual(raw.git)
-    expect(result.glab).toEqual(raw.glab)
     expect(raw.gh.installed).toBe(false)
     check.mockRejectedValueOnce(new Error('offline'))
     await expect(api.preflight!.check()).rejects.toThrow('offline')

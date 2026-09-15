@@ -53,7 +53,6 @@ function WebRoot(): React.JSX.Element {
   window.__CODEV_DEFAULT_AGENT__ = codevBoot?.defaultAgent
   window.__CODEV_MEMBER_ID__ = codevBoot?.memberId
   window.__CODEV_SETTINGS_ONLY__ = codevBoot?.settingsOnly === true
-  window.__CODEV_CURSOR_AVAILABLE__ = codevBoot?.cursorAvailable === true
 
   // Before the preload API installs: a waking workspace must not connect to
   // the pairing some other workspace left in browser-wide storage.

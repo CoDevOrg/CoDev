@@ -437,46 +437,6 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  it('writes wrappers without restoring Pi/OMP homes after user startup files', async () => {
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-    getShellReadyLaunchConfig('/bin/bash')
-
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
-    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
-    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
-    const restoreLine =
-      '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
-    const mimoRestoreLine =
-      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
-    const codexRestoreLine =
-      '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
-    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
-    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
-    expect(zshrc).toContain(restoreLine)
-    expect(zlogin).toContain(restoreLine)
-    expect(bashRc).toContain(restoreLine)
-    expect(zshrc).toContain(mimoRestoreLine)
-    expect(zlogin).toContain(mimoRestoreLine)
-    expect(bashRc).toContain(mimoRestoreLine)
-    expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(zshrc).toContain(codexRestoreLine)
-    expect(zlogin).toContain(codexRestoreLine)
-    expect(zshrc).toContain(agentTeamsPathRestoreLine)
-    expect(zlogin).toContain(agentTeamsPathRestoreLine)
-    expect(bashRc).toContain(agentTeamsPathRestoreLine)
-    expect(bashRc).toContain(codexRestoreLine)
-    expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(zshrc).toContain(ompWrapperLine)
-    expect(zlogin).toContain(ompWrapperLine)
-    expect(bashRc).toContain(ompWrapperLine)
-  })
-
   // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
   it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()

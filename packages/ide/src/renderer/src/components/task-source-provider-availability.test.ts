@@ -6,7 +6,6 @@ import { getRepoBackedProviderAvailability } from './task-source-provider-availa
 const readyPreflight: PreflightStatus = {
   git: { installed: true },
   gh: { installed: true, authenticated: true },
-  glab: { installed: true, authenticated: true }
 }
 
 function source(hostId: TaskSourceContext['hostId']): TaskSourceContext {
@@ -35,33 +34,6 @@ describe('task source provider availability', () => {
       { hostId: 'local', reason: 'missing-provider-auth' },
       { hostId: 'ssh:builder', reason: 'missing-provider-auth' }
     ])
-  })
-
-  it('marks desktop-owned GitLab sources unavailable when glab is missing', () => {
-    expect(
-      getRepoBackedProviderAvailability({
-        provider: 'gitlab',
-        contexts: [source('local')],
-        preflightReady: true,
-        preflightStatus: {
-          ...readyPreflight,
-          glab: { installed: false, authenticated: false }
-        }
-      })
-    ).toEqual([{ hostId: 'local', reason: 'unavailable-source-tool' }])
-  })
-
-  it('marks GitLab unsupported when a host preflight payload predates GitLab support', () => {
-    const { glab: _glab, ...preGitLabPreflight } = readyPreflight
-
-    expect(
-      getRepoBackedProviderAvailability({
-        provider: 'gitlab',
-        contexts: [source('local')],
-        preflightReady: true,
-        preflightStatus: preGitLabPreflight
-      })
-    ).toEqual([{ hostId: 'local', reason: 'unsupported-provider' }])
   })
 
   it('does not apply desktop preflight to runtime-owned sources', () => {
@@ -119,28 +91,6 @@ describe('task source provider availability', () => {
         ])
       })
     ).toEqual([])
-  })
-
-  it('marks runtime-owned GitLab sources unsupported when runtime preflight lacks GitLab', () => {
-    const { glab: _glab, ...preGitLabPreflight } = readyPreflight
-
-    expect(
-      getRepoBackedProviderAvailability({
-        provider: 'gitlab',
-        contexts: [source('runtime:server')],
-        preflightReady: true,
-        preflightStatus: readyPreflight,
-        runtimePreflightStatusByHostId: new Map([
-          [
-            'runtime:server',
-            {
-              checked: true,
-              status: preGitLabPreflight
-            }
-          ]
-        ])
-      })
-    ).toEqual([{ hostId: 'runtime:server', reason: 'unsupported-provider' }])
   })
 
   it('waits for preflight before reporting provider availability', () => {

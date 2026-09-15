@@ -131,8 +131,6 @@ export function useFileDeletion({
           worktreePath: worktree?.path ?? null,
           connectionId: operationRoute.connectionId,
           expectedExecutionHostId: operationRoute.expectedExecutionHostId,
-          expectedSshTargetId: operationRoute.expectedSshTargetId,
-          expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
         }
 
         const parentDir = dirname(node.path)

@@ -56,7 +56,7 @@ describe('AgentDashboardSettingsMenu', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     act(() => {
-      root?.render(<AgentDashboardSettingsMenu onSwitchToPopout={vi.fn()} onOpenChange={vi.fn()} />)
+      root?.render(<AgentDashboardSettingsMenu onOpenChange={vi.fn()} />)
     })
 
     const toggle = container.querySelector<HTMLButtonElement>(

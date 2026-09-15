@@ -68,16 +68,6 @@ const actions: CmdJQuickAction[] = [
     verbKeywords: ['delete worktree', 'delete current worktree', 'remove worktree'],
     isAvailable: available,
     run: noopRun
-  },
-  {
-    id: 'add-quick-command',
-    kind: 'action',
-    title: 'Add Quick Command',
-    description: 'Create a saved terminal command.',
-    icon: Globe,
-    verbKeywords: ['add quick command', 'new quick command'],
-    isAvailable: available,
-    run: noopRun
   }
 ]
 
@@ -188,7 +178,6 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['terminal', 'settings:terminal'],
     ['browser', 'settings:browser'],
     ['quick commands', 'settings:quick-commands'],
-    ['add quick command', 'add-quick-command'],
     ['orca cli', 'settings:general:cli'],
     ['shell command', 'settings:general:cli']
   ])('ranks %s first', (query, expectedId) => {

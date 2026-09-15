@@ -8,7 +8,6 @@
 // event sequences match.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
-import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
 import { createPtyOutputProcessor } from './pty-transport'
@@ -279,98 +278,6 @@ describe('main tracker parity with renderer 133;D and PR-link byte parsers', () 
       paths,
       `${ESC}]9999;{"state":"done","prompt":"https://github.com/acme/orca/pull/9"}${BEL}\r\n`
     )
-
-    expect(paths.main.events).toEqual(paths.renderer.events)
-    expect(paths.main.events).toEqual([])
-  })
-})
-
-// Why: slice 4 moves the Command Code output scrape into main for local/SSH
-// PTYs. The renderer byte path observes raw transport data; main observes the
-// OSC 9999-stripped cleanData. Both must derive identical working/done
-// sequences from the same chunk boundaries, or flipping the kill switch
-// changes Command Code status rows.
-type CommandCodeFactEvent = ['working' | 'done', string]
-
-type CommandCodeFactPath = {
-  events: CommandCodeFactEvent[]
-  feed: (chunk: string) => void
-}
-
-function createCommandCodePath(options: { stripStatusPayloads: boolean }): CommandCodeFactPath {
-  const events: CommandCodeFactEvent[] = []
-  const processAgentStatusChunk = createAgentStatusOscProcessor()
-  const detector = createCommandCodeOutputStatusDetector({
-    startupCommand: null,
-    onWorking: (prompt) => events.push(['working', prompt]),
-    onDone: (prompt) => events.push(['done', prompt])
-  })
-  return {
-    events,
-    feed(chunk: string): void {
-      detector.observe(
-        options.stripStatusPayloads ? processAgentStatusChunk(chunk).cleanData : chunk
-      )
-    }
-  }
-}
-
-describe('main Command Code scrape parity with the renderer byte detector', () => {
-  let paths: { renderer: CommandCodeFactPath; main: CommandCodeFactPath }
-
-  beforeEach(() => {
-    paths = {
-      renderer: createCommandCodePath({ stripStatusPayloads: false }),
-      main: createCommandCodePath({ stripStatusPayloads: true })
-    }
-  })
-
-  it('derives identical working facts after the banner arms across chunks', () => {
-    feedBoth(paths, '# Command')
-    feedBoth(paths, ' Code v0.27.3\r\n')
-    feedBoth(paths, '❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')
-
-    expect(paths.main.events).toEqual(paths.renderer.events)
-    expect(paths.main.events).toEqual([['working', 'Fix the spinner']])
-  })
-
-  it('derives identical done facts for a no-tool turn in both paths', () => {
-    feedBoth(paths, '# Command Code v0.27.3\r\n')
-    feedBoth(paths, '❯ say hi\r\n✻ Thinking...')
-    feedBoth(paths, '\r\n:: Hi!\r\n❯ Ask your question...')
-
-    expect(paths.main.events).toEqual(paths.renderer.events)
-    expect(paths.main.events).toEqual([
-      ['working', 'say hi'],
-      ['done', 'say hi']
-    ])
-  })
-
-  it('recovers prompt capture from interleaved OSC 9999 payloads (main improvement)', () => {
-    // Deliberate divergence, not drift: the renderer's raw byte path lets an
-    // OSC 9999 payload leak partial text into the scrape window (its ANSI
-    // strip consumes only the ESC] introducer), which breaks the prompt-echo
-    // line match. Main feeds the OSC 9999-stripped cleanData, so the prompt
-    // (and therefore the done settle hint) survives an adjacent payload.
-    const payloadThenPrompt = [
-      '# Command Code v0.27.3\r\n',
-      `${ESC}]9999;{"state":"working","agentType":"command-code"}${BEL}`,
-      '❯ say hi\r\n✻ Thinking...',
-      '\r\n:: Hi!\r\n❯ Ask your question...'
-    ]
-    for (const chunk of payloadThenPrompt) {
-      feedBoth(paths, chunk)
-    }
-
-    expect(paths.renderer.events).toEqual([['working', '']])
-    expect(paths.main.events).toEqual([
-      ['working', 'say hi'],
-      ['done', 'say hi']
-    ])
-  })
-
-  it('stays silent without the Command Code banner in both paths', () => {
-    feedBoth(paths, '❯ Fix the spinner\r\nThinking about unrelated shell output...')
 
     expect(paths.main.events).toEqual(paths.renderer.events)
     expect(paths.main.events).toEqual([])

@@ -25,36 +25,14 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName : ''
 
-  // Why: for an SSH project the files live on the remote host's disk, not the
-  // user's — "still on your disk" would be misleading. Name the host (using the
-  // removed-target label when it's a ghost) so the user knows where it remains
-  // and that re-adding that host recovers it.
-  const sshHostLabel = useAppStore((s) => {
-    const connectionId = s.repos.find((r) => r.id === repoId)?.connectionId?.trim()
-    if (!connectionId) {
-      return null
-    }
-    return (
-      s.sshTargetLabels.get(connectionId) ??
-      s.removedSshTargetLabels.get(connectionId) ??
-      connectionId
-    )
-  })
-
   // Why: fragment concatenation around the styled name cannot be reordered by
   // SOV locales (#9294). Translate one full sentence with the name as a
   // sentinel token, then split on it to re-apply the inline emphasis.
-  const description = sshHostLabel
-    ? translate(
-        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
-        'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
-        { name: NAME_TOKEN, host: sshHostLabel }
-      )
-    : translate(
-        'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
-        'This only removes {{name}} from Orca. It is still on your disk.',
-        { name: NAME_TOKEN }
-      )
+  const description = translate(
+    'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
+    'This only removes {{name}} from Orca. It is still on your disk.',
+    { name: NAME_TOKEN }
+  )
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {

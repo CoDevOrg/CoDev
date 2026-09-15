@@ -401,7 +401,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   // HOST spawn, so no remote/SSH pane is ever in the registry and listStalePanes
   // can never report one. Every rung one takes is a 15s-timeout RPC spent to
   // learn nothing, five times over.
-  it.each(['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7'])(
+  it.each(['remote:env-1@@term-1', 'remote:term-1'])(
     'never queues %s, so no rung spends an RPC on it',
     async (ptyId) => {
       useAppStore.setState({ ptyIdsByTabId: { 'tab-1': [ptyId] } })

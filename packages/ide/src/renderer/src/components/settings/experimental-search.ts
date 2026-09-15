@@ -4,48 +4,9 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
-import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
-    {
-      title: translate('auto.components.settings.experimental.search.87d99e634b', 'Pet'),
-      description: translate(
-        'auto.components.settings.experimental.search.6b5a56ac35',
-        'Floating animated pet in the bottom-right corner.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.0d24759f14',
-          'experimental'
-        ),
-        ...translateSearchKeyword('auto.components.settings.experimental.search.051203d37c', 'pet'),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.b54cea709b',
-          'sidekick'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.2a33975d72',
-          'mascot'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.9f5609bfb8',
-          'overlay'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.65df471ab2',
-          'animated'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.791fefc0b0',
-          'corner'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.9af7a518db',
-          'character'
-        )
-      ]
-    },
     {
       title: translate('auto.components.settings.experimental.search.ccc5548ac5', 'Agents View'),
       description: translate(
@@ -228,8 +189,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
-    getNewWorktreeCardStyleSearchEntry(),
-    getEphemeralVmsSearchEntry()
+    getNewWorktreeCardStyleSearchEntry()
   ]
 )
 
@@ -246,7 +206,6 @@ function findEntry(title: string): SettingsSearchEntry {
 
 export function getExperimentalSearchEntry() {
   return {
-    pet: findEntry(translate('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
     agentsView: findEntry(
       translate('auto.components.settings.experimental.search.ccc5548ac5', 'Agents View')
     ),
@@ -273,9 +232,6 @@ export function getExperimentalSearchEntry() {
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
       )
-    ),
-    ephemeralVms: findEntry(
-      translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')
     )
   } as const
 }

@@ -16,8 +16,6 @@ export function areWorkspaceLinkedItemsEqual(
     a.number === b.number &&
     a.title === b.title &&
     a.url === b.url &&
-    (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
-    (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -27,15 +25,10 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     return null
   }
   const raw = value as Partial<WorkspaceLinkedItem>
-  if (
-    raw.provider !== 'github' &&
-    raw.provider !== 'gitlab' &&
-    raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
-  ) {
+  if (raw.provider !== 'github') {
     return null
   }
-  if (raw.type !== 'issue' && raw.type !== 'pr' && raw.type !== 'mr') {
+  if (raw.type !== 'issue' && raw.type !== 'pr') {
     return null
   }
   if (
@@ -54,12 +47,6 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     number: raw.number,
     title: raw.title.trim(),
     url: raw.url.trim(),
-    ...(typeof raw.linearIdentifier === 'string' && raw.linearIdentifier.trim().length > 0
-      ? { linearIdentifier: raw.linearIdentifier.trim() }
-      : {}),
-    ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
-      ? { jiraIdentifier: raw.jiraIdentifier.trim() }
-      : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }
       : {})

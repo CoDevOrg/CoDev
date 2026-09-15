@@ -1,1 +1,0 @@
-function e(e){return e.split(/[\\/]+/).filter(Boolean)}export{e as t};

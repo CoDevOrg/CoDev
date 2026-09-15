@@ -8,15 +8,13 @@ import {
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
 import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
-import { listOmpSubagentSessions } from '../ai-vault/session-scanner-omp-subagent-listing'
-import { claudeProjectsRootDirs, ompSessionsRootDirs } from '../ai-vault/session-scanner-roots'
+import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-roots'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   aiVaultScanIssueResult,
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
-import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -34,10 +32,8 @@ import {
   normalizeExecutionHostScope,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostScope
 } from '../../shared/execution-host'
-import { getActiveSshAiVaultHostInfos } from './ssh'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
@@ -49,13 +45,6 @@ import { resetAiVaultHostLegCacheForTests, scanHostLegWithCache } from './ai-vau
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
-// Why: a remote home with many agent roots routinely needs seconds to walk,
-// stat and parse. The old shared 3s bound emptied healthy SSH hosts in the
-// all-hosts view; the relay gets a real scan budget and the whole leg (relay
-// attempt plus any legacy crawl) stays bounded so one host can't hold the
-// merge open.
-const AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS = 15_000
-const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -123,27 +112,9 @@ async function scanAiVaultSessionsByHostScope(
   }
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
-    const runtimeResults = [
-      ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
-      ...(sshHosts.issue ? [sshHosts.issue] : [])
-    ]
+    const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     const scannedResults = await Promise.all([
       scanLocalAiVaultSessionsForAllScope(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_SSH_RELAY_TIMEOUT_MS
-            })
-        })
-      ),
       ...runtimeHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
@@ -168,9 +139,6 @@ async function scanAiVaultSessionsByHostScope(
   }
 
   const parsed = parseExecutionHostId(executionHostScope)
-  if (parsed?.kind === 'ssh') {
-    return scanSshAiVaultSessions(parsed.targetId, args, { signal })
-  }
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
       hostInfo: {
@@ -197,14 +165,7 @@ function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<Ru
   })
 }
 
-function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targetId: string }> {
-  return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
-    path: 'SSH hosts',
-    fallbackMessage: 'SSH hosts are unavailable.'
-  })
-}
-
-// Why: the SSH legs already degrade to an issue row so one bad host can't take
+// Why: the runtime legs already degrade to an issue row so one bad host can't take
 // the shared Promise.all down; the local leg can throw too (parse-cache load,
 // WSL home resolution) and would otherwise discard every host's sessions.
 async function scanLocalAiVaultSessionsForAllScope(
@@ -295,7 +256,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   })
 }
 
-// Provider-gated: only Claude and OMP materialize Task subagent transcripts as
+// Provider-gated: only Claude materializes Task subagent transcripts as
 // sibling files today; other agents resolve to an empty list.
 async function listAiVaultSubagentSessions(
   args?: AiVaultSubagentListArgs
@@ -304,7 +265,7 @@ async function listAiVaultSubagentSessions(
   // every other rejected input instead of throwing.
   if (
     !args ||
-    (args.agent !== 'claude' && args.agent !== 'omp') ||
+    args.agent !== 'claude' ||
     typeof args.parentFilePath !== 'string' ||
     !args.parentFilePath.trim()
   ) {
@@ -322,16 +283,11 @@ async function listAiVaultSubagentSessions(
   // compares textually and would otherwise pass `<root>/../../etc/x.jsonl`.
   const parentFilePath = resolve(args.parentFilePath)
   const wslHomeDirs = await getAiVaultWslHomeDirs()
-  const roots =
-    args.agent === 'claude'
-      ? claudeProjectsRootDirs({ wslHomeDirs })
-      : ompSessionsRootDirs({ wslHomeDirs })
+  const roots = claudeProjectsRootDirs({ wslHomeDirs })
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }
   }
-  return args.agent === 'claude'
-    ? listClaudeSubagentSessions({ parentFilePath })
-    : listOmpSubagentSessions({ parentFilePath })
+  return listClaudeSubagentSessions({ parentFilePath })
 }
 
 function resetAiVaultCacheForTests(): void {

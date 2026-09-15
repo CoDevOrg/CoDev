@@ -17,7 +17,6 @@ function worktree(id: string, displayName: string | undefined, lastActivityAt = 
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

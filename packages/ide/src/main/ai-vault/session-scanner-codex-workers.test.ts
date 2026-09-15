@@ -105,23 +105,6 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
     const result = await scanAiVaultSessions({
       claudeProjectsDir: join(root, 'claude-projects'),
       codexSessionsDir,
-      geminiSessionsDir: join(root, 'gemini-sessions'),
-      antigravityBrainDir: join(root, 'antigravity-brain'),
-      copilotSessionsDir: join(root, 'copilot-sessions'),
-      cursorProjectsDir: join(root, 'cursor-projects'),
-      opencodeStorageDir: join(root, 'opencode-storage'),
-      opencodeDbPaths: [],
-      grokSessionsDir: join(root, 'grok-sessions'),
-      devinTranscriptsDir: join(root, 'devin-transcripts'),
-      hermesSessionsDir: join(root, 'hermes-sessions'),
-      rovoSessionsDir: join(root, 'rovo-sessions'),
-      openclawStateDir: join(root, 'openclaw-state'),
-      openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
-      piSessionsDir: join(root, 'pi-sessions'),
-      ompSessionsDir: join(root, 'omp-sessions'),
-      droidSessionsDir: join(root, 'droid-sessions'),
-      droidProjectsDir: join(root, 'droid-projects'),
-      kimiSessionsDir: join(root, 'kimi-sessions'),
       platform: 'darwin'
     })
 

@@ -84,29 +84,6 @@ describe('resolveTerminalHostOwnership teardown', () => {
       ...overrides
     } as unknown as Partial<AppState>)
 
-  it('scopes an ephemeral setup terminal to the runtime for spawn but not for teardown', () => {
-    const state = focusedState()
-    expect(resolveTerminalHostOwnership(state, EPHEMERAL_ID, 'spawn')).toEqual({
-      kind: 'runtime',
-      runtimeEnvironmentId: 'hub-a'
-    })
-    expect(resolveTerminalHostOwnership(state, EPHEMERAL_ID, 'teardown')).toEqual({
-      kind: 'local-or-ssh',
-      runtimeEnvironmentId: null
-    })
-  })
-
-  it('keeps a plain local folder workspace local for teardown while a runtime is focused', () => {
-    const state = focusedState({
-      folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
-      projectGroups: [{ id: 'pg-1', connectionId: null, executionHostId: null }]
-    } as unknown as Partial<AppState>)
-    expect(resolveTerminalHostOwnership(state, folderWorkspaceKey('fw-1'), 'teardown')).toEqual({
-      kind: 'local-or-ssh',
-      runtimeEnvironmentId: null
-    })
-  })
-
   it('keeps a HUB-owned folder workspace on its runtime for teardown', () => {
     const state = focusedState({
       folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
@@ -142,17 +119,6 @@ describe('resolveTerminalHostOwnership teardown', () => {
     expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
       kind: 'runtime',
       runtimeEnvironmentId: 'hub-a'
-    })
-  })
-
-  it('keeps an SSH-owned worktree killable by the paired client', () => {
-    const state = localState({
-      repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1', hostId: 'ssh:conn-1' }] }
-    } as unknown as Partial<AppState>)
-    expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
-      kind: 'local-or-ssh',
-      runtimeEnvironmentId: null
     })
   })
 

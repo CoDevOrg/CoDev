@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildManagedHookDetectionCommands,
-  detectedManagedHookAgents
 } from './managed-hook-detection-commands'
 
 describe('managed hook detection commands', () => {
@@ -18,7 +17,4 @@ describe('managed hook detection commands', () => {
     expect(commands).toContainEqual({ id: 'codex', cmd: '/opt/codex' })
   })
 
-  it('maps detected TUI ids back to managed hook targets', () => {
-    expect(detectedManagedHookAgents(['codex', 'opencode', 'droid'])).toEqual(['codex', 'droid'])
-  })
 })

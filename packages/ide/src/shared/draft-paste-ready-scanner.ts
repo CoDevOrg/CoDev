@@ -11,7 +11,6 @@ const CODEX_COMPOSER_PROMPT = '›'
 // enabled, so gating on it (instead of a quiet window) stops the paste from
 // racing the composer mount under slow/noisy startup. mimo-code uses the same
 // signal by parity; the quiet-window fallback covers any agent that differs.
-const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 
 export type DraftPasteReadyScanResult = {
   /** The agent-specific ready signal fired — caller should deliver the paste now. */
@@ -50,12 +49,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   let postHandshakeRecent = ''
   let saw2004 = false
 
-  const signalMarker =
-    readySignal === 'codex-composer-prompt'
-      ? CODEX_COMPOSER_PROMPT
-      : readySignal === 'render-cursor-after-bracketed-paste'
-        ? DECTCEM_SHOW_CURSOR
-        : null
+  const signalMarker = readySignal === 'codex-composer-prompt' ? CODEX_COMPOSER_PROMPT : null
 
   return {
     observe(data: string): DraftPasteReadyScanResult {

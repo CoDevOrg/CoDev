@@ -1,15 +1,7 @@
-import type {
-  BaseRefSearchResult,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearCollectionResult,
-  LinearIssue
-} from '../types'
+import type { BaseRefSearchResult, GitHubWorkItem } from '../types'
 import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
-import { JIRA_ISSUE_KEY_PATTERN, parseJiraIssueUrl } from '../jira-issue-url'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+export type SmartNameMode = 'smart' | 'github' | 'branches' | 'text'
 
 export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 
@@ -17,20 +9,12 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
-  | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
-  | { kind: 'linear'; value: string; issue: LinearIssue }
-  | { kind: 'jira'; value: string; issue: JiraIssue }
-
-type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
 const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   smart: 'Start typing to create a name or find a source.',
   github: 'Start typing to search GitHub PRs and issues.',
-  gitlab: 'Start typing to search GitLab MRs and issues.',
   branches: 'No matching branches.',
-  linear: 'Start typing to search Linear issues.',
-  jira: 'Start typing to search Jira issues, or paste an issue URL.',
   text: ''
 }
 
@@ -43,26 +27,6 @@ export function isSmartWorkspaceSourceQueryWithinLimit(
   maxBytes = SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES
 ): boolean {
   return !isClipboardTextByteLengthOverLimit(query, maxBytes)
-}
-
-export function buildJiraIssueSearchJql(query: string): string | null {
-  const trimmed = query.trim()
-  if (!trimmed || !isSmartWorkspaceSourceQueryWithinLimit(trimmed)) {
-    return null
-  }
-  if (JIRA_ISSUE_KEY_PATTERN.test(trimmed)) {
-    return `key = "${trimmed.toUpperCase()}"`
-  }
-  const escaped = trimmed.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
-  return `text ~ "${escaped}*"`
-}
-
-export function isBlockingJiraUrlIntent(mode: SmartNameMode, value: string): boolean {
-  return (mode === 'smart' || mode === 'jira') && parseJiraIssueUrl(value) !== null
-}
-
-function toJiraSourceRow(issue: JiraIssue): SmartWorkspaceSourceRow {
-  return { kind: 'jira', value: `jira-${issue.siteId ?? ''}-${issue.key}`, issue }
 }
 
 export function getBranchSearchRequest({
@@ -188,34 +152,16 @@ export function shouldHoldSourceResultsForQuery({
 export function buildSmartWorkspaceSourceRows({
   branches,
   githubItems,
-  gitlabAvailable,
-  gitlabItems,
-  jiraIntent = false,
-  jiraIssue,
-  jiraIssues = [],
-  linearAvailable,
-  linearIssues,
   mode,
   resultLimit,
   value
 }: {
   branches: BaseRefSearchResult[]
   githubItems: GitHubWorkItem[]
-  gitlabAvailable: boolean
-  gitlabItems: GitLabWorkItem[]
-  jiraIntent?: boolean
-  jiraIssue?: JiraIssue | null
-  jiraIssues?: JiraIssue[]
-  linearAvailable: boolean
-  linearIssues: LinearIssueSourceInput
   mode: SmartNameMode
   resultLimit: number
   value: string
 }): SmartWorkspaceSourceRow[] {
-  // Why: a pasted issue URL resolves to exactly one issue — every other source is noise.
-  if (jiraIntent) {
-    return jiraIssue ? [toJiraSourceRow(jiraIssue)] : []
-  }
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return []
   }
@@ -237,15 +183,6 @@ export function buildSmartWorkspaceSourceRows({
       }))
     )
   }
-  if (gitlabAvailable && (mode === 'smart' || mode === 'gitlab')) {
-    nextRows.push(
-      ...gitlabItems.map((item) => ({
-        kind: 'gitlab' as const,
-        value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
-        item
-      }))
-    )
-  }
   const shouldShowBranches = mode === 'branches' || (mode === 'smart' && trimmed.length > 0)
   if (shouldShowBranches) {
     const branchExactMatch = branches.some(
@@ -262,25 +199,6 @@ export function buildSmartWorkspaceSourceRows({
         localBranchName: branch.localBranchName
       }))
     )
-  }
-  if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
-    // Why: mixed-version runtime responses may briefly carry the paginated
-    // collection shape into this render path; rendering must stay recoverable.
-    const resolvedLinearIssues = Array.isArray(linearIssues)
-      ? linearIssues
-      : Array.isArray(linearIssues?.items)
-        ? linearIssues.items
-        : []
-    nextRows.push(
-      ...resolvedLinearIssues.map((issue) => ({
-        kind: 'linear' as const,
-        value: `linear-${issue.id}`,
-        issue
-      }))
-    )
-  }
-  if (mode === 'jira') {
-    nextRows.push(...jiraIssues.map(toJiraSourceRow))
   }
   return nextRows.slice(0, resultLimit + 1)
 }

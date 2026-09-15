@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const launchAgentInNewTab = vi.fn()
 const closeTab = vi.fn()
 let storeState: {
-  tabsByWorktree: Record<string, Array<{ id: string }>>
+  tabsByWorktree: Record<string, { id: string }[]>
   closeTab: typeof closeTab
 }
 
@@ -36,19 +36,13 @@ afterEach(() => {
 })
 
 describe('codevChatProviders / isCodevChatProvider / otherCodevChatProvider', () => {
-  it('offers only claude and codex when no Cursor credential is linked', () => {
-    expect(codevChatProviders({})).toEqual(['claude', 'codex'])
-    expect(isCodevChatProvider('claude', {})).toBe(true)
-    expect(isCodevChatProvider('codex', {})).toBe(true)
-    expect(isCodevChatProvider('cursor', {})).toBe(false)
-    expect(isCodevChatProvider('gemini', {})).toBe(false)
-    expect(isCodevChatProvider(null, {})).toBe(false)
-  })
-
-  it('adds cursor once the member has a linked Cursor credential', () => {
-    const win = { __CODEV_CURSOR_AVAILABLE__: true }
-    expect(codevChatProviders(win)).toEqual(['claude', 'codex', 'cursor'])
-    expect(isCodevChatProvider('cursor', win)).toBe(true)
+  it('offers only claude and codex', () => {
+    expect(codevChatProviders()).toEqual(['claude', 'codex'])
+    expect(isCodevChatProvider('claude')).toBe(true)
+    expect(isCodevChatProvider('codex')).toBe(true)
+    expect(isCodevChatProvider('cursor')).toBe(false)
+    expect(isCodevChatProvider('gemini')).toBe(false)
+    expect(isCodevChatProvider(null)).toBe(false)
   })
 
   it('toggles between the two hosted providers', () => {
@@ -58,28 +52,21 @@ describe('codevChatProviders / isCodevChatProvider / otherCodevChatProvider', ()
 })
 
 describe('switchCodevChatProvider', () => {
-  it('launches the new provider in the tab’s worktree and retires the old tab', () => {
+  it('does not launch a local Orca agent', () => {
     switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
 
-    expect(launchAgentInNewTab).toHaveBeenCalledWith({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      promptDelivery: 'draft',
-      launchSource: 'new_workspace_composer'
-    })
-    expect(closeTab).not.toHaveBeenCalled()
-
     vi.runAllTimers()
-    expect(closeTab).toHaveBeenCalledWith('chat-old', { reason: 'user' })
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
   })
 
-  it('keeps the previous tab when it is the worktree’s only one (replacement not mirrored yet)', () => {
+  it('does nothing when the local tab is the only remaining tab', () => {
     storeState.tabsByWorktree = { 'wt-1': [{ id: 'chat-old' }] }
 
     switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
     vi.runAllTimers()
 
-    expect(launchAgentInNewTab).toHaveBeenCalledTimes(1)
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
     expect(closeTab).not.toHaveBeenCalled()
   })
 

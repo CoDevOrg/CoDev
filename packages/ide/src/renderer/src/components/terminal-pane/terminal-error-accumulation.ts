@@ -1,6 +1,5 @@
 // Why: the error surface aggregates every pane error into ONE newline-joined
-// string so TerminalErrorToast's per-line filters (isSshReconnectOwnedTerminalError,
-// stripSshReconnectOwnedErrorLines) keep working. That join makes line-based
+// string so per-line error filters keep working. That join makes line-based
 // dedup wrong for messages that themselves contain newlines: a multi-line
 // message is never one line of the accumulated value, so it would re-append on
 // every recurrence and grow without bound.

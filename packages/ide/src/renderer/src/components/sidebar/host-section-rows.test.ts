@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
+import type {   Repo, Worktree } from '../../../../shared/types'
 import { PINNED_GROUP_KEY, type Row } from './worktree-list-groups'
 import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
 
@@ -25,7 +25,6 @@ function worktree(id: string, repoId: string): Worktree {
     isMainWorktree: false,
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     comment: '',
     isUnread: false,
@@ -88,48 +87,6 @@ function pinnedItem(id: string, project: Repo, sectionKey: string): Extract<Row,
   row.rowKey = `${sectionKey}:${id}`
   row.sectionKey = sectionKey
   return row
-}
-
-function folderWorkspaceRow(
-  connectionId: string | null
-): Extract<Row, { type: 'folder-workspace' }> {
-  const projectGroup: ProjectGroup = {
-    id: 'group-1',
-    name: 'Remote folder',
-    parentPath: '/srv/project',
-    connectionId,
-    parentGroupId: null,
-    createdFrom: 'manual',
-    tabOrder: 0,
-    isCollapsed: false,
-    color: null,
-    createdAt: 1,
-    updatedAt: 1
-  }
-  const folderWorkspace: FolderWorkspace = {
-    id: 'folder-1',
-    projectGroupId: projectGroup.id,
-    name: 'Folder workspace',
-    folderPath: '/srv/project',
-    connectionId,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1
-  }
-  return {
-    type: 'folder-workspace',
-    key: 'folder-workspace:folder-1',
-    folderWorkspace,
-    projectGroup,
-    depth: 0,
-    groupDepth: 0
-  }
 }
 
 function rowKey(row: HostSectionRow): string {
@@ -570,72 +527,6 @@ describe('addHostSectionRows', () => {
       'repo:remote-project',
       'remote-wt'
     ])
-  })
-
-  it('groups SSH folder workspace rows under their connection host', () => {
-    const local = repo('local')
-    const rows: Row[] = [repoHeader(local), item('local-wt', local), folderWorkspaceRow('ssh-1')]
-
-    const sectioned = addHostSectionRows({
-      rows,
-      hostOptions: [
-        {
-          id: 'local',
-          kind: 'local',
-          label: 'Local Mac',
-          detail: 'This computer',
-          health: 'local'
-        },
-        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
-      ],
-      workspaceHostScope: 'all',
-      defaultHostId: 'local'
-    })
-
-    expect(sectioned.map(rowKey)).toEqual([
-      'host:local',
-      'repo:local',
-      'local-wt',
-      'host:ssh:ssh-1',
-      'folder-workspace:folder-1'
-    ])
-  })
-
-  it('carries the SSH connection status through to the host header row', () => {
-    const local = repo('local')
-    const ssh = repo('ssh', 'ssh-1')
-    const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
-
-    const sectioned = addHostSectionRows({
-      rows,
-      hostOptions: [
-        {
-          id: 'local',
-          kind: 'local',
-          label: 'Local Mac',
-          detail: 'This computer',
-          health: 'local'
-        },
-        {
-          id: 'ssh:ssh-1',
-          kind: 'ssh',
-          label: 'Builder',
-          detail: 'SSH',
-          health: 'error',
-          connectionStatus: 'auth-failed'
-        }
-      ],
-      workspaceHostScope: 'all',
-      defaultHostId: 'local'
-    })
-
-    expect(
-      sectioned.find((row) => row.type === 'host-header' && row.hostId === 'ssh:ssh-1')
-    ).toMatchObject({
-      health: 'error',
-      connectionStatus: 'auth-failed',
-      collapsed: false
-    })
   })
 
   it('uses the focused runtime as the owner for non-SSH repos', () => {

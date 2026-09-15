@@ -37,28 +37,14 @@ import {
 } from '../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
-import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
-import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
-const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
-  loadUserSshConfigMock: vi.fn(),
-  sshConfigHostsToTargetsMock: vi.fn()
-}))
-
-vi.mock('./ssh/ssh-config-parser', () => ({
-  loadUserSshConfig: loadUserSshConfigMock,
-  sshConfigHostsToTargets: sshConfigHostsToTargetsMock
-}))
 const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
-const TEST_LEAF_LIVE = '33333333-3333-4333-8333-333333333333'
-const TEST_LEAF_EXPIRED = '44444444-4444-4444-8444-444444444444'
 const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
   { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
@@ -694,7 +680,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
-    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(settings.visibleTaskProviders).toEqual(['github'])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
     ])
@@ -1370,242 +1356,6 @@ describe('Store', () => {
     expect(repos).toHaveLength(1)
     expect(repos[0].id).toBe('r1')
     expect(repos[0].gitUsername).toBe('testuser')
-  })
-
-  it('normalizes legacy remote workspace sync fields on SSH targets', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {},
-      sshTargets: [
-        {
-          id: 'ssh-disabled-legacy-grace',
-          label: 'Disabled legacy grace',
-          host: 'disabled.example.com',
-          port: 22,
-          username: 'dev',
-          remoteWorkspaceSyncEnabled: false,
-          remoteWorkspaceSyncGracePeriodSeconds: 0
-        },
-        {
-          id: 'ssh-enabled-legacy-grace',
-          label: 'Enabled legacy grace',
-          host: 'enabled.example.com',
-          port: 22,
-          username: 'dev',
-          remoteWorkspaceSyncEnabled: true,
-          remoteWorkspaceSyncGracePeriodSeconds: 0
-        },
-        {
-          id: 'ssh-synced-grace-wins-over-relay',
-          label: 'Synced grace wins',
-          host: 'new.example.com',
-          port: 22,
-          username: 'dev',
-          relayGracePeriodSeconds: 120,
-          remoteWorkspaceSyncEnabled: true,
-          remoteWorkspaceSyncGracePeriodSeconds: 0
-        },
-        {
-          id: 'ssh-form-default-relay-with-unlimited-sync',
-          label: 'Form-default relay with unlimited sync',
-          host: 'unlimited.example.com',
-          port: 22,
-          username: 'dev',
-          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-          remoteWorkspaceSyncEnabled: true,
-          remoteWorkspaceSyncGracePeriodSeconds: 0
-        },
-        {
-          id: 'ssh-form-default-relay',
-          label: 'Form-default relay',
-          host: 'form-default.example.com',
-          port: 22,
-          username: 'dev',
-          relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-        }
-      ]
-    })
-
-    const store = await createStore()
-    const targets = store.getSshTargets()
-
-    expect(targets[0]).not.toHaveProperty('relayGracePeriodSeconds')
-    expect(targets[1].relayGracePeriodSeconds).toBe(0)
-    expect(targets[2].relayGracePeriodSeconds).toBe(0)
-    expect(targets[3].relayGracePeriodSeconds).toBe(0)
-    expect(targets[4]).not.toHaveProperty('relayGracePeriodSeconds')
-    for (const target of targets) {
-      expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
-      expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
-    }
-
-    store.flush()
-    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    expect(persisted.sshTargets?.[0]).not.toHaveProperty('relayGracePeriodSeconds')
-    expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
-    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
-    expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
-    expect(persisted.sshTargets?.[4]).not.toHaveProperty('relayGracePeriodSeconds')
-    for (const target of persisted.sshTargets ?? []) {
-      expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
-      expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
-    }
-  })
-
-  it('drops the legacy SSH relay default when updating targets', async () => {
-    const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-update-legacy-default',
-      label: 'Update legacy default',
-      host: 'update-default.example.com',
-      port: 22,
-      username: 'dev'
-    })
-
-    const updated = store.updateSshTarget('ssh-update-legacy-default', {
-      relayGracePeriodSeconds: LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-    })
-
-    expect(updated).not.toHaveProperty('relayGracePeriodSeconds')
-    expect(store.getSshTarget('ssh-update-legacy-default')).not.toHaveProperty(
-      'relayGracePeriodSeconds'
-    )
-
-    store.flush()
-    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-update-legacy-default')
-    expect(onDisk).not.toHaveProperty('relayGracePeriodSeconds')
-  })
-
-  it('persists the SSH target source field through add, update, and disk round-trip', async () => {
-    const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-src-1',
-      label: 'cluster',
-      configHost: 'cluster',
-      host: '10.0.0.5',
-      port: 2200,
-      username: 'dev',
-      source: 'ssh-config'
-    })
-
-    // normalizeSshTarget must not strip `source` on update and the new port must take effect (persistence-layer guard for #4684 item #1).
-    const updated = store.updateSshTarget('ssh-src-1', { port: 2222, source: 'ssh-config' })
-    expect(updated?.port).toBe(2222)
-    expect(updated?.source).toBe('ssh-config')
-
-    expect(store.getSshTarget('ssh-src-1')?.source).toBe('ssh-config')
-    expect(store.getSshTarget('ssh-src-1')?.port).toBe(2222)
-
-    store.flush()
-    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-src-1')
-    expect(onDisk?.source).toBe('ssh-config')
-    expect(onDisk?.port).toBe(2222)
-  })
-
-  it('persists only explicit SSH connection reuse opt-outs', async () => {
-    const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-reuse-default',
-      label: 'Default reuse',
-      host: 'default.example.com',
-      port: 22,
-      username: 'dev',
-      systemSshConnectionReuse: true
-    })
-    store.addSshTarget({
-      id: 'ssh-reuse-off',
-      label: 'Reuse disabled',
-      host: 'legacy.example.com',
-      port: 22,
-      username: 'dev',
-      systemSshConnectionReuse: false
-    })
-
-    expect(store.getSshTarget('ssh-reuse-default')).not.toHaveProperty('systemSshConnectionReuse')
-    expect(store.getSshTarget('ssh-reuse-off')?.systemSshConnectionReuse).toBe(false)
-
-    store.flush()
-    const persistedBeforeUpdate = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    const defaultTarget = persistedBeforeUpdate.sshTargets?.find(
-      (t) => t.id === 'ssh-reuse-default'
-    )
-    const disabledTarget = persistedBeforeUpdate.sshTargets?.find((t) => t.id === 'ssh-reuse-off')
-    expect(defaultTarget).not.toHaveProperty('systemSshConnectionReuse')
-    expect(disabledTarget?.systemSshConnectionReuse).toBe(false)
-
-    const updated = store.updateSshTarget('ssh-reuse-off', { systemSshConnectionReuse: undefined })
-    expect(updated).not.toHaveProperty('systemSshConnectionReuse')
-    store.flush()
-    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    const updatedTarget = persisted.sshTargets?.find((t) => t.id === 'ssh-reuse-off')
-    expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
-  })
-
-  it('drops retired per-target SSH terminal source-credit selections', async () => {
-    const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-source-credit-on',
-      label: 'Noisy build host',
-      host: 'build.example.com',
-      port: 22,
-      username: 'dev',
-      experimentalPtySourceCreditV1: true
-    } as never)
-
-    expect(store.getSshTarget('ssh-source-credit-on')).not.toHaveProperty(
-      'experimentalPtySourceCreditV1'
-    )
-    store.flush()
-    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
-    const target = persisted.sshTargets?.find((entry) => entry.id === 'ssh-source-credit-on')
-    expect(target).not.toHaveProperty('experimentalPtySourceCreditV1')
-  })
-
-  it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
-    loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
-    const candidate = (port: number, id: string) => [
-      { id, label: 'cluster', configHost: 'cluster', host: '10.0.0.5', port, username: 'dev' }
-    ]
-
-    const store = await createStore()
-    const sshStore = new SshConnectionStore(store)
-
-    // First sync inserts the config host, stamped as config-managed.
-    sshConfigHostsToTargetsMock.mockReturnValue(candidate(2200, 'ssh-cfg-1'))
-    const inserted = sshStore.importFromSshConfig()
-    expect(inserted).toHaveLength(1)
-    expect(inserted[0]?.source).toBe('ssh-config')
-    expect(inserted[0]?.port).toBe(2200)
-    // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
-    sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
-    const changed = sshStore.importFromSshConfig()
-    expect(changed).toHaveLength(1)
-    expect(changed[0]?.port).toBe(2222)
-    expect(changed[0]?.source).toBe('ssh-config')
-
-    // A third identical sync is a no-op — repeated auto-sync on every pane open writes nothing.
-    expect(sshStore.importFromSshConfig()).toHaveLength(0)
-
-    // Exactly one cluster target on disk with the rotated port and source kept.
-    store.flush()
-    const onDisk = (readDataFile() as { sshTargets?: Record<string, unknown>[] }).sshTargets
-    const clusterTargets = (onDisk ?? []).filter((t) => t.configHost === 'cluster')
-    expect(clusterTargets).toHaveLength(1)
-    expect(clusterTargets[0]?.port).toBe(2222)
-    expect(clusterTargets[0]?.source).toBe('ssh-config')
-
-    // Survives a fresh load from the same data file.
-    const reloaded = await createStore()
-    const reloadedCluster = reloaded.getSshTargets().find((t) => t.configHost === 'cluster')
-    expect(reloadedCluster?.port).toBe(2222)
-    expect(reloadedCluster?.source).toBe('ssh-config')
   })
 
   it('drops malformed migration-unsupported PTY entries on load', async () => {
@@ -2381,7 +2131,7 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github'])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
@@ -2398,20 +2148,20 @@ describe('Store', () => {
       settings: {
         commitMessageAi: {
           enabled: true,
-          agentId: 'cursor',
-          selectedModelByAgent: { cursor: 'gpt-5.2' },
-          selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } },
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.2' },
+          selectedModelByAgentByHost: { 'ssh:conn-1': { codex: 'remote-model' } },
           discoveredModelsByAgent: {
-            cursor: [{ id: 'gpt-5.2', label: 'GPT 5.2' }]
+            codex: [{ id: 'gpt-5.2', label: 'GPT 5.2' }]
           },
           discoveredModelsByAgentByHost: {
             'ssh:conn-1': {
-              cursor: [{ id: 'remote-model', label: 'Remote Model' }]
+              codex: [{ id: 'remote-model', label: 'Remote Model' }]
             }
           },
           selectedThinkingByModel: { 'gpt-5.2': 'high' },
           customPrompt: 'Use Conventional Commits.',
-          customAgentCommand: 'cursor-agent'
+          customAgentCommand: 'codex'
         }
       },
       ui: {},
@@ -2424,19 +2174,19 @@ describe('Store', () => {
 
     expect(sourceControlAi).toMatchObject({
       enabled: true,
-      agentId: 'cursor',
-      selectedModelByAgent: { cursor: 'gpt-5.2' },
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'gpt-5.2' },
       selectedThinkingByModel: { 'gpt-5.2': 'high' },
-      customAgentCommand: 'cursor-agent',
+      customAgentCommand: 'codex',
       instructionsByOperation: {
         commitMessage: 'Use Conventional Commits.',
         pullRequest: '',
         branchName: 'Use Conventional Commits.'
       }
     })
-    expect(sourceControlAi?.selectedModelByAgentByHost?.['ssh:conn-1']?.cursor).toBe('remote-model')
-    expect(sourceControlAi?.discoveredModelsByAgent?.cursor?.[0]?.id).toBe('gpt-5.2')
-    expect(sourceControlAi?.discoveredModelsByAgentByHost?.['ssh:conn-1']?.cursor?.[0]?.id).toBe(
+    expect(sourceControlAi?.selectedModelByAgentByHost?.['ssh:conn-1']?.codex).toBe('remote-model')
+    expect(sourceControlAi?.discoveredModelsByAgent?.codex?.[0]?.id).toBe('gpt-5.2')
+    expect(sourceControlAi?.discoveredModelsByAgentByHost?.['ssh:conn-1']?.codex?.[0]?.id).toBe(
       'remote-model'
     )
     expect(store.getSettings().commitMessageAi?.customPrompt).toBe('Use Conventional Commits.')
@@ -2741,32 +2491,14 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { visibleTaskProviders: ['gitlab', 'unknown', 'gitlab'] },
+      settings: { visibleTaskProviders: ['github', 'unknown', 'github'] as never },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
 
     const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
-  })
-
-  it('preserves a deliberate Jira provider opt-out after migration', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {
-        visibleTaskProviders: ['gitlab'],
-        visibleTaskProvidersDefaultedForJira: true
-      },
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-
-    const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github'])
   })
 
   it('normalizes malformed terminal shortcut policy on load', async () => {
@@ -2804,7 +2536,7 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { visibleTaskProviders: ['linear'], defaultTaskSource: 'github' },
+      settings: { visibleTaskProviders: ['linear'] as never, defaultTaskSource: 'github' },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -2812,7 +2544,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -2820,15 +2552,15 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'bitbucket' as never },
+      settings: { visibleTaskProviders: ['gitlab'] as never, defaultTaskSource: 'bitbucket' as never },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
 
     const store = await createStore()
-    expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().defaultTaskSource).toBe('github')
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {
@@ -4018,201 +3750,6 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('only::/repo/wt')).toBeUndefined()
   })
 
-  // ── 6c. reassignSshTargetId re-adopts orphaned workspaces ─────────────
-
-  it('reassignSshTargetId re-points repos and worktree metas onto the new id', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old', executionHostId: 'ssh:ssh-old' }))
-    store.setWorktreeMeta('r1::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
-
-    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    expect(repoIds).toEqual(['r1'])
-    const repo = store.getRepo('r1')!
-    expect(repo.connectionId).toBe('ssh-new')
-    expect(repo.executionHostId).toBe('ssh:ssh-new')
-    expect(store.getWorktreeMeta('r1::/repo/wt')!.hostId).toBe('ssh:ssh-new')
-  })
-
-  it('reassignSshTargetId leaves repos on other hosts untouched', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'local-repo', path: '/local' }))
-    store.addRepo(
-      makeRepo({
-        id: 'ssh-repo',
-        path: '/remote',
-        connectionId: 'ssh-old',
-        executionHostId: 'ssh:ssh-old'
-      })
-    )
-
-    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    expect(repoIds).toEqual(['ssh-repo'])
-    expect(store.getRepo('local-repo')!.connectionId).toBeUndefined()
-    expect(store.getRepo('ssh-repo')!.connectionId).toBe('ssh-new')
-  })
-
-  it('reassignSshTargetId re-points a repo that only carries connectionId (no executionHostId)', async () => {
-    const store = await createStore()
-    // SSH repos created via addRemoteRepoFromPath leave executionHostId unset.
-    store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old' }))
-
-    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    expect(repoIds).toEqual(['r1'])
-    const repo = store.getRepo('r1')!
-    expect(repo.connectionId).toBe('ssh-new')
-    // Must not stamp an executionHostId where there wasn't one.
-    expect(repo.executionHostId).toBeUndefined()
-  })
-
-  it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
-    const store = await createStore()
-    // A meta on the old SSH host with no repo row — the re-point must still be persisted, not memory-only.
-    store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
-
-    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
-    expect(repoIds).toEqual([]) // no repo matched
-    store.flush()
-
-    const reloaded = await createStore()
-    expect(reloaded.getWorktreeMeta('r1::/remote/wt')?.hostId).toBe('ssh:ssh-new')
-  })
-
-  it('reassignSshTargetId migrates session pty ids, reconnect list, leases, and host scope', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old', executionHostId: 'ssh:ssh-old' }))
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'r1::/wt',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId: 'ssh:ssh-old@@pty-2' })]
-      },
-      terminalLayoutsByTabId: {},
-      remoteSessionIdsByTabId: { tab1: 'ssh:ssh-old@@pty-2' },
-      activeConnectionIdsAtShutdown: ['ssh-old']
-    })
-    store.upsertSshRemotePtyLease({ targetId: 'ssh-old', ptyId: 'pty-2', state: 'detached' })
-    store.updateUI({
-      workspaceHostScope: 'ssh:ssh-old',
-      visibleWorkspaceHostIds: ['local', 'ssh:ssh-old'],
-      workspaceHostOrder: ['ssh:ssh-old', 'local']
-    })
-
-    store.reassignSshTargetId('ssh-old', 'ssh-new')
-    store.flush()
-
-    const reloaded = await createStore()
-    const session = reloaded.getWorkspaceSession()
-    expect(session.tabsByWorktree['r1::/wt'][0].ptyId).toBe('ssh:ssh-new@@pty-2')
-    expect(session.remoteSessionIdsByTabId).toEqual({ tab1: 'ssh:ssh-new@@pty-2' })
-    expect(session.activeConnectionIdsAtShutdown).toEqual(['ssh-new'])
-    expect(reloaded.getSshRemotePtyLeases('ssh-new')).toHaveLength(1)
-    expect(reloaded.getSshRemotePtyLeases('ssh-old')).toHaveLength(0)
-    const ui = reloaded.getUI()
-    expect(ui.workspaceHostScope).toBe('ssh:ssh-new')
-    expect(ui.visibleWorkspaceHostIds).toEqual(['local', 'ssh:ssh-new'])
-    expect(ui.workspaceHostOrder).toEqual(['ssh:ssh-new', 'local'])
-  })
-
-  it('reassignSshTargetId re-keys a session partition stored under the old ssh host id', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(
-      {
-        activeRepoId: null,
-        activeWorktreeId: null,
-        activeTabId: null,
-        tabsByWorktree: {
-          'r1::/wt': [makeTerminalTab({ id: 'tab1', ptyId: 'ssh:ssh-old@@pty-9' })]
-        },
-        terminalLayoutsByTabId: {}
-      },
-      'ssh:ssh-old'
-    )
-
-    store.reassignSshTargetId('ssh-old', 'ssh-new')
-    store.flush()
-
-    const reloaded = await createStore()
-    // Old-key partition is gone; the re-keyed one carries migrated pty ids.
-    expect(reloaded.getWorkspaceSession('ssh:ssh-old').tabsByWorktree).toEqual({})
-    expect(reloaded.getWorkspaceSession('ssh:ssh-new').tabsByWorktree['r1::/wt'][0].ptyId).toBe(
-      'ssh:ssh-new@@pty-9'
-    )
-  })
-
-  it('reassignSshTargetId keeps the live partition when both host keys exist', async () => {
-    const store = await createStore()
-    const baseSession = {
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      terminalLayoutsByTabId: {}
-    }
-    store.setWorkspaceSession(
-      { ...baseSession, tabsByWorktree: { 'r1::/dead': [] } },
-      'ssh:ssh-old'
-    )
-    store.setWorkspaceSession(
-      { ...baseSession, tabsByWorktree: { 'r1::/live': [] } },
-      'ssh:ssh-new'
-    )
-
-    store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    expect(store.getWorkspaceSession('ssh:ssh-old').tabsByWorktree).toEqual({})
-    expect(store.getWorkspaceSession('ssh:ssh-new').tabsByWorktree).toEqual({ 'r1::/live': [] })
-  })
-
-  it('reassignSshTargetId re-points an independent provisioned host setup', async () => {
-    const store = await createStore()
-    store.addRepo({
-      ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
-      upstream: { owner: 'stablyai', repo: 'cloud-project' }
-    })
-    store.createProjectHostSetup({
-      projectId: 'github:stablyai/cloud-project',
-      hostId: 'ssh:ssh-old',
-      setupId: 'cloud-project::ssh-old',
-      setupMethod: 'provisioned'
-    })
-
-    // Meta-only re-adoption must still migrate the provisioned setup, or new worktrees would be born on a dead host id.
-    store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    const setups = store.getProjectHostSetups()
-    const provisioned = setups.find((entry) => entry.id === 'cloud-project::ssh-old')
-    expect(provisioned?.hostId).toBe('ssh:ssh-new')
-  })
-
-  it('reassignSshTargetId drops a stale setup when the new host already has one', async () => {
-    const store = await createStore()
-    store.addRepo({
-      ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
-      upstream: { owner: 'stablyai', repo: 'cloud-project' }
-    })
-    store.createProjectHostSetup({
-      projectId: 'github:stablyai/cloud-project',
-      hostId: 'ssh:ssh-old',
-      setupId: 'setup-old',
-      setupMethod: 'provisioned'
-    })
-    store.createProjectHostSetup({
-      projectId: 'github:stablyai/cloud-project',
-      hostId: 'ssh:ssh-new',
-      setupId: 'setup-new',
-      setupMethod: 'provisioned'
-    })
-
-    store.reassignSshTargetId('ssh-old', 'ssh-new')
-
-    const setups = store.getProjectHostSetups()
-    expect(setups.find((entry) => entry.id === 'setup-old')).toBeUndefined()
-    expect(setups.find((entry) => entry.id === 'setup-new')?.hostId).toBe('ssh:ssh-new')
-  })
-
   // ── 7. updateRepo ──────────────────────────────────────────────────
 
   it('updateRepo modifies the repo in place', async () => {
@@ -4843,52 +4380,35 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
-  it('persists paired Jira linked-item metadata and drops mismatched source context', async () => {
+  it('persists paired linked-item metadata and drops mismatched source context', async () => {
     const store = await createStore()
     const linkedWorkItem = {
-      provider: 'jira' as const,
+      provider: 'github' as const,
       type: 'issue' as const,
-      number: 0,
-      title: 'ORCA-123 Link Jira',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      number: 123,
+      title: 'Link GitHub',
+      url: 'https://github.com/acme/app/issues/123'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
-      provider: 'jira' as const,
+      provider: 'github' as const,
       projectId: 'project-1',
       hostId: 'runtime:env-1' as const,
-      providerIdentity: {
-        provider: 'jira' as const,
-        siteId: 'site-1',
-        siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
-      },
+      providerIdentity: { provider: 'github' as const, owner: 'acme', repo: 'app' },
       accountLabel: 'ada@example.com'
     }
 
-    store.setWorktreeMeta('wt-jira', { linkedWorkItem, linkedTaskSourceContext })
+    store.setWorktreeMeta('wt-github', { linkedWorkItem, linkedTaskSourceContext })
     store.flush()
     const restored = await createStore()
 
-    expect(restored.getWorktreeMeta('wt-jira')).toMatchObject({
+    expect(restored.getWorktreeMeta('wt-github')).toMatchObject({
       linkedWorkItem,
       linkedTaskSourceContext
     })
     expect(
-      restored.setWorktreeMeta('wt-jira', {
-        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
-      }).linkedTaskSourceContext
-    ).toBeNull()
-    expect(
-      restored.setWorktreeMeta('wt-jira', {
-        linkedTaskSourceContext: {
-          ...linkedTaskSourceContext,
-          providerIdentity: {
-            ...linkedTaskSourceContext.providerIdentity,
-            projectKey: 'OTHER'
-          }
-        }
+      restored.setWorktreeMeta('wt-github', {
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' as never }
       }).linkedTaskSourceContext
     ).toBeNull()
   })
@@ -4900,25 +4420,19 @@ describe('Store', () => {
       worktreeMeta: {
         'wt-malformed': {
           linkedWorkItem: {
-            provider: 'jira',
+            provider: 'github',
             type: 'issue',
-            number: 0,
-            title: 'ORCA-123 Link Jira',
-            url: 'https://company.atlassian.net/browse/ORCA-123',
-            jiraIdentifier: 'ORCA-123'
+            number: 123,
+            title: 'Link GitHub',
+            url: 'https://github.com/acme/app/issues/123'
           },
           linkedTaskSourceContext: {
             kind: 'task-source',
-            provider: 'jira',
+            provider: 'github',
             projectId: 'project-1',
             hostId: 'local',
             accountLabel: 44,
-            providerIdentity: {
-              provider: 'jira',
-              siteId: 'site-1',
-              siteUrl: 'https://company.atlassian.net',
-              projectKey: 'ORCA'
-            }
+            providerIdentity: { provider: 'github', owner: 'acme', repo: 'app' }
           }
         }
       }
@@ -4926,7 +4440,7 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getWorktreeMeta('wt-malformed')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-malformed')?.linkedWorkItem?.number).toBe(123)
     expect(store.getWorktreeMeta('wt-malformed')?.linkedTaskSourceContext).toBeNull()
   })
 
@@ -4943,25 +4457,19 @@ describe('Store', () => {
         'r1::/tmp/scalar': 5,
         'wt-sibling': {
           linkedWorkItem: {
-            provider: 'jira',
+            provider: 'github',
             type: 'issue',
-            number: 0,
-            title: 'ORCA-123 Link Jira',
-            url: 'https://company.atlassian.net/browse/ORCA-123',
-            jiraIdentifier: 'ORCA-123'
+            number: 123,
+            title: 'Link GitHub',
+            url: 'https://github.com/acme/app/issues/123'
           },
           linkedTaskSourceContext: {
             kind: 'task-source',
-            provider: 'jira',
+            provider: 'github',
             projectId: 'project-1',
             hostId: 'local',
             accountLabel: 44,
-            providerIdentity: {
-              provider: 'jira',
-              siteId: 'site-1',
-              siteUrl: 'https://company.atlassian.net',
-              projectKey: 'ORCA'
-            }
+            providerIdentity: { provider: 'github', owner: 'acme', repo: 'app' }
           }
         }
       }
@@ -4969,7 +4477,7 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getWorktreeMeta('wt-sibling')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-sibling')?.linkedWorkItem?.number).toBe(123)
     expect(store.getWorktreeMeta('wt-sibling')?.linkedTaskSourceContext).toBeNull()
     // Corrupt entries must not survive: gcStaleWorktreeMeta keeps timestamp-less keys, and downstream
     // consumers deref worktreeMeta values unguarded (also keeps a rollback to an older build loadable).
@@ -4991,12 +4499,11 @@ describe('Store', () => {
       createdFrom: 'folder-scan'
     })
     const linkedTask = {
-      provider: 'linear' as const,
+      provider: 'github' as const,
       type: 'issue' as const,
-      number: 0,
+      number: 123,
       title: 'Refund fix',
-      url: 'https://linear.app/acme/issue/ENG-123',
-      linearIdentifier: 'ENG-123'
+      url: 'https://github.com/acme/app/issues/123'
     }
 
     const workspace = store.createFolderWorkspace({
@@ -5024,7 +4531,7 @@ describe('Store', () => {
     expect(store.getFolderWorkspaces()).toHaveLength(1)
   })
 
-  it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
+  it('round-trips linked item and source context for repo-less folder workspaces', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
       name: 'Platform',
@@ -5032,25 +4539,19 @@ describe('Store', () => {
       createdFrom: 'folder-scan'
     })
     const linkedTask = {
-      provider: 'jira' as const,
+      provider: 'github' as const,
       type: 'issue' as const,
-      number: 0,
-      title: 'ORCA-123 Link Jira',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      number: 123,
+      title: 'Link GitHub',
+      url: 'https://github.com/acme/app/issues/123'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
-      provider: 'jira' as const,
+      provider: 'github' as const,
       projectId: group.id,
       hostId: 'runtime:folder-env' as const,
       repoId: null,
-      providerIdentity: {
-        provider: 'jira' as const,
-        siteId: 'site-1',
-        siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
-      },
+      providerIdentity: { provider: 'github' as const, owner: 'acme', repo: 'app' },
       accountLabel: 'ada@example.com'
     }
 
@@ -5598,9 +5099,9 @@ describe('Store', () => {
     expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude', 'claude-agent-teams'])
 
     const updated = store.updateSettings({
-      disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
+      disabledTuiAgents: ['codex', 'not-real', 'codex', 'claude'] as never
     })
-    expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+    expect(updated.disabledTuiAgents).toEqual(['codex', 'claude'])
   })
 
   it('enables Claude Agent Teams by default for fresh installs', async () => {
@@ -5623,12 +5124,9 @@ describe('Store', () => {
 
     expect(store.getSettings().agentDefaultArgs).toMatchObject({
       claude: '--dangerously-skip-permissions',
-      codex: '--dangerously-bypass-approvals-and-sandbox',
-      cursor: '--yolo'
+      codex: '--dangerously-bypass-approvals-and-sandbox'
     })
-    expect(store.getSettings().agentDefaultEnv).toMatchObject({
-      goose: { GOOSE_MODE: 'auto' }
-    })
+    expect(store.getSettings().agentDefaultEnv).toEqual({})
     expect(store.getSettings().agentYoloDefaultsMigrated).toBe(true)
   })
 
@@ -5638,8 +5136,7 @@ describe('Store', () => {
       JSON.stringify({
         settings: {
           agentCmdOverrides: {
-            codex: 'codex --profile work',
-            goose: 'goose'
+            codex: 'codex --profile work'
           }
         }
       })
@@ -5647,36 +5144,7 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().agentDefaultArgs?.codex).toBe('')
-    expect(store.getSettings().agentDefaultEnv?.goose).toEqual({})
     expect(store.getSettings().agentDefaultArgs?.claude).toBe('--dangerously-skip-permissions')
-  })
-
-  it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
-    writeFileSync(
-      join(testState.dir, 'orca-data.json'),
-      JSON.stringify({
-        settings: {
-          agentYoloDefaultsMigrated: true,
-          agentDefaultArgs: {
-            opencode: '--dangerously-skip-permissions --model opencode/gpt-5',
-            kilo: '--dangerously-skip-permissions',
-            codex: '--dangerously-bypass-approvals-and-sandbox'
-          }
-        }
-      })
-    )
-    const store = await createStore()
-    store.flush()
-
-    expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
-    expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
-      '--dangerously-bypass-approvals-and-sandbox'
-    )
-    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(
-      '--model opencode/gpt-5'
-    )
-    expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
   })
 
   it('normalizes app icon on load and update', async () => {
@@ -6832,81 +6300,6 @@ describe('Store', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
-  it('durably encrypts SSH PTY consumer ownership for process restart recovery', async () => {
-    const store = await createStore()
-    store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 1 } as never }, issue: {} })
-    await store.upsertSshPtyConsumerRecovery({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease',
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-    })
-
-    const persisted = readDataFile() as {
-      sshPtyConsumerRecoveries: { ownerLease: string }[]
-    }
-    expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
-    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
-
-    const reloaded = await createStore()
-    expect(reloaded.getSshPtyConsumerRecovery('ssh-1')).toEqual({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease',
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
-    })
-  })
-
-  it('drops decrypted SSH PTY owner leases that exceed the relay protocol bound', async () => {
-    const oversizedLease = 'x'.repeat(513)
-    writeDataFile({
-      ...getDefaultPersistedState(testState.dir),
-      sshPtyConsumerRecoveries: [
-        {
-          targetId: 'ssh-1',
-          clientInstanceId: 'client-1',
-          serverBuildId: 'relay-build-1',
-          clientGeneration: 3,
-          ownerGeneration: 5,
-          ownerLease: Buffer.from(`encrypted:${oversizedLease}`, 'utf-8').toString('base64')
-        }
-      ]
-    })
-
-    const store = await createStore()
-
-    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-  })
-
-  it('removes persisted SSH PTY consumer ownership with its target', async () => {
-    const store = await createStore()
-    store.addSshTarget({
-      id: 'ssh-1',
-      label: 'SSH 1',
-      host: 'example.test',
-      port: 22,
-      username: 'orca'
-    })
-    await store.upsertSshPtyConsumerRecovery({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ownerLease: 'secret-owner-lease'
-    })
-
-    store.removeSshTarget('ssh-1')
-
-    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-  })
-
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
     writeDataFile({
@@ -7453,8 +6846,6 @@ describe('Store', () => {
       'unread',
       'ci',
       'issue',
-      'linear-issue',
-      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -7490,8 +6881,6 @@ describe('Store', () => {
       'unread',
       'ci',
       'issue',
-      'linear-issue',
-      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -7518,8 +6907,6 @@ describe('Store', () => {
       'status',
       'unread',
       'issue',
-      'linear-issue',
-      'jira-issue',
       'pr',
       'automation',
       'cli',
@@ -7551,8 +6938,6 @@ describe('Store', () => {
       'unread',
       'ci',
       'issue',
-      'linear-issue',
-      'jira-issue',
       'pr',
       'ports',
       'inline-agents'
@@ -7569,8 +6954,7 @@ describe('Store', () => {
       ui: {
         worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -7594,7 +6978,6 @@ describe('Store', () => {
           'status',
           'unread',
           'issue',
-          'linear-issue',
           'pr',
           'comment',
           'ports',
@@ -7623,14 +7006,12 @@ describe('Store', () => {
           'status',
           'unread',
           'issue',
-          'linear-issue',
           'pr',
           'comment',
           'ports'
         ],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -7642,114 +7023,12 @@ describe('Store', () => {
       'status',
       'unread',
       'issue',
-      'linear-issue',
       'pr',
       'comment',
       'ports'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-  })
-
-  it('backfills jira-issue once for profiles stamped before it joined the defaults', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { compactWorktreeCards: false },
-      ui: {
-        worktreeCardProperties: [
-          'status',
-          'unread',
-          'issue',
-          'linear-issue',
-          'pr',
-          'ports',
-          'inline-agents'
-        ],
-        _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'linear-issue',
-      'jira-issue',
-      'pr',
-      'ports',
-      'inline-agents'
-    ])
-    expect(
-      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
-    ).toHaveLength(1)
-    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
-  })
-
-  it('preserves a deliberate jira-issue removal after the backfill has run', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { compactWorktreeCards: false },
-      ui: {
-        worktreeCardProperties: ['status', 'unread', 'issue', 'linear-issue', 'pr'],
-        _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'linear-issue',
-      'pr'
-    ])
-    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
-  })
-
-  it('leaves fresh default profiles with a single jira-issue entry', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-
-    expect(
-      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
-    ).toHaveLength(1)
-    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
-  })
-
-  it('skips the jira-issue backfill when card properties are malformed', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { compactWorktreeCards: false },
-      ui: { worktreeCardProperties: 'not-an-array' },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-
-    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
-    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
   })
 
   it('uses the compact preset when card properties are missing in compact mode', async () => {
@@ -7842,35 +7121,6 @@ describe('Store', () => {
     }
     store.setWorkspaceSession(session)
     expect(store.getWorkspaceSession()).toEqual(session)
-  })
-
-  it('patches workspace session without replacing unchanged slices', async () => {
-    const store = await createStore()
-    const tabsByWorktree = {
-      wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
-    }
-    const terminalLayoutsByTabId = {
-      tab1: { root: null, activeLeafId: null, expandedLeafId: null }
-    }
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree,
-      terminalLayoutsByTabId,
-      activeConnectionIdsAtShutdown: ['ssh-1']
-    })
-
-    store.patchWorkspaceSession({
-      activeTabId: 'tab2',
-      activeConnectionIdsAtShutdown: undefined
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.activeTabId).toBe('tab2')
-    expect(session.tabsByWorktree).toEqual(tabsByWorktree)
-    expect(session.terminalLayoutsByTabId).toEqual(terminalLayoutsByTabId)
-    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
   })
 
   it('uses full normalization for structural workspace session patches', async () => {
@@ -8115,66 +7365,6 @@ describe('Store', () => {
     const session = store.getWorkspaceSession()
     expect(session.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
     expect(session.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
-  })
-
-  it('remaps legacy SSH lease leaf ids when loading legacy workspace layouts', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {
-        activeRepoId: 'r1',
-        activeWorktreeId: 'wt1',
-        activeTabId: 'tab1',
-        tabsByWorktree: {
-          wt1: [
-            {
-              id: 'tab1',
-              worktreeId: 'wt1',
-              title: 'Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1,
-              ptyId: 'remote-pty'
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          tab1: {
-            root: { type: 'leaf', leafId: 'pane:1' },
-            activeLeafId: 'pane:1',
-            expandedLeafId: null,
-            ptyIdsByLeafId: { 'pane:1': 'remote-pty' }
-          }
-        }
-      },
-      sshRemotePtyLeases: [
-        {
-          targetId: 'ssh-1',
-          ptyId: 'remote-pty',
-          worktreeId: 'wt1',
-          tabId: 'tab1',
-          leafId: 'pane:1',
-          state: 'detached',
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-
-    const store = await createStore()
-    const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
-    const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
-    if (leafId === null) {
-      throw new Error('Expected remapped leaf id')
-    }
-    expect(isTerminalLeafId(leafId)).toBe(true)
-    expect(layout.ptyIdsByLeafId).toEqual({ [leafId]: 'remote-pty' })
-    expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(leafId)
   })
 
   it('hydrates legacy numeric agent status cache through the pane identity migration', async () => {
@@ -8830,59 +8020,6 @@ describe('Store', () => {
         ])
       })
     )
-  })
-
-  it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {
-        activeRepoId: 'r1',
-        activeWorktreeId: 'wt1',
-        activeTabId: 'tab1',
-        tabsByWorktree: {
-          wt1: [
-            {
-              id: 'tab1',
-              worktreeId: 'wt1',
-              title: 'Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1,
-              ptyId: 'remote-pty'
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          tab1: {
-            root: { type: 'leaf', leafId: TEST_LEAF_1 },
-            activeLeafId: TEST_LEAF_1,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-          }
-        }
-      },
-      sshRemotePtyLeases: [
-        {
-          targetId: 'ssh-1',
-          ptyId: 'remote-pty',
-          worktreeId: 'wt1',
-          tabId: 'tab1',
-          leafId: 'pane:1',
-          state: 'detached',
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-
-    const store = await createStore()
-    expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(TEST_LEAF_1)
   })
 
   it('normalizes stale legacy session writes to prior UUID leaves before preserving bindings', async () => {
@@ -9801,985 +8938,6 @@ describe('Store', () => {
     expect(leafId).not.toBe(TEST_LEAF_2)
   })
 
-  it('does not restore cleared SSH bindings after a lease expired', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'expired'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('does not let an expired lease for another tab suppress a matching pty id', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab-expired',
-      leafId: TEST_LEAF_EXPIRED,
-      state: 'expired'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab-live',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab-live',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'tab-live': {
-          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
-          activeLeafId: TEST_LEAF_LIVE,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_LIVE]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab-live',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab-live',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'tab-live': {
-          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
-          activeLeafId: TEST_LEAF_LIVE,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
-    expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_LIVE]: 'remote-pty'
-    })
-  })
-
-  it('does not let an expired lease for another SSH target suppress the same tab binding', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'repo-live', connectionId: 'ssh-live' }))
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-expired',
-      ptyId: 'remote-pty',
-      worktreeId: 'repo-live::/wt',
-      tabId: 'tab-live',
-      leafId: TEST_LEAF_LIVE,
-      state: 'expired'
-    })
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-live',
-      ptyId: 'remote-pty',
-      worktreeId: 'repo-live::/wt',
-      tabId: 'tab-live',
-      leafId: TEST_LEAF_LIVE,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'repo-live',
-      activeWorktreeId: 'repo-live::/wt',
-      activeTabId: 'tab-live',
-      tabsByWorktree: {
-        'repo-live::/wt': [
-          {
-            id: 'tab-live',
-            worktreeId: 'repo-live::/wt',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'tab-live': {
-          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
-          activeLeafId: TEST_LEAF_LIVE,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_LIVE]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'repo-live',
-      activeWorktreeId: 'repo-live::/wt',
-      activeTabId: 'tab-live',
-      tabsByWorktree: {
-        'repo-live::/wt': [
-          {
-            id: 'tab-live',
-            worktreeId: 'repo-live::/wt',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'tab-live': {
-          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
-          activeLeafId: TEST_LEAF_LIVE,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree['repo-live::/wt'][0].ptyId).toBe('remote-pty')
-    expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_LIVE]: 'remote-pty'
-    })
-  })
-
-  it('does not treat contextless expired leases as wildcards for contextual bindings', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      state: 'expired'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_1]: 'remote-pty'
-    })
-  })
-
-  it('does not treat layout-level leases missing worktree context as contextual matches', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'expired'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {}
-        }
-      }
-    })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_1]: 'remote-pty'
-    })
-  })
-
-  it('merges missing prior layout bindings into partial renderer snapshots', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty-1',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'detached'
-    })
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty-2',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_2,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: TEST_LEAF_1 },
-            second: { type: 'leaf', leafId: TEST_LEAF_2 },
-            ratio: 0.5
-          },
-          activeLeafId: TEST_LEAF_2,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            [TEST_LEAF_1]: 'remote-pty-1',
-            [TEST_LEAF_2]: 'remote-pty-2'
-          }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: TEST_LEAF_1 },
-            second: { type: 'leaf', leafId: TEST_LEAF_2 },
-            ratio: 0.5
-          },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty-1' }
-        }
-      }
-    })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_1]: 'remote-pty-1',
-      [TEST_LEAF_2]: 'remote-pty-2'
-    })
-  })
-
-  it('does not restore layout bindings for leaves removed from the incoming layout', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty-1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'detached'
-    })
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty-2',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_2,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: TEST_LEAF_1 },
-            second: { type: 'leaf', leafId: TEST_LEAF_2 },
-            ratio: 0.5
-          },
-          activeLeafId: TEST_LEAF_2,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            [TEST_LEAF_1]: 'remote-pty-1',
-            [TEST_LEAF_2]: 'remote-pty-2'
-          }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty-1' }
-        }
-      }
-    })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_1]: 'remote-pty-1'
-    })
-  })
-
-  it('does not restore missing layout bindings without a live SSH lease', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'local-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: TEST_LEAF_1 },
-            second: { type: 'leaf', leafId: TEST_LEAF_2 },
-            ratio: 0.5
-          },
-          activeLeafId: TEST_LEAF_2,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            [TEST_LEAF_1]: 'local-pty-1',
-            [TEST_LEAF_2]: 'local-pty-2'
-          }
-        }
-      }
-    })
-
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'local-pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: TEST_LEAF_1 },
-            second: { type: 'leaf', leafId: TEST_LEAF_2 },
-            ratio: 0.5
-          },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'local-pty-1' }
-        }
-      }
-    })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      [TEST_LEAF_1]: 'local-pty-1'
-    })
-  })
-
-  it('clears workspace bindings before removing SSH remote PTY leases for a target', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.removeSshRemotePtyLeases('ssh-1')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('clears workspace bindings when marking all SSH remote PTY leases for a target terminated', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'attached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'ssh:ssh-1@@remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
-        }
-      }
-    })
-
-    store.markSshRemotePtyLeases('ssh-1', 'terminated')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('matches scoped SSH workspace bindings against raw relay leases', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'ssh:ssh-1@@remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
-        }
-      }
-    })
-
-    store.removeSshRemotePtyLeases('ssh-1')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('stores scoped SSH remote PTY leases as raw relay ids', async () => {
-    const store = await createStore()
-
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'ssh:ssh-1@@remote-pty',
-      state: 'attached'
-    })
-
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        targetId: 'ssh-1',
-        ptyId: 'remote-pty',
-        state: 'attached'
-      })
-    ])
-  })
-
-  it('rejects mismatched scoped SSH remote PTY lease ids on write paths', async () => {
-    const store = await createStore()
-
-    expect(() =>
-      store.upsertSshRemotePtyLease({
-        targetId: 'ssh-1',
-        ptyId: 'ssh:ssh-2@@remote-pty',
-        state: 'attached'
-      })
-    ).toThrow('belongs to SSH connection "ssh-2"')
-  })
-
-  it('updates SSH remote PTY leases when callers pass scoped app ids', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      state: 'attached'
-    })
-
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'terminated')
-
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'terminated'
-      })
-    ])
-  })
-
-  it('clears workspace bindings when marking an SSH remote PTY lease expired', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'attached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'ssh:ssh-1@@remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
-        }
-      }
-    })
-
-    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'expired')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
-      expect.objectContaining({
-        ptyId: 'remote-pty',
-        state: 'expired'
-      })
-    ])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('removes SSH remote PTY leases when callers pass scoped app ids', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'ssh:ssh-1@@remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
-        }
-      }
-    })
-
-    store.removeSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('clears workspace bindings before removing contextless SSH remote PTY leases', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      state: 'detached'
-    })
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'remote-pty'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-        }
-      }
-    })
-
-    store.removeSshRemotePtyLeases('ssh-1')
-
-    const session = store.getWorkspaceSession()
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
-  })
-
-  it('does not revive expired leases when marking a target detached', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'live-pty',
-      state: 'attached'
-    })
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'expired-pty',
-      state: 'expired'
-    })
-
-    store.markSshRemotePtyLeases('ssh-1', 'detached')
-
-    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ ptyId: 'live-pty', state: 'detached' }),
-        expect.objectContaining({ ptyId: 'expired-pty', state: 'expired' })
-      ])
-    )
-  })
-
   // ── getAllWorktreeMeta ─────────────────────────────────────────────
 
   it('getAllWorktreeMeta returns all entries', async () => {
@@ -11685,35 +9843,6 @@ describe('Store host-partitioned workspace sessions', () => {
     activeRepoId
   })
 
-  const makeBoundHostSession = (ptyId: string | null): WorkspaceSessionState => ({
-    ...getDefaultWorkspaceSession(),
-    activeRepoId: 'repo-1',
-    activeWorktreeId: 'repo-1::/worktree',
-    activeTabId: 'tab-1',
-    tabsByWorktree: {
-      'repo-1::/worktree': [
-        {
-          id: 'tab-1',
-          worktreeId: 'repo-1::/worktree',
-          title: 'Terminal',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1,
-          ptyId
-        }
-      ]
-    },
-    terminalLayoutsByTabId: {
-      'tab-1': {
-        root: { type: 'leaf', leafId: TEST_LEAF_1 },
-        activeLeafId: TEST_LEAF_1,
-        expandedLeafId: null,
-        ptyIdsByLeafId: ptyId ? { [TEST_LEAF_1]: ptyId } : {}
-      }
-    }
-  })
-
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -11853,81 +9982,6 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(
       store.getWorkspaceSession('runtime:env-b').terminalTopologyRevisionByRepoId?.duplicate
     ).toBe(7)
-  })
-
-  it('persists an SSH PTY binding only in the SSH host partition', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
-    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
-
-    store.persistPtyBinding(
-      {
-        worktreeId: 'repo-1::/worktree',
-        tabId: 'tab-1',
-        leafId: TEST_LEAF_1,
-        ptyId: 'ssh:ssh-1@@remote-pty'
-      },
-      'ssh:ssh-1'
-    )
-
-    expect(
-      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
-    ).toBe('ssh:ssh-1@@remote-pty')
-    expect(
-      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
-    ).toBeNull()
-  })
-
-  it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
-    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
-    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
-      throw new Error('disk unavailable')
-    })
-
-    expect(() =>
-      store.persistPtyBinding(
-        {
-          worktreeId: 'repo-1::/worktree',
-          tabId: 'tab-1',
-          leafId: TEST_LEAF_1,
-          ptyId: 'ssh:ssh-1@@remote-pty'
-        },
-        'ssh:ssh-1'
-      )
-    ).toThrow('disk unavailable')
-    flush.mockRestore()
-
-    expect(
-      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
-    ).toBeNull()
-    expect(
-      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
-    ).toBeNull()
-  })
-
-  it('clears expired SSH PTY bindings from the SSH partition and legacy local copy', async () => {
-    const store = await createStore()
-    const ptyId = 'ssh:ssh-1@@remote-pty'
-    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'local')
-    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'ssh:ssh-1')
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'repo-1::/worktree',
-      tabId: 'tab-1',
-      leafId: TEST_LEAF_1,
-      state: 'attached'
-    })
-
-    store.markSshRemotePtyLease('ssh-1', ptyId, 'expired')
-
-    for (const hostId of ['local', 'ssh:ssh-1']) {
-      const session = store.getWorkspaceSession(hostId)
-      expect(session.tabsByWorktree['repo-1::/worktree'][0]?.ptyId).toBeNull()
-      expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({})
-    }
   })
 
   it('defaults an omitted hostId to the local partition', async () => {

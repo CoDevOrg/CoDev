@@ -231,78 +231,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(await list(null, undefined)).toEqual([])
   })
 
-  it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    const verifyAndAdd = handler<
-      { name: string; pairingCode: string; allowLoopback?: boolean },
-      { ok: boolean; kind?: string }
-    >('runtimeEnvironments:verifyAndAddFromPairingCode')
-
-    await expect(
-      verifyAndAdd(null, { name: 'desk', pairingCode: pairingCode() })
-    ).resolves.toMatchObject({
-      ok: false,
-      kind: 'host-unreachable'
-    })
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
-    expect(environmentStore.listEnvironments(userDataPath)).toEqual([])
-  })
-
-  it('verifies identity, access, status, and compatibility before saving', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: runtimeStatus(),
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    const verifyAndAdd = handler<
-      { name: string; pairingCode: string; allowLoopback?: boolean },
-      { ok: boolean; environment?: { name: string; connectionDependency?: string } }
-    >('runtimeEnvironments:verifyAndAddFromPairingCode')
-
-    const result = await verifyAndAdd(null, {
-      name: 'desk',
-      pairingCode: pairingCode(),
-      allowLoopback: true
-    })
-
-    expect(result).toMatchObject({
-      ok: true,
-      environment: { name: 'desk', connectionDependency: 'ssh-tunnel' }
-    })
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
-      'status.get',
-      undefined,
-      15_000
-    )
-    expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
-  })
-
-  it('does not mark non-loopback hosts as SSH-tunnel dependent', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
-      id: 'status',
-      ok: true,
-      result: runtimeStatus(),
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    const verifyAndAdd = handler<
-      { name: string; pairingCode: string; allowLoopback?: boolean },
-      { ok: boolean; environment?: { connectionDependency?: string } }
-    >('runtimeEnvironments:verifyAndAddFromPairingCode')
-
-    const result = await verifyAndAdd(null, {
-      name: 'desk',
-      pairingCode: pairingCode('ws://100.76.32.125:6768'),
-      allowLoopback: true
-    })
-
-    expect(result).toMatchObject({ ok: true })
-    expect(result.environment).not.toHaveProperty('connectionDependency')
-  })
-
   it.each([
     [{ protocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1 }, 'protocol-incompatible'],
     [{ protocolVersion: 999_999, deviceScope: 'mobile' }, 'access-link-invalid'],
@@ -478,27 +406,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: { runtimeId: 'runtime-remote' }
     })
     expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
-  })
-
-  it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-
-    // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
-    // on the environment record (ephemeral-vm.ts), so the public list reads it
-    // straight from the record rather than cross-referencing the VM runtime store.
-    const added = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
-      name: 'orca VM abc12345',
-      pairingCode: pairingCode(),
-      source: 'ephemeral-vm'
-    })
-
-    const list = handler<undefined, { id: string; name: string; source?: string }[]>(
-      'runtimeEnvironments:list'
-    )
-
-    expect(await list(null, undefined)).toMatchObject([
-      { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
-    ])
   })
 
   it('checks a saved remote runtime and records the runtime id on success', async () => {

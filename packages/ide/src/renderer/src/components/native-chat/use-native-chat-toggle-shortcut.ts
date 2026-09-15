@@ -4,9 +4,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
@@ -86,9 +84,6 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
-          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-            getConnectionIdFromState(state, worktreeId)
-          ),
           isChatViewMode: tab.viewMode === 'chat'
         })
       ) {

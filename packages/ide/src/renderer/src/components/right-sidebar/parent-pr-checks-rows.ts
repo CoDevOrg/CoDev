@@ -114,11 +114,7 @@ function buildParentPrChecksRow(
   const reviewSnapshot = getReviewSnapshot(args, branch, outcome)
   const fallbackDisplay = getWorktreeCardPrDisplay(
     reviewSnapshot.review,
-    args.worktree.linkedPR,
-    args.worktree.linkedGitLabMR ?? null,
-    args.worktree.linkedBitbucketPR ?? null,
-    args.worktree.linkedAzureDevOpsPR ?? null,
-    args.worktree.linkedGiteaPR ?? null
+    args.worktree.linkedPR
   )
   const review = reviewSnapshot.review
   const status = classifyParentPrChecksRowStatus({
@@ -214,7 +210,7 @@ function getReviewLabel(
   if (provider === undefined || number === undefined) {
     return null
   }
-  return provider === 'gitlab' ? `!${number}` : `#${number}`
+  return `#${number}`
 }
 
 function getCheckDetails(
@@ -294,22 +290,11 @@ function getBranchName(worktree: Worktree): string | null {
 }
 
 function hasLinkedReview(worktree: Worktree): boolean {
-  return Boolean(
-    worktree.linkedPR ??
-    worktree.linkedGitLabMR ??
-    worktree.linkedBitbucketPR ??
-    worktree.linkedAzureDevOpsPR ??
-    worktree.linkedGiteaPR ??
-    null
-  )
+  return Boolean(worktree.linkedPR ?? null)
 }
 
 function getLinkedReviewHints(worktree: Worktree): Parameters<typeof linkedReviewHintKey>[0] {
   return {
-    linkedGitHubPR: worktree.linkedPR ?? null,
-    linkedGitLabMR: worktree.linkedGitLabMR ?? null,
-    linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: worktree.linkedGiteaPR ?? null
+    linkedGitHubPR: worktree.linkedPR ?? null
   }
 }

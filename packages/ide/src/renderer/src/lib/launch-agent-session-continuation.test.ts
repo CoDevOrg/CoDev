@@ -77,16 +77,6 @@ describe('launchAgentSessionContinuation', () => {
     )
   })
 
-  it('detects the target Agent on the SSH host that owns the workspace', async () => {
-    connectionId.value = 'ssh-1'
-    const { detectAgentSessionContinuationAgents } =
-      await import('./launch-agent-session-continuation')
-
-    await expect(detectAgentSessionContinuationAgents('wt-1')).resolves.toEqual(['claude', 'codex'])
-    expect(store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(store.ensureDetectedAgents).not.toHaveBeenCalled()
-  })
-
   it('detects local Agents in the target worktree runtime', async () => {
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')

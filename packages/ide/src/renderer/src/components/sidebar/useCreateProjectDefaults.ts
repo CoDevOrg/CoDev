@@ -46,13 +46,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 export function useCreateProjectDefaults({
   step,
   activeRuntimeEnvironmentId,
-  sshTargetId,
   createParent,
   setCreateParent
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
-  sshTargetId?: string | null | undefined
   createParent: string
   setCreateParent: (value: string) => void
 }): {
@@ -74,12 +72,9 @@ export function useCreateProjectDefaults({
   const createParentDefaultGenRef = useRef(0)
   const createGitProbeGenRef = useRef(0)
   const activeCreateParentRuntimeEnvironmentId = activeRuntimeEnvironmentId?.trim() || null
-  const activeCreateParentSshTargetId = sshTargetId?.trim() || null
   const activeCreateParentTargetKey = activeCreateParentRuntimeEnvironmentId
     ? `runtime:${activeCreateParentRuntimeEnvironmentId}`
-    : activeCreateParentSshTargetId
-      ? `ssh:${activeCreateParentSshTargetId}`
-      : 'local'
+    : 'local'
 
   const canReplaceCreateParentDefault = useCallback((parent: string): boolean => {
     if (createParentTouchedRef.current) {
@@ -131,7 +126,7 @@ export function useCreateProjectDefaults({
     if (step !== 'create') {
       return
     }
-    if (activeCreateParentRuntimeEnvironmentId || activeCreateParentSshTargetId) {
+    if (activeCreateParentRuntimeEnvironmentId) {
       return
     }
     // Why: invalidate any in-flight runtime parent probe once local mode owns the default.
@@ -177,7 +172,6 @@ export function useCreateProjectDefaults({
   }, [
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
-    activeCreateParentSshTargetId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -189,7 +183,7 @@ export function useCreateProjectDefaults({
       return
     }
     const runtimeEnvironmentId = activeCreateParentRuntimeEnvironmentId
-    if (!runtimeEnvironmentId || activeCreateParentSshTargetId) {
+    if (!runtimeEnvironmentId) {
       setCreateRuntimeParentStatus('idle')
       return
     }
@@ -246,7 +240,6 @@ export function useCreateProjectDefaults({
   }, [
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
-    activeCreateParentSshTargetId,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,
@@ -259,12 +252,6 @@ export function useCreateProjectDefaults({
     }
     const runtimeEnvironmentId = activeRuntimeEnvironmentId?.trim()
     const gen = ++createGitProbeGenRef.current
-    if (activeCreateParentSshTargetId) {
-      // Why: SSH creation happens through the relay; probing client Git would
-      // make the selected host look healthier or less healthy than it is.
-      setCreateGitAvailability('unknown')
-      return
-    }
     setCreateGitAvailability('checking')
     const probe = runtimeEnvironmentId
       ? callRuntimeRpc<{ available: boolean }>(
@@ -291,7 +278,7 @@ export function useCreateProjectDefaults({
         }
         setCreateGitAvailability('unknown')
       })
-  }, [activeRuntimeEnvironmentId, activeCreateParentSshTargetId, step])
+  }, [activeRuntimeEnvironmentId, step])
 
   return {
     createDefaultParent,

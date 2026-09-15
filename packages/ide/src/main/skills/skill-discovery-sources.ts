@@ -104,64 +104,6 @@ export function buildSkillDiscoverySources(
       'plugin',
       ['codex', 'agent-skills'],
       'codex'
-    ),
-    // Why: `npx skills add --global` writes into each agent's own home skills
-    // directory, so coverage misses them unless we scan every provider root.
-    source(
-      'home-grok',
-      'Grok home',
-      pathApi.join(home, '.grok', 'skills'),
-      'home',
-      ['agent-skills'],
-      'grok'
-    ),
-    source(
-      'home-opencode',
-      'OpenCode home',
-      pathApi.join(home, '.config', 'opencode', 'skills'),
-      'home',
-      ['agent-skills'],
-      'opencode'
-    ),
-    source(
-      'home-pi',
-      'Pi home',
-      pathApi.join(home, '.pi', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
-      'pi'
-    ),
-    source(
-      'home-omp',
-      'OMP home',
-      pathApi.join(home, '.omp', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
-      'omp'
-    ),
-    source(
-      'home-gemini',
-      'Gemini home',
-      pathApi.join(home, '.gemini', 'skills'),
-      'home',
-      ['agent-skills'],
-      'gemini'
-    ),
-    source(
-      'home-antigravity',
-      'Antigravity home',
-      pathApi.join(home, '.gemini', 'antigravity', 'skills'),
-      'home',
-      ['agent-skills'],
-      'antigravity'
-    ),
-    source(
-      'home-cursor',
-      'Cursor home',
-      pathApi.join(home, '.cursor', 'skills'),
-      'home',
-      ['agent-skills'],
-      'cursor'
     )
   ]
 

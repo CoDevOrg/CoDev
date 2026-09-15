@@ -23,94 +23,27 @@ describe('execution host registry', () => {
     ])
   })
 
-  it('includes saved and repo-derived SSH hosts with connection health', () => {
-    const hosts = buildExecutionHostRegistry({
-      repos: [{ connectionId: 'repo-ssh' }],
-      settings: { activeRuntimeEnvironmentId: null },
-      sshTargetLabels: new Map([['saved-ssh', 'Saved SSH']]),
-      sshConnectionStates: new Map([
-        [
-          'repo-ssh',
-          {
-            targetId: 'repo-ssh',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        ],
-        [
-          'saved-ssh',
-          {
-            targetId: 'saved-ssh',
-            status: 'auth-failed',
-            error: 'Permission denied',
-            reconnectAttempt: 1
-          }
-        ]
-      ])
-    })
-
-    expect(hosts).toMatchObject([
-      { id: 'local', health: 'local' },
-      { id: 'ssh:saved-ssh', label: 'Saved SSH', health: 'error', connectionStatus: 'auth-failed' },
-      { id: 'ssh:repo-ssh', label: 'repo-ssh', health: 'available', connectionStatus: 'connected' }
-    ])
-  })
 
   it('excludes repository references from configured-only registries', () => {
     const hosts = buildExecutionHostRegistry({
-      repos: [
-        { connectionId: 'removed-ssh' },
-        { connectionId: null, executionHostId: 'runtime:removed-runtime' }
-      ],
+      repos: [{ connectionId: null, executionHostId: 'runtime:removed-runtime' }],
       settings: { activeRuntimeEnvironmentId: 'removed-focused-runtime' },
       hostSource: 'configured-only',
-      sshTargetLabels: new Map([['saved-ssh', 'Saved SSH']]),
       runtimeEnvironments: [{ id: 'saved-runtime', name: 'Saved Runtime' }]
     })
 
-    expect(hosts.map((host) => host.id)).toEqual([
-      'local',
-      'runtime:saved-runtime',
-      'ssh:saved-ssh'
-    ])
+    expect(hosts.map((host) => host.id)).toEqual(['local', 'runtime:saved-runtime'])
   })
 
   it('keeps repository references in the default reference-inclusive registry', () => {
     const hosts = buildExecutionHostRegistry({
-      repos: [
-        { connectionId: 'removed-ssh' },
-        { connectionId: null, executionHostId: 'runtime:removed-runtime' }
-      ],
+      repos: [{ connectionId: null, executionHostId: 'runtime:removed-runtime' }],
       settings: { activeRuntimeEnvironmentId: null }
     })
 
-    expect(hosts.map((host) => host.id)).toEqual([
-      'local',
-      'runtime:removed-runtime',
-      'ssh:removed-ssh'
-    ])
+    expect(hosts.map((host) => host.id)).toEqual(['local', 'runtime:removed-runtime'])
   })
 
-  it('hides runtime-owned (ephemeral VM) SSH targets from repo-derived hosts', () => {
-    const hosts = buildExecutionHostRegistry({
-      // A VM-backed repo carries the hidden runtime-owned target on both fields.
-      repos: [
-        {
-          connectionId: 'runtime-ssh-orca-instance-1',
-          executionHostId: 'ssh:runtime-ssh-orca-instance-1'
-        },
-        { connectionId: 'repo-ssh' }
-      ],
-      settings: { activeRuntimeEnvironmentId: null },
-      // Even if a stale label leaked in, it must still be filtered out.
-      sshTargetLabels: new Map([['runtime-ssh-orca-instance-1', 'Hidden VM']])
-    })
-
-    expect(hosts.some((h) => h.id.includes('runtime-ssh-orca-instance-1'))).toBe(false)
-    // The ordinary repo SSH host is still present.
-    expect(hosts.some((h) => h.id === 'ssh:repo-ssh')).toBe(true)
-  })
 
   it('adds saved runtime environments and preserves compatibility state per host', () => {
     const hosts = buildExecutionHostRegistry({
@@ -224,7 +157,7 @@ describe('execution host registry', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [],
       settings: { activeRuntimeEnvironmentId: null },
-      runtimeEnvironments: [{ id: 'vm-runtime', name: 'VM Runtime', source: 'ephemeral-vm' }],
+      runtimeEnvironments: [{ id: 'vm-runtime', name: 'VM Runtime', source: 'manual' }],
       runtimeStatusByEnvironmentId: new Map([
         [
           'vm-runtime',
@@ -249,39 +182,39 @@ describe('execution host registry', () => {
       expect.objectContaining({
         id: 'runtime:vm-runtime',
         kind: 'runtime',
-        source: 'ephemeral-vm'
+        source: 'manual'
       })
     )
   })
 
+
+
   it('applies per-host display-label overrides to derived labels', () => {
     const hosts = buildExecutionHostRegistry({
-      repos: [{ connectionId: 'repo-ssh' }],
+      repos: [{ connectionId: null, executionHostId: 'runtime:env-1' }],
       settings: { activeRuntimeEnvironmentId: null },
-      sshTargetLabels: new Map([['repo-ssh', 'Derived SSH']]),
       hostLabelOverrides: new Map([
-        ['ssh:repo-ssh', 'Renamed Box'],
+        ['runtime:env-1', 'Renamed Box'],
         ['local', 'My Laptop']
       ])
     })
 
     expect(hosts).toMatchObject([
       { id: 'local', label: 'My Laptop' },
-      { id: 'ssh:repo-ssh', label: 'Renamed Box' }
+      { id: 'runtime:env-1', label: 'Renamed Box' }
     ])
   })
 
   it('keeps derived labels for hosts without an override', () => {
     const hosts = buildExecutionHostRegistry({
-      repos: [{ connectionId: 'repo-ssh' }],
+      repos: [{ connectionId: null, executionHostId: 'runtime:env-1' }],
       settings: { activeRuntimeEnvironmentId: null },
-      sshTargetLabels: new Map([['repo-ssh', 'Derived SSH']]),
-      hostLabelOverrides: new Map([['ssh:other', 'Unrelated']])
+      hostLabelOverrides: new Map([['runtime:other', 'Unrelated']])
     })
 
     expect(hosts).toMatchObject([
       { id: 'local', label: LOCAL_HOST_LABEL },
-      { id: 'ssh:repo-ssh', label: 'Derived SSH' }
+      { id: 'runtime:env-1', label: 'env-1' }
     ])
   })
 

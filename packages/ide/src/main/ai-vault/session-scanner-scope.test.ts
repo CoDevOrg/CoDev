@@ -12,28 +12,12 @@ afterEach(async () => {
   tempRoots = []
 })
 
-// Point every non-Claude source at a nonexistent dir so the scan only sees the
-// Claude fixtures created per test.
+// Point the Codex source at a nonexistent dir so the scan only sees the Claude
+// fixtures created per test.
 function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScanOptions>) {
   return {
     claudeProjectsDir,
     codexSessionsDir: '/nonexistent/codex',
-    geminiSessionsDir: '/nonexistent/gemini',
-    antigravityBrainDir: '/nonexistent/antigravity',
-    copilotSessionsDir: '/nonexistent/copilot',
-    cursorProjectsDir: '/nonexistent/cursor',
-    opencodeStorageDir: '/nonexistent/opencode',
-    opencodeDbPaths: [],
-    grokSessionsDir: '/nonexistent/grok',
-    devinTranscriptsDir: '/nonexistent/devin',
-    hermesSessionsDir: '/nonexistent/hermes',
-    rovoSessionsDir: '/nonexistent/rovo',
-    openclawStateDir: '/nonexistent/openclaw',
-    openclawLegacyStateDir: '/nonexistent/openclaw-legacy',
-    piSessionsDir: '/nonexistent/pi',
-    droidSessionsDir: '/nonexistent/droid',
-    droidProjectsDir: '/nonexistent/droid-projects',
-    kimiSessionsDir: '/nonexistent/kimi',
     ...extra
   } satisfies AiVaultScanOptions
 }

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: automation dispatch is a single renderer lifecycle
- * coordinator spanning workspace creation, SSH readiness, terminal launch/reuse,
+ * coordinator spanning workspace creation, terminal launch/reuse,
  * completion bookkeeping, and focus restoration. */
 import { useEffect } from 'react'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
@@ -27,8 +27,7 @@ import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-owne
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  parseExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
@@ -116,9 +115,7 @@ export function useAutomationDispatchEvents(): void {
             automationWorkspaceScope?.type === 'folder' && automationWorktree
               ? folderWorkspaceConnectionId === undefined
                 ? null
-                : folderWorkspaceConnectionId
-                  ? toSshExecutionHostId(folderWorkspaceConnectionId)
-                  : getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
+                : getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
               : null
           const runHostId =
             parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
@@ -143,46 +140,6 @@ export function useAutomationDispatchEvents(): void {
               )
             })
             return
-          }
-          const sshTargetId =
-            automationWorkspaceScope?.type === 'folder'
-              ? (folderWorkspaceConnectionId ?? null)
-              : (repo.connectionId ?? null)
-          if (sshTargetId) {
-            const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-              targetId: sshTargetId
-            })
-            if (needsPrompt) {
-              await markDispatchResult({
-                runId: run.id,
-                status: 'skipped_needs_interactive_auth',
-                workspaceId: dispatchWorkspaceId,
-                workspaceDisplayName: dispatchWorkspaceDisplayName,
-                error: translate(
-                  'auto.hooks.useAutomationDispatchEvents.16a21d6413',
-                  'SSH reconnect requires interactive credentials.'
-                )
-              })
-              return
-            }
-            const sshState = await window.api.ssh.getState({ targetId: sshTargetId })
-            if (sshState?.status !== 'connected') {
-              try {
-                const connected = await window.api.ssh.connect({ targetId: sshTargetId })
-                if (connected?.status !== 'connected') {
-                  throw new Error('SSH target is unavailable.')
-                }
-              } catch (error) {
-                await markDispatchResult({
-                  runId: run.id,
-                  status: 'skipped_unavailable',
-                  workspaceId: dispatchWorkspaceId,
-                  workspaceDisplayName: dispatchWorkspaceDisplayName,
-                  error: error instanceof Error ? error.message : String(error)
-                })
-                return
-              }
-            }
           }
 
           if (automation.workspaceMode === 'existing' && !automationWorktree) {
@@ -234,14 +191,6 @@ export function useAutomationDispatchEvents(): void {
                     undefined,
                     undefined,
                     automation.agentId,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
                     undefined,
                     undefined,
                     undefined,

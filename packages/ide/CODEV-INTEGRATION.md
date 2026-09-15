@@ -219,13 +219,17 @@ and displayed uses the CoDev name. `src/shared/codev-identifiers.ts` holds both.
 | `orca://pair` | `codev://pair` | parsed (IDE, web, renderer) |
 | `orca` / `orca-ide` | `codev` | kept as bin aliases; still probed and detected |
 
-Two rules constrain anything further here, both covered by tests:
+One rule constrains anything further here, covered by tests:
 
-- **Remote launches keep the pre-rename shim name.** The relay deploys the CLI
-  as plain `orca`, so `getTuiAgentLaunchCommand` routes remote launches through
-  `remoteLaunchCmdByPlatform`. Local launches use `codev` everywhere.
 - **`source: 'orca.yaml'`** in `orca-runtime.ts` is a host→client wire
   discriminant and stays (see remote-wire-compatibility in `AGENTS.md`).
+
+The upstream SSH remote-host subsystem (the `ssh2` transport, the deployed
+relay agent under `src/relay/`, ephemeral-VM recipes, and the renderer's SSH
+host UI) is removed from this fork: every workspace is a checkout on the
+`orca serve` host and the browser client pairs to it directly. `connectionId`
+fields survive on `Repo`/`Worktree`/`FolderWorkspace` for persisted-state
+compatibility but are always null.
 
 Deliberately still Orca, because they are package and app identity rather than
 anything a person types — renaming them orphans user data, breaks code signing

@@ -11,15 +11,6 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: true, remote: false })
   })
 
-  it('allows supported VS Code commands for SSH paths', () => {
-    expect(
-      getExternalEditorOpenCapability(
-        { activeRuntimeEnvironmentId: null },
-        { connectionId: 'ssh-1', command: 'code-insiders' }
-      )
-    ).toEqual({ allowed: true, remote: true })
-  })
-
   it('rejects non-VS Code and compound commands for SSH paths', () => {
     expect(
       getExternalEditorOpenCapability(

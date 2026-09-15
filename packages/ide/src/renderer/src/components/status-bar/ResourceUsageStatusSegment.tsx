@@ -51,7 +51,6 @@ import {
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,
-  getResourceUsageDeferredSshSessionIdsByTabId,
   getResourceUsagePtyIdsByTabId,
   getResourceUsageRepos,
   getResourceUsageRuntimePaneTitlesByTabId,
@@ -772,10 +771,6 @@ export function ResourceUsageStatusSegment({
   // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
   const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
   const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
-  // Why: sessions awaiting SSH reattach are live on the remote host with no other binding.
-  const deferredSshSessionIdsByTabId = useAppStore((s) =>
-    getResourceUsageDeferredSshSessionIdsByTabId(s, open)
-  )
   const resourceSnapshot = snapshot
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
@@ -783,14 +778,12 @@ export function ResourceUsageStatusSegment({
       ptyIdsByTabId,
       tabsByWorktree,
       terminalLayoutsByTabId,
-      deferredSshSessionIdsByTabId,
       workspaceSessionReady
     }),
     [
       ptyIdsByTabId,
       tabsByWorktree,
       terminalLayoutsByTabId,
-      deferredSshSessionIdsByTabId,
       workspaceSessionReady
     ]
   )

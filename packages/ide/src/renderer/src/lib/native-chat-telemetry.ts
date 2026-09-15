@@ -43,7 +43,7 @@ export function emitNativeChatToggled(args: {
 /**
  * Fire `native_chat_message_sent` when a prompt is sent from the native
  * composer into the running agent. `runtime` is `'unknown'` when the caller
- * cannot resolve whether the owning PTY is local or remote (SSH).
+ * cannot resolve whether the owning PTY is local or remote.
  *
  * The composer (`NativeChatComposer.tsx`, owned by another unit) is the
  * intended caller — it owns the send path and the local/remote runtime
@@ -92,7 +92,7 @@ export function emitNativeChatSendClassified(args: {
 export function emitNativeChatSkillDiscovery(args: {
   agent: NativeChatTelemetryAgent
   outcome: 'ready' | 'error' | 'timeout' | 'unavailable'
-  executionHostKind: 'local' | 'runtime' | 'ssh'
+  executionHostKind: 'local' | 'runtime'
 }): void {
   track('native_chat_skill_discovery', {
     agent_kind: resolveAgentKind(args.agent),

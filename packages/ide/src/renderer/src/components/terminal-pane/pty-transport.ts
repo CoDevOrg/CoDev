@@ -10,7 +10,6 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   ptyDataHandlers,
   ptyReplayHandlers,
@@ -68,9 +67,6 @@ export type {
 } from './pty-transport-types'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
-const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
-// Why: main rejects a session reattached under a different SSH connection with this phrase; treat as stale (spawn fresh), not a crash.
-const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
 // Why: background timer throttling clamps the drain to ~64 effects/s while an agent CLI can queue
@@ -896,32 +892,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return spawnResult.id
       } catch (err) {
         const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
-        if (
-          connectionId &&
-          options.sessionId &&
-          (msg.includes(SSH_SESSION_EXPIRED_ERROR) ||
-            msg.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER))
-        ) {
-          return {
-            id: options.sessionId,
-            sessionExpired: true
-          } satisfies PtyConnectResult
-        }
         // Why: re-spawning a Kill-All'd session throws TerminalKilledError; swallow it (pane still shows "Process exited"), don't toast (src/main/daemon/daemon-pty-adapter.ts).
         if (msg.includes('was explicitly killed')) {
           return undefined
         }
-        // Why: on cold start the SSH provider isn't registered yet, so pty:spawn throws a raw IPC error; replace with a friendly message.
-        if (connectionId && msg.includes('No PTY provider for connection')) {
-          // Why: a disappearing runtime-owned SSH target is expected teardown (e.g. workspace deleted); don't surface a reconnect toast.
-          if (!isRuntimeOwnedSshTargetId(connectionId)) {
-            storedCallbacks.onError?.(
-              'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
-            )
-          }
-        } else {
-          storedCallbacks.onError?.(msg)
-        }
+        storedCallbacks.onError?.(msg)
         return undefined
       }
     },

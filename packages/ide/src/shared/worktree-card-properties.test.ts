@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
-  TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
   isDefaultedCompactWorktreeCardProperties,
@@ -39,13 +38,6 @@ describe('worktree card properties', () => {
   it('keeps status enabled in both presets', () => {
     expect(getWorktreeCardModeProperties('Default')).toEqual(expect.arrayContaining(['status']))
     expect(getWorktreeCardModeProperties('Compact')).toEqual(expect.arrayContaining(['status']))
-  })
-
-  it('keeps provider-specific task metadata together in Default mode', () => {
-    expect(getWorktreeCardModeProperties('Default')).toEqual(
-      expect.arrayContaining(TASK_WORKTREE_CARD_PROPERTIES)
-    )
-    expect(TASK_WORKTREE_CARD_PROPERTIES).toEqual(['issue', 'linear-issue', 'jira-issue'])
   })
 
   it('normalizes fixed and legacy properties while preserving selected properties', () => {

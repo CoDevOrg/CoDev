@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasPositiveHostedReviewNumberLink,
   hasResolvableHostedReviewPushTargetLink,
   hasUsableHostedReviewPushTarget,
   resolveHostedReviewActionUpstreamStatus,
@@ -120,7 +119,6 @@ describe('resolveHostedReviewActionUpstreamStatus', () => {
 describe('hasResolvableHostedReviewPushTargetLink', () => {
   it('accepts only hosted-review links with supported target lookup APIs', () => {
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: 12 })).toBe(true)
-    expect(hasResolvableHostedReviewPushTargetLink({ linkedGitLabMR: 34 })).toBe(true)
     // Why: a queue-discovered same-repo PR (no persisted linkedPR) is resolvable.
     expect(hasResolvableHostedReviewPushTargetLink({ fallbackGitHubPR: 8333 })).toBe(true)
     expect(
@@ -129,38 +127,10 @@ describe('hasResolvableHostedReviewPushTargetLink', () => {
     expect(hasResolvableHostedReviewPushTargetLink({ fallbackGitHubPR: 0 })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: null })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: 0 })).toBe(false)
-    expect(hasResolvableHostedReviewPushTargetLink({ linkedGitLabMR: -1 })).toBe(false)
-    expect(hasResolvableHostedReviewPushTargetLink({ linkedGitLabMR: 1.5 })).toBe(false)
+    expect(hasResolvableHostedReviewPushTargetLink({ })).toBe(false)
+    expect(hasResolvableHostedReviewPushTargetLink({ })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({ linkedGitHubPR: Number.NaN })).toBe(false)
     expect(hasResolvableHostedReviewPushTargetLink({})).toBe(false)
-  })
-})
-
-describe('hasPositiveHostedReviewNumberLink', () => {
-  it('accepts positive hosted-review metadata and rejects invalid values', () => {
-    expect(hasPositiveHostedReviewNumberLink({ fallbackGitHubPR: 12 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedBitbucketPR: 34 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedAzureDevOpsPR: 56 })).toBe(true)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGiteaPR: 78 })).toBe(true)
-    expect(
-      hasPositiveHostedReviewNumberLink({
-        linkedGitHubPR: 0,
-        linkedGitLabMR: -1
-      })
-    ).toBe(false)
-    expect(hasPositiveHostedReviewNumberLink({ linkedGitHubPR: Number.NaN })).toBe(false)
-    expect(hasPositiveHostedReviewNumberLink({})).toBe(false)
-  })
-
-  it('blocks resolver-less providers without treating them as resolvable', () => {
-    // Bitbucket/Azure/Gitea have no push-target resolver yet, so they must block
-    // unsafe pushes but stay out of the resolvable subset. Locks the intended
-    // relationship: resolvable ⊂ positive, so the two helpers cannot drift.
-    for (const provider of ['linkedBitbucketPR', 'linkedAzureDevOpsPR', 'linkedGiteaPR'] as const) {
-      const args = { [provider]: 42 }
-      expect(hasPositiveHostedReviewNumberLink(args)).toBe(true)
-      expect(hasResolvableHostedReviewPushTargetLink(args)).toBe(false)
-    }
   })
 })
 
@@ -325,7 +295,6 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
     const hasResolvable = hasResolvableHostedReviewPushTargetLink({
       linkedGitHubPR: null,
       fallbackGitHubPR: 8333,
-      linkedGitLabMR: null
     })
     expect(hasResolvable).toBe(true)
     const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({

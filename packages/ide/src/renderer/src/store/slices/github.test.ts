@@ -118,7 +118,6 @@ function makePRRefreshWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -1754,92 +1753,6 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     } finally {
       mockApi.gh.refreshPRNow = refreshPRNow
     }
-  })
-
-  it('passes SSH connection identity to GitHub refresh IPC for SSH-backed repos', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const pr = makePR({ number: 44 })
-
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: repoPath,
-          name: 'repo',
-          kind: 'git',
-          connectionId: 'ssh-1'
-        }
-      ],
-      prCache: {
-        [`repo-1::${branch}`]: {
-          data: pr,
-          fetchedAt: Date.now()
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
-      kind: 'found',
-      pr,
-      fetchedAt: Date.now()
-    })
-
-    await expect(
-      store.getState().fetchPRForBranch(repoPath, branch, { force: true })
-    ).resolves.toMatchObject({ number: 44 })
-    expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
-    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoId: 'repo-1',
-        repoPath,
-        branch,
-        cacheKey: `ssh:ssh-1::repo-1::${branch}`,
-        connectionId: 'ssh-1'
-      })
-    })
-  })
-
-  it('does not reuse local fresh PR cache for SSH-backed repos', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const pr = makePR({ number: 44 })
-
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: repoPath,
-          name: 'repo',
-          kind: 'git',
-          connectionId: 'ssh-1'
-        }
-      ],
-      prCache: {
-        [`repo-1::${branch}`]: {
-          data: makePR({ number: 12, title: 'Local stale PR' }),
-          fetchedAt: Date.now()
-        }
-      }
-    } as unknown as Partial<AppState>)
-    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
-      kind: 'found',
-      pr,
-      fetchedAt: Date.now()
-    })
-
-    await expect(store.getState().fetchPRForBranch(repoPath, branch)).resolves.toMatchObject({
-      number: 44
-    })
-
-    expect(mockApi.gh.refreshPRNow).toHaveBeenCalled()
-    expect(store.getState().prCache[`ssh:ssh-1::repo-1::${branch}`]?.data).toMatchObject({
-      number: 44
-    })
-    expect(store.getState().prCache[`repo-1::${branch}`]?.data).toMatchObject({
-      title: 'Local stale PR'
-    })
   })
 
   it('writes direct PR refresh results to the hosted-review scope captured at request start', async () => {
@@ -4234,53 +4147,6 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(_getGitHubPRRefreshStartedEntryCountForTest()).toBe(0)
   })
 
-  it('does not overwrite a non-GitHub hosted review from GitHub PR refresh events', () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-1'
-    const branch = 'feature/gitlab-review'
-    const cacheKey = `${repoId}::${branch}`
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
-    const gitlabReview: HostedReviewInfo = {
-      provider: 'gitlab',
-      number: 5,
-      title: 'GitLab MR',
-      state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
-      status: 'pending',
-      updatedAt: '2026-03-28T00:00:00Z',
-      mergeable: 'UNKNOWN'
-    }
-
-    store.setState({
-      hostedReviewCache: {
-        [hostedReviewCacheKey]: {
-          data: gitlabReview,
-          fetchedAt: 1,
-          linkedReviewHintKey: 'gitlab:5'
-        }
-      }
-    } as unknown as Partial<AppState>)
-
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch }],
-      reason: 'visible',
-      outcome: {
-        kind: 'found',
-        pr: makePR({ number: 12, title: 'GitHub PR status' }),
-        fetchedAt: 2
-      }
-    })
-
-    expect(store.getState().prCache[cacheKey]).toBeUndefined()
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
-      data: gitlabReview,
-      fetchedAt: 1,
-      linkedReviewHintKey: 'gitlab:5'
-    })
-  })
-
   it('applies local GitHub PR refresh events without touching runtime-scoped cache', () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -4420,105 +4286,6 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
   })
 
-  it('does not reuse a GitHub-scoped null hosted review cache for neutral discovery', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-1'
-    const branch = 'feature/github-null-then-gitlab'
-    const cacheKey = `${repoId}::${branch}`
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
-    const gitlabReview: HostedReviewInfo = {
-      provider: 'gitlab',
-      number: 5,
-      title: 'GitLab MR',
-      state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
-      status: 'success',
-      updatedAt: '2026-03-28T00:00:00Z',
-      mergeable: 'MERGEABLE'
-    }
-
-    store.setState({
-      hostedReviewCache: {
-        [hostedReviewCacheKey]: {
-          data: null,
-          fetchedAt: 1,
-          linkedReviewHintKey: 'github:12'
-        }
-      }
-    } as unknown as Partial<AppState>)
-
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch }],
-      reason: 'visible',
-      outcome: { kind: 'no-pr', fetchedAt: 2 }
-    })
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(gitlabReview)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch(repoPath, branch, { repoId })
-    ).resolves.toEqual(gitlabReview)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
-      branch,
-      currentHeadOid: null,
-      linkedAzureDevOpsPR: null,
-      linkedBitbucketPR: null,
-      linkedGitHubPR: null,
-      linkedGitLabMR: null,
-      linkedGiteaPR: null,
-      repoId,
-      repoPath
-    })
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
-      data: gitlabReview,
-      fetchedAt: expect.any(Number),
-      linkedReviewHintKey: ''
-    })
-  })
-
-  it('does not reuse a GitHub-scoped PR hit for neutral hosted review discovery', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-1'
-    const branch = 'feature/github-hit-then-gitlab'
-    const cacheKey = `${repoId}::${branch}`
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
-    const gitlabReview: HostedReviewInfo = {
-      provider: 'gitlab',
-      number: 5,
-      title: 'GitLab MR',
-      state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
-      status: 'success',
-      updatedAt: '2026-03-28T00:00:00Z',
-      mergeable: 'MERGEABLE'
-    }
-
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch }],
-      reason: 'visible',
-      outcome: {
-        kind: 'found',
-        pr: makePR({ number: 12, title: 'GitHub PR status' }),
-        fetchedAt: 2
-      }
-    })
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(gitlabReview)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch(repoPath, branch, { repoId })
-    ).resolves.toEqual(gitlabReview)
-    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
-      data: gitlabReview,
-      fetchedAt: expect.any(Number),
-      linkedReviewHintKey: ''
-    })
-  })
-
   it('keeps cleared GitHub hosted review data scoped to GitHub PR discovery', () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -4556,49 +4323,6 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       data: null,
       fetchedAt: 2,
       linkedReviewHintKey: 'github:12'
-    })
-  })
-
-  it('does not clear non-GitHub hosted review cache on a GitHub no-PR refresh', () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-1'
-    const branch = 'feature/gitlab'
-    const cacheKey = `${repoId}::${branch}`
-    const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
-    const gitlabReview = {
-      provider: 'gitlab' as const,
-      number: 5,
-      title: 'GitLab MR',
-      state: 'open' as const,
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
-      status: 'success' as const,
-      updatedAt: '2026-03-28T00:00:00Z',
-      mergeable: 'MERGEABLE' as const
-    }
-
-    store.setState({
-      hostedReviewCache: {
-        [hostedReviewCacheKey]: {
-          data: gitlabReview,
-          fetchedAt: 1,
-          linkedReviewHintKey: 'gitlab:5'
-        }
-      }
-    } as unknown as Partial<AppState>)
-
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 1,
-      aliases: [{ cacheKey, repoId, repoPath, branch }],
-      reason: 'visible',
-      outcome: { kind: 'no-pr', fetchedAt: 2 }
-    })
-
-    expect(store.getState().prCache[cacheKey]).toBeUndefined()
-    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]).toEqual({
-      data: gitlabReview,
-      fetchedAt: 1,
-      linkedReviewHintKey: 'gitlab:5'
     })
   })
 })
@@ -4973,54 +4697,6 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       repoPath,
       repoId: 'repo-1',
       number: 123
-    })
-  })
-
-  it('enqueues active PR refresh IPC for connected SSH-backed repos', () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const branch = 'feature/test'
-    const worktreeId = 'wt-1'
-
-    store.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: repoPath,
-          name: 'repo',
-          kind: 'git',
-          connectionId: 'ssh-1'
-        }
-      ],
-      groupBy: 'pr-status',
-      sshConnectionStates: new Map([['ssh-1', { status: 'connected' }]]),
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: worktreeId,
-            repoId: 'repo-1',
-            path: '/repo/worktrees/test',
-            branch,
-            displayName: 'test',
-            isMainWorktree: false,
-            isBare: false,
-            isArchived: false
-          }
-        ]
-      }
-    } as unknown as Partial<AppState>)
-
-    store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
-
-    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoPath,
-        branch,
-        connectionId: 'ssh-1',
-        connectionState: 'connected'
-      }),
-      reason: 'active',
-      priority: 80
     })
   })
 
@@ -7446,70 +7122,6 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-})
-
-describe('IssueSourceIndicator suppression', () => {
-  it('hides when sources deep-equal, shows when they differ, hides when either is null', async () => {
-    const { default: IssueSourceIndicator, sameGitHubOwnerRepo } =
-      await import('../../components/github/IssueSourceIndicator')
-    const React = await import('react')
-    const { renderToStaticMarkup } = await import('react-dom/server')
-
-    // Same slug → null (no information to convey)
-    expect(sameGitHubOwnerRepo({ owner: 'o', repo: 'r' }, { owner: 'o', repo: 'r' })).toBe(true)
-    // Case-insensitive equality — the parent design doc calls out that `StablyAI/Orca`
-    // and `stablyai/orca` resolve to the same repo and must suppress.
-    expect(
-      sameGitHubOwnerRepo({ owner: 'StablyAI', repo: 'Orca' }, { owner: 'stablyai', repo: 'orca' })
-    ).toBe(true)
-    expect(
-      sameGitHubOwnerRepo(
-        { owner: 'stablyai', repo: 'orca', host: 'github.com' },
-        { owner: 'stablyai', repo: 'orca', host: 'ghe.example.test' }
-      )
-    ).toBe(false)
-    expect(sameGitHubOwnerRepo({ owner: 'a', repo: 'r' }, { owner: 'b', repo: 'r' })).toBe(false)
-
-    // null on either side → element renders as null (empty render)
-    const sameEl = React.createElement(IssueSourceIndicator, {
-      issues: { owner: 'o', repo: 'r' },
-      prs: { owner: 'o', repo: 'r' }
-    })
-    expect(renderToStaticMarkup(sameEl)).toBe('')
-
-    const nullIssueEl = React.createElement(IssueSourceIndicator, {
-      issues: null,
-      prs: { owner: 'o', repo: 'r' }
-    })
-    expect(renderToStaticMarkup(nullIssueEl)).toBe('')
-
-    const diffEl = React.createElement(IssueSourceIndicator, {
-      issues: { owner: 'up', repo: 'r' },
-      prs: { owner: 'fork', repo: 'r' }
-    })
-    const defaultMarkup = renderToStaticMarkup(diffEl)
-    expect(defaultMarkup).toContain('up/r')
-    // Default variant is 'list' → plural prefix on list surfaces.
-    expect(defaultMarkup).toContain('Issues from')
-
-    // 'item' variant → singular prefix on detail surfaces where the chip
-    // annotates a single issue (e.g. GitHubItemDialog).
-    const itemEl = React.createElement(IssueSourceIndicator, {
-      issues: { owner: 'up', repo: 'r' },
-      prs: { owner: 'fork', repo: 'r' },
-      variant: 'item'
-    })
-    const itemMarkup = renderToStaticMarkup(itemEl)
-    expect(itemMarkup).toContain('up/r')
-    expect(itemMarkup).toContain('Issue from')
-    expect(itemMarkup).not.toContain('Issues from')
-
-    const enterpriseEl = React.createElement(IssueSourceIndicator, {
-      issues: { owner: 'up', repo: 'r', host: 'ghe.example.test' },
-      prs: { owner: 'fork', repo: 'r', host: 'ghe.example.test' }
-    })
-    expect(renderToStaticMarkup(enterpriseEl)).toContain('ghe.example.test/up/r')
   })
 })
 

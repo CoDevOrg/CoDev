@@ -240,7 +240,9 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
-  it('shows language as a primary interface control without opening Advanced', async () => {
+  it('keeps Advanced closed by default and hides the language control', async () => {
+    // Why: English is the only bundled UI language, so SHOW_UI_LANGUAGE_SETTING
+    // is off and the Interface section renders no language dropdown.
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
     const languageTrigger = container.querySelector<HTMLButtonElement>(
@@ -250,7 +252,7 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')
     ).find((button) => button.textContent?.includes('Advanced'))
 
-    expect(languageTrigger).not.toBeNull()
+    expect(languageTrigger).toBeNull()
     expect(advancedTrigger).toBeDefined()
     expect(advancedTrigger?.getAttribute('aria-expanded')).toBe('false')
     expect(
@@ -258,58 +260,21 @@ describe('AppearancePane', () => {
     ).toBeNull()
   })
 
-  it('keeps Advanced closed when searching for language', async () => {
+  it('does not surface a language control when searching for language', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
-    const languageTrigger = container.querySelector<HTMLButtonElement>(
-      '[data-slot="select-trigger"][aria-label="Language"]'
-    )
 
-    expect(languageTrigger).not.toBeNull()
-    expect(container.textContent).not.toContain('Advanced')
     expect(
-      container.querySelector('button[role="switch"][aria-label="Titlebar App Name"]')
+      container.querySelector('[data-slot="select-trigger"][aria-label="Language"]')
     ).toBeNull()
+    expect(container.querySelector('[data-slot="select-item"][data-value="zh"]')).toBeNull()
   })
 
-  it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
-    mocks.state.settingsSearchQuery = 'language'
-    const updateSettings = vi.fn()
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      uiLanguage: 'system' as const
-    }
-
-    const container = await renderAppearancePane(settings, updateSettings)
-    const languageTrigger = container.querySelector<HTMLButtonElement>(
-      '[data-slot="select-trigger"][aria-label="Language"]'
-    )
-    const chineseOption = container.querySelector<HTMLButtonElement>(
-      '[data-slot="select-item"][data-value="zh"]'
-    )
-
-    expect(languageTrigger).not.toBeNull()
-    expect(chineseOption).not.toBeNull()
-    expect(container.textContent).not.toContain('Advanced')
-    expect(container.textContent).toContain('System')
-    expect(container.textContent).toContain('English')
-    expect(container.textContent).toContain('中文（简体）')
-    expect(container.textContent).toContain('한국어')
-    expect(container.textContent).toContain('日本語')
-    expect(container.textContent).toContain('Español')
-
-    await act(async () => {
-      chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
-  })
-
-  it('includes the selected language in the collapsed Interface summary', async () => {
+  it('omits the language from the collapsed Interface summary', async () => {
     mocks.state.settingsSearchQuery = ''
     const settings = {
       ...getDefaultSettings('/tmp'),
-      uiLanguage: 'zh' as const,
+      uiLanguage: 'en' as const,
       theme: 'dark' as const,
       appFontFamily: 'Inter'
     }
@@ -326,7 +291,8 @@ describe('AppearancePane', () => {
 
     expect(interfaceToggle?.getAttribute('aria-expanded')).toBe('false')
     // Summary is only rendered on the collapsed toggle (children stay mounted but hidden).
-    expect(interfaceToggle?.textContent).toContain('Dark · 中文（简体） · Inter')
+    expect(interfaceToggle?.textContent).toContain('Dark · Inter')
+    expect(interfaceToggle?.textContent).not.toContain('English')
   })
 
   it('updates the left sidebar appearance from sidebar settings', async () => {
@@ -532,56 +498,6 @@ describe('AppearancePane', () => {
     })
 
     expect(mocks.state.setUsagePercentageDisplay).toHaveBeenCalledWith('remaining')
-  })
-
-  it('records MiniMax status bar toggles as usage tracking interactions', async () => {
-    mocks.state.availableStatusBarToggles = [
-      {
-        id: 'minimax',
-        title: 'MiniMax Usage',
-        description: 'Show MiniMax subscription usage in the status bar.',
-        toggleDescription: 'Show MiniMax subscription usage for the active workspace.',
-        keywords: ['status bar', 'minimax', 'usage']
-      }
-    ]
-    mocks.state.settingsSearchQuery = 'minimax'
-    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
-    const miniMaxSwitch = container.querySelector<HTMLButtonElement>(
-      'button[role="switch"][aria-label="MiniMax Usage"]'
-    )
-
-    expect(miniMaxSwitch).not.toBeNull()
-    await act(async () => {
-      miniMaxSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
-    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('minimax')
-  })
-
-  it('records Antigravity status bar toggles as usage tracking interactions', async () => {
-    mocks.state.availableStatusBarToggles = [
-      {
-        id: 'antigravity',
-        title: 'Antigravity Usage',
-        description: 'Show Antigravity subscription usage in the status bar.',
-        toggleDescription: 'Show Antigravity subscription usage for the active workspace.',
-        keywords: ['status bar', 'antigravity', 'usage']
-      }
-    ]
-    mocks.state.settingsSearchQuery = 'antigravity'
-    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
-    const antigravitySwitch = container.querySelector<HTMLButtonElement>(
-      'button[role="switch"][aria-label="Antigravity Usage"]'
-    )
-
-    expect(antigravitySwitch).not.toBeNull()
-    await act(async () => {
-      antigravitySwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.state.recordFeatureInteraction).toHaveBeenCalledWith('usage-tracking')
-    expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
   })
 
   it('expands Interface, Terminal, and Window & Sidebar by default', async () => {

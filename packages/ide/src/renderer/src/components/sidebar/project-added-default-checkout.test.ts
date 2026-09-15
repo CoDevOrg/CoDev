@@ -57,7 +57,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -484,31 +483,6 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-  })
-
-  it('reveals the project if no default checkout is available', async () => {
-    const closeModal = vi.fn()
-    const setHideDefaultBranchWorkspace = vi.fn()
-    mocks.state.worktreesByRepo = {
-      'repo-1': [makeWorktree({ isMainWorktree: false })]
-    }
-
-    await finishProjectAddWithDefaultCheckout({
-      repoId: 'repo-1',
-      source: 'ssh_remote_path',
-      closeModal,
-      setHideDefaultBranchWorkspace
-    })
-
-    expect(closeModal).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
-      source: 'ssh_remote_path',
-      result: 'revealed_project',
-      reason: 'no_authoritative_detection'
-    })
-    expect(mocks.state.setActiveRepo).toHaveBeenCalledWith('repo-1')
-    expect(setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 
   it('reveals the project even when no worktrees are loaded', async () => {

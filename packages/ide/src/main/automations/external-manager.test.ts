@@ -2,12 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createExternalAutomation,
   listExternalAutomationManagers,
-  listExternalAutomationRuns,
   runExternalAutomationAction,
   updateExternalAutomation
 } from './external-manager'
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
-import { getActiveMultiplexer } from '../ipc/ssh'
 import type { Store } from '../persistence'
 import type * as Fs from 'node:fs'
 
@@ -41,15 +39,10 @@ vi.mock('fs', async () => {
   }
 })
 
-vi.mock('../ipc/ssh', () => ({
-  getActiveMultiplexer: vi.fn()
-}))
-
 beforeEach(() => {
   execFileMock.mockReset()
   execFileMock.mockImplementation(resolveExecFileMock)
   existsSyncMock.mockReturnValue(false)
-  vi.mocked(getActiveMultiplexer).mockReset()
 })
 
 afterEach(() => {
@@ -61,7 +54,6 @@ describe('listExternalAutomationManagers', () => {
     vi.useFakeTimers()
     execFileMock.mockImplementation(() => ({ kill: vi.fn() }))
     const promise = listExternalAutomationManagers({
-      getSshTargets: () => []
     } as unknown as Store)
     let settled = false
     void promise.finally(() => {
@@ -337,63 +329,6 @@ describe('runExternalAutomationAction', () => {
       { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
-  })
-})
-
-describe('listExternalAutomationRuns', () => {
-  it('requests paginated Hermes runs from the remote relay', async () => {
-    const request = vi.fn().mockResolvedValue({
-      total: 42,
-      runs: [
-        {
-          id: 'job-1:2026-05-15_09-00-00.md',
-          job_id: 'job-1',
-          run_at: '2026-05-15T09:00:00',
-          status: 'completed',
-          output_preview: 'No risky dependency changes.'
-        }
-      ]
-    })
-    vi.mocked(getActiveMultiplexer).mockReturnValue({
-      isDisposed: () => false,
-      request
-    } as unknown as ReturnType<typeof getActiveMultiplexer>)
-
-    await expect(
-      listExternalAutomationRuns({
-        managerId: 'hermes:ssh:ssh-1',
-        provider: 'hermes',
-        target: { type: 'ssh', connectionId: 'ssh-1' },
-        jobId: 'job-1',
-        page: 2,
-        pageSize: 10
-      })
-    ).resolves.toMatchObject({
-      managerId: 'hermes:ssh:ssh-1',
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 2,
-      pageSize: 10,
-      total: 42,
-      runs: [
-        {
-          id: 'job-1:2026-05-15_09-00-00.md',
-          managerId: 'hermes:ssh:ssh-1',
-          provider: 'hermes',
-          jobId: 'job-1',
-          runAt: '2026-05-15T09:00:00',
-          status: 'completed',
-          outputPreview: 'No risky dependency changes.'
-        }
-      ]
-    })
-
-    expect(request).toHaveBeenCalledWith('externalAutomations.runs', {
-      provider: 'hermes',
-      jobId: 'job-1',
-      page: 2,
-      pageSize: 10
-    })
   })
 })
 

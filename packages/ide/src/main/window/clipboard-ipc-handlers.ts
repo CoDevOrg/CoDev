@@ -29,20 +29,14 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
-import {
-  cleanupExpiredRemoteClipboardFiles,
-  writeRemoteFileToClipboard
-} from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
-import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
 
 type ClipboardWriteFileRequest = {
   filePath: string
-  connectionId?: string
 }
 
 async function saveClipboardImageBufferForTarget(
@@ -51,7 +45,7 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  if (runtimeEnvironmentId && !args?.connectionId) {
+  if (runtimeEnvironmentId) {
     return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
@@ -83,8 +77,6 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
-
-  void cleanupExpiredRemoteClipboardFiles()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
@@ -147,13 +139,6 @@ export function registerClipboardHandlers(store: Store): void {
           return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
       })
-      if (request.connectionId) {
-        return writeRemoteFileToClipboard({
-          remotePath: request.filePath,
-          connectionId: request.connectionId,
-          deps
-        })
-      }
       return writeFileToClipboard(request.filePath, deps)
     }
   )
@@ -221,10 +206,6 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
   if (typeof filePath !== 'string') {
     return null
   }
-  const connectionId = (args as { connectionId?: unknown }).connectionId
-  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
-    return { filePath, connectionId }
-  }
   return { filePath }
 }
 
@@ -249,7 +230,7 @@ function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
 function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
   // Why: terminal copy/paste runs in the exact dashboard popout window, but its
   // clipboard authority must not extend to image, file, or remote operations.
-  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
+  if (!isTrustedClipboardRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }

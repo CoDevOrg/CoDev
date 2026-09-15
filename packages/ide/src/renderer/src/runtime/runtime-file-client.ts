@@ -52,7 +52,6 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
-  expectedExternalSshTargetId?: string
   includeLocalLogMetadata?: boolean
 }
 
@@ -61,47 +60,14 @@ export type RuntimeFileOperationArgs = {
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExternalSshTargetId?: string
+  expectedExecutionHostId?: 'local'
 }
 
-function assertExternalSshReadOwnership(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  connectionId: string | undefined,
-  expectedExternalSshTargetId: string | undefined
-): void {
-  const expectedTargetId = expectedExternalSshTargetId?.trim()
-  if (
-    expectedTargetId &&
-    (getActiveRuntimeTarget(settings).kind === 'environment' || connectionId !== expectedTargetId)
-  ) {
-    throw new Error('External SSH files are not available after the workspace host changes.')
-  }
-}
-
-function withSshMutationExpectation<T extends object>(
-  context: RuntimeFileOperationArgs,
+function withMutationExpectation<T extends object>(
+  _context: RuntimeFileOperationArgs,
   params: T
-): T & {
-  expectedExecutionHostId: 'local' | `ssh:${string}`
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-} {
-  const sshTargetId = context.expectedSshTargetId ?? context.connectionId
-  return {
-    ...params,
-    expectedExecutionHostId:
-      context.expectedExecutionHostId ??
-      (sshTargetId ? `ssh:${encodeURIComponent(sshTargetId)}` : 'local'),
-    ...(context.expectedSshTargetId === undefined
-      ? {}
-      : { expectedSshTargetId: context.expectedSshTargetId }),
-    ...(context.expectedSshConnectionGeneration === undefined
-      ? {}
-      : { expectedSshConnectionGeneration: context.expectedSshConnectionGeneration })
-  }
+): T & { expectedExecutionHostId: 'local' } {
+  return { ...params, expectedExecutionHostId: 'local' }
 }
 
 export type RuntimeFileDownloadResult =
@@ -243,10 +209,8 @@ export async function readRuntimeFileContent({
   relativePath,
   worktreeId,
   connectionId,
-  expectedExternalSshTargetId,
   includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
-  assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
     return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
@@ -269,7 +233,7 @@ export async function readRuntimeFileContent({
     )
   } catch (err) {
     // Why: files.read rejects binary paths with the typed 'binary_file' error; fall
-    // back to the base64 preview RPC so PDFs/images render like local/SSH paths.
+    // back to the base64 preview RPC so PDFs/images render like local paths.
     // Match the exact typed error so an unrelated failure can't spoof the fallback.
     if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
       return callRuntimeRpc<RuntimeFilePreviewResult>(
@@ -293,11 +257,6 @@ export async function readRuntimeFilePreview(
   context: RuntimeFileOperationArgs,
   filePath: string
 ): Promise<RuntimeFilePreviewResult> {
-  assertExternalSshReadOwnership(
-    context.settings,
-    context.connectionId,
-    context.expectedExternalSshTargetId
-  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
@@ -318,11 +277,6 @@ export async function downloadRuntimeFile(
   filePath: string,
   suggestedName: string
 ): Promise<RuntimeFileDownloadResult> {
-  assertExternalSshReadOwnership(
-    context.settings,
-    context.connectionId,
-    context.expectedExternalSshTargetId
-  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
@@ -486,14 +440,14 @@ export async function writeRuntimeFile(
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.writeFile(
-      withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
+      withMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
     )
     return
   }
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: remoteArgs.worktreeSelector,
       relativePath: remoteArgs.relativePath,
       content
@@ -512,10 +466,10 @@ export async function createRuntimePath(
     assertLocalFilesystemFallbackAllowed(context)
     await (kind === 'directory'
       ? window.api.fs.createDir(
-          withSshMutationExpectation(context, { dirPath: path, connectionId: context.connectionId })
+          withMutationExpectation(context, { dirPath: path, connectionId: context.connectionId })
         )
       : window.api.fs.createFile(
-          withSshMutationExpectation(context, {
+          withMutationExpectation(context, {
             filePath: path,
             connectionId: context.connectionId
           })
@@ -525,7 +479,7 @@ export async function createRuntimePath(
   await callRuntimeFileMutation(
     remoteArgs.target,
     kind === 'directory' ? 'files.createDir' : 'files.createFile',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: remoteArgs.worktreeSelector,
       relativePath: remoteArgs.relativePath
     }),
@@ -543,14 +497,14 @@ export async function renameRuntimePath(
   if (!oldRemoteArgs || newRelativePath === null) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.rename(
-      withSshMutationExpectation(context, { oldPath, newPath, connectionId: context.connectionId })
+      withMutationExpectation(context, { oldPath, newPath, connectionId: context.connectionId })
     )
     return
   }
   await callRuntimeFileMutation(
     oldRemoteArgs.target,
     'files.rename',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: oldRemoteArgs.worktreeSelector,
       oldRelativePath: oldRemoteArgs.relativePath,
       newRelativePath
@@ -569,7 +523,7 @@ export async function copyRuntimePath(
   if (!sourceArgs || !destinationArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.copy(
-      withSshMutationExpectation(context, {
+      withMutationExpectation(context, {
         sourcePath,
         destinationPath,
         connectionId: context.connectionId
@@ -580,7 +534,7 @@ export async function copyRuntimePath(
   await callRuntimeFileMutation(
     sourceArgs.target,
     'files.copy',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: sourceArgs.worktreeSelector,
       sourceRelativePath: sourceArgs.relativePath,
       destinationRelativePath: destinationArgs.relativePath
@@ -598,7 +552,7 @@ export async function deleteRuntimePath(
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.deletePath(
-      withSshMutationExpectation(context, {
+      withMutationExpectation(context, {
         targetPath,
         connectionId: context.connectionId,
         recursive
@@ -609,7 +563,7 @@ export async function deleteRuntimePath(
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.delete',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: remoteArgs.worktreeSelector,
       relativePath: remoteArgs.relativePath,
       recursive
@@ -634,7 +588,7 @@ export async function deleteRuntimeRelativePath(
   await callRuntimeFileMutation(
     target,
     'files.delete',
-    withSshMutationExpectation(context, {
+    withMutationExpectation(context, {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: normalizeRelativePath(relativePath),
       recursive
@@ -653,7 +607,7 @@ export async function importExternalPathsToRuntime(
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.importExternalPaths(
-      withSshMutationExpectation(context, {
+      withMutationExpectation(context, {
         sourcePaths,
         destDir: destinationDir,
         connectionId: context.connectionId,
@@ -712,7 +666,7 @@ export async function importExternalPathsToRuntime(
           await callRuntimeFileMutation(
             target,
             'files.createDirNoClobber',
-            withSshMutationExpectation(context, {
+            withMutationExpectation(context, {
               worktree: toRuntimeWorktreeSelector(context.worktreeId),
               relativePath: entryRelativePath
             }),
@@ -730,12 +684,6 @@ export async function importExternalPathsToRuntime(
           entryRelativePath,
           entry.contentBase64,
           assertImportSessionCurrent,
-          context.expectedSshConnectionGeneration,
-          context.expectedSshTargetId,
-          context.expectedExecutionHostId ??
-            (context.expectedSshTargetId
-              ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
-              : 'local'),
           expectedEnvironmentPairingRevision
         )
       }
@@ -755,7 +703,7 @@ export async function importExternalPathsToRuntime(
         await callRuntimeFileMutation(
           target,
           'files.delete',
-          withSshMutationExpectation(context, {
+          withMutationExpectation(context, {
             worktree: toRuntimeWorktreeSelector(context.worktreeId),
             relativePath: createdDirectoryImportRoot,
             recursive: true
@@ -781,9 +729,6 @@ async function uploadRuntimeFileWithoutClobber(
   relativePath: string,
   contentBase64: string,
   assertCurrent?: () => void,
-  expectedSshConnectionGeneration?: number,
-  expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
   expectedEnvironmentPairingRevision?: number
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
@@ -794,9 +739,6 @@ async function uploadRuntimeFileWithoutClobber(
       tempRelativePath,
       contentBase64,
       assertCurrent,
-      expectedSshConnectionGeneration,
-      expectedSshTargetId,
-      expectedExecutionHostId,
       expectedEnvironmentPairingRevision
     )
     assertCurrent?.()
@@ -807,9 +749,7 @@ async function uploadRuntimeFileWithoutClobber(
         worktree: toRuntimeWorktreeSelector(worktreeId),
         tempRelativePath,
         finalRelativePath: relativePath,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
+        expectedExecutionHostId: 'local'
       },
       30_000,
       expectedEnvironmentPairingRevision
@@ -823,9 +763,7 @@ async function uploadRuntimeFileWithoutClobber(
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath: tempRelativePath,
         recursive: false,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
+        expectedExecutionHostId: 'local'
       },
       15_000,
       expectedEnvironmentPairingRevision
@@ -839,9 +777,6 @@ async function writeRuntimeBase64File(
   relativePath: string,
   contentBase64: string,
   assertCurrent?: () => void,
-  expectedSshConnectionGeneration?: number,
-  expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
   expectedEnvironmentPairingRevision?: number
 ): Promise<void> {
   if (contentBase64.length <= REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
@@ -853,9 +788,7 @@ async function writeRuntimeBase64File(
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath,
         contentBase64,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
+        expectedExecutionHostId: 'local'
       },
       30_000,
       expectedEnvironmentPairingRevision
@@ -873,9 +806,7 @@ async function writeRuntimeBase64File(
         relativePath,
         contentBase64: contentBase64.slice(offset, offset + REMOTE_UPLOAD_BASE64_CHUNK_CHARS),
         append: offset > 0,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
+        expectedExecutionHostId: 'local'
       },
       30_000,
       expectedEnvironmentPairingRevision
@@ -917,7 +848,7 @@ async function ensureRuntimeDirectory(
     await callRuntimeFileMutation(
       destinationArgs.target,
       'files.createDir',
-      withSshMutationExpectation(context, {
+      withMutationExpectation(context, {
         worktree: destinationArgs.worktreeSelector,
         relativePath: current
       }),
@@ -976,7 +907,7 @@ export async function listRuntimeFiles(
 
 /**
  * Best-effort abort of an in-flight listRuntimeFiles call (#7721). Switching
- * workspaces must stop the previous workspace's full-tree scan — over SSH an
+ * workspaces must stop the previous workspace's full-tree scan — on a remote runtime an
  * abandoned scan keeps loading the relay and starves fs.readDir/fs.stat.
  */
 export function cancelRuntimeFileList(

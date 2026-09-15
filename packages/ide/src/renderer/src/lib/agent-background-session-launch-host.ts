@@ -5,14 +5,13 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 
 type LaunchStore = ReturnType<typeof useAppStore.getState>
 type LaunchRepo = LaunchStore['repos'][number]
 
 export type AgentBackgroundLaunchHost = {
-  /** SSH connection to spawn on, or null for a local launch. */
+  /** Legacy remote connection id; always null on this fork (every launch is local). */
   connectionId: string | null
   /** Platform whose shell quoting and CLI naming the startup plan must target. */
   platform: NodeJS.Platform
@@ -47,7 +46,7 @@ export function resolveAgentBackgroundLaunchHost(args: {
         repo,
         repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
       ),
-      isRemote: repoIsRemote(repo),
+      isRemote: false,
       expectedConnectionId: repo.connectionId ?? null
     }
   }
@@ -65,7 +64,7 @@ export function resolveAgentBackgroundLaunchHost(args: {
       : isWslUncPath(worktreePath ?? '')
         ? 'linux'
         : CLIENT_PLATFORM,
-    isRemote: Boolean(folderWorkspaceConnectionId),
+    isRemote: false,
     expectedConnectionId: isFolderWorkspace ? (folderWorkspaceConnectionId ?? null) : undefined
   }
 }

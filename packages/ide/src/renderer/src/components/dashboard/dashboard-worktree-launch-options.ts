@@ -18,7 +18,6 @@ export type DashboardLaunchDetectionState = Pick<
   | 'detectedAgentIds'
   | 'folderWorkspaces'
   | 'projectGroups'
-  | 'remoteDetectedAgentIds'
   | 'runtimeDetectedAgentIds'
 >
 
@@ -60,8 +59,7 @@ function detectedAgentsForWorktree(
     if (host?.kind === 'runtime') {
       return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
     }
-    const connectionId = folder?.connectionId ?? group?.connectionId
-    return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
+    return state.detectedAgentIds ?? []
   }
 
   const worktree = catalog.worktreesByRepoAndId.get(repoId)?.get(worktreeId)
@@ -70,10 +68,7 @@ function detectedAgentsForWorktree(
   if (host?.kind === 'runtime') {
     return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
   }
-  const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
-  return connectionId
-    ? (state.remoteDetectedAgentIds?.[connectionId] ?? [])
-    : (state.detectedAgentIds ?? [])
+  return state.detectedAgentIds ?? []
 }
 
 /** Host-detected choices plus providers already proven to run in the workspace. */

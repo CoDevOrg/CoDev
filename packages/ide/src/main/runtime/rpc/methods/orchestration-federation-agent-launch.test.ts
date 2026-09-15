@@ -58,10 +58,10 @@ describe('federated worker agent launch', () => {
       method.params!.parse({
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
-        taskSpec: 'remote cursor worker',
+        taskSpec: 'remote codex worker',
         protocolVersion: 1,
         worktree: 'id:repo::remote-worktree',
-        agent: 'cursor',
+        agent: 'codex',
         model: 'gpt-5.3-codex',
         effort: 'high'
       }),
@@ -86,14 +86,14 @@ describe('federated worker agent launch', () => {
     expect(result).toMatchObject({
       state: 'ready',
       launch: {
-        requested: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' },
-        effective: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' }
+        requested: { agent: 'codex', model: 'gpt-5.3-codex', effort: 'high' },
+        effective: { agent: 'codex', model: 'gpt-5.3-codex', effort: 'high' }
       }
     })
     expect(createTerminal).toHaveBeenCalledWith(
       'id:repo::remote-worktree',
       expect.objectContaining({
-        startupAgent: 'cursor',
+        startupAgent: 'codex',
         launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
       })
     )

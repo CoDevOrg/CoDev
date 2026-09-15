@@ -16,7 +16,6 @@ import {
   WorktreePrefetchCreateBase,
   WorktreePsParams,
   WorktreeRemove,
-  WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSet,
@@ -120,14 +119,6 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             preserveBranchOnDelete: params.preserveBranchOnDelete,
             linkedIssue: params.linkedIssue,
             linkedPR: params.linkedPR,
-            linkedLinearIssue: params.linkedLinearIssue,
-            linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-            linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-            linkedGitLabMR: params.linkedGitLabMR,
-            linkedGitLabIssue: params.linkedGitLabIssue,
-            linkedBitbucketPR: params.linkedBitbucketPR,
-            linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-            linkedGiteaPR: params.linkedGiteaPR,
             linkedWorkItem: params.linkedWorkItem,
             linkedTaskSourceContext: params.linkedTaskSourceContext,
             comment: params.comment,
@@ -202,14 +193,6 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         displayName: params.displayName,
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
-        linkedLinearIssue: params.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabMR: params.linkedGitLabMR,
-        linkedGitLabIssue: params.linkedGitLabIssue,
-        linkedBitbucketPR: params.linkedBitbucketPR,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-        linkedGiteaPR: params.linkedGiteaPR,
         linkedWorkItem: params.linkedWorkItem,
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
@@ -253,18 +236,6 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         prNumber: params.prNumber,
         headRefName: params.headRefName,
         baseRefName: params.baseRefName,
-        isCrossRepository: params.isCrossRepository
-      })
-  }),
-  defineMethod({
-    name: 'worktree.resolveMrBase',
-    params: WorktreeResolveMrBase,
-    handler: async (params, { runtime }) =>
-      runtime.resolveManagedMrBase({
-        repoSelector: params.repo,
-        mrIid: params.mrIid,
-        sourceBranch: params.sourceBranch,
-        targetBranch: params.targetBranch,
         isCrossRepository: params.isCrossRepository
       })
   }),

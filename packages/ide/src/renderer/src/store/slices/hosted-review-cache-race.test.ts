@@ -47,11 +47,11 @@ function makeStore(settings: AppState['settings'] = null) {
 }
 
 const review: HostedReviewInfo = {
-  provider: 'gitlab',
+  provider: 'github',
   number: 5,
-  title: 'Shared MR status',
+  title: 'Shared PR status',
   state: 'open',
-  url: 'https://gitlab.com/g/p/-/merge_requests/5',
+  url: 'https://github.com/g/p/pull/5',
   status: 'success',
   updatedAt: '2026-05-10T00:00:00.000Z',
   mergeable: 'MERGEABLE'
@@ -301,7 +301,8 @@ describe('hosted review cache race protection', () => {
     expect(store.getState().hostedReviewCache[cacheKey]).toEqual({
       data: freshReview,
       fetchedAt: 100,
-      linkedReviewHintKey: ''
+      linkedReviewHintKey: '',
+      branchLookupGitHubPRNumber: 5
     })
   })
 
@@ -323,11 +324,7 @@ describe('hosted review cache race protection', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenNthCalledWith(2, {
       branch: 'feature/inflight',
       currentHeadOid: null,
-      linkedAzureDevOpsPR: null,
-      linkedBitbucketPR: null,
       linkedGitHubPR: null,
-      linkedGitLabMR: null,
-      linkedGiteaPR: null,
       repoPath: '/repo'
     })
     resolveGitHubLookup(githubReview)

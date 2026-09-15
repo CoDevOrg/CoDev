@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import ko from '@/i18n/locales/ko.json'
 import { i18n } from '@/i18n/i18n'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import {
@@ -129,23 +128,45 @@ describe('browser link routing modifier copy', () => {
 describe('Link Routing description localization', () => {
   const KEY = 'auto.components.settings.BrowserLinkRoutingSetting.description'
   const BASE_KEY = 'auto.components.settings.BrowserLinkRoutingSetting.descriptionBase'
+  // Why: English is the only bundled catalog, so a synthetic resource language
+  // stands in for a translation. It proves the copy comes from the catalog key
+  // (with the shortcut interpolated) rather than a hardcoded English literal.
+  const TEST_LANGUAGE = 'xx'
+  const TEST_DESCRIPTION = 'Synthetic copy {{shortcut}} opens in the built-in browser'
+  const TEST_BASE = 'Synthetic invert-on copy'
 
   beforeEach(async () => {
+    i18n.addResourceBundle(
+      TEST_LANGUAGE,
+      'translation',
+      {
+        auto: {
+          components: {
+            settings: {
+              BrowserLinkRoutingSetting: {
+                description: TEST_DESCRIPTION,
+                descriptionBase: TEST_BASE
+              }
+            }
+          }
+        }
+      },
+      true,
+      true
+    )
     await i18n.changeLanguage('en')
   })
 
-  it('renders the Korean copy with the shortcut interpolated', async () => {
-    const koCopy = (
-      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
-    )['description']
-    expect(koCopy).toBeTruthy()
-    expect(koCopy).toContain('{{shortcut}}')
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+    i18n.removeResourceBundle(TEST_LANGUAGE, 'translation')
+  })
 
-    i18n.addResourceBundle('ko', 'translation', ko, true, true)
-    await i18n.changeLanguage('ko')
+  it('renders the catalog copy with the shortcut interpolated', async () => {
+    await i18n.changeLanguage(TEST_LANGUAGE)
 
     const description = getBrowserLinkRoutingDescription({ isMac: true })
-    expect(description).toBe(koCopy.replace('{{shortcut}}', '⇧⌘-click'))
+    expect(description).toBe(TEST_DESCRIPTION.replace('{{shortcut}}', '⇧⌘-click'))
     expect(description).not.toMatch(/\{\{.+?\}\}/)
     // Fails when the copy is a hardcoded English literal.
     expect(description).not.toContain("Orca's built-in browser")
@@ -160,17 +181,11 @@ describe('Link Routing description localization', () => {
     expect(getBrowserLinkRoutingDescription({ isMac: true })).toContain("Orca's built-in browser")
   })
 
-  it('renders the Korean copy for the invert-on variant', async () => {
-    const koBase = (
-      ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
-    )['descriptionBase']
-    expect(koBase).toBeTruthy()
-
-    i18n.addResourceBundle('ko', 'translation', ko, true, true)
-    await i18n.changeLanguage('ko')
+  it('renders the catalog copy for the invert-on variant', async () => {
+    await i18n.changeLanguage(TEST_LANGUAGE)
 
     const description = getBrowserLinkRoutingDescription({ isMac: true }, true)
-    expect(description).toBe(koBase)
+    expect(description).toBe(TEST_BASE)
     // Fails when the invert-on branch regresses to a hardcoded English literal.
     expect(description).not.toContain("Orca's built-in browser")
   })

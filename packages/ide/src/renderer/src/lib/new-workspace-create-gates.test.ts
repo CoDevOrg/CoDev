@@ -13,7 +13,6 @@ const readyInput: ComposerCreateGateInput = {
   shouldWaitForIssueAutomationCheck: false,
   requiresExplicitSetupChoice: false,
   hasSetupDecision: false,
-  selectedRepoRequiresConnection: false,
   sparseError: null
 }
 
@@ -51,9 +50,6 @@ describe('new workspace create gates', () => {
   it('still blocks quick create for other missing form state and explicit setup choices', () => {
     expect(getQuickComposerCreateDisabled({ ...readyInput, workspaceSeedName: '' })).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...readyInput, creating: true })).toBe(true)
-    expect(
-      getQuickComposerCreateDisabled({ ...readyInput, selectedRepoRequiresConnection: true })
-    ).toBe(true)
     expect(
       getQuickComposerCreateDisabled({
         ...readyInput,

@@ -85,20 +85,8 @@ describe('AccountsPane', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Showing accounts for this device. New accounts are added there.')
-    expect(markup).toContain('authenticate with Google for this device. This uses credentials')
     expect(markup).not.toContain('ShowingThis device')
     expect(markup).not.toContain('forThis device')
-  })
-
-  it('localizes the runtime label before interpolating account copy', async () => {
-    await i18n.changeLanguage('es')
-
-    const markup = renderPane(getDefaultSettings('/tmp'))
-
-    expect(markup).toMatch(
-      /Mostrando cuentas para [Ee]ste dispositivo\. Las nuevas cuentas se agregan allí\./
-    )
-    expect(markup).not.toContain('This device')
   })
 
   it('scopes account copy to the active remote server and disables local sign-in actions', () => {

@@ -13,7 +13,6 @@ import type { BrowserFindSource } from '../shared/browser-find-source'
 import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
-  DashboardSnapshot,
   DashboardSpawnAgentArgs
 } from '../shared/dashboard-snapshot'
 import type {
@@ -33,14 +32,9 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
-import type { ReleaseChannel } from '../shared/release-channel'
 import type {
-  ForgetRemovedWorktreesForExecutionHostArgs,
-  ForgetRemovedWorktreesForExecutionHostResult,
-  HostQualifiedKnownWorktreeResult,
   HostQualifiedDetectedWorktreeResult,
   LegacyDetectedWorktreeRequest,
-  ListKnownWorktreesForExecutionHostArgs,
   ListDetectedWorktreesArgs,
   ProviderRequestId
 } from '../shared/detected-worktree-provider-contract'
@@ -61,18 +55,6 @@ import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-conne
 import type { RuntimePairingReach } from '../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../shared/mobile-relay-mint-failure'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../shared/remote-pairing-verification'
-import type {
-  SshMutationExpectation,
-  SshConnectionState,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshConfigImportResult,
-  SshTargetAddResult,
-  SshTarget,
-  PortForwardEntry,
-  EnrichedDetectedPort
-} from '../shared/ssh-types'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -101,7 +83,6 @@ import type {
 } from '../shared/orca-profiles'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
-import type { LinearIssueAttributeFilter } from '../shared/linear-issue-attribute-filter'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -138,14 +119,12 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   ClaudeRateLimitAccountsState,
-  ClassifiedError,
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
   DetectedWorktreeListResult,
   DirEntry,
-  FilesystemPathFlavor,
   ForceDeleteWorktreeBranchResult,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -171,58 +150,8 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
-  GitLabAssignableUser,
-  GitLabAuthDiagnostic,
-  GitLabCommentResult,
-  GitLabDiscussionResolveResult,
-  GitLabIssueInfo,
-  GitLabIssueUpdate,
-  GitLabJobTraceResult,
-  GitLabMRInlineCommentInput,
-  GitLabMRReviewersUpdateResult,
-  GitLabMRUpdate,
-  GitLabProjectRef,
-  GitLabRetryJobResult,
-  GitLabTodo,
-  GitLabViewer,
-  GitLabWorkItem,
-  GitLabWorkItemDetails,
-  GetGitLabRateLimitResult,
-  ListMergeRequestsResult,
-  MRInfo,
-  MRListState,
   ListWorkItemsResult,
   IssueInfo,
-  JiraComment,
-  JiraConnectionStatus,
-  JiraCreateField,
-  JiraCreateIssueArgs,
-  JiraIssue,
-  JiraIssueFilter,
-  JiraIssueType,
-  JiraProjectStatusOrder,
-  JiraIssueUpdate,
-  JiraPriority,
-  JiraProject,
-  JiraSiteSelection,
-  JiraTransition,
-  JiraUser,
-  JiraViewer,
-  LinearViewer,
-  LinearCollectionResult,
-  LinearConnectionStatus,
-  LinearCustomViewModel,
-  LinearCustomViewSummary,
-  LinearWorkspaceSelection,
-  LinearIssue,
-  LinearIssueUpdate,
-  LinearComment,
-  LinearWorkflowState,
-  LinearLabel,
-  LinearMember,
-  LinearProjectDetail,
-  LinearProjectSummary,
-  LinearTeam,
   MarkdownDocument,
   FloatingTerminalCwdRequest,
   GitHubIssueUpdate,
@@ -270,9 +199,6 @@ import type {
   StatsSummary,
   MemorySnapshot,
   TuiAgent,
-  ReleaseBuildListResult,
-  UpdateCheckOptions,
-  UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeHeadIdentity,
@@ -285,8 +211,7 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionPatch,
-  WorkspaceSessionState,
-  LinuxPackageInstallInstructions
+  WorkspaceSessionState
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
@@ -304,9 +229,6 @@ import type {
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
-import type { EphemeralVmRecipeDoctorResult } from '../shared/ephemeral-vm-recipes'
-import type { EphemeralVmRecipeResultWarning } from '../shared/ephemeral-vm-recipe-diagnostics'
-import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -436,12 +358,6 @@ import type {
   LocalNetworkConnectionTestResult
 } from '../shared/developer-permissions-types'
 import type {
-  ComputerUsePermissionId,
-  ComputerUsePermissionResetResult,
-  ComputerUsePermissionSetupResult,
-  ComputerUsePermissionStatusResult
-} from '../shared/computer-use-permissions-types'
-import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
@@ -454,17 +370,9 @@ import type {
 } from '../shared/claude-usage-types'
 import type {
   CodexRateLimitResetResult,
-  GrokAccountStatus,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
-import type {
-  SpeechErrorEvent,
-  SpeechLifecycleEvent,
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechTranscriptEvent
-} from '../shared/speech-types'
 import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
@@ -489,17 +397,6 @@ import type {
   CodexUsageSummary
 } from '../shared/codex-usage-types'
 import type {
-  OpenCodeUsageBreakdownKind,
-  OpenCodeUsageBreakdownRow,
-  OpenCodeUsageDailyPoint,
-  OpenCodeUsageRange,
-  OpenCodeUsageScanState,
-  OpenCodeUsageScope,
-  OpenCodeUsageSessionRow,
-  OpenCodeUsageSnapshot,
-  OpenCodeUsageSummary
-} from '../shared/opencode-usage-types'
-import type {
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultListArgs,
@@ -519,12 +416,6 @@ import type {
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
-import type {
-  RemoteWorkspaceChangedEvent,
-  RemoteWorkspaceConnectedClient,
-  RemoteWorkspacePatchResult,
-  RemoteWorkspaceSnapshot
-} from '../shared/remote-workspace-types'
 import type {
   Automation,
   AutomationCreateInput,
@@ -549,12 +440,6 @@ import type {
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
-
-type GitLabRepoSelectorArgs = {
-  repoPath: string
-  repoId?: string | null
-  sourceContext?: TaskSourceContext | null
-}
 
 type GitHubRepoSelectorArgs = {
   repoPath: string
@@ -703,23 +588,6 @@ export type DetectedBrowserInfo = {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  /** Optional — older preload payloads predating GitLab support omit it; consumers gate on `glab?.installed`. */
-  glab?: { installed: boolean; authenticated: boolean }
-  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-  gitea?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
 }
 
 export type RefreshAgentsResult = {
@@ -882,35 +750,6 @@ export type CodexUsageApi = {
     range: CodexUsageRange
     limit?: number
   }) => Promise<CodexUsageSessionRow[]>
-}
-
-export type OpenCodeUsageApi = {
-  getScanState: () => Promise<OpenCodeUsageScanState>
-  setEnabled: (args: { enabled: boolean }) => Promise<OpenCodeUsageScanState>
-  refresh: (args?: { force?: boolean }) => Promise<OpenCodeUsageScanState>
-  getSnapshot: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    limit?: number
-  }) => Promise<OpenCodeUsageSnapshot>
-  getSummary: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-  }) => Promise<OpenCodeUsageSummary>
-  getDaily: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-  }) => Promise<OpenCodeUsageDailyPoint[]>
-  getBreakdown: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    kind: OpenCodeUsageBreakdownKind
-  }) => Promise<OpenCodeUsageBreakdownRow[]>
-  getRecentSessions: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    limit?: number
-  }) => Promise<OpenCodeUsageSessionRow[]>
 }
 
 export type AiVaultApi = {
@@ -1414,13 +1253,6 @@ export type PreloadApi = {
       ): Promise<HostQualifiedDetectedWorktreeResult | DetectedWorktreeListResult>
       (args: LegacyDetectedWorktreeRequest): Promise<DetectedWorktreeListResult>
     }
-    listKnownForExecutionHost?: (
-      args: ListKnownWorktreesForExecutionHostArgs
-    ) => Promise<HostQualifiedKnownWorktreeResult>
-    /** Retires the persisted metadata an authoritative scan proved gone, so it stops feeding the read above. */
-    forgetRemovedForExecutionHost?: (
-      args: ForgetRemovedWorktreesForExecutionHostArgs
-    ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
     cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
@@ -1437,19 +1269,6 @@ export type PreloadApi = {
       baseRefName?: string
       isCrossRepository?: boolean
     }) => Promise<GitHubPrStartPoint | { error: string }>
-    /** GitLab parallel of resolvePrBase. For same-project MRs returns
-     *  `<remote>/<source_branch>`; for fork MRs fetches
-     *  refs/merge-requests/<iid>/head and returns the SHA. */
-    resolveMrBase: (args: {
-      repoId: string
-      mrIid: number
-      sourceBranch?: string
-      targetBranch?: string
-      isCrossRepository?: boolean
-    }) => Promise<
-      | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-      | { error: string }
-    >
     remove: (args: {
       worktreeId: string
       hostId?: ExecutionHostId
@@ -1460,7 +1279,7 @@ export type PreloadApi = {
       allowUnverifiedPtyStop?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
-    // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
+    // Forget a workspace from Orca only (no Git/FS work).
     forgetLocal: (args: {
       worktreeId: string
       hostId?: ExecutionHostId
@@ -2033,325 +1852,6 @@ export type PreloadApi = {
     ) => Promise<HostedReviewCreationEligibility>
     create: (args: CreateHostedReviewArgs) => Promise<CreateHostedReviewResult>
   }
-  // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
-  // Shapes mirror gh.* except where GitLab's API differs (MR states, host-qualified project path, `glab api -i` paging).
-  gl: {
-    viewer: () => Promise<GitLabViewer | null>
-    diagnoseAuth: () => Promise<GitLabAuthDiagnostic>
-    rateLimit: (args?: {
-      force?: boolean
-      host?: string | null
-    }) => Promise<GetGitLabRateLimitResult>
-    projectSlug: (args: GitLabRepoSelectorArgs) => Promise<GitLabProjectRef | null>
-    mrForBranch: (
-      args: GitLabRepoSelectorArgs & {
-        branch: string
-        linkedMRIid?: number | null
-      }
-    ) => Promise<MRInfo | null>
-    mr: (args: GitLabRepoSelectorArgs & { iid: number }) => Promise<MRInfo | null>
-    listMRs: (
-      args: GitLabRepoSelectorArgs & {
-        state?: MRListState
-        page?: number
-        perPage?: number
-        query?: string
-      }
-    ) => Promise<ListMergeRequestsResult>
-    /** Combined MR + issue list filtered by state. Issues are skipped
-     *  when state is 'merged' (issues don't merge). */
-    listWorkItems: (
-      args: GitLabRepoSelectorArgs & {
-        state?: MRListState
-        page?: number
-        perPage?: number
-        query?: string
-      }
-    ) => Promise<ListMergeRequestsResult>
-    issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
-    listIssues: (
-      args: GitLabRepoSelectorArgs & {
-        state?: 'opened' | 'closed' | 'all'
-        assignee?: string
-        limit?: number
-      }
-    ) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
-    createIssue: (
-      args: GitLabRepoSelectorArgs & {
-        title: string
-        body: string
-      }
-    ) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
-    updateIssue: (
-      args: GitLabRepoSelectorArgs & {
-        number: number
-        updates: GitLabIssueUpdate
-      }
-    ) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (
-      args: GitLabRepoSelectorArgs & {
-        number: number
-        body: string
-      }
-    ) => Promise<GitLabCommentResult>
-    listLabels: (args: GitLabRepoSelectorArgs) => Promise<string[]>
-    listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<GitLabAssignableUser[]>
-    /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
-    todos: (args: GitLabRepoSelectorArgs) => Promise<GitLabTodo[]>
-    /** Aggregated dialog payload — body + discussions + pipeline jobs. */
-    workItemDetails: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        type: 'issue' | 'mr'
-      }
-    ) => Promise<GitLabWorkItemDetails | null>
-    closeMR: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-      }
-    ) => Promise<{ ok: true } | { ok: false; error: string }>
-    reopenMR: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-      }
-    ) => Promise<{ ok: true } | { ok: false; error: string }>
-    mergeMR: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        method?: 'merge' | 'squash' | 'rebase'
-      }
-    ) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMR: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        updates: GitLabMRUpdate
-      }
-    ) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMRReviewers: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        reviewerIds: number[]
-        projectRef?: GitLabProjectRef | null
-      }
-    ) => Promise<GitLabMRReviewersUpdateResult>
-    addMRComment: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        body: string
-      }
-    ) => Promise<GitLabCommentResult>
-    addMRInlineComment: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        input: GitLabMRInlineCommentInput
-        projectRef?: GitLabProjectRef | null
-      }
-    ) => Promise<GitLabCommentResult>
-    resolveMRDiscussion: (
-      args: GitLabRepoSelectorArgs & {
-        iid: number
-        discussionId: string
-        resolved: boolean
-      }
-    ) => Promise<GitLabDiscussionResolveResult>
-    jobTrace: (
-      args: GitLabRepoSelectorArgs & {
-        jobId: number
-        projectRef?: GitLabProjectRef | null
-        /** Bound the trace in main to a readable excerpt (see gitLabJobTraceToLogExcerpt). */
-        logExcerpt?: boolean
-      }
-    ) => Promise<GitLabJobTraceResult>
-    retryJob: (
-      args: GitLabRepoSelectorArgs & {
-        jobId: number
-        projectRef?: GitLabProjectRef | null
-      }
-    ) => Promise<GitLabRetryJobResult>
-    workItemByPath: (
-      args: GitLabRepoSelectorArgs & {
-        host: string
-        path: string
-        iid: number
-        type: 'issue' | 'mr'
-      }
-    ) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
-  }
-  linear: {
-    connect: (args: {
-      apiKey: string
-    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    disconnect: (args?: { workspaceId?: string }) => Promise<void>
-    selectWorkspace: (args: {
-      workspaceId: LinearWorkspaceSelection
-    }) => Promise<LinearConnectionStatus>
-    status: () => Promise<LinearConnectionStatus>
-    testConnection: (args?: {
-      workspaceId?: string
-    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    searchIssues: (args: {
-      query: string
-      limit?: number
-      workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearIssue[]>
-    listIssues: (args?: {
-      filter?: 'assigned' | 'created' | 'all' | 'completed'
-      limit?: number
-      workspaceId?: LinearWorkspaceSelection
-      attributeFilter?: LinearIssueAttributeFilter
-    }) => Promise<LinearCollectionResult<LinearIssue>>
-    createIssue: (args: {
-      teamId: string
-      title: string
-      description?: string
-      workspaceId?: string
-      parentIssueId?: string
-      projectId?: string | null
-      stateId?: string
-      priority?: number
-      assigneeId?: string | null
-      labelIds?: string[]
-    }) => Promise<
-      | { ok: true; id: string; identifier: string; title: string; url: string }
-      | { ok: false; error: string }
-    >
-    getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
-    updateIssue: (args: {
-      id: string
-      updates: LinearIssueUpdate
-      workspaceId?: string
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      issueId: string
-      body: string
-      workspaceId?: string
-    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-    issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
-    listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
-    listProjects: (args?: {
-      query?: string
-      limit?: number
-      workspaceId?: LinearWorkspaceSelection
-      force?: boolean
-    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
-    createProject: (args: {
-      name: string
-      description?: string
-      content?: string
-      teamIds: string[]
-      workspaceId?: string
-      leadId?: string | null
-      memberIds?: string[]
-      labelIds?: string[]
-      priority?: number
-      startDate?: string
-      targetDate?: string
-    }) => Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }>
-    getProject: (args: {
-      id: string
-      workspaceId: string
-      force?: boolean
-    }) => Promise<LinearProjectDetail | null>
-    listProjectIssues: (args: {
-      projectId: string
-      limit?: number
-      workspaceId: string
-      force?: boolean
-    }) => Promise<LinearCollectionResult<LinearIssue>>
-    listCustomViews: (args: {
-      model: LinearCustomViewModel
-      limit?: number
-      workspaceId?: LinearWorkspaceSelection
-      force?: boolean
-    }) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
-    getCustomView: (args: {
-      viewId: string
-      model: LinearCustomViewModel
-      workspaceId: string
-      force?: boolean
-    }) => Promise<LinearCustomViewSummary | null>
-    listCustomViewIssues: (args: {
-      viewId: string
-      limit?: number
-      workspaceId: string
-      force?: boolean
-    }) => Promise<LinearCollectionResult<LinearIssue>>
-    listCustomViewProjects: (args: {
-      viewId: string
-      limit?: number
-      workspaceId: string
-      force?: boolean
-    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
-    teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
-    teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
-    teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
-  }
-  jira: {
-    connect: (args: {
-      siteUrl: string
-      email: string
-      apiToken: string
-      authType?: 'cloud' | 'server'
-    }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
-    disconnect: (args?: { siteId?: string }) => Promise<void>
-    selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
-    status: () => Promise<JiraConnectionStatus>
-    readStatus: () => Promise<JiraConnectionStatus>
-    testConnection: (args?: {
-      siteId?: string
-    }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
-    searchIssues: (args: {
-      jql: string
-      limit?: number
-      siteId?: JiraSiteSelection
-      requestId?: string
-    }) => Promise<JiraIssue[]>
-    cancelSearchIssues: (args: { requestId: string }) => Promise<void>
-    listIssues: (args?: {
-      filter?: JiraIssueFilter
-      limit?: number
-      siteId?: JiraSiteSelection
-    }) => Promise<JiraIssue[]>
-    getIssue: (args: { key: string; siteId?: string }) => Promise<JiraIssue | null>
-    lookupIssueSummary: (args: {
-      key: string
-      siteId: string
-      requestId?: string
-    }) => Promise<JiraIssue | null>
-    cancelIssueSummary: (args: { requestId: string }) => Promise<void>
-    createIssue: (
-      args: JiraCreateIssueArgs
-    ) => Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }>
-    updateIssue: (args: {
-      key: string
-      updates: JiraIssueUpdate
-      siteId?: string
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      key: string
-      body: string
-      siteId?: string
-    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-    issueComments: (args: { key: string; siteId?: string }) => Promise<JiraComment[]>
-    listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
-    listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
-    listCreateFields: (args: {
-      projectIdOrKey: string
-      issueTypeId: string
-      siteId?: string
-    }) => Promise<JiraCreateField[]>
-    listPriorities: (args?: { siteId?: string }) => Promise<JiraPriority[]>
-    listAssignableUsers: (args: {
-      key: string
-      query?: string
-      siteId?: string
-    }) => Promise<JiraUser[]>
-    listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
-    getProjectStatusOrder: (args: {
-      projectKey: string
-      siteId?: string
-    }) => Promise<JiraProjectStatusOrder>
-  }
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
@@ -2475,22 +1975,11 @@ export type PreloadApi = {
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
-    openClaudeStatus: () => Promise<AgentHookInstallStatus>
     codexStatus: () => Promise<AgentHookInstallStatus>
-    geminiStatus: () => Promise<AgentHookInstallStatus>
-    antigravityStatus: () => Promise<AgentHookInstallStatus>
-    ampStatus: () => Promise<AgentHookInstallStatus>
-    cursorStatus: () => Promise<AgentHookInstallStatus>
-    droidStatus: () => Promise<AgentHookInstallStatus>
-    commandCodeStatus: () => Promise<AgentHookInstallStatus>
-    grokStatus: () => Promise<AgentHookInstallStatus>
-    copilotStatus: () => Promise<AgentHookInstallStatus>
-    hermesStatus: () => Promise<AgentHookInstallStatus>
-    devinStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: {
-      preset: 'claude' | 'cursor' | 'copilot' | 'codex'
+      preset: 'claude' | 'codex'
       workspacePath: string
       connectionId?: string
     }) => Promise<void>
@@ -2514,18 +2003,6 @@ export type PreloadApi = {
     ) => Promise<OnboardingState>
   }
   dashboard: {
-    openPopout: (view?: 'board' | 'map') => Promise<void>
-    publishSnapshot: (snapshot: DashboardSnapshot) => Promise<void>
-    getPopoutOpen: () => Promise<boolean>
-    onPopoutOpenChanged: (callback: (open: boolean) => void) => () => void
-    onSnapshotRequested: (callback: () => void) => () => void
-    onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
-    onAckAgent: (callback: (paneKey: string) => void) => () => void
-    onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
-    onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
-    requestSnapshot: () => Promise<void>
-    onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
-    onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
     revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
     ackAgent: (paneKey: string) => Promise<void>
     spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
@@ -2547,14 +2024,6 @@ export type PreloadApi = {
     unsubscribe: (ptyId: string) => Promise<void>
     onData: (callback: (payload: TerminalPreviewDataPayload) => void) => () => void
   }
-  macosTccPrompts: {
-    /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
-    onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
-    consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
-    acknowledgePending: (claimId: number) => Promise<void>
-    releasePending: (claimId: number) => Promise<void>
-    dismiss: () => Promise<void>
-  }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
     request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
@@ -2563,13 +2032,6 @@ export type PreloadApi = {
       host: string
       port: number
     }) => Promise<LocalNetworkConnectionTestResult>
-  }
-  computerUsePermissions: {
-    getStatus: () => Promise<ComputerUsePermissionStatusResult>
-    openSetup: (args?: {
-      id?: ComputerUsePermissionId
-    }) => Promise<ComputerUsePermissionSetupResult>
-    reset: () => Promise<ComputerUsePermissionResetResult>
   }
   shell: {
     openPath: (path: string) => Promise<void>
@@ -2635,70 +2097,6 @@ export type PreloadApi = {
       hostId?: ExecutionHostId
     }) => Promise<void>
   }
-  ephemeralVm: {
-    listRecipes: (args: { repoId: string }) => Promise<{
-      status: 'ok' | 'error'
-      repoPath: string | null
-      recipes: OrcaHooks['environmentRecipes']
-      diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
-      message?: string
-    }>
-    listRecipeCatalog: () => Promise<
-      {
-        repoId: string
-        repoName: string
-        repoPath: string
-        recipes: NonNullable<OrcaHooks['environmentRecipes']>
-        diagnostics: NonNullable<OrcaHooks['environmentRecipeDiagnostics']>
-      }[]
-    >
-    doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
-    provision: (args: {
-      repoId: string
-      recipeId: string
-      workspaceName?: string
-      projectId?: string
-      workspaceId?: string
-      provisionId?: string
-    }) => Promise<
-      | {
-          ok: true
-          connectionType: 'orca-server'
-          runtime: EphemeralVmRuntimeRecord
-          environment: PublicKnownRuntimeEnvironment
-          stderr: string
-          warnings: EphemeralVmRecipeResultWarning[]
-        }
-      | {
-          ok: true
-          connectionType: 'ssh'
-          runtime: EphemeralVmRuntimeRecord
-          sshTargetId: string
-          stderr: string
-          warnings: EphemeralVmRecipeResultWarning[]
-        }
-      | { ok: false; error: string; stderr: string; stdout: string }
-    >
-    cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
-    onProvisionEvent: (
-      callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
-    ) => () => void
-    listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
-    attachWorkspace: (args: {
-      runtimeId: string
-      workspaceId: string
-    }) => Promise<EphemeralVmRuntimeRecord>
-    suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
-    resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
-    cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
-    getCleanupCommand: (args: { runtimeId: string }) => Promise<{
-      runtimeId: string
-      command: string | null
-      payloadJson: string
-      cleanupDisabled: boolean
-      message?: string
-    }>
-  }
   cache: {
     getGitHub: () => Promise<{
       pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
@@ -2720,35 +2118,11 @@ export type PreloadApi = {
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
-  remoteWorkspace: {
-    get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
-    setForConnectedTargets: (args: {
-      session?: WorkspaceSessionState
-      hydratedTargetIds?: string[]
-    }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
-    listEnabledConnectedTargets: () => Promise<string[]>
-    listConnectedClients: (args?: {
-      targetIds?: string[]
-    }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
-    clientId: () => Promise<string>
-    onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
-  }
+  // Why: the self-updater is gone (CoDev replaces the AppImage through its own deploy); only the
+  // renderer-side dismissal calls in the UI store remain, and they are no-ops on every surface.
   updater: {
-    getVersion: () => Promise<string>
-    getStatus: () => Promise<UpdateStatus>
-    check: (options?: UpdateCheckOptions) => Promise<void>
-    download: () => Promise<void>
-    quitAndInstall: () => Promise<void>
     dismissNudge: () => Promise<void>
     dismissAvailableUpdate: () => Promise<void>
-    /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */
-    getLinuxPackageInstallInstructions: () => Promise<LinuxPackageInstallInstructions>
-    /** Desktop-only. Reveals the revalidated cached package in the native file manager. */
-    showLinuxPackage: () => Promise<void>
-    listBuilds: (channel: ReleaseChannel) => Promise<ReleaseBuildListResult>
-
-    onStatus: (callback: (status: UpdateStatus) => void) => () => void
-    onClearDismissal: (callback: () => void) => () => void
   }
   notebook: {
     runPythonCell: (args: {
@@ -2762,7 +2136,6 @@ export type PreloadApi = {
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
-  openCodeUsage: OpenCodeUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: {
@@ -2813,30 +2186,30 @@ export type PreloadApi = {
       connectionId?: string
     }) => Promise<MarkdownDocument[]>
     writeFile: (
-      args: { filePath: string; content: string; connectionId?: string } & SshMutationExpectation
+      args: { filePath: string; content: string; connectionId?: string }
     ) => Promise<void>
     createFile: (
-      args: { filePath: string; connectionId?: string } & SshMutationExpectation
+      args: { filePath: string; connectionId?: string }
     ) => Promise<void>
     createDir: (
-      args: { dirPath: string; connectionId?: string } & SshMutationExpectation
+      args: { dirPath: string; connectionId?: string }
     ) => Promise<void>
     rename: (
-      args: { oldPath: string; newPath: string; connectionId?: string } & SshMutationExpectation
+      args: { oldPath: string; newPath: string; connectionId?: string }
     ) => Promise<void>
     copy: (
       args: {
         sourcePath: string
         destinationPath: string
         connectionId?: string
-      } & SshMutationExpectation
+      }
     ) => Promise<void>
     deletePath: (
       args: {
         targetPath: string
         connectionId?: string
         recursive?: boolean
-      } & SshMutationExpectation
+      }
     ) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
     stat: (args: {
@@ -2858,7 +2231,7 @@ export type PreloadApi = {
         destDir: string
         connectionId?: string
         ensureDir?: boolean
-      } & SshMutationExpectation
+      }
     ) => Promise<{
       results: (
         | {
@@ -2909,7 +2282,7 @@ export type PreloadApi = {
         paths: string[]
         worktreePath: string
         connectionId?: string
-      } & SshMutationExpectation
+      }
     ) => Promise<{
       resolvedPaths: string[]
       skipped: {
@@ -3460,83 +2833,9 @@ export type PreloadApi = {
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
-    refreshMiniMax: () => Promise<RateLimitState>
-    refreshGrok: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
-  minimaxCredentials: {
-    getStatus: () => Promise<{ configured: boolean }>
-    saveCookie: (cookie: string) => Promise<{ configured: boolean }>
-    clearCookie: () => Promise<{ configured: boolean }>
-  }
-  grokAccounts: {
-    getStatus: () => Promise<GrokAccountStatus>
-  }
-  ssh: {
-    listTargets: () => Promise<SshTarget[]>
-    // Removed-target id → last known label, for a friendly host name on workspaces still pinned to a removed target.
-    listRemovedTargetLabels: () => Promise<Record<string, string>>
-    addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTargetAddResult>
-    updateTarget: (args: {
-      id: string
-      updates: Partial<Omit<SshTarget, 'id'>>
-    }) => Promise<SshTarget>
-    removeTarget: (args: { id: string }) => Promise<void>
-    importConfig: (args?: { reAdopt?: boolean }) => Promise<SshConfigImportResult>
-    listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
-    resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
-    connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
-    disconnect: (args: { targetId: string }) => Promise<void>
-    terminateSessions: (args: { targetId: string }) => Promise<void>
-    resetRelay: (args: { targetId: string }) => Promise<void>
-    getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
-    needsPassphrasePrompt: (args: { targetId: string }) => Promise<boolean>
-    testConnection: (args: {
-      targetId: string
-    }) => Promise<{ success: boolean; error?: string; state?: SshConnectionState }>
-    onStateChanged: (
-      callback: (data: { targetId: string; state: SshConnectionState }) => void
-    ) => () => void
-    addPortForward: (args: {
-      targetId: string
-      localPort: number
-      remoteHost: string
-      remotePort: number
-      label?: string
-    }) => Promise<PortForwardEntry>
-    updatePortForward: (args: {
-      id: string
-      targetId: string
-      localPort: number
-      remoteHost: string
-      remotePort: number
-      label?: string
-    }) => Promise<PortForwardEntry>
-    removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
-    listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
-    listDetectedPorts: (args: { targetId: string }) => Promise<EnrichedDetectedPort[]>
-    onPortForwardsChanged: (
-      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
-    ) => () => void
-    onDetectedPortsChanged: (
-      callback: (data: { targetId: string; ports: EnrichedDetectedPort[] }) => void
-    ) => () => void
-    browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
-      entries: { name: string; isDirectory: boolean }[]
-      resolvedPath: string
-      pathFlavor: FilesystemPathFlavor
-    }>
-    onCredentialRequest: (
-      callback: (data: {
-        requestId: string
-        targetId: string
-        kind: 'passphrase' | 'password'
-        detail: string
-      }) => void
-    ) => () => void
-    onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
-    submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
-  }
+
   automations: {
     list: () => Promise<Automation[]>
     listRuns: (args?: { automationId?: string }) => Promise<AutomationRun[]>
@@ -3727,31 +3026,6 @@ export type PreloadApi = {
     consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
     /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
     onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void
-  }
-  speech: {
-    getCatalog: () => Promise<SpeechModelManifest[]>
-    getModelStates: () => Promise<SpeechModelState[]>
-    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
-    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
-    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
-    downloadModel: (modelId: string) => Promise<void>
-    cancelDownload: (modelId: string) => Promise<void>
-    deleteModel: (modelId: string) => Promise<void>
-    startDictation: (
-      modelId: string,
-      hotwords: string[] | undefined,
-      sessionId: string
-    ) => Promise<void>
-    feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<void>
-    stopDictation: (sessionId?: string) => Promise<void>
-    onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
-    onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
-    onDownloadProgress: (
-      callback: (data: { modelId: string; progress: number }) => void
-    ) => () => void
-    onReady: (callback: (data: SpeechLifecycleEvent) => void) => () => void
-    onStopped: (callback: (data: SpeechLifecycleEvent) => void) => () => void
-    onError: (callback: (data: SpeechErrorEvent) => void) => () => void
   }
 }
 

@@ -1,141 +1,19 @@
 import type { JSX } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+  fallbackCapabilities,
+  stateLabel,
+  statusMessage,
+  type CodevSharedSessionView
+} from './codev-shared-session-model'
 
-export type CodevSharedQueueEntry = {
-  id: string
-  authorId: string
-  authorName?: string
-  prompt: string
-  queuePosition: number
-}
-
-export type CodevSharedTranscriptTurn = {
-  position: number
-  turnId: string
-  authorId: string
-  authorName: string
-  prompt: string
-  status: 'completed' | 'interrupted' | 'failed'
-  tool: string | null
-  output: string | null
-  provider?: string
-  providerLabel?: string
-}
-
-export type CodevSharedProviderBoundary = {
-  id: string
-  from: string
-  to: string
-  fromLabel: string
-  toLabel: string
-  afterTurnId: string | null
-  label: string
-}
-
-export type CodevProviderCapabilityFlags = {
-  id: string
-  label: string
-  selected: boolean
-  canQueue: boolean
-  canInterrupt: boolean
-  canStartControlled: boolean
-  queueUnavailable: string | null
-  interruptUnavailable: string | null
-  startControlledUnavailable: string | null
-}
-
-export type CodevSharedSessionView = {
-  session: {
-    sessionId: string
-    ownerId: string
-    worktreeId: string
-    provider: string
-    model: string
-    state: string
-    activeTurnId: string | null
-    streamCursor: number
-    queue: CodevSharedQueueEntry[]
-  }
-  name: string
-  ownerName: string
-  worktreeName: string
-  model: string
-  attributedQueue?: CodevSharedQueueEntry[]
-  transcript: CodevSharedTranscriptTurn[]
-  lastCompletedAction: { tool: string; output: string } | null
-  connectionBlocked?: string | null
-  providerEvents?: Array<{
-    id: string
-    kind: string
-    label: string
-    detail: string
-    turnId: string | null
-  }>
-  capabilities?: CodevProviderCapabilityFlags
-  availableProviders?: CodevProviderCapabilityFlags[]
-  providerBoundaries?: CodevSharedProviderBoundary[]
-}
-
-export type CodevSharedSessionSnapshot = {
-  viewer?: { id: string; name: string; canCoSteer: boolean }
-  sharedSessions?: CodevSharedSessionView[]
-}
-
-function fallbackCapabilities(view: CodevSharedSessionView): CodevProviderCapabilityFlags {
-  return {
-    id: view.session.provider,
-    label: view.session.provider,
-    selected: true,
-    canQueue: true,
-    canInterrupt: true,
-    canStartControlled: true,
-    queueUnavailable: null,
-    interruptUnavailable: null,
-    startControlledUnavailable: null
-  }
-}
-
-function stateLabel(view: CodevSharedSessionView): string {
-  const { state, queue } = view.session
-  if (state === 'running') return 'Running · controlled turn'
-  if (state === 'interrupted') return 'Interrupted · controlled turn'
-  if (queue.length > 0) return 'Queued · awaiting turn'
-  if (view.transcript.length > 0) {
-    return `Completed · ${view.transcript.length} turns`
-  }
-  return 'Idle · awaiting instruction'
-}
-
-function statusMessage(
-  connected: boolean,
-  restored: boolean,
-  view: CodevSharedSessionView | null,
-  viewerName: string
-): string {
-  if (!connected) return 'Waiting for the workspace-bound CoDev bridge.'
-  if (view?.connectionBlocked) return view.connectionBlocked
-  if (!view) {
-    return 'Prepare a managed proposal from this Agents panel to open a shared session.'
-  }
-  const queue = view.session.queue
-  if (restored) {
-    return `Session restored after browser refresh · stream cursor ${view.session.streamCursor} · ${
-      queue.length > 0
-        ? 'queued instruction preserved once.'
-        : 'transcript replayed without duplicate turns.'
-    }`
-  }
-  if (queue.length > 0) {
-    return `${queue.length === 1 ? "Collaborator's instruction is" : 'Queued instructions are'} queued and attributed for every session member.`
-  }
-  if (view.session.state === 'interrupted') {
-    return 'The controlled turn was interrupted; the last completed action remains visible to every member.'
-  }
-  if (view.session.state === 'running') {
-    return `${viewerName} can interrupt the running turn with co-steer permission.`
-  }
-  return 'Shared session is open and idle with an empty ordered queue.'
-}
+export type {
+  CodevProviderCapabilityFlags,
+  CodevSharedQueueEntry,
+  CodevSharedSessionSnapshot,
+  CodevSharedSessionView,
+  CodevSharedTranscriptTurn
+} from './codev-shared-session-model'
 
 export function CodevSharedSessionViewPanel({
   connected,
@@ -147,7 +25,6 @@ export function CodevSharedSessionViewPanel({
   message,
   onDraftChange,
   onRefresh,
-  onStartControlled,
   onQueue,
   onInterrupt,
   onSelectProvider
@@ -175,7 +52,6 @@ export function CodevSharedSessionViewPanel({
   const availableProviders = view?.availableProviders ?? (capabilities ? [capabilities] : [])
   const canQueue = Boolean(canCoSteer && capabilities?.canQueue)
   const canInterrupt = Boolean(canCoSteer && capabilities?.canInterrupt)
-  const canStart = Boolean(canCoSteer && capabilities?.canStartControlled)
 
   return (
     <section
@@ -186,28 +62,31 @@ export function CodevSharedSessionViewPanel({
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            CoDev · durable shared session
+            CoDev · managed agent session
           </p>
           <h2 id="codev-shared-session-heading" className="text-sm font-semibold">
             Shared session
           </h2>
         </div>
-        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy === 'refresh'}
+          onClick={onRefresh}
+        >
           {busy === 'refresh' ? 'Refreshing…' : 'Refresh shared session'}
         </Button>
       </div>
 
       {!view ? (
         <p className="text-xs text-muted-foreground">
-          Prepare a managed proposal from this Agents panel to open a shared session. The shared
-          context is this visible conversation and repository state, not provider credentials.
+          Start a CoDev agent from the workboard or New CoDev agent to open a shared session. The
+          shared context is the visible conversation and repository state, not provider credentials.
         </p>
       ) : (
         <div className="space-y-3">
-          <div
-            className="grid grid-cols-2 gap-2 text-xs"
-            aria-label="Session metadata"
-          >
+          <div className="grid grid-cols-2 gap-2 text-xs" aria-label="Session metadata">
             <div>
               <span className="block text-[10px] uppercase text-muted-foreground">Provider</span>
               <strong>{capabilities?.label ?? view.session.provider}</strong>
@@ -231,7 +110,9 @@ export function CodevSharedSessionViewPanel({
               <strong>{view.model} · standard</strong>
             </div>
             <div>
-              <span className="block text-[10px] uppercase text-muted-foreground">Stream cursor</span>
+              <span className="block text-[10px] uppercase text-muted-foreground">
+                Stream cursor
+              </span>
               <strong>{view.session.streamCursor}</strong>
             </div>
           </div>
@@ -266,13 +147,9 @@ export function CodevSharedSessionViewPanel({
                     </Button>
                   )}
                 </div>
-                <p className="mt-1">
-                  Queue · {provider.canQueue ? 'available' : 'unavailable'}
-                </p>
+                <p className="mt-1">Queue · {provider.canQueue ? 'available' : 'unavailable'}</p>
                 <p>Interrupt · {provider.canInterrupt ? 'available' : 'unavailable'}</p>
-                <p>
-                  Controlled turns · {provider.canStartControlled ? 'available' : 'unavailable'}
-                </p>
+                <p>Agent turns · {provider.canQueue ? 'available' : 'unavailable'}</p>
                 {provider.selected && provider.queueUnavailable ? (
                   <p className="mt-1" aria-label="Unavailable control">
                     {provider.queueUnavailable}
@@ -287,7 +164,9 @@ export function CodevSharedSessionViewPanel({
 
           <div aria-label="Ordered turn queue" className="space-y-1">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[10px] uppercase text-muted-foreground">Ordered turn queue</span>
+              <span className="text-[10px] uppercase text-muted-foreground">
+                Ordered turn queue
+              </span>
               <strong>{queue.length} queued</strong>
             </div>
             {!queued ? (
@@ -297,7 +176,10 @@ export function CodevSharedSessionViewPanel({
                   : 'Queue is empty — no instructions are waiting.'}
               </p>
             ) : (
-              <div className="rounded-md border border-sidebar-border p-2 text-xs" aria-label="Queued instruction">
+              <div
+                className="rounded-md border border-sidebar-border p-2 text-xs"
+                aria-label="Queued instruction"
+              >
                 <div className="flex justify-between gap-2">
                   <span>Turn {queued.queuePosition}</span>
                   <strong>
@@ -316,12 +198,10 @@ export function CodevSharedSessionViewPanel({
             )}
           </div>
 
-          <div aria-label="Controlled shared-session turn" className="space-y-2">
+          <div aria-label="Current CoDev agent turn" className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-[10px] uppercase text-muted-foreground">Controlled turn</span>
-              <strong>
-                {running ? 'Running' : interrupted ? 'Interrupted' : 'Ready to run'}
-              </strong>
+              <span className="text-[10px] uppercase text-muted-foreground">Current turn</span>
+              <strong>{running ? 'Running' : interrupted ? 'Interrupted' : 'Ready to run'}</strong>
             </div>
             {running || interrupted ? (
               <>
@@ -345,20 +225,11 @@ export function CodevSharedSessionViewPanel({
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Start a controlled turn with one completed tool result so an eligible collaborator can
-                cancel it without calling the provider again.
+                Queue an instruction below to start the next CoDev turn. Every member can see its
+                attribution and resulting transcript.
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!canStart || running || busy !== ''}
-                onClick={onStartControlled}
-              >
-                {canStart ? 'Start controlled turn' : 'Start controlled turn · unavailable'}
-              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -380,7 +251,10 @@ export function CodevSharedSessionViewPanel({
             ) : null}
           </div>
 
-          <div aria-label={`${viewer?.name ?? 'Collaborator'} collaborator controls`} className="space-y-2">
+          <div
+            aria-label={`${viewer?.name ?? 'Collaborator'} collaborator controls`}
+            className="space-y-2"
+          >
             <label className="block text-xs" htmlFor="codev-shared-session-prompt">
               Instruction to queue
             </label>
@@ -414,7 +288,9 @@ export function CodevSharedSessionViewPanel({
           {view.transcript.length > 0 ? (
             <div aria-label="Ordered transcript" className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[10px] uppercase text-muted-foreground">Ordered transcript</span>
+                <span className="text-[10px] uppercase text-muted-foreground">
+                  Ordered transcript
+                </span>
                 <strong>{view.transcript.length} completed turns</strong>
               </div>
               {view.transcript.map((turn) => (

@@ -88,9 +88,6 @@ function makeWorktree(repoId: string, branch: string, id = `${repoId}-wt`): Work
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedLinearIssueWorkspaceId: null,
-    linkedLinearIssueOrganizationUrlKey: null,
     isMainWorktree: false,
     isBare: false,
     isArchived: false,
@@ -157,44 +154,6 @@ describe('GitHub PR refresh owner-host routing', () => {
       method: 'github.prForBranch',
       params: { repo: 'repo-runtime', branch, linkedPRNumber: null, currentHeadOid: 'head-oid' },
       timeoutMs: 30_000
-    })
-  })
-
-  it('keeps connected SSH PR refresh on the local coordinator even when a runtime is focused', () => {
-    const store = createTestStore()
-    const repoPath = '/ssh/repo'
-    const branch = 'feature/ssh'
-    seed(store, {
-      settings: { activeRuntimeEnvironmentId: 'env-focused' } as AppState['settings'],
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          path: repoPath,
-          connectionId: 'ssh-1',
-          executionHostId: 'ssh:ssh-1'
-        })
-      ],
-      sshConnectionStates: new Map([
-        ['ssh-1', { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }]
-      ]),
-      worktreesByRepo: {
-        'repo-ssh': [makeWorktree('repo-ssh', branch, 'wt-ssh')]
-      }
-    })
-
-    store.getState().refreshGitHubForWorktreeIfStale('wt-ssh')
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(enqueuePRRefresh).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoId: 'repo-ssh',
-        repoPath,
-        branch,
-        connectionId: 'ssh-1',
-        connectionState: 'connected'
-      }),
-      reason: 'active',
-      priority: 80
     })
   })
 

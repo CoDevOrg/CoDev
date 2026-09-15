@@ -5,7 +5,6 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 
 let isolatedUserDataDir = ''
@@ -65,92 +64,20 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { CodexHookService } from '../codex/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import {
   wrapPosixHookCommand,
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
 } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
-import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
-const REMOTE_INSTALLERS = [
-  {
-    agent: 'antigravity',
-    install: (sftp: SFTPWrapper) => new AntigravityHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'claude',
-    install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'openclaude',
-    install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'codex',
-    install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'command-code',
-    install: (sftp: SFTPWrapper) => new CommandCodeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'copilot',
-    install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'cursor',
-    install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'devin',
-    install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'droid',
-    install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'gemini',
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'grok',
-    install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'kimi',
-    install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
-  }
-] as const
-
 const LOCAL_INSTALLERS = [
-  { agent: 'antigravity', install: () => new AntigravityHookService().install() },
   { agent: 'claude', install: () => new ClaudeHookService().install() },
-  { agent: 'openclaude', install: () => openClaudeHookService.install() },
-  { agent: 'codex', install: () => new CodexHookService().install() },
-  { agent: 'command-code', install: () => new CommandCodeHookService().install() },
-  { agent: 'copilot', install: () => new CopilotHookService().install() },
-  { agent: 'cursor', install: () => new CursorHookService().install() },
-  { agent: 'devin', install: () => new DevinHookService().install() },
-  { agent: 'droid', install: () => new DroidHookService().install() },
-  { agent: 'gemini', install: () => new GeminiHookService().install() },
-  { agent: 'grok', install: () => new GrokHookService().install() },
-  { agent: 'kimi', install: () => new KimiHookService().install() }
+  { agent: 'codex', install: () => new CodexHookService().install() }
 ] as const
 
 type HookRun = {
@@ -206,98 +133,30 @@ function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promis
 
 async function generatePosixScripts(): Promise<Map<string, string>> {
   const scripts = new Map<string, string>()
-  for (const entry of REMOTE_INSTALLERS) {
-    const memory = createAgentHookMemorySftp()
-    const status = await entry.install(memory.sftp)
-    expect(status.state, `${entry.agent} install status`).toBe('installed')
-    const generated = [...memory.fs.files.entries()].filter(
-      ([path]) => path.includes('/.codev/agent-hooks/') && path.endsWith('.sh')
-    )
-    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
-    expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
-    for (const [path, script] of generated) {
-      scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
+  const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-posix-'))
+  homedirMock.mockReturnValue(home)
+  try {
+    // Why: the serve host is Linux, so the local installers emit the same POSIX
+    // scripts the workspace agents run; generate them for real instead of a fixture.
+    for (const entry of LOCAL_INSTALLERS) {
+      expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
     }
+    const hooksDir = join(home, '.codev', 'agent-hooks')
+    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
+    const generated = readdirSync(hooksDir).filter((name) => name.endsWith('.sh'))
+    expect(generated.length, 'generated POSIX scripts').toBeGreaterThan(0)
+    for (const fileName of generated) {
+      const agent = fileName.startsWith('codex') ? 'codex' : 'claude'
+      scripts.set(`${agent} ${fileName}`, readFileSync(join(hooksDir, fileName), 'utf8'))
+    }
+  } finally {
+    homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+    rmSync(home, { recursive: true, force: true })
   }
   return scripts
 }
 
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
-  const original = Object.getOwnPropertyDescriptor(process, 'platform')
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  try {
-    return run()
-  } finally {
-    if (original) {
-      Object.defineProperty(process, 'platform', original)
-    }
-  }
-}
-
 describe('Windows managed hook stdin structure', () => {
-  it('routes every batch guard to a shared drain epilogue', () => {
-    const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
-    homedirMock.mockReturnValue(home)
-    const previousGrokHome = process.env.GROK_HOME
-    const previousKimiHome = process.env.KIMI_CODE_HOME
-    delete process.env.GROK_HOME
-    delete process.env.KIMI_CODE_HOME
-    try {
-      withPlatform('win32', () => {
-        for (const entry of LOCAL_INSTALLERS) {
-          expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
-        }
-      })
-      const hooksDir = join(home, '.codev', 'agent-hooks')
-      const fileNames = readdirSync(hooksDir)
-      const mainBatchScripts = fileNames.filter(
-        (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
-      )
-      mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(10)
-      for (const fileName of mainBatchScripts) {
-        const script = readFileSync(join(hooksDir, fileName), 'utf8')
-        expect(script, `${fileName} port guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin'
-        )
-        expect(script, `${fileName} token guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :orca_agent_hook_drain_stdin'
-        )
-        expect(script, `${fileName} pane guard`).toContain(
-          'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
-        )
-        expect(script, `${fileName} drain epilogue`).toContain(
-          [
-            ':orca_agent_hook_drain_stdin',
-            '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
-            'exit /b 0'
-          ].join('\r\n')
-        )
-      }
-
-      const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
-      expect(copilot.indexOf('[Console]::In.ReadToEnd()')).toBeLessThan(
-        copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
-      )
-      const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
-        kimi.indexOf('exit 0')
-      )
-    } finally {
-      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
-      if (previousGrokHome === undefined) {
-        delete process.env.GROK_HOME
-      } else {
-        process.env.GROK_HOME = previousGrokHome
-      }
-      if (previousKimiHome === undefined) {
-        delete process.env.KIMI_CODE_HOME
-      } else {
-        process.env.KIMI_CODE_HOME = previousKimiHome
-      }
-      rmSync(home, { recursive: true, force: true })
-    }
-  })
 
   it.skipIf(process.platform !== 'win32')(
     'executes every local script and missing-script launcher without a broken writer',
@@ -378,6 +237,10 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
+      // Why: the statusline script renders status text; it is not a hook and reads no payload.
+      if (agent.endsWith('statusline.sh')) {
+        continue
+      }
       const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
@@ -388,14 +251,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const extraEnv = agent.startsWith('command-code')
-        ? {
-            ORCA_AGENT_HOOK_PORT: '1',
-            ORCA_AGENT_HOOK_TOKEN: 'test-token',
-            ORCA_PANE_KEY: 'test-pane'
-          }
-        : {}
-      const result = await runPosixHook(script, extraEnv)
+      const result = await runPosixHook(script, {})
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
     }

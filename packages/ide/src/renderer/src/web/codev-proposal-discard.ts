@@ -21,7 +21,7 @@ export type CodevProposalCreateResponse =
 const CODEV_AGENT_WORKTREE_PATH =
   /\/\.git\/codev-agent-worktrees\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
 const CODEV_PROPOSAL_COMMENT =
-  /^codev-proposal:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i
+  /^codev-(?:proposal|agent):([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i
 const CODEV_WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 let nextRequestId = 0
@@ -30,8 +30,20 @@ export function codevProposalComment(worktreeId: string): string {
   return `codev-proposal:${worktreeId}`
 }
 
+/**
+ * The local Orca worktree is only a representation of the backend-managed
+ * CoDev session. The actual files live in the sandbox, so this tag lets the
+ * IDE route lifecycle actions back to CoDev without pretending the two
+ * filesystems are shared.
+ */
+export function codevAgentComment(worktreeId: string): string {
+  return `codev-agent:${worktreeId}`
+}
+
 export function getCodevProposalWorktreeId(path: string, comment = ''): string | null {
-  return CODEV_AGENT_WORKTREE_PATH.exec(path)?.[1] ?? CODEV_PROPOSAL_COMMENT.exec(comment)?.[1] ?? null
+  return (
+    CODEV_AGENT_WORKTREE_PATH.exec(path)?.[1] ?? CODEV_PROPOSAL_COMMENT.exec(comment)?.[1] ?? null
+  )
 }
 
 export async function openCodevManagedProposalWorktree(
@@ -66,6 +78,41 @@ export async function openCodevManagedProposalWorktree(
     'Managed proposal'
   )
   await options.updateComment(created.worktree.id, codevProposalComment(worktreeId))
+  return created.worktree.id
+}
+
+export async function openCodevManagedAgentWorktree(
+  worktreeId: string,
+  options: {
+    repoId: string | null | undefined
+    createWorktree: (
+      repoId: string,
+      name: string,
+      baseBranch?: string,
+      setupDecision?: 'inherit' | 'run' | 'skip',
+      sparseCheckout?: undefined,
+      telemetrySource?: undefined,
+      displayName?: string
+    ) => Promise<{ worktree: { id: string } }>
+    updateComment: (orcaWorktreeId: string, comment: string) => Promise<void>
+  }
+): Promise<string> {
+  if (!options.repoId) {
+    throw new Error('Open the workspace project before starting a CoDev agent.')
+  }
+  if (!CODEV_WORKTREE_ID.test(worktreeId)) {
+    throw new Error('CoDev did not return a managed agent worktree.')
+  }
+  const created = await options.createWorktree(
+    options.repoId,
+    `codev-agent-${worktreeId.slice(0, 8)}`,
+    undefined,
+    'skip',
+    undefined,
+    undefined,
+    'CoDev agent'
+  )
+  await options.updateComment(created.worktree.id, codevAgentComment(worktreeId))
   return created.worktree.id
 }
 

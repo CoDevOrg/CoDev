@@ -18,27 +18,20 @@ import { createSettingsSlice } from './settings'
 import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
-import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
@@ -46,9 +39,6 @@ import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
-import { createNewIssueDraftSlice } from './new-issue-draft'
-import { createTaskCreationDraftsSlice } from './task-creation-drafts'
-import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -71,37 +61,27 @@ export function createTestStore() {
     ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
     ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
-    ...createJiraSlice(...a),
     ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
     ...createMemorySlice(...a),
     ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createRuntimeEnvironmentSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createRuntimeDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
     ...createPinnedTabCloseConfirmSlice(...a),
     ...createRecentlyClosedTabsSlice(...a),
-    ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a),
-    ...createTaskCreationDraftsSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
+    ...createOrcaProfilesSlice(...a)
   }))
 }
 
@@ -131,9 +111,6 @@ export function makeWorktree(
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

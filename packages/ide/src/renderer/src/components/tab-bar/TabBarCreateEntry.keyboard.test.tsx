@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TabEntryOption } from './tab-create-entry-action'
-import type { TabAgentLaunchOption } from './tab-agent-launch-options'
+import type { } from './tab-agent-launch-options'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 // Why: the real entry-action module pulls in runtime IPC + the app store; the
@@ -153,30 +153,6 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     submitForm()
 
     expect(onOpenEntry.mock.calls[0][0].classification).toMatchObject({ relativePath: 'b.ts' })
-  })
-
-  it('launches a matched agent when its highlighted row is selected', () => {
-    const agentOptions: TabAgentLaunchOption[] = [
-      { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
-    ]
-    const onLaunchAgent = vi.fn()
-    mount(
-      <TabBarCreateEntry
-        worktreeId="wt"
-        groupId="g"
-        menuOpen
-        agentOptions={agentOptions}
-        onOpenEntry={vi.fn().mockResolvedValue(undefined)}
-        onLaunchAgent={onLaunchAgent}
-      />
-    )
-
-    // A partial query surfaces the agent (issue #1); it is the top row, so Enter
-    // launches it.
-    setQuery('gem')
-    submitForm()
-
-    expect(onLaunchAgent).toHaveBeenCalledWith('gemini')
   })
 
   it('exposes the highlighted row to assistive tech via aria-activedescendant', () => {

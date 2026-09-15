@@ -257,47 +257,6 @@ describe('handleInternalTerminalFileDrop', () => {
     expect(sendInput).toHaveBeenCalledWith('"C:\\repo\\a&b.txt" ')
   })
 
-  it('uses SSH remote platform metadata for Windows internal file drops', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-win',
-        path: 'C:\\Remote Repo',
-        executionHostId: 'ssh:ssh-win'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\Remote Repo' }]
-    }
-    mocks.storeState.sshConnectionStates = new Map([['ssh-win', { remotePlatform: 'win32' }]])
-    const sendInput = vi.fn(() => true)
-    const focus = vi.fn()
-    const manager = {
-      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
-      getPanes: () => []
-    }
-
-    const result = await handleInternalTerminalFileDrop({
-      manager: manager as never,
-      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      dataTransfer: {
-        getData: (type) =>
-          type === WORKSPACE_FILE_PATHS_MIME
-            ? encodeWorkspaceFilePaths(['C:\\Remote Repo\\A&B.txt'])
-            : ''
-      }
-    })
-
-    expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ')
-    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
-    expect(focus).toHaveBeenCalled()
-  })
-
   it('keeps SSH Linux internal file drops on POSIX shell escaping', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
     mocks.storeState.repos = [

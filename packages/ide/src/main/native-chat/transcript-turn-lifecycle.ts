@@ -8,7 +8,6 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { decodeCursorTranscriptLine } from './transcript-line-decoders-cursor'
 import {
   claudeInterruptedMessageId,
   CODEX_EVENT_TURN_ABORTED,
@@ -31,42 +30,7 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
   }
-  if (transcriptAgent === 'cursor') {
-    return decodeCursorTurnLifecycle
-  }
   return null
-}
-
-/**
- * Cursor marks turn boundaries with standalone records: a `user` line opens a
- * generation, and `{"type":"turn_ended","status":…}` closes it. There is no
- * per-line id, so the turn is keyed by `fallbackId` (the caller supplies the
- * record's byte offset).
- */
-export function decodeCursorTurnLifecycle(
-  line: string,
-  fallbackId: string
-): NativeChatTurnLifecycle | null {
-  const record = parseJsonObject(line)
-  if (!record) {
-    return null
-  }
-  if (record.type === 'turn_ended') {
-    const status = extractString(record.status)
-    return {
-      state: status && status !== 'success' ? 'interrupted' : 'completed',
-      turnId: fallbackId,
-      timestamp: lifecycleTimestamp(record.timestamp)
-    }
-  }
-  if (record.role !== 'user') {
-    return null
-  }
-  const decoded = decodeCursorTranscriptLine(line, fallbackId)
-  if (decoded?.role !== 'user') {
-    return null
-  }
-  return { state: 'working', turnId: decoded.id, timestamp: decoded.timestamp }
 }
 
 export function decodeCodexTurnLifecycle(

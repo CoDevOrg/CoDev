@@ -17,7 +17,6 @@ function worktree(id: string, instanceId: string, overrides: Partial<Worktree> =
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

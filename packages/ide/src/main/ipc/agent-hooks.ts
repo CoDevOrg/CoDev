@@ -7,7 +7,6 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
-import { ampHookService } from '../amp/hook-service'
 import {
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey,
@@ -15,17 +14,6 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { droidHookService } from '../droid/hook-service'
-import { commandCodeHookService } from '../command-code/hook-service'
-import { grokHookService } from '../grok/hook-service'
-import { copilotHookService } from '../copilot/hook-service'
-import { hermesHookService } from '../hermes/hook-service'
-import { devinHookService } from '../devin/hook-service'
-import { kimiHookService } from '../kimi/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
 import {
@@ -152,168 +140,12 @@ export function registerAgentHookHandlers(
       }
     }
   })
-  ipcMain.handle('agentHooks:openClaudeStatus', (): AgentHookInstallStatus => {
-    try {
-      return openClaudeHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'openclaude',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
   ipcMain.handle('agentHooks:codexStatus', (): AgentHookInstallStatus => {
     try {
       return codexHookService.getStatus()
     } catch (err) {
       return {
         agent: 'codex',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:geminiStatus', (): AgentHookInstallStatus => {
-    try {
-      return geminiHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'gemini',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:antigravityStatus', (): AgentHookInstallStatus => {
-    try {
-      return antigravityHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'antigravity',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:ampStatus', (): AgentHookInstallStatus => {
-    try {
-      return ampHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'amp',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:cursorStatus', (): AgentHookInstallStatus => {
-    try {
-      return cursorHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'cursor',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:droidStatus', (): AgentHookInstallStatus => {
-    try {
-      return droidHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'droid',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:commandCodeStatus', (): AgentHookInstallStatus => {
-    try {
-      return commandCodeHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'command-code',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:grokStatus', (): AgentHookInstallStatus => {
-    try {
-      return grokHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'grok',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:copilotStatus', (): AgentHookInstallStatus => {
-    try {
-      return copilotHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'copilot',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:hermesStatus', (): AgentHookInstallStatus => {
-    try {
-      return hermesHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'hermes',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:devinStatus', (): AgentHookInstallStatus => {
-    try {
-      return devinHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'devin',
-        state: 'error',
-        configPath: '',
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  })
-  ipcMain.handle('agentHooks:kimiStatus', (): AgentHookInstallStatus => {
-    try {
-      return kimiHookService.getStatus()
-    } catch (err) {
-      return {
-        agent: 'kimi',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

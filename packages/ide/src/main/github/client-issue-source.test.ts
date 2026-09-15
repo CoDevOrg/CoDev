@@ -243,29 +243,6 @@ describe('GitHub issue source split', () => {
     })
   })
 
-  it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
-    resolveIssueSourceMock.mockResolvedValueOnce({
-      source: { owner: 'stablyai', repo: 'orca' },
-      fellBack: false
-    })
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
-      stdout: '[]'
-    })
-
-    await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
-
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
-      '/home/jinwoo/orca',
-      'auto',
-      'openclaw-2',
-      {}
-    )
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2', {})
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('stablyai/orca'), {})
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('fork/orca'), {})
-  })
-
   it('uses upstream for issue-only queries and origin for PR-only queries', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
@@ -558,14 +535,6 @@ describe('GitHub issue source split', () => {
     await expect(getWorkItem('/repo-root', 42, 'pr', null, {}, 'origin')).resolves.toBeNull()
 
     expect(resolvePRRepositoryCandidatesMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('does not run a bare gh lookup for an SSH repo without candidates', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({ candidates: [], headRepo: null })
-
-    await expect(getWorkItem('/remote/repo', 42, 'pr', 'ssh-1')).resolves.toBeNull()
-
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 

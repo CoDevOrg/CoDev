@@ -4,7 +4,6 @@ import {
   bulkStageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
   commitRuntimeGit,
-  discoverRuntimeCommitMessageModels,
   fastForwardRuntimeGit,
   fetchRuntimeGit,
   generateRuntimeCommitMessage,
@@ -710,33 +709,6 @@ describe('runtime git client', () => {
       },
       timeoutMs: 75_000
     })
-  })
-
-  it('discovers commit-message models through the active runtime', async () => {
-    const agentCmdOverrides = { cursor: 'cursor-agent' }
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { success: true, models: [{ id: 'auto', label: 'Auto' }], defaultModelId: 'auto' },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await discoverRuntimeCommitMessageModels(
-      {
-        settings: { activeRuntimeEnvironmentId: 'env-1', agentCmdOverrides },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo'
-      },
-      'cursor'
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'git.discoverCommitMessageModels',
-      params: { worktree: 'id:wt-1', agentId: 'cursor', agentCmdOverrides },
-      timeoutMs: 75_000
-    })
-    expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
   })
 
   it('passes the raw worktree id to local generation IPC', async () => {

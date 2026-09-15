@@ -90,25 +90,4 @@ describe('launch draft mirrorability', () => {
     expect(canMirrorLaunchDraftToNativeChat(overMaxLineDraft)).toBe(false)
   })
 
-  it('withholds the mirror from agents without a native-chat renderer', () => {
-    // The view mode already returns undefined for these, so the sets still
-    // agree — but only the seeding side enforces it.
-    expect(seedsTheComposer('https://github.com/o/r/issues/12')).toBe(true)
-    mocks.seedNativeChatLaunchDraft.mockClear()
-    seedNativeChatLaunchDraftForAgentTab({
-      tabId: 'tab-1',
-      agent: 'gemini',
-      text: 'https://github.com/o/r/issues/12'
-    })
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'gemini',
-        promptDelivery: 'draft',
-        launchDraftText: 'https://github.com/o/r/issues/12'
-      })
-    ).toBeUndefined()
-  })
 })

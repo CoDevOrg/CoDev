@@ -9,11 +9,7 @@ const HostedReviewForBranch = z.object({
   // Only the caller's selected worktree; the host caps how many earn the fast tier.
   active: z.boolean().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
-  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
-  linkedGitLabMR: z.number().int().positive().nullable().optional(),
-  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
-  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
+  fallbackGitHubPR: z.number().int().positive().nullable().optional()
 })
 
 const HostedReviewCreationEligibility = z.object({
@@ -26,17 +22,13 @@ const HostedReviewCreationEligibility = z.object({
   ahead: z.number().int().nonnegative().optional(),
   behind: z.number().int().nonnegative().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
-  fallbackGitHubPR: z.number().int().positive().nullable().optional(),
-  linkedGitLabMR: z.number().int().positive().nullable().optional(),
-  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
-  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
-  linkedGiteaPR: z.number().int().positive().nullable().optional()
+  fallbackGitHubPR: z.number().int().positive().nullable().optional()
 })
 
 const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
   worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
+  provider: z.enum(['github', 'unsupported']),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),
   title: requiredString('Missing title'),
@@ -58,11 +50,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         currentHeadOid: params.currentHeadOid ?? null,
         ...(params.active === true ? { active: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
-        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-        linkedGitLabMR: params.linkedGitLabMR ?? null,
-        linkedBitbucketPR: params.linkedBitbucketPR ?? null,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-        linkedGiteaPR: params.linkedGiteaPR ?? null
+        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {})
       })
     }
   }),
@@ -82,11 +70,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         ahead: params.ahead,
         behind: params.behind,
         linkedGitHubPR: params.linkedGitHubPR ?? null,
-        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-        linkedGitLabMR: params.linkedGitLabMR ?? null,
-        linkedBitbucketPR: params.linkedBitbucketPR ?? null,
-        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-        linkedGiteaPR: params.linkedGiteaPR ?? null
+        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {})
       })
     }
   }),

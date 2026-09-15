@@ -111,22 +111,6 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('main')
   })
 
-  it('does not re-focus a sibling hosted on a torn-down runtime-owned SSH target', () => {
-    // The runtime's main worktree is hosted on the per-workspace-env SSH target, which is
-    // destroyed on delete — re-focusing it would create a blank terminal that can never spawn.
-    seed([
-      { id: 'main', isMainWorktree: true, hostId: 'ssh:runtime-ssh-orca-1' },
-      { id: 'wt-del', hostId: 'ssh:runtime-ssh-orca-1' }
-    ])
-    mocks.state.activeWorktreeId = 'wt-del'
-
-    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
-    simulateDelete('wt-del', true)
-    commit()
-
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
-
   it('stays within the deleted worktree project instead of jumping to another project', () => {
     seed([
       { id: 'main-1', repoId: 'repo-1', isMainWorktree: true },

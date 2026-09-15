@@ -102,7 +102,6 @@ function renderField(onPlainEnter: () => void): HTMLInputElement {
         onValueChange={vi.fn()}
         onGitHubItemSelect={vi.fn()}
         onBranchSelect={vi.fn()}
-        onLinearIssueSelect={vi.fn()}
         selectedSource={null}
         onClearSelectedSource={vi.fn()}
         onPlainEnter={onPlainEnter}
@@ -132,7 +131,6 @@ function renderSmartField(spies: {
         onValueChange={spies.onValueChange}
         onGitHubItemSelect={vi.fn()}
         onBranchSelect={spies.onBranchSelect}
-        onLinearIssueSelect={vi.fn()}
         selectedSource={null}
         onClearSelectedSource={vi.fn()}
         onPlainEnter={spies.onPlainEnter}
@@ -157,7 +155,6 @@ function renderEmojiField(value: string, onValueChange: (value: string) => void)
         onValueChange={onValueChange}
         onGitHubItemSelect={vi.fn()}
         onBranchSelect={vi.fn()}
-        onLinearIssueSelect={vi.fn()}
         selectedSource={null}
         onClearSelectedSource={vi.fn()}
         textOnly

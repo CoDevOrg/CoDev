@@ -41,7 +41,8 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { maybeLaunchCodevAgentInOwnWorktree } from '@/web/codev-launch-agent-worktree'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { startCodevManagedAgentWithToast } from '@/web/codev-managed-agent'
 import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -78,11 +79,9 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { CodevPresenceSegment } from './CodevPresenceSegment'
-import { isCodevEmbedded } from '@/web/codev-embedded'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -317,12 +316,6 @@ function TabBarInner({
   const worktreeConnectionId = useAppStore(
     (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
   )
-  const worktreeRemotePlatform = useAppStore((s) => {
-    if (!worktreeConnectionId) {
-      return null
-    }
-    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
-  })
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
@@ -339,8 +332,7 @@ function TabBarInner({
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId,
-    worktreeConnectionId
+    activeRuntimeEnvironmentId
   )
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
@@ -355,12 +347,9 @@ function TabBarInner({
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget,
-    worktreeConnectionId
+    runtimeTarget
   )
-  const shellMenuHostPlatform = worktreeConnectionId
-    ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
-    : windowsTerminalCapabilities.hostPlatform
+  const shellMenuHostPlatform = windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     activeRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
@@ -424,9 +413,6 @@ function TabBarInner({
   // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
   const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
     useAppStore(useShallow(selectTabBarAgentProjections))
-  const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
-    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
-  )
 
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
@@ -591,15 +577,10 @@ function TabBarInner({
   }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
-    // CoDev-embedded: isolate the agent in its own worktree; the host creates
-    // the tab and focus follows the next session-tabs snapshot.
-    if (
-      maybeLaunchCodevAgentInOwnWorktree({
-        agent,
-        baseWorktreeId: worktreeId,
-        launchSource: 'tab_bar_quick_launch'
-      })
-    ) {
+    if (isCodevEmbedded()) {
+      void startCodevManagedAgentWithToast({ agent, baseWorktreeId: worktreeId }).catch(
+        () => undefined
+      )
       queueNewActiveTerminalFocusAfterNewTabMenuClose()
       return
     }
@@ -910,7 +891,9 @@ function TabBarInner({
   // something else. `viewMode` is the signal that survives a paired host's tab
   // mirror; `launchAgent` comes back unset from it.
   const codevChatTabId = useMemo(() => {
-    if (!isCodevEmbedded()) return null
+    if (!isCodevEmbedded()) {
+      return null
+    }
     const chat = unifiedTabs.find((tab) => tab.viewMode === 'chat')
     return chat?.entityId ?? chat?.id ?? null
   }, [unifiedTabs])
@@ -1108,7 +1091,6 @@ function TabBarInner({
                     launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
                     resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
-                    nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (

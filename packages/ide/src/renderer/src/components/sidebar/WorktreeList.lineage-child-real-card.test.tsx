@@ -180,7 +180,6 @@ function makeWorktree(args: {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -204,7 +203,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
 
 function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
-    provider: 'gitlab',
+    provider: 'github',
     number: 42,
     title: 'Child GitLab MR',
     state: 'open',
@@ -244,7 +243,6 @@ function setLineageState(
     branch: 'child-branch',
     sortOrder: 10,
     overrides: {
-      linkedGitLabMR: 42,
       comment: 'Child handoff note'
     }
   })
@@ -396,15 +394,6 @@ describe('WorktreeList real child WorktreeCard integration', () => {
       }
     })
     document.body.innerHTML = ''
-  })
-
-  it('renders GitLab MR metadata from a child through the real WorktreeCard path', async () => {
-    const container = await renderWorktreeList()
-    const childOption = container.querySelector('[id="worktree-list-option-all%3Achild"]')
-
-    expect(childOption?.textContent).toContain('MR #42')
-    expect(childOption?.textContent).toContain('Child GitLab MR')
-    expect(childOption?.textContent).toContain('Child handoff note')
   })
 
   it('keeps expanded child cards in the parent title column', async () => {

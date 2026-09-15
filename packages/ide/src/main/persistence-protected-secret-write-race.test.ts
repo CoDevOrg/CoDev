@@ -80,7 +80,7 @@ describe('protected-secret async write retention', () => {
 
   it('does not retain ciphertext from a superseded async secret write', async () => {
     const store = await createStore()
-    store.updateSettings({ opencodeSessionCookie: 'durable-cookie' })
+    store.updateSettings({ httpProxyUrl: 'http://durable:secret@proxy.test:8080' })
     vi.advanceTimersByTime(1_000)
     await store.waitForPendingWrite()
 
@@ -89,11 +89,11 @@ describe('protected-secret async write retention', () => {
     renameGate.release = renameRelease.promise
     renameGate.started = renameStarted.resolve
 
-    store.updateSettings({ opencodeSessionCookie: 'intermediate-cookie' })
+    store.updateSettings({ httpProxyUrl: 'http://intermediate:secret@proxy.test:8080' })
     vi.advanceTimersByTime(1_000)
     await renameStarted.promise
 
-    store.updateSettings({ opencodeSessionCookie: 'replacement-cookie' })
+    store.updateSettings({ httpProxyUrl: 'http://replacement:secret@proxy.test:8080' })
     cipherState.available = false
     vi.advanceTimersByTime(1_000)
     renameRelease.resolve()
@@ -101,6 +101,6 @@ describe('protected-secret async write retention', () => {
 
     cipherState.available = true
     const restarted = await createStore()
-    expect(restarted.getSettings().opencodeSessionCookie).toBe('durable-cookie')
+    expect(restarted.getSettings().httpProxyUrl).toBe('http://durable:secret@proxy.test:8080')
   })
 })

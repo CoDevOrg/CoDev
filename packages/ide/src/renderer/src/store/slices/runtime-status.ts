@@ -234,11 +234,8 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Optional-chained: minimal store assemblies (some unit tests) omit the
     // detected-agents slice.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
-    // A detached environment's mirrored SSH state must not outlive it.
-    get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
       clearRuntimeCompatibilityCache(id)
-      get().markEnvironmentSshStateStale?.(id)
     }
     // Why: same-id re-pair publications belong to the retired peer just as surely as removed ids.
     const retiredEnvironmentIds = [...new Set([...removedIds, ...replacedEnvironmentIds])]

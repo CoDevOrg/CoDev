@@ -1,79 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSourceControlManualReviewUrl,
-  buildSourceControlManualReviewUrlFromContext,
   resolveSourceControlManualReviewProvider
 } from './source-control-manual-review-url'
 
 describe('resolveSourceControlManualReviewProvider', () => {
-  it('prefers hosted review and creation providers over linked review hints', () => {
-    expect(
-      resolveSourceControlManualReviewProvider({
-        hostedReviewProvider: 'gitlab',
-        hostedReviewCreationProvider: 'github',
-        linkedGitLabMR: 12
-      })
-    ).toBe('gitlab')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        hostedReviewCreationProvider: 'bitbucket',
-        linkedGitLabMR: 12
-      })
-    ).toBe('bitbucket')
-  })
-
-  it('falls back through linked review metadata when no hosted provider is known', () => {
-    expect(
-      resolveSourceControlManualReviewProvider({
-        linkedGitLabMR: 12
-      })
-    ).toBe('gitlab')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        linkedBitbucketPR: 3
-      })
-    ).toBe('bitbucket')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        linkedAzureDevOpsPR: 7
-      })
-    ).toBe('azure-devops')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        linkedGiteaPR: 2
-      })
-    ).toBe('gitea')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        linkedGitHubPR: 42
-      })
-    ).toBe('github')
-    expect(
-      resolveSourceControlManualReviewProvider({
-        fallbackGitHubPRNumber: 42
-      })
-    ).toBe('github')
-  })
 
   it('returns null when there is no provider hint', () => {
     expect(resolveSourceControlManualReviewProvider({})).toBeNull()
-  })
-})
-
-describe('buildSourceControlManualReviewUrlFromContext', () => {
-  it('resolves the provider from linked review metadata before building the URL', () => {
-    expect(
-      buildSourceControlManualReviewUrlFromContext({
-        linkedBitbucketPR: 3,
-        baseRef: 'origin/main',
-        branchName: 'feature/bitbucket',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@bitbucket.org:team/project.git',
-        upstreamName: 'origin/feature/bitbucket'
-      })
-    ).toBe(
-      'https://bitbucket.org/team/project/pull-requests/new?source=feature%2Fbitbucket&dest=main'
-    )
   })
 })
 
@@ -120,82 +54,6 @@ describe('buildSourceControlManualReviewUrl', () => {
     ).toBe(
       'https://github.com/stablyai/orca/compare/main...slashdevcorpse/identifying-pwsh.exe-error?expand=1'
     )
-  })
-
-  it('builds a GitLab merge request URL for a self-hosted GitLab remote', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'refs/remotes/origin/release/next',
-        branchName: 'feature/gitlab',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@gitlab.company.test:group/sub/orca.git',
-        provider: 'gitlab',
-        upstreamName: 'origin/feature/gitlab'
-      })
-    ).toBe(
-      'https://gitlab.company.test/group/sub/orca/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fgitlab&merge_request%5Btarget_branch%5D=release%2Fnext'
-    )
-  })
-
-  it('opens the GitLab New-MR page on the fork project when the branch was pushed to a fork', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'refs/remotes/upstream/main',
-        branchName: 'feature/fork-head',
-        repoRemoteName: 'upstream',
-        repoRemoteUrl: 'git@gitlab.company.test:group/sub/orca.git',
-        provider: 'gitlab',
-        pushTarget: {
-          remoteName: 'fork',
-          branchName: 'feature/fork-head',
-          remoteUrl: 'git@gitlab.company.test:contributor/orca.git'
-        }
-      })
-      // On the fork project — not group/sub/orca, where source_branch would 404.
-    ).toBe(
-      'https://gitlab.company.test/contributor/orca/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Ffork-head&merge_request%5Btarget_branch%5D=main'
-    )
-  })
-
-  it('builds a Bitbucket manual pull request URL', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'origin/main',
-        branchName: 'feature/bitbucket',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@bitbucket.org:team/project.git',
-        upstreamName: 'origin/feature/bitbucket'
-      })
-    ).toBe(
-      'https://bitbucket.org/team/project/pull-requests/new?source=feature%2Fbitbucket&dest=main'
-    )
-  })
-
-  it('builds an Azure DevOps pull request creation URL', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'refs/remotes/origin/main',
-        branchName: 'feature/azure',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'git@ssh.dev.azure.com:v3/acme/widgets/widget-app.git',
-        upstreamName: 'origin/feature/azure'
-      })
-    ).toBe(
-      'https://dev.azure.com/acme/widgets/_git/widget-app/pullrequestcreate?sourceRef=refs%2Fheads%2Ffeature%2Fazure&targetRef=refs%2Fheads%2Fmain'
-    )
-  })
-
-  it('builds a Gitea compare URL when the provider is known', () => {
-    expect(
-      buildSourceControlManualReviewUrl({
-        baseRef: 'refs/remotes/origin/main',
-        branchName: 'feature/gitea',
-        repoRemoteName: 'origin',
-        repoRemoteUrl: 'ssh://git@gitea.company.test/team/orca.git',
-        provider: 'gitea',
-        upstreamName: 'origin/feature/gitea'
-      })
-    ).toBe('https://gitea.company.test/team/orca/compare/main...feature/gitea')
   })
 
   it('suppresses the link when the branch tracks a fork remote with no resolvable push URL', () => {

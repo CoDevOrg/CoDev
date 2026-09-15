@@ -6,34 +6,10 @@ export type AgentPermissionMode = 'yolo' | 'manual' | 'mixed'
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
   'claude-agent-teams': '--dangerously-skip-permissions',
-  openclaude: '--dangerously-skip-permissions',
-  codex: '--dangerously-bypass-approvals-and-sandbox',
-  gemini: '--yolo',
-  antigravity: '--dangerously-skip-permissions',
-  aider: '--yes-always',
-  amp: '--dangerously-allow-all',
-  kiro: '--trust-all-tools',
-  crush: '--yolo',
-  autohand: '--unrestricted',
-  cline: '--auto-approve true',
-  'command-code': '--yolo',
-  continue: '--allow "*"',
-  cursor: '--yolo',
-  kimi: '--yolo',
-  'mistral-vibe': '--agent auto-approve',
-  'qwen-code': '--approval-mode yolo',
-  rovo: '--yolo',
-  hermes: '--yolo',
-  copilot: '--yolo',
-  grok: '--permission-mode bypassPermissions',
-  devin: '--permission-mode bypass',
-  ante: '--yolo',
-  trae: '--yolo'
+  codex: '--dangerously-bypass-approvals-and-sandbox'
 }
 
-export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
-  goose: { GOOSE_MODE: 'auto' }
-}
+export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {}
 
 const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
   (agent): agent is TuiAgent => agent in YOLO_TUI_AGENT_ARGS || agent in YOLO_TUI_AGENT_ENV

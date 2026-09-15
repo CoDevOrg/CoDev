@@ -94,8 +94,6 @@ export function computeRenderedSidebarWorktreeOrder(
         hostOptions: orderHostSectionOptions(
           buildSidebarHostOptions({
             repos: state.repos,
-            sshTargetLabels: state.sshTargetLabels,
-            sshConnectionStates: state.sshConnectionStates,
             settings: state.settings,
             runtimeEnvironments: state.runtimeEnvironments,
             runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,

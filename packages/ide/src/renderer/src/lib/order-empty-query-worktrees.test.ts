@@ -13,7 +13,6 @@ function wt(overrides: Partial<Worktree> & { id: string; displayName: string }):
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

@@ -16,7 +16,6 @@ import type {
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
-import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
 import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle
@@ -184,9 +183,8 @@ export function createAgentCompletionCoordinator(
     return payload.agentType?.trim().toLowerCase() || null
   }
 
-  function doneShouldUseQuietWindow(payload: AgentCompletionStatusSnapshot): boolean {
-    // Why: Pi/OMP emit milestone 'done' while still working, so route it through the quiet window so later work can cancel it.
-    return workingStatusObserved || isPiCompatibleAgentType(hookCompletionAgentIdentity(payload))
+  function doneShouldUseQuietWindow(): boolean {
+    return workingStatusObserved
   }
 
   function hookAttentionToken(payload: AgentCompletionStatusSnapshot): string {
@@ -216,27 +214,6 @@ export function createAgentCompletionCoordinator(
     }
     if (/\bclaude\b/.test(normalized)) {
       return 'claude'
-    }
-    if (/\bgemini\b/.test(normalized)) {
-      return 'gemini'
-    }
-    if (/\bcursor(?: agent)?\b/.test(normalized)) {
-      return 'cursor'
-    }
-    if (/\bopencode\b/.test(normalized)) {
-      return 'opencode'
-    }
-    if (/\bdroid\b/.test(normalized)) {
-      return 'droid'
-    }
-    if (/\bhermes\b/.test(normalized)) {
-      return 'hermes'
-    }
-    if (/\baider\b/.test(normalized)) {
-      return 'aider'
-    }
-    if (/\bpi\b/.test(normalized) || normalized.includes('\u03c0')) {
-      return 'pi'
     }
     return null
   }
@@ -844,7 +821,7 @@ export function createAgentCompletionCoordinator(
         // Why: some hook producers only emit terminal states; treat later done-only completions as new turns without backstop dupes.
         currentTurn += 1
       }
-      if (payload.state === 'done' && doneShouldUseQuietWindow(payload)) {
+      if (payload.state === 'done' && doneShouldUseQuietWindow()) {
         lastCompletionIdentity = hookIdentity
           ? {
               source: 'hook',

@@ -1,8 +1,6 @@
 type WorktreeCardTitleDisplayInput = {
   storedDisplayName: string | null | undefined
   branchName: string | null | undefined
-  linearIssueTitle?: string | null
-  jiraIssueTitle?: string | null
   issueTitle?: string | null
   reviewTitle?: string | null
 }
@@ -39,8 +37,6 @@ export function coerceWorktreeCardVisibleTitle(value: string | null | undefined)
 export function getWorktreeCardTitleDisplay({
   storedDisplayName,
   branchName,
-  linearIssueTitle,
-  jiraIssueTitle,
   issueTitle,
   reviewTitle
 }: WorktreeCardTitleDisplayInput): string {
@@ -62,8 +58,6 @@ export function getWorktreeCardTitleDisplay({
   // Why: branch names are available in hover/details; the closed card title
   // should prefer only a confirmed task/review subject, not repo/path guesses.
   return (
-    normalizeTitle(linearIssueTitle) ??
-    normalizeTitle(jiraIssueTitle) ??
     normalizeTitle(issueTitle) ??
     normalizeTitle(reviewTitle) ??
     (normalizedStoredDisplayName ? visibleStoredDisplayName : '')

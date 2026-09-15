@@ -220,7 +220,7 @@ describe('getTerminalPaneSearchEntries', () => {
 
   // The notice tells users to "turn it off in Terminal settings", so the product names in
   // the copy have to be the ones that find it.
-  it.each(['zellij', 'grok', 'tmux', 'osc 52'])(
+  it.each(['zellij', 'tmux', 'osc 52'])(
     'finds the OSC 52 clipboard setting by searching %s',
     (query) => {
       const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })

@@ -28,8 +28,7 @@ describe('codev channel pane layering', () => {
   }
 
   const paneZ = tailwindZIndexes(paneSource, 'absolute inset-0')[0] as number
-  // Every top-right overlay in the same container: the right-sidebar toggle and
-  // the workspace profile switcher.
+  // Every top-right overlay in the same container: the right-sidebar toggle.
   const overlayZ = tailwindZIndexes(appSource, 'absolute top-0 z-')
 
   it('covers the chat layer it is meant to replace', () => {
@@ -37,7 +36,7 @@ describe('codev channel pane layering', () => {
   })
 
   it('leaves the top-right overlay chrome clickable above it', () => {
-    expect(overlayZ).toHaveLength(2)
+    expect(overlayZ).toHaveLength(1)
     for (const z of overlayZ) {
       expect(z).toBeGreaterThan(paneZ)
     }

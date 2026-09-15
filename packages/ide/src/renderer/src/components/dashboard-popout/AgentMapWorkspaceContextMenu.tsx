@@ -7,7 +7,6 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -49,8 +48,7 @@ function countWorkspaceOwners(
         .filter((workspace) => workspace.id === scope.folderWorkspaceId)
         .map(
           (workspace) =>
-            normalizeExecutionHostId(workspace.executionHostId) ??
-            (workspace.connectionId ? toSshExecutionHostId(workspace.connectionId) : 'local')
+            normalizeExecutionHostId(workspace.executionHostId) ?? 'local'
         )
     ).size
   }

@@ -98,17 +98,14 @@ import {
   canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
   getSetupConfig,
-  getWorkspaceSeedName,
-  isGitLabIssueUrl
+  getWorkspaceSeedName
 } from './new-workspace'
 import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
 
 describe('linked-item issue commands', () => {
-  it('keeps Jira and Linear sentinel numbers out of repository issue templates', () => {
+  it('allows repository issue templates for GitHub linked items', () => {
     expect(canUseIssueCommandForLinkedItemProvider('github')).toBe(true)
-    expect(canUseIssueCommandForLinkedItemProvider('gitlab')).toBe(true)
-    expect(canUseIssueCommandForLinkedItemProvider('jira')).toBe(false)
-    expect(canUseIssueCommandForLinkedItemProvider('linear')).toBe(false)
+    expect(canUseIssueCommandForLinkedItemProvider(null)).toBe(false)
   })
 })
 
@@ -225,24 +222,6 @@ describe('getWorkspaceSeedName', () => {
   })
 })
 
-describe('isGitLabIssueUrl', () => {
-  it('detects canonical and self-hosted GitLab issue URLs', () => {
-    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/issues/123')).toBe(true)
-    expect(isGitLabIssueUrl('https://gitlab.example.com/group/project/-/issues/123')).toBe(true)
-  })
-
-  it('detects modern /-/work_items/<iid> issue URLs (incl. non-default port)', () => {
-    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/work_items/123')).toBe(true)
-    expect(isGitLabIssueUrl('https://gitlab.example.com:8443/group/project/-/work_items/7')).toBe(
-      true
-    )
-  })
-
-  it('does not classify GitHub issue URLs as GitLab issues', () => {
-    expect(isGitLabIssueUrl('https://github.com/group/project/issues/123')).toBe(false)
-  })
-})
-
 describe('ensureAgentStartupInTerminal prompt delivery', () => {
   beforeEach(() => {
     vi.useRealTimers()
@@ -281,77 +260,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     resetAgentStartupDelayedDeliveryForTests()
   })
 
-  it('sends a follow-up prompt through the terminal runtime without renderer telemetry', async () => {
-    await ensureAgentStartupInTerminal({
-      worktreeId: 'wt-1',
-      startup: {
-        agent: 'aider',
-        launchCommand: 'aider',
-        expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
-        launchConfig: { agentArgs: '', agentEnv: {} }
-      }
-    })
-
-    expect(mockSendRuntimePtyInputVerified).toHaveBeenCalledWith({}, 'pty-1', 'fix the spinner\r')
-    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
-  })
-
-  it('does not track when follow-up prompt delivery is rejected by the terminal runtime', async () => {
-    mockSendRuntimePtyInputVerified.mockResolvedValue(false)
-
-    await ensureAgentStartupInTerminal({
-      worktreeId: 'wt-1',
-      startup: {
-        agent: 'aider',
-        launchCommand: 'aider',
-        expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
-        launchConfig: { agentArgs: '', agentEnv: {} }
-      }
-    })
-
-    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
-  })
-
-  it('surfaces the not-sent toast when a follow-up prompt is dropped', async () => {
-    // Foreground never becomes a recognized agent and there is no live child,
-    // so the readiness wait times out and the prompt is not delivered.
-    mockInspectRuntimeTerminalProcess.mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
-
-    await ensureAgentStartupInTerminal({
-      worktreeId: 'wt-1',
-      startup: {
-        agent: 'aider',
-        launchCommand: 'aider',
-        expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
-        launchConfig: { agentArgs: '', agentEnv: {} }
-      }
-    })
-
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('aider')
-  })
-
-  it('does not toast when a follow-up prompt is delivered', async () => {
-    await ensureAgentStartupInTerminal({
-      worktreeId: 'wt-1',
-      startup: {
-        agent: 'aider',
-        launchCommand: 'aider',
-        expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
-        launchConfig: { agentArgs: '', agentEnv: {} }
-      }
-    })
-
-    expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
-  })
-
   it('passes an onTimeout that surfaces the not-sent toast to the draft paste path', async () => {
     await ensureAgentStartupInTerminal({
       worktreeId: 'wt-1',
@@ -371,25 +279,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     expect(call?.onTimeout).toBeTypeOf('function')
     call?.onTimeout?.()
     expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
-  })
-
-  it('does not track when follow-up prompt delivery rejects', async () => {
-    mockSendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
-
-    await expect(
-      ensureAgentStartupInTerminal({
-        worktreeId: 'wt-1',
-        startup: {
-          agent: 'aider',
-          launchCommand: 'aider',
-          expectedProcess: 'aider',
-          followupPrompt: 'fix the spinner',
-          launchConfig: { agentArgs: '', agentEnv: {} }
-        }
-      })
-    ).resolves.toBeUndefined()
-
-    expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
   it('does not track draft prompt delivery as a sent prompt', async () => {
@@ -781,29 +670,6 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     expect(mockPasteDraftToAgentPtyWhenReady).not.toHaveBeenCalled()
   })
 
-  it('does not write a delayed follow-up prompt on readiness timeout', async () => {
-    vi.useFakeTimers()
-    mockInspectRuntimeTerminalProcess.mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
-
-    const delivery = ensureAgentStartupInTerminal({
-      worktreeId: 'wt-1',
-      startup: {
-        agent: 'aider',
-        launchCommand: 'aider',
-        expectedProcess: 'aider',
-        followupPrompt: 'fix the spinner',
-        launchConfig: { agentArgs: '', agentEnv: {} }
-      }
-    })
-
-    await vi.advanceTimersByTimeAsync(5_000)
-    await delivery
-
-    expect(mockSendRuntimePtyInputVerified).not.toHaveBeenCalled()
-  })
 })
 
 describe('getSetupConfig', () => {

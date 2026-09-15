@@ -51,7 +51,6 @@ function HookProbe(props: { repo: Repo; onRefreshReview: () => Promise<void> }):
     review,
     githubPR,
     repo: props.repo,
-    isGitLab: false,
     shortLabel: 'PR',
     reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',

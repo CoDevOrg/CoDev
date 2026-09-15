@@ -765,19 +765,6 @@ describe('orca skills CLI', () => {
     expect(detectCommandsMock).not.toHaveBeenCalled()
   })
 
-  it('maps detected agents onto the skills CLI namespace, not Orca ids', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-    detectCommandsMock.mockReturnValue(new Set<string>(['claude', 'cursor-agent', 'rovo']))
-
-    await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
-
-    // Why: `skills add` exits 1 on an unknown --agent, and the ids differ —
-    // Orca's `claude` is `claude-code` and its `rovo` is `rovodev`.
-    expect(stdoutText(stdoutSpy)).toContain(
-      '--agent claude-code --agent cursor --agent rovodev --agent universal'
-    )
-  })
-
   it('never sends --agent for an update, and never refuses on a bare host', async () => {
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)

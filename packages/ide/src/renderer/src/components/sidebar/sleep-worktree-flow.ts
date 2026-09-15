@@ -175,13 +175,9 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // layout stays in terminalLayoutsByTabId, only the live PTY processes are
         // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /
         // lastKnownRelayPtyIdByTabId so wake re-spawns against the same on-disk
-        // history dir (local) or relay session id (SSH); it also captures
-        // serializer buffers into buffersByLeafId for SSH wake to reseed
-        // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
+        // history dir; it also captures serializer buffers into buffersByLeafId
+        // so wake can reseed scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
         await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
-        if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
-          await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
-        }
       } catch (err) {
         console.error('[sleep-worktree] terminal or host suspension failed', {
           worktreeId,

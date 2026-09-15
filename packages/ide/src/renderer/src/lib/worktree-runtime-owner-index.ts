@@ -3,7 +3,6 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 
@@ -59,8 +58,7 @@ function catalogOwnerHostId(owner: {
   if (explicitHost) {
     return explicitHost.id
   }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  return 'local'
 }
 
 function buildCatalogOwnerIndex<
@@ -186,7 +184,7 @@ function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
     return [physicalHostId ?? 'local']
   }
   const runtimeHostId = toRuntimeExecutionHostId(runtimeEnvironmentId)
-  // Why: paired HUB worktrees need logical-runtime lookup without losing their physical SSH route.
+  // Why: paired HUB worktrees need logical-runtime lookup without losing their physical host route.
   return physicalHostId && physicalHostId !== runtimeHostId
     ? [physicalHostId, runtimeHostId]
     : [runtimeHostId]

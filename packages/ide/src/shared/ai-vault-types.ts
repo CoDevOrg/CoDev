@@ -3,21 +3,7 @@ import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
-  'codex',
-  'hermes',
-  'pi',
-  'omp',
-  'cursor',
-  'gemini',
-  'antigravity',
-  'rovo',
-  'copilot',
-  'opencode',
-  'grok',
-  'openclaw',
-  'devin',
-  'droid',
-  'kimi'
+  'codex'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
@@ -43,21 +29,7 @@ export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
-  codex: 'Codex',
-  hermes: 'Hermes',
-  pi: 'Pi',
-  omp: 'OMP',
-  cursor: 'Cursor',
-  gemini: 'Gemini',
-  antigravity: 'Antigravity',
-  rovo: 'Rovo Dev',
-  copilot: 'GitHub Copilot',
-  opencode: 'OpenCode',
-  grok: 'Grok',
-  openclaw: 'OpenClaw',
-  devin: 'Devin',
-  droid: 'Droid',
-  kimi: 'Kimi'
+  codex: 'Codex'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -135,7 +107,6 @@ export type AiVaultSubagentListResult = {
 export type AiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
   filePath: string
-  // Required for OpenCode SQLite rows (filePath is the db; session is a row id).
   sessionId?: string
   // Transcripts are local-FS only; non-local hosts resolve to null prompt.
   executionHostId?: ExecutionHostId
@@ -148,8 +119,8 @@ export type AiVaultFirstUserPromptResult = {
 
 // A session is only offered for normal resume when its transcript actually holds
 // conversation turns; resuming a zero-turn transcript lands in an empty session.
-// Conversation previews count as evidence too: some parsers (e.g. Grok, OpenCode
-// fallback schemas) only learn the turn count from metadata that may be absent.
+// Conversation previews count as evidence too: some parsers only learn the turn
+// count from metadata that may be absent.
 export function isAiVaultSessionResumableContent(
   session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>
 ): boolean {

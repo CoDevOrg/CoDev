@@ -25,9 +25,6 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
   if (hasLinkedGitHubPR && pr.number !== worktree.linkedPR) {
     return false
   }
-  if (!hasLinkedGitHubPR && hasNonGitHubLinkedReview(worktree)) {
-    return false
-  }
   const mergedPrMatchesCurrentHead = isCachedMergedBranchPRCurrentForWorktree(pr, worktree)
   if (pr.state === 'merged' && !mergedPrMatchesCurrentHead) {
     return false
@@ -80,11 +77,3 @@ export function getParentPrChecksGitHubPRCacheEntry({
   )
 }
 
-function hasNonGitHubLinkedReview(worktree: Worktree): boolean {
-  return (
-    worktree.linkedGitLabMR != null ||
-    worktree.linkedBitbucketPR != null ||
-    worktree.linkedAzureDevOpsPR != null ||
-    worktree.linkedGiteaPR != null
-  )
-}

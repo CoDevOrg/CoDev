@@ -175,7 +175,7 @@ export function useAddRepoNestedImportFlow({
           return
         }
         const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
-        const completionOwnerOptions = worktreeRefreshOptions(completionOwner, nestedConnectionId)
+        const completionOwnerOptions = worktreeRefreshOptions(completionOwner)
         for (const projectId of importedRepoIds) {
           await fetchWorktrees(projectId, completionOwnerOptions)
         }
@@ -199,11 +199,9 @@ export function useAddRepoNestedImportFlow({
         }
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {
-          const source: AddRepoExistingWorkspaceSource = nestedConnectionId
-            ? 'ssh_remote_path'
-            : activeRuntimeEnvironmentId?.trim()
-              ? 'runtime_server_path'
-              : 'local_folder_picker'
+          const source: AddRepoExistingWorkspaceSource = activeRuntimeEnvironmentId?.trim()
+            ? 'runtime_server_path'
+            : 'local_folder_picker'
           await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
         }
       } catch (err) {

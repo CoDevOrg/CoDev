@@ -24,7 +24,7 @@ export function reserveTerminalRetirementTeardowns(
   return {
     plan: {
       ...plan,
-      localOrSshPtyIds: plan.localOrSshPtyIds.filter(reserve),
+      localPtyIds: plan.localPtyIds.filter(reserve),
       runtimeTerminals: plan.runtimeTerminals.filter((terminal) => reserve(terminal.ptyId)),
       cleanupOnlyPtyIds: [...cleanupOnlyPtyIds]
     },

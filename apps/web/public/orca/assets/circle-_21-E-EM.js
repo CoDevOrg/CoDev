@@ -1,1 +1,0 @@
-import{qv as e}from"./web-index-C4zlVhVa.js";var t=e(`circle`,[[`circle`,{cx:`12`,cy:`12`,r:`10`,key:`1mglay`}]]);export{t};

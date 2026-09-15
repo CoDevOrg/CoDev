@@ -34,6 +34,6 @@ describe('recordManagedHookInstallFailure', () => {
       throw new Error('telemetry failed')
     })
 
-    expect(() => recordManagedHookInstallFailure('cursor', { code: 'EACCES' })).not.toThrow()
+    expect(() => recordManagedHookInstallFailure('codex', { code: 'EACCES' })).not.toThrow()
   })
 })

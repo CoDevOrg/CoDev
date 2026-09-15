@@ -20,7 +20,6 @@ export type TerminalTabRetirementState = WorktreeRuntimeOwnerState &
     | 'ptyIdsByTabId'
     | 'terminalLayoutsByTabId'
     | 'lastKnownRelayPtyIdByTabId'
-    | 'deferredSshSessionIdsByTabId'
     | 'pendingReconnectPtyIdByTabId'
   >
 
@@ -28,7 +27,7 @@ export type TerminalTabRetirementPlan = {
   tabId: string
   worktreeId: string | null
   ptyIds: string[]
-  localOrSshPtyIds: string[]
+  localPtyIds: string[]
   runtimeTerminals: {
     ptyId: string
     environmentId: string | null
@@ -75,7 +74,6 @@ function collectPtyIdsForTab(
     appendPtyId(ids, ptyId)
   }
   appendPtyId(ids, state.lastKnownRelayPtyIdByTabId[tabId])
-  appendPtyId(ids, state.deferredSshSessionIdsByTabId[tabId])
   appendPtyId(ids, state.pendingReconnectPtyIdByTabId[tabId])
   return [...ids]
 }
@@ -172,7 +170,7 @@ export function buildTerminalTabRetirementPlans(
     const ptyIds =
       ptyIdsByLiveTab.get(tabId) ?? collectPtyIdsForTab(state, tabId, owner?.rowPtyId ?? null)
     const sharedPtyIds: string[] = []
-    const localOrSshPtyIds: string[] = []
+    const localPtyIds: string[] = []
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
@@ -205,11 +203,11 @@ export function buildTerminalTabRetirementPlans(
         })
       } else if (ptyId.startsWith('remote:')) {
         unroutablePtyIds.push(ptyId)
-      } else if (providerOwnership.kind !== 'local-or-ssh') {
+      } else if (providerOwnership.kind !== 'local') {
         // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
         unroutablePtyIds.push(ptyId)
       } else {
-        localOrSshPtyIds.push(ptyId)
+        localPtyIds.push(ptyId)
       }
     }
 
@@ -217,7 +215,7 @@ export function buildTerminalTabRetirementPlans(
       tabId,
       worktreeId,
       ptyIds,
-      localOrSshPtyIds,
+      localPtyIds,
       runtimeTerminals,
       cleanupOnlyPtyIds,
       sharedPtyIds,

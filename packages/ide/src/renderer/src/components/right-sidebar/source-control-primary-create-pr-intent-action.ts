@@ -22,13 +22,9 @@ export function resolveProvisionalHostedReviewProvider(input: {
   activeRepoId?: string | null
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
   // Provider inferred from the repo's remote URL host; used before the GitHub
-  // default so a GitLab (etc.) repo with no linked review still gets its own
-  // review copy while a probe is loading or after it fails.
+  // default so a repo with no linked review still gets its own review copy
+  // while a probe is loading or after it fails.
   remoteInferredProvider?: HostedReviewProvider | null
 }): HostedReviewProvider {
   if (input.hostedReview?.provider && supportsHostedReviewCreation(input.hostedReview.provider)) {
@@ -40,15 +36,6 @@ export function resolveProvisionalHostedReviewProvider(input: {
     supportsHostedReviewCreation(input.hostedReviewCreationState.data.provider)
   ) {
     return input.hostedReviewCreationState.data.provider
-  }
-  if (input.linkedGitLabMR != null) {
-    return 'gitlab'
-  }
-  if (input.linkedAzureDevOpsPR != null) {
-    return 'azure-devops'
-  }
-  if (input.linkedGiteaPR != null) {
-    return 'gitea'
   }
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'

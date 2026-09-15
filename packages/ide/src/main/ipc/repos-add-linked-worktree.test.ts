@@ -64,9 +64,6 @@ vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
-vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
-
 import { registerRepoHandlers } from './repos'
 
 const MAIN_CHECKOUT = '/Users/dev/projects/orca'
@@ -179,15 +176,4 @@ describe('repos:add with git worktrees', () => {
     expect(result).toEqual({ repo: expect.objectContaining({ path: LINKED_WORKTREE }) })
   })
 
-  it('does not match a tracked SSH repo that shares the local main-checkout path', async () => {
-    mockStore.getRepos.mockReturnValue([
-      { ...trackedMainRepo(), id: 'ssh-repo-id', connectionId: 'builder' } as Repo
-    ])
-    getLinkedWorktreeMainRepoRootMock.mockReturnValue(MAIN_CHECKOUT)
-
-    const result = await callAdd({ path: LINKED_WORKTREE })
-
-    expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ repo: expect.objectContaining({ path: LINKED_WORKTREE }) })
-  })
 })

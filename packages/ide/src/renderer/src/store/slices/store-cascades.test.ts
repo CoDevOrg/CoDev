@@ -3,8 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { SshProviderEpoch } from '../../../../shared/ssh-types'
-import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
 import {
   clearRuntimeCompatibilityCacheForTests,
@@ -1304,140 +1302,6 @@ describe('setActiveWorktree', () => {
     )
   })
 
-  it('moves current direct SSH binding evidence when detaching a live pane', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const sourceTabId = 'tab-source'
-    const targetTabId = 'tab-target'
-    const authority = {
-      targetId: 'target-a',
-      providerEpoch: 'epoch-a' as SshProviderEpoch,
-      connectionGeneration: 1
-    }
-    const detachedPtyId = 'ssh:target-a@@pty-detached'
-    seedStore(store, {
-      tabsByWorktree: {
-        [wt]: [
-          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId }),
-          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
-        ]
-      },
-      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
-      directSshLivePtyBindingByTabId: {
-        [sourceTabId]: {
-          attemptId: 'live-detach' as DirectSshPaneRetryAttemptId,
-          authority,
-          tabGeneration: 0,
-          ptyId: detachedPtyId
-        }
-      },
-      directSshPaneRetryHistoryByTabId: {
-        [sourceTabId]: { authority, attemptedAt: [1] }
-      },
-      sshConnectionStates: new Map([
-        [
-          authority.targetId,
-          {
-            targetId: authority.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: authority.providerEpoch,
-            connectionGeneration: authority.connectionGeneration
-          }
-        ]
-      ])
-    })
-
-    store.getState().syncPaneDetachPtyOwnership({
-      detachedLeafId: '11111111-1111-4111-8111-111111111111',
-      detachedPtyId,
-      sourceLayout: makeLayout(),
-      sourceTabId,
-      targetTabId
-    })
-
-    const state = store.getState()
-    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
-      attemptId: 'live-detach',
-      authority,
-      tabGeneration: 0,
-      ptyId: detachedPtyId
-    })
-    expect(state.directSshPaneRetryHistoryByTabId[targetTabId]).toEqual({
-      authority,
-      attemptedAt: [1]
-    })
-  })
-
-  it('rearms a current pending SSH detach as live destination evidence', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const sourceTabId = 'tab-source'
-    const targetTabId = 'tab-target'
-    const authority = {
-      targetId: 'target-a',
-      providerEpoch: 'epoch-a' as SshProviderEpoch,
-      connectionGeneration: 1
-    }
-    const detachedPtyId = 'ssh:target-a@@pty-detached'
-    seedStore(store, {
-      tabsByWorktree: {
-        [wt]: [
-          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId, generation: 2 }),
-          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
-        ]
-      },
-      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
-      directSshPaneRetryByTabId: {
-        [sourceTabId]: {
-          attemptId: 'pending-detach' as DirectSshPaneRetryAttemptId,
-          authority,
-          tabGeneration: 2,
-          startedAt: 1
-        }
-      },
-      sshConnectionStates: new Map([
-        [
-          authority.targetId,
-          {
-            targetId: authority.targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            providerEpoch: authority.providerEpoch,
-            connectionGeneration: authority.connectionGeneration
-          }
-        ]
-      ])
-    })
-
-    store.getState().syncPaneDetachPtyOwnership({
-      detachedLeafId: '11111111-1111-4111-8111-111111111111',
-      detachedPtyId,
-      sourceLayout: makeLayout(),
-      sourceTabId,
-      targetTabId
-    })
-
-    const state = store.getState()
-    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
-    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
-      attemptId: 'pending-detach',
-      authority,
-      tabGeneration: 0,
-      ptyId: detachedPtyId
-    })
-    expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
-      detachedPtyId
-    )
-  })
-
   // Regression for #9911: a split SSH tab's single relay slot points at the
   // last-bound pane; when it exits, clearTabPtyId must promote a surviving pane
   // instead of clearing, or a later relay-drop bulk-clear leaves the survivor
@@ -1699,43 +1563,6 @@ describe('setActiveWorktree', () => {
     }
   })
 
-  it('does not stamp local Windows shell icons onto SSH terminal tabs', () => {
-    const originalNavigator = globalThis.navigator
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      configurable: true
-    })
-    try {
-      const store = createTestStore()
-      const wt = 'remote-repo::/path/wt1'
-
-      seedStore(store, {
-        repos: [
-          {
-            id: 'remote-repo',
-            path: '/remote/repo',
-            displayName: 'Remote Repo',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: 'ssh-1'
-          }
-        ],
-        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
-        worktreesByRepo: {
-          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
-        }
-      })
-
-      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
-      expect(terminal.shellOverride).toBeUndefined()
-    } finally {
-      Object.defineProperty(globalThis, 'navigator', {
-        value: originalNavigator,
-        configurable: true
-      })
-    }
-  })
-
   it('preserves explicit Windows shell selections for Windows SSH terminal tabs', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {
@@ -1757,18 +1584,6 @@ describe('setActiveWorktree', () => {
             connectionId: 'ssh-1'
           }
         ],
-        sshConnectionStates: new Map([
-          [
-            'ssh-1',
-            {
-              targetId: 'ssh-1',
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0,
-              remotePlatform: 'win32'
-            }
-          ]
-        ]),
         settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
         worktreesByRepo: {
           'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
@@ -1777,92 +1592,6 @@ describe('setActiveWorktree', () => {
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
       expect(terminal.shellOverride).toBe('cmd.exe')
-    } finally {
-      Object.defineProperty(globalThis, 'navigator', {
-        value: originalNavigator,
-        configurable: true
-      })
-    }
-  })
-
-  it('drops explicit Windows shell selections for non-Windows SSH terminal tabs', () => {
-    const originalNavigator = globalThis.navigator
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      configurable: true
-    })
-    try {
-      const store = createTestStore()
-      const wt = 'remote-repo::/path/wt1'
-
-      seedStore(store, {
-        repos: [
-          {
-            id: 'remote-repo',
-            path: '/remote/repo',
-            displayName: 'Remote Repo',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: 'ssh-1'
-          }
-        ],
-        sshConnectionStates: new Map([
-          [
-            'ssh-1',
-            {
-              targetId: 'ssh-1',
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0,
-              remotePlatform: 'linux'
-            }
-          ]
-        ]),
-        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
-        worktreesByRepo: {
-          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
-        }
-      })
-
-      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
-      expect(terminal.shellOverride).toBeUndefined()
-    } finally {
-      Object.defineProperty(globalThis, 'navigator', {
-        value: originalNavigator,
-        configurable: true
-      })
-    }
-  })
-
-  it('does not offer Git Bash as a local shell override for SSH terminal tabs', () => {
-    const originalNavigator = globalThis.navigator
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      configurable: true
-    })
-    try {
-      const store = createTestStore()
-      const wt = 'remote-repo::/path/wt1'
-
-      seedStore(store, {
-        repos: [
-          {
-            id: 'remote-repo',
-            path: '/remote/repo',
-            displayName: 'Remote Repo',
-            badgeColor: '#000',
-            addedAt: 0,
-            connectionId: 'ssh-1'
-          }
-        ],
-        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' },
-        worktreesByRepo: {
-          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
-        }
-      })
-
-      const terminal = store.getState().createTab(wt, undefined, 'git-bash')
-      expect(terminal.shellOverride).toBeUndefined()
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,

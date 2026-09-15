@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -295,14 +295,4 @@ describe('AgentKanbanCard', () => {
     expect(agentIconRender).toHaveBeenCalledTimes(2)
   })
 
-  it('updates the relative age when the UI language changes', async () => {
-    renderCard({ card: card({ startedAt: 1_000 }), now: 121_500 })
-    expect(screen.getByText('2m')).toBeInTheDocument()
-
-    await act(async () => {
-      await i18n.changeLanguage('ja')
-    })
-
-    expect(screen.getByText('2分')).toBeInTheDocument()
-  })
 })

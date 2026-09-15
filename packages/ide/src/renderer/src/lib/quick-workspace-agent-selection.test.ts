@@ -12,15 +12,6 @@ describe('pickQuickWorkspaceAgent', () => {
     expect(new Set(TUI_AGENT_AUTO_PICK_ORDER).size).toBe(TUI_AGENT_AUTO_PICK_ORDER.length)
   })
 
-  it('uses the first enabled catalog agent while detection is pending', () => {
-    expect(pickQuickWorkspaceAgent(null, null, [])).toBe('claude')
-    expect(pickQuickWorkspaceAgent(null, null, ['claude'])).toBe('claude-agent-teams')
-    expect(pickQuickWorkspaceAgent(null, null, ['claude', 'claude-agent-teams'])).toBe('openclaude')
-    expect(
-      pickQuickWorkspaceAgent(null, null, ['claude', 'claude-agent-teams', 'openclaude'])
-    ).toBe('codex')
-  })
-
   it('respects blank and disabled preferred agents', () => {
     expect(pickQuickWorkspaceAgent('blank', null, [])).toBeNull()
     expect(pickQuickWorkspaceAgent('codex', null, ['codex'])).toBe('claude')

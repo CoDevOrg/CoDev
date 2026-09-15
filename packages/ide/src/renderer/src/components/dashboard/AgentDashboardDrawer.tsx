@@ -55,18 +55,6 @@ function AgentDashboardDrawerBody({
     [onClose]
   )
 
-  // Switching to pop-out from the board hands the surface over rather than
-  // leaving an in-window board that the setting says should be a window.
-  const handleSwitchToPopout = useCallback(() => {
-    onClose()
-    void window.api.dashboard.openPopout?.()
-  }, [onClose])
-
-  const handleOpenMap = useCallback(() => {
-    onClose()
-    void window.api.dashboard.openPopout?.('map')
-  }, [onClose])
-
   return (
     <AgentKanbanBoard
       snapshot={snapshot}
@@ -78,10 +66,8 @@ function AgentDashboardDrawerBody({
       onRevealAgent={handleRevealAgent}
       onSpawnAgent={launchDashboardAgent}
       onClose={onClose}
-      onOpenMap={handleOpenMap}
       headerActions={
         <AgentDashboardSettingsMenu
-          onSwitchToPopout={handleSwitchToPopout}
           onOpenChange={onMenuOpenChange}
         />
       }

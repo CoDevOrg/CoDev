@@ -252,104 +252,6 @@ describe('resolvePrimaryAction Create PR intent', () => {
     })
   })
 
-  it('returns Create MR intent with provider copy for a GitLab dirty branch', () => {
-    const result = resolvePrimaryAction(
-      inputs({
-        stagedCount: 1,
-        hasMessage: true,
-        upstreamStatus: upstreamInSync,
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'dirty',
-          nextAction: 'commit',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    )
-    expect(result.kind).toBe('create_pr_intent')
-    expect(result.label).toBe('Create MR')
-    expect(result.title).toBe('Prepare this branch and create a merge request')
-  })
-
-  it('routes a GitLab dirty branch header through Create MR intent', () => {
-    expect(
-      resolveCreatePrHeaderAction(
-        inputs({
-          stagedCount: 1,
-          hasMessage: true,
-          upstreamStatus: upstreamInSync,
-          hostedReviewCreation: {
-            provider: 'gitlab',
-            review: null,
-            canCreate: false,
-            blockedReason: 'dirty',
-            nextAction: 'commit',
-            reviewLookupOutcome: 'not_found'
-          }
-        })
-      )
-    ).toEqual({
-      kind: 'create_pr_intent',
-      label: 'Create MR',
-      title: 'Prepare this branch and create a merge request',
-      disabled: false
-    })
-  })
-
-  it('keeps in-flight Create MR intent copy provider-aware', () => {
-    const input = inputs({
-      isPrIntentInFlight: true,
-      hostedReviewCreation: {
-        provider: 'gitlab',
-        review: null,
-        canCreate: false,
-        blockedReason: 'dirty',
-        nextAction: 'commit',
-        reviewLookupOutcome: 'not_found'
-      }
-    })
-
-    expect(resolvePrimaryAction(input)).toEqual({
-      kind: 'create_pr_intent',
-      label: 'Create MR',
-      title: 'Preparing branch for review…',
-      disabled: true
-    })
-    expect(resolveCreatePrHeaderAction(input)).toEqual({
-      kind: 'create_pr_intent',
-      label: 'Create MR',
-      title: 'Preparing branch for review…',
-      disabled: true
-    })
-  })
-
-  it.each(['azure-devops', 'gitea'] as const)(
-    'returns Create PR intent for a %s branch that needs a safe push before review',
-    (provider) => {
-      const result = resolvePrimaryAction(
-        inputs({
-          upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-          hostedReviewCreation: {
-            provider,
-            review: null,
-            canCreate: false,
-            blockedReason: 'needs_push',
-            nextAction: 'push',
-            reviewLookupOutcome: 'not_found'
-          }
-        })
-      )
-      expect(result).toEqual({
-        kind: 'create_pr_intent',
-        label: 'Create PR',
-        title: 'Prepare this branch and create a pull request',
-        disabled: false
-      })
-    }
-  )
-
   it('routes unpublished commits through Create PR intent while keeping Publish Branch in the commit area', () => {
     const input = inputs({
       upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
@@ -505,29 +407,6 @@ describe('resolvePrimaryAction Create PR intent', () => {
       kind: 'create_pr',
       label: 'Create PR',
       title: 'Checking whether this branch can create a pull request…',
-      disabled: true
-    })
-  })
-
-  it('keeps stale Create MR eligibility disabled with provider-aware loading copy', () => {
-    expect(
-      resolveCreatePrHeaderAction(
-        inputs({
-          hostedReviewCreation: {
-            provider: 'gitlab',
-            review: null,
-            canCreate: true,
-            blockedReason: null,
-            nextAction: null,
-            reviewLookupOutcome: 'not_found'
-          },
-          isHostedReviewCreationLoading: true
-        })
-      )
-    ).toEqual({
-      kind: 'create_pr',
-      label: 'Create MR',
-      title: 'Checking whether this branch can create a merge request…',
       disabled: true
     })
   })

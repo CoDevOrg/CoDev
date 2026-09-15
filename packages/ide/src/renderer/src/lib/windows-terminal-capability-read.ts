@@ -17,37 +17,8 @@ async function reconcileWslAvailability(
 }
 
 export async function readWindowsTerminalCapabilities(
-  target: WindowsTerminalCapabilityLoadTarget,
-  sshConnectionId?: string | null
+  target: WindowsTerminalCapabilityLoadTarget
 ): Promise<WindowsTerminalCapabilities> {
-  if (sshConnectionId) {
-    const remoteCapabilityPromise =
-      target.kind === 'environment'
-        ? callRuntimeRpc<Omit<WindowsTerminalCapabilities, 'isLoading'>>(
-            target,
-            'preflight.detectRemoteWindowsTerminalCapabilities',
-            { connectionId: sshConnectionId },
-            { timeoutMs: 15_000 }
-          )
-        : window.api.preflight.detectRemoteWindowsTerminalCapabilities({
-            connectionId: sshConnectionId
-          })
-    return remoteCapabilityPromise
-      .then((capabilities) => ({
-        ...capabilities,
-        wslDistros: capabilities.wslDistros ?? [],
-        isLoading: false
-      }))
-      .catch(() => ({
-        wslAvailable: false,
-        wslDistros: [],
-        pwshAvailable: false,
-        gitBashAvailable: false,
-        hostPlatform: null,
-        isLoading: false
-      }))
-  }
-
   if (target.kind === 'local') {
     const [wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform] =
       await Promise.all([

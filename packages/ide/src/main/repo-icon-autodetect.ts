@@ -2,8 +2,6 @@ import { readFile, stat } from 'node:fs/promises'
 import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import { faviconUrlFromWebsite, githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
-import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
-import type { IFilesystemProvider } from './providers/types'
 import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
@@ -51,26 +49,6 @@ async function detectLocalPackageHomepageIcon(repoPath: string): Promise<RepoIco
   }
 }
 
-async function detectRemotePackageHomepageIcon(
-  repoPath: string,
-  fsProvider: IFilesystemProvider
-): Promise<RepoIcon | null> {
-  try {
-    const packageJsonPath = joinWorktreeRelativePath(repoPath, 'package.json')
-    const info = await fsProvider.stat(packageJsonPath)
-    if (info.type !== 'file' || info.size > 128 * 1024) {
-      return null
-    }
-    const result = await fsProvider.readFile(packageJsonPath)
-    if (result.isBinary) {
-      return null
-    }
-    return packageHomepageIcon(JSON.parse(result.content))
-  } catch {
-    return null
-  }
-}
-
 async function detectGitHubAvatarIcon(
   repoPath: string,
   connectionId?: string | null,
@@ -97,15 +75,12 @@ export async function detectRepoIcon({
   upstream?: GitHubRepositoryIdentity | null
 }): Promise<RepoIcon | undefined> {
   try {
-    const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
+    const fileIcon = await detectRepoFileIcon(repoPath)
     if (fileIcon) {
       return fileIcon
     }
 
-    const homepageIcon = fsProvider
-      ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
-      : await detectLocalPackageHomepageIcon(repoPath)
+    const homepageIcon = await detectLocalPackageHomepageIcon(repoPath)
     if (homepageIcon) {
       return homepageIcon
     }

@@ -1,5 +1,4 @@
 import type {
-  DirectSshDetectedWorktreeRequest,
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs,
   LocalDetectedWorktreeRequest,
@@ -25,9 +24,10 @@ export type DetectedWorktreeRefreshLease = {
   release(reason: DetectedWorktreeRefreshReleaseReason): DetectedWorktreeRefreshReleaseOutcome
 }
 
-export type DetectedWorktreeRefreshProviderInput =
-  | Omit<LocalDetectedWorktreeRequest, 'providerRequestId'>
-  | Omit<DirectSshDetectedWorktreeRequest, 'providerRequestId'>
+export type DetectedWorktreeRefreshProviderInput = Omit<
+  LocalDetectedWorktreeRequest,
+  'providerRequestId'
+>
 
 export type DetectedWorktreeRefreshLeaseRegistryOptions = {
   startProviderRequest(
@@ -88,16 +88,7 @@ function requestsAreCompatible(
   if (request.repoId !== input.repoId || request.executionHostId !== input.executionHostId) {
     return false
   }
-  const requestAuthority = 'expectedAuthority' in request ? request.expectedAuthority : undefined
-  const inputAuthority = 'expectedAuthority' in input ? input.expectedAuthority : undefined
-  if (!requestAuthority || !inputAuthority) {
-    return requestAuthority === inputAuthority
-  }
-  return (
-    requestAuthority.targetId === inputAuthority.targetId &&
-    requestAuthority.providerEpoch === inputAuthority.providerEpoch &&
-    requestAuthority.connectionGeneration === inputAuthority.connectionGeneration
-  )
+  return true
 }
 
 function canceledResult(request: ListDetectedWorktreesArgs): HostQualifiedDetectedWorktreeResult {
@@ -112,13 +103,6 @@ function providerRequestWithId(
   input: DetectedWorktreeRefreshProviderInput,
   providerRequestId: ProviderRequestId
 ): ListDetectedWorktreesArgs {
-  if ('expectedAuthority' in input) {
-    return {
-      ...input,
-      expectedAuthority: { ...input.expectedAuthority },
-      providerRequestId
-    }
-  }
   return { ...input, providerRequestId }
 }
 

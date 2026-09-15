@@ -94,11 +94,6 @@ describe('resolveTabAgent', () => {
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
   })
 
-  it('resolves via the prefix scan when the layout is missing', () => {
-    const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'droid') }
-    expect(resolveTabAgent(map, undefined, 'tab-1')).toBe('droid')
-  })
-
   it('treats same-tab hook identity as focused when the layout is missing', () => {
     const map = { [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'codex') }
 
@@ -119,17 +114,6 @@ describe('resolveTabAgent', () => {
       }
     }
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()
-  })
-
-  it('exposes the completed hook agent for title disambiguation', () => {
-    const map = {
-      [`tab-1:${LEAF_A}`]: {
-        ...entry(`tab-1:${LEAF_A}`, 'openclaude'),
-        state: 'done' as const
-      }
-    }
-    expect(resolveFocusedCompletedTabAgent(map, undefined, 'tab-1')).toBe('openclaude')
-    expect(resolveSiblingCompletedTabAgent(map, undefined, 'tab-1')).toBeNull()
   })
 
   it('exposes focused and sibling completed hook identity separately', () => {

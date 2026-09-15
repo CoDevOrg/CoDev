@@ -2,18 +2,22 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
-import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,
   stripMatchingQuotes
 } from './editor-launcher-name'
-import {
-  isJetBrainsConsoleShim,
-  resolveColocatedJetBrainsGuiExecutable
-} from './jetbrains-windows-gui-launchers'
 import { getCmdExePath, getSpawnArgsForWindows } from './win32-utils'
+
+const VSCODE_LAUNCHER_NAMES = new Set(['code', 'code-insiders', 'code - insiders'])
+
+function isVsCodeLauncherExecutable(command: string): boolean {
+  const unquoted = stripMatchingQuotes(command)
+  const fileName = unquoted.split(/[\\/]/).at(-1) ?? ''
+  const launcherName = fileName.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
+  return VSCODE_LAUNCHER_NAMES.has(launcherName)
+}
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
@@ -21,12 +25,6 @@ const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
 export type ExternalEditorExecutableLaunchSpec = {
   kind: 'executable'
   hideWindowsConsole: boolean
-  /**
-   * Set only for Windows batch shims that would otherwise leave a Command
-   * Prompt behind; routes the spawn through `start` with an empty title and
-   * `/B`. Left unset elsewhere because `start` re-parses quoted argv.
-   */
-  detachedGui?: boolean
   spawnCmd: string
   spawnArgs: string[]
 }
@@ -118,27 +116,8 @@ function isCompoundShellCommand(command: string): boolean {
   return /\s/.test(command)
 }
 
-function preferJetBrainsGuiExecutable(
-  editorCommand: string,
-  platform: NodeJS.Platform,
-  fileExists: (path: string) => boolean
-): string {
-  if (platform !== 'win32') {
-    return editorCommand
-  }
-  return resolveColocatedJetBrainsGuiExecutable(editorCommand, fileExists) ?? editorCommand
-}
-
-function resolveSimpleEditorCommand(
-  command: string,
-  platform: NodeJS.Platform,
-  fileExists: (path: string) => boolean
-): string {
-  return preferJetBrainsGuiExecutable(
-    resolveCliCommand(command, { platform }),
-    platform,
-    fileExists
-  )
+function resolveSimpleEditorCommand(command: string, platform: NodeJS.Platform): string {
+  return resolveCliCommand(command, { platform })
 }
 
 function buildExecutableLaunchSpec(
@@ -151,9 +130,6 @@ function buildExecutableLaunchSpec(
     hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
     spawnCmd: editorCommand,
     spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
-  }
-  if (spec.hideWindowsConsole && isJetBrainsConsoleShim(editorCommand, platform)) {
-    spec.detachedGui = true
   }
   return spec
 }
@@ -195,55 +171,14 @@ export function resolveExternalEditorLaunchSpec(
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    // Why: settings often store a full path to idea.cmd / idea.exe; upgrade
-    // those the same way as PATH-resolved names when *64.exe is colocated.
-    return buildExecutableLaunchSpec(
-      preferJetBrainsGuiExecutable(stripMatchingQuotes(trimmed), platform, fileExists),
-      pathValue,
-      platform
-    )
+    return buildExecutableLaunchSpec(stripMatchingQuotes(trimmed), pathValue, platform)
   }
 
   if (isCompoundShellCommand(trimmed)) {
     return buildShellLaunchSpec(trimmed, pathValue, platform)
   }
 
-  return buildExecutableLaunchSpec(
-    resolveSimpleEditorCommand(trimmed, platform, fileExists),
-    pathValue,
-    platform
-  )
-}
-
-export function resolveVsCodeRemoteSshLaunchSpec(
-  command: string | undefined,
-  pathValue: string,
-  authority: string,
-  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
-): ExternalEditorLaunchSpec | null {
-  const platform = options.platform ?? process.platform
-  const fileExists = options.fileExists ?? existsSync
-  const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
-
-  let editorCommand: string
-  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    editorCommand = stripMatchingQuotes(trimmed)
-  } else {
-    if (isCompoundShellCommand(trimmed)) {
-      return null
-    }
-    editorCommand = resolveCliCommand(trimmed, { platform })
-  }
-
-  if (!isVsCodeLauncherExecutable(editorCommand)) {
-    return null
-  }
-  return {
-    kind: 'executable',
-    hideWindowsConsole: true,
-    spawnCmd: editorCommand,
-    spawnArgs: ['--remote', `ssh-remote+${authority}`, pathValue]
-  }
+  return buildExecutableLaunchSpec(resolveSimpleEditorCommand(trimmed, platform), pathValue, platform)
 }
 
 function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
@@ -251,12 +186,8 @@ function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
   spawnArgs: string[]
   windowsHide: boolean
 } {
-  // Why: only shims flagged during resolution (JetBrains) take the start /B
-  // detach; every other launcher keeps the waiting form so its argv survives.
   if (launchSpec.kind === 'executable') {
-    const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs, {
-      detachedGui: launchSpec.detachedGui === true
-    })
+    const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs)
     return { ...spawned, windowsHide: launchSpec.hideWindowsConsole }
   }
   return {

@@ -9,7 +9,6 @@ import {
   isTerminalQuickCommandComplete,
   normalizeTerminalQuickCommands,
   parseNormalizedTerminalQuickCommands,
-  supportsTerminalAgentQuickCommand,
   terminalQuickCommandMatchesRepo
 } from './terminal-quick-commands'
 
@@ -327,12 +326,6 @@ describe('terminal quick commands', () => {
     expect(isTerminalQuickCommandComplete(agent)).toBe(true)
   })
 
-  it('only allows agent prompt quick commands for launch-time prompt agents', () => {
-    expect(supportsTerminalAgentQuickCommand('claude')).toBe(true)
-    expect(supportsTerminalAgentQuickCommand('gemini')).toBe(true)
-    expect(supportsTerminalAgentQuickCommand('aider')).toBe(false)
-    expect(supportsTerminalAgentQuickCommand('not-real')).toBe(false)
-  })
 })
 
 describe('flattenTerminalQuickCommand', () => {

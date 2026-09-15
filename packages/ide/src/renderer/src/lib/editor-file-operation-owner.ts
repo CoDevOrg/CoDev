@@ -17,7 +17,6 @@ import {
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
   ownershipProjection: 'explicit' | 'legacy'
-  expectedSshConnectionGeneration?: number
 }
 
 type EditorOwnerState = Pick<
@@ -32,8 +31,6 @@ type EditorOwnerState = Pick<
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
-  | 'sshConnectionStates'
-  | 'sshStateByEnvironment'
 >
 
 const OWNER_CHANGED_MESSAGE =
@@ -70,11 +67,9 @@ export function captureEditorFileOperationProvenance(
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
-  const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(state, route)
   return {
     generation: captureWorktreeOperationGenerationSnapshot(route),
-    ownershipProjection,
-    ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
+    ownershipProjection
   }
 }
 
@@ -90,10 +85,6 @@ export function assertEditorFileOperationCurrent(
     () => new Error(OWNER_CHANGED_MESSAGE),
     () => resolveCurrentEditorRoute(state, worktreeId, provenance)
   )
-  const currentGeneration = getExpectedSshConnectionGeneration(state, route)
-  if (currentGeneration !== provenance.expectedSshConnectionGeneration) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
   return route
 }
 
@@ -136,7 +127,6 @@ export function getEditorFileOperationContext(
   file: {
     worktreeId: string
     runtimeEnvironmentId?: string | null
-    externalSshTargetId?: string
     operationProvenance?: EditorFileOperationProvenance
   },
   worktreePath: string | null
@@ -145,9 +135,7 @@ export function getEditorFileOperationContext(
   worktreeId: string
   worktreePath: string | null
   connectionId?: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExecutionHostId: 'local' | `ssh:${string}`
+  expectedExecutionHostId: 'local'
 } {
   const provenance =
     file.operationProvenance ??
@@ -172,45 +160,11 @@ export function getEditorFileOperationContext(
   if (!host) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
-  const externalSshTargetId = file.externalSshTargetId?.trim()
-  if (
-    externalSshTargetId &&
-    (host.kind !== 'ssh' ||
-      route.runtimeEnvironmentId !== null ||
-      host.targetId !== externalSshTargetId)
-  ) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
-  if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {
-    // Why: an old/partial SSH publication may be readable but cannot safely authorize mutations.
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
   return {
     settings: settingsForWorktreeOperationRoute(state.settings, route),
     worktreeId: file.worktreeId,
     worktreePath: resolvedWorktreePath,
-    expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local',
-    ...(route.runtimeEnvironmentId === null && host?.kind === 'ssh'
-      ? { connectionId: host.targetId }
-      : {}),
-    ...(host?.kind === 'ssh' ? { expectedSshTargetId: host.targetId } : {}),
-    ...(provenance.expectedSshConnectionGeneration === undefined
-      ? {}
-      : { expectedSshConnectionGeneration: provenance.expectedSshConnectionGeneration })
+    expectedExecutionHostId: 'local'
   }
 }
 
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
-  }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
-}

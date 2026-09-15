@@ -17,14 +17,10 @@ export function resolveWindowsTerminalCapabilityOwnerKey(args: {
   isWebClient: boolean
   runtimeEnvironments: readonly RuntimeCapabilityOwnerEnvironment[]
   runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeCapabilityOwnerStatus>
-  sshConnectionId?: string | null
 }): string {
   const activeEnvironmentId = args.activeRuntimeEnvironmentId?.trim() || null
   const environment = args.isWebClient ? (args.runtimeEnvironments[0] ?? null) : null
-  const ownerKey = getWindowsTerminalCapabilityOwnerKey(
-    environment?.id ?? activeEnvironmentId,
-    args.sshConnectionId
-  )
+  const ownerKey = getWindowsTerminalCapabilityOwnerKey(environment?.id ?? activeEnvironmentId)
   if (!environment) {
     return ownerKey
   }
@@ -35,8 +31,7 @@ export function resolveWindowsTerminalCapabilityOwnerKey(args: {
 }
 
 export function useWindowsTerminalCapabilityOwnerKey(
-  activeRuntimeEnvironmentId?: string | null,
-  sshConnectionId?: string | null
+  activeRuntimeEnvironmentId?: string | null
 ): string {
   const isWebClient = isWebClientLocation()
   return useAppStore((state) =>
@@ -44,8 +39,7 @@ export function useWindowsTerminalCapabilityOwnerKey(
       activeRuntimeEnvironmentId,
       isWebClient,
       runtimeEnvironments: state.runtimeEnvironments ?? [],
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      sshConnectionId
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId
     })
   )
 }

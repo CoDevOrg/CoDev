@@ -24,7 +24,6 @@ function worktree(id: string, isPinned = false): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned,

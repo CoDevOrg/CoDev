@@ -12,12 +12,6 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() }
 }))
 
-vi.mock('qrcode', () => ({
-  default: {
-    toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr')
-  }
-}))
-
 // Why: only the interface enumeration is faked; the real `os` stays available for the integration
 // test below, which needs tmpdir() for a real runtime's user data directory.
 vi.mock('os', async (importOriginal) => ({

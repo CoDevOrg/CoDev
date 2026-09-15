@@ -72,48 +72,4 @@ describe('preflight RPC methods', () => {
     })
   })
 
-  it('detects agents on remote SSH connections through runtime RPC', async () => {
-    detectRemoteAgentsMock.mockResolvedValueOnce(['claude'])
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('preflight.detectRemoteAgents', { connectionId: 'ssh-1' })
-    )
-
-    expect(detectRemoteAgentsMock).toHaveBeenCalledWith({ connectionId: 'ssh-1' })
-    expect(response).toMatchObject({ ok: true, result: ['claude'] })
-  })
-
-  it('detects remote Windows terminal capabilities through runtime RPC', async () => {
-    detectRemoteWindowsTerminalCapabilitiesMock.mockResolvedValueOnce({
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: true,
-      gitBashAvailable: true,
-      hostPlatform: 'win32'
-    })
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('preflight.detectRemoteWindowsTerminalCapabilities', {
-        connectionId: 'ssh-1'
-      })
-    )
-
-    expect(detectRemoteWindowsTerminalCapabilitiesMock).toHaveBeenCalledWith({
-      connectionId: 'ssh-1'
-    })
-    expect(response).toMatchObject({
-      ok: true,
-      result: {
-        wslAvailable: true,
-        wslDistros: ['Ubuntu'],
-        pwshAvailable: true,
-        gitBashAvailable: true,
-        hostPlatform: 'win32'
-      }
-    })
-  })
 })

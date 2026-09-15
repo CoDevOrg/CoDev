@@ -33,7 +33,6 @@ export { getBrowserPaneCombinedSearchEntries }
 type BrowserPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  onOpenComputerUse?: () => void
 }
 
 function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<number[]>): void {
@@ -45,8 +44,7 @@ function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<numbe
 
 export function BrowserPane({
   settings,
-  updateSettings,
-  onOpenComputerUse
+  updateSettings
 }: BrowserPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -57,8 +55,6 @@ export function BrowserPane({
   const setBrowserDefaultZoomLevel = useAppStore((s) => s.setBrowserDefaultZoomLevel)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const repos = useAppStore((s) => s.repos)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
@@ -117,8 +113,6 @@ export function BrowserPane({
     () =>
       buildSidebarHostOptions({
         repos,
-        sshTargetLabels,
-        sshConnectionStates,
         settings,
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
@@ -138,8 +132,6 @@ export function BrowserPane({
         })),
     [
       repos,
-      sshTargetLabels,
-      sshConnectionStates,
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
@@ -204,10 +196,7 @@ export function BrowserPane({
   return (
     <div ref={setBrowserPaneRootNode} className="space-y-6">
       {showBrowserUse ? (
-        <BrowserUseSetup
-          onConfigureMoreBrowsers={scrollToSessionCookies}
-          onOpenComputerUse={onOpenComputerUse}
-        />
+        <BrowserUseSetup onConfigureMoreBrowsers={scrollToSessionCookies} />
       ) : null}
 
       {showHomePage ? (

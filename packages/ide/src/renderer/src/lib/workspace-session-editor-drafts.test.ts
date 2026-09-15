@@ -27,7 +27,6 @@ function createSnapshot(
     groupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
-    sshConnectionStates: new Map(),
     repos: [],
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},
@@ -77,29 +76,6 @@ describe('workspace session editor drafts', () => {
         dirtyDraftContent: expect.any(String)
       })
     ])
-  })
-
-  it('persists the SSH target that owns an external host file', () => {
-    const payload = buildWorkspaceSessionPayload(
-      createSnapshot({
-        openFiles: [
-          {
-            id: '/tmp/ssh-preview.png',
-            filePath: '/tmp/ssh-preview.png',
-            relativePath: '/tmp/ssh-preview.png',
-            worktreeId: 'wt-1',
-            language: 'png',
-            mode: 'edit',
-            isDirty: false,
-            externalSshTargetId: 'ssh-1'
-          } as never
-        ]
-      })
-    )
-
-    expect(payload.openFilesByWorktree?.['wt-1']?.[0]).toEqual(
-      expect.objectContaining({ externalSshTargetId: 'ssh-1' })
-    )
   })
 
   it('persists the disk baseline signature only alongside a dirty draft', () => {

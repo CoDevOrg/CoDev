@@ -80,10 +80,6 @@ export type HostedReviewBranchCacheIdentity = {
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
   localGitExecOptions?: unknown
 }
 
@@ -106,10 +102,6 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
     identity.fallbackGitHubPR ?? '',
-    identity.linkedGitLabMR ?? '',
-    identity.linkedBitbucketPR ?? '',
-    identity.linkedAzureDevOpsPR ?? '',
-    identity.linkedGiteaPR ?? '',
     identity.localGitExecOptions ? JSON.stringify(identity.localGitExecOptions) : ''
   ].join(KEY_SEPARATOR)
 }

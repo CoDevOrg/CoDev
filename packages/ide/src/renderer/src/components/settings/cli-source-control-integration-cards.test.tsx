@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   GitHubIntegrationCard,
-  GitLabIntegrationCard
 } from './cli-source-control-integration-cards'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
@@ -109,21 +108,4 @@ describe('CLI source-control integration card account scope', () => {
     })
   })
 
-  it('shows remote-server ownership for GitLab CLI credential checks', async () => {
-    mocks.store.current = {
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
-      openSettingsPage: vi.fn(),
-      openSettingsTarget: vi.fn()
-    }
-    mocks.preflight.statuses.glabStatus = 'not-authenticated'
-
-    const rendered = await renderCard(<GitLabIntegrationCard />)
-
-    expect(rendered.textContent).toContain('GitLab')
-    expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
-    expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
-    )
-    expect(rendered.textContent).toContain('glab auth login')
-  })
 })

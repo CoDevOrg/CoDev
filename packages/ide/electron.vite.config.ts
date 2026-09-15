@@ -211,12 +211,7 @@ export const electronViteConfig: UserConfig = {
           'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
-          'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
-          'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'session-scanner-opencode-sqlite-worker-entry': resolve(
-            'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'
-          ),
           // Why: libuv spawns processes inline on the calling loop, so the port
           // scan's probe commands run on a worker thread instead of the UI one.
           'port-scan-command-worker-entry': resolve(
@@ -225,11 +220,6 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
-          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
-          // without paying for another Electron process.
-          'main-thread-hang-watchdog-entry': resolve(
-            'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
-          ),
           // Why: run under ELECTRON_RUN_AS_NODE while the caller blocks on
           // spawnSync — codex app-server trust grants need a live event loop
           // but must finish before a Codex pane launch proceeds.
@@ -306,7 +296,6 @@ export const electronViteConfig: UserConfig = {
         preserveEntrySignatures: 'strict',
         input: {
           index: resolve('src/renderer/index.html'),
-          popout: resolve('src/renderer/popout.html'),
           web: resolve('src/renderer/web-index.html')
         }
       }

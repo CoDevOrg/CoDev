@@ -15,7 +15,6 @@ describe('agent dashboard performance isolation', () => {
     const nav = source('components/sidebar/SidebarNav.tsx')
 
     expect(app).not.toMatch(/from ['"].*DashboardPopoutBridge['"]/)
-    expect(app).toContain("import('./components/dashboard/DashboardPopoutBridge')")
     expect(sidebar).not.toMatch(/from ['"].*AgentDashboard(?:Drawer|SidebarHost)['"]/)
     expect(sidebar).toContain("import('./AgentDashboardSidebarHost')")
     expect(nav).not.toContain('useAgentBucketCounts')
@@ -30,7 +29,5 @@ describe('agent dashboard performance isolation', () => {
     expect(board).toContain("import('./AgentDashboardMapView')")
     expect(board).not.toMatch(/from ['"].\/(?:AgentMap|useAgentMap|agent-map-)/)
     expect(drawer).toContain('initialView="board"')
-    expect(drawer).toContain("openPopout?.('map')")
-    expect(drawer).toContain('onOpenMap={handleOpenMap}')
   })
 })

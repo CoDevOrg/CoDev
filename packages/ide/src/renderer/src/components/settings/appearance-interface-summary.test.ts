@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
 
+// Why: English is the only bundled UI language, so the language setting is
+// hidden and the summary lists just theme and font.
 describe('resolveInterfaceSectionSummary', () => {
-  it('includes theme, language, and font when the language setting is shown', () => {
+  it('includes theme and font while the language setting is hidden', () => {
     const settings = {
       ...getDefaultSettings('/tmp'),
       theme: 'dark' as const,
-      uiLanguage: 'zh' as const,
+      uiLanguage: 'en' as const,
       appFontFamily: 'Inter'
     }
 
-    expect(resolveInterfaceSectionSummary(settings)).toBe('Dark · 中文（简体） · Inter')
+    expect(resolveInterfaceSectionSummary(settings)).toBe('Dark · Inter')
   })
 
   it('falls back to the default font label when app font is empty', () => {
@@ -22,6 +24,6 @@ describe('resolveInterfaceSectionSummary', () => {
       appFontFamily: ''
     }
 
-    expect(resolveInterfaceSectionSummary(settings)).toBe('Light · System · Default font')
+    expect(resolveInterfaceSectionSummary(settings)).toBe('Light · Default font')
   })
 })

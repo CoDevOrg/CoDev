@@ -30,15 +30,7 @@ function makeState(
 
 describe('right sidebar visibility helpers', () => {
   it('suppresses right sidebar controls on full-page views', () => {
-    for (const view of [
-      'settings',
-      'tasks',
-      'activity',
-      'automations',
-      'space',
-      'skills',
-      'mobile'
-    ]) {
+    for (const view of ['settings', 'activity', 'automations', 'space', 'skills']) {
       expect(canShowRightSidebarForView(view as AppState['activeView'])).toBe(false)
     }
   })
@@ -48,7 +40,7 @@ describe('right sidebar visibility helpers', () => {
   })
 
   it('does not treat hidden full-page sidebars as visible PR panels', () => {
-    expect(rightSidebarShowsPullRequestData(makeState({ activeView: 'tasks' }))).toBe(false)
+    expect(rightSidebarShowsPullRequestData(makeState({ activeView: 'settings' }))).toBe(false)
   })
 
   it('does not treat hidden folder-repo fallbacks as visible PR panels', () => {

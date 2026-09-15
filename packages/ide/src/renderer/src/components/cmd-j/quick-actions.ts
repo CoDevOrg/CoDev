@@ -1,4 +1,4 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import { FileText, FolderPlus, Globe, SquareTerminal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -157,25 +157,6 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
         return { status: 'unavailable', reason: availability.reason }
       }
       ctx.deleteActiveWorkspace()
-      return { status: 'ok' }
-    }
-  },
-  {
-    id: 'add-quick-command',
-    kind: 'action',
-    title: translate('auto.components.cmd.j.quick.actions.a43ab56fc1', 'Add Quick Command'),
-    description: translate(
-      'auto.components.cmd.j.quick.actions.c884a6398e',
-      'Create a saved terminal command.'
-    ),
-    icon: Play,
-    verbKeywords: [
-      translate('auto.components.cmd.j.quick.actions.verbs.addQuickCommand', 'add quick command'),
-      translate('auto.components.cmd.j.quick.actions.verbs.newQuickCommand', 'new quick command')
-    ],
-    isAvailable: () => ({ available: true }),
-    run: async (ctx) => {
-      ctx.openAddQuickCommand()
       return { status: 'ok' }
     }
   }

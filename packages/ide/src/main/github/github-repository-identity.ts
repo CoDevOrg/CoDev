@@ -1,14 +1,12 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
 import type { GitHubOwnerRepo } from '../../shared/types'
-import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
   parseGitHubRemoteIdentity,
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
-import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 
 export type OwnerRepo = GitHubOwnerRepo
@@ -18,6 +16,7 @@ export { parseGitHubOwnerRepo, parseGitHubRemoteIdentity }
 
 export type GitHubRepoContext = {
   repoPath: string
+  /** Legacy remote-target id; always null on this fork (every repo is local). */
   connectionId?: string | null
   wslDistro?: string
 }
@@ -43,6 +42,8 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   encoding?: BufferEncoding
   wslDistro?: string
 } {
+  // Why: a context with a connectionId (e.g. global project-host validation) has no
+  // repository cwd, so gh must run natively rather than inside an empty path.
   return context.connectionId
     ? {}
     : {
@@ -111,9 +112,7 @@ export async function getOwnerRepoForRemote(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  const runtimeKey = context.connectionId
-    ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
-    : `local:${context.wslDistro ?? 'host'}`
+  const runtimeKey = `local:${context.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)
@@ -169,27 +168,19 @@ async function resolveOwnerRepoForRemote(
       pruneOwnerRepoCache(now)
       return null
     }
-    // Why: PR mutations need the effective host behind an SSH alias.
-    const classification = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
-    if (classification.kind === 'github') {
+    const ownerRepo = parseGitHubOwnerRepo(remoteUrl)
+    if (ownerRepo) {
       ownerRepoCache.set(cacheKey, {
-        value: classification.ownerRepo,
-        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature)
+        value: ownerRepo,
+        expiresAt: now + getOwnerRepoCacheTtl(ownerRepo, configSignature)
       })
       pruneOwnerRepoCache(now)
-      return classification.ownerRepo
+      return ownerRepo
     }
-    if (classification.kind === 'indeterminate') {
-      // Why: a failed ssh -G probe is not a stable "not GitHub" result.
-      return null
-    }
-    const stableConfigSignature = classification.cacheWithGitConfigSignature
-      ? configSignature
-      : undefined
     ownerRepoCache.set(cacheKey, {
       value: null,
-      expiresAt: now + getOwnerRepoCacheTtl(null, stableConfigSignature),
-      ...(stableConfigSignature ? { configSignature: stableConfigSignature } : {})
+      expiresAt: now + getOwnerRepoCacheTtl(null, configSignature),
+      ...(configSignature ? { configSignature } : {})
     })
     pruneOwnerRepoCache(now)
     return null

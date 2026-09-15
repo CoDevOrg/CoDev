@@ -25,7 +25,6 @@ import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
-import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { translate } from '@/i18n/i18n'
@@ -75,7 +74,6 @@ export function RepositoryPane({
   updateRepo,
   removeProject,
   project = null,
-  selectedProjectSetupId,
   isLocalWindowsProject = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -189,7 +187,6 @@ export function RepositoryPane({
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
-  const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
@@ -320,14 +317,6 @@ export function RepositoryPane({
 
         {!isFolder ? (
           <>
-            <RepositoryHostSetupsSection
-              repo={repo}
-              selectedProjectSetupId={selectedProjectSetupId}
-              forceVisible={forceFullPaneForRepoMatch}
-              searchQuery={searchQuery}
-              searchEntries={hostSetupEntries}
-            />
-
             <RepositoryWindowsRuntimeSection
               repoDisplayName={repo.displayName}
               project={project}

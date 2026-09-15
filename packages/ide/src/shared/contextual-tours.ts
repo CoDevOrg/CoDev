@@ -19,7 +19,6 @@ export type ContextualTourStepActionKind =
   | 'split-terminal-pane'
   | 'create-worktree'
   | 'show-worktrees'
-  | 'open-tasks'
   | 'open-getting-started'
 
 export type ContextualTourStepAction = {

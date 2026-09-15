@@ -13,21 +13,7 @@
 // of launchable agents because short names like "amp" would classify ordinary
 // shell titles like "timestamp ready" as agent activity. Product telemetry uses
 // the explicit launch/session facts Orca owns, not this inference path.
-export const AGENT_NAMES = [
-  'claude',
-  'openclaude',
-  'codex',
-  'copilot',
-  'cursor',
-  'gemini',
-  'antigravity',
-  'opencode',
-  'mimo',
-  'openclaw',
-  'aider',
-  'grok',
-  'devin'
-]
+export const AGENT_NAMES = ['claude', 'codex']
 
 // Why: Windows agent titles can surface launcher process names such as
 // `openclaude.exe`; still reject arbitrary dotted path fragments.

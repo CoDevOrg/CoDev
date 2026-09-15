@@ -7,7 +7,6 @@ const {
   appQuitMock,
   appRelaunchMock,
   spawnMock,
-  destroySystemTrayMock,
   relaunchAppMock,
   showOpenDialogMock,
   grantFloatingWorkspaceDirectoryMock,
@@ -18,7 +17,6 @@ const {
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
   spawnMock: vi.fn(),
-  destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   grantFloatingWorkspaceDirectoryMock: vi.fn(),
@@ -91,10 +89,6 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: true }
 }))
 
-vi.mock('../tray/system-tray', () => ({
-  destroySystemTray: destroySystemTrayMock
-}))
-
 vi.mock('../app-relaunch', () => ({
   relaunchApp: relaunchAppMock
 }))
@@ -124,7 +118,6 @@ describe('registerAppHandlers', () => {
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
     spawnMock.mockReset()
-    destroySystemTrayMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
@@ -161,13 +154,9 @@ describe('registerAppHandlers', () => {
     await relaunchPromise
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
     expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
-    expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
-      appExitMock.mock.invocationCallOrder[0]
-    )
   })
 
   it('waits for pre-relaunch cleanup before exiting', async () => {

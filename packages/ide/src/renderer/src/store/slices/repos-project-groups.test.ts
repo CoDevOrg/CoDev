@@ -7,13 +7,11 @@ import type {
   FolderWorkspace
 } from '../../../../shared/types'
 import {
-  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
   id: 'remote-repo',
@@ -54,15 +52,6 @@ const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
-
-function makeSshConnectionState(status: SshConnectionState['status']): SshConnectionState {
-  return {
-    targetId: 'ssh-1',
-    status,
-    error: null,
-    reconnectAttempt: 0
-  }
-}
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -281,97 +270,6 @@ describe('project group store routing', () => {
     expect(folderWorkspacesCreate).not.toHaveBeenCalled()
   })
 
-  it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
-    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
-    if (oldRuntimeStatus.ok) {
-      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
-        (capability) => capability !== 'worktree.linked-work-item-context.v1'
-      )
-    }
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
-    )
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace(
-        {
-          projectGroupId: projectGroup.id,
-          name: 'Jira folder',
-          linkedTask: {
-            provider: 'jira',
-            type: 'issue',
-            number: 0,
-            title: 'ORCA-123 Link Jira',
-            url: 'https://company.atlassian.net/browse/ORCA-123',
-            jiraIdentifier: 'ORCA-123'
-          }
-        },
-        { runtimeEnvironmentId: 'env-1' }
-      )
-    ).rejects.toThrow('Update the remote runtime to link Jira')
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
-  })
-
-  it('creates, updates, and deletes local folder workspaces', async () => {
-    const linkedTask: FolderWorkspace['linkedTask'] = {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      title: 'Refund fix',
-      url: 'https://linear.app/acme/issue/ENG-123',
-      linearIdentifier: 'ENG-123'
-    }
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      folderPath: '/workspace/platform',
-      linkedTask,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    folderWorkspacesCreate.mockResolvedValue(folderWorkspace)
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
-    folderWorkspacesDelete.mockResolvedValue(true)
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Refund fix',
-        linkedTask
-      })
-    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    expect(folderWorkspacesCreate).toHaveBeenCalledWith({
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      linkedTask
-    })
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { comment: 'Ready' }
-    })
-    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id
-    })
-    expect(store.getState().folderWorkspaces).toEqual([])
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
   it('caches local folder workspace path status by scope', async () => {
     const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
     folderWorkspacesGetPathStatus.mockResolvedValue({
@@ -484,71 +382,6 @@ describe('project group store routing', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('treats current-state mismatched folder path cache entries as unknown', async () => {
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
-      ],
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
-    })
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    await store.getState().fetchFolderWorkspacePathStatus(request)
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
-      path: '/workspace/platform',
-      exists: true
-    })
-
-    store.setState({
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
-    })
-
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
-  })
-
-  it('ignores stale folder path status responses after SSH connection state changes', async () => {
-    const resolvers: ((status: { path: string; exists: boolean; reason?: string }) => void)[] = []
-    folderWorkspacesGetPathStatus.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvers.push(resolve)
-        })
-    )
-    const store = createTestStore()
-    store.setState({
-      projectGroups: [
-        { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
-      ],
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
-    })
-    const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
-
-    store.setState({
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
-    })
-    const disconnectedStatusPromise = store
-      .getState()
-      .fetchFolderWorkspacePathStatus(request, { force: true })
-
-    resolvers[1]?.({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
-    await disconnectedStatusPromise
-    resolvers[0]?.({ path: '/workspace/platform', exists: true })
-    await connectedStatusPromise
-
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
-    expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
   })
 
   it('purges renderer session state when deleting a local folder workspace', async () => {

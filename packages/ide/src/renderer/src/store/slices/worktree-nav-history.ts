@@ -1,48 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
-import type { GitHubWorkItem, JiraIssue, LinearIssue } from '../../../../shared/types'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import {
-  getTaskSourceCacheScope,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 // Why: bound per-session history growth; 50 keeps goBack/goForward's linear scans cheap yet is never hit in normal use.
 const MAX_HISTORY = 50
 
 // Why: entries may be page sentinels, not just worktree IDs; names keep the "worktree" prefix for call-site stability.
-export type WorktreeNavHistorySimpleViewEntry = 'tasks' | 'automations'
-export type WorktreeNavHistoryTaskDetailEntry =
-  | {
-      kind: 'task-detail'
-      source: 'github'
-      workItem: GitHubWorkItem
-      sourceContext?: TaskSourceContext | null
-      initialTab?: 'conversation' | 'checks' | 'files'
-    }
-  | {
-      kind: 'task-detail'
-      source: 'linear'
-      issue: LinearIssue
-      sourceContext?: TaskSourceContext | null
-    }
-  | {
-      kind: 'task-detail'
-      source: 'gitlab'
-      workItem: GitLabWorkItem
-      sourceContext?: TaskSourceContext | null
-    }
-  | {
-      kind: 'task-detail'
-      source: 'jira'
-      issue: JiraIssue
-      sourceContext?: TaskSourceContext | null
-    }
-export type WorktreeNavHistoryViewEntry =
-  | WorktreeNavHistorySimpleViewEntry
-  | WorktreeNavHistoryTaskDetailEntry
+export type WorktreeNavHistorySimpleViewEntry = 'automations'
+export type WorktreeNavHistoryViewEntry = WorktreeNavHistorySimpleViewEntry
 export type WorktreeNavHistoryEntry = string | WorktreeNavHistoryViewEntry
 
 export type WorktreeNavHistorySlice = {
@@ -77,43 +43,11 @@ export function setWorktreeNavViewActivator(fn: ViewActivateFn | null): void {
 
 // Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
 function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
-  return entry === 'tasks' || entry === 'automations' || typeof entry === 'object'
-}
-
-function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
-  return entry === 'tasks' || (typeof entry === 'object' && entry.kind === 'task-detail')
+  return entry === 'automations'
 }
 
 function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
-  if (typeof entry === 'string') {
-    return entry === 'tasks' || entry === 'automations' ? `view:${entry}` : `worktree:${entry}`
-  }
-  if (entry.source === 'github') {
-    const sourceScope =
-      entry.sourceContext?.provider === 'github'
-        ? getTaskSourceCacheScope(entry.sourceContext)
-        : 'legacy'
-    return `view:task-detail:github:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
-  }
-  if (entry.source === 'gitlab') {
-    const sourceScope =
-      entry.sourceContext?.provider === 'gitlab'
-        ? getTaskSourceCacheScope(entry.sourceContext)
-        : 'legacy'
-    return `view:task-detail:gitlab:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}`
-  }
-  if (entry.source === 'jira') {
-    const sourceScope =
-      entry.sourceContext?.provider === 'jira'
-        ? getTaskSourceCacheScope(entry.sourceContext)
-        : 'legacy'
-    return `view:task-detail:jira:${sourceScope}:${entry.issue.siteId ?? 'selected'}:${entry.issue.key}`
-  }
-  const sourceScope =
-    entry.sourceContext?.provider === 'linear'
-      ? getTaskSourceCacheScope(entry.sourceContext)
-      : 'legacy'
-  return `view:task-detail:linear:${sourceScope}:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
+  return isViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
 }
 
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
@@ -160,16 +94,6 @@ function appendHistoryEntry(
 export function findPrevLiveWorktreeHistoryIndex(state: AppState): number | null {
   for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
     if (isLiveEntry(state.worktreeNavHistory[i], state)) {
-      return i
-    }
-  }
-  return null
-}
-
-export function findPrevLiveNonTaskStackHistoryIndex(state: AppState): number | null {
-  for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
-    const entry = state.worktreeNavHistory[i]
-    if (!isTaskStackEntry(entry) && isLiveEntry(entry, state)) {
       return i
     }
   }

@@ -64,6 +64,7 @@ function snapshot(
     cliSubscriptions: [],
     claudeCliToken: OFF,
     hostedClaudeConnect: true,
+    hostedOpenAIConnect: false,
     ...input,
   };
 }

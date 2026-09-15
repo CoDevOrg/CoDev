@@ -25,10 +25,18 @@ const logoAssets = assetNames.filter((name) => /^logo-[\w-]+\.js$/.test(name));
 if (logoAssets.length !== 1) {
   throw new Error(`Expected one Orca logo module, found ${logoAssets.length}.`);
 }
-await writeFile(
-  join(assetsDirectory, logoAssets[0]),
-  "var e=`data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3e%3cpath%20d='M%2067%2033%20A%2024%2024%200%201%200%2067%2067'%20fill='none'%20stroke='%23ffffff'%20stroke-width='13'%20stroke-linecap='round'/%3e%3ccircle%20cx='74'%20cy='50'%20r='6.5'%20fill='%23d9652d'/%3e%3c/svg%3e`;export{e as t};",
+const brandedLogoDataUrl =
+  "data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3e%3cpath%20d='M%2067%2033%20A%2024%2024%200%201%200%2067%2067'%20fill='none'%20stroke='%23ffffff'%20stroke-width='13'%20stroke-linecap='round'/%3e%3ccircle%20cx='74'%20cy='50'%20r='6.5'%20fill='%23d9652d'/%3e%3c/svg%3e";
+const logoPath = join(assetsDirectory, logoAssets[0]);
+const logoSource = await readFile(logoPath, "utf8");
+const brandedLogoSource = logoSource.replace(
+  /([A-Za-z_$][\w$]*)=`data:image\/svg\+xml,[^`]*`/,
+  (_match, variableName) => `${variableName}=\`${brandedLogoDataUrl}\``,
 );
+if (brandedLogoSource === logoSource) {
+  throw new Error("Expected the Orca logo module to contain an SVG data URL.");
+}
+await writeFile(logoPath, brandedLogoSource);
 
 const localeAsset = /^(?:es|ja|ko|zh)-/;
 await Promise.all(

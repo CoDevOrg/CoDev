@@ -43,7 +43,6 @@ import type {
   TerminalTab,
   TuiAgent
 } from '../../../shared/types'
-import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
@@ -174,7 +173,6 @@ import {
 } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
-import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
@@ -324,7 +322,6 @@ function Terminal(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
-  const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
@@ -451,24 +448,6 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
-  const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
-  const hasSplitTerminalPane = useAppStore((s) =>
-    hasFeatureInteraction(s.featureInteractions, 'terminal-pane-split')
-  )
-
-  useContextualTour(
-    'workspace-agent-sessions',
-    Boolean(
-      activeWorktreeId &&
-      activeView === 'terminal' &&
-      workspaceSessionReady &&
-      activeTabType === 'terminal' &&
-      Boolean(activeTabId) &&
-      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
-    ),
-    'workspace_agent_sessions_visible'
-  )
-
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
@@ -488,7 +467,7 @@ function Terminal(): React.JSX.Element | null {
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
 
-  // Window close confirmation, shown for local terminals with running children (SSH terminals detach/persist via the relay).
+  // Window close confirmation, shown for local terminals with running children.
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
 
   // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
@@ -975,7 +954,6 @@ function Terminal(): React.JSX.Element | null {
     }
 
     const restorePolicy = {
-      sshParkingEnabled: terminalSshParkingEnabled,
       pairedRuntimeParkingEnvironmentIds
     }
     const nextParkedTerminalWorktreeIds = selectColdParkedTerminalWorktrees({
@@ -1164,7 +1142,6 @@ function Terminal(): React.JSX.Element | null {
     terminalParkingEnabled,
     terminalParkingRevision,
     terminalRetentionBudgetEnabled,
-    terminalSshParkingEnabled,
     workspaceSurfaces
   ])
   // Why here: downloads outlive the pane-local state of hidden (unmounted)
@@ -1999,14 +1976,10 @@ function Terminal(): React.JSX.Element | null {
         let agentActionId: KeybindingActionId | null = null
         let agentToLaunch: TuiAgent | null = null
         if (matchShortcut('tab.newAgent')) {
-          const connectionId = getConnectionId(activeWorktreeId)
           agentActionId = 'tab.newAgent'
           agentToLaunch = resolveDefaultAgentForNewTab({
             defaultTuiAgent: state.settings?.defaultTuiAgent,
-            detectedAgentIds:
-              typeof connectionId === 'string'
-                ? state.remoteDetectedAgentIds[connectionId]
-                : state.detectedAgentIds,
+            detectedAgentIds: state.detectedAgentIds,
             disabledTuiAgents: state.settings?.disabledTuiAgents
           })
         } else {

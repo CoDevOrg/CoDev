@@ -15,25 +15,20 @@ const HOVER_REVEAL_FILES = [
   resolve(__dirname, 'dashboard/DashboardAgentRowTrailingControls.tsx'),
   resolve(__dirname, 'editor/CombinedDiffViewer.tsx'),
   resolve(__dirname, 'editor/DiffSectionHeader.tsx'),
-  resolve(__dirname, 'github-project/ProjectPicker.tsx'),
-  resolve(__dirname, 'github-project/ProjectRow.tsx'),
   resolve(__dirname, 'right-sidebar/AiVaultSessionRow.tsx'),
   resolve(__dirname, 'right-sidebar/ChecksPanel.tsx'),
   resolve(__dirname, 'right-sidebar/PortsPanel.tsx'),
   resolve(__dirname, 'right-sidebar/SourceControl.tsx'),
   resolve(__dirname, 'right-sidebar/checks-panel-content.tsx'),
-  resolve(__dirname, 'settings/MobilePairingQrSection.tsx'),
   resolve(__dirname, 'settings/ShortcutBindingSubRow.tsx'),
   resolve(__dirname, 'settings/ShortcutCommandBlock.tsx'),
-  resolve(__dirname, 'settings/VoiceSpeechModelSection.tsx'),
   resolve(__dirname, 'sidebar/HostSectionHeaderMenu.tsx'),
   resolve(__dirname, 'sidebar/PendingWorktreeRow.tsx'),
   resolve(__dirname, 'sidebar/WorkspaceKanbanStatusLane.tsx'),
   resolve(__dirname, 'sidebar/WorktreeCardPorts.tsx'),
   resolve(__dirname, 'sidebar/WorktreeList.tsx'),
   resolve(__dirname, 'status-bar/ResourceUsageStatusSegment.tsx'),
-  resolve(__dirname, 'status-bar/ports-status-popover-rows.tsx'),
-  resolve(__dirname, 'tab-bar/TabBarQuickCommandsMenu.tsx')
+  resolve(__dirname, 'status-bar/ports-status-popover-rows.tsx')
 ]
 
 function lineHasBareOpacityZero(line: string): boolean {

@@ -5,12 +5,10 @@ import type { TopLevelView } from './types'
 const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   terminal: true,
   settings: true,
-  tasks: true,
   activity: true,
   automations: true,
   space: true,
-  skills: true,
-  mobile: true
+  skills: true
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {

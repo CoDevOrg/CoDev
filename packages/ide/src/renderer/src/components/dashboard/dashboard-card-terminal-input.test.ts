@@ -53,15 +53,6 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(profile.osRelease).toBe('10.0.22631')
   })
 
-  it('keeps the kitty advertisement on ConPTY for an agent that needs CSI-u', () => {
-    const profile = resolveDashboardCardTerminalInput(stateWith(), {
-      ...WINDOWS_ARGS,
-      launchAgent: 'grok'
-    })
-    expect(profile.localWindowsConpty).toBe(true)
-    expect(profile.kittyKeyboardAdvertised).toBe(true)
-  })
-
   // Why: the pty runs Linux inside WSL, so byte protocols must follow it and
   // not the Windows client — the pane resolves this from its own session cwd.
   it('treats a WSL shell override as a non-ConPTY Linux-hosted pty', () => {
@@ -85,26 +76,6 @@ describe('resolveDashboardCardTerminalInput', () => {
 
   it('keeps a native Windows pane on the client host', () => {
     expect(resolveDashboardCardTerminalInput(stateWith(), WINDOWS_ARGS).hostPlatform).toBe('win32')
-  })
-
-  it('follows the SSH host platform rather than the client OS', () => {
-    const state = stateWith({
-      repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
-      sshConnectionStates: new Map([['conn-1', { remotePlatform: 'win32' }]])
-    } as unknown as Partial<DashboardCardTerminalInputState>)
-    expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).hostPlatform).toBe('win32')
-  })
-
-  it("keeps the live SSH PTY's host after the worktree owner changes", () => {
-    const state = stateWith({
-      sshConnectionStates: new Map([['conn-live', { remotePlatform: 'win32' }]])
-    } as unknown as Partial<DashboardCardTerminalInputState>)
-    const profile = resolveDashboardCardTerminalInput(state, {
-      ...MAC_ARGS,
-      ptyId: 'ssh:conn-live@@pty-1'
-    })
-    expect(profile.hostPlatform).toBe('win32')
-    expect(profile.localWindowsConpty).toBe(false)
   })
 
   it("keeps the live runtime PTY's host after the worktree owner changes", () => {

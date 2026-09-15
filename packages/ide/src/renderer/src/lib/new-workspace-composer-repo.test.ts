@@ -108,10 +108,6 @@ describe('new-workspace-composer-repo', () => {
     const repos = [otherProject, localOrca, runtimeOrca]
     const eligibleRepos = getComposerEligibleRepos(repos)
 
-    it('maps an active runtime-owned SSH repo to its local same-project sibling', () => {
-      expect(resolveComposerActiveRepoId(repos, eligibleRepos, 'runtime-orca')).toBe('local-orca')
-    })
-
     it('leaves a normal active repo unchanged', () => {
       expect(resolveComposerActiveRepoId(repos, eligibleRepos, 'local-orca')).toBe('local-orca')
     })

@@ -35,23 +35,6 @@ export function tokenTotal(value: unknown): number {
   return fields.reduce<number>((total, current) => total + numberValue(current), 0)
 }
 
-export function copilotModelMetricsTotal(value: unknown): number {
-  const metrics = asRecord(value)
-  if (!metrics) {
-    return 0
-  }
-  let total = 0
-  for (const metric of Object.values(metrics)) {
-    const record = asRecord(metric)
-    const usage = asRecord(record?.usage)
-    if (!usage) {
-      continue
-    }
-    total += tokenTotal(usage)
-  }
-  return total
-}
-
 export function claudeUsageTotal(value: unknown): number {
   const usage = asRecord(value)
   if (!usage) {

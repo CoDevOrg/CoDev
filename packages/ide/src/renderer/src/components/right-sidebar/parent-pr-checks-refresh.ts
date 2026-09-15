@@ -21,10 +21,6 @@ type FetchHostedReview = (
     repoId?: string
     staleWhileRevalidate?: boolean
     linkedGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
     currentHeadOid?: string | null
   }
 ) => Promise<HostedReviewInfo | null>
@@ -132,10 +128,6 @@ async function refreshParentPrChecksCandidate(
       force,
       repoId: candidate.repo.id,
       linkedGitHubPR: candidate.worktree.linkedPR ?? null,
-      linkedGitLabMR: candidate.worktree.linkedGitLabMR ?? null,
-      linkedBitbucketPR: candidate.worktree.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: candidate.worktree.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: candidate.worktree.linkedGiteaPR ?? null,
       currentHeadOid: candidate.worktree.head ?? null,
       staleWhileRevalidate: true
     })
@@ -190,12 +182,5 @@ function getBranchName(worktree: Worktree): string | null {
 }
 
 function hasLinkedReview(worktree: Worktree): boolean {
-  return Boolean(
-    worktree.linkedPR ??
-    worktree.linkedGitLabMR ??
-    worktree.linkedBitbucketPR ??
-    worktree.linkedAzureDevOpsPR ??
-    worktree.linkedGiteaPR ??
-    null
-  )
+  return Boolean(worktree.linkedPR ?? null)
 }

@@ -52,8 +52,6 @@ type ComposerModalData = {
    *  `workspace_created.source` carries the right value. Falls back to
    *  `unknown` when omitted. */
   telemetrySource?: WorkspaceCreateTelemetrySource
-  contextualTourSource?: string
-  setupGuideTourRequestId?: string
 }
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
@@ -139,7 +137,6 @@ function QuickTabBody({
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
-    initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
@@ -310,7 +307,6 @@ function QuickTabBody({
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
-        contextualTourSource={modalData.contextualTourSource}
         // Why: the scroll container clips children (overflow-y-auto forces overflow-x to auto),
         // while Orca's standard field focus ring paints 3px outside the control and the ghost
         // "Advanced" disclosure pulls its padded hover highlight ~8px left to align its label with

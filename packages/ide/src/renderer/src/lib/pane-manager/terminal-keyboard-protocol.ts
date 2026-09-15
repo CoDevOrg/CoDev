@@ -22,9 +22,9 @@ export type TerminalKeyboardProtocolContext = WindowsPtyCompatibilityContext & {
  * relies on KKP for interject vs newline (official Grok Build keyboard docs).
  */
 export function prefersKittyKeyboardDespiteWindowsConpty(
-  agent: TuiAgent | null | undefined
+  _agent: TuiAgent | null | undefined
 ): boolean {
-  return agent === 'grok'
+  return false
 }
 
 /**

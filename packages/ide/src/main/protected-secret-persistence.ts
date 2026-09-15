@@ -1,14 +1,9 @@
 import { safeStorage } from 'electron'
 
 export const PROTECTED_SECRET_SLOT = {
-  opencodeSessionCookie: 'settings.opencodeSessionCookie',
   httpProxyUrl: 'settings.httpProxyUrl',
   browserKagiSessionLink: 'ui.browserKagiSessionLink'
 } as const
-
-export function sshPtyOwnerLeaseSecretSlot(targetId: string): string {
-  return `sshPtyConsumerRecoveries.ownerLease:${targetId}`
-}
 
 export type ProtectedSecretDecryption = {
   plaintext: string

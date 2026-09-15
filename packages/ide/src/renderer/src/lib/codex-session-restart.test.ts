@@ -531,19 +531,6 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
-  it('leaves a live SSH-connection Codex pane alone on a host switch', async () => {
-    seedPanes([{ ptyId: 'ssh:my-box@@pty-7' }])
-
-    await markLiveCodexSessionsForRestart({
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B,
-      target: { runtime: 'host' }
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(window.api.pty.inspectProcess).not.toHaveBeenCalled()
-  })
-
   it('still marks the local host pane while sparing the remote one beside it', async () => {
     seedPanes([{ ptyId: 'pty-1' }, { ptyId: 'remote:env-1@@term-1' }])
 
@@ -713,26 +700,6 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
       })
     })
 
-    it('asks only about panes main could have recorded', async () => {
-      seedPanes([
-        { ptyId: 'pty-1' },
-        { ptyId: 'remote:env-1@@term-1' },
-        { ptyId: 'ssh:my-box@@pty-7' }
-      ])
-
-      await markLiveCodexSessionsForRestart({
-        previousAccountLabel: ACCOUNT_A,
-        nextAccountLabel: ACCOUNT_B,
-        target: { runtime: 'host' }
-      })
-
-      // Why: main only records daemon host spawns, so a foreign id is a certain
-      // miss — and one batched call, not one per pane.
-      expect(window.api.codexAccounts.listRecordedPaneLanes).toHaveBeenCalledTimes(1)
-      expect(window.api.codexAccounts.listRecordedPaneLanes).toHaveBeenCalledWith({
-        ptyIds: ['pty-1']
-      })
-    })
   })
 })
 

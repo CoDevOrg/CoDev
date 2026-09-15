@@ -11,7 +11,6 @@ import {
   createRichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
 import {
-  classifyHtmlSuperscriptLinkAction,
   createRichMarkdownHtmlSuperscriptLinkContext
 } from './rich-markdown-html-superscript-link-context'
 import {
@@ -247,30 +246,6 @@ describe('rich Markdown HTML superscript links', () => {
       editor.destroy()
       host.remove()
     }
-  })
-
-  it('keeps whitespace and remote outside-root destinations non-actionable', () => {
-    const local = {
-      version: 0,
-      sourceFilePath: '/repo/README.md',
-      worktreeId: 'worktree-1',
-      worktreeRoot: '/repo',
-      sourceOwner: { kind: 'local' as const }
-    }
-    expect(classifyHtmlSuperscriptLinkAction('   ', local)).toBe(false)
-    expect(classifyHtmlSuperscriptLinkAction('file:///etc/passwd', local)).toBe(true)
-    expect(
-      classifyHtmlSuperscriptLinkAction('file:///etc/passwd', {
-        ...local,
-        sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
-      })
-    ).toBe(false)
-    expect(
-      classifyHtmlSuperscriptLinkAction('file:///etc/passwd', {
-        ...local,
-        sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'runtime-1' }
-      })
-    ).toBe(false)
   })
 
   it('scopes citation Tab focus to the selected editor bubble', () => {

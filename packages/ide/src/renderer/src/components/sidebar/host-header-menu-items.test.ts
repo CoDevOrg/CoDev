@@ -9,24 +9,6 @@ describe('buildHostHeaderMenuModel', () => {
     expect(model.blocked).toBeNull()
   })
 
-  it('offers Reconnect + Remove for a disconnected SSH host', () => {
-    const model = buildHostHeaderMenuModel({
-      kind: 'ssh',
-      health: 'disconnected',
-      sshConnected: false
-    })
-    expect(model.actions).toEqual(['rename', 'ssh-reconnect', 'manage', 'remove'])
-  })
-
-  it('offers Disconnect + Remove for a connected SSH host', () => {
-    const model = buildHostHeaderMenuModel({
-      kind: 'ssh',
-      health: 'available',
-      sshConnected: true
-    })
-    expect(model.actions).toEqual(['rename', 'ssh-disconnect', 'manage', 'remove'])
-  })
-
   it('offers Check connection + Remove for a runtime host', () => {
     const model = buildHostHeaderMenuModel({ kind: 'runtime', health: 'available' })
     expect(model.actions).toEqual(['rename', 'runtime-check-connection', 'manage', 'remove'])
@@ -36,18 +18,6 @@ describe('buildHostHeaderMenuModel', () => {
     for (const kind of ['local', 'ssh', 'runtime'] as const) {
       expect(buildHostHeaderMenuModel({ kind, health: 'available' }).actions).toContain('rename')
     }
-  })
-
-  it('offers Remove only for ssh and runtime hosts', () => {
-    expect(buildHostHeaderMenuModel({ kind: 'ssh', health: 'available' }).actions).toContain(
-      'remove'
-    )
-    expect(buildHostHeaderMenuModel({ kind: 'runtime', health: 'available' }).actions).toContain(
-      'remove'
-    )
-    expect(buildHostHeaderMenuModel({ kind: 'local', health: 'local' }).actions).not.toContain(
-      'remove'
-    )
   })
 
   it('surfaces a server-too-old block for a blocked runtime host', () => {

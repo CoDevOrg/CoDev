@@ -67,44 +67,7 @@ import type {
 // ── Shared property enums ───────────────────────────────────────────────
 
 // Mirrors `TuiAgent` launch surface; `claude`↔`claude-code` (product, not CLI string). `other` is the escape hatch; see `tuiAgentToAgentKind`.
-export const AGENT_KIND_VALUES = [
-  'claude-code',
-  'claude-agent-teams',
-  'openclaude',
-  'codex',
-  'autohand',
-  'opencode',
-  'mimo-code',
-  'pi',
-  'omp',
-  'gemini',
-  'antigravity',
-  'aider',
-  'goose',
-  'amp',
-  'kilo',
-  'kiro',
-  'crush',
-  'aug',
-  'cline',
-  'codebuff',
-  'command-code',
-  'continue',
-  'cursor',
-  'droid',
-  'kimi',
-  'mistral-vibe',
-  'qwen-code',
-  'rovo',
-  'hermes',
-  'openclaw',
-  'copilot',
-  'grok',
-  'devin',
-  'ante',
-  'trae',
-  'other'
-] as const
+export const AGENT_KIND_VALUES = ['claude-code', 'claude-agent-teams', 'codex', 'other'] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
@@ -129,7 +92,6 @@ export const addRepoSetupStepActionSchema = z.enum([
 export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'local_folder_picker',
   'runtime_server_path',
-  'ssh_remote_path',
   'clone_url',
   'create_project'
 ])
@@ -137,7 +99,6 @@ export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorks
 export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
   'local_folder_picker',
   'runtime_server_path',
-  'ssh_remote_path',
   'clone_url',
   'create_project',
   'onboarding_open_folder',
@@ -252,8 +213,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalAgentDashboardPopout',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
-  'experimentalEphemeralVms',
-  'geminiCliOAuthEnabled',
   'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
@@ -530,7 +489,7 @@ const nativeChatSkillDiscoverySchema = z
   .object({
     agent_kind: agentKindSchema,
     outcome: z.enum(['ready', 'error', 'timeout', 'unavailable']),
-    execution_host_kind: z.enum(['local', 'runtime', 'ssh'])
+    execution_host_kind: z.enum(['local', 'runtime'])
   })
   .strict()
 
@@ -1349,7 +1308,7 @@ const terminalPaneSplitSchema = z
 const editorExternalChangeConflictShownSchema = z
   .object({
     surface: z.enum(['edit', 'unstaged-diff']),
-    transport: z.enum(['local', 'ssh', 'runtime']),
+    transport: z.enum(['local', 'runtime']),
     origin: z.enum(['live', 'restore'])
   })
   .strict()
@@ -1358,63 +1317,7 @@ const editorExternalChangeConflictActionSchema = z
   .object({
     action: z.enum(['reload', 'keep', 'compare', 'undo_reload', 'save_overwrite']),
     surface: z.enum(['edit', 'unstaged-diff']),
-    transport: z.enum(['local', 'ssh', 'runtime'])
-  })
-  .strict()
-
-const directSshReconnectCountSchema = z.number().int().min(0).max(1_000_000)
-const directSshReconnectDurationSchema = z.number().int().min(0).max(86_400_000)
-const directSshReconnectOperationSchema = z
-  .object({
-    mode: z.enum(['reconnect', 'prepare_only']),
-    reason: z.enum(['reconnect', 'initial_hydration', 'workspace_snapshot', 'wake_refresh']),
-    outcome: z.enum(['complete', 'degraded', 'canceled', 'stale', 'stopped', 'stabilizing']),
-    terminal_retried_count: directSshReconnectCountSchema,
-    terminal_stale_binding_cleared_count: directSshReconnectCountSchema,
-    terminal_correction_succeeded_count: directSshReconnectCountSchema,
-    catalog_complete_count: directSshReconnectCountSchema,
-    catalog_degraded_count: directSshReconnectCountSchema,
-    catalog_stale_count: directSshReconnectCountSchema,
-    repo_complete_count: directSshReconnectCountSchema,
-    repo_non_authoritative_count: directSshReconnectCountSchema,
-    repo_retrying_count: directSshReconnectCountSchema,
-    repo_timed_out_count: directSshReconnectCountSchema,
-    repo_cancel_budget_exhausted_count: directSshReconnectCountSchema,
-    repo_canceled_count: directSshReconnectCountSchema,
-    repo_stale_count: directSshReconnectCountSchema,
-    repo_rejected_count: directSshReconnectCountSchema,
-    lineage_complete_count: directSshReconnectCountSchema,
-    lineage_degraded_count: directSshReconnectCountSchema,
-    lineage_canceled_count: directSshReconnectCountSchema,
-    lineage_stale_count: directSshReconnectCountSchema,
-    lineage_not_started_count: directSshReconnectCountSchema,
-    git_worktree_count: directSshReconnectCountSchema,
-    folder_workspace_count: directSshReconnectCountSchema,
-    ambiguous_owner_count: directSshReconnectCountSchema,
-    contradictory_owner_count: directSshReconnectCountSchema,
-    total_duration_ms: directSshReconnectDurationSchema,
-    terminal_finalization_duration_ms: directSshReconnectDurationSchema,
-    catalog_duration_ms: directSshReconnectDurationSchema,
-    queue_wait_sample_count: directSshReconnectCountSchema,
-    queue_wait_duration_ms_p50: directSshReconnectDurationSchema,
-    queue_wait_duration_ms_p95: directSshReconnectDurationSchema,
-    queue_wait_duration_ms_p99: directSshReconnectDurationSchema,
-    queue_wait_duration_ms_max: directSshReconnectDurationSchema,
-    provider_execution_sample_count: directSshReconnectCountSchema,
-    provider_execution_duration_ms_p50: directSshReconnectDurationSchema,
-    provider_execution_duration_ms_p95: directSshReconnectDurationSchema,
-    provider_execution_duration_ms_p99: directSshReconnectDurationSchema,
-    provider_execution_duration_ms_max: directSshReconnectDurationSchema,
-    timeout_retry_count: directSshReconnectCountSchema,
-    locally_settled_waiter_count: directSshReconnectCountSchema,
-    cancel_debt_count: directSshReconnectCountSchema,
-    replacement_admission_delayed_count: directSshReconnectCountSchema,
-    overlapping_join_count: directSshReconnectCountSchema,
-    coordinator_owned_direct_ssh_detected_worktree_concurrency_peak:
-      directSshReconnectCountSchema.max(5),
-    estimated_late_work_allowance_count: directSshReconnectCountSchema.max(2),
-    authority_rotation_count: directSshReconnectCountSchema,
-    damped_preparation_count: directSshReconnectCountSchema
+    transport: z.enum(['local', 'runtime'])
   })
   .strict()
 
@@ -1508,8 +1411,6 @@ export const eventSchemas = {
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
-
-  direct_ssh_reconnect_operation: directSshReconnectOperationSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

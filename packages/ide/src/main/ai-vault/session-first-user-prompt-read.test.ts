@@ -121,20 +121,6 @@ describe('readAiVaultFirstUserPrompt', () => {
     expect(result.prompt).toBe('Ship the first-prompt copy button')
   })
 
-  it('resolves null instead of rejecting when the transcript is corrupt', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-corrupt-'))
-    tempRoots.push(root)
-    const sessionDir = join(root, 'session-1')
-    await mkdir(sessionDir, { recursive: true })
-    // Grok's parser JSON.parses summary.json eagerly, so truncated JSON throws.
-    const summaryPath = join(sessionDir, 'summary.json')
-    await writeFile(summaryPath, '{"info": {"id": "session-1", "cwd": "/repo/a')
-
-    await expect(
-      readAiVaultFirstUserPrompt({ agent: 'grok', filePath: summaryPath })
-    ).resolves.toEqual({ prompt: null })
-  })
-
   // The web preload fallback and the renderer's canLoadFullFirstPrompt guard both
   // rely on remote hosts never reading a local transcript body.
   it('returns null for a non-local execution host', async () => {

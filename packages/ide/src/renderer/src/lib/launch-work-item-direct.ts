@@ -7,7 +7,6 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
 import {
   agentLaunchCommandErrorMessage,
-  gitLabIssueNumber,
   resolvePrHeadErrorMessage,
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
@@ -16,7 +15,6 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { getConnectionId } from '@/lib/connection-context'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
-import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   buildDirectWorkItemAgentStartupPlan,
@@ -104,9 +102,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // don't let it serialize setup-policy resolution or git worktree creation.
   const detectedAgentsPromise = agentOverride
     ? null
-    : repoConnectionId
-      ? store.ensureRemoteDetectedAgents(repoConnectionId)
-      : store.ensureDetectedAgents()
+    : store.ensureDetectedAgents()
 
   const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerSettings)
   if (setupResolution.kind === 'needs-modal') {
@@ -126,9 +122,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         })
       : null
   const workspaceName = getWorkspaceSeedName({
-    explicitName: item.linearIdentifier
-      ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
-      : (workspaceIntentName?.seedName ?? ''),
+    explicitName: workspaceIntentName?.seedName ?? '',
     prompt: '',
     linkedIssueNumber: itemType === 'issue' ? (itemNumber ?? null) : null,
     linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null
@@ -173,16 +167,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       itemType === 'pr' && itemNumber ? itemNumber : undefined,
       resolvedPushTarget,
       undefined,
-      item.linearIdentifier,
       resolvedBranchNameOverride,
       undefined,
-      itemType === 'mr' && itemNumber ? itemNumber : undefined,
-      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
-      undefined,
-      undefined,
-      undefined,
-      item.linearWorkspaceId,
-      item.linearOrganizationUrlKey,
       undefined,
       undefined,
       undefined,
@@ -209,9 +195,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       })
     if (agentOverride) {
       const detectedAgents =
-        typeof launchConnectionId === 'string'
-          ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
-          : await latestStore.ensureDetectedAgents()
+        await latestStore.ensureDetectedAgents()
       if (
         !detectedAgents.includes(agentOverride) ||
         !isTuiAgentEnabled(agentOverride, latestStore.settings?.disabledTuiAgents)
@@ -228,9 +212,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       const detectedAgents =
         launchConnectionId === repoConnectionId
           ? await detectedAgentsPromise!
-          : typeof launchConnectionId === 'string'
-            ? await latestStore.ensureRemoteDetectedAgents(launchConnectionId)
-            : await latestStore.ensureDetectedAgents()
+          : await latestStore.ensureDetectedAgents()
       const detectedIds = new Set(detectedAgents)
       effectiveAgent = pickTuiAgent(
         settings?.defaultTuiAgent,

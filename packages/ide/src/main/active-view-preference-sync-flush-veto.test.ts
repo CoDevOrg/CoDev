@@ -79,15 +79,15 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     const inflight = (pref as unknown as { pendingWrite: Promise<void> | null }).pendingWrite
 
     // A session checkpoint fires while that write is still parked.
-    pref.set('tasks')
+    pref.set('skills')
     pref.flushOrThrow()
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
 
     gate.blockRename = false
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await inflight
 
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
     expect(readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
   })
 
@@ -99,7 +99,7 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     pref.set('activity')
     await vi.waitFor(() => expect(gate.renameCalls).toBeGreaterThan(0))
 
-    pref.set('tasks')
+    pref.set('skills')
     gate.failUnlink = true
     expect(() => pref.flushOrThrow()).toThrow('busy')
 
@@ -108,7 +108,7 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await pref.waitForPendingWrite()
 
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
     expect(readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
   })
 
@@ -121,7 +121,7 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     pref.set('activity')
     await renameCompleted
 
-    pref.set('tasks')
+    pref.set('skills')
     pref.flushOrThrow()
     gate.blockAfterRename = false
     gate.afterRenameWaiters.splice(0).forEach((resolve) => resolve())
@@ -143,12 +143,12 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     const flush = pref.flushPendingAsync()
     await vi.waitFor(() => expect(gate.renameCalls).toBeGreaterThan(0))
 
-    pref.set('tasks')
+    pref.set('skills')
     gate.blockRename = false
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await flush
 
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
     expect(gate.renameCalls).toBe(2)
   })
 
@@ -161,14 +161,14 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     const firstFlush = pref.flushPendingAsync()
     await vi.waitFor(() => expect(gate.renameCalls).toBeGreaterThan(0))
 
-    pref.set('tasks')
+    pref.set('skills')
     const secondFlush = pref.flushPendingAsync()
     expect(secondFlush).toBe(firstFlush)
     gate.blockRename = false
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await Promise.all([firstFlush, secondFlush])
 
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
     expect(gate.renameCalls).toBe(2)
   })
 
@@ -183,12 +183,12 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     await vi.waitFor(() => expect(gate.renameCalls).toBeGreaterThan(0))
     expect(pref.flushPendingAsync(controller.signal)).toBe(flush)
 
-    pref.set('tasks')
+    pref.set('skills')
     controller.abort()
     gate.blockRename = false
     gate.waiters.splice(0).forEach((resolve) => resolve())
     await expect(flush).resolves.toBeUndefined()
-    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')
+    expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('skills')
     expect(gate.renameCalls).toBe(2)
   })
 

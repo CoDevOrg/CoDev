@@ -4,8 +4,6 @@ import {
   Ellipsis,
   Loader2,
   Pencil,
-  Plug,
-  PlugZap,
   RefreshCw,
   Settings2,
   Trash2
@@ -24,7 +22,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import {
@@ -50,8 +47,6 @@ function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
       )
 }
 
-// Why: SSH and paired runtime hosts share the sidebar model, but Settings keeps
-// their management pages separate so each connection type can explain itself.
 function openManageHost(row: HostHeaderRow): void {
   const state = useAppStore.getState()
   if (row.kind === 'runtime') {
@@ -61,8 +56,6 @@ function openManageHost(row: HostHeaderRow): void {
       repoId: null,
       sectionId: parsed?.kind === 'runtime' ? parsed.environmentId : undefined
     })
-  } else if (row.kind === 'ssh') {
-    state.openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
   } else {
     state.openSettingsTarget({ pane: 'general', repoId: null })
   }
@@ -75,18 +68,10 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const mountedRef = useMountedRef()
-  const sshStatus = useAppStore((s) => {
-    const parsed = parseExecutionHostId(row.hostId)
-    if (parsed?.kind !== 'ssh') {
-      return null
-    }
-    return s.sshConnectionStates.get(parsed.targetId)?.status ?? null
-  })
 
   const model = buildHostHeaderMenuModel({
     kind: row.kind,
     health: row.health,
-    sshConnected: sshStatus === 'connected',
     compatibility: row.compatibility
   })
   const removalTarget = resolveHostRemoval(row.hostId)
@@ -94,38 +79,6 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const handleManage = useCallback(() => {
     openManageHost(row)
   }, [row])
-
-  const runSshAction = useCallback(
-    async (action: 'connect' | 'disconnect') => {
-      const parsed = parseExecutionHostId(row.hostId)
-      if (parsed?.kind !== 'ssh') {
-        return
-      }
-      setBusy(true)
-      try {
-        await window.api.ssh[action]({ targetId: parsed.targetId })
-      } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : action === 'connect'
-              ? translate(
-                  'auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68',
-                  'Connection failed'
-                )
-              : translate(
-                  'auto.components.sidebar.HostSectionHeaderMenu.bf07aee59e',
-                  'Disconnect failed'
-                )
-        )
-      } finally {
-        if (mountedRef.current) {
-          setBusy(false)
-        }
-      }
-    },
-    [mountedRef, row.hostId]
-  )
 
   const handleCheckConnection = useCallback(async () => {
     const parsed = parseExecutionHostId(row.hostId)
@@ -238,18 +191,6 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
             <Pencil className="size-3.5" />
             {translate('auto.components.sidebar.HostSectionHeaderMenu.8d1e2f3a4b', 'Rename…')}
-          </DropdownMenuItem>
-        )}
-        {model.actions.includes('ssh-reconnect') && (
-          <DropdownMenuItem onSelect={() => void runSshAction('connect')}>
-            <Plug className="size-3.5" />
-            {sshConnectVerb(sshStatus)}
-          </DropdownMenuItem>
-        )}
-        {model.actions.includes('ssh-disconnect') && (
-          <DropdownMenuItem onSelect={() => void runSshAction('disconnect')}>
-            <PlugZap className="size-3.5" />
-            {translate('auto.components.sidebar.HostSectionHeaderMenu.59b553e2aa', 'Disconnect')}
           </DropdownMenuItem>
         )}
         {model.actions.includes('runtime-check-connection') && (

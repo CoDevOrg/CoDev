@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/types'
 import {
@@ -75,8 +74,7 @@ export function useChecksPanelTerminalWorktree(args: {
   // report a cwd on their relay host, which must not resolve a local worktree.
   const isLocalTerminalPty =
     activeTerminalPtyId !== null &&
-    !isRemoteRuntimePtyId(activeTerminalPtyId) &&
-    parseAppSshPtyId(activeTerminalPtyId) === null
+    !isRemoteRuntimePtyId(activeTerminalPtyId)
   const shouldPollCwd = isPanelVisible && isLocalTerminalPty
 
   const [polledCwd, setPolledCwd] = useState<{ ptyId: string; cwd: string | null } | null>(null)

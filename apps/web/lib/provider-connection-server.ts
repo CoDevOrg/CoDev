@@ -14,6 +14,7 @@ import {
   type CredentialSurfaces,
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
+import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
 import {
   getConnectedClaudeRuntime,
   disconnectClaudeRuntime,
@@ -123,6 +124,7 @@ export async function loadProviderConnectionSnapshot(
       cursor: "cursor_deeplink",
     },
     hostedClaudeConnect: isHostedClaudeConnectEnabled(),
+    hostedOpenAIConnect: isHostedCodexSubscriptionEnabled(),
     ...(workspaceId
       ? {
           sharedWorkspaceLogin: {

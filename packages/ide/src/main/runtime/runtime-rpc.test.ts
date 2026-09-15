@@ -318,7 +318,6 @@ describe('OrcaRuntimeRpcServer', () => {
         comment: '',
         linkedIssue: 123,
         linkedPR: null,
-        linkedLinearIssue: null,
         isArchived: false,
         isUnread: overrides?.isUnread ?? false,
         isPinned: false,
@@ -2373,24 +2372,12 @@ describe('OrcaRuntimeRpcServer', () => {
     const setRepoPRFileViewed = vi.fn().mockResolvedValue(true)
     const requestRepoPRReviewers = vi.fn().mockResolvedValue({ ok: true })
     const mergeRepoPR = vi.fn().mockResolvedValue({ ok: true })
-    const addGitLabRepoIssueComment = vi.fn().mockResolvedValue({ ok: true })
-    const addGitLabRepoMRComment = vi.fn().mockResolvedValue({ ok: true })
-    const resolveGitLabRepoMRDiscussion = vi.fn().mockResolvedValue({ ok: true })
-    const mergeGitLabRepoMR = vi.fn().mockResolvedValue({ ok: true })
     const addGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({
       ok: true,
       comment: { id: 1, author: 'me', body: 'done', createdAt: '2026-01-01T00:00:00Z', url: '' }
     })
     const updateGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({ ok: true })
     const deleteGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({ ok: true })
-    const linearSearchIssues = vi.fn().mockResolvedValue([])
-    const linearSelectWorkspace = vi.fn().mockReturnValue({
-      connected: true,
-      selectedWorkspaceId: 'workspace-1'
-    })
-    const linearTeamLabels = vi.fn().mockResolvedValue([{ id: 'label-1', name: 'bug' }])
-    const linearTeamMembers = vi.fn().mockResolvedValue([{ id: 'member-1', displayName: 'Alex' }])
-    const linearAddIssueComment = vi.fn().mockResolvedValue({ ok: true, id: 'comment-1' })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -2434,20 +2421,11 @@ describe('OrcaRuntimeRpcServer', () => {
       setRepoPRFileViewed,
       requestRepoPRReviewers,
       mergeRepoPR,
-      addGitLabRepoIssueComment,
-      addGitLabRepoMRComment,
-      resolveGitLabRepoMRDiscussion,
-      mergeGitLabRepoMR,
       addGitHubIssueCommentBySlug,
       updateGitHubIssueCommentBySlug,
       deleteGitHubIssueCommentBySlug,
-      linearSearchIssues,
-      linearSelectWorkspace,
-      linearTeamLabels,
-      linearTeamMembers,
-      linearAddIssueComment,
       getClientSettings: vi.fn(() => ({ defaultTuiAgent: 'codex', agentCmdOverrides: {} })),
-      updateClientSettings: vi.fn(() => ({ defaultTaskSource: 'linear' }))
+      updateClientSettings: vi.fn(() => ({ defaultTaskSource: 'github' }))
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -2489,7 +2467,7 @@ describe('OrcaRuntimeRpcServer', () => {
         id: 'req_settings_update',
         method: 'settings.update',
         deviceToken: mobile.token,
-        params: { defaultTaskSource: 'linear' }
+        params: { defaultTaskSource: 'github' }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
@@ -2826,113 +2804,6 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
-        id: 'req_gitlab_add_issue_comment',
-        method: 'gitlab.addIssueComment',
-        deviceToken: mobile.token,
-        params: {
-          repo: 'id:repo-1',
-          number: 123,
-          body: 'done'
-        }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_gitlab_add_mr_comment',
-        method: 'gitlab.addMRComment',
-        deviceToken: mobile.token,
-        params: {
-          repo: 'id:repo-1',
-          iid: 456,
-          body: 'ship it'
-        }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_gitlab_resolve_mr_discussion',
-        method: 'gitlab.resolveMRDiscussion',
-        deviceToken: mobile.token,
-        params: {
-          repo: 'id:repo-1',
-          iid: 456,
-          discussionId: 'discussion-1',
-          resolved: true
-        }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_gitlab_merge_mr',
-        method: 'gitlab.mergeMR',
-        deviceToken: mobile.token,
-        params: {
-          repo: 'id:repo-1',
-          iid: 456,
-          method: 'merge'
-        }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_linear_search',
-        method: 'linear.searchIssues',
-        deviceToken: mobile.token,
-        params: { query: 'auth', limit: 10, workspaceId: 'workspace-1' }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_linear_select_workspace',
-        method: 'linear.selectWorkspace',
-        deviceToken: mobile.token,
-        params: { workspaceId: 'workspace-1' }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_linear_team_labels',
-        method: 'linear.teamLabels',
-        deviceToken: mobile.token,
-        params: { teamId: 'team-1', workspaceId: 'workspace-1' }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_linear_team_members',
-        method: 'linear.teamMembers',
-        deviceToken: mobile.token,
-        params: { teamId: 'team-1', workspaceId: 'workspace-1' }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
-        id: 'req_linear_add_comment',
-        method: 'linear.addIssueComment',
-        deviceToken: mobile.token,
-        params: { issueId: 'issue-1', workspaceId: 'workspace-1', body: 'done' }
-      }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
-      () => {}
-    )
-    await server['handleWebSocketMessage'](
-      JSON.stringify({
         id: 'req_git_status',
         method: 'git.status',
         deviceToken: mobile.token,
@@ -3213,26 +3084,6 @@ describe('OrcaRuntimeRpcServer', () => {
       expect.objectContaining({ id: 'req_github_request_reviewers', ok: true })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_github_merge_pr', ok: true }))
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_gitlab_add_issue_comment', ok: true })
-    )
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_gitlab_add_mr_comment', ok: true })
-    )
-    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_gitlab_merge_mr', ok: true }))
-    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_linear_search', ok: true }))
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_select_workspace', ok: true })
-    )
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_team_labels', ok: true })
-    )
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_team_members', ok: true })
-    )
-    expect(replies).toContainEqual(
-      expect.objectContaining({ id: 'req_linear_add_comment', ok: true })
-    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_status', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_push', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_upstream', ok: true }))
@@ -3409,16 +3260,6 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'], null)
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
-    expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
-    expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
-    expect(resolveGitLabRepoMRDiscussion).toHaveBeenCalledWith(
-      'id:repo-1',
-      456,
-      'discussion-1',
-      true,
-      undefined
-    )
-    expect(mergeGitLabRepoMR).toHaveBeenCalledWith('id:repo-1', 456, 'merge', undefined)
     expect(updateGitHubProjectItemField).toHaveBeenCalledWith({
       projectId: 'project-1',
       itemId: 'item-1',
@@ -3430,11 +3271,6 @@ describe('OrcaRuntimeRpcServer', () => {
       itemId: 'item-1',
       fieldId: 'field-1'
     })
-    expect(linearSearchIssues).toHaveBeenCalledWith('auth', 10, 'workspace-1')
-    expect(linearSelectWorkspace).toHaveBeenCalledWith('workspace-1')
-    expect(linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
-    expect(linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')
-    expect(linearAddIssueComment).toHaveBeenCalledWith('issue-1', 'done', 'workspace-1')
     expect(removeClaudeAccount).not.toHaveBeenCalled()
   })
 

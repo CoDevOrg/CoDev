@@ -63,13 +63,6 @@ describe('isEvictionExemptTerminalPty', () => {
     expect(isEvictionExemptTerminalPty('other::wt@@session-1', worktreeId)).toBe(true)
   })
 
-  it('never exempts authoritative, SSH, remote-runtime, or unbound ptys', () => {
-    expect(isEvictionExemptTerminalPty(currentPtyId, worktreeId)).toBe(false)
-    expect(isEvictionExemptTerminalPty('ssh:conn-1@@pty-1', worktreeId)).toBe(false)
-    expect(isEvictionExemptTerminalPty('remote:env-1@@t-1', worktreeId)).toBe(false)
-    expect(isEvictionExemptTerminalPty(null, worktreeId)).toBe(false)
-  })
-
   it('exempts a preserved daemon without an authoritative snapshot', async () => {
     clearTerminalProviderSnapshotCapabilities()
     await synchronizeTerminalProviderSnapshotCapabilities([currentPtyId], async () => [

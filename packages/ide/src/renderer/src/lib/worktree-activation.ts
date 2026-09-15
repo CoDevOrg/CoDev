@@ -51,9 +51,7 @@ import {
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
-import { getConnectionId } from '@/lib/connection-context'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -534,10 +532,7 @@ export function ensureWorktreeHasInitialTerminal(
             agent: launchAgent,
             // Why: argv-prefill launches carry the draft in `command` and set no
             // draftPrompt, so gating on draftPrompt alone misses them entirely.
-            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionId(worktreeId)
-            )
+            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup))
           })
         }
       : {}),
@@ -608,9 +603,6 @@ function applyDefaultTerminalTabs(
               agent: launchAgent,
               ...draftViewModeProps(
                 isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
-              ),
-              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                getConnectionId(worktreeId)
               )
             })
           }
@@ -733,105 +725,5 @@ setWorktreeNavActivator(activateAndRevealWorkspace)
 
 // Why: page entries replay via setActiveView (not open*Page) so back/forward doesn't mutate previousViewBefore* or duplicate history (see navigateToIndex).
 setWorktreeNavViewActivator((entry) => {
-  if (entry === 'automations') {
-    useAppStore.getState().setActiveView(entry)
-    return
-  }
-  if (entry === 'tasks') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'github') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'github',
-        preselectedRepoId: entry.workItem.repoId,
-        openGitHubWorkItem: entry.workItem,
-        openGitHubSourceContext: entry.sourceContext,
-        openGitHubInitialTab: entry.initialTab,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'gitlab') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'gitlab',
-        preselectedRepoId: entry.workItem.repoId,
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: entry.workItem,
-        openGitLabSourceContext: entry.sourceContext,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: undefined,
-        openJiraSourceContext: undefined
-      }
-    }))
-    return
-  }
-  if (entry.source === 'jira') {
-    useAppStore.setState((state) => ({
-      activeView: 'tasks',
-      githubTaskDrawerWorkItem: null,
-      taskPageData: {
-        ...state.taskPageData,
-        taskSource: 'jira',
-        openGitHubWorkItem: undefined,
-        openGitHubSourceContext: undefined,
-        openGitHubInitialTab: undefined,
-        openGitLabWorkItem: undefined,
-        openGitLabSourceContext: undefined,
-        openLinearIssue: undefined,
-        openLinearSourceContext: undefined,
-        openJiraIssue: entry.issue,
-        openJiraSourceContext: entry.sourceContext
-      }
-    }))
-    return
-  }
-  useAppStore.setState((state) => ({
-    activeView: 'tasks',
-    githubTaskDrawerWorkItem: null,
-    taskPageData: {
-      ...state.taskPageData,
-      taskSource: 'linear',
-      openGitHubWorkItem: undefined,
-      openGitHubSourceContext: undefined,
-      openGitHubInitialTab: undefined,
-      openGitLabWorkItem: undefined,
-      openGitLabSourceContext: undefined,
-      openLinearIssue: entry.issue,
-      openLinearSourceContext: entry.sourceContext,
-      openJiraIssue: undefined,
-      openJiraSourceContext: undefined
-    }
-  }))
+  useAppStore.getState().setActiveView(entry)
 })

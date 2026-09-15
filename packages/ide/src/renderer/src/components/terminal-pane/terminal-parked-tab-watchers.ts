@@ -8,7 +8,6 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
@@ -50,22 +49,18 @@ export type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconci
 export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
 
 const allowOrdinaryParkRestore = (ptyId: string): boolean =>
-  isRemoteRuntimePtyId(ptyId) ||
-  parseAppSshPtyId(ptyId) !== null ||
-  terminalProviderHasAuthoritativeSnapshot(ptyId)
+  isRemoteRuntimePtyId(ptyId) || terminalProviderHasAuthoritativeSnapshot(ptyId)
 
-// Why: fact-mode watchers work for any pty whose bytes transit local main —
-// SSH included — so watcher coverage follows the park-restore policy, not the
-// stricter daemon-snapshot predicate.
+// Why: fact-mode watchers work for any pty whose bytes transit local main, so
+// watcher coverage follows the park-restore policy, not the stricter
+// daemon-snapshot predicate.
 function parkRestorePolicyFromState(state: {
-  settings: { terminalSshViewParking?: boolean } | null
   runtimeStatusByEnvironmentId: ReadonlyMap<
     string,
     { status: { capabilities?: readonly string[] } | null | undefined }
   >
 }): TerminalParkRestorePolicy {
   return {
-    sshParkingEnabled: state.settings?.terminalSshViewParking !== false,
     pairedRuntimeParkingEnvironmentIds: selectPairedRuntimeParkingEnvironmentIds(
       state.runtimeStatusByEnvironmentId
     )
@@ -80,7 +75,7 @@ function parkRestorePolicyFromState(state: {
 export function canWatcherCoverParkedTerminalTab(
   worktreeId: string,
   tab: ParkableTerminalTabModel,
-  // Why: paired and SSH restore through their own policy; local parking must not
+  // Why: paired PTYs restore through their own policy; local parking must not
   // unmount a pane whose preserved daemon can only return a lossy snapshot.
   isPtyEligible: ParkedTerminalPtyEligibility = allowOrdinaryParkRestore
 ): boolean {

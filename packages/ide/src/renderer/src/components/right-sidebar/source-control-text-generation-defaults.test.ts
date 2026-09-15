@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
 import {
-  generationParamsToActionRecipe,
   sourceControlTextGenerationDefaultsMatchTarget
 } from './source-control-text-generation-defaults'
 
@@ -58,35 +57,6 @@ describe('sourceControlTextGenerationDefaultsMatchTarget', () => {
         repo: { sourceControlAi: { enabled: true } } satisfies Pick<Repo, 'sourceControlAi'>
       })
     ).toBe(false)
-  })
-
-  it('returns true when the current params match the repo saved recipe', () => {
-    expect(
-      sourceControlTextGenerationDefaultsMatchTarget({
-        actionId: 'commitMessage',
-        target: { type: 'repo', repoId: 'repo-1' },
-        params: {
-          agentId: 'opencode',
-          model: '',
-          commandInputTemplate: '{basePrompt}\n\nrepo only',
-          agentArgs: ''
-        },
-        settings: settings(),
-        repo: {
-          sourceControlAi: {
-            enabled: true,
-            actionOverrides: {
-              commitMessage: generationParamsToActionRecipe({
-                agentId: 'opencode',
-                model: '',
-                commandInputTemplate: '{basePrompt}\n\nrepo only',
-                agentArgs: ''
-              })
-            }
-          }
-        } satisfies Pick<Repo, 'sourceControlAi'>
-      })
-    ).toBe(true)
   })
 
   it('returns false when the command template differs from the saved recipe', () => {

@@ -1,6 +1,6 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = ['github']
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -52,68 +52,12 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   return normalized.length > 0 ? normalized : [...TASK_PROVIDERS]
 }
 
-export type TaskProviderAvailability = {
-  gitlabInstalled: boolean
-  linearConnected: boolean
-}
-
-export function filterAvailableTaskProviders(
-  visibleProviders: readonly TaskProvider[],
-  availability: TaskProviderAvailability
-): TaskProvider[] {
-  const available = visibleProviders.filter((provider) =>
-    isTaskProviderAvailable(provider, availability)
-  )
-
-  return available.length > 0 ? available : ['github']
-}
-
-export function restoreAvailableDefaultTaskProvider(
-  visibleProviders: readonly TaskProvider[],
-  availability: TaskProviderAvailability,
-  preferredProvider: unknown
-): TaskProvider[] {
-  const available = filterAvailableTaskProviders(visibleProviders, availability)
-
-  // Why: older or drifted settings can hide the saved default while another
-  // provider becomes available. Keep that default reachable after hydration.
-  if (
-    isTaskProvider(preferredProvider) &&
-    isTaskProviderAvailable(preferredProvider, availability) &&
-    !available.includes(preferredProvider)
-  ) {
-    return TASK_PROVIDERS.filter(
-      (provider) => provider === preferredProvider || available.includes(provider)
-    )
-  }
-
-  return available
-}
-
-function isTaskProviderAvailable(
-  provider: TaskProvider,
-  availability: TaskProviderAvailability
-): boolean {
-  if (provider === 'github') {
-    return true
-  }
-  if (provider === 'gitlab') {
-    return availability.gitlabInstalled
-  }
-  // Why: Jira can be connected from the Tasks surface itself, so hiding it
-  // when disconnected would remove the entry point for first-time setup.
-  if (provider === 'jira') {
-    return true
-  }
-  return availability.linearConnected
-}
-
 export function resolveVisibleTaskProvider(
-  preferred: TaskProvider | null | undefined,
+  preferredProvider: unknown,
   visibleProviders: readonly TaskProvider[]
 ): TaskProvider {
-  if (preferred && visibleProviders.includes(preferred)) {
-    return preferred
+  if (isTaskProvider(preferredProvider) && visibleProviders.includes(preferredProvider)) {
+    return preferredProvider
   }
   return visibleProviders[0] ?? 'github'
 }

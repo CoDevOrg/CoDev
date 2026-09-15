@@ -62,7 +62,6 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
     rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
     gitStatusHugeByWorktree?: EditorExternalWatchTargetState['gitStatusHugeByWorktree']
-    sshConnectionStates?: EditorExternalWatchTargetState['sshConnectionStates']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
@@ -72,7 +71,6 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
-    sshConnectionStates: args.sshConnectionStates ?? new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings:
@@ -198,24 +196,6 @@ describe('getEditorExternalWatchTargets', () => {
     ).toEqual([])
   })
 
-  it('does not watch Source Control-only SSH worktrees while disconnected', () => {
-    const repo = makeRepo('repo-source-control-ssh', 'ssh-1')
-    const worktree = makeWorktree(repo.id, 'wt-source-control-ssh')
-
-    expect(
-      getEditorExternalWatchTargets(
-        makeState({
-          repo,
-          worktree,
-          activeWorktreeId: worktree.id,
-          rightSidebarOpen: true,
-          rightSidebarTab: 'source-control',
-          sshConnectionStates: new Map([['ssh-1', { status: 'disconnected' } as never]])
-        })
-      ).targets
-    ).toEqual([])
-  })
-
   it('watches Source Control-only SSH worktrees when connected', () => {
     const repo = makeRepo('repo-source-control-ssh-connected', 'ssh-1')
     const worktree = makeWorktree(repo.id, 'wt-source-control-ssh-connected')
@@ -228,7 +208,6 @@ describe('getEditorExternalWatchTargets', () => {
           activeWorktreeId: worktree.id,
           rightSidebarOpen: true,
           rightSidebarTab: 'source-control',
-          sshConnectionStates: new Map([['ssh-1', { status: 'connected' } as never]])
         })
       ).targets
     ).toEqual([

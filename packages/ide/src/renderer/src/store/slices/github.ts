@@ -158,7 +158,7 @@ function getPRRefreshRuntimeRepoTarget(
 }
 
 function shouldEnqueueLocalPRRefresh(candidate: GitHubPRRefreshCandidate): boolean {
-  // Why: the local coordinator owns local git + SSH-bridge refreshes; runtime-owned and disconnected-SSH repos must not hit the IPC crash path.
+  // Why: the local coordinator owns local git refreshes; runtime-owned repos must not hit the IPC crash path.
   if (getPRRefreshOwnerRuntimeEnvironmentId(candidate) !== null) {
     return false
   }
@@ -217,7 +217,7 @@ function settingsForGitHubRepoOwner(
       ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
-  // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
+  // Why: local GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
   return settings
     ? { ...settings, activeRuntimeEnvironmentId: null }
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
@@ -1174,9 +1174,6 @@ function buildPRRefreshCandidate(
       : cachedFallbackPRNumber != null
         ? 'pr-cache'
         : 'hosted-review'
-  const sshStatus = repo.connectionId
-    ? state.sshConnectionStates.get(repo.connectionId)?.status
-    : null
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -1193,11 +1190,7 @@ function buildPRRefreshCandidate(
     isArchived: worktree.isArchived,
     connectionId: repo.connectionId ?? null,
     executionHostId: repo.executionHostId ?? null,
-    connectionState: repo.connectionId
-      ? sshStatus === 'connected'
-        ? 'connected'
-        : 'disconnected'
-      : 'unknown',
+    connectionState: 'unknown',
     cachedFetchedAt: state.prCache[cacheKey]?.fetchedAt ?? null,
     cachedHasPR: cachedPR ? true : state.prCache[cacheKey] ? false : null,
     cachedPRState: cachedPR?.state ?? null,
@@ -1232,7 +1225,7 @@ function githubHostedReviewFallbackPRNumber(
 function shouldClearHostedReviewForNoGitHubPR(
   entry: AppState['hostedReviewCache'][string] | undefined
 ): boolean {
-  // Why: a GitHub-only miss must not suppress GitLab/other hosted-review discovery via provider-neutral branch misses.
+  // Why: a GitHub-only miss must not suppress hosted-review discovery via provider-neutral branch misses.
   if (!entry) {
     return false
   }
@@ -1831,7 +1824,7 @@ export type GitHubSlice = {
   prRefreshSequences: Record<string, number>
   prRefreshStates: Record<string, PRRefreshState>
   prVisibleRefreshGeneration: number
-  // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
+  // Why: keyed by repoId + limit + query so same-path repos on different hosts don't share results.
   workItemsCache: Record<string, CacheEntry<GitHubWorkItem[]>>
   fetchPRForBranch: (
     repoPath: string,
@@ -2794,7 +2787,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       })
     )
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
+    // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped remote repos aren't GitHub sources here.
     const githubUnavailable =
       requestFailureCount > 0 &&
       requestFailureCount === repos.length - skippedSourceCount &&

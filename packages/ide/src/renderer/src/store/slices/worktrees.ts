@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import type { StateCreator, StoreApi } from 'zustand'
+import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
   DetectedWorktreeListResult,
@@ -22,7 +22,6 @@ import {
   applyWorktreeUpdates,
   withoutErasedRequiredWorktreeFields,
   getRepoIdFromWorktreeId,
-  type DirectSshWorktreeFetchOptions,
   type WorktreeFetchOptions,
   type WorktreeSlice
 } from './worktree-helpers'
@@ -40,7 +39,6 @@ import {
   isRemovedRuntimeHostId
 } from './stale-runtime-host-rows'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
@@ -52,7 +50,6 @@ import {
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
 import {
-  TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
@@ -83,7 +80,6 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -93,7 +89,6 @@ import {
   settingsForWorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
-import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 import {
   folderWorkspaceKey,
@@ -121,12 +116,9 @@ import {
 import { getTerminalActivationSpawnSuppression } from './terminal-activation-spawn-suppression'
 import type {
   HostQualifiedDetectedWorktreeResult,
-  HostQualifiedKnownWorktreeResult,
   ListDetectedWorktreesArgs,
-  ProviderRequestId,
-  SshExecutionHostId
+  ProviderRequestId
 } from '../../../../shared/detected-worktree-provider-contract'
-import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
@@ -177,7 +169,6 @@ type BackgroundRuntimeRefreshOptions = {
 type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
   requireAuthoritative?: boolean
-  directSshAuthority?: DirectSshAuthority
   // Why (#10562): the caller's own view of what it is about to purge. Teardown is
   // requested per caller, so this must never be shared with a coalesced scan.
   connectionId?: string | null
@@ -189,10 +180,8 @@ type AdmittedDetectedWorktreeRefresh = {
   result: DetectedWorktreeListResult
   providerResult?: HostQualifiedDetectedWorktreeResult
   executionHostId: ExecutionHostId
-  directSshAuthority?: DirectSshAuthority
   runtimeAuthority?: {
     environmentId: string
-    connectionGeneration: number
     runtimeConnectionGeneration: number
   }
 }
@@ -203,7 +192,6 @@ type DetectedWorktreeRefreshOutcome =
       status: 'not-admitted'
       providerResult: HostQualifiedDetectedWorktreeResult
       executionHostId: ExecutionHostId
-      directSshAuthority?: DirectSshAuthority
     }
 
 async function mapReposForWorktreeRefresh<TRepo extends { id: string }, TResult>(
@@ -324,16 +312,6 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
       worktree.linkedPR === candidate.linkedPR &&
-      worktree.linkedLinearIssue === candidate.linkedLinearIssue &&
-      (worktree.linkedLinearIssueWorkspaceId ?? null) ===
-        (candidate.linkedLinearIssueWorkspaceId ?? null) &&
-      (worktree.linkedLinearIssueOrganizationUrlKey ?? null) ===
-        (candidate.linkedLinearIssueOrganizationUrlKey ?? null) &&
-      worktree.linkedGitLabMR === candidate.linkedGitLabMR &&
-      worktree.linkedGitLabIssue === candidate.linkedGitLabIssue &&
-      worktree.linkedBitbucketPR === candidate.linkedBitbucketPR &&
-      worktree.linkedAzureDevOpsPR === candidate.linkedAzureDevOpsPR &&
-      worktree.linkedGiteaPR === candidate.linkedGiteaPR &&
       areWorkspaceLinkedItemsEqual(worktree.linkedWorkItem, candidate.linkedWorkItem) &&
       areTaskSourceContextsEqual(
         worktree.linkedTaskSourceContext,
@@ -426,13 +404,7 @@ function withRepoHostOwnership<
   const parsedOwner = parseExecutionHostId(hostId)
   const runtimeOwnerEnvironmentId =
     parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined
-  const worktreeHost = parseExecutionHostId(worktree.hostId)
-  // Why: an SSH worktree reached through a paired HUB has two owners; retain the SSH execution host and stamp the HUB transport separately.
-  const nextHostId =
-    hostId === LOCAL_EXECUTION_HOST_ID ||
-    (runtimeOwnerEnvironmentId !== undefined && worktreeHost?.kind === 'ssh')
-      ? worktree.hostId
-      : hostId
+  const nextHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
   const projectId = worktree.projectId ?? setup?.projectId
   const projectHostSetupId = worktree.projectHostSetupId ?? setup?.id
   if (
@@ -480,19 +452,7 @@ function repoHasExactlyOneExecutionHostOwner(
     if (hasExplicitHost && !explicitHost) {
       return null
     }
-    const rawConnectionId = repo.connectionId
-    const hasConnection = rawConnectionId !== null && rawConnectionId !== undefined
-    const connectionId = hasConnection ? rawConnectionId.trim() : null
-    if (hasConnection && !connectionId) {
-      return null
-    }
-    if (!connectionId || explicitHost?.kind === 'runtime') {
-      return explicitHost?.id ?? LOCAL_EXECUTION_HOST_ID
-    }
-    if (explicitHost && explicitHost.id !== toSshExecutionHostId(connectionId)) {
-      return null
-    }
-    return explicitHost?.id ?? toSshExecutionHostId(connectionId)
+    return explicitHost?.id ?? LOCAL_EXECUTION_HOST_ID
   })
   return (
     ownerHostIds.every((ownerHostId) => ownerHostId !== null) &&
@@ -823,10 +783,8 @@ function folderWorkspaceMatchesHost(
   executionHostId: ExecutionHostId
 ): boolean {
   return (
-    (parseExecutionHostId(workspace.executionHostId)?.id ??
-      (workspace.connectionId?.trim()
-        ? toSshExecutionHostId(workspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
+    (parseExecutionHostId(workspace.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID) ===
+    executionHostId
   )
 }
 
@@ -998,7 +956,7 @@ function settingsForRepoOwner(
       ? { ...state.settings, activeRuntimeEnvironmentId: parsedHost.environmentId }
       : ({ activeRuntimeEnvironmentId: parsedHost.environmentId } as AppState['settings'])
   }
-  if (parsedHost?.kind === 'local' || parsedHost?.kind === 'ssh') {
+  if (parsedHost?.kind === 'local') {
     return state.settings
       ? { ...state.settings, activeRuntimeEnvironmentId: null }
       : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
@@ -1022,13 +980,7 @@ function settingsForKnownRepoOwner(
   if (parsed?.kind === 'local' && settings?.activeRuntimeEnvironmentId) {
     return { ...settings, activeRuntimeEnvironmentId: null }
   }
-  if (parsed?.kind !== 'ssh') {
-    return settings
-  }
-  // Why: SSH repos are owned by the desktop client/SSH provider, not the focused runtime server.
   return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
 function trySettingsForWorktreeOwner(
@@ -1149,7 +1101,6 @@ function detectedWorktreeRefreshKey(
   ]
   // Why: only remote targets run a compat preflight, so a foreground (reuse:false) refresh must re-probe not coalesce onto a stale-failure background scan; local targets have no preflight and stay coalesced.
   if (target.kind === 'environment') {
-    parts.push(`connection:${getEnvironmentSshStateGeneration(target.environmentId)}`)
     parts.push(`runtime:${getRuntimeEnvironmentConnectionGeneration(target.environmentId)}`)
     parts.push(options.reuseRecentCompatibilityFailure === true ? 'reuse-failure' : 'reprobe')
   }
@@ -1232,26 +1183,13 @@ export function acquireDetectedWorktreeRefreshLeaseForRepo(
   options: DetectedWorktreeRefreshOptions
 ): DetectedWorktreeRefreshLease {
   const parsedHost = parseExecutionHostId(options.executionHostId)
-  if (!parsedHost || parsedHost.kind === 'runtime') {
-    throw new Error('Provider leases require a local or direct SSH execution host')
+  if (parsedHost?.kind !== 'local') {
+    throw new Error('Provider leases require a local execution host')
   }
   const publicKey = detectedWorktreeRefreshKey(settings, repoId, options)
-  if (parsedHost.kind === 'local') {
-    return detectedWorktreeRefreshLeaseRegistry.acquire(publicKey, {
-      repoId,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    })
-  }
-  if (
-    !options.directSshAuthority ||
-    !directSshAuthorityIsComplete(options.directSshAuthority, parsedHost.targetId)
-  ) {
-    throw new Error('Direct SSH provider leases require exact target authority')
-  }
   return detectedWorktreeRefreshLeaseRegistry.acquire(publicKey, {
     repoId,
-    executionHostId: options.executionHostId as SshExecutionHostId,
-    expectedAuthority: { ...options.directSshAuthority }
+    executionHostId: LOCAL_EXECUTION_HOST_ID
   })
 }
 
@@ -1276,21 +1214,10 @@ function qualifiedProviderResultIsAdmitted(
     return false
   }
   const parsedHost = parseExecutionHostId(options.executionHostId)
-  if (parsedHost?.kind === 'local') {
-    return (
-      result.authority.kind === 'local' &&
-      result.authority.executionHostId === LOCAL_EXECUTION_HOST_ID
-    )
-  }
-  const expected = options.directSshAuthority
   return (
-    parsedHost?.kind === 'ssh' &&
-    expected !== undefined &&
-    result.authority.kind === 'direct-ssh' &&
-    result.authority.executionHostId === options.executionHostId &&
-    result.authority.targetId === expected.targetId &&
-    result.authority.providerEpoch === expected.providerEpoch &&
-    result.authority.connectionGeneration === expected.connectionGeneration
+    parsedHost?.kind === 'local' &&
+    result.authority.kind === 'local' &&
+    result.authority.executionHostId === LOCAL_EXECUTION_HOST_ID
   )
 }
 
@@ -1323,7 +1250,6 @@ async function listDetectedWorktreesForRepoCoalesced(
   const key = detectedWorktreeRefreshKey(settings, repoId, options)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'environment') {
-    const connectionGeneration = getEnvironmentSshStateGeneration(target.environmentId)
     const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(
       target.environmentId
     )
@@ -1337,9 +1263,8 @@ async function listDetectedWorktreesForRepoCoalesced(
     try {
       const result = await refresh
       if (
-        getEnvironmentSshStateGeneration(target.environmentId) !== connectionGeneration ||
         getRuntimeEnvironmentConnectionGeneration(target.environmentId) !==
-          runtimeConnectionGeneration
+        runtimeConnectionGeneration
       ) {
         throw new Error('runtime_environment_generation_changed')
       }
@@ -1359,7 +1284,6 @@ async function listDetectedWorktreesForRepoCoalesced(
         executionHostId: options.executionHostId,
         runtimeAuthority: {
           environmentId: target.environmentId,
-          connectionGeneration,
           runtimeConnectionGeneration
         }
       }
@@ -1382,8 +1306,7 @@ async function listDetectedWorktreesForRepoCoalesced(
         executionHostId: options.executionHostId,
         status: 'rejected'
       },
-      executionHostId: options.executionHostId,
-      directSshAuthority: options.directSshAuthority
+      executionHostId: options.executionHostId
     }
   }
   if (
@@ -1396,8 +1319,7 @@ async function listDetectedWorktreesForRepoCoalesced(
         lease.providerRequestId,
         options.executionHostId
       ),
-      executionHostId: options.executionHostId,
-      directSshAuthority: options.directSshAuthority
+      executionHostId: options.executionHostId
     }
   }
   await teardownMissingWorktreeTerminalsBestEffort(
@@ -1411,8 +1333,7 @@ async function listDetectedWorktreesForRepoCoalesced(
     status: 'admitted',
     result: providerResult.result,
     providerResult,
-    executionHostId: options.executionHostId,
-    directSshAuthority: options.directSshAuthority
+    executionHostId: options.executionHostId
   }
 }
 
@@ -1728,15 +1649,6 @@ async function persistWorktreeMeta(
       'Update the remote runtime to change this workspace’s linked issue'
     )
   }
-  // task-source-context.v1 is a sound proxy for the Linear keys: #5322 added them
-  // to the schema and is an ancestor of the commit introducing that capability.
-  if (target.kind === 'environment' && 'linkedLinearIssue' in updates) {
-    await assertRuntimeEnvironmentCapability(
-      target.environmentId,
-      TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
-      'Update the remote runtime to link Linear issues'
-    )
-  }
   await callRuntimeRpc(
     target,
     'worktree.set',
@@ -1746,47 +1658,6 @@ async function persistWorktreeMeta(
     },
     { timeoutMs: 15_000 }
   )
-}
-
-// Why: an SSH per-workspace-env project's host is the runtime-owned SSH target; once that runtime is destroyed, remove the project or it lingers as a dead, never-connectable one.
-async function purgeOrphanedRuntimeSshProjects(
-  get: () => AppState,
-  destroyedSshTargetIds: string[]
-): Promise<void> {
-  if (destroyedSshTargetIds.length === 0) {
-    return
-  }
-  const destroyedTargetIds = new Set(destroyedSshTargetIds)
-  const destroyedHostIds = new Set<ExecutionHostId>(
-    destroyedSshTargetIds.map((id) => toSshExecutionHostId(id))
-  )
-  const orphanedSetupIds = get()
-    .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
-    .map((setup) => setup.id)
-  const purgedRepoIds = new Set<string>()
-  for (const setupId of orphanedSetupIds) {
-    try {
-      const result = await get().deleteProjectHostSetup({ setupId })
-      if (result?.repo) {
-        purgedRepoIds.add(result.repo.id)
-      }
-    } catch (error) {
-      console.error('Failed to purge orphaned per-workspace-env project:', error)
-    }
-  }
-  // A repo whose only host was the destroyed runtime can outlive its setup (pruned first by a projection refresh); remove it directly so no dead project lingers.
-  const orphanedRepoIds = get()
-    .repos.filter(
-      (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
-    )
-    .map((repo) => repo.id)
-  for (const repoId of orphanedRepoIds) {
-    try {
-      await get().removeProject(repoId)
-    } catch (error) {
-      console.error('Failed to purge orphaned per-workspace-env repo:', error)
-    }
-  }
 }
 
 async function resolveGitHubReviewPushTarget(
@@ -1819,36 +1690,6 @@ async function resolveGitHubReviewPushTarget(
   }
 }
 
-async function resolveGitLabReviewPushTarget(
-  settings: AppState['settings'],
-  repoId: string,
-  mrIid: number
-): Promise<GitPushTarget | undefined> {
-  try {
-    const target = getActiveRuntimeTarget(settings)
-    const result =
-      target.kind === 'local'
-        ? await window.api.worktrees.resolveMrBase({ repoId, mrIid })
-        : await callRuntimeRpc<
-            | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
-            | {
-                error: string
-              }
-          >(target, 'worktree.resolveMrBase', { repo: repoId, mrIid }, { timeoutMs: 30_000 })
-    if ('error' in result) {
-      console.warn(`Failed to resolve push target for MR !${mrIid}: ${result.error}`)
-      return undefined
-    }
-    return result.pushTarget
-  } catch (error) {
-    console.warn(
-      `Failed to resolve push target for MR !${mrIid}:`,
-      error instanceof Error ? error.message : error
-    )
-    return undefined
-  }
-}
-
 function getHostedReviewPushTargetLookup(worktree: Worktree): {
   key: string
   resolve: (settings: AppState['settings']) => Promise<GitPushTarget | undefined>
@@ -1861,37 +1702,15 @@ function getHostedReviewPushTargetLookup(worktree: Worktree): {
       resolve: (settings) => resolveGitHubReviewPushTarget(settings, worktree.repoId, prNumber)
     }
   }
-  if (isPositiveHostedReviewNumber(worktree.linkedGitLabMR)) {
-    const mrIid = worktree.linkedGitLabMR
-    return {
-      key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
-      resolve: (settings) => resolveGitLabReviewPushTarget(settings, worktree.repoId, mrIid)
-    }
-  }
   return null
 }
 
-type HostedReviewLinkKey =
-  | 'linkedPR'
-  | 'linkedGitLabMR'
-  | 'linkedBitbucketPR'
-  | 'linkedAzureDevOpsPR'
-  | 'linkedGiteaPR'
+type HostedReviewLinkKey = 'linkedPR'
 
-const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
-  'linkedPR',
-  'linkedGitLabMR',
-  'linkedBitbucketPR',
-  'linkedAzureDevOpsPR',
-  'linkedGiteaPR'
-]
+const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = ['linkedPR']
 
 const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<WorktreeMeta, HostedReviewLinkKey | 'pushTarget'> = {
   linkedPR: null,
-  linkedGitLabMR: null,
-  linkedBitbucketPR: null,
-  linkedAzureDevOpsPR: null,
-  linkedGiteaPR: null,
   pushTarget: undefined
 }
 
@@ -2033,10 +1852,6 @@ function getHostedReviewLinkUpdates(
 ): Pick<WorktreeMeta, HostedReviewLinkKey | 'pushTarget'> {
   return {
     linkedPR: worktree.linkedPR ?? null,
-    linkedGitLabMR: worktree.linkedGitLabMR ?? null,
-    linkedBitbucketPR: worktree.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: worktree.linkedGiteaPR ?? null,
     pushTarget: worktree.pushTarget
   }
 }
@@ -2143,35 +1958,13 @@ function applyHostedReviewLinkClear(
   })
 }
 
-function getPositiveHostedReviewLinkUpdateKey(
-  updates: Partial<WorktreeMeta>
-): HostedReviewLinkKey | null {
-  for (const key of HOSTED_REVIEW_LINK_KEYS) {
-    if (isPositiveHostedReviewNumber(updates[key])) {
-      return key
-    }
-  }
-  return null
-}
-
 function clearOlderHostedReviewLinksForReplacement(
   updates: Partial<WorktreeMeta>,
-  existingWorktree: Worktree
+  _existingWorktree: Worktree
 ): Partial<WorktreeMeta> {
-  const replacementKey = getPositiveHostedReviewLinkUpdateKey(updates)
-  if (!replacementKey) {
-    return updates
-  }
-  let normalized = updates
-  for (const key of HOSTED_REVIEW_LINK_KEYS) {
-    if (key === replacementKey || existingWorktree[key] == null) {
-      continue
-    }
-    // Why: one branch pushes to one hosted-review head; stale provider links would win the target lookup after replacement.
-    normalized = normalized === updates ? { ...updates } : normalized
-    normalized[key] = null
-  }
-  return normalized
+  // Why: GitHub PRs are the only hosted-review link left, so a replacement never
+  // has a stale sibling provider link to clear.
+  return updates
 }
 
 function getHostedReviewLinkForMetaRefresh(
@@ -2506,22 +2299,6 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
-  const survivingTabIds = new Set(
-    Object.entries(s.tabsByWorktree)
-      .filter(([worktreeId]) => !worktreeIdSet.has(worktreeId))
-      .flatMap(([, tabs]) => tabs.map((tab) => tab.id))
-  )
-  const omitRetiredDirectSshLedgerByTabId = <T>(obj: Record<string, T>): Record<string, T> => {
-    let changed = false
-    const out = { ...obj }
-    for (const tabId of doomedTabIds) {
-      if (!survivingTabIds.has(tabId) && tabId in out) {
-        delete out[tabId]
-        changed = true
-      }
-    }
-    return changed ? out : obj
-  }
   const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -2629,18 +2406,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
     // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
     pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
-    deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
     pendingSetupSplitByTabId: omitByTabId(s.pendingSetupSplitByTabId),
     pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
-    directSshPaneRetryByTabId: omitRetiredDirectSshLedgerByTabId(s.directSshPaneRetryByTabId),
-    directSshLivePtyBindingByTabId: omitRetiredDirectSshLedgerByTabId(
-      s.directSshLivePtyBindingByTabId
-    ),
-    directSshPaneRetryHistoryByTabId: omitRetiredDirectSshLedgerByTabId(
-      s.directSshPaneRetryHistoryByTabId
-    ),
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
@@ -2750,92 +2519,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   }
 }
 
-function directSshAuthorityIsComplete(
-  authority: DirectSshAuthority,
-  expectedTargetId: string
-): boolean {
-  if (
-    authority.targetId !== expectedTargetId ||
-    typeof authority.providerEpoch !== 'string' ||
-    authority.providerEpoch.length === 0 ||
-    !Number.isSafeInteger(authority.connectionGeneration) ||
-    authority.connectionGeneration < 0
-  ) {
-    return false
-  }
-  return true
-}
-
-function getCurrentDirectSshAuthority(
-  state: Pick<AppState, 'sshConnectionStates'>,
-  hostId: ExecutionHostId
-): DirectSshAuthority | null {
-  const parsedHost = parseExecutionHostId(hostId)
-  if (parsedHost?.kind !== 'ssh') {
-    return null
-  }
-  const connection = state.sshConnectionStates?.get(parsedHost.targetId)
-  if (connection?.status !== 'connected') {
-    return null
-  }
-  const authority = {
-    targetId: parsedHost.targetId,
-    providerEpoch: connection.providerEpoch,
-    connectionGeneration: connection.connectionGeneration
-  } as DirectSshAuthority
-  if (!directSshAuthorityIsComplete(authority, parsedHost.targetId)) {
-    return null
-  }
-  return {
-    ...authority
-  }
-}
-
-function directSshAuthoritiesEqual(
-  left: DirectSshAuthority | null | undefined,
-  right: DirectSshAuthority | null | undefined
-): boolean {
-  if (!left || !right) {
-    return false
-  }
-  return (
-    left.targetId === right.targetId &&
-    left.providerEpoch === right.providerEpoch &&
-    left.connectionGeneration === right.connectionGeneration
-  )
-}
-
 function isCurrentDetectedWorktreeRefresh(
-  state: Pick<AppState, 'sshConnectionStates'>,
+  _state: AppState,
   refresh: AdmittedDetectedWorktreeRefresh
 ): boolean {
-  if (refresh.directSshAuthority) {
-    return directSshAuthoritiesEqual(
-      getCurrentDirectSshAuthority(state, refresh.executionHostId),
-      refresh.directSshAuthority
-    )
-  }
   if (refresh.runtimeAuthority) {
     return (
-      getEnvironmentSshStateGeneration(refresh.runtimeAuthority.environmentId) ===
-        refresh.runtimeAuthority.connectionGeneration &&
       getRuntimeEnvironmentConnectionGeneration(refresh.runtimeAuthority.environmentId) ===
         refresh.runtimeAuthority.runtimeConnectionGeneration
     )
   }
   return true
-}
-
-function staleDetectedWorktreeProviderResult(
-  refresh: AdmittedDetectedWorktreeRefresh
-): HostQualifiedDetectedWorktreeResult | undefined {
-  return refresh.providerResult
-    ? {
-        providerRequestId: refresh.providerResult.providerRequestId,
-        executionHostId: refresh.executionHostId,
-        status: 'stale'
-      }
-    : undefined
 }
 
 function preserveConcurrentManualOrder<T extends Worktree>(
@@ -2868,7 +2562,6 @@ type FencedWorktreeMergeArgs = {
   repoId: string
   hostId: ExecutionHostId
   ownerWasMissingAtStart: boolean
-  missingDirectSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
@@ -2889,8 +2582,7 @@ function mergeFetchedWorktrees(
         s,
         args.repoId,
         args.hostId,
-        args.ownerWasMissingAtStart &&
-          (!args.refresh.directSshAuthority || s.repos === args.missingDirectSshOwnerReposSnapshot)
+        args.ownerWasMissingAtStart
       )
     ) {
       return s
@@ -2992,7 +2684,6 @@ function mergeFetchedWorktrees(
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
     rememberAuthoritativelyRemovedWorktrees(args.hostId, authoritativelyRemovedIds)
-    forgetPersistedWorktreeMetaForRemovals(args.repoId, args.hostId, authoritativelyRemovedIds)
   }
   return admitted
 }
@@ -3047,269 +2738,6 @@ export function resetAuthoritativelyRemovedWorktreeMemoryForTests(): void {
   authoritativelyRemovedWorktreeIdsByHost.clear()
 }
 
-// Why: SSH WorktreeMeta is exempt from gcStaleWorktreeMeta (persistence.ts:407,415) and outlives the remote
-// worktree, so a scan-proven removal must retire the metadata itself — otherwise the next launch's fallback
-// re-lists the deleted row before the host connects, and the in-memory suppression above is already gone.
-function forgetPersistedWorktreeMetaForRemovals(
-  repoId: string,
-  hostId: ExecutionHostId,
-  worktreeIds: readonly string[]
-): void {
-  const parsedHost = parseExecutionHostId(hostId)
-  if (worktreeIds.length === 0 || parsedHost?.kind !== 'ssh') {
-    return
-  }
-  const forget = window.api.worktrees.forgetRemovedForExecutionHost
-  if (typeof forget !== 'function') {
-    return
-  }
-  void forget({ repoId, executionHostId: parsedHost.id, worktreeIds: [...worktreeIds] }).catch(
-    (err) => {
-      console.warn(`Failed to forget metadata for removed worktrees in repo ${repoId}:`, err)
-    }
-  )
-}
-
-function appendMissingWorktreesForHost<
-  T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
->(
-  current: readonly T[] | undefined,
-  incoming: readonly T[],
-  hostId: ExecutionHostId,
-  options: WorktreeHostMatchOptions
-): T[] {
-  const existing = current ?? []
-  const existingHostIds = new Set(
-    existing
-      .filter((worktree) => worktreeMatchesHost(worktree, hostId, options))
-      .map(({ id }) => id)
-  )
-  const missing = incoming.filter((worktree) => !existingHostIds.has(worktree.id))
-  if (missing.length === 0) {
-    return [...existing]
-  }
-  // Why: land inside the host's block like mergeWorktreesForHost does, else these rows sit past sibling hosts and visibly jump once the authoritative scan splices them back.
-  const lastHostIndex = existing.findLastIndex((worktree) =>
-    worktreeMatchesHost(worktree, hostId, options)
-  )
-  if (lastHostIndex === -1) {
-    return [...existing, ...missing]
-  }
-  return [...existing.slice(0, lastHostIndex + 1), ...missing, ...existing.slice(lastHostIndex + 1)]
-}
-
-function isAdmittedKnownSshWorktreeResult(
-  result: HostQualifiedKnownWorktreeResult,
-  repoId: string,
-  executionHostId: SshExecutionHostId
-): result is Extract<HostQualifiedKnownWorktreeResult, { status: 'complete' }> {
-  return (
-    result.status === 'complete' &&
-    result.repoId === repoId &&
-    result.executionHostId === executionHostId &&
-    isDetectedWorktreeListResult(result.result) &&
-    result.result.repoId === repoId &&
-    result.result.authoritative === false
-  )
-}
-
-const inflightKnownSshWorktreeFetches = new Map<
-  string,
-  Promise<DetectedWorktreeListResult | null>
->()
-
-// Why: the authoritative path dedupes through listDetectedWorktreesForRepoCoalesced; without a matching guard
-// the four refresh triggers can each issue this IPC and its merge for the same repo/host.
-async function fetchKnownSshWorktreesForRepo(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
-  repoId: string,
-  executionHostId: SshExecutionHostId
-): Promise<DetectedWorktreeListResult | null> {
-  const coalesceKey = `${repoId}\0${executionHostId}`
-  const inflight = inflightKnownSshWorktreeFetches.get(coalesceKey)
-  if (inflight) {
-    return await inflight
-  }
-  const request = runKnownSshWorktreeFetch(set, repoId, executionHostId).finally(() => {
-    inflightKnownSshWorktreeFetches.delete(coalesceKey)
-  })
-  inflightKnownSshWorktreeFetches.set(coalesceKey, request)
-  return await request
-}
-
-async function runKnownSshWorktreeFetch(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
-  repoId: string,
-  executionHostId: SshExecutionHostId
-): Promise<DetectedWorktreeListResult | null> {
-  // Why: reads the local store only, so a runtime-hub session (whose repo ids live on the hub) always gets 'rejected' and keeps the pre-existing no-op.
-  const listKnown = window.api.worktrees.listKnownForExecutionHost
-  if (typeof listKnown !== 'function') {
-    return null
-  }
-  const result = await listKnown({ repoId, executionHostId })
-  if (!isAdmittedKnownSshWorktreeResult(result, repoId, executionHostId)) {
-    return null
-  }
-  // Why: persisted SSH metadata outlives the remote worktree, so drop rows a completed scan already proved gone.
-  const suppressedIds = authoritativelyRemovedWorktreeIdsByHost.get(executionHostId)
-  const known =
-    suppressedIds && suppressedIds.size > 0
-      ? {
-          ...result.result,
-          worktrees: result.result.worktrees.filter((worktree) => !suppressedIds.has(worktree.id))
-        }
-      : result.result
-  let admitted = false
-  set((state) => {
-    // Why: the provider can connect during the await; authoritative rows already replaced this host, so appending stale metadata would resurrect purged worktrees.
-    if (
-      getCurrentDirectSshAuthority(state, executionHostId) ||
-      !repoHasExactlyOneExecutionHostOwner(state, repoId, executionHostId, false)
-    ) {
-      return state
-    }
-    admitted = true
-    const setup = getProjectHostSetupForRepoHost(state, repoId, executionHostId)
-    const matchOptions = worktreeHostMatchOptions(state, repoId, executionHostId)
-    const incomingDetected = known.worktrees.map((worktree) =>
-      withRepoHostOwnership(worktree, executionHostId, setup)
-    )
-    const priorDetected = state.detectedWorktreesByRepo[repoId]
-    // Why: only the rows are ours to merge. This entry is keyed by repo alone, so adopting the fallback's
-    // authoritative/source would demote a sibling host's completed scan and blank every authoritative-gated surface.
-    const detected = {
-      ...(priorDetected ?? known),
-      worktrees: appendMissingWorktreesForHost(
-        priorDetected?.worktrees,
-        incomingDetected,
-        executionHostId,
-        matchOptions
-      )
-    }
-    const worktrees = appendMissingWorktreesForHost(
-      state.worktreesByRepo[repoId],
-      toVisibleWorktrees(known, executionHostId, setup),
-      executionHostId,
-      matchOptions
-    )
-    const worktreesChanged = !areWorktreesEqual(state.worktreesByRepo[repoId], worktrees)
-    const detectedChanged = !areDetectedWorktreeResultsEqual(
-      state.detectedWorktreesByRepo[repoId],
-      detected
-    )
-    if (!worktreesChanged && !detectedChanged) {
-      return state
-    }
-    return {
-      ...(worktreesChanged
-        ? {
-            worktreesByRepo: { ...state.worktreesByRepo, [repoId]: worktrees },
-            sortEpoch: state.sortEpoch + 1
-          }
-        : {}),
-      ...(detectedChanged
-        ? { detectedWorktreesByRepo: { ...state.detectedWorktreesByRepo, [repoId]: detected } }
-        : {})
-    }
-  })
-  return admitted ? known : null
-}
-
-export type DirectSshDetectedWorktreeRefresh = {
-  waiterLeaseId: DetectedWorktreeRefreshLease['waiterLeaseId']
-  providerRequestId: ProviderRequestId
-  result: Promise<HostQualifiedDetectedWorktreeResult>
-  release: DetectedWorktreeRefreshLease['release']
-  merge(result: HostQualifiedDetectedWorktreeResult): HostQualifiedDetectedWorktreeResult
-}
-
-export function acquireDirectSshDetectedWorktreeRefresh(
-  store: Pick<StoreApi<AppState>, 'getState' | 'setState'>,
-  request: {
-    repoId: string
-    executionHostId: SshExecutionHostId
-    authority: DirectSshAuthority
-    requireAuthoritative?: boolean
-  }
-): DirectSshDetectedWorktreeRefresh {
-  const requestStartedState = store.getState()
-  const requestStartedWorktrees = requestStartedState.worktreesByRepo[request.repoId]
-  const ownerWasMissingAtStart = !requestStartedState.repos.some(
-    (repo) => repo.id === request.repoId
-  )
-  const setup = getProjectHostSetupForRepoHost(
-    requestStartedState,
-    request.repoId,
-    request.executionHostId
-  )
-  const settings = settingsForRepoOwner(
-    requestStartedState,
-    request.repoId,
-    request.executionHostId
-  )
-  const options: DetectedWorktreeRefreshOptions = {
-    executionHostId: request.executionHostId,
-    directSshAuthority: request.authority,
-    requireAuthoritative: request.requireAuthoritative
-  }
-  const lease = acquireDetectedWorktreeRefreshLeaseForRepo(settings, request.repoId, options)
-  let mergedResult: HostQualifiedDetectedWorktreeResult | undefined
-
-  return {
-    waiterLeaseId: lease.waiterLeaseId,
-    providerRequestId: lease.providerRequestId,
-    result: lease.result,
-    release: lease.release,
-    merge: (providerResult) => {
-      if (mergedResult) {
-        return mergedResult
-      }
-      if (
-        !qualifiedProviderResultIsAdmitted(
-          providerResult,
-          lease.providerRequestId,
-          request.repoId,
-          options
-        )
-      ) {
-        mergedResult = normalizeNotAdmittedProviderResult(
-          providerResult,
-          lease.providerRequestId,
-          request.executionHostId
-        )
-        return mergedResult
-      }
-      if (request.requireAuthoritative && providerResult.status !== 'complete') {
-        mergedResult = providerResult
-        return mergedResult
-      }
-      const refresh: AdmittedDetectedWorktreeRefresh = {
-        status: 'admitted',
-        result: providerResult.result,
-        providerResult,
-        executionHostId: request.executionHostId,
-        directSshAuthority: request.authority
-      }
-      const admitted = mergeFetchedWorktrees(
-        store.setState as Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
-        {
-          repoId: request.repoId,
-          hostId: request.executionHostId,
-          ownerWasMissingAtStart,
-          requestStartedWorktrees,
-          setup,
-          refresh
-        }
-      )
-      mergedResult = admitted
-        ? providerResult
-        : (staleDetectedWorktreeProviderResult(refresh) ?? providerResult)
-      return mergedResult
-    }
-  }
-}
-
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
   detectedWorktreesByRepo: {},
@@ -3340,23 +2768,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         hostId,
         settings: ownerState.settings
       })
-      const parsedHost = parseExecutionHostId(hostId)
-      const directSshAuthority =
-        parsedHost?.kind === 'ssh'
-          ? (getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
-          : undefined
-      if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: this function's contract is detected-only. The fallback runs for its store side effect, but
-        // callers keep seeing null as they did before the metadata path existed.
-        await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
-        return null
-      }
       const refresh = await listDetectedWorktreesForRepoCoalesced(
         settingsForRepoOwner(ownerState, repoId, hostId),
         repoId,
         {
           executionHostId: hostId,
-          directSshAuthority,
           connectionId: repoOwner?.connectionId,
           knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
         }
@@ -3368,12 +2784,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       set((s) => {
         if (
           !isCurrentDetectedWorktreeRefresh(s, refresh) ||
-          !repoHasExactlyOneExecutionHostOwner(
-            s,
-            repoId,
-            hostId,
-            ownerWasMissingAtStart && !refresh.directSshAuthority
-          )
+          !repoHasExactlyOneExecutionHostOwner(s, repoId, hostId, ownerWasMissingAtStart)
         ) {
           return s
         }
@@ -3405,12 +2816,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  fetchWorktrees: (async (
-    repoId: string,
-    options?: WorktreeFetchOptions | DirectSshWorktreeFetchOptions
-  ) => {
-    const directCallerAuthority =
-      options && 'directSshAuthority' in options ? options.directSshAuthority : undefined
+  fetchWorktrees: async (repoId: string, options?: WorktreeFetchOptions) => {
     try {
       const ownerState = get()
       const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
@@ -3441,54 +2847,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         useLocalOwner && ownerSettings?.activeRuntimeEnvironmentId
           ? { ...ownerSettings, activeRuntimeEnvironmentId: null }
           : ownerSettings
-      const parsedHost = parseExecutionHostId(hostId)
-      const directSshAuthority =
-        parsedHost?.kind === 'ssh'
-          ? (directCallerAuthority ?? getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
-          : undefined
-      if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
-        // rows as a side effect before returning false would silently weaken that contract.
-        if (!options?.requireAuthoritative) {
-          await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
-        }
-        return false
-      }
       const refresh = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
         requireAuthoritative: options?.requireAuthoritative,
-        directSshAuthority,
         connectionId: repoOwner?.connectionId,
         knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
       })
       if (refresh.status !== 'admitted') {
-        return directCallerAuthority ? refresh.providerResult : false
+        return false
       }
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
-        return directCallerAuthority ? refresh.providerResult : false
+        return false
       }
       const admitted = mergeFetchedWorktrees(set, {
         repoId,
         hostId,
         ownerWasMissingAtStart,
-        missingDirectSshOwnerReposSnapshot:
-          ownerWasMissingAtStart && options?.executionHostId === hostId
-            ? ownerState.repos
-            : undefined,
         requestStartedWorktrees,
         setup,
         refresh
       })
       if (!admitted) {
-        return directCallerAuthority
-          ? (staleDetectedWorktreeProviderResult(refresh) ?? false)
-          : false
+        return false
       }
-      // Direct SSH lineage requires its own qualified authority result.
-      if (!directSshAuthority) {
-        await refreshRemoteWorktreeLineageBestEffort(settings, set)
-      }
-      return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
+      await refreshRemoteWorktreeLineageBestEffort(settings, set)
+      return refresh.result.authoritative
     } catch (err) {
       if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
         return false
@@ -3496,7 +2879,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
       return false
     }
-  }) as WorktreeSlice['fetchWorktrees'],
+  },
 
   fetchAllWorktrees: async (options) => {
     const { repos } = get()
@@ -3510,19 +2893,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const hostId = getRepoExecutionHostId(r)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
-          const parsedHost = parseExecutionHostId(hostId)
-          const directSshAuthority =
-            parsedHost?.kind === 'ssh'
-              ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
-              : undefined
-          if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
-            return
-          }
           const refresh = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true,
-            directSshAuthority,
             connectionId: r.connectionId,
             knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
           })
@@ -3562,22 +2935,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
-          const parsedHost = parseExecutionHostId(hostId)
-          const directSshAuthority =
-            parsedHost?.kind === 'ssh'
-              ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
-              : undefined
-          if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
-            return { repoId: r.id, ok: false as const }
-          }
           const refresh = await listDetectedWorktreesForRepoCoalesced(
             settingsForKnownRepoOwner(requestStartedState.settings, r),
             r.id,
             {
               executionHostId: hostId,
               reuseRecentCompatibilityFailure: true,
-              directSshAuthority,
               connectionId: r.connectionId,
               knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
             }
@@ -3927,19 +3290,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedPR,
     pushTarget,
     createdWithAgent,
-    linkedLinearIssue,
     branchNameOverride,
     workspaceStatus,
-    linkedGitLabMR,
-    linkedGitLabIssue,
     startup,
     pendingFirstAgentMessageRename,
     creationId,
-    linkedLinearIssueWorkspaceId,
-    linkedLinearIssueOrganizationUrlKey,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
     compareBaseRef,
     options
   ) => {
@@ -3981,19 +3336,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(pendingFirstAgentMessageRename === true && createdWithAgent
               ? { pendingFirstAgentMessageRename: true }
               : {}),
-            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
-            ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
-            ...(linkedLinearIssueOrganizationUrlKey !== undefined
-              ? { linkedLinearIssueOrganizationUrlKey }
-              : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
-            ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-            ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
-            ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
-            ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
             ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {}),
             ...(startup ? { startup } : {}),
@@ -4002,16 +3347,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(preserveBranchOnDelete ? { preserveBranchOnDelete } : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
-          if (
-            target.kind === 'environment' &&
-            (linkedWorkItem?.provider === 'jira' || linkedTaskSourceContext?.provider === 'jira')
-          ) {
-            await assertRuntimeEnvironmentCapability(
-              target.environmentId,
-              WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-              'Update the remote runtime to link Jira'
-            )
-          }
           const result =
             target.kind === 'local'
               ? await window.api.worktrees.create(createArgs)
@@ -4038,21 +3373,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(pendingFirstAgentMessageRename === true && createdWithAgent
                       ? { pendingFirstAgentMessageRename: true }
                       : {}),
-                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
-                    ...(linkedLinearIssueWorkspaceId !== undefined
-                      ? { linkedLinearIssueWorkspaceId }
-                      : {}),
-                    ...(linkedLinearIssueOrganizationUrlKey !== undefined
-                      ? { linkedLinearIssueOrganizationUrlKey }
-                      : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
-                    ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-                    ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-                    ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
-                    ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
-                    ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
                     ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
                     ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {}),
                     ...(automationProvenanceRequest ? { automationProvenanceRequest } : {}),
@@ -4170,34 +3493,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  removePendingWorktreeCreation: (creationId, options) => {
+  removePendingWorktreeCreation: (creationId) => {
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
       if (!entry) {
         return {}
-      }
-      const cleanupVm = options?.cleanupVm ?? true
-      if (
-        cleanupVm &&
-        entry.phase === 'provisioning-vm' &&
-        typeof window !== 'undefined' &&
-        window.api?.ephemeralVm?.cancelProvision
-      ) {
-        void window.api.ephemeralVm.cancelProvision({ provisionId: creationId }).catch(() => {
-          // Best effort: dismissing the pending surface shouldn't block on a finished or unreachable provisioning process.
-        })
-      }
-      if (
-        cleanupVm &&
-        entry.request.ephemeralVmRuntimeId &&
-        typeof window !== 'undefined' &&
-        window.api?.ephemeralVm?.cleanup
-      ) {
-        void window.api.ephemeralVm
-          .cleanup({ runtimeId: entry.request.ephemeralVmRuntimeId })
-          .catch(() => {
-            // Best effort: cancellation shouldn't block on provider cleanup; Settings still exposes retry/manual cleanup.
-          })
       }
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
       return {
@@ -4329,11 +3629,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
-      // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
-      // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
-      if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
-        rememberAuthoritativelyRemovedWorktrees(hostId, [worktreeId])
-      }
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
@@ -4356,12 +3651,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // The backend removal above already killed the workspace's PTYs.
         backendOwnsPtyTeardown: true
       })
-      // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
-      const destroyedRuntimeSshTargetIds = await cleanupEphemeralVmRuntimesForDeleted({
-        workspaceIds: [worktreeId]
-      })
-      // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
-      await purgeOrphanedRuntimeSshProjects(get, destroyedRuntimeSshTargetIds)
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -4833,15 +4122,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return { ok: true }
     }
     const shouldRefreshHostedReview =
-      (normalizedUpdates.linkedPR === null && worktreeForUpdate?.linkedPR !== null) ||
-      (normalizedUpdates.linkedGitLabMR === null &&
-        (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
-      (normalizedUpdates.linkedBitbucketPR === null &&
-        (worktreeForUpdate?.linkedBitbucketPR ?? null) !== null) ||
-      (normalizedUpdates.linkedAzureDevOpsPR === null &&
-        (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
-      (normalizedUpdates.linkedGiteaPR === null &&
-        (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
+      normalizedUpdates.linkedPR === null && worktreeForUpdate?.linkedPR !== null
     const reviewRepo = shouldRefreshHostedReview
       ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
       : undefined
@@ -4972,26 +4253,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             targetEnriched,
             worktreeForUpdate,
             'linkedPR'
-          ),
-          linkedGitLabMR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGitLabMR'
-          ),
-          linkedBitbucketPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedBitbucketPR'
-          ),
-          linkedAzureDevOpsPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedAzureDevOpsPR'
-          ),
-          linkedGiteaPR: getHostedReviewLinkForMetaRefresh(
-            targetEnriched,
-            worktreeForUpdate,
-            'linkedGiteaPR'
           ),
           force: true
         })
@@ -5261,8 +4522,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         repoId: repo.id,
         branch,
         linkedGitHubPR: alreadyLinked ? link.number : null,
-        fallbackGitHubPR: null,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null
+        fallbackGitHubPR: null
       })
     }
   },

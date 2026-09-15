@@ -19,13 +19,6 @@ import {
   type ClaudeAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
-import { fetchKimiRateLimits } from './kimi-fetcher'
-import { fetchGrokRateLimits } from './grok-fetcher'
-import { readGrokAuthSession } from './grok-auth'
-import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
-import { fetchMiniMaxRateLimits } from './minimax-fetcher'
-import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget,
@@ -42,23 +35,6 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
-type OpenCodeGoRateLimitConfig = {
-  sessionCookie: string
-  workspaceIdOverride: string
-}
-
-type MiniMaxRateLimitConfig = {
-  sessionCookie: string
-  groupId: string
-  models: string
-}
-
-type MiniMaxResolvedConfig = {
-  config: MiniMaxRateLimitConfig
-  error: string | null
-}
-
-type GeminiCliOAuthEnabledResolver = () => boolean
 type ActiveRateLimitProvider = ProviderRateLimits['provider']
 type ActiveProviderState = {
   provider: ActiveRateLimitProvider
@@ -81,8 +57,7 @@ const MAX_ACTIVE_FAILURE_STREAK = 8
 // Why: these providers have a dedicated fetch cycle, so an activation retry refreshes just the failing one; others force a full fetchAll.
 const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
-  'codex',
-  'grok'
+  'codex'
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 // Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
@@ -100,12 +75,6 @@ const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
-  opencodeGo: ProviderRateLimits | null
-  kimi: ProviderRateLimits | null
-  antigravity: ProviderRateLimits | null
-  minimax: ProviderRateLimits | null
-  grok: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -166,39 +135,20 @@ function isSameUsageWindow(
 export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
-    codex: null,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: null,
-    minimax: null,
-    grok: null
+    codex: null
   }
-  private grokAuthConfigured = readGrokAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
   // Why: throttle repeated focus/show/restore events so one outage doesn't create a tight provider retry loop.
   private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
-    codex: 0,
-    gemini: 0,
-    'opencode-go': 0,
-    kimi: 0,
-    minimax: 0,
-    grok: 0,
-    antigravity: 0
+    codex: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
-    codex: 0,
-    gemini: 0,
-    'opencode-go': 0,
-    kimi: 0,
-    minimax: 0,
-    grok: 0,
-    antigravity: 0
+    codex: 0
   }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -206,17 +156,12 @@ export class RateLimitService {
   private fullFetchQueued = false
   private codexOnlyFetchQueued = false
   private claudeOnlyFetchQueued = false
-  private grokOnlyFetchQueued = false
   private activeFetchAbortControllers = new Set<AbortController>()
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
-  private opencodeFetchGeneration = 0
-  private minimaxFetchGeneration = 0
-  private lastOpencodeConfigHash = ''
-  private lastMiniMaxConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -227,9 +172,6 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
-  private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
-  private miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
-  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
@@ -266,18 +208,6 @@ export class RateLimitService {
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
-  }
-
-  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
-    this.openCodeGoConfigResolver = resolver
-  }
-
-  setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
-    this.miniMaxConfigResolver = resolver
-  }
-
-  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
-    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
@@ -351,9 +281,6 @@ export class RateLimitService {
     this.pruneInactiveCodexState()
     return {
       ...this.state,
-      // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
-      minimaxCookieConfigured: hasMiniMaxSessionCookie(),
-      grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -378,20 +305,6 @@ export class RateLimitService {
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
     return this.getState()
-  }
-
-  async refreshGrok(): Promise<RateLimitState> {
-    await this.fetchGrokOnly({ force: true })
-    return this.getState()
-  }
-
-  invalidateMiniMaxCredentialState(): void {
-    this.minimaxFetchGeneration += 1
-    // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.
-    this.updateState({
-      ...this.state,
-      minimax: this.withFetchingStatus(null, 'minimax')
-    })
   }
 
   async refreshForCodexAccountChange(
@@ -828,13 +741,7 @@ export class RateLimitService {
     // Why: key by provider so a new provider is compile-forced an entry — a missing one silently never recovers from a startup error.
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
-      codex: this.state.codex,
-      gemini: this.state.gemini,
-      'opencode-go': this.state.opencodeGo,
-      kimi: this.state.kimi,
-      minimax: this.state.minimax,
-      grok: this.state.grok,
-      antigravity: this.state.antigravity
+      codex: this.state.codex
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -924,9 +831,6 @@ export class RateLimitService {
     if (plan.providers.includes('codex')) {
       await this.fetchCodexOnly()
     }
-    if (plan.providers.includes('grok')) {
-      await this.fetchGrokOnly()
-    }
   }
 
   private async refreshIfWindowActive(): Promise<void> {
@@ -983,15 +887,6 @@ export class RateLimitService {
             break
           }
         }
-        if (this.grokOnlyFetchQueued) {
-          this.grokOnlyFetchQueued = false
-          const grokSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchGrokOnlyCycle(fetchSignal)
-          )
-          if (grokSignal.aborted) {
-            break
-          }
-        }
       }
     } finally {
       this.isFetching = false
@@ -1039,15 +934,6 @@ export class RateLimitService {
             this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
-            break
-          }
-        }
-        if (this.grokOnlyFetchQueued) {
-          this.grokOnlyFetchQueued = false
-          const grokSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchGrokOnlyCycle(fetchSignal)
-          )
-          if (grokSignal.aborted) {
             break
           }
         }
@@ -1104,74 +990,6 @@ export class RateLimitService {
             break
           }
         }
-        if (this.grokOnlyFetchQueued) {
-          this.grokOnlyFetchQueued = false
-          const grokSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchGrokOnlyCycle(fetchSignal)
-          )
-          if (grokSignal.aborted) {
-            break
-          }
-        }
-      }
-    } finally {
-      this.isFetching = false
-      this.resolveFetchIdleWaiters()
-    }
-  }
-
-  private async fetchGrokOnly(options?: { force?: boolean }): Promise<void> {
-    if (this.isFetching) {
-      if (options?.force) {
-        this.grokOnlyFetchQueued = true
-        return this.waitForFetchIdle()
-      }
-      return
-    }
-    this.isFetching = true
-
-    try {
-      let shouldContinue = true
-      while (shouldContinue) {
-        const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchGrokOnlyCycle(fetchSignal)
-        )
-        shouldContinue = false
-        if (signal.aborted) {
-          break
-        }
-        if (this.fullFetchQueued) {
-          this.fullFetchQueued = false
-          const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal, { force: true })
-          )
-          if (fullSignal.aborted) {
-            break
-          }
-          continue
-        }
-        if (this.grokOnlyFetchQueued) {
-          this.grokOnlyFetchQueued = false
-          shouldContinue = true
-        }
-        if (this.codexOnlyFetchQueued) {
-          this.codexOnlyFetchQueued = false
-          const codexSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchCodexOnlyCycle(fetchSignal)
-          )
-          if (codexSignal.aborted) {
-            break
-          }
-        }
-        if (this.claudeOnlyFetchQueued) {
-          this.claudeOnlyFetchQueued = false
-          const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
-          )
-          if (claudeSignal.aborted) {
-            break
-          }
-        }
       }
     } finally {
       this.isFetching = false
@@ -1184,8 +1002,7 @@ export class RateLimitService {
       !this.isFetching &&
       !this.fullFetchQueued &&
       !this.codexOnlyFetchQueued &&
-      !this.claudeOnlyFetchQueued &&
-      !this.grokOnlyFetchQueued
+      !this.claudeOnlyFetchQueued
     ) {
       return Promise.resolve()
     }
@@ -1200,8 +1017,7 @@ export class RateLimitService {
       this.isFetching ||
       this.fullFetchQueued ||
       this.codexOnlyFetchQueued ||
-      this.claudeOnlyFetchQueued ||
-      this.grokOnlyFetchQueued
+      this.claudeOnlyFetchQueued
     ) {
       return
     }
@@ -1245,7 +1061,6 @@ export class RateLimitService {
     this.fullFetchQueued = false
     this.codexOnlyFetchQueued = false
     this.claudeOnlyFetchQueued = false
-    this.grokOnlyFetchQueued = false
   }
 
   private resolveAndClearFetchIdleWaiters(): void {
@@ -1361,41 +1176,6 @@ export class RateLimitService {
   private shouldAllowClaudeUsagePanelSupplement(): boolean {
     // Why: keep this supplement off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
-  }
-
-  private resolveMiniMaxConfig(): MiniMaxResolvedConfig {
-    try {
-      return {
-        config: this.miniMaxConfigResolver?.() ?? {
-          sessionCookie: '',
-          groupId: '',
-          models: 'general'
-        },
-        error: null
-      }
-    } catch (error) {
-      // Why: one unreadable cookie must not abort every provider's refresh; surface it as MiniMax-only state instead.
-      return {
-        config: {
-          sessionCookie: '',
-          groupId: '',
-          models: 'general'
-        },
-        error: toErrorMessage(error)
-      }
-    }
-  }
-
-  private getMiniMaxCredentialError(message: string): ProviderRateLimits {
-    return {
-      provider: 'minimax',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: message,
-      status: 'error',
-      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
-    }
   }
 
   // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
@@ -1529,15 +1309,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider:
-      | 'claude'
-      | 'codex'
-      | 'gemini'
-      | 'opencode-go'
-      | 'kimi'
-      | 'minimax'
-      | 'grok'
-      | 'antigravity'
+    provider: 'claude' | 'codex'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1577,69 +1349,21 @@ export class RateLimitService {
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
-    const cookie = openCodeGoConfig?.sessionCookie ?? ''
-    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
-    const miniMaxConfigResult = this.resolveMiniMaxConfig()
-    const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
-    const miniMaxGroupId = miniMaxConfigResult.config.groupId
-    const miniMaxModels = miniMaxConfigResult.config.models
-    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
-    // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
-
-    // Discard stale data on config change — it belongs to a different session/workspace.
-    const currentConfigHash = `${cookie}|${workspaceIdOverride}`
-    const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
-    if (opencodeConfigChanged) {
-      this.lastOpencodeConfigHash = currentConfigHash
-      this.opencodeFetchGeneration += 1
-    }
-    const opencodeGeneration = this.opencodeFetchGeneration
-
-    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxConfigResult.error ?? ''}`
-    const miniMaxConfigChanged = currentMiniMaxConfigHash !== this.lastMiniMaxConfigHash
-    if (miniMaxConfigChanged) {
-      this.lastMiniMaxConfigHash = currentMiniMaxConfigHash
-      this.minimaxFetchGeneration += 1
-    }
-    const miniMaxGeneration = this.minimaxFetchGeneration
-
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
-      codex: this.withFetchingStatus(previousState.codex, 'codex'),
-      gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
-      opencodeGo: opencodeConfigChanged
-        ? this.withFetchingStatus(null, 'opencode-go')
-        : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
-      kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
-      antigravity: this.withFetchingStatus(previousState.antigravity, 'antigravity'),
-      minimax: miniMaxConfigChanged
-        ? this.withFetchingStatus(null, 'minimax')
-        : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      codex: this.withFetchingStatus(previousState.codex, 'codex')
     })
 
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
-    )
-
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
+    const [claudeResult, codexResult] = await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
           : fetchClaudeRateLimits({
@@ -1654,21 +1378,7 @@ export class RateLimitService {
             codexHomePath,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
             signal
-          }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
+          })
       ])
 
     if (signal.aborted) {
@@ -1701,68 +1411,6 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const gemini =
-      geminiResult.status === 'fulfilled'
-        ? geminiResult.value
-        : ({
-            provider: 'gemini',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    // Why: Antigravity shares Gemini credentials today; mirror the Gemini snapshot so its status-bar UI gets a real lifecycle instead of null.
-    const antigravity: ProviderRateLimits = {
-      ...gemini,
-      provider: 'antigravity'
-    }
-
-    const opencodeGo =
-      opencodeGoResult.status === 'fulfilled'
-        ? opencodeGoResult.value
-        : ({
-            provider: 'opencode-go',
-            session: null,
-            weekly: null,
-            monthly: null,
-            updatedAt: Date.now(),
-            error:
-              opencodeGoResult.reason instanceof Error
-                ? opencodeGoResult.reason.message
-                : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    const kimi =
-      kimiResult.status === 'fulfilled'
-        ? kimiResult.value
-        : ({
-            provider: 'kimi',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: kimiResult.reason instanceof Error ? kimiResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    const miniMax =
-      miniMaxResult.status === 'fulfilled'
-        ? miniMaxResult.value
-        : ({
-            provider: 'minimax',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              miniMaxResult.reason instanceof Error
-                ? miniMaxResult.reason.message
-                : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -1778,23 +1426,12 @@ export class RateLimitService {
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
-    const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
-    const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
-    }
-    this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
-    if (shouldApplyOpencode) {
-      this.trackActiveFailureStreak('opencode-go', opencodeGo)
-    }
-    this.trackActiveFailureStreak('kimi', kimi)
-    if (shouldApplyMiniMax) {
-      this.trackActiveFailureStreak('minimax', miniMax)
     }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
@@ -1805,41 +1442,7 @@ export class RateLimitService {
         : this.state.claude,
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)
-        : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
-      opencodeGo: shouldApplyOpencode
-        ? opencodeConfigChanged
-          ? opencodeGo
-          : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
-        : this.state.opencodeGo,
-      kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
-      minimax: shouldApplyMiniMax
-        ? miniMaxConfigChanged
-          ? miniMax
-          : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
-    })
-
-    const grokResult = await grokResultPromise
-    if (signal.aborted) {
-      return
-    }
-    const grok =
-      grokResult.status === 'fulfilled'
-        ? grokResult.value
-        : ({
-            provider: 'grok',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-    this.trackActiveFailureStreak('grok', grok)
-    this.updateState({
-      ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok)
+        : this.state.codex
     })
   }
 
@@ -1964,44 +1567,6 @@ export class RateLimitService {
       claude: shouldApplyClaude
         ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude
-    })
-  }
-
-  private async runFetchGrokOnlyCycle(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) {
-      return
-    }
-    const previousState = this.state
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
-
-    this.updateState({
-      ...previousState,
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
-    })
-
-    const grok = await fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).catch(
-      (err): ProviderRateLimits => ({
-        provider: 'grok',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: err instanceof Error ? err.message : 'Unknown error',
-        status: 'error'
-      })
-    )
-
-    if (signal.aborted) {
-      return
-    }
-
-    this.trackActiveFailureStreak('grok', grok)
-    this.updateState({
-      ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok)
     })
   }
 

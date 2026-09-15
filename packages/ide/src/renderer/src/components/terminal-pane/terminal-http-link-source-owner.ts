@@ -3,10 +3,9 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   parseRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { PtyTransport } from './pty-transport-types'
 
-type OwnerTransport = Pick<PtyTransport, 'getPtyId' | 'getRuntimeEnvironmentId' | 'getConnectionId'>
+type OwnerTransport = Pick<PtyTransport, 'getPtyId' | 'getRuntimeEnvironmentId'>
 
 export function resolveTerminalHttpLinkSourceOwner(
   transport: OwnerTransport | null | undefined
@@ -17,25 +16,13 @@ export function resolveTerminalHttpLinkSourceOwner(
   }
 
   const ptyId = transport?.getPtyId() ?? null
-  const retainedSshConnectionId = transport?.getConnectionId?.()?.trim()
   if (!ptyId) {
-    return retainedSshConnectionId
-      ? { kind: 'ssh', connectionId: retainedSshConnectionId }
-      : { kind: 'local' }
+    return { kind: 'local' }
   }
 
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   if (runtimeEnvironmentId) {
     return { kind: 'runtime', runtimeEnvironmentId }
-  }
-
-  const sshPty = parseAppSshPtyId(ptyId)
-  if (sshPty) {
-    return { kind: 'ssh', connectionId: sshPty.connectionId }
-  }
-
-  if (retainedSshConnectionId) {
-    return { kind: 'ssh', connectionId: retainedSshConnectionId }
   }
 
   // Why: legacy remote ids without a retained transport owner are not evidence of local ownership.

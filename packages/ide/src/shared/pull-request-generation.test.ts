@@ -62,53 +62,12 @@ describe('buildPullRequestFieldsPrompt', () => {
     expect(prompt).toContain('use `Refs #12398`')
   })
 
-  it('uses GitLab-specific issue references', () => {
-    const prompt = buildPullRequestFieldsPrompt(
-      {
-        ...context,
-        provider: 'gitlab',
-        linkedIssueDetails: {
-          provider: 'gitlab',
-          number: 42,
-          title: 'Fix runner polling',
-          description: 'The runner checks paths that cannot exist.'
-        }
-      },
-      ''
-    )
+  it('uses the generic provider label when no provider is known', () => {
+    const prompt = buildPullRequestFieldsPrompt({ ...context, provider: 'unsupported' }, '')
 
-    expect(prompt).toContain('Linked GitLab issue: #42 Fix runner polling')
-    expect(prompt).toContain('`Closes #42` only for a complete fix')
-    expect(prompt).toContain('use `Related to #42`')
+    expect(prompt).toContain('Linked hosted-review issue: (none)')
+    expect(prompt).toContain('No hosted-review issue is linked; do not invent one')
     expect(prompt).not.toContain('GitHub issue')
-  })
-
-  it('uses the active provider when no issue is linked', () => {
-    const prompt = buildPullRequestFieldsPrompt({ ...context, provider: 'bitbucket' }, '')
-
-    expect(prompt).toContain('Linked Bitbucket issue: (none)')
-    expect(prompt).toContain('No Bitbucket issue is linked; do not invent one')
-    expect(prompt).not.toContain('GitHub issue')
-  })
-
-  it('uses Azure DevOps work-item syntax', () => {
-    const prompt = buildPullRequestFieldsPrompt(
-      {
-        ...context,
-        provider: 'azure-devops',
-        linkedIssueDetails: {
-          provider: 'azure-devops',
-          number: 99,
-          title: 'Stop unnecessary polling',
-          description: 'Avoid checks for unavailable tools.'
-        }
-      },
-      ''
-    )
-
-    expect(prompt).toContain('Linked Azure DevOps issue: AB#99 Stop unnecessary polling')
-    expect(prompt).toContain('`Fixes AB#99` only for a complete fix')
-    expect(prompt).toContain('use `AB#99`')
   })
 
   it('tells the agent to preserve existing review templates', () => {

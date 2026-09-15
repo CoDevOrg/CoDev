@@ -63,11 +63,10 @@ function resetPreflightMocks(): void {
   platformGet.mockReset().mockReturnValue({ platform: 'linux' })
 }
 
-function makeStatus(glabInstalled: boolean): PreflightStatus {
+function makeStatus(ghAuthenticated: boolean): PreflightStatus {
   return {
     git: { installed: true },
-    gh: { installed: true, authenticated: true },
-    glab: { installed: glabInstalled, authenticated: glabInstalled }
+    gh: { installed: true, authenticated: ghAuthenticated }
   }
 }
 
@@ -92,9 +91,6 @@ function makeWorktree(
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -128,7 +124,7 @@ describe('createPreflightSlice', () => {
     pending.resolve(makeStatus(true))
     await Promise.all([first, second])
 
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
     expect(store.getState().preflightStatusChecked).toBe(true)
     expect(store.getState().preflightStatusLoading).toBe(false)
   })
@@ -167,7 +163,7 @@ describe('createPreflightSlice', () => {
     stale.resolve(makeStatus(false))
     await normal
 
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
   })
 
   it('dedupes lazy checks onto an in-flight forced refresh', async () => {
@@ -183,7 +179,7 @@ describe('createPreflightSlice', () => {
     fresh.resolve(makeStatus(true))
     await Promise.all([forced, lazy])
 
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
   })
 
   it('checks integrations inside the active WSL worktree distro', async () => {
@@ -318,7 +314,7 @@ describe('createPreflightSlice', () => {
     ubuntu.resolve(makeStatus(false))
     debian.resolve(makeStatus(true))
     await Promise.all([first, second])
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
   })
 
   it('checks integrations through the active runtime environment', async () => {
@@ -356,7 +352,7 @@ describe('createPreflightSlice', () => {
     secondRuntime.resolve(makeStatus(true))
     await Promise.all([first, second])
     expect(store.getState().preflightStatusContextKey).toBe('runtime:runtime-2#0')
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
   })
 
   it('keeps a paired preflight result bound to the active runtime session', async () => {
@@ -404,7 +400,7 @@ describe('createPreflightSlice', () => {
 
     runtimeB.resolve(makeStatus(true))
     await requestB
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
 
     store.getState().setRuntimeEnvironmentStatus('runtime-b', { status: null, checkedAt: 3 })
     store.getState().invalidatePreflightStatus()
@@ -419,7 +415,7 @@ describe('createPreflightSlice', () => {
     expect(callRuntimeRpc).toHaveBeenCalledTimes(3)
     reconnectedB.resolve(makeStatus(true))
     await reconnect
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(true)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(true)
   })
 
   it('clears checked status immediately when refreshing a different local context', async () => {
@@ -447,6 +443,6 @@ describe('createPreflightSlice', () => {
 
     wsl.resolve(makeStatus(false))
     await second
-    expect(store.getState().preflightStatus?.glab?.installed).toBe(false)
+    expect(store.getState().preflightStatus?.gh.authenticated).toBe(false)
   })
 })

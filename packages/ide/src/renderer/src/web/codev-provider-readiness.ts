@@ -18,6 +18,7 @@ export type CodevProviderReadiness = {
 }
 
 const CODEV_PROVIDER_READINESS_MESSAGE = 'codev:provider-readiness'
+export const CODEV_PROVIDER_READINESS_REFRESH_MESSAGE = 'codev:provider-readiness-refresh'
 
 let readiness: CodevProviderReadiness | null = null
 const listeners = new Set<() => void>()
@@ -123,8 +124,36 @@ export function resetCodevProviderReadinessForTest(): void {
   installed = false
 }
 
-/** Test seam: applies a report without a window message. */
-export function setCodevProviderReadinessForTest(next: CodevProviderReadiness | null): void {
+/** Applies a readiness report locally — used after a connect in this iframe
+ *  so the composer unblocks without waiting for the parent to round-trip. */
+export function applyCodevProviderReadiness(next: CodevProviderReadiness | null): void {
+  if (next === null) {
+    if (readiness === null) {
+      return
+    }
+    readiness = null
+    emit()
+    return
+  }
+  if (sameReadiness(readiness, next)) {
+    return
+  }
   readiness = next
   emit()
+}
+
+/** Ask the parent to re-read connections and post an updated report. */
+export function requestCodevProviderReadinessRefresh(): void {
+  if (typeof window === 'undefined' || window.parent === window) {
+    return
+  }
+  window.parent.postMessage(
+    { type: CODEV_PROVIDER_READINESS_REFRESH_MESSAGE },
+    window.location.origin
+  )
+}
+
+/** Test seam: applies a report without a window message. */
+export function setCodevProviderReadinessForTest(next: CodevProviderReadiness | null): void {
+  applyCodevProviderReadiness(next)
 }

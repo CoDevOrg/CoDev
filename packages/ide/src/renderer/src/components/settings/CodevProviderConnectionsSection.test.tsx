@@ -1,138 +1,194 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CodevProviderConnectionsView } from './CodevProviderConnectionsSection'
+import type { CodevProviderConnectionSnapshot } from './codev-provider-connection-types'
 
-const disconnectedSnapshot = {
+const disconnectedSnapshot: CodevProviderConnectionSnapshot = {
   viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
   connections: [
     {
-      provider: 'openai' as const,
+      provider: 'openai',
       label: 'OpenAI',
-      status: 'not_connected' as const,
+      status: 'not_connected',
       credentialType: null,
       lastFour: null,
       suppliedBy: null,
-      scope: 'personal' as const
+      scope: 'personal',
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
     },
     {
-      provider: 'anthropic' as const,
+      provider: 'anthropic',
       label: 'Anthropic',
-      status: 'not_connected' as const,
+      status: 'not_connected',
       credentialType: null,
       lastFour: null,
       suppliedBy: null,
-      scope: 'personal' as const
+      scope: 'personal',
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
+    },
+    {
+      provider: 'cursor',
+      label: 'Cursor',
+      status: 'not_connected',
+      credentialType: null,
+      lastFour: null,
+      suppliedBy: null,
+      scope: 'personal',
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
     }
   ],
   cliSubscriptions: [
     {
-      provider: 'codex' as const,
+      provider: 'codex',
       label: 'Codex',
-      status: 'connected' as const,
-      command: 'codev codex-auth'
+      status: 'not_connected',
+      connectMode: 'device_code',
+      command: 'codev codex-auth',
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
     },
     {
-      provider: 'claude' as const,
+      provider: 'claude',
       label: 'Claude Code',
-      status: 'not_connected' as const,
-      command: 'codev claude-auth'
+      status: 'not_connected',
+      connectMode: 'manual_code',
+      command: 'codev claude-auth',
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
+    },
+    {
+      provider: 'cursor',
+      label: 'Cursor',
+      status: 'not_connected',
+      connectMode: 'cursor_deeplink',
+      command: null,
+      provenance: null,
+      enabledForRooms: false,
+      enabledForWorkspace: false
     }
-  ]
+  ],
+  claudeCliToken: {
+    status: 'not_connected',
+    lastFour: null,
+    enabledForRooms: false,
+    enabledForWorkspace: false
+  },
+  hostedClaudeConnect: false,
+  hostedOpenAIConnect: false
 }
 
 describe('CodevProviderConnectionsView', () => {
-  it('shows connected status with last four digits and a revoke control, never the secret', () => {
+  it('renders the home-page provider tabs and Claude, Codex, and Cursor cards', () => {
     const html = renderToStaticMarkup(
       <CodevProviderConnectionsView
         connected
+        onSnapshot={() => {}}
+        snapshot={disconnectedSnapshot}
+      />
+    )
+    expect(html).toContain('Chat rooms')
+    expect(html).toContain('Coding workspaces')
+    expect(html).toContain('Claude')
+    expect(html).toContain('Codex')
+    expect(html).toContain('Cursor')
+    expect(html).toContain('Connect Cursor')
+    expect(html).toContain('Connect from a terminal')
+    expect(html).not.toContain('Gemini')
+    expect(html).not.toContain('MiniMax')
+    expect(html).not.toContain('sk-')
+    expect(html).not.toContain('Provider connections')
+  })
+
+  it('shows Connect Claude and Connect ChatGPT when those hosted flows are enabled', () => {
+    const html = renderToStaticMarkup(
+      <CodevProviderConnectionsView
+        connected
+        onSnapshot={() => {}}
         snapshot={{
-          viewer: { id: 'user-1', name: 'CoDev Test Jordan' },
-          connections: [
-            {
-              provider: 'openai',
-              label: 'OpenAI',
-              status: 'connected',
-              credentialType: 'API_KEY',
-              lastFour: '9kQ2',
-              suppliedBy: 'CoDev Test Jordan',
-              scope: 'personal'
-            },
-            {
-              provider: 'anthropic',
-              label: 'Anthropic',
-              status: 'not_connected',
-              credentialType: null,
-              lastFour: null,
-              suppliedBy: null,
-              scope: 'personal'
-            }
-          ]
+          ...disconnectedSnapshot,
+          hostedClaudeConnect: true,
+          hostedOpenAIConnect: true
         }}
       />
     )
-    expect(html).toContain('Provider connections')
-    expect(html).toContain('OpenAI')
-    expect(html).toContain('Connected · API key · supplied by CoDev Test Jordan · ending 9kQ2')
-    expect(html).toContain('Replace key')
-    expect(html).toContain('Revoke')
-    expect(html).toContain('Anthropic')
-    expect(html).toContain('Not connected')
-    expect(html).toContain('Save key')
+    expect(html).toContain('Connect Claude')
+    expect(html).toContain('Connect ChatGPT')
+  })
+
+  it('does not offer an API key on the chat-rooms tab', () => {
+    const html = renderToStaticMarkup(
+      <CodevProviderConnectionsView
+        connected
+        onSnapshot={() => {}}
+        snapshot={disconnectedSnapshot}
+      />
+    )
+    expect(html).toContain('API key support for chat rooms is coming soon')
+    expect(html).not.toContain('Paste API key')
+  })
+
+  it('never renders a secret from a connected API key', () => {
+    const html = renderToStaticMarkup(
+      <CodevProviderConnectionsView
+        connected
+        onSnapshot={() => {}}
+        snapshot={{
+          ...disconnectedSnapshot,
+          connections: disconnectedSnapshot.connections.map((row) =>
+            row.provider === 'openai'
+              ? {
+                  ...row,
+                  status: 'connected',
+                  credentialType: 'API_KEY',
+                  lastFour: '9kQ2',
+                  suppliedBy: 'CoDev Test Jordan',
+                  provenance: 'api_key',
+                  enabledForWorkspace: true
+                }
+              : row
+          )
+        }}
+      />
+    )
     expect(html).not.toContain('sk-')
     expect(html).not.toContain('ciphertext')
     expect(html).not.toContain('9kQ2secret')
-    expect(html).not.toContain('Official OAuth')
   })
 
-  it('shows a save control for a disconnected provider and an error without echoing the key', () => {
+  it('opens on Coding workspaces when that tab was requested', () => {
     const html = renderToStaticMarkup(
       <CodevProviderConnectionsView
         connected
+        initialTabId="coding-workspaces"
+        onSnapshot={() => {}}
         snapshot={disconnectedSnapshot}
-        message="Enter a valid OpenAI API key."
       />
     )
-    expect(html).toContain('Save key')
-    expect(html).toContain('Enter a valid OpenAI API key.')
-    expect(html).not.toContain('Revoke')
-    expect(html).not.toContain('sk-test-codev-f62-fixture-key0001')
+    expect(html).toContain('aria-selected="true"')
+    expect(html).toContain('id="coding-workspaces-tab"')
+    expect(html).toContain('Paste API key')
   })
 
-  it('shows CLI subscription status inline on each provider card, with an API key alternative', () => {
+  it('does not offer Cursor on the coding workspaces tab', () => {
     const html = renderToStaticMarkup(
-      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
-    )
-    expect(html).toContain('Codex CLI:')
-    expect(html).toContain('Connected')
-    expect(html).toContain('Claude Code CLI:')
-    expect(html).toContain('Not connected · run')
-    expect(html).toContain('codev claude-auth')
-    expect(html).toContain('or paste an API key below instead')
-    expect(html).not.toContain('Official OAuth')
-    expect(html).not.toContain('fixture')
-  })
-
-  it('shows the in-app Connect Claude button only when the deployment enables it', () => {
-    const withoutFlag = renderToStaticMarkup(
-      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
-    )
-    expect(withoutFlag).not.toContain('Connect Claude')
-
-    const withFlag = renderToStaticMarkup(
       <CodevProviderConnectionsView
         connected
-        snapshot={{ ...disconnectedSnapshot, hostedClaudeConnect: true }}
+        initialTabId="coding-workspaces"
+        onSnapshot={() => {}}
+        snapshot={disconnectedSnapshot}
       />
     )
-    expect(withFlag).toContain('Connect Claude')
-  })
-
-  it('never renders the fixture OAuth flow', () => {
-    const html = renderToStaticMarkup(
-      <CodevProviderConnectionsView connected snapshot={disconnectedSnapshot} />
-    )
-    expect(html).not.toContain('Connect with OpenAI')
-    expect(html).not.toContain('auth.openai.com')
-    expect(html).not.toContain('sk-')
+    expect(html).toContain('Claude')
+    expect(html).toContain('Codex')
+    expect(html).not.toContain('Cursor')
+    expect(html).not.toContain('Connect Cursor')
   })
 })

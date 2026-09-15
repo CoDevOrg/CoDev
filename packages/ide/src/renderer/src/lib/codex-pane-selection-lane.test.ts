@@ -253,18 +253,6 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
   })
 
-  it('keys an SSH-connection pane to a lane no account selection can name', () => {
-    const laneKey = resolveCodexPaneSelectionLaneKey({
-      state: laneState(),
-      tab: HOST_TAB,
-      ptyId: 'ssh:my-box@@pty-7'
-    })
-    expect(laneKey).toBe('ssh-connection')
-    // Why: managed Codex accounts are only ever 'host' or 'wsl:<distro>', so no
-    // switch can produce this key — the pane is unreachable by any selection.
-    expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
-    expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
-  })
 })
 
 describe('resolveCodexPaneSelectionLane', () => {
@@ -346,8 +334,7 @@ describe('resolveCodexPaneSelectionLane', () => {
   })
 
   it.each([
-    ['remote:env-1@@term-1', 'env:env-1'],
-    ['ssh:my-box@@pty-7', 'ssh-connection']
+    ['remote:env-1@@term-1', 'env:env-1']
   ])('keeps a record from re-keying the foreign pane %s', (ptyId, expectedLaneKey) => {
     // Why: a foreign pane's lane is settled by its id, so a record here can only
     // be a recycled id — and honouring it would mute a working remote terminal.
@@ -456,31 +443,13 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(environmentSwitch('env:env-2')).toBe(false)
   })
 
-  it('never lets a local host switch claim a remote or SSH pane', () => {
-    const hostSwitch = getCodexAccountSwitchLaneMatcher({
-      settings: null,
-      target: { runtime: 'host' }
-    })
-    const state = laneState()
-    for (const ptyId of ['remote:env-owner@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7']) {
-      expect(hostSwitch(resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId }))).toBe(
-        false
-      )
-    }
-  })
 })
 
 describe('isForeignMachineCodexPtyId', () => {
-  it('separates panes whose shell runs on another machine from local ones', () => {
-    expect(isForeignMachineCodexPtyId('remote:env-1@@term-1')).toBe(true)
-    expect(isForeignMachineCodexPtyId('remote:term-1')).toBe(true)
-    expect(isForeignMachineCodexPtyId('ssh:my-box@@pty-7')).toBe(true)
-    expect(isForeignMachineCodexPtyId('pty-1')).toBe(false)
-  })
 
   it('agrees with the lane keys, so the sweep and the scan skip the same panes', () => {
     const state = laneState({ activeRuntimeEnvironmentId: 'env-1' })
-    for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7', 'pty-1']) {
+    for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'pty-1']) {
       expect(
         isLocalCodexSelectionLaneKey(
           resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId })

@@ -11,13 +11,13 @@ describe('pickTuiAgent', () => {
   })
 
   it('falls back in desktop catalog order when the preference is absent or stale', () => {
-    expect(pickTuiAgent(null, ['cursor', 'codex'])).toBe('codex')
-    expect(pickTuiAgent('gemini', ['cursor', 'codex'])).toBe('codex')
-    expect(pickTuiAgent(null, ['continue', 'command-code'])).toBe('command-code')
+    expect(pickTuiAgent(null, ['codex', 'claude-agent-teams'])).toBe('claude-agent-teams')
+    expect(pickTuiAgent('claude', ['codex'])).toBe('codex')
+    expect(pickTuiAgent(null, ['codex'])).toBe('codex')
   })
 
   it('respects the explicit blank terminal preference', () => {
-    expect(pickTuiAgent('blank', ['cursor', 'claude'])).toBeNull()
+    expect(pickTuiAgent('blank', ['codex', 'claude'])).toBeNull()
   })
 
   it('ignores disabled preferred and fallback agents', () => {

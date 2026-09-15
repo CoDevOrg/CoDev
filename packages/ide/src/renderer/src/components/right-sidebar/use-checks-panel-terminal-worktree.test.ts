@@ -216,18 +216,6 @@ describe('useChecksPanelTerminalWorktree', () => {
     expect(latest?.worktree).toBe(parentWorktree)
   })
 
-  it('does not poll an SSH terminal (its cwd is on the relay host)', async () => {
-    useAppStore.setState({
-      ptyIdsByTabId: { 'tab-1': ['ssh:target-1@@pty-9'] }
-    } as Partial<AppState>)
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(getCwdMock).not.toHaveBeenCalled()
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
   it('follows a local-host worktree that overrides its runtime repo host', async () => {
     const RUNTIME_REPO_ID = 'runtimeRepo'
     const runtimeRepo: Repo = {

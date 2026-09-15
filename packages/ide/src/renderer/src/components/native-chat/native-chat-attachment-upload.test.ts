@@ -66,25 +66,6 @@ describe('resolveNativeChatAttachmentOwner', () => {
     expect(resolveNativeChatAttachmentOwner(state(), 'tab-1')).toEqual({ kind: 'local' })
   })
 
-  it('resolves an SSH repo worktree to ssh with the worktree path', () => {
-    expect(
-      resolveNativeChatAttachmentOwner(
-        state({
-          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
-        }),
-        'tab-1'
-      )
-    ).toEqual({
-      kind: 'ssh',
-      connectionId: 'conn-1',
-      worktreePath: '/repo/worktree',
-      expectedExecutionHostId: 'ssh:conn-1',
-      expectedSshTargetId: 'conn-1',
-      expectedSshConnectionGeneration: 4
-    })
-  })
-
   it('resolves a runtime-owned repo to runtime', () => {
     expect(
       resolveNativeChatAttachmentOwner(
@@ -147,27 +128,6 @@ describe('uploadNativeChatAttachmentPaths', () => {
     vi.stubGlobal('window', {
       api: { fs: { resolveDroppedPathsForAgent: mocks.resolveDroppedPathsForAgent } }
     })
-  })
-
-  it('uploads through the terminal drop resolver and returns remote paths', async () => {
-    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
-      resolvedPaths: ['/remote/worktree/.codev/drops/a.txt'],
-      skipped: [],
-      failed: []
-    })
-    await expect(uploadNativeChatAttachmentPaths(['/local/a.txt'], owner)).resolves.toEqual([
-      '/remote/worktree/.codev/drops/a.txt'
-    ])
-    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledWith({
-      paths: ['/local/a.txt'],
-      worktreePath: '/remote/worktree',
-      connectionId: 'conn-1',
-      expectedExecutionHostId: 'ssh:conn-1',
-      expectedSshTargetId: 'conn-1',
-      expectedSshConnectionGeneration: 4
-    })
-    expect(mocks.toastLoading).toHaveBeenCalledTimes(1)
-    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
 
   it('surfaces per-file skips and failures through the shared drop toasts', async () => {

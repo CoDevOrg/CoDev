@@ -35,7 +35,6 @@ describe('tui agent permissions', () => {
 
     expect(result.agentDefaultArgs.claude).toBe('')
     expect(result.agentDefaultArgs.codex).toBe('--model gpt-5')
-    expect(result.agentDefaultEnv.goose).toEqual({})
   })
 
   it('reports mixed when custom arguments are present', () => {
@@ -76,13 +75,4 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
-  it('resolves env-driven yolo launches', () => {
-    expect(
-      resolveTuiAgentPermissionMode({
-        agent: 'goose',
-        agentArgs: '',
-        agentEnv: YOLO_TUI_AGENT_ENV.goose
-      })
-    ).toBe('yolo')
-  })
 })

@@ -20,18 +20,18 @@ describe('ActiveViewPreference', () => {
 
   it('migrates the legacy durable-state value into the profile sidecar', async () => {
     vi.useFakeTimers()
-    const preference = new ActiveViewPreference(dataFile, 'tasks')
+    const preference = new ActiveViewPreference(dataFile, 'automations')
 
-    expect(preference.get()).toBe('tasks')
+    expect(preference.get()).toBe('automations')
     expect(existsSync(getActiveViewPreferenceFile(dataFile))).toBe(false)
 
     // The renderer reasserts its hydrated value once persistence is ready.
-    expect(preference.set('tasks')).toBe(false)
+    expect(preference.set('automations')).toBe(false)
     vi.advanceTimersByTime(100)
     await preference.waitForPendingWrite()
 
     expect(JSON.parse(readFileSync(getActiveViewPreferenceFile(dataFile), 'utf-8'))).toEqual({
-      activeView: 'tasks'
+      activeView: 'automations'
     })
   })
 
@@ -82,10 +82,10 @@ describe('ActiveViewPreference', () => {
     // Why: `constructor`/`__proto__` are truthy under `in`; the sidecar must not
     // treat them as a valid view and leave the main surface blank.
     writeFileSync(getActiveViewPreferenceFile(dataFile), '{"activeView":"constructor"}', 'utf-8')
-    const preference = new ActiveViewPreference(dataFile, 'tasks')
+    const preference = new ActiveViewPreference(dataFile, 'automations')
 
-    expect(preference.get()).toBe('tasks')
+    expect(preference.get()).toBe('automations')
     expect(preference.set('__proto__')).toBe(false)
-    expect(preference.get()).toBe('tasks')
+    expect(preference.get()).toBe('automations')
   })
 })

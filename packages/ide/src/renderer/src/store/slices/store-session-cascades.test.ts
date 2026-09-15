@@ -87,22 +87,6 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
-  },
-  openCodeUsage: {
-    getScanState: vi.fn().mockResolvedValue({
-      enabled: false,
-      isScanning: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null,
-      hasAnyOpenCodeData: false
-    }),
-    setEnabled: vi.fn().mockResolvedValue({}),
-    refresh: vi.fn().mockResolvedValue({}),
-    getSummary: vi.fn().mockResolvedValue(null),
-    getDaily: vi.fn().mockResolvedValue([]),
-    getBreakdown: vi.fn().mockResolvedValue([]),
-    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -1712,44 +1696,6 @@ describe('reconnectPersistedTerminals', () => {
     expect(s.pendingReconnectWorktreeIds).toEqual([])
     // No eager spawn — PTY creation deferred to pane mount
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
-  })
-
-  it('does not restore old pty ids onto remote tabs during reconnect preparation', async () => {
-    const store = createTestStore()
-    const wt1 = 'repo1::/remote/wt1'
-
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo1',
-          displayName: 'Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/remote/wt1' })]
-      }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: wt1,
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-remote-pty' })]
-      },
-      terminalLayoutsByTabId: { tab1: makeLayout() },
-      activeWorktreeIdsOnShutdown: [wt1]
-    })
-
-    await store.getState().reconnectPersistedTerminals()
-
-    const s = store.getState()
-    expect(s.tabsByWorktree[wt1][0].ptyId).toBeNull()
-    expect(s.ptyIdsByTabId.tab1).toEqual([])
   })
 
   it('sets workspaceSessionReady even with no pending worktrees', async () => {

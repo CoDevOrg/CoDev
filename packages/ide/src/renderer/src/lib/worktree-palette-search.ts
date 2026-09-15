@@ -21,7 +21,7 @@ export type PaletteMatchedField =
   | 'port'
 
 export type PaletteSupportingText = {
-  labelKind: 'comment' | 'pr' | 'mr' | 'issue' | 'port'
+  labelKind: 'comment' | 'pr' | 'issue' | 'port'
   text: string
   matchRange: MatchRange | null
 }

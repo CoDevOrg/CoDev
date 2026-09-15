@@ -65,8 +65,7 @@ function dataFile(): string {
 }
 
 const SECRETS = {
-  opencodeSessionCookie: 'cookie-$&-value',
-  httpProxyUrl: 'http://user:p@ss@proxy.local:8080'
+  httpProxyUrl: 'http://user:p@ss-$&@proxy.local:8080'
 } as const
 const KAGI_LINK = 'https://kagi.com/session?token=abc123'
 
@@ -112,7 +111,7 @@ describe('persistence single-serialize save guard', () => {
     const store = await seedStoreWithSecrets()
     const inoBefore = statSync(dataFile()).ino
 
-    store.updateSettings({ opencodeSessionCookie: 'rotated-cookie' })
+    store.updateSettings({ httpProxyUrl: 'http://rotated:secret@proxy.local:8080' })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
     const inoAfter = statSync(dataFile()).ino
@@ -129,18 +128,16 @@ describe('persistence single-serialize save guard', () => {
 
     const raw = readFileSync(dataFile(), 'utf-8')
     const persisted = JSON.parse(raw) as {
-      settings: { opencodeSessionCookie: string; httpProxyUrl: string }
+      settings: { httpProxyUrl: string }
       ui: { browserKagiSessionLink: string }
     }
     // Secrets are ciphertext on disk, plaintext nowhere in the payload.
-    expect(persisted.settings.opencodeSessionCookie).not.toBe(SECRETS.opencodeSessionCookie)
     expect(persisted.settings.httpProxyUrl).not.toBe(SECRETS.httpProxyUrl)
     expect(persisted.ui.browserKagiSessionLink).not.toBe(KAGI_LINK)
-    expect(raw).not.toContain(SECRETS.opencodeSessionCookie)
+    expect(raw).not.toContain(SECRETS.httpProxyUrl)
     expect(raw).not.toContain(KAGI_LINK)
 
     const reloaded = await createStore()
-    expect(reloaded.getSettings().opencodeSessionCookie).toBe(SECRETS.opencodeSessionCookie)
     expect(reloaded.getSettings().httpProxyUrl).toBe(SECRETS.httpProxyUrl)
     expect(reloaded.getUI().browserKagiSessionLink).toBe(KAGI_LINK)
   })
@@ -148,14 +145,13 @@ describe('persistence single-serialize save guard', () => {
   it('omits new secrets when encryption is unavailable and still skips an identical state', async () => {
     cipherState.encryptionAvailable = false
     const store = await createStore()
-    store.updateSettings({ ...SECRETS, opencodeSessionCookie: '' })
+    store.updateSettings({ ...SECRETS })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
 
     const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
-      settings: { opencodeSessionCookie: string; httpProxyUrl: string }
+      settings: { httpProxyUrl: string }
     }
-    expect(persisted.settings.opencodeSessionCookie).toBe('')
     expect(persisted.settings.httpProxyUrl).toBe('')
 
     const inoBefore = statSync(dataFile()).ino
@@ -211,41 +207,6 @@ describe('persistence single-serialize save guard', () => {
   // search for the ciphertext would substitute the wrong site, letting two
   // distinct states hash equal → a silently dropped write (data loss). The
   // position-exact sentinel substitution must keep the hashes distinct.
-  it('persists a swap between a plaintext field and a secret when the plaintext equals the secret ciphertext (deterministic cipher)', async () => {
-    cipherState.deterministic = true
-    const store = await createStore()
-
-    const P = 'cookie-plaintext-value'
-    // Persist cookie=P, then read its on-disk ciphertext C (what a user could
-    // copy out of orca-data.json).
-    store.updateSettings({ opencodeSessionCookie: P })
-    vi.advanceTimersByTime(1000)
-    await store.waitForPendingWrite()
-    const C = (
-      JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
-        settings: { opencodeSessionCookie: string }
-      }
-    ).settings.opencodeSessionCookie
-    expect(C).not.toBe(P) // C is ciphertext
-
-    // State 1: the plaintext bypass-rules field literally holds ciphertext C;
-    // cookie is still P (which also encrypts to C under the deterministic IV).
-    store.updateSettings({ httpProxyBypassRules: C, opencodeSessionCookie: P })
-    vi.advanceTimersByTime(2000)
-    await store.waitForPendingWrite()
-    const inoState1 = statSync(dataFile()).ino
-
-    // State 2 (distinct): swap the two values. Must be written, not skipped.
-    store.updateSettings({ httpProxyBypassRules: P, opencodeSessionCookie: C })
-    vi.advanceTimersByTime(2000)
-    await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).not.toBe(inoState1)
-
-    // The swap round-trips through a reload — nothing was lost.
-    const reloaded = await createStore()
-    expect(reloaded.getSettings().httpProxyBypassRules).toBe(P)
-    expect(reloaded.getSettings().opencodeSessionCookie).toBe(C)
-  })
 
   // Regression (adversarial review, gpt-5.6-sol round 2): the deeper variant of
   // the same class — a user-controlled JSON KEY. agentDefaultEnv lets the user

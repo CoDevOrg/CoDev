@@ -54,7 +54,6 @@ export function useSourceControlAgentActionDialog({
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
-  const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
@@ -81,16 +80,13 @@ export function useSourceControlAgentActionDialog({
     }
     setDetecting(true)
     try {
-      const nextAgents =
-        typeof connectionId === 'string'
-          ? await ensureRemoteDetectedAgents(connectionId)
-          : await ensureDetectedAgents()
+      const nextAgents = await ensureDetectedAgents()
       setDetectedAgents(nextAgents)
       return nextAgents
     } finally {
       setDetecting(false)
     }
-  }, [connectionId, connectionUnavailable, ensureDetectedAgents, ensureRemoteDetectedAgents])
+  }, [connectionUnavailable, ensureDetectedAgents])
 
   useEffect(() => {
     if (!open) {

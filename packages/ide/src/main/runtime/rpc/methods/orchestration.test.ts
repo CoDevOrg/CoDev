@@ -831,40 +831,6 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
-    it('fans out @droid by title match', async () => {
-      setupWithTerminals([
-        makeSummary('term_a', { title: 'Codex' }),
-        makeSummary('term_b', { title: 'Droid ready' }),
-        makeSummary('term_c', { title: 'Android build' })
-      ])
-
-      const result = (await call('orchestration.send', {
-        from: 'term_a',
-        to: '@droid',
-        subject: 'droid only'
-      })) as { messages: { to_handle: string }[]; recipients: number }
-
-      expect(result.recipients).toBe(1)
-      expect(result.messages[0].to_handle).toBe('term_b')
-    })
-
-    it('fans out @cursor by title match without claiming a cursor-mentioning title', async () => {
-      setupWithTerminals([
-        makeSummary('term_a', { title: 'Codex' }),
-        makeSummary('term_b', { title: 'Cursor ready' }),
-        makeSummary('term_c', { title: '✳ Fix the text cursor blink' })
-      ])
-
-      const result = (await call('orchestration.send', {
-        from: 'term_a',
-        to: '@cursor',
-        subject: 'cursor only'
-      })) as { messages: { to_handle: string }[]; recipients: number }
-
-      expect(result.recipients).toBe(1)
-      expect(result.messages[0].to_handle).toBe('term_b')
-    })
-
     it('fans out @worktree:<id> to matching worktree', async () => {
       setupWithTerminals([
         makeSummary('term_a', { worktreeId: 'wt_1' }),
@@ -2290,22 +2256,22 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
-    // shell command opened the IDE and left a blank shell (issue #11926).
+    // Why: an agent id on PATH can resolve to a desktop app; passing it as a shell
+    // command opened that app and left a blank shell (issue #11926).
     it('never passes the agent id to the worker terminal as a shell command', async () => {
       setup()
       mockCurrentWorkerStart()
-      const task = db.createTask({ spec: 'start a cursor worker' })
+      const task = db.createTask({ spec: 'start a codex worker' })
 
       await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'cursor'
+        agent: 'codex'
       })
 
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',
-        expect.objectContaining({ startupAgent: 'cursor' })
+        expect.objectContaining({ startupAgent: 'codex' })
       )
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',

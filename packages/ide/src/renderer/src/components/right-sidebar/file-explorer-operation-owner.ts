@@ -19,9 +19,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 export type FileExplorerOperationRoute = {
   settings: { activeRuntimeEnvironmentId: string | null }
   connectionId?: string
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
+  expectedExecutionHostId?: 'local'
 }
 
 export type FileExplorerOperationGuard = {
@@ -109,20 +107,12 @@ export function getFileExplorerOperationRoute(
         expectedExecutionHostId: 'local'
       }
     case 'ssh':
-      return {
-        settings: { activeRuntimeEnvironmentId: null },
-        connectionId: owner.connectionId,
-        expectedExecutionHostId: `ssh:${encodeURIComponent(owner.connectionId)}`
-      }
-    case 'runtime': {
-      const host = parseExecutionHostId(owner.executionHostId)
+      return null
+    case 'runtime':
       return {
         settings: { activeRuntimeEnvironmentId: owner.environmentId },
-        ...(host?.kind === 'ssh'
-          ? { expectedExecutionHostId: host.id }
-          : { expectedExecutionHostId: 'local' as const })
+        expectedExecutionHostId: 'local'
       }
-    }
     case 'unresolved':
       return null
   }
@@ -165,51 +155,18 @@ export function captureFileExplorerOperationGuard(
     () => new Error(getFileExplorerOwnerUnresolvedMessage()),
     () => getFileExplorerGenerationRoute(getFileExplorerOperationOwner(worktreeId))
   )
-  const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(
-    useAppStore.getState(),
-    operationRoute
-  )
   const operationHost = parseExecutionHostId(operationRoute.executionHostId)
-  if (!operationHost) {
+  if (!operationHost || operationHost.kind === 'ssh') {
     throw new Error(getFileExplorerOwnerUnresolvedMessage())
   }
-  if (operationHost?.kind === 'ssh' && expectedSshConnectionGeneration === undefined) {
-    throw new Error(getFileExplorerOwnerUnresolvedMessage())
-  }
-  const guardedRoute: FileExplorerOperationRoute = {
-    ...route,
-    expectedExecutionHostId: operationHost.kind === 'ssh' ? operationHost.id : 'local',
-    ...(operationHost?.kind === 'ssh' ? { expectedSshTargetId: operationHost.targetId } : {}),
-    ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
-  }
+  const guardedRoute: FileExplorerOperationRoute = { ...route, expectedExecutionHostId: 'local' }
   return {
     route: guardedRoute,
     assertCurrent: () => {
       generationGuard.assertCurrent()
-      if (
-        getExpectedSshConnectionGeneration(useAppStore.getState(), operationRoute) !==
-        expectedSshConnectionGeneration
-      ) {
-        throw new Error(getFileExplorerOwnerUnresolvedMessage())
-      }
       return guardedRoute
     }
   }
-}
-
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
-  }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
 }
 
 function getFileExplorerGenerationRoute(

@@ -83,7 +83,6 @@ vi.mock('./project-header-drag', () => ({
 vi.mock('./WorktreeCard', () => ({
   default: ({
     worktree,
-    repo,
     isActive,
     contentIndent,
     flushSurface,
@@ -93,7 +92,6 @@ vi.mock('./WorktreeCard', () => ({
     lineageChildren
   }: {
     worktree: Worktree
-    repo?: Repo
     isActive?: boolean
     contentIndent?: number
     flushSurface?: boolean
@@ -108,12 +106,7 @@ vi.mock('./WorktreeCard', () => ({
         { isDeleting?: boolean } | undefined
       >) ?? {}
     const cardProps = (mockStore.state.worktreeCardProperties as string[] | undefined) ?? []
-    const sshState =
-      repo?.connectionId && mockStore.state.sshConnectionStates instanceof Map
-        ? mockStore.state.sshConnectionStates.get(repo.connectionId)
-        : null
     const isDeleting = deleteStateByWorktreeId[worktree.id]?.isDeleting === true
-    const showSshDialog = isActive && repo?.connectionId && sshState?.status !== 'connected'
     // Why: the real WorktreeCard owns the inline-rename surface and decides
     // begin-editing from renameRowKey + renamingWorktreeId, so mirror that here
     // to verify WorktreeList hands each row its row-scoped rename key.
@@ -137,7 +130,6 @@ vi.mock('./WorktreeCard', () => ({
         'data-lineage-collapsed':
           lineageCollapsed === undefined ? undefined : String(lineageCollapsed),
         'data-linked-pr': worktree.linkedPR ?? undefined,
-        'data-linked-gitlab-mr': worktree.linkedGitLabMR ?? undefined,
         'aria-busy': isDeleting ? 'true' : undefined
       },
       React.createElement('h2', null, worktree.displayName),
@@ -154,13 +146,6 @@ vi.mock('./WorktreeCard', () => ({
             },
             `${lineageChildCount} ${lineageChildCount === 1 ? 'child' : 'children'}`
           )
-        : null,
-      showSshDialog
-        ? React.createElement('aside', {
-            'data-worktree-card-ssh-dialog': 'open',
-            'data-ssh-status': sshState?.status ?? 'disconnected',
-            'data-ssh-target-id': repo?.connectionId
-          })
         : null,
       lineageChildren
     )
@@ -271,7 +256,6 @@ function makeWorktree(args: {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -983,13 +967,12 @@ describe('WorktreeList lineage child card renderer', () => {
 
   it('passes child review details through the shared WorktreeCard path', async () => {
     setLineageFixtureState('none', {
-      childWorktreeOverrides: { linkedPR: 456, linkedGitLabMR: 42 }
+      childWorktreeOverrides: { linkedPR: 456, }
     })
     const markup = await renderWorktreeListMarkup()
     const childCard = getCardOpeningTag(markup, 'child')
 
     expect(childCard).toContain('data-linked-pr="456"')
-    expect(childCard).toContain('data-linked-gitlab-mr="42"')
   })
 
   it('uses shared nested-row indentation for child and grandchild cards', async () => {
@@ -1030,23 +1013,6 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(childMarkup).toContain('aria-label="Mark as read"')
     expect(childMarkup).not.toContain('aria-label="Mark as unread"')
-  })
-
-  it('lets WorktreeCard own the reconnect dialog for an active disconnected lineage child', async () => {
-    setLineageFixtureState()
-    const repo = (mockStore.state.repos as Repo[])[0]!
-    repo.connectionId = 'ssh-target-1'
-    mockStore.state.activeWorktreeId = 'child'
-    mockStore.state.sshConnectionStates = new Map([['ssh-target-1', { status: 'disconnected' }]])
-    mockStore.state.sshTargetLabels = new Map([['ssh-target-1', 'Remote target']])
-
-    const markup = await renderWorktreeListMarkup()
-
-    expect(getCardOpeningTag(markup, 'child')).toContain('data-worktree-card-active="true"')
-    expect(markup).toContain('data-worktree-card-ssh-dialog="open"')
-    expect(markup).not.toContain('data-lineage-ssh-dialog="open"')
-    expect(markup).toContain('data-ssh-status="disconnected"')
-    expect(markup).toContain('data-ssh-target-id="ssh-target-1"')
   })
 
   it('points aria-activedescendant at the active lineage child row', async () => {

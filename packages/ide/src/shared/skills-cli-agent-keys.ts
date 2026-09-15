@@ -5,50 +5,13 @@ import type { TuiAgent } from './types'
  *
  * Why: `skills add` validates `--agent` against its own namespace and exits 1 on
  * an unknown key, so anything we are not certain of maps to null and is dropped
- * rather than guessed. Orca ids and skills keys agree less often than they look
- * (`claude` is `claude-code`, `rovo` is `rovodev`, `aug` is `augment`), and some
- * near-matches are different products — Orca's `aider` CLI is not the CLI's
- * `aider-desk`, and Orca's `openclaude` is its `openclaw` in name only, so it
- * follows Orca's own rule that OpenClaude reads Claude-owned roots.
+ * rather than guessed. Orca ids and skills keys do not always agree (`claude` is
+ * `claude-code`).
  */
 export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   claude: 'claude-code',
   'claude-agent-teams': 'claude-code',
-  // Why: Orca states OpenClaude reads Claude-owned roots (native-chat-agent-profiles).
-  openclaude: 'claude-code',
-  codex: 'codex',
-  autohand: 'autohand-code',
-  opencode: 'opencode',
-  'mimo-code': null,
-  pi: 'pi',
-  omp: null,
-  gemini: 'gemini-cli',
-  antigravity: 'antigravity',
-  aider: null,
-  goose: 'goose',
-  amp: 'amp',
-  kilo: 'kilo',
-  kiro: 'kiro-cli',
-  crush: 'crush',
-  aug: 'augment',
-  cline: 'cline',
-  codebuff: null,
-  'command-code': 'command-code',
-  continue: 'continue',
-  cursor: 'cursor',
-  droid: 'droid',
-  kimi: 'kimi-code-cli',
-  'mistral-vibe': 'mistral-vibe',
-  'qwen-code': 'qwen-code',
-  rovo: 'rovodev',
-  hermes: 'hermes-agent',
-  openclaw: 'openclaw',
-  copilot: 'github-copilot',
-  grok: 'grok',
-  devin: 'devin',
-  ante: null,
-  // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
-  trae: 'trae-cn'
+  codex: 'codex'
 } satisfies Record<TuiAgent, string | null>
 
 /**

@@ -30,10 +30,6 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
 
   const getFileConnectionId = (file: OpenFile): string | undefined => {
     const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
-    const externalSshTargetId = file.externalSshTargetId?.trim()
-    if (externalSshTargetId && connectionId !== externalSshTargetId) {
-      throw new Error('External SSH file owner changed')
-    }
     return connectionId
   }
 
@@ -65,8 +61,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         filePath: file.filePath,
         relativePath: file.relativePath,
         worktreeId: file.worktreeId,
-        connectionId: getFileConnectionId(file),
-        expectedExternalSshTargetId: file.externalSshTargetId
+        connectionId: getFileConnectionId(file)
       })
       if (disposed) {
         return

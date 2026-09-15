@@ -5,10 +5,6 @@ import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
-import {
-  findGrokChatHistoryBySessionId,
-  resolveGrokSessionsDir
-} from '../../shared/grok-session-paths'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
@@ -17,14 +13,6 @@ import {
 // computed per call (not at module load) so it tracks the live home.
 function claudeProjectsDir(): string {
   return join(homedir(), '.claude', 'projects')
-}
-
-// Why: `cursor-agent` nests each session's transcript under a per-project slug
-// (`~/.cursor/projects/<encoded-cwd>/agent-transcripts/<id>/<id>.jsonl`). The
-// slug is not derivable here without the launch cwd, but the session id is a
-// UUID, so a glob for `<id>/<id>.jsonl` across every project dir is unambiguous.
-function cursorProjectsDir(): string {
-  return join(homedir(), '.cursor', 'projects')
 }
 
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
@@ -41,20 +29,12 @@ function codexSessionsDirs(): string[] {
   return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
-function grokSessionsDir(): string {
-  return resolveGrokSessionsDir(process.env, homedir())
-}
-
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
   /** Override the Codex sessions roots, searched in order (tests / isolated
    *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
   codexSessionsDirs?: string[]
-  /** Override the Grok sessions root (`~/.grok/sessions`). */
-  grokSessionsDir?: string
-  /** Override the Cursor projects root (`~/.cursor/projects`). */
-  cursorProjectsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -101,29 +81,7 @@ export async function resolveSessionFilePath(
   if (transcriptAgent === 'codex') {
     return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
   }
-  if (transcriptAgent === 'grok') {
-    return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
-  }
-  if (transcriptAgent === 'cursor') {
-    return resolveCursorSessionFile(trimmedId, options.cursorProjectsDir ?? cursorProjectsDir())
-  }
   return null
-}
-
-async function resolveCursorSessionFile(
-  sessionId: string,
-  projectsDir: string
-): Promise<string | null> {
-  const targetName = `${sessionId}.jsonl`
-  const files = await walkSessionFiles(projectsDir, 'cursor', [], {
-    extensions: new Set(['.jsonl']),
-    // The transcript lives at `<project>/agent-transcripts/<id>/<id>.jsonl`;
-    // match both the file name and the id-named parent so an unrelated
-    // `<id>.jsonl` elsewhere in the tree cannot shadow it.
-    filePredicate: (path) =>
-      basename(path) === targetName && basename(join(path, '..')) === sessionId
-  })
-  return files[0] ?? null
 }
 
 async function resolveClaudeSessionFile(
@@ -163,12 +121,3 @@ async function resolveCodexSessionFile(
   return null
 }
 
-async function resolveGrokSessionFile(
-  sessionId: string,
-  sessionsDir: string
-): Promise<string | null> {
-  // Why: Native Chat runs on the main thread; use the bounded async direct-layout
-  // lookup instead of blocking, then repeating, a recursive full-tree scan.
-  const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
-  return history
-}

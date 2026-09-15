@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveCodevLiveEdit,
   isCodevFileWriteTool,
-  normalizeCodevAgentKind,
   normalizeWorktreeRelativePath,
   type CodevLiveEditSource,
 } from './codev-live-edit'
@@ -25,19 +24,6 @@ describe('isCodevFileWriteTool', () => {
     for (const tool of ['Read', 'Bash', 'Grep', 'WebFetch', 'read_file', undefined]) {
       expect(isCodevFileWriteTool(tool)).toBe(false)
     }
-  })
-})
-
-describe('normalizeCodevAgentKind', () => {
-  it('maps raw hook agent types onto the closed telemetry enum', () => {
-    expect(normalizeCodevAgentKind('claude')).toBe('claude-code')
-    expect(normalizeCodevAgentKind('Anthropic')).toBe('claude-code')
-    expect(normalizeCodevAgentKind('openai')).toBe('codex')
-    expect(normalizeCodevAgentKind('codex')).toBe('codex')
-    expect(normalizeCodevAgentKind('gemini')).toBe('gemini')
-    expect(normalizeCodevAgentKind('cursor')).toBe('cursor')
-    expect(normalizeCodevAgentKind('totally-unknown')).toBe('other')
-    expect(normalizeCodevAgentKind(undefined)).toBe('other')
   })
 })
 

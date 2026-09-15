@@ -23,7 +23,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -163,38 +162,6 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('allows SSH-owned session worktrees', () => {
-    expect(
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: WSL_SESSION_FILE,
-        worktreeInfo: makeWorktreeInfo('active'),
-        activeWorktreeId: null,
-        worktrees: [makeWorktree()],
-        repos: [makeRepo({ connectionId: 'ssh-1' })]
-      })
-    ).toEqual({
-      blocked: false,
-      worktreeId: 'repo-1::/repo/orca',
-      usesSessionWorktree: true
-    })
-  })
-
-  it('allows SSH-stamped worktrees even when the repo owner is runtime', () => {
-    expect(
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: WSL_SESSION_FILE,
-        worktreeInfo: makeWorktreeInfo('active'),
-        activeWorktreeId: null,
-        worktrees: [makeWorktree({ hostId: 'ssh:ssh-1' })],
-        repos: [makeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })]
-      })
-    ).toEqual({
-      blocked: false,
-      worktreeId: 'repo-1::/repo/orca',
-      usesSessionWorktree: true
-    })
-  })
-
   it('allows runtime-owned targets for matching runtime sessions', () => {
     expect(
       resolveAiVaultSessionResumeState({
@@ -327,23 +294,6 @@ describe('resolveAiVaultSessionResumeState', () => {
     })
   })
 
-  it('blocks host-stored sessions when only an SSH workspace is open', () => {
-    expect(
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: HOST_SESSION_FILE,
-        worktreeInfo: makeWorktreeInfo('archived'),
-        activeWorktreeId: folderWorkspaceKey('folder-1'),
-        worktrees: [],
-        repos: [],
-        targetState: makeFolderTargetState({ id: 'group-1', connectionId: 'ssh-1' })
-      })
-    ).toEqual({
-      blocked: true,
-      worktreeId: null,
-      usesSessionWorktree: false
-    })
-  })
-
   it('allows an active runtime folder workspace for matching runtime sessions', () => {
     expect(
       resolveAiVaultSessionResumeState({
@@ -379,28 +329,6 @@ describe('resolveAiVaultSessionResumeActions', () => {
     ).toEqual({
       worktree: { worktreeId: 'repo-1::/repo/orca', disabled: false },
       newTab: { worktreeId: 'repo-1::/repo/other', disabled: false }
-    })
-  })
-
-  it('enables an SSH active-workspace action when the session worktree is local', () => {
-    expect(
-      resolveAiVaultSessionResumeActions({
-        sessionFilePath: WSL_SESSION_FILE,
-        worktreeInfo: makeWorktreeInfo('active'),
-        activeWorktreeId: 'repo-2::/remote/orca',
-        worktrees: [
-          makeWorktree(),
-          makeWorktree({
-            id: 'repo-2::/remote/orca',
-            repoId: 'repo-2',
-            path: '/remote/orca'
-          })
-        ],
-        repos: [{ id: 'repo-1' } as Repo, { id: 'repo-2', connectionId: 'ssh-1' } as Repo]
-      })
-    ).toEqual({
-      worktree: { worktreeId: 'repo-1::/repo/orca', disabled: false },
-      newTab: { worktreeId: 'repo-2::/remote/orca', disabled: false }
     })
   })
 
@@ -516,19 +444,6 @@ describe('resolveAiVaultSessionLaunchTarget', () => {
     ).toEqual({
       status: 'ready',
       worktreeId: folderWorkspaceKey('folder-1')
-    })
-  })
-
-  it('blocks direct resume of a host-stored session into an SSH folder workspace', () => {
-    expect(
-      resolveAiVaultSessionLaunchTarget({
-        sessionFilePath: HOST_SESSION_FILE,
-        activeWorktreeId: folderWorkspaceKey('folder-1'),
-        targetState: makeFolderTargetState({ id: 'group-1', connectionId: 'ssh-1' })
-      })
-    ).toEqual({
-      status: 'unsupported',
-      targetStatus: 'ssh'
     })
   })
 

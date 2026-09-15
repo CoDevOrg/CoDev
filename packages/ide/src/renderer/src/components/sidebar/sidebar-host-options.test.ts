@@ -3,7 +3,6 @@ import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
-  getSidebarHostVisibilityLabel,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls
 } from './sidebar-host-options'
@@ -14,7 +13,6 @@ describe('sidebar host options', () => {
   it('hides host controls for local-only workspaces', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: null }],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -31,48 +29,9 @@ describe('sidebar host options', () => {
     expect(shouldShowHostScopeControls(hosts)).toBe(false)
   })
 
-  it('includes SSH hosts from labels and repos', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-from-repo' }],
-      sshTargetLabels: new Map([['ssh-saved', 'Saved SSH']]),
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(hosts.map((host) => host.id)).toEqual(['local', 'ssh:ssh-saved', 'ssh:ssh-from-repo'])
-    expect(hosts.map((host) => host.health)).toEqual(['local', 'disconnected', 'disconnected'])
-    expect(hosts.find((host) => host.id === 'ssh:ssh-saved')?.presence).toBe('configured')
-    expect(hosts.find((host) => host.id === 'ssh:ssh-from-repo')?.presence).toBe('project')
-    expect(shouldShowHostScopeControls(hosts)).toBe(true)
-  })
-
-  it('includes SSH health in options', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        ]
-      ]),
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(hosts.find((host) => host.id === 'ssh:ssh-1')).toMatchObject({
-      label: 'Builder',
-      health: 'available'
-    })
-  })
-
   it('includes the focused runtime compatibility host', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' }
     })
 
@@ -88,7 +47,6 @@ describe('sidebar host options', () => {
   it('uses saved runtime environment names for runtime host labels', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: '03ef704c-b180-4b10-998d-e28fbd5de9a3' },
       runtimeEnvironments: [
         {
@@ -107,7 +65,6 @@ describe('sidebar host options', () => {
   it('marks a runtime host blocked when its live status fails compat', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       // Why: protocol 0 is below the minimum compatible server version, so the
       // registry must surface a 'server-too-old' blocked verdict + health when
@@ -142,7 +99,6 @@ describe('sidebar host options', () => {
   it('leaves a runtime host available when its live status is compatible', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       runtimeStatusByEnvironmentId: new Map([
         [
@@ -171,39 +127,13 @@ describe('sidebar host options', () => {
   it('builds all-host plus focused-host scope options', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
     expect(buildSidebarHostScopeOptions(hosts)).toMatchObject([
-      { id: 'all', label: 'All hosts', detail: `${LOCAL_HOST_LABEL}, Builder`, health: 'mixed' },
-      { id: 'local', label: LOCAL_HOST_LABEL, health: 'local' },
-      { id: 'ssh:ssh-1', label: 'Builder', health: 'disconnected' }
+      { id: 'all', label: 'All hosts', detail: LOCAL_HOST_LABEL, health: 'mixed' },
+      { id: 'local', label: LOCAL_HOST_LABEL, health: 'local' }
     ])
-  })
-
-  it('labels visible host selections for the workspace options menu', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getSidebarHostVisibilityLabel(null, hosts)).toBe('All hosts')
-    expect(getSidebarHostVisibilityLabel(['ssh:ssh-1'], hosts)).toBe('Builder')
-    expect(getSidebarHostVisibilityLabel(['local', 'ssh:ssh-1'], hosts)).toBe('All hosts')
-  })
-
-  it('carries host kind so the header menu can pick lifecycle actions', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      settings: { activeRuntimeEnvironmentId: 'runtime-1' }
-    })
-
-    expect(hosts.find((host) => host.id === 'local')?.kind).toBe('local')
-    expect(hosts.find((host) => host.id === 'ssh:ssh-1')?.kind).toBe('ssh')
-    expect(hosts.find((host) => host.id === 'runtime:runtime-1')?.kind).toBe('runtime')
   })
 
   it('labels host health for compact sidebar UI', () => {

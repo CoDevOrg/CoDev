@@ -12,19 +12,14 @@ import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
-  openTaskPage: vi.fn(),
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
-  openMobilePage: vi.fn(),
   openModal: vi.fn(),
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
-  hasPairedMobileDevice: false,
   agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
-  getAgentBucketCounts: vi.fn(),
-  dismissMobileOnboardingBadge: vi.fn(),
-  setSetupGuideSidebarDismissed: vi.fn()
+  getAgentBucketCounts: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -53,23 +48,6 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'J'], doubleTap: false }]
 }))
 
-vi.mock('./mobile-sidebar-onboarding-badge', () => ({
-  useMobileSidebarOnboardingBadge: () => ({
-    visible: false,
-    hasPairedDevice: mocks.hasPairedMobileDevice,
-    dismiss: mocks.dismissMobileOnboardingBadge
-  })
-}))
-
-vi.mock('../setup-guide/use-setup-guide-progress', () => ({
-  useSetupGuideProgress: () => ({
-    ready: true,
-    coreDoneCount: 0,
-    coreTotal: 1,
-    stepDone: {}
-  })
-}))
-
 vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => (
     <div data-testid="context-menu">{children}</div>
@@ -86,12 +64,9 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 import SidebarNav, {
-  getSetupGuideSidebarEntryReady,
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
-  shouldShowAutomationsButton,
-  shouldShowMobileButton,
-  shouldShowSetupGuideEntry
+  shouldShowAutomationsButton
 } from './SidebarNav'
 
 function gitRepo(): Repo {
@@ -102,17 +77,6 @@ function gitRepo(): Repo {
     badgeColor: 'gray',
     addedAt: 1,
     kind: 'git'
-  }
-}
-
-function folderRepo(): Repo {
-  return {
-    id: 'folder-1',
-    path: '/tmp/folder-1',
-    displayName: 'folder-1',
-    badgeColor: 'gray',
-    addedAt: 1,
-    kind: 'folder'
   }
 }
 
@@ -127,10 +91,8 @@ function setSidebarState({
     settings,
     repos,
     activeView: 'worktrees',
-    openTaskPage: mocks.openTaskPage,
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
-    openMobilePage: mocks.openMobilePage,
     openModal: mocks.openModal,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
@@ -142,9 +104,7 @@ function setSidebarState({
     prefetchWorkItems: vi.fn(),
     activeRepoId: null,
     persistedUIReady: true,
-    activeModal: null,
-    setupGuideSidebarDismissed: true,
-    setSetupGuideSidebarDismissed: mocks.setSetupGuideSidebarDismissed
+    activeModal: null
   }
 }
 
@@ -212,7 +172,6 @@ describe('SidebarNav', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
-    mocks.hasPairedMobileDevice = false
     mocks.agentBucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
     setSidebarState()
   })
@@ -292,15 +251,6 @@ describe('SidebarNav', () => {
     expect(idle?.querySelector('svg')).toBeNull()
   })
 
-  it('shows the Mobile entry by default for older settings', () => {
-    expect(shouldShowMobileButton(null)).toBe(true)
-    expect(shouldShowMobileButton({})).toBe(true)
-  })
-
-  it('hides the Mobile entry when the sidebar setting is off', () => {
-    expect(shouldShowMobileButton({ showMobileButton: false })).toBe(false)
-  })
-
   it('hides the Tasks and Automations entries in the CoDev-embedded client', async () => {
     ;(window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__ = true
     const container = await renderSidebarNav()
@@ -308,21 +258,9 @@ describe('SidebarNav', () => {
     expect(queryButtonByText(container, 'Tasks')).toBeNull()
     expect(queryButtonByText(container, 'Automations')).toBeNull()
     // The worktree search entry is untouched.
-    expect(container.querySelector('[aria-label="Search worktrees and browser tabs"]')).not.toBeNull()
-  })
-
-  it('updates localized labels when the language changes after mount', async () => {
-    const container = await renderSidebarNav()
-
-    expect(queryButtonByText(container, 'Automations')).not.toBeNull()
-    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
-
-    await act(async () => {
-      await i18n.changeLanguage('zh')
-    })
-
-    expect(queryButtonByText(container, '自动化')).not.toBeNull()
-    expect(queryButtonByText(container, 'Orca 手机端')).not.toBeNull()
+    expect(
+      container.querySelector('[aria-label="Search worktrees and browser tabs"]')
+    ).not.toBeNull()
   })
 
   it('updates labels when pseudo-localization is enabled after mount', async () => {
@@ -333,28 +271,6 @@ describe('SidebarNav', () => {
     })
 
     expect(queryButtonByText(container, '[Automations]')).not.toBeNull()
-    expect(queryButtonByText(container, '[Orca Mobile]')).not.toBeNull()
-  })
-
-  it('shows the inline hide control only once a device is paired', async () => {
-    const beforePairing = await renderSidebarNav()
-    expect(queryButtonByText(beforePairing, 'Orca Mobile')).not.toBeNull()
-    expect(beforePairing.querySelector('button[aria-label="Hide from sidebar"]')).toBeNull()
-
-    mocks.hasPairedMobileDevice = true
-    const container = await renderSidebarNav()
-    const hideButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Hide from sidebar"]'
-    )
-
-    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
-    expect(hideButton).not.toBeNull()
-    expect(hideButton?.querySelector('svg')).not.toBeNull()
-
-    await clickButton(hideButton as HTMLButtonElement)
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
-    expect(mocks.openMobilePage).not.toHaveBeenCalled()
   })
 
   it('shows the Automations entry by default for older settings', () => {
@@ -392,19 +308,6 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showAutomationsButton: false })
   })
 
-  it('hides Mobile from its sidebar context menu', async () => {
-    const container = await renderSidebarNav()
-
-    const mobileMenu = getButtonByText(container, 'Orca Mobile').closest(
-      '[data-testid="context-menu"]'
-    )
-    expect(mobileMenu).not.toBeNull()
-
-    await clickButton(getHideButton(mobileMenu as HTMLElement))
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
-  })
-
   it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
     const container = await renderSidebarNav()
 
@@ -420,70 +323,5 @@ describe('SidebarNav', () => {
     expect(shortcuts?.textContent).toContain('⌘')
     expect(shortcuts?.textContent).toContain('J')
     expect(searchButton?.querySelector('kbd')).toBeNull()
-  })
-
-  it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {
-    const container = await renderSidebarNav()
-
-    const tasksButton = getButtonByText(container, 'Tasks')
-    const shortcuts = tasksButton.querySelector('[aria-label="Open GitHub tasks"]')?.parentElement
-
-    expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:flex')
-    expect(shortcuts?.className).toContain('group-focus-within:flex')
-  })
-
-  it('hides available Tasks from its sidebar context menu', async () => {
-    const container = await renderSidebarNav()
-
-    const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('false')
-
-    const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
-    expect(tasksMenu).not.toBeNull()
-    await clickButton(getHideButton(tasksMenu as HTMLElement))
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
-  })
-
-  it('keeps unavailable Tasks context-menu-capable while left click remains inert', async () => {
-    setSidebarState({ repos: [folderRepo()] })
-    const container = await renderSidebarNav()
-
-    const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('true')
-    expect(tasksButton.disabled).toBe(false)
-    expect(tasksButton.querySelectorAll('[role="button"]')).toHaveLength(0)
-    expect(tasksButton.querySelector('[aria-label="Open GitHub tasks"]')).toBeNull()
-
-    await clickButton(tasksButton)
-    expect(mocks.openTaskPage).not.toHaveBeenCalled()
-
-    const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
-    expect(tasksMenu).not.toBeNull()
-    await clickButton(getHideButton(tasksMenu as HTMLElement))
-
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
-  })
-
-  it('shows the setup guide entry only after readiness, before completion, and before explicit hide', () => {
-    expect(
-      shouldShowSetupGuideEntry({ ready: false, setupComplete: false, dismissed: false })
-    ).toBe(false)
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: false })).toBe(
-      true
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: true, dismissed: false })).toBe(
-      false
-    )
-    expect(shouldShowSetupGuideEntry({ ready: true, setupComplete: false, dismissed: true })).toBe(
-      false
-    )
-  })
-
-  it('requires both persisted UI and setup progress readiness before showing setup guide entry', () => {
-    expect(getSetupGuideSidebarEntryReady(false, true)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, false)).toBe(false)
-    expect(getSetupGuideSidebarEntryReady(true, true)).toBe(true)
   })
 })

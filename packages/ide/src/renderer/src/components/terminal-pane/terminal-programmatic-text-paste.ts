@@ -6,7 +6,6 @@ import { pasteTerminalText } from './terminal-bracketed-paste'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 
@@ -57,7 +56,7 @@ export function handleTerminalProgrammaticTextPaste({
         platform,
         ptyId,
         connectionId,
-        remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+        remotePlatform: null,
         transport
       })
     },

@@ -77,18 +77,6 @@ describe('getAgentRowConversationName', () => {
     ).toBe('Fix a/b toggle in settings')
   })
 
-  it('rejects synthetic status titles', () => {
-    expect(
-      getAgentRowConversationName(makeTab({ title: 'Codex ready' }), 'codex', false)
-    ).toBeNull()
-    expect(
-      getAgentRowConversationName(makeTab({ title: 'Codex - action required' }), 'codex', false)
-    ).toBeNull()
-    expect(
-      getAgentRowConversationName(makeTab({ title: 'Cursor Agent' }), 'cursor', false)
-    ).toBeNull()
-  })
-
   it('rejects identity-echo, management, and placeholder titles', () => {
     expect(getAgentRowConversationName(makeTab({ title: 'Claude' }), 'claude', false)).toBeNull()
     expect(

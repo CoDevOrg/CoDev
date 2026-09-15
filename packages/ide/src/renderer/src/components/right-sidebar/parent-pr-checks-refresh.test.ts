@@ -32,9 +32,6 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -107,60 +104,10 @@ describe('parent PR checks refresh', () => {
     expect(fetchHostedReviewForBranch.mock.calls[0]?.[2]).toMatchObject({ force: false })
   })
 
-  it('prioritizes linked reviews and passes SSH-safe repo/provider context', async () => {
-    const repo = makeRepo()
-    const unlinked = makeWorktree({
-      id: 'repo-1::/unlinked',
-      displayName: 'A unlinked'
-    })
-    const linked = makeWorktree({
-      id: 'repo-1::/linked',
-      displayName: 'Z linked',
-      linkedPR: 7,
-      linkedGitLabMR: 9,
-      linkedBitbucketPR: 10,
-      linkedAzureDevOpsPR: 11,
-      linkedGiteaPR: 12
-    })
-    const candidates = getParentPrChecksRefreshCandidates({
-      worktrees: [unlinked, linked],
-      repos: [repo]
-    })
-    const fetchHostedReviewForBranch = vi.fn(async () => makeReview())
-    const fetchPRChecks = vi.fn(async () => [])
-
-    await runLimitedParentPrChecksRefreshes({
-      candidates,
-      concurrency: 1,
-      fetchHostedReviewForBranch,
-      fetchPRChecks
-    })
-
-    expect(fetchHostedReviewForBranch.mock.calls[0]).toEqual([
-      '/repo',
-      'feature',
-      {
-        force: false,
-        repoId: 'repo-1',
-        linkedGitHubPR: 7,
-        linkedGitLabMR: 9,
-        linkedBitbucketPR: 10,
-        linkedAzureDevOpsPR: 11,
-        linkedGiteaPR: 12,
-        currentHeadOid: 'abc',
-        staleWhileRevalidate: true
-      }
-    ])
-    expect(fetchPRChecks).toHaveBeenCalledWith('/repo', 7, 'feature', 'abc123', null, {
-      repoId: 'repo-1',
-      force: false
-    })
-  })
-
   it('keeps ambiguous null neutral while preserving thrown refresh failures as errors', async () => {
     const repo = makeRepo()
     const unlinked = makeWorktree({ id: 'repo-1::/unlinked' })
-    const linked = makeWorktree({ id: 'repo-1::/linked', linkedGitLabMR: 5 })
+    const linked = makeWorktree({ id: 'repo-1::/linked', })
     const ambiguousNull = await runLimitedParentPrChecksRefreshes({
       candidates: getParentPrChecksRefreshCandidates({
         worktrees: [unlinked],

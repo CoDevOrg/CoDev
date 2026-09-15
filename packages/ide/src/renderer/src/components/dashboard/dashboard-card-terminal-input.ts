@@ -1,8 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/types'
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/terminal-keyboard-protocol'
@@ -20,8 +19,6 @@ export type DashboardCardTerminalInputState = Pick<
   | 'folderWorkspaces'
   | 'projectGroups'
   | 'settings'
-  | 'sshConnectionStates'
-  | 'sshStateByEnvironment'
   | 'runtimeStatusByEnvironmentId'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
@@ -45,8 +42,6 @@ function withHydratedSlices(
     folderWorkspaces: state.folderWorkspaces ?? [],
     projectGroups: state.projectGroups ?? [],
     settings: state.settings ?? null,
-    sshConnectionStates: state.sshConnectionStates ?? new Map(),
-    sshStateByEnvironment: state.sshStateByEnvironment ?? new Map(),
     runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId ?? new Map(),
     restoredRuntimeHostIdByWorkspaceSessionKey:
       state.restoredRuntimeHostIdByWorkspaceSessionKey ?? EMPTY_RECORD,
@@ -80,16 +75,13 @@ export function resolveDashboardCardTerminalInput(
   }
 ): DashboardCardTerminalInput {
   const state = withHydratedSlices(partialState)
-  const sshPty = parseAppSshPtyId(args.ptyId)
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(args.ptyId)
-  const connectionId =
-    sshPty?.connectionId ??
-    (runtimeEnvironmentId ? null : getConnectionIdFromState(state, args.worktreeId))
-  const executionHostId = sshPty
-    ? toSshExecutionHostId(sshPty.connectionId)
-    : runtimeEnvironmentId
-      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
-      : getExecutionHostIdForWorktree(state, args.worktreeId)
+  const connectionId = runtimeEnvironmentId
+    ? null
+    : getConnectionIdFromState(state, args.worktreeId)
+  const executionHostId = runtimeEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+    : getExecutionHostIdForWorktree(state, args.worktreeId)
   const windowsPtyContext = {
     userAgent: args.userAgent,
     osRelease: args.osRelease,

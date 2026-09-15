@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
-import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { } from './TerminalErrorToast'
 
 const MULTILINE_ERROR = 'Remote terminal write failed.\nThe remote runtime rejected the request.'
 
@@ -60,11 +60,4 @@ describe('appendTerminalErrorMessage', () => {
     )
   })
 
-  it('stays a newline-joined string the toast can still filter per line', () => {
-    const accumulated = appendTerminalErrorMessage(
-      appendTerminalErrorMessage(null, 'SSH connection failed: host unreachable'),
-      MULTILINE_ERROR
-    )
-    expect(stripSshReconnectOwnedErrorLines(accumulated)).toBe(MULTILINE_ERROR)
-  })
 })

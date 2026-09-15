@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -117,46 +116,12 @@ describe('task source context', () => {
     expect(local).not.toBe(enterpriseRepo)
   })
 
-  it('serializes provider identities for GitLab, Linear, and Jira cache scopes', () => {
-    const base = {
-      projectId: 'project-1',
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      repoId: 'repo-1'
-    } as const
-
-    expect(
-      getTaskSourceCacheScope({
-        ...base,
-        provider: 'gitlab',
-        providerIdentity: { provider: 'gitlab', namespace: 'stably', project: 'orca' }
-      })
-    ).toContain(encodeURIComponent('stably/orca'))
-    expect(
-      getTaskSourceCacheScope({
-        ...base,
-        provider: 'linear',
-        providerIdentity: { provider: 'linear', workspaceId: 'workspace-1', teamKey: 'ENG' }
-      })
-    ).toContain(encodeURIComponent('workspace-1/ENG'))
-    expect(
-      getTaskSourceCacheScope({
-        ...base,
-        provider: 'jira',
-        providerIdentity: {
-          provider: 'jira',
-          siteUrl: 'https://example.atlassian.net',
-          projectKey: 'OPS'
-        }
-      })
-    ).toContain(encodeURIComponent('https://example.atlassian.net/OPS'))
-  })
-
   it('drops provider identities that do not match the source provider', () => {
     expect(
       normalizeTaskSourceContext({
-        provider: 'gitlab',
+        provider: 'github',
         projectId: 'project-1',
-        providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+        providerIdentity: { provider: 'gitlab', namespace: 'stablyai', project: 'orca' } as never
       })?.providerIdentity
     ).toBeNull()
   })
@@ -164,21 +129,16 @@ describe('task source context', () => {
   it('rejects malformed stored scalar and provider-identity fields without throwing', () => {
     const valid = {
       kind: 'task-source',
-      provider: 'jira',
+      provider: 'github',
       projectId: 'project-1',
       hostId: 'local',
-      providerIdentity: {
-        provider: 'jira',
-        siteId: 'site-1',
-        siteUrl: 'https://example.atlassian.net',
-        projectKey: 'OPS'
-      }
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
     }
     for (const malformed of [
       { ...valid, accountLabel: 44 },
       { ...valid, hostId: { runtime: 'env-1' } },
-      { ...valid, providerIdentity: { ...valid.providerIdentity, siteId: 44 } },
-      { ...valid, providerIdentity: { ...valid.providerIdentity, projectKey: [] } }
+      { ...valid, providerIdentity: { ...valid.providerIdentity, host: 44 } },
+      { ...valid, providerIdentity: { ...valid.providerIdentity, repo: [] } }
     ]) {
       expect(() => TaskSourceContextSchema.safeParse(malformed)).not.toThrow()
       expect(TaskSourceContextSchema.safeParse(malformed).success).toBe(false)
@@ -214,15 +174,15 @@ describe('task source context', () => {
 describe('areTaskSourceContextsEqual', () => {
   const base: TaskSourceContext = {
     kind: 'task-source',
-    provider: 'jira',
+    provider: 'github',
     projectId: 'project-1',
     hostId: 'local',
     repoId: 'repo-1',
     providerIdentity: {
-      provider: 'jira',
-      siteId: 'site-1',
-      siteUrl: 'https://company.atlassian.net',
-      projectKey: 'ORCA'
+      provider: 'github',
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.example.com'
     }
   }
 
@@ -230,15 +190,15 @@ describe('areTaskSourceContextsEqual', () => {
     expect(
       areTaskSourceContextsEqual(base, {
         providerIdentity: {
-          projectKey: 'ORCA',
-          siteUrl: 'https://company.atlassian.net',
-          siteId: 'site-1',
-          provider: 'jira'
+          host: 'github.example.com',
+          repo: 'orca',
+          owner: 'acme',
+          provider: 'github'
         },
         repoId: 'repo-1',
         hostId: 'local',
         projectId: 'project-1',
-        provider: 'jira',
+        provider: 'github',
         kind: 'task-source',
         accountLabel: null
       })
@@ -258,18 +218,10 @@ describe('areTaskSourceContextsEqual', () => {
     expect(
       areTaskSourceContextsEqual(base, {
         ...base,
-        providerIdentity: { provider: 'jira', siteId: 'site-2' }
+        providerIdentity: { provider: 'github', owner: 'acme', repo: 'other' }
       })
     ).toBe(false)
     expect(areTaskSourceContextsEqual(base, { ...base, providerIdentity: null })).toBe(false)
   })
 
-  it('does not equate identities from different providers', () => {
-    const github: TaskSourceContext = {
-      ...base,
-      provider: 'github',
-      providerIdentity: { provider: 'github', owner: 'acme', repo: 'orca' }
-    }
-    expect(areTaskSourceContextsEqual(github, { ...github, provider: 'gitlab' })).toBe(false)
-  })
 })

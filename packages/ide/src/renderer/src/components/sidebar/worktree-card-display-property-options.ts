@@ -12,29 +12,11 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
     }
   },
   {
-    id: 'linear-issue',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e',
-        'Linear issue'
-      )
-    }
-  },
-  {
-    id: 'jira-issue',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssue',
-        'Jira issue'
-      )
-    }
-  },
-  {
     id: 'pr',
     get label() {
       return translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.b8dcc6f321',
-        'PR/MR link'
+        'PR link'
       )
     }
   },

@@ -99,35 +99,6 @@ function state(): DashboardSnapshotState {
 }
 
 describe('buildDashboardSnapshot folder workspaces', () => {
-  it('places folder-workspace agents in their real project group without git assumptions', () => {
-    const snapshot = buildDashboardSnapshot(state(), NOW)
-
-    expect(snapshot.cards).toHaveLength(1)
-    expect(snapshot.cards[0]).toMatchObject({
-      paneKey: PANE_KEY,
-      repoId: 'folder-workspace:group-1',
-      repoName: 'Documentation',
-      worktreeId: WORKSPACE_ID,
-      worktreeName: 'Docs workspace',
-      workspaceKind: 'folder',
-      hostKind: 'ssh',
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(snapshot.filterOptions?.projects).toEqual([
-      { id: 'folder-workspace:group-1', label: 'Documentation' }
-    ])
-    expect(snapshot.workspaces).toEqual([
-      expect.objectContaining({
-        repoId: 'folder-workspace:group-1',
-        worktreeId: WORKSPACE_ID,
-        repoName: 'Documentation',
-        worktreeName: 'Docs workspace',
-        workspaceKind: 'folder',
-        hostKind: 'ssh',
-        executionHostId: 'ssh:ssh-1'
-      })
-    ])
-  })
 
   it('classifies a folder workspace from its own runtime host stamp', () => {
     const runtimeState = state()

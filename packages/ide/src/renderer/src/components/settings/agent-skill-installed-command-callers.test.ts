@@ -20,10 +20,6 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['ORCHESTRATION_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
   ],
   [
-    'src/renderer/src/components/settings/ComputerUseSkillSetupPanel.tsx',
-    ['COMPUTER_USE_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
-  ],
-  [
     // Shared hook owns update-target resolution for Linear settings + Task Sources.
     'src/renderer/src/components/settings/use-linear-agent-skill-setup.ts',
     [
@@ -33,24 +29,6 @@ const updateCapableCallers = new Map<string, readonly string[]>([
       // either command on the runtime alone serves a stale Windows host command.
       'const installCommand = activeSkillRuntime.installDisabledReason',
       'const updateCommand = activeSkillRuntime.installDisabledReason'
-    ]
-  ],
-  [
-    'src/renderer/src/components/settings/LinearAgentSkillPane.tsx',
-    ['installedCommand={skillSetup.updateCommand}']
-  ],
-  [
-    'src/renderer/src/components/settings/TaskSourceLinearSetup.tsx',
-    ['installedCommand={skillSetup.updateCommand}']
-  ],
-  [
-    'src/renderer/src/components/settings/EphemeralVmsPane.tsx',
-    [
-      'EPHEMERAL_VMS_SKILL_UPDATE_COMMAND',
-      'installedCommand={updateCommand}',
-      // An absent runtime must still resolve to the host so the Windows npx
-      // preflight applies, as it does on the sibling panes.
-      'const installCommand = activeSkillRuntime.installDisabledReason'
     ]
   ],
   [
@@ -66,18 +44,10 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['installedCommand={installedCommand}']
   ],
   [
-    'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
-  ],
-  [
     // Why: the single-skill update command selection moved into
     // getLinearAgentSkillUpdateCommand so the settings install CTA shares it.
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
     ['getLinearAgentSkillUpdateCommand', 'installedCommand={installedCommand}']
-  ],
-  [
-    'src/renderer/src/components/sidebar/LinearAgentSkillSetupDialog.tsx',
-    ['installedCommand={installedCommand}']
   ],
   [
     'src/renderer/src/components/settings/MobileEmulatorAgentControlRow.tsx',
@@ -147,14 +117,6 @@ function findProductionPanelCallers(dir: string): string[] {
 }
 
 describe('AgentSkillSetupPanel installed-command call sites', () => {
-  it('keeps every update-capable production caller on an explicit single-skill update command', () => {
-    for (const [relativePath, expectedSnippets] of updateCapableCallers) {
-      const source = readRepoFile(relativePath)
-      for (const snippet of expectedSnippets) {
-        expect(source, `${relativePath} should include ${snippet}`).toContain(snippet)
-      }
-    }
-  })
 
   it('keeps orchestration installed updates on the primary panel only', () => {
     const source = readRepoFile('src/renderer/src/components/settings/OrchestrationPane.tsx')
@@ -162,26 +124,6 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('installedCommand={orchestrationUpdateCommand}')
     expect(source).not.toContain('Copy update command')
     expect(source).not.toContain('copyUpdateCommand')
-  })
-
-  it('routes the combined feature-tip install through runtime command setup', () => {
-    const source = readRepoFile(
-      'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx'
-    )
-
-    expect(source).toContain('buildSkillCommandForRuntime(')
-    // The copied string stays bare for POSIX-family shells; the forced-PowerShell
-    // setup terminal keeps the npx preflight.
-    expect(source).toContain('writeClipboardText(skillCommand)')
-    expect(source).toContain('buildSkillSetupTerminalCommand(')
-    expect(source).toContain('command={setupTerminalCommand}')
-    expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
-    expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
-    // This terminal auto-pastes with no install gate, so a repair-required runtime
-    // must fall back to the host rather than skip the Windows npx preflight.
-    expect(source).toContain(
-      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
-    )
   })
 
   it('keeps client freshness behind resolved local runtime authority', () => {

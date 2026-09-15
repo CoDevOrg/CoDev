@@ -61,7 +61,6 @@ function AddRepoNestedScanProgressNotice({
 
 type AddRepoLocalStartStepProps = {
   repoCount: number
-  isSshLikely: boolean
   isAdding: boolean
   addProjectBusyLabel: string | null
   nestedScanInProgress: boolean
@@ -69,17 +68,15 @@ type AddRepoLocalStartStepProps = {
   hostSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
-  browseHostKind?: 'local' | 'ssh' | 'runtime'
+  browseHostKind?: 'local' | 'runtime'
   onBrowse: () => void
   onOpenCloneStep: () => void
-  onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
   onStopNestedScan: () => void
 }
 
 export function AddRepoLocalStartStep({
   repoCount,
-  isSshLikely,
   isAdding,
   addProjectBusyLabel,
   nestedScanInProgress,
@@ -90,17 +87,14 @@ export function AddRepoLocalStartStep({
   browseHostKind = 'local',
   onBrowse,
   onOpenCloneStep,
-  onOpenRemoteStep,
   onOpenCreateStep,
   onStopNestedScan
 }: AddRepoLocalStartStepProps): React.JSX.Element {
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
-    isSshLikely,
     onBrowse,
     onOpenCloneStep,
-    onOpenRemoteStep,
     onOpenCreateStep,
     showRemoteAction,
     canCreateProject,

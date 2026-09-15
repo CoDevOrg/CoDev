@@ -8,18 +8,10 @@ import {
 describe('resolveChecksPanelReviewEvidenceProvider', () => {
   const noLinkedReviews = {
     linkedGitHubPR: null,
-    linkedGitLabMR: null,
-    linkedBitbucketPR: null,
-    linkedAzureDevOpsPR: null,
-    linkedGiteaPR: null
   }
 
   it.each([
-    ['linkedGitHubPR', 'github'],
-    ['linkedGitLabMR', 'gitlab'],
-    ['linkedBitbucketPR', 'bitbucket'],
-    ['linkedAzureDevOpsPR', 'azure-devops'],
-    ['linkedGiteaPR', 'gitea']
+    ['linkedGitHubPR', 'github']
   ] as const)('lets an explicit %s link outrank stale cached metadata', (linkedField, provider) => {
     expect(
       resolveChecksPanelReviewEvidenceProvider({
@@ -30,15 +22,6 @@ describe('resolveChecksPanelReviewEvidenceProvider', () => {
     ).toBe(provider)
   })
 
-  it('uses eligibility before cached provider metadata when no review is linked', () => {
-    expect(
-      resolveChecksPanelReviewEvidenceProvider({
-        ...noLinkedReviews,
-        eligibilityProvider: 'bitbucket',
-        cachedProvider: 'gitlab'
-      })
-    ).toBe('bitbucket')
-  })
 })
 
 describe('getChecksPanelForegroundReviewEvidenceKey', () => {
@@ -59,14 +42,6 @@ describe('getChecksPanelForegroundReviewEvidenceKey', () => {
     expect(confirmedKey).toBe(optimisticKey)
   })
 
-  it('clears the request key when evidence switches to another provider', () => {
-    expect(
-      getChecksPanelForegroundReviewEvidenceKey({
-        ...input,
-        reviewEvidenceProvider: 'gitlab'
-      })
-    ).toBeNull()
-  })
 })
 
 describe('resolveChecksPanelPRRefreshRequest', () => {

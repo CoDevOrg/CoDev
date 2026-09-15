@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
-import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
   createAgentBackgroundSessionTestState,
@@ -128,7 +127,6 @@ describe('launchAgentBackgroundSession', () => {
           ORCA_TAB_ID: tabId,
           ORCA_WORKTREE_ID: 'wt-1'
         }),
-        connectionId: null,
         worktreeId: 'wt-1',
         tabId
       })
@@ -301,45 +299,6 @@ describe('launchAgentBackgroundSession', () => {
     })
   })
 
-  it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
-    state.projects = [
-      {
-        id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    state.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
-    state.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-1',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          path: 'C:\\Users\\jinwo\\repo\\feature',
-          displayName: 'feature'
-        }
-      ]
-    }
-
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: "don't use powershell quoting"
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
-        connectionId: null,
-        worktreeId: 'wt-1',
-        tabId: expect.stringMatching(UUID_RE)
-      })
-    )
-  })
-
   it('pre-marks trust for agents with first-launch trust prompts', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -354,35 +313,6 @@ describe('launchAgentBackgroundSession', () => {
       workspacePath: '/repo/worktree'
     })
     expect(mockSpawn).toHaveBeenCalled()
-  })
-
-  it('stamps hidden SSH status from renderer fallback when the kill switch is off', async () => {
-    // Why: with main side-effect authority disabled, this sidecar is the only
-    // OSC 9999 → store path for hidden SSH sessions.
-    state.settings.terminalMainSideEffectAuthority = false
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
-    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
-    mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    dataSidecar('\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07')
-
-    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
-    expect(state.setAgentStatus).toHaveBeenCalledWith(
-      paneKey,
-      expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
-      undefined,
-      undefined,
-      { connectionId: 'ssh-a' },
-      { launchToken: expect.stringMatching(UUID_RE) }
-    )
   })
 
   it('skips the duplicate OSC store write under main side-effect authority', async () => {
@@ -405,40 +335,6 @@ describe('launchAgentBackgroundSession', () => {
     expect(state.setAgentStatus).not.toHaveBeenCalled()
     expect(onAgentStatus).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
-    )
-  })
-
-  it('stamps a working status for SSH Command Code prompt launches', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
-    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
-    mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'command-code',
-      worktreeId: 'wt-1',
-      prompt: 'check the status spinner'
-    })
-
-    const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)
-    expect(state.setAgentStatus).toHaveBeenCalledWith(
-      paneKey,
-      {
-        state: 'working',
-        prompt: 'check the status spinner',
-        agentType: 'command-code'
-      },
-      undefined,
-      undefined,
-      { connectionId: 'ssh-a' },
-      {
-        launchConfig: {
-          agentCommand: "command-code --trust '--yolo'",
-          agentArgs: '--yolo',
-          agentEnv: {}
-        },
-        launchToken: expect.stringMatching(UUID_RE)
-      }
     )
   })
 
@@ -538,62 +434,4 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('submits prompts for stdin-after-start agents in background mode', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'aider',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({ command: "aider '--yes-always'" })
-    )
-    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: expectReservedAgentBackgroundTabId(mockSpawn),
-        content: 'run the automation',
-        agent: 'aider',
-        submit: true
-      })
-    )
-  })
-
-  it('passes Hermes automation prompts through the native startup query', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'hermes',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
-      })
-    )
-    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-  })
-
-  it('uses the configured cmd shell for Windows Hermes background launches', async () => {
-    mockGetAgentLaunchPlatformForRepo.mockReturnValue('win32')
-    Object.assign(state.settings, { terminalWindowsShell: 'cmd.exe' })
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'hermes',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining('powershell.exe -NoProfile -EncodedCommand'),
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
-      })
-    )
-  })
 })

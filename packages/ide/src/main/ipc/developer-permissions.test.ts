@@ -6,7 +6,6 @@ const {
   askForMediaAccessMock,
   getMediaAccessStatusMock,
   isTrustedAccessibilityClientMock,
-  getMacosFullDiskAccessStatusMock,
   execFileMock,
   createSocketMock,
   socketMock,
@@ -30,7 +29,6 @@ const {
     askForMediaAccessMock: vi.fn(),
     getMediaAccessStatusMock: vi.fn(),
     isTrustedAccessibilityClientMock: vi.fn(),
-    getMacosFullDiskAccessStatusMock: vi.fn(),
     execFileMock: vi.fn(),
     createSocketMock: vi.fn(() => socketMock),
     socketMock,
@@ -62,10 +60,6 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-vi.mock('../macos-full-disk-access-status', () => ({
-  getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
-}))
-
 import type { DeveloperPermissionState } from '../../shared/developer-permissions-types'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 
@@ -80,8 +74,6 @@ describe('registerDeveloperPermissionHandlers', () => {
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
     isTrustedAccessibilityClientMock.mockReset()
-    getMacosFullDiskAccessStatusMock.mockReset()
-    getMacosFullDiskAccessStatusMock.mockResolvedValue('denied')
     execFileMock.mockReset()
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1)
@@ -154,21 +146,6 @@ describe('registerDeveloperPermissionHandlers', () => {
     }
     return call[1] as (_event: unknown, args: { id: string }) => Promise<void>
   }
-
-  it('returns the Full Disk Access read-probe status', async () => {
-    getMacosFullDiskAccessStatusMock.mockResolvedValue('granted')
-    registerDeveloperPermissionHandlers()
-
-    const call = handleMock.mock.calls.find(
-      (registration: unknown[]) => registration[0] === 'developerPermissions:getStatus'
-    )
-    const handler = call?.[1] as (() => Promise<unknown>) | undefined
-
-    await expect(handler?.()).resolves.toContainEqual({
-      id: 'full-disk-access',
-      status: 'granted'
-    })
-  })
 
   it('keeps the local-network status unknown when UDP send settles without an error', async () => {
     registerDeveloperPermissionHandlers()

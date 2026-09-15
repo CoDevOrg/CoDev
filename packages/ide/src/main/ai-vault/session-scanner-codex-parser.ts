@@ -31,7 +31,7 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
+import { sessionContentLines } from './session-content-lines'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -66,7 +66,7 @@ export async function parseCodexSessionContent(args: {
 }): Promise<AiVaultSession | null> {
   return parseCodexSessionLines({
     file: args.file,
-    lines: remoteSessionContentLines(args.content, args.signal),
+    lines: sessionContentLines(args.content, args.signal),
     platform: args.platform ?? process.platform,
     codexHome: args.codexHome ?? null,
     executionHostId: args.executionHostId,

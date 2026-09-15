@@ -102,8 +102,7 @@ function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
       ...initialState,
       settings,
       repos,
-      ensureDetectedAgents: mocks.ensureDetectedAgents,
-      ensureRemoteDetectedAgents: mocks.ensureRemoteDetectedAgents
+      ensureDetectedAgents: mocks.ensureDetectedAgents
     },
     true
   )

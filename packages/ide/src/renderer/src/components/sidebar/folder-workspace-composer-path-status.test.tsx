@@ -22,7 +22,7 @@ const projectGroup: ProjectGroup = {
   createdAt: 1,
   updatedAt: 1
 }
-const projectGroupRequestSnapshot = '/workspace/platform\0group-1\0\0\0'
+const projectGroupRequestSnapshot = '/workspace/platform\0group-1\0\0'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null

@@ -82,10 +82,12 @@ export function AiVaultPanelHeader({
           <div className="truncate text-xs font-semibold text-foreground">
             {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
             <span className="@max-[300px]/ai-vault:hidden">
-              {translate(
-                'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
-                'Agent Session History'
-              )}
+              {onCreateProposal
+                ? 'CoDev Agents'
+                : translate(
+                    'auto.components.right.sidebar.AiVaultPanel.sessionHistory',
+                    'Agent Session History'
+                  )}
             </span>
             <span className="hidden @max-[300px]/ai-vault:inline">
               {translate('auto.components.right.sidebar.AiVaultPanel.agents', 'Agents')}
@@ -109,6 +111,8 @@ export function AiVaultPanelHeader({
                   )}
                 </span>
               </>
+            ) : onCreateProposal ? (
+              'Managed sandbox session controls'
             ) : (
               translate(
                 'auto.components.right.sidebar.AiVaultPanel.resumePastSessions',
@@ -123,14 +127,18 @@ export function AiVaultPanelHeader({
               type="button"
               variant="ghost"
               size="xs"
-              aria-label="Prepare managed proposal"
+              aria-label="Start CoDev agent"
               onClick={onCreateProposal}
               disabled={creatingProposal}
               aria-busy={creatingProposal}
               className="h-6 px-1.5 text-[11px]"
             >
-              {creatingProposal ? <LoaderCircle className="size-3 animate-spin" /> : <Plus className="size-3" />}
-              <span className="@max-[300px]/ai-vault:hidden">Proposal</span>
+              {creatingProposal ? (
+                <LoaderCircle className="size-3 animate-spin" />
+              ) : (
+                <Plus className="size-3" />
+              )}
+              <span className="@max-[300px]/ai-vault:hidden">New agent</span>
             </Button>
           ) : null}
           <VaultHostScopeMenu

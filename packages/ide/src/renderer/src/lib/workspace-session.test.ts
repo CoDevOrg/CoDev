@@ -321,33 +321,6 @@ describe('buildWorkspaceSessionPayload', () => {
     })
   })
 
-  it('uses lastKnownRelayPtyIdByTabId fallback for disconnected SSH worktrees', () => {
-    const payload = buildWorkspaceSessionPayload(
-      createSnapshot({
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' } as never],
-          'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
-        },
-        ptyIdsByTabId: {
-          'tab-1': ['pty-1'],
-          'tab-ssh': []
-        },
-        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'relay-sess-42' },
-        repos: [createRepo('repo-ssh', 'conn-1')],
-        worktreesByRepo: {
-          'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
-        },
-        sshConnectionStates: new Map([
-          ['conn-1', { status: 'connected', targetId: 'conn-1', error: null, reconnectAttempt: 0 }]
-        ]) as never
-      })
-    )
-
-    expect(payload.activeWorktreeIdsOnShutdown).toContain('wt-ssh')
-    expect(payload.remoteSessionIdsByTabId).toEqual({ 'tab-ssh': 'relay-sess-42' })
-    expect(payload.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
-  })
-
   it('drops transient active editor markers that do not point at restored edit files', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

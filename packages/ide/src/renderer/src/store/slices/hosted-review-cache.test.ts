@@ -52,11 +52,11 @@ function makeStore(settings: AppState['settings'] = null) {
 }
 
 const review: HostedReviewInfo = {
-  provider: 'gitlab',
+  provider: 'github',
   number: 5,
-  title: 'Shared MR status',
+  title: 'Shared PR status',
   state: 'open',
-  url: 'https://gitlab.com/g/p/-/merge_requests/5',
+  url: 'https://github.com/g/p/pull/5',
   status: 'success',
   updatedAt: '2026-05-10T00:00:00.000Z',
   mergeable: 'MERGEABLE'

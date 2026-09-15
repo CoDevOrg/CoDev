@@ -40,9 +40,6 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -423,103 +420,6 @@ describe('buildParentPrChecksProjection', () => {
     })
   })
 
-  it('does not use stale merged non-GitHub hosted-review cache after the worktree advances', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree({
-      id: 'repo-1::/feature',
-      linkedBitbucketPR: null,
-      head: 'new-head'
-    })
-    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
-
-    expect(
-      makeProjection({
-        worktree,
-        repo,
-        hostedReviewCache: {
-          [hostedKey]: {
-            data: makeReview({
-              provider: 'bitbucket',
-              number: 77,
-              title: 'Stale merged Bitbucket PR',
-              state: 'merged',
-              headSha: 'merged-head'
-            }),
-            fetchedAt: 2,
-            linkedReviewHintKey: ''
-          }
-        }
-      }).rows[0]
-    ).toMatchObject({
-      status: 'notFetched',
-      reviewLabel: null
-    })
-  })
-
-  it('does not let same-number hosted-review cache from another provider override linked PR metadata', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree({
-      id: 'repo-1::/feature',
-      linkedPR: 99
-    })
-    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
-
-    expect(
-      makeProjection({
-        worktree,
-        repo,
-        hostedReviewCache: {
-          [hostedKey]: {
-            data: makeReview({
-              provider: 'gitlab',
-              number: 99,
-              title: 'Wrong provider same number',
-              status: 'failure'
-            }),
-            fetchedAt: 2,
-            linkedReviewHintKey: ''
-          }
-        }
-      }).rows[0]
-    ).toMatchObject({
-      status: 'linkedDetailsUnavailable',
-      provider: 'github',
-      reviewNumber: 99,
-      reviewLabel: '#99',
-      title: 'Loading PR...'
-    })
-  })
-
-  it('does not use linked-hint hosted-review cache after a non-GitHub link is removed', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree({
-      id: 'repo-1::/feature',
-      linkedBitbucketPR: null
-    })
-    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
-
-    expect(
-      makeProjection({
-        worktree,
-        repo,
-        hostedReviewCache: {
-          [hostedKey]: {
-            data: makeReview({
-              provider: 'bitbucket',
-              number: 77,
-              title: 'Removed linked Bitbucket PR'
-            }),
-            fetchedAt: 2,
-            linkedReviewHintKey: 'bitbucket:77'
-          }
-        }
-      }).rows[0]
-    ).toMatchObject({
-      status: 'notFetched',
-      reviewLabel: null
-    })
-  })
-
   it('classifies completed unavailable refreshes as unavailable instead of not fetched', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/feature' })
@@ -537,27 +437,6 @@ describe('buildParentPrChecksProjection', () => {
       summary: 'Review status unavailable'
     })
     expect(projection.summary.unknown).toBe(1)
-  })
-
-  it('keeps linked unavailable and refresh-error rows out of No PR', () => {
-    const repo = makeRepo()
-    const linked = makeWorktree({ id: 'repo-1::/linked', linkedGitLabMR: 42 })
-    const identity = getParentPrChecksRefreshIdentity(linked, repo, 'feature')
-
-    const linkedUnavailable = makeProjection({ worktree: linked, repo })
-    expect(linkedUnavailable.rows[0]).toMatchObject({
-      status: 'linkedDetailsUnavailable',
-      reviewLabel: '!42'
-    })
-    expect(linkedUnavailable.summary.noPr).toBe(0)
-
-    const refreshError = makeProjection({
-      worktree: linked,
-      repo,
-      refreshOutcomes: new Map([[identity, { kind: 'error' }]])
-    })
-    expect(refreshError.rows[0]?.status).toBe('refreshError')
-    expect(refreshError.summary.noPr).toBe(0)
   })
 
   it('preserves stale review grouping when a refresh fails', () => {

@@ -76,12 +76,9 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1', {
       keepIdentifiers: true
     })
-    expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-1' })
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalsCallOrder = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
-    const suspendCallOrder = mocks.suspendWorkspace.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)
-    expect(terminalsCallOrder).toBeLessThan(suspendCallOrder)
   })
 
   it('clears activeWorktreeId before teardown when the slept worktree is active', async () => {
@@ -200,7 +197,6 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
-    expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.state.setActiveWorktree).toHaveBeenLastCalledWith('wt-1')
     expect(mocks.toastError).toHaveBeenCalledWith(
@@ -221,7 +217,6 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.setActiveWorktree.mock.calls).toEqual([[null], ['wt-1']])
-    expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep workspace',
       expect.objectContaining({
@@ -248,7 +243,6 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
       keepIdentifiers: true
     })
-    expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-2' })
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep some workspaces',
       expect.objectContaining({
@@ -273,7 +267,5 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(2, 'wt-2', {
       keepIdentifiers: true
     })
-    expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(1, { workspaceId: 'wt-1' })
-    expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(2, { workspaceId: 'wt-2' })
   })
 })

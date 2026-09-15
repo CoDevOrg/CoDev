@@ -1034,54 +1034,6 @@ describe('LocalPtyProvider', () => {
       expect(pwshAvailable).not.toHaveBeenCalled()
     })
 
-    it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const savedCodexHome = process.env.CODEX_HOME
-      const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
-      delete process.env.CODEX_HOME
-      delete process.env.ORCA_CODEX_HOME
-      provider.configure({
-        buildSpawnEnv: (_id, env, ctx) => {
-          env.ORCA_TERMINAL_HANDLE = 'term_wsl'
-          if (ctx?.isWsl) {
-            env.WSLENV = 'ORCA_TERMINAL_HANDLE/u'
-          }
-          return env
-        }
-      })
-
-      try {
-        await provider.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-          env: { ORCA_HERMES_STARTUP_QUERY: 'line one\nline two' }
-        })
-      } finally {
-        if (savedCodexHome === undefined) {
-          delete process.env.CODEX_HOME
-        } else {
-          process.env.CODEX_HOME = savedCodexHome
-        }
-        if (savedOrcaCodexHome === undefined) {
-          delete process.env.ORCA_CODEX_HOME
-        } else {
-          process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
-        }
-      }
-
-      const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[0]).toBe('wsl.exe')
-      expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-      expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
-        expect.arrayContaining([
-          'ORCA_TERMINAL_HANDLE/u',
-          'ORCA_HERMES_STARTUP_QUERY',
-          POWERLEVEL10K_WIZARD_DISABLE_ENV
-        ])
-      )
-    })
-
     it('does not mark deleted Powerlevel10k wizard env for WSL import', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 

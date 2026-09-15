@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
+import { } from 'node:events'
+import { } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runAutomationPrecheck } from './precheck-runner'
 
@@ -66,37 +66,4 @@ describe('runAutomationPrecheck', () => {
     expect(result.error).toBe('Precheck timed out after 1s.')
   })
 
-  it('uses the SSH channel exit event as the precheck exit code', async () => {
-    const channel = Object.assign(new EventEmitter(), {
-      stderr: new PassThrough(),
-      close: vi.fn()
-    })
-    sshManagerState.manager = {
-      getConnection: vi.fn(() => ({
-        getState: () => ({ status: 'connected' }),
-        exec: vi.fn(async () => channel)
-      }))
-    }
-
-    const resultPromise = runAutomationPrecheck({
-      precheck: {
-        command: "printf 'ready'",
-        timeoutSeconds: 5
-      },
-      target: {
-        type: 'ssh',
-        cwd: '/repo/path',
-        connectionId: 'ssh-1'
-      }
-    })
-    await Promise.resolve()
-    channel.emit('data', Buffer.from('ready\n'))
-    channel.emit('exit', 0)
-    channel.emit('close')
-
-    const result = await resultPromise
-    expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('ready')
-    expect(result.error).toBeNull()
-  })
 })

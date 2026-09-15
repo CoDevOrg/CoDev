@@ -20,9 +20,7 @@ import {
 } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { resolveNativeTerminalDropPane } from './terminal-drop-pane-resolution'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import {
   joinRuntimeTerminalDropDir,
   resolveTerminalDropWorktreePath
@@ -42,9 +40,8 @@ export type NativeTerminalFileDropArgs = {
  * Handle a native file drop targeted at a terminal pane.
  *
  * Local worktrees: paste the local absolute path (reference-in-place; no copy
- * or IPC). SSH worktrees: upload each file into `${worktreePath}/.orca/drops`
- * and paste the remote path so the remote agent can read it. See
- * docs/terminal-drop-ssh.md.
+ * or IPC). Paired-runtime worktrees: upload each file into the runtime's drop
+ * directory and paste the resulting path so the agent can read it.
  */
 export async function handleNativeTerminalFileDrop(
   args: NativeTerminalFileDropArgs
@@ -103,10 +100,9 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
     return
   }
 
-  // Why: `getConnectionId` returns `string` (SSH), `null` (local repo found),
-  // or `undefined` (store not hydrated / worktree not found). Treat
-  // `undefined` as an error — otherwise a drop during hydration would
-  // silently paste local paths into a remote shell.
+  // Why: `getConnectionId` returns `null` (local repo found) or `undefined`
+  // (store not hydrated / worktree not found). Treat `undefined` as an error
+  // so a drop during hydration never pastes into the wrong shell.
   const connectionId = getConnectionId(worktreeId)
   if (connectionId === undefined) {
     toast.error(
@@ -120,38 +116,21 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
   const targetShell = resolveTerminalDropTargetShell({
     activeRuntimeEnvironmentId: null,
     worktreePath,
-    connectionId,
-    remotePlatform: getTerminalPasteSshRemotePlatform(connectionId)
+    connectionId: null,
+    remotePlatform: null
   })
-  const isRemote = connectionId !== null
-  const localWslDrop = !isRemote && isWorktreeUsingLocalWslRuntime(state, worktreeId)
+  const localWslDrop = isWorktreeUsingLocalWslRuntime(state, worktreeId)
 
-  if (!isRemote) {
-    await pasteLocalDropPaths({
-      dataPaths: data.paths,
-      dropTarget,
-      localWslDrop,
-      manager,
-      paneTransports,
-      pane,
-      tabId,
-      targetShell: localWslDrop ? 'posix' : targetShell,
-      worktreePath
-    })
-    return
-  }
-
-  await uploadRemoteDropPaths({
-    connectionId,
-    ...captureDirectSshMutationExpectation(state, connectionId),
+  await pasteLocalDropPaths({
     dataPaths: data.paths,
     dropTarget,
     manager,
     paneTransports,
     pane,
     tabId,
-    targetShell,
-    worktreePath
+    worktreePath,
+    localWslDrop,
+    targetShell
   })
 }
 
@@ -163,9 +142,6 @@ type NativeDropFlowArgs = {
   pane: ReturnType<typeof resolveNativeTerminalDropPane> & {}
   tabId: string
   worktreePath: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
   assertCurrent?: () => void
 }
 
@@ -192,10 +168,7 @@ async function uploadRuntimeDropPaths(
         // not the currently focused host in the sidebar.
         settings: { ...args.settings, activeRuntimeEnvironmentId: args.runtimeEnvironmentId },
         worktreeId: args.worktreeId,
-        worktreePath: args.worktreePath,
-        expectedExecutionHostId: args.expectedExecutionHostId,
-        expectedSshTargetId: args.expectedSshTargetId,
-        expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
+        worktreePath: args.worktreePath
       },
       args.dataPaths,
       destinationDir,
@@ -245,34 +218,6 @@ async function pasteLocalDropPaths(
     paths: args.localWslDrop ? args.dataPaths.map(toLocalWslDropPath) : args.dataPaths,
     targetShell: args.targetShell
   })
-}
-
-async function uploadRemoteDropPaths(
-  args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
-): Promise<void> {
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
-      'Uploading {{value0}} file{{value1}} to remote…',
-      { value0: args.dataPaths.length, value1: args.dataPaths.length === 1 ? '' : 's' }
-    )
-  )
-  try {
-    const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
-      paths: args.dataPaths,
-      worktreePath: args.worktreePath,
-      connectionId: args.connectionId,
-      expectedExecutionHostId: args.expectedExecutionHostId,
-      expectedSshTargetId: args.expectedSshTargetId,
-      expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
-    })
-    await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
-    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
-  } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
-  } finally {
-    toast.dismiss(pending)
-  }
 }
 
 async function pasteResolvedDropPaths(

@@ -22,20 +22,13 @@ function isDesktopOwnedHost(hostId: TaskSourceContext['hostId']): boolean {
 }
 
 function getRepoBackedProviderToolStatus(
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>,
+  _provider: Extract<TaskProvider, 'github'>,
   preflightStatus: PreflightStatus | null
 ): ProviderAvailabilityStatus | null {
   if (!preflightStatus) {
     return null
   }
-  if (provider === 'github') {
-    return preflightStatus.gh
-  }
-  // Why: older remote servers can predate GitLab preflight entirely. That is a
-  // host capability gap, not a user-fixable missing `glab` install.
-  return Object.hasOwn(preflightStatus, 'glab')
-    ? (preflightStatus.glab ?? { installed: false, authenticated: false })
-    : 'unsupported'
+  return preflightStatus.gh
 }
 
 function getProviderReason(
@@ -54,7 +47,7 @@ function getProviderReason(
 }
 
 export function getRepoBackedProviderAvailability(args: {
-  provider: Extract<TaskProvider, 'github' | 'gitlab'>
+  provider: Extract<TaskProvider, 'github'>
   contexts: readonly TaskSourceContext[]
   preflightStatus: PreflightStatus | null
   preflightReady: boolean

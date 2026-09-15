@@ -1,19 +1,12 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
-import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  getRemoteManagedScriptPath,
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
   writeManagedScript,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
@@ -30,9 +23,6 @@ import {
   getConfigPath,
   getManagedCommand,
   getManagedScriptPath,
-  getPosixManagedScriptFileName,
-  getRemoteConfigPath,
-  getRemoteManagedCommand,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
@@ -226,58 +216,6 @@ export class ClaudeHookService {
     return next
   }
 
-  // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
-    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
-    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
-    const remoteScriptPath = getRemoteManagedScriptPath(remoteHome, remoteScriptFileName)
-    // Why: surface fallible SFTP installs as structured errors.
-    try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: this.options.agent,
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: `Could not parse remote ${this.options.displayName} settings.json`
-        }
-      }
-
-      // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
-      const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
-
-      // Why: write scripts before settings to avoid settings pointing to missing scripts.
-      // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
-      await writeManagedScriptRemote(
-        sftp,
-        remoteScriptPath,
-        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
-      )
-      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
-      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
-      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
-
-      return {
-        agent: this.options.agent,
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
-      }
-    } catch (err) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath: remoteConfigPath,
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
-  }
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)

@@ -19,15 +19,4 @@ describe('migrationUnsupportedToAgentStatusEntry', () => {
     expect(first?.updatedAt).toBe(Number.MAX_SAFE_INTEGER)
   })
 
-  it('caches null for records that cannot be projected to a pane key', () => {
-    const unsupported: MigrationUnsupportedPtyEntry = {
-      ptyId: 'pty-1',
-      reason: 'legacy-numeric-pane-key',
-      source: 'ssh',
-      updatedAt: 1234
-    }
-
-    expect(migrationUnsupportedToAgentStatusEntry(unsupported)).toBeNull()
-    expect(migrationUnsupportedToAgentStatusEntry(unsupported)).toBeNull()
-  })
 })

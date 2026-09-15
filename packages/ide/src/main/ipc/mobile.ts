@@ -9,8 +9,18 @@ import type { DeviceEntry } from '../runtime/device-registry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
-import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker-contract'
+
+// Why: the desktop pairing QR renderer (and its `qrcode` dependency) is gone; the settings pane
+// falls back to the copyable pairing code when no data URL comes back.
+export type MobilePairingQrResult =
+  | { ok: true; qrDataUrl: string }
+  | { ok: false; reason: 'encoding_failed' }
+
+const pairingQrUnavailable = async (): Promise<MobilePairingQrResult> => ({
+  ok: false,
+  reason: 'encoding_failed'
+})
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
@@ -189,7 +199,7 @@ export function registerMobileHandlers(
         }
       }
 
-      const qr = await (dependencies.encodePairingQr ?? encodeMobilePairingQr)(offer.pairingUrl)
+      const qr = await (dependencies.encodePairingQr ?? pairingQrUnavailable)(offer.pairingUrl)
 
       return {
         available: true as const,

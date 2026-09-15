@@ -4,7 +4,6 @@ import {
   filterWorkspaceCleanupCandidates,
   getWorkspaceCleanupGitLabel,
   getWorkspaceCleanupReviewInfo,
-  getWorkspaceCleanupSearchText,
   hasWorkspaceCleanupLocalContext,
   sortWorkspaceCleanupCandidates,
   type WorkspaceCleanupReviewInfo
@@ -117,38 +116,6 @@ describe('workspace cleanup presentation', () => {
         NOW
       )
     ).toEqual([candidate])
-  })
-
-  it('search includes repo, branch, path, review, git, and context labels', () => {
-    const candidate = makeCandidate({
-      repoName: 'Search Repo',
-      branch: 'feature/search',
-      path: '/repo/search-target',
-      git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null },
-      localContext: {
-        terminalTabCount: 0,
-        cleanEditorTabCount: 0,
-        browserTabCount: 1,
-        diffCommentCount: 0,
-        newestDiffCommentAt: null,
-        retainedDoneAgentCount: 0
-      }
-    })
-    const reviewInfo: WorkspaceCleanupReviewInfo = {
-      hasReview: true,
-      label: 'MR #9',
-      state: 'closed',
-      provider: 'gitlab',
-      title: 'Searchable review'
-    }
-    const text = getWorkspaceCleanupSearchText(candidate, reviewInfo)
-
-    expect(text).toContain('search repo')
-    expect(text).toContain('feature/search')
-    expect(text).toContain('/repo/search-target')
-    expect(text).toContain('mr #9')
-    expect(text).toContain('unknown')
-    expect(text).toContain('has context')
   })
 
   it('sorts by activity, name, repo, review, and git', () => {

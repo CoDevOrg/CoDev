@@ -137,8 +137,7 @@ const mocks = vi.hoisted(() => ({
   setTabColor: vi.fn(),
   setTabCustomTitle: vi.fn(),
   setTabPaneExpanded: vi.fn(),
-  shouldDeferParkedPtyExitTabClose: vi.fn(),
-  useContextualTour: vi.fn()
+  shouldDeferParkedPtyExitTabClose: vi.fn()
 }))
 
 const saveDialogBox = vi.hoisted(() => ({
@@ -255,10 +254,6 @@ vi.mock('@/components/ui/button', () => ({
   Button: function Button() {
     return null
   }
-}))
-
-vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
-  useContextualTour: mocks.useContextualTour
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -651,18 +646,10 @@ async function flushAsyncWork(): Promise<void> {
   await Promise.resolve()
 }
 
-async function renderPanel(
-  open: boolean,
-  onOpenChange = vi.fn(),
-  tourInteractionSnapshot?: {
-    wasPreviouslyInteracted: boolean
-    persisted?: Promise<void>
-    recordFeatureInteractionForTour: boolean
-  } | null
-): Promise<unknown> {
+async function renderPanel(open: boolean, onOpenChange = vi.fn()): Promise<unknown> {
   hookRuntime.index = 0
   const { FloatingTerminalPanel } = await import('./FloatingTerminalPanel')
-  return FloatingTerminalPanel({ open, onOpenChange, tourInteractionSnapshot })
+  return FloatingTerminalPanel({ open, onOpenChange })
 }
 
 function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBounds {
@@ -1264,62 +1251,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
     await flushAsyncWork()
     expect(mocks.createTab).not.toHaveBeenCalled()
-  })
-
-  it('requests the floating workspace tour only when the panel is open', async () => {
-    const persisted = Promise.resolve()
-
-    await renderPanel(false, vi.fn(), {
-      wasPreviouslyInteracted: false,
-      persisted,
-      recordFeatureInteractionForTour: false
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      false,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: false,
-        featureInteractionPersisted: persisted,
-        wasFeaturePreviouslyInteracted: false
-      }
-    )
-
-    await renderPanel(true, vi.fn(), {
-      wasPreviouslyInteracted: true,
-      persisted,
-      recordFeatureInteractionForTour: false
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      true,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: false,
-        featureInteractionPersisted: persisted,
-        wasFeaturePreviouslyInteracted: true
-      }
-    )
-  })
-
-  it('records the floating workspace tour interaction when the open snapshot deferred persistence', async () => {
-    await renderPanel(true, vi.fn(), {
-      wasPreviouslyInteracted: false,
-      recordFeatureInteractionForTour: true
-    })
-
-    expect(mocks.useContextualTour).toHaveBeenLastCalledWith(
-      'floating-workspace',
-      true,
-      'floating_workspace_visible',
-      {
-        recordFeatureInteraction: true,
-        featureInteractionPersisted: undefined,
-        wasFeaturePreviouslyInteracted: false
-      }
-    )
   })
 
   it('targets the empty-state actions without co-mounting the surface fallback', async () => {

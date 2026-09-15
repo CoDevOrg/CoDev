@@ -1,4 +1,4 @@
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
 import type { FolderWorkspace, ProjectGroup } from '../../../shared/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -96,12 +96,7 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
   if (parsed?.kind === 'runtime') {
     return parsed.environmentId
   }
-  if (
-    parsed?.kind === 'local' ||
-    parsed?.kind === 'ssh' ||
-    folderWorkspace?.connectionId?.trim() ||
-    projectGroup?.connectionId?.trim()
-  ) {
+  if (parsed?.kind === 'local') {
     return null
   }
   const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
@@ -147,10 +142,6 @@ export function getExecutionHostIdForFolderWorkspace(
   )
   if (parsed) {
     return parsed.id
-  }
-  const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
   }
   if (preferredHostId && folderWorkspace) {
     return preferredHostId

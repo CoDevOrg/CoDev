@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
+import { ChevronRight, ExternalLink } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -26,13 +26,13 @@ export function FolderWorkspacePrChecksRow({
   onToggle,
   onLoadCheckDetails
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
-  const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const ReviewIcon = PullRequestIcon
   const StatusIcon = CHECK_ICON[row.checkTone] ?? CHECK_ICON.neutral
   // Why: match the regular PR checks header; the review identity leads,
   // while aggregate check state stays with the summary metadata.
   const showStatusIcon = row.checkTone !== 'neutral'
   const animateStatusIcon = row.checkTone === 'pending'
-  const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'
+  const reviewProviderLabel = 'PR'
   const toggleDetailsLabel = expanded
     ? translate(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.hideDetails',

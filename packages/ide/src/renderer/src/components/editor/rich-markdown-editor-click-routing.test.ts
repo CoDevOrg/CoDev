@@ -72,13 +72,4 @@ describe('rich markdown editor Shift+modifier click on external links', () => {
     })
   })
 
-  it('forwards a non-local source owner untouched', () => {
-    const sourceOwner = { kind: 'ssh', connectionId: 'conn-1' } as HttpLinkSourceOwner
-
-    expect(clickExternalLinkWithShift(sourceOwner)).toBe(true)
-    expect(openHttpLinkMock).toHaveBeenCalledWith(
-      'https://example.com/docs',
-      expect.objectContaining({ forceSystemBrowser: true, sourceOwner })
-    )
-  })
 })

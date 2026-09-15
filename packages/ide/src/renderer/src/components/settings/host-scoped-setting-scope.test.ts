@@ -7,7 +7,7 @@ import {
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 
 function host(id: SidebarHostOption['id'], label: string): SidebarHostOption {
-  const kind = id === 'local' ? 'local' : id.startsWith('runtime:') ? 'runtime' : 'ssh'
+  const kind = id === 'local' ? 'local' : 'runtime'
   return {
     id,
     label,

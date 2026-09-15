@@ -32,7 +32,6 @@ import {
   assertCreateParentFlagsCompatible,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
-import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
   warning?: string
@@ -228,13 +227,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         cwdParentWorktree = undefined
       }
     }
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
-      ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
       activate: flags.get('activate') === true || flags.get('run-hooks') === true,
@@ -261,14 +258,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
     assertParentWorktreeFlagsCompatible(flags)
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
-      ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),

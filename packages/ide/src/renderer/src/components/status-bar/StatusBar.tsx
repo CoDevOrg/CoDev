@@ -8,8 +8,7 @@ import {
   ChevronRight,
   Loader2,
   PanelsTopLeft,
-  RefreshCw,
-  Server
+  RefreshCw
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -59,8 +58,7 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { ClaudeIcon, OpenAIIcon } from './icons'
 import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
@@ -69,9 +67,7 @@ import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
 } from '@/lib/codex-session-restart'
-import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
-import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { CodevBridgeStatusSegment } from './CodevBridgeStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
@@ -110,10 +106,6 @@ import {
 type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
-
-const PetStatusSegment = lazyWithRetry(() =>
-  import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
-)
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
@@ -121,9 +113,6 @@ const ResourceUsageStatusSegment = lazyWithRetry(() =>
 )
 const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
-)
-const SshStatusSegment = lazyWithRetry(() =>
-  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
 
 export type CodexStatusRuntimeTarget = {
@@ -1146,18 +1135,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
       return 'C'
-    case 'gemini':
-      return 'G'
-    case 'opencode-go':
-      return 'O'
-    case 'kimi':
-      return 'K'
-    case 'antigravity':
-      return 'A'
-    case 'minimax':
-      return 'M'
-    case 'grok':
-      return 'R'
     case 'codex':
       return 'X'
   }
@@ -1167,7 +1144,7 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Provider segment
 // ---------------------------------------------------------------------------
 
-// Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
+// Why: providers can expose extra experimental buckets that would make the verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function VerboseProviderUsage({
@@ -1997,8 +1974,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // Why: gate per-CLI bars on PATH detection so an uninstalled agent isn't shown a noisy empty bar (auto re-shows when installed).
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
-  // Why: pet segment is driven purely by experimentalPet, not statusBarItems, to avoid double-toggling the surface (see design doc).
-  const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -2066,28 +2041,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
-  const antigravityUsageConfigured =
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
-  const usageSettings = {
-    ...settings,
-    antigravityUsageConfigured,
-    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
-  }
+  const usageSettings = settings
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
-  const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
-  const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
-  const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
-  const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2096,59 +2055,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  const showGemini =
-    visibleGemini !== null &&
-    statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
-  const showKimi =
-    visibleKimi !== null &&
-    statusBarItems.includes('kimi') &&
-    isStatusBarItemAvailable('kimi', detectedAgentIds)
-  const showAntigravity =
-    visibleAntigravity !== null &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
-  const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
-  const showGrok =
-    visibleGrok !== null &&
-    statusBarItems.includes('grok') &&
-    isStatusBarItemAvailable('grok', detectedAgentIds)
-  // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
-  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
-  const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
-  const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
-  const hasVisibleUsageMeters =
-    showClaude ||
-    showCodex ||
-    showGemini ||
-    showOpencodeGo ||
-    showKimi ||
-    showAntigravity ||
-    showMiniMax ||
-    showGrok
+  const hasVisibleUsageMeters = showClaude || showCodex
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
-    usageSettings
-  )
+  const isEmptyUsageState = isUsageEmptyState({ claude, codex }, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+  const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2159,25 +2077,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   // Why: the roster must contain only status items the user left visible;
   // otherwise an empty trigger would bypass those visibility controls.
-  const rosterProviders = [
-    showClaude ? visibleClaude : null,
-    showCodex ? visibleCodex : null,
-    showGemini ? visibleGemini : null,
-    showAntigravity ? visibleAntigravity : null,
-    showOpencodeGo ? visibleOpencodeGo : null,
-    showKimi ? visibleKimi : null,
-    showMiniMax ? visibleMiniMax : null,
-    showGrok ? visibleGrok : null
-  ].filter((p): p is ProviderRateLimits => p !== null)
+  const rosterProviders = [showClaude ? visibleClaude : null, showCodex ? visibleCodex : null].filter((p): p is ProviderRateLimits => p !== null)
 
   const handleManageAccounts = (): void => {
     setUsageMenuOpen(false)
     openSettingsTarget({ pane: 'accounts', repoId: null })
-    openSettingsPage()
-  }
-  const handleUsageDetails = (): void => {
-    setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'stats', repoId: null })
     openSettingsPage()
   }
   const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
@@ -2276,7 +2180,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   onSignIn={handleOpenProviderAccounts}
                   canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
                   onManageAccounts={handleManageAccounts}
-                  onUsageDetails={handleUsageDetails}
                   renderRow={(p, rowNode) => {
                     // Every provider drills into its detail panel (parity with the
                     // per-provider dropdowns on main); Claude/Codex additionally get
@@ -2350,11 +2253,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
-        <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
-        <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
-          {petEnabled ? <PetStatusSegment /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
@@ -2362,7 +2262,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
           {typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? (
             <CodevBridgeStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
-          {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
         </React.Suspense>
         {showFloatingTerminalToggle && (
           <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
@@ -2433,87 +2332,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
             </DropdownMenuCheckboxItem>
           )}
-          {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
-            <DropdownMenuCheckboxItem
-              checked={statusBarItems.includes('gemini')}
-              onCheckedChange={() => {
-                recordFeatureInteraction('usage-tracking')
-                toggleStatusBarItem('gemini')
-              }}
-            >
-              <GeminiIcon size={14} />
-              {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
-            </DropdownMenuCheckboxItem>
-          )}
-          {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
-            <DropdownMenuCheckboxItem
-              checked={statusBarItems.includes('antigravity')}
-              onCheckedChange={() => {
-                recordFeatureInteraction('usage-tracking')
-                toggleStatusBarItem('antigravity')
-              }}
-            >
-              <AgentIcon agent="antigravity" size={14} />
-              {translate(
-                'auto.components.status.bar.StatusBar.antigravityUsage',
-                'Antigravity Usage'
-              )}
-            </DropdownMenuCheckboxItem>
-          )}
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('opencode-go')}
-            onCheckedChange={() => {
-              recordFeatureInteraction('usage-tracking')
-              toggleStatusBarItem('opencode-go')
-            }}
-          >
-            <OpenCodeGoIcon size={14} />
-            {translate('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
-          </DropdownMenuCheckboxItem>
-          {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
-            <DropdownMenuCheckboxItem
-              checked={statusBarItems.includes('kimi')}
-              onCheckedChange={() => {
-                recordFeatureInteraction('usage-tracking')
-                toggleStatusBarItem('kimi')
-              }}
-            >
-              <AgentIcon agent="kimi" size={14} />
-              {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
-            </DropdownMenuCheckboxItem>
-          )}
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('minimax')}
-            onCheckedChange={() => {
-              recordFeatureInteraction('usage-tracking')
-              toggleStatusBarItem('minimax')
-            }}
-          >
-            <MiniMaxIcon size={14} />
-            {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
-          </DropdownMenuCheckboxItem>
-          {isStatusBarItemAvailable('grok', detectedAgentIds) && (
-            <DropdownMenuCheckboxItem
-              checked={statusBarItems.includes('grok')}
-              onCheckedChange={() => {
-                recordFeatureInteraction('usage-tracking')
-                toggleStatusBarItem('grok')
-              }}
-            >
-              <AgentIcon agent="grok" size={14} />
-              {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
-            </DropdownMenuCheckboxItem>
-          )}
-          <DropdownMenuCheckboxItem
-            checked={statusBarItems.includes('ssh')}
-            onCheckedChange={() => {
-              recordFeatureInteraction('ssh')
-              toggleStatusBarItem('ssh')
-            }}
-          >
-            <Server className="size-3.5" />
-            {translate('auto.components.status.bar.StatusBar.24ac89df1a', 'Remote Hosts')}
-          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('resource-usage')}
             onCheckedChange={() => {

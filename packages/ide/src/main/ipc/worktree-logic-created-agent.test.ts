@@ -17,7 +17,6 @@ describe('mergeWorktree creation agent metadata', () => {
         comment: '',
         linkedIssue: null,
         linkedPR: null,
-        linkedLinearIssue: null,
         isArchived: false,
         isUnread: false,
         isPinned: false,

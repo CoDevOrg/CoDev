@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
   getWorkspaceIntentName,
@@ -66,18 +65,17 @@ describe('getLinkedWorkItemWorkspaceName', () => {
     })
   })
 
-  it('keeps external provider identifiers without duplicating title prefixes', () => {
+  it('falls back to the work-item identity when the title is empty', () => {
     expect(
       getLinkedWorkItemWorkspaceName({
-        type: 'issue',
-        provider: 'jira',
-        number: 0,
-        title: 'PROJ-7 Fix flaky import',
-        jiraIdentifier: 'PROJ-7'
+        type: 'pr',
+        provider: 'github',
+        number: 7,
+        title: '   '
       })
     ).toEqual({
-      displayName: 'PROJ-7 Fix flaky import',
-      seedName: 'proj-7-fix-flaky-import'
+      displayName: 'PR 7',
+      seedName: 'pr-7'
     })
   })
 })
@@ -100,7 +98,7 @@ describe('getWorkspaceIntentName', () => {
     })
   })
 
-  it('defaults PR and MR work to review-oriented identities', () => {
+  it('defaults PR work to review-oriented identities', () => {
     expect(
       getWorkspaceIntentName({
         sourceText: 'https://github.com/acme/app/pull/1234 and check whether this is safe',
@@ -116,17 +114,17 @@ describe('getWorkspaceIntentName', () => {
     })
     expect(
       getWorkspaceIntentName({
-        sourceText: 'fix https://gitlab.com/acme/app/-/merge_requests/77',
+        sourceText: 'fix https://github.com/acme/app/pull/77',
         workItem: {
-          type: 'mr',
-          provider: 'gitlab',
+          type: 'pr',
+          provider: 'github',
           number: 77,
           title: 'Resolve sync race'
         }
       })
     ).toEqual({
-      displayName: 'Fix MR 77',
-      seedName: 'fix-mr-77'
+      displayName: 'Fix PR 77',
+      seedName: 'fix-pr-77'
     })
   })
 
@@ -208,23 +206,6 @@ describe('getWorkspaceIntentName', () => {
     })
   })
 
-  it('uses external provider identifiers without duplicating them in the subject', () => {
-    expect(
-      getWorkspaceIntentName({
-        workItem: {
-          type: 'issue',
-          provider: 'jira',
-          number: 0,
-          title: 'PROJ-7 Fix flaky import',
-          jiraIdentifier: 'PROJ-7'
-        }
-      })
-    ).toEqual({
-      displayName: 'PROJ-7 Fix Flaky Import',
-      seedName: 'proj-7-fix-flaky-import'
-    })
-  })
-
   it('summarizes unlinked task text into a shared display and seed', () => {
     expect(getWorkspaceIntentName({ sourceText: 'add keyboard shortcut settings' })).toEqual({
       displayName: 'Add Keyboard Shortcut Settings',
@@ -248,35 +229,6 @@ describe('getWorkspaceIntentName', () => {
     expect(
       split.mock.calls.filter(([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+')
     ).toHaveLength(0)
-  })
-})
-
-describe('getLinearIssueWorkspaceName', () => {
-  it('keeps the Linear identifier in the workspace seed', () => {
-    expect(
-      getLinearIssueWorkspaceName({
-        identifier: 'ENG-42',
-        title: 'Ship Linear parity'
-      })
-    ).toBe('eng-42-ship-linear-parity')
-  })
-
-  it('does not duplicate an identifier already present in the Linear title', () => {
-    expect(
-      getLinearIssueWorkspaceName({
-        identifier: 'ENG-42',
-        title: 'ENG-42 Ship Linear parity'
-      })
-    ).toBe('eng-42-ship-linear-parity')
-  })
-
-  it('keeps the combined Linear seed within the workspace-name limit', () => {
-    const seed = getLinearIssueWorkspaceName({
-      identifier: 'ENG-42',
-      title: 'Implement a very long Linear issue title that should be truncated'
-    })
-    expect(seed.length).toBeLessThanOrEqual(48)
-    expect(seed).toMatch(/^eng-42-/)
   })
 })
 

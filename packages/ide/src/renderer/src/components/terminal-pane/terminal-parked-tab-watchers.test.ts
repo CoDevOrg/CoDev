@@ -255,14 +255,6 @@ describe('terminal-parked-tab-watchers', () => {
     expect(exitSubscriptions).toEqual([])
   })
 
-  it('starts watchers for SSH PTYs (C1 SSH parking, default on)', () => {
-    capturePanes([{ ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
-    syncParked({ tabs: [{ id: TAB_ID, ptyId: 'ssh:conn-1@@pty-1' }] })
-
-    expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(1)
-    expect(startedWatchers[0].options).toMatchObject({ ptyId: 'ssh:conn-1@@pty-1' })
-  })
-
   it('never starts watchers for SSH PTYs when terminalSshViewParking is off', () => {
     mockStoreState.settings = { terminalSshViewParking: false }
     capturePanes([{ ptyId: 'ssh:conn-1@@pty-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
@@ -779,16 +771,6 @@ describe('terminal-parked-tab-watchers', () => {
       )
     })
 
-    it('accepts an SSH PTY under the default C1 SSH-parking policy', () => {
-      capturePanes([
-        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        { ptyId: 'ssh:conn-1@@pty-1', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
-        true
-      )
-    })
-
     it('rejects an SSH PTY when terminalSshViewParking is off', () => {
       mockStoreState.settings = { terminalSshViewParking: false }
       capturePanes([
@@ -898,13 +880,6 @@ describe('terminal-parked-tab-watchers', () => {
       ).toBe(true)
     })
 
-    it('never exempts remote-runtime or SSH panes', () => {
-      capturePanes([
-        { ptyId: 'remote:env-1@@t-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        { ptyId: 'ssh:conn-1@@pty-1', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      expect(isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: null }, WORKTREE_ID)).toBe(false)
-    })
   })
 
   describe('selectEvictionExemptTerminalTabIds', () => {

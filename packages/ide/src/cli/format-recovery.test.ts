@@ -45,16 +45,4 @@ describe('CLI error recovery', () => {
     expect(output).not.toContain('Fix the command flags or RPC params')
   })
 
-  it('keeps generic computer hints when an RPC error has no recovery data', () => {
-    const error = new RuntimeRpcFailureError({
-      id: 'req_rpc_fallback',
-      ok: false,
-      error: { code: 'invalid_argument', message: 'Invalid computer argument' },
-      _meta: { runtimeId: 'runtime_local' }
-    })
-
-    const output = formatCliError(error, { commandPath: ['computer', 'click'] })
-
-    expect(output).toContain('Fix the command flags or RPC params')
-  })
 })

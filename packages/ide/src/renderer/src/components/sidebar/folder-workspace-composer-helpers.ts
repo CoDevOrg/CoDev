@@ -1,8 +1,6 @@
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
   buildGitHubWorkspaceSource,
-  buildGitLabWorkspaceSource,
-  buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   getWorkspaceSourceProvider
@@ -12,7 +10,6 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
@@ -20,8 +17,6 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type {
   FolderWorkspace,
   GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue,
   ProjectGroup,
   Repo
 } from '../../../../shared/types'
@@ -35,9 +30,7 @@ function getProjectGroupExecutionHostId(projectGroup: ProjectGroup): ExecutionHo
   if (executionHostId) {
     return executionHostId
   }
-  return projectGroup.connectionId
-    ? toSshExecutionHostId(projectGroup.connectionId)
-    : LOCAL_EXECUTION_HOST_ID
+  return LOCAL_EXECUTION_HOST_ID
 }
 
 export function getFolderSourceRepos(
@@ -73,8 +66,6 @@ export function toFolderWorkspaceLinkedTask(
     number: item.number,
     title: item.title,
     url: item.url,
-    ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
-    ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   }
 }
@@ -91,14 +82,6 @@ export function getLinkedItemDisplayName(item: LinkedWorkItemSummary): string | 
 
 export function toGitHubLinkedWorkItem(item: GitHubWorkItem): LinkedWorkItemSummary {
   return buildGitHubWorkspaceSource(item)
-}
-
-export function toGitLabLinkedWorkItem(item: GitLabWorkItem): LinkedWorkItemSummary {
-  return buildGitLabWorkspaceSource(item)
-}
-
-export function toLinearLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
-  return buildLinearWorkspaceSource(issue)
 }
 
 export function getFolderWorkspacePrimaryActionLabel(): string {

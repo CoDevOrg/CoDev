@@ -6,28 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   createGitHubPullRequestMock,
   getRepoSlugMock,
-  getProjectSlugMock,
-  getBitbucketRepoSlugMock,
-  getAzureDevOpsRepoSlugMock,
-  getGiteaRepoSlugMock,
   getEnterpriseGitHubRepoSlugMock,
   getHostedReviewForBranchMock,
   ghExecFileAsyncMock,
-  glabExecFileAsyncMock,
   gitExecFileAsyncMock,
   getUpstreamStatusMock,
   getSshGitProviderMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
   getRepoSlugMock: vi.fn(),
-  getProjectSlugMock: vi.fn(),
-  getBitbucketRepoSlugMock: vi.fn(),
-  getAzureDevOpsRepoSlugMock: vi.fn(),
-  getGiteaRepoSlugMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
-  glabExecFileAsyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   getUpstreamStatusMock: vi.fn(),
   getSshGitProviderMock: vi.fn()
@@ -41,46 +31,11 @@ vi.mock('../github/client', () => ({
 vi.mock('../github/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
-vi.mock('../gitlab/client', () => ({
-  getProjectSlug: getProjectSlugMock,
-  getMergeRequestForBranch: vi.fn(),
-  getMergeRequest: vi.fn()
-}))
-vi.mock('../gitlab/merge-request-creation', () => ({ createGitLabMergeRequest: vi.fn() }))
-vi.mock('../bitbucket/client', () => ({
-  getBitbucketRepoSlug: getBitbucketRepoSlugMock,
-  getBitbucketPullRequestForBranch: vi.fn(),
-  getBitbucketPullRequest: vi.fn()
-}))
-vi.mock('../azure-devops/client', () => ({
-  getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
-  getAzureDevOpsPullRequestForBranch: vi.fn(),
-  getAzureDevOpsPullRequest: vi.fn()
-}))
-vi.mock('../azure-devops/pull-request-creation', () => ({
-  createAzureDevOpsPullRequest: vi.fn(),
-  isAzureDevOpsReviewCreationAuthenticated: vi.fn()
-}))
-vi.mock('../gitea/client', () => ({
-  getGiteaRepoSlug: getGiteaRepoSlugMock,
-  getGiteaPullRequestForBranch: vi.fn(),
-  getGiteaPullRequest: vi.fn()
-}))
-vi.mock('../gitea/pull-request-creation', () => ({
-  createGiteaPullRequest: vi.fn(),
-  isGiteaReviewCreationAuthenticated: vi.fn()
-}))
 vi.mock('../github/gh-utils', () => ({
   acquire: vi.fn(),
   release: vi.fn(),
   ghExecFileAsync: ghExecFileAsyncMock,
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-vi.mock('../gitlab/gl-utils', () => ({
-  acquire: vi.fn(),
-  release: vi.fn(),
-  glabExecFileAsync: glabExecFileAsyncMock,
-  glabRepoExecOptions: (repoPath: string) => ({ cwd: repoPath })
 }))
 vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
@@ -114,14 +69,9 @@ describe('createHostedReview with shared symlinks', () => {
     for (const mock of [
       createGitHubPullRequestMock,
       getRepoSlugMock,
-      getProjectSlugMock,
-      getBitbucketRepoSlugMock,
-      getAzureDevOpsRepoSlugMock,
-      getGiteaRepoSlugMock,
       getEnterpriseGitHubRepoSlugMock,
       getHostedReviewForBranchMock,
       ghExecFileAsyncMock,
-      glabExecFileAsyncMock,
       gitExecFileAsyncMock,
       getUpstreamStatusMock,
       getSshGitProviderMock
@@ -129,15 +79,10 @@ describe('createHostedReview with shared symlinks', () => {
       mock.mockReset()
     }
 
-    getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
-    getBitbucketRepoSlugMock.mockResolvedValue(null)
-    getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
-    getGiteaRepoSlugMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     getHostedReviewForBranchMock.mockResolvedValue(null)
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getUpstreamStatusMock.mockResolvedValue({
       hasUpstream: true,
       upstreamName: 'origin/feature',

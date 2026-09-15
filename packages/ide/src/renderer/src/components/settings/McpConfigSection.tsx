@@ -19,7 +19,6 @@ import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFil
 import { McpMissingConfigList } from './McpMissingConfigList'
 import { loadMcpConfigInspections } from './mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -38,9 +37,6 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const worktreesForRepo = useAppStore((state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES)
-  const sshConnectionStatus = useAppStore((state) =>
-    repo.connectionId ? state.sshConnectionStates.get(repo.connectionId)?.status : null
-  )
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
   const [createConfirm, setCreateConfirm] = useState(false)
@@ -108,7 +104,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     setInspectionUnavailableMessage(null)
 
     try {
-      if (connectionId && sshConnectionStatus !== 'connected') {
+      if (connectionId) {
         if (mountedRef.current) {
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('Connect this SSH repo to inspect or add MCP configs.')
@@ -148,7 +144,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         setLoading(false)
       }
     }
-  }, [connectionId, isWindows, missingInspections, mountedRef, sshConnectionStatus, targetRootPath])
+  }, [connectionId, isWindows, missingInspections, mountedRef, targetRootPath])
 
   const clearCreateConfirmResetTimer = useCallback((): void => {
     if (createConfirmResetTimerRef.current !== null) {
@@ -193,16 +189,12 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
     const target = joinPath(targetRootPath, '.mcp.json')
     try {
-      const sshExpectation = connectionId
-        ? captureDirectSshMutationExpectation(useAppStore.getState(), connectionId)
-        : {}
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({
         filePath: target,
         content: MCP_STARTER_CONFIG,
-        connectionId,
-        ...sshExpectation
+        connectionId
       })
       clearCreateConfirmResetTimer()
       if (mountedRef.current) {

@@ -30,10 +30,10 @@ function windowOf(
   return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
-// Grok unified-billing accounts surface a monthly window and nothing else.
-function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
+// Accounts on unified monthly billing surface a monthly window and nothing else.
+function codexMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
   return {
-    provider: 'grok',
+    provider: 'codex',
     session: null,
     weekly: null,
     monthly: windowOf(25, 43200),
@@ -48,7 +48,7 @@ describe('ProviderSegment monthly window', () => {
     const { ProviderSegment } = await import('./StatusBar')
 
     const markup = renderToStaticMarkup(
-      <ProviderSegment p={grokMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
+      <ProviderSegment p={codexMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
     )
 
     expect(markup).toContain('25% used 30d')
@@ -59,7 +59,7 @@ describe('ProviderSegment monthly window', () => {
 
     const markup = renderToStaticMarkup(
       <ProviderSegment
-        p={grokMonthlyLimits('fetching')}
+        p={codexMonthlyLimits('fetching')}
         compact={false}
         display="used"
         mode="compact"
@@ -74,7 +74,7 @@ describe('ProviderSegment monthly window', () => {
     const { ProviderSegment } = await import('./StatusBar')
 
     const limits: ProviderRateLimits = {
-      provider: 'opencode-go',
+      provider: 'codex',
       session: windowOf(10, 300),
       weekly: windowOf(20, 10080),
       monthly: windowOf(30, 43200),
@@ -94,7 +94,7 @@ describe('ProviderSegment monthly window', () => {
   it('selects a named bucket as the tightest provider window', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const limits: ProviderRateLimits = {
-      provider: 'gemini',
+      provider: 'claude',
       session: null,
       weekly: null,
       buckets: [
@@ -147,7 +147,7 @@ describe('ProviderSegment monthly window', () => {
 
   it('shows the footer bar only in verbose mode', async () => {
     const { ProviderSegment } = await import('./StatusBar')
-    const limits = grokMonthlyLimits('ok')
+    const limits = codexMonthlyLimits('ok')
 
     const verbose = renderToStaticMarkup(
       <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />

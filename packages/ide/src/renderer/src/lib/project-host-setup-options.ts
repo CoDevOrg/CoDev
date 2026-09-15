@@ -1,12 +1,10 @@
 import {
   getExecutionHostLabel,
-  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -35,7 +33,7 @@ export type ProjectHostSetupOption =
       // Why: only a genuine connection error warrants an alarm glyph; a dormant
       // disconnected host is merely not-yet-connected, not broken.
       attention: boolean
-      connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
+      connectAction?: { kind: 'runtime'; environmentId: string }
     }
 
 export type ReadyProjectHostSetupOption = Extract<ProjectHostSetupOption, { kind: 'ready' }>
@@ -122,9 +120,7 @@ function buildReadySetupOptions({
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
         eligibleRepoIds.has(setup.repoId) &&
-        Boolean(host) &&
-        !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(setup.hostId)
+        Boolean(host)
       )
     })
     .map((setup) => ({
@@ -163,12 +159,7 @@ function buildNeedsSetupOptions({
   pendingSetupByHost
 }: BuildNeedsSetupOptionsInput): NeedsSetupProjectHostOption[] {
   return hosts
-    .filter(
-      (host) =>
-        !readySetupByHost.has(host.id) &&
-        !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(host.id)
-    )
+    .filter((host) => !readySetupByHost.has(host.id))
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
       const availability = getHostSetupAvailability(host)
@@ -189,18 +180,6 @@ function buildNeedsSetupOptions({
         ...(connectAction ? { connectAction } : {})
       }
     })
-}
-
-function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
-  return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
-}
-
-// Why: a per-workspace-env SSH repo projects a setup with hostId `ssh:runtime-ssh-<id>`. The
-// execution-host registry filters runtime-owned targets, so its host is absent here — guard on the
-// hostId directly so the hidden target never becomes a selectable run-target option.
-function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
-  const parsed = parseExecutionHostId(hostId)
-  return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
 function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
@@ -269,9 +248,6 @@ function getHostConnectAction(
     return undefined
   }
   const parsed = parseExecutionHostId(host.id)
-  if (parsed?.kind === 'ssh') {
-    return { kind: 'ssh', targetId: parsed.targetId }
-  }
   if (parsed?.kind === 'runtime') {
     return { kind: 'runtime', environmentId: parsed.environmentId }
   }

@@ -111,33 +111,6 @@ describe('buildProjectHostSetupOptions', () => {
     ])
   })
 
-  it('omits ephemeral VM runtime setups from reusable project host choices', () => {
-    const ephemeralHostId = 'runtime:90d880b2-de1b-44be-b7b8-8e15274e184e' as ExecutionHostId
-    const options = buildProjectHostSetupOptions({
-      projectId: 'project-1',
-      eligibleRepos: [repo('local-repo'), repo('vm-repo')],
-      hosts: [
-        host('local'),
-        host(ephemeralHostId, {
-          label: '90d880b2-de1b-44be-b7b8-8e15274e184e',
-          source: 'ephemeral-vm',
-          capabilities: FULL_HOST_MODEL_RUNTIME_CAPABILITIES
-        })
-      ],
-      projectHostSetups: [
-        setup('local', 'project-1', 'local', 'local-repo'),
-        setup('vm', 'project-1', ephemeralHostId, 'vm-repo', {
-          path: '/vercel/sandbox/orca',
-          displayName: 'orca'
-        })
-      ]
-    })
-
-    expect(options).toEqual([
-      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
-    ])
-  })
-
   it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
     // The execution-host registry filters runtime-owned targets, so the setup's host is absent
     // here — guard on the hostId so the hidden target never becomes a selectable run-target.
@@ -159,29 +132,6 @@ describe('buildProjectHostSetupOptions', () => {
       expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
     ])
     expect(options.some((o) => String(o.hostId).includes('runtime-ssh-'))).toBe(false)
-  })
-
-  it('omits hidden host categories from setup-needed choices', () => {
-    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
-    const ephemeralHostId = 'runtime:90d880b2-de1b-44be-b7b8-8e15274e184e' as ExecutionHostId
-
-    const options = buildProjectHostSetupOptions({
-      projectId: 'project-1',
-      eligibleRepos: [repo('local-repo')],
-      hosts: [
-        host('local'),
-        host(runtimeSshHostId),
-        host(ephemeralHostId, {
-          source: 'ephemeral-vm',
-          capabilities: FULL_HOST_MODEL_RUNTIME_CAPABILITIES
-        })
-      ],
-      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
-    })
-
-    expect(options).toEqual([
-      expect.objectContaining({ id: 'local', kind: 'ready', label: LOCAL_HOST_LABEL })
-    ])
   })
 
   it('omits setups that are not ready or cannot create through an eligible repo', () => {
@@ -314,7 +264,6 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it.each([
-    ['ssh:builder' as const, { kind: 'ssh', targetId: 'builder' }],
     ['runtime:gpu' as const, { kind: 'runtime', environmentId: 'gpu' }]
   ])('adds a connect action for disconnected %s setup-needed hosts', (hostId, connectAction) => {
     const options = buildProjectHostSetupOptions({
@@ -334,27 +283,6 @@ describe('buildProjectHostSetupOptions', () => {
       id: `needs-setup:${hostId}`,
       kind: 'needs-setup',
       connectAction
-    })
-  })
-
-  it('adds a connect action for errored setup-needed hosts', () => {
-    const options = buildProjectHostSetupOptions({
-      projectId: 'project-1',
-      eligibleRepos: [repo('local-repo')],
-      hosts: [
-        host('local'),
-        host('ssh:builder', {
-          label: 'Builder',
-          health: 'error'
-        })
-      ],
-      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
-    })
-
-    expect(options.at(-1)).toMatchObject({
-      id: 'needs-setup:ssh:builder',
-      kind: 'needs-setup',
-      connectAction: { kind: 'ssh', targetId: 'builder' }
     })
   })
 

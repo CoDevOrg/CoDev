@@ -37,7 +37,6 @@ const makeStore = () => ({
       comment: '',
       linkedIssue: 123,
       linkedPR: null,
-      linkedLinearIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,

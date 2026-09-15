@@ -9,11 +9,6 @@ import {
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
-  attachEphemeralVmRuntimeToWorkspace,
-  cleanupEphemeralVmRuntimeForFailedCreate,
-  prepareRequestForCreate
-} from '@/lib/ephemeral-vm-worktree-creation'
-import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
@@ -98,10 +93,7 @@ async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<void> {
-  const preparedRequest = await prepareRequestForCreate(creationId, request)
-  if (!preparedRequest) {
-    return
-  }
+  const preparedRequest = request
 
   let result: CreateWorktreeResult
   try {
@@ -120,19 +112,11 @@ async function executeWorktreeCreation(
         preparedRequest.linkedPR,
         preparedRequest.pushTarget,
         preparedRequest.agent ?? undefined,
-        preparedRequest.linkedLinearIssue,
         preparedRequest.branchNameOverride,
         preparedRequest.workspaceStatus,
-        preparedRequest.linkedGitLabMR,
-        preparedRequest.linkedGitLabIssue,
         backendStartup,
         preparedRequest.pendingFirstAgentMessageRename,
         creationId,
-        preparedRequest.linkedLinearIssueWorkspaceId,
-        preparedRequest.linkedLinearIssueOrganizationUrlKey,
-        preparedRequest.linkedBitbucketPR,
-        preparedRequest.linkedAzureDevOpsPR,
-        preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
           ...(preparedRequest.linkedWorkItem !== undefined
@@ -150,14 +134,12 @@ async function executeWorktreeCreation(
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return
     }
-    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     // Why: an error must stay on the same creation surface that owns the faux
     // tab strip, rather than falling back to stale previous-workspace tabs.
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
-      error: message,
-      ...(preparedRequest.ephemeralVmRecipe ? { request } : {})
+      error: message
     })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
@@ -176,8 +158,6 @@ async function executeWorktreeCreation(
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
   }
-  await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
-
   const backendSpawned = result.startupTerminal?.spawned === true
   if (preparedRequest.startupPlan && !backendSpawned && !preparedRequest.startupPlan.launchToken) {
     // Why: delayed delivery must target the exact pane spawned from this queued
@@ -231,7 +211,7 @@ async function executeWorktreeCreation(
 
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
-  useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
+  useAppStore.getState().removePendingWorktreeCreation(creationId)
   seedAgentTabStateAfterWorktreeCreate({
     request: preparedRequest,
     worktreeId: worktree.id,
@@ -314,7 +294,6 @@ export function continueBackgroundWorktreeCreation(
     status: 'creating',
     startedAt: Date.now(),
     error: undefined,
-    provisioningLog: undefined,
     request
   })
   // Why: background work-item preflight can finish after the user moved on; keep
@@ -338,12 +317,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     startedAt: Date.now(),
-    phase:
-      entry.request.ephemeralVmRecipe && !entry.request.ephemeralVmRuntimeId
-        ? 'provisioning-vm'
-        : 'fetching',
-    error: undefined,
-    provisioningLog: undefined
+    phase: 'fetching',
+    error: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

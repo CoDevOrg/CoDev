@@ -411,7 +411,7 @@ describe('source-control AI action recipes', () => {
       actions: {
         ...base.sourceControlAi!.actions,
         commitMessage: {
-          agentId: 'aider',
+          agentId: 'claude-agent-teams',
           commandInputTemplate: '{basePrompt}'
         }
       }
@@ -427,7 +427,7 @@ describe('source-control AI action recipes', () => {
     ).toEqual({
       ok: false,
       error:
-        'Agent "aider" does not support Source Control AI commit messages. Supported agents: Claude, Codex, OpenCode, Pi, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
+        'Agent "claude-agent-teams" does not support Source Control AI commit messages. Supported agents: Claude, Codex, or Custom command.'
     })
   })
 })

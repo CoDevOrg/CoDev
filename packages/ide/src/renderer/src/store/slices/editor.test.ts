@@ -39,10 +39,6 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
-const loadGitLabJobLogDetailsMock = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/gitlab-job-trace-client', () => ({
-  loadGitLabJobLogDetails: loadGitLabJobLogDetailsMock
-}))
 
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
@@ -713,62 +709,6 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
   })
 
-  it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
-    const store = createEditorStore()
-    const file = {
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'wt-1',
-      language: 'png',
-      mode: 'edit' as const
-    }
-
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 1
-          }
-        ]
-      ])
-    } as never)
-    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-1' })
-
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-2' }],
-      sshConnectionStates: new Map([
-        [
-          'ssh-2',
-          {
-            targetId: 'ssh-2',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 2
-          }
-        ]
-      ])
-    } as never)
-    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-2' })
-
-    expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.externalSshTargetId).toBe('ssh-2')
-    expect(store.getState().openFiles[0]?.operationProvenance).toEqual(
-      expect.objectContaining({
-        generation: expect.objectContaining({
-          route: { executionHostId: 'ssh:ssh-2', runtimeEnvironmentId: null }
-        }),
-        expectedSshConnectionGeneration: 2
-      })
-    )
-  })
-
   it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
     const store = createEditorStore()
 
@@ -1372,7 +1312,6 @@ describe('createEditorSlice untitled cleanup routing', () => {
             comment: '',
             linkedIssue: null,
             linkedPR: null,
-            linkedLinearIssue: null,
             isArchived: false,
             isUnread: false,
             isPinned: false,
@@ -2184,35 +2123,6 @@ describe('createEditorSlice markdown table of contents visibility', () => {
 })
 
 describe('createEditorSlice openMarkdownPreview', () => {
-  it('keeps external SSH ownership after the source edit tab closes', () => {
-    const store = createEditorStore()
-    store.getState().openFile({
-      filePath: '/tmp/notes.md',
-      relativePath: '/tmp/notes.md',
-      worktreeId: 'wt-1',
-      language: 'markdown',
-      mode: 'edit',
-      externalSshTargetId: 'ssh-1'
-    })
-
-    store.getState().openMarkdownPreview(
-      {
-        filePath: '/tmp/notes.md',
-        relativePath: '/tmp/notes.md',
-        worktreeId: 'wt-1',
-        language: 'markdown'
-      },
-      { sourceFileId: '/tmp/notes.md' }
-    )
-    store.getState().closeFile('/tmp/notes.md')
-
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        id: 'markdown-preview::/tmp/notes.md',
-        externalSshTargetId: 'ssh-1'
-      })
-    ])
-  })
 
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()
@@ -3107,148 +3017,9 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   // Regression for #7732: refreshing a GitLab job tab through the GitHub check-runs
   // API returns null and blanks the tab the user just asked to reload.
-  it('reloads an open GitLab job tab through the job trace client', async () => {
-    loadGitLabJobLogDetailsMock.mockReset()
-    loadGitLabJobLogDetailsMock.mockResolvedValue({
-      name: 'test: unit',
-      status: 'completed',
-      conclusion: 'failure',
-      url: null,
-      detailsUrl: null,
-      startedAt: null,
-      completedAt: null,
-      title: null,
-      summary: null,
-      text: null,
-      annotations: [],
-      jobs: [
-        {
-          id: 42,
-          name: 'test: unit',
-          status: 'completed',
-          conclusion: 'failure',
-          startedAt: null,
-          completedAt: null,
-          url: null,
-          logTail: 'ERROR: Job failed: exit code 1',
-          steps: []
-        }
-      ]
-    })
-    const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails,
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 42
-    }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
-
-    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
-    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1', check })
-    )
-    expect(store.getState().openFiles).toContainEqual(
-      expect.objectContaining({
-        id: 'wt-1::check-details::gitlab-job:42',
-        checkRunDetails: expect.objectContaining({
-          loading: false,
-          error: null,
-          details: expect.objectContaining({
-            jobs: [expect.objectContaining({ logTail: 'ERROR: Job failed: exit code 1' })]
-          })
-        })
-      })
-    )
-  })
 
   // Regression for #7732: a fork MR's job lives in the source project, so reloading
   // without the stored project ref requests the trace from the wrong project.
-  it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
-    loadGitLabJobLogDetailsMock.mockReset()
-    loadGitLabJobLogDetailsMock.mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails: vi.fn().mockResolvedValue(null),
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 77
-    }
-    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      gitlabProjectRef: projectRef
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:77')
-
-    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ check, projectRef })
-    )
-  })
-
-  it('keeps a stored GitLab project ref when a patch omits it', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 77
-    }
-    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      gitlabProjectRef: projectRef
-    })
-    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: true,
-      error: null,
-      gitlabProjectRef: null
-    })
-
-    expect(
-      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::gitlab-job:77')
-        ?.checkRunDetails?.gitlabProjectRef
-    ).toEqual(projectRef)
-  })
 
   it('patches an open check-details tab without changing the active file', () => {
     const store = createEditorTabsStore()
@@ -4705,64 +4476,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('stats SSH markdown links through the source worktree connection before opening', async () => {
-    const store = createEditorStore()
-    pathExistsMock.mockResolvedValue(true)
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [
-          {
-            id: 'wt-1',
-            repoId: 'repo1',
-            path: '/repo',
-            branch: 'refs/heads/main',
-            head: 'abc',
-            isBare: false,
-            isMainWorktree: true,
-            displayName: 'main',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-        ]
-      }
-    } as Partial<AppState>)
-
-    await store.getState().activateMarkdownLink('./guide.md', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(fsStatMock).toHaveBeenCalledWith({
-      filePath: '/repo/docs/guide.md',
-      connectionId: 'ssh-1'
-    })
-    expect(store.getState().openFiles).toEqual([
-      expect.objectContaining({
-        filePath: '/repo/docs/guide.md',
-        mode: 'edit',
-        isPreview: true
-      })
-    ])
-  })
-
   it('does not open linked markdown directories as files', async () => {
     const store = createEditorStore()
     fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
@@ -5082,57 +4795,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('blocks external file URLs from SSH markdown sources', async () => {
-    const store = createEditorStore()
-    store.setState({
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo',
-          displayName: 'Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [
-          {
-            id: 'wt-1',
-            repoId: 'repo1',
-            path: '/repo',
-            branch: 'refs/heads/main',
-            head: 'abc',
-            isBare: false,
-            isMainWorktree: true,
-            displayName: 'main',
-            comment: '',
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            isUnread: false,
-            isPinned: false,
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-        ]
-      }
-    } as Partial<AppState>)
-
-    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
-      sourceFilePath: '/repo/docs/note.md',
-      worktreeId: 'wt-1',
-      worktreeRoot: '/repo'
-    })
-
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
-    expect(store.getState().openFiles).toEqual([])
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Opening remote paths in the local OS is not available.'
-    )
-  })
-
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
@@ -5401,29 +5063,4 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 
-  it('restores the SSH target that owns an external host file', () => {
-    const store = createEditorStore()
-    store.setState({
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
-      folderWorkspaces: []
-    } as never)
-
-    store.getState().hydrateEditorSession({
-      openFilesByWorktree: {
-        'wt-1': [
-          {
-            filePath: '/tmp/ssh-preview.png',
-            relativePath: '/tmp/ssh-preview.png',
-            worktreeId: 'wt-1',
-            language: 'png',
-            externalSshTargetId: 'ssh-1'
-          }
-        ]
-      }
-    } as never)
-
-    expect(store.getState().openFiles[0]).toEqual(
-      expect.objectContaining({ externalSshTargetId: 'ssh-1' })
-    )
-  })
 })

@@ -368,34 +368,6 @@ describe('DaemonServer', () => {
       ).rejects.toThrow('Session not found: never-created')
     })
 
-    it('persists only an allowlisted launch identity across reattach', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const first = await c.request('createOrAttach', {
-        sessionId: 'agent-session',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'droid'
-      })
-      expect(first).toMatchObject({ isNew: true, launchAgent: 'droid' })
-
-      const second = await c.request('createOrAttach', {
-        sessionId: 'agent-session',
-        cols: 80,
-        rows: 24
-      })
-      expect(second).toMatchObject({ isNew: false, launchAgent: 'droid' })
-
-      const unknown = await c.request('createOrAttach', {
-        sessionId: 'unknown-agent-session',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'not-an-agent'
-      } as never)
-      expect(unknown).not.toHaveProperty('launchAgent')
-    })
-
     it('handles listSessions', async () => {
       await startServer()
       const c = await connectClient()

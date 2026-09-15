@@ -152,41 +152,6 @@ describe('RuntimeGitCommands', () => {
     })
   })
 
-  it('does not resolve shared link paths for a remote runtime status', async () => {
-    const provider = { getStatus: vi.fn().mockResolvedValue({ entries: [] }) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        repo: { path: '/remote/repo', symlinkPaths: ['node_modules'] } as never,
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await commands.getRuntimeGitStatus('id:wt-1')
-
-    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
-  it('aborts a remote merge through the SSH git provider', async () => {
-    const provider = { abortMerge: vi.fn().mockResolvedValue(undefined) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.abortRuntimeGitMerge('id:wt-1')).resolves.toEqual({ ok: true })
-
-    expect(provider.abortMerge).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.abortMerge).not.toHaveBeenCalled()
-  })
-
   it('aborts a local rebase through the resolved worktree', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
@@ -196,23 +161,6 @@ describe('RuntimeGitCommands', () => {
     await expect(commands.abortRuntimeGitRebase('id:wt-1')).resolves.toEqual({ ok: true })
 
     expect(mocks.abortRebase).toHaveBeenCalledWith(worktreePath, {})
-  })
-
-  it('aborts a remote rebase through the SSH git provider', async () => {
-    const provider = { abortRebase: vi.fn().mockResolvedValue(undefined) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.abortRuntimeGitRebase('id:wt-1')).resolves.toEqual({ ok: true })
-
-    expect(provider.abortRebase).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.abortRebase).not.toHaveBeenCalled()
   })
 
   it('checks out a local branch through the resolved worktree', async () => {
@@ -229,26 +177,6 @@ describe('RuntimeGitCommands', () => {
     expect(mocks.checkoutBranch).toHaveBeenCalledWith(worktreePath, 'feature/x', {})
   })
 
-  it('checks out a remote branch through the SSH git provider', async () => {
-    const provider = { checkoutBranch: vi.fn().mockResolvedValue(undefined) }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.checkoutRuntimeGitBranch('id:wt-1', 'feature/x')).resolves.toEqual({
-      ok: true,
-      branch: 'feature/x'
-    })
-
-    expect(provider.checkoutBranch).toHaveBeenCalledWith('/remote/repo', 'feature/x')
-    expect(mocks.checkoutBranch).not.toHaveBeenCalled()
-  })
-
   it('lists local branches through the resolved worktree', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)
@@ -261,28 +189,6 @@ describe('RuntimeGitCommands', () => {
     })
 
     expect(mocks.listLocalBranches).toHaveBeenCalledWith(worktreePath, {})
-  })
-
-  it('lists remote local branches through the SSH git provider', async () => {
-    const provider = {
-      listLocalBranches: vi.fn().mockResolvedValue({ current: 'main', branches: ['main'] })
-    }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(commands.listRuntimeGitLocalBranches('id:wt-1')).resolves.toEqual({
-      current: 'main',
-      branches: ['main']
-    })
-
-    expect(provider.listLocalBranches).toHaveBeenCalledWith('/remote/repo')
-    expect(mocks.listLocalBranches).not.toHaveBeenCalled()
   })
 
   it('rejects slash-only git mutation paths before they can target the worktree root', async () => {
@@ -569,7 +475,7 @@ describe('RuntimeGitCommands', () => {
         title: '',
         body: '',
         draft: false,
-        provider: 'gitlab',
+        provider: 'github',
         useTemplate: true
       },
       { sourceControlAiResolvedParams }
@@ -579,67 +485,13 @@ describe('RuntimeGitCommands', () => {
       body: '',
       repoPath: worktreePath,
       connectionId: undefined,
-      provider: 'gitlab',
+      provider: 'github',
       useTemplate: true
     })
     expect(mocks.getPullRequestDraftContext).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({
         currentBody: templateBody
-      })
-    )
-  })
-
-  it('resolves remote commit-message settings against the SSH host cache', async () => {
-    const worktreePath = '/remote/repo'
-    const context = {
-      branch: 'main',
-      stagedSummary: 'M\tREADME.md',
-      stagedPatch: '+hello'
-    }
-    const params = { agentId: 'cursor', model: 'remote-model' }
-    mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
-    mocks.generateCommitMessageFromContext.mockResolvedValue({
-      success: true,
-      message: 'docs: update remote readme'
-    })
-    const provider = {
-      getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
-    }
-    mocks.getSshGitProvider.mockReturnValue(provider)
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree(worktreePath),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () =>
-        ({
-          commitMessageAi: {
-            enabled: true,
-            agentId: 'cursor',
-            selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } }
-          }
-        }) as unknown as GlobalSettings
-    })
-
-    await expect(commands.generateRuntimeCommitMessage('id:wt-1')).resolves.toEqual({
-      success: true,
-      message: 'docs: update remote readme'
-    })
-
-    expect(mocks.resolveCommitMessageSettings).toHaveBeenCalledWith(
-      expect.any(Object),
-      'ssh:conn-1',
-      'commitMessage',
-      null
-    )
-    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
-      context,
-      params,
-      expect.objectContaining({
-        kind: 'remote',
-        cwd: worktreePath
       })
     )
   })
@@ -663,33 +515,6 @@ describe('RuntimeGitCommands', () => {
       { ...context, linkedIssue: 123 },
       params,
       expect.objectContaining({ kind: 'local' })
-    )
-  })
-
-  it('enriches the SSH commit context with the workspace linked issue', async () => {
-    const worktreePath = '/home/tester/wt'
-    const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
-    const params = { agentId: 'cursor', model: 'remote-model' }
-    mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
-    mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
-    mocks.getSshGitProvider.mockReturnValue({
-      getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
-    })
-    const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree(worktreePath, 77),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await commands.generateRuntimeCommitMessage('id:wt-1')
-
-    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
-      { ...context, linkedIssue: 77 },
-      params,
-      expect.objectContaining({ kind: 'remote' })
     )
   })
 

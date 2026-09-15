@@ -17,28 +17,7 @@ export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as 
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — these well-known names are just a convenience union for pattern-matching.
-export type WellKnownAgentType =
-  | 'claude'
-  | 'openclaude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'amp'
-  | 'opencode'
-  | 'mimo-code'
-  | 'cursor'
-  | 'copilot'
-  | 'aider'
-  | 'pi'
-  | 'omp'
-  | 'droid'
-  | 'command-code'
-  | 'grok'
-  | 'hermes'
-  | 'devin'
-  | 'ante'
-  | 'trae'
-  | 'unknown'
+export type WellKnownAgentType = 'claude' | 'codex' | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
@@ -153,7 +132,7 @@ export type MigrationUnsupportedPtyEntry = {
   /** Registry-backed UUID pane proof, when available. */
   paneKey?: string
   reason: 'legacy-numeric-pane-key'
-  source: 'local' | 'ssh'
+  source: 'local'
   updatedAt: number
 }
 
@@ -224,8 +203,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   terminalHandle?: string
   tabId?: string
   worktreeId?: string
-  /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Only the remote-ingest path (`ingestRemote`) can stamp it; the HTTP path always sets null. See docs/design/agent-status-over-ssh.md §5. */
+  /** Legacy remote-connection stamp; always null on this fork (every hook event is host-local). */
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
@@ -241,7 +219,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   restoredUnconfirmed?: boolean
 }
 
-/** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
+/** Wire shape for ordinary pane teardown or a stamped transient-disconnect batch. */
 export type AgentStatusClearIpcPayload =
   | { paneKey: string }
   | {

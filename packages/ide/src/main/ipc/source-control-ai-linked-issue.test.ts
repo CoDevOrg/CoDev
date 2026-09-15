@@ -158,16 +158,4 @@ describe('resolveSourceControlAiLinkedIssue', () => {
     }
   })
 
-  it('does not fall back to a GitLab-linked issue', () => {
-    const store = {
-      getWorktreeMeta: vi.fn(() => ({ linkedIssue: null, linkedGitLabIssue: 456 }))
-    } as unknown as Store
-
-    expect(
-      resolveSourceControlAiLinkedIssue(store, {
-        worktreeId: LOCAL_ID,
-        worktreePath: LOCAL_PATH
-      })
-    ).toBeNull()
-  })
 })

@@ -40,18 +40,6 @@ describe('terminal startup command classifier', () => {
     expect(isCodexTerminalStartupCommand('/usr/local/bin/not-codex --continue')).toBe(false)
   })
 
-  it('recognizes non-Codex Orca agent startup commands', () => {
-    expect(isKnownTuiAgentTerminalStartupCommand('grok --permission-mode bypassPermissions')).toBe(
-      true
-    )
-    expect(isKnownTuiAgentTerminalStartupCommand('/Users/me/.grok/bin/grok --resume abc')).toBe(
-      true
-    )
-    expect(isKnownTuiAgentTerminalStartupCommand('/usr/local/bin/not-grok --resume abc')).toBe(
-      false
-    )
-  })
-
   it('bounds pathological single-token startup commands', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const command = 'codex'.repeat(TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS)

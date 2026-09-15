@@ -38,7 +38,6 @@ const fixtures = vi.hoisted(() => {
     comment: '',
     linkedIssue: null,
     linkedPR: 42,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

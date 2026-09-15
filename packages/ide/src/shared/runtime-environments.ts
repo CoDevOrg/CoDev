@@ -17,7 +17,7 @@ export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omi
 
 export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndpointSchema>
 
-export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm'])
+export const RuntimeEnvironmentSourceSchema = z.enum(['manual'])
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
 export const KnownRuntimeEnvironmentSchema = z.object({
@@ -29,7 +29,6 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   lastUsedAt: z.number().finite().nullable(),
   runtimeId: z.string().min(1).nullable(),
   source: RuntimeEnvironmentSourceSchema.optional(),
-  connectionDependency: z.literal('ssh-tunnel').optional(),
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
   preferredEndpointId: z.string().min(1)
 })
@@ -65,7 +64,6 @@ export function createEnvironmentFromPairingOffer(args: {
   offer: PairingOffer
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
-  connectionDependency?: 'ssh-tunnel'
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
@@ -77,7 +75,6 @@ export function createEnvironmentFromPairingOffer(args: {
     lastUsedAt: null,
     runtimeId: args.runtimeId ?? null,
     ...(args.source ? { source: args.source } : {}),
-    ...(args.connectionDependency ? { connectionDependency: args.connectionDependency } : {}),
     endpoints: [
       {
         id: endpointId,
@@ -92,16 +89,10 @@ export function createEnvironmentFromPairingOffer(args: {
   })
 }
 
-export function isEphemeralVmRuntimeEnvironment(
-  environment: Pick<PublicKnownRuntimeEnvironment, 'source'>
-): boolean {
-  return environment.source === 'ephemeral-vm'
-}
-
 export function isUserManagedRuntimeEnvironment(
-  environment: Pick<PublicKnownRuntimeEnvironment, 'source'>
+  _environment: Pick<PublicKnownRuntimeEnvironment, 'source'>
 ): boolean {
-  return !isEphemeralVmRuntimeEnvironment(environment)
+  return true
 }
 
 export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): PairingOffer {

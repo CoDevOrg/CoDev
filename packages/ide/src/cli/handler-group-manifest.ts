@@ -146,27 +146,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/emulator.js')).EMULATOR_HANDLERS
   },
-  {
-    name: 'computer',
-    keys: [
-      'computer capabilities',
-      'computer list-apps',
-      'computer permissions',
-      'computer list-windows',
-      'computer get-app-state',
-      'computer click',
-      'computer perform-secondary-action',
-      'computer scroll',
-      'computer drag',
-      'computer type-text',
-      'computer press-key',
-      'computer hotkey',
-      'computer paste-text',
-      'computer set-value'
-    ],
-    load: async () => (await import('./handlers/computer.js')).COMPUTER_HANDLERS
-  },
-  {
+    {
     name: 'agent-hooks',
     keys: ['agent hooks status', 'agent hooks off', 'agent hooks on'],
     load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
@@ -185,44 +165,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'environment',
     keys: ['environment add', 'environment list', 'environment show', 'environment rm'],
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
-  },
-  {
-    name: 'linear',
-    keys: [
-      'linear save-issue',
-      'linear list-issues',
-      'linear relation add',
-      'linear relation remove',
-      'linear issue',
-      'linear search',
-      'linear team list',
-      'linear team members',
-      'linear team states',
-      'linear team labels',
-      'linear project list',
-      'linear list',
-      'linear status set',
-      'linear assignee set',
-      'linear assignee clear',
-      'linear priority set',
-      'linear priority clear',
-      'linear estimate set',
-      'linear estimate clear',
-      'linear due-date set',
-      'linear due-date clear',
-      'linear label add',
-      'linear label remove',
-      'linear label set',
-      'linear comment add',
-      'linear attach',
-      'linear create'
-    ],
-    load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
-  },
-  {
-    name: 'vm',
-    keys: ['vm recipe doctor'],
-    load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
   },
   {
     name: 'skills',

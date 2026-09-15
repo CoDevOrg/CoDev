@@ -1,8 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   '.github/pull_request_template.md',
@@ -17,17 +15,7 @@ const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   'docs/PULL_REQUEST_TEMPLATE.md'
 ]
 
-const MERGE_REQUEST_TEMPLATE_CANDIDATES = [
-  '.gitlab/merge_request_templates/Default.md',
-  '.gitlab/merge_request_templates/default.md',
-  '.gitlab/merge_request_template.md',
-  '.gitlab/MERGE_REQUEST_TEMPLATE.md'
-]
-
-function getTemplateCandidates(provider?: HostedReviewProvider | null): string[] {
-  if (provider === 'gitlab') {
-    return [...MERGE_REQUEST_TEMPLATE_CANDIDATES, ...PULL_REQUEST_TEMPLATE_CANDIDATES]
-  }
+function getTemplateCandidates(_provider?: HostedReviewProvider | null): string[] {
   return PULL_REQUEST_TEMPLATE_CANDIDATES
 }
 
@@ -40,24 +28,11 @@ export async function readHostedPullRequestTemplate(
 
 export async function readHostedReviewTemplate(
   repoPath: string,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   provider?: HostedReviewProvider | null
 ): Promise<string> {
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
-    return ''
-  }
   for (const relativeCandidate of getTemplateCandidates(provider)) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional hosted-review template path.

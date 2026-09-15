@@ -1159,68 +1159,6 @@ describe('createWebRuntimeSessionTerminal', () => {
     })
   })
 
-  it('uses the exact legacy OMP resume when an older host only advertises base authority', async () => {
-    const methods: string[] = []
-    const runtimeCall = vi.fn(async (request: { method: string }) => {
-      methods.push(request.method)
-      if (request.method === 'status.get') {
-        return {
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeId: 'new-runtime',
-            graphStatus: 'ready',
-            runtimeProtocolVersion: 3,
-            minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
-          }
-        }
-      }
-      if (request.method === 'terminal.ensureAgentSession') {
-        return {
-          id: 'ensure',
-          ok: false,
-          error: {
-            code: 'invalid_argument',
-            message: 'old host rejected OMP'
-          }
-        }
-      }
-      return {
-        id: 'legacy-create',
-        ok: true,
-        result: { tab: { id: 'legacy-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 1 }
-      }
-    })
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
-
-    await expect(
-      createWebRuntimeSessionTerminal({
-        worktreeId: WORKTREE_ID,
-        agentSessionKind: 'resume',
-        launchAgent: 'omp',
-        command: "omp --resume '/custom/omp/project/session.jsonl'",
-        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
-        launchConfig: {
-          agentCommand: 'omp',
-          agentArgs: '',
-          agentEnv: { PI_CODING_AGENT_DIR: '/custom/omp' },
-          ompResumeFilePath: '/custom/omp/project/session.jsonl'
-        },
-        providerSession: { key: 'session_id', id: 'session-1' }
-      })
-    ).resolves.toEqual({ status: 'created' })
-
-    expect(methods).toEqual(['status.get', 'session.tabs.createTerminal', 'session.tabs.list'])
-    expect(runtimeCall.mock.calls[1]?.[0]).toMatchObject({
-      params: {
-        command: "omp --resume '/custom/omp/project/session.jsonl'",
-        env: { PI_CODING_AGENT_DIR: '/custom/omp' },
-        launchAgent: 'omp'
-      }
-    })
-  })
-
   it('delivers generated continuation context after host-authoritative creation', async () => {
     const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'status.get') {

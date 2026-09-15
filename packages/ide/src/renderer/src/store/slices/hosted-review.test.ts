@@ -54,11 +54,11 @@ function makeStore(settings: AppState['settings'] = null) {
 }
 
 const review: HostedReviewInfo = {
-  provider: 'gitlab',
+  provider: 'github',
   number: 5,
-  title: 'Shared MR status',
+  title: 'Shared PR status',
   state: 'open',
-  url: 'https://gitlab.com/g/p/-/merge_requests/5',
+  url: 'https://github.com/g/p/pull/5',
   status: 'success',
   updatedAt: '2026-05-10T00:00:00.000Z',
   mergeable: 'MERGEABLE'
@@ -92,24 +92,18 @@ describe('hosted review slice', () => {
     const store = makeStore()
 
     await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab', {
-        linkedGitLabMR: 5
-      })
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/shared')
     ).resolves.toEqual(review)
     await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab')
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/shared')
     ).resolves.toEqual(review)
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith({
       repoPath: '/repo',
-      branch: 'feature/gitlab',
+      branch: 'feature/shared',
       currentHeadOid: null,
-      linkedGitHubPR: null,
-      linkedGitLabMR: 5,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
+      linkedGitHubPR: null
     })
   })
 
@@ -141,67 +135,6 @@ describe('hosted review slice', () => {
       fetchedAt: expect.any(Number),
       linkedReviewHintKey: 'github:12'
     })
-  })
-
-  it('clears stale GitHub PR cache when branch review lookup finds a non-GitHub review', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      prCache: {
-        'repo-1::feature/gitlab': {
-          data: {
-            number: 12,
-            title: 'Old GitHub PR',
-            state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
-            checksStatus: 'pending',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN',
-            headSha: 'head-oid'
-          },
-          fetchedAt: 1
-        },
-        '/repo::feature/gitlab': {
-          data: {
-            number: 99,
-            title: 'Old path-scoped GitHub PR',
-            state: 'closed',
-            url: 'https://github.com/acme/orca/pull/99',
-            checksStatus: 'failure',
-            updatedAt: '2026-03-28T00:00:00Z',
-            mergeable: 'UNKNOWN',
-            headSha: 'old-head-oid'
-          },
-          fetchedAt: 1
-        }
-      }
-    } as unknown as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab')
-    ).resolves.toEqual(review)
-
-    expect(store.getState().prCache['repo-1::feature/gitlab']).toBeUndefined()
-    expect(store.getState().prCache['/repo::feature/gitlab']).toBeUndefined()
-  })
-
-  it('uses SSH-scoped hosted review cache entries for SSH-backed repos', async () => {
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
-    const store = makeStore()
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' } as AppState['repos'][number]]
-    } as Partial<AppState>)
-
-    await expect(
-      store.getState().fetchHostedReviewForBranch('/repo', 'feature/gitlab', {
-        repoId: 'repo-1'
-      })
-    ).resolves.toEqual(review)
-
-    expect(store.getState().hostedReviewCache['ssh:ssh-1::repo-1::feature/gitlab']).toMatchObject({
-      data: review
-    })
-    expect(store.getState().hostedReviewCache['local::repo-1::feature/gitlab']).toBeUndefined()
   })
 
   it('uses local hosted-review IPC for a known local repo while a runtime is focused', async () => {
@@ -250,10 +183,6 @@ describe('hosted review slice', () => {
         branch: 'feature/windows',
         currentHeadOid: null,
         linkedGitHubPR: 12,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null
       },
       { timeoutMs: 30_000 }
     )
@@ -528,17 +457,12 @@ describe('hosted review slice', () => {
       repoPath: '/repo',
       repoId: 'repo-id',
       branch: 'feature/test',
-      linkedGitHubPR: null,
-      linkedGitLabMR: 33
+      linkedGitHubPR: 33
     })
     expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo', 'feature/test', {
       force: true,
       repoId: 'repo-id',
-      linkedGitHubPR: null,
-      linkedGitLabMR: 33,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
+      linkedGitHubPR: 33
     })
   })
 

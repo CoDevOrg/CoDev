@@ -145,17 +145,10 @@ export function useRuntimeFileListForWorktree({
   const operationRouteAvailable = operationRoute !== null
   const connectionId = operationRoute?.connectionId
   const runtimeEnvironmentId = operationRoute?.settings.activeRuntimeEnvironmentId ?? null
-  const activeTargetStatus = useAppStore((state) =>
-    connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
-  )
-  const connectionPending =
-    activeTargetStatus === 'connecting' ||
-    activeTargetStatus === 'deploying-relay' ||
-    activeTargetStatus === 'reconnecting'
+  const connectionPending = false
   const requestKey = useMemo(
-    () =>
-      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, excludeRequest.key, operationOwnerKey, worktreePath]
+    () => `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}`,
+    [excludeRequest.key, operationOwnerKey, worktreePath]
   )
 
   useEffect(() => {

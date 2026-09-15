@@ -112,14 +112,6 @@ export const WorktreeCreate = z
     preserveBranchOnDelete: z.boolean().optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
-    linkedLinearIssue: z.string().optional(),
-    linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
-    linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
-    linkedGitLabMR: TriStateLinkedIssue,
-    linkedGitLabIssue: TriStateLinkedIssue,
-    linkedBitbucketPR: TriStateLinkedIssue,
-    linkedAzureDevOpsPR: TriStateLinkedIssue,
-    linkedGiteaPR: TriStateLinkedIssue,
     linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
     comment: OptionalString,
@@ -233,14 +225,6 @@ export const WorktreeSet = WorktreeSelector.extend({
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
-  linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
-  linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
-  linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
-  linkedGitLabMR: TriStateLinkedIssue,
-  linkedGitLabIssue: TriStateLinkedIssue,
-  linkedBitbucketPR: TriStateLinkedIssue,
-  linkedAzureDevOpsPR: TriStateLinkedIssue,
-  linkedGiteaPR: TriStateLinkedIssue,
   linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
@@ -308,19 +292,5 @@ export const WorktreeResolvePrBase = z.object({
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
   baseRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
-})
-
-export const WorktreeResolveMrBase = z.object({
-  repo: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector')),
-  mrIid: z
-    .unknown()
-    .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
-    .pipe(z.number().int().positive('Missing MR number')),
-  sourceBranch: OptionalString,
-  targetBranch: OptionalString,
   isCrossRepository: OptionalBoolean
 })

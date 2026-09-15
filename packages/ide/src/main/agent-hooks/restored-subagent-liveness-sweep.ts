@@ -1,7 +1,6 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace, ProjectGroup } from '../../shared/types'
@@ -95,8 +94,8 @@ function resolveDeclaredExecutionHost(owner: ExecutionHostOwner): ExecutionHostI
   if (owner.executionHostId?.trim()) {
     return parseExecutionHostId(owner.executionHostId)?.id ?? null
   }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  // Why: every workspace on this fork is local to the host; a stale legacy connectionId carries no other host.
+  return LOCAL_EXECUTION_HOST_ID
 }
 
 /** Resolve persisted workspace ownership; unknown provenance is not local authority. */

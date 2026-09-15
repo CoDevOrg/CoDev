@@ -412,8 +412,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sleepingAgentSessionsByPaneKey = useAppStore((s) => s.sleepingAgentSessionsByPaneKey)
   const settings = useAppStore((s) => s.settings)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -469,8 +467,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () =>
       buildSidebarHostOptions({
         repos,
-        sshTargetLabels,
-        sshConnectionStates,
         settings,
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
@@ -478,8 +474,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }),
     [
       repos,
-      sshTargetLabels,
-      sshConnectionStates,
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
@@ -1028,11 +1022,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
   }, [])
 
-  const openAddQuickCommandAction = useCallback(() => {
-    openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
-    openSettingsPage()
-  }, [openSettingsPage, openSettingsTarget])
-
   const buildQuickActionContext = useCallback(
     () =>
       buildCmdJQuickActionContext({
@@ -1042,12 +1031,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
-        deleteActiveWorkspace: deleteActiveWorkspaceAction,
-        openAddQuickCommand: openAddQuickCommandAction
+        deleteActiveWorkspace: deleteActiveWorkspaceAction
       }),
     [
       deleteActiveWorkspaceAction,
-      openAddQuickCommandAction,
       openCreateWorkspaceAction,
       openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace,
@@ -1998,10 +1985,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
                     ? repo.connectionId
                     : null
-                const sshStatus = sshConnectionId
-                  ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
-                  : null
-                const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
+                const isSshDisconnected = sshConnectionId !== null
                 const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
 
                 return (
@@ -2524,7 +2508,5 @@ function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.port', 'Port')
     case 'pr':
       return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
-    case 'mr':
-      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
   }
 }

@@ -70,25 +70,7 @@ describe('ServeReadinessPublisher', () => {
     )
   })
 
-  it('preserves the recipe JSON contract', () => {
-    expect(renderServeReadiness(ready, { mode: 'recipe-json', projectRoot: '/workspace' })).toBe(
-      '{"schemaVersion":1,"pairingCode":"codev://pair?code=secret","projectRoot":"/workspace"}'
-    )
-  })
 
-  it('fails recipe output with the unavailable reason and guidance', () => {
-    const unavailable: ServeReadiness = {
-      ...ready,
-      pairing: {
-        available: false,
-        reason: 'websocket_unavailable',
-        guidance: 'Choose an unused --port.'
-      }
-    }
-    expect(() =>
-      renderServeReadiness(unavailable, { mode: 'recipe-json', projectRoot: '/workspace' })
-    ).toThrow('websocket_unavailable. Choose an unused --port.')
-  })
 
   it('rejects concurrent and later duplicate publications', async () => {
     let finishWrite: (() => void) | undefined

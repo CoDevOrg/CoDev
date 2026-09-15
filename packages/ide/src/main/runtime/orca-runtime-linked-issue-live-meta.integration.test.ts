@@ -53,7 +53,6 @@ function makeStore(worktreePath: string) {
       comment: '',
       linkedIssue: null,
       linkedPR: null,
-      linkedLinearIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,

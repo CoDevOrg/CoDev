@@ -147,7 +147,7 @@ describe('source-control primary action decision', () => {
     const input = inputs({
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
       hostedReviewCreation: {
-        provider: 'gitlab',
+        provider: 'github',
         review: null,
         canCreate: true,
         blockedReason: null,
@@ -164,7 +164,7 @@ describe('source-control primary action decision', () => {
       inputs({
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
         hostedReviewCreation: {
-          provider: 'gitlab',
+          provider: 'github',
           review: null,
           canCreate: false,
           blockedReason: null,

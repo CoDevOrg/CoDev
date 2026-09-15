@@ -90,9 +90,6 @@ export function useTerminalTabColdParking(args: {
   const terminalParkingEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenViewParking !== false
   )
-  const terminalSshParkingEnabled = useAppStore(
-    (state) => state.settings?.terminalSshViewParking !== false
-  )
   const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
@@ -205,7 +202,6 @@ export function useTerminalTabColdParking(args: {
       nowMs,
       parkCooldownUntilMs: measureParkCooldownUntilRef.current,
       restorePolicy: {
-        sshParkingEnabled: terminalSshParkingEnabled,
         pairedRuntimeParkingEnvironmentIds
       },
       ...overrides
@@ -255,7 +251,6 @@ export function useTerminalTabColdParking(args: {
     pairedRuntimeParkingEnvironmentIds,
     shouldMeasureHiddenWorktree,
     terminalParkingEnabled,
-    terminalSshParkingEnabled,
     terminalTabParkingRevision,
     terminalTabs,
     worktreeId

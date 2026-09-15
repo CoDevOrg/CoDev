@@ -8,7 +8,6 @@ import {
   type OrcaProfileIndex
 } from '../../shared/orca-profiles'
 import type { PersistedState, Repo, WorktreeMeta } from '../../shared/types'
-import type { SshTarget } from '../../shared/ssh-types'
 
 const testState = { dir: '' }
 
@@ -77,7 +76,6 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -179,89 +177,6 @@ describe('profile project transfer', () => {
     ])
     expect(target.workspaceSession.tabsByWorktree).toEqual({})
     expect(readProfileState('personal').repos.map((repo) => repo.id)).toEqual(['repo-1'])
-  })
-
-  it('moves a project, preserving SSH identity and restorable workspace session state', async () => {
-    const sourceWorktreeId = 'repo-ssh::/srv/orca-feature'
-    const sshTarget: SshTarget = {
-      id: 'ssh-1',
-      label: 'Builder',
-      host: 'builder.example.com',
-      port: 22,
-      username: 'dev'
-    }
-    writeProfileState(
-      'personal',
-      makeState({
-        repos: [
-          makeRepo({
-            id: 'repo-ssh',
-            path: '/srv/orca',
-            connectionId: 'ssh-1',
-            executionHostId: 'ssh:ssh-1'
-          })
-        ],
-        sshTargets: [sshTarget],
-        worktreeMeta: {
-          [sourceWorktreeId]: makeWorktreeMeta({ projectHostSetupId: 'repo-ssh' })
-        },
-        workspaceSession: {
-          ...getDefaultPersistedState('/Users/tester').workspaceSession,
-          browserTabsByWorktree: {
-            [sourceWorktreeId]: [
-              {
-                id: 'browser-1',
-                worktreeId: sourceWorktreeId,
-                sessionProfileId: 'source-browser-profile',
-                sessionPartition: 'persist:orca-profile-personal-deadbeef-browser-default',
-                url: 'https://example.com',
-                title: 'Example',
-                loading: false,
-                faviconUrl: null,
-                canGoBack: false,
-                canGoForward: false,
-                loadError: null,
-                createdAt: 1
-              }
-            ]
-          }
-        }
-      })
-    )
-    writeProfileState('work', makeState())
-
-    const { transferOrcaProfileProject } = await loadTransferModule()
-    const result = transferOrcaProfileProject(
-      {
-        sourceProfileId: 'personal',
-        targetProfileId: 'work',
-        repoId: 'repo-ssh',
-        mode: 'move'
-      },
-      testState.dir
-    )
-
-    expect(result).toMatchObject({
-      status: 'transferred',
-      sourceRepoId: 'repo-ssh',
-      targetRepoId: 'repo-ssh'
-    })
-    const source = readProfileState('personal')
-    const target = readProfileState('work')
-    expect(source.repos).toEqual([])
-    expect(source.worktreeMeta).toEqual({})
-    expect(target.repos[0]).toMatchObject({
-      id: 'repo-ssh',
-      path: '/srv/orca',
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(target.sshTargets).toEqual([sshTarget])
-    expect(target.workspaceSession.browserTabsByWorktree?.[sourceWorktreeId]?.[0]).toMatchObject({
-      worktreeId: sourceWorktreeId,
-      sessionProfileId: null,
-      sessionPartition: null
-    })
   })
 
   it('rejects a duplicate physical project inside the target profile', async () => {

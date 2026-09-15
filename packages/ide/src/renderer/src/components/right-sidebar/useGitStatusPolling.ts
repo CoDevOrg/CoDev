@@ -51,7 +51,6 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -65,9 +64,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
   const activeConnectionId = activeRepo?.connectionId ?? null
   const isConnectionReady = useCallback(
-    (connectionId: string | null | undefined): boolean =>
-      !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
-    [sshConnectionStates]
+    (connectionId: string | null | undefined): boolean => !connectionId,
+    []
   )
   const activeGitStatusPollingArgs = {
     activeWorktreeId,

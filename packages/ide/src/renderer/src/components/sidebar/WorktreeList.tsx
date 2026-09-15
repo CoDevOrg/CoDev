@@ -777,16 +777,6 @@ function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boo
       isWarning: true
     }
   }
-  // Why: auth-failed needs a worded status; the health icon alone doesn't tell the user to re-auth.
-  if (row.connectionStatus === 'auth-failed') {
-    return {
-      text: translate(
-        'auto.components.sidebar.WorktreeList.hostAuthNeeded',
-        'Authentication needed'
-      ),
-      isWarning: true
-    }
-  }
   if (row.health === 'disconnected') {
     return {
       text: translate('auto.components.sidebar.WorktreeList.hostDisconnected', 'Disconnected'),
@@ -1458,7 +1448,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const rightSidebarShowsPR = useAppStore((s) => rightSidebarShowsPullRequestData(s))
   const keybindings = useAppStore((s) => s.keybindings)
-  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
@@ -1855,7 +1844,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const {
     folderWorkspacePathStatuses,
     fetchFolderWorkspacePathStatus,
@@ -1880,14 +1868,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         })
         .join('\0'),
     [allRepoIds, repoMap]
-  )
-  const folderPathStatusSshConnectionKey = useMemo(
-    () =>
-      [...sshConnectionStates.entries()]
-        .map(([connectionId, state]) => `${connectionId}:${state.status}`)
-        .sort()
-        .join('\0'),
-    [sshConnectionStates]
   )
   const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
     folderWorkspacePathStatuses
@@ -1936,7 +1916,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     activeRuntimeEnvironmentId,
     fetchFolderWorkspacePathStatus,
     folderPathStatusRepoMembershipKey,
-    folderPathStatusSshConnectionKey,
+    '',
     folderWorkspaces,
     getFolderPathStatusRouteOptions,
     getFolderWorkspacePathStatusCacheKey,
@@ -3709,11 +3689,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return
     }
     const currentWorktree = currentWorktreeId ? (worktreeMap.get(currentWorktreeId) ?? null) : null
-    // Why: this reporter feeds the GitHub coordinator; GitLab-only MR panels refresh via hosted-review paths.
-    const sidebarWorktreeHasGitHubReview =
-      currentWorktree !== null &&
-      ((currentWorktree.linkedGitLabMR ?? null) === null ||
-        (currentWorktree.linkedPR ?? null) !== null)
+    // Why: this reporter feeds the GitHub coordinator.
+    const sidebarWorktreeHasGitHubReview = currentWorktree !== null
     const shouldTrackSidebarWorktree = rightSidebarShowsPR && sidebarWorktreeHasGitHubReview
     const shouldTrackVisibleRows =
       groupBy === 'pr-status' ||
@@ -3754,7 +3731,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       shouldTrackSidebarWorktree && currentWorktree
         ? `${currentWorktree.id}:${currentWorktree.branch}:${currentWorktree.linkedPR ?? ''}`
         : ''
-    const key = `${visibleIdentity}:${sidebarIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
+    const key = `${visibleIdentity}:${sidebarIdentity}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
     if (!key || key === lastVisibleRefreshKeyRef.current) {
       return
     }
@@ -3769,7 +3746,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     reportVisibleGitHubPRRefreshCandidates,
     prVisibleRefreshGeneration,
     rightSidebarShowsPR,
-    sshConnectedGeneration,
     newCardStyle,
     virtualItems,
     worktreeMap
@@ -4174,10 +4150,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const createState = row.repo
                 ? getRepoHeaderCreateState({
                     repo: row.repo,
-                    label: row.label,
-                    sshStatus: row.repo.connectionId
-                      ? (sshConnectionStates.get(row.repo.connectionId)?.status ?? null)
-                      : null
+                    label: row.label
                   })
                 : null
               const projectGroupPathStatus =
@@ -5306,8 +5279,6 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const settings = useAppStore((s) => s.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
@@ -5705,8 +5676,6 @@ const WorktreeList = React.memo(function WorktreeList({
     () =>
       buildSidebarHostOptions({
         repos,
-        sshTargetLabels,
-        sshConnectionStates,
         settings,
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
@@ -5714,8 +5683,6 @@ const WorktreeList = React.memo(function WorktreeList({
       }),
     [
       repos,
-      sshTargetLabels,
-      sshConnectionStates,
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
@@ -5952,8 +5919,7 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [])
 
   // Why: full-page nav views aren't scoped to a worktree, so no sidebar card should look selected.
-  const selectedSidebarWorktreeId =
-    activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
+  const selectedSidebarWorktreeId = activeView === 'activity' ? null : currentSidebarWorktreeId
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {

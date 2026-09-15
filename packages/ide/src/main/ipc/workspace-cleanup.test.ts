@@ -58,10 +58,6 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
-}))
-
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
@@ -115,7 +111,6 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -350,51 +345,6 @@ describe('workspace cleanup scan', () => {
     expect(signal?.aborted).toBe(true)
   })
 
-  it('skips disconnected remote workspaces without a scan warning', async () => {
-    const result = await scanWorkspaceCleanup(
-      makeStore({
-        repos: [{ ...REPO, connectionId: 'ssh-1' }]
-      })
-    )
-
-    expect(result.errors).toEqual([])
-    expect(result.candidates).toEqual([])
-  })
-
-  it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
-    const targetWorktreeId = 'repo-1::/remote/repo-feature'
-    const targetMeta = makeWorktreeMeta({
-      displayName: 'Remote Feature',
-      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
-    })
-    const getWorktreeMeta = vi.fn((worktreeId: string) =>
-      worktreeId === targetWorktreeId ? targetMeta : undefined
-    )
-    const getAllWorktreeMeta = vi.fn(() => {
-      throw new Error('focused disconnected SSH preflight should not enumerate all metadata')
-    })
-    const store = {
-      getRepos: () => [{ ...REPO, connectionId: 'ssh-1' }],
-      getWorktreeMeta,
-      getAllWorktreeMeta
-    } as unknown as Store
-
-    const result = await scanWorkspaceCleanup(store, { worktreeId: targetWorktreeId })
-
-    expect(getWorktreeMeta).toHaveBeenCalledWith(targetWorktreeId)
-    expect(getAllWorktreeMeta).not.toHaveBeenCalled()
-    expect(result.errors).toEqual([])
-    expect(result.candidates[0]).toMatchObject({
-      worktreeId: targetWorktreeId,
-      path: '/remote/repo-feature',
-      blockers: ['ssh-disconnected'],
-      git: {
-        clean: null,
-        checkedAt: null
-      }
-    })
-  })
-
   it('stats only the requested worktree during focused local preflight scans', async () => {
     listRepoWorktreesMock.mockResolvedValue([
       {
@@ -422,66 +372,6 @@ describe('workspace cleanup scan', () => {
     expect(lstatMock).toHaveBeenCalledTimes(2)
     expect(lstatMock).toHaveBeenCalledWith('/repo-feature-b')
     expect(lstatMock).toHaveBeenCalledWith(path.join('/repo-feature-b', '.git'))
-  })
-
-  it('scans connected remote workspaces through the SSH git provider', async () => {
-    const provider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/repo-feature',
-          head: 'abc123',
-          branch: 'refs/heads/feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]),
-      getStatus: vi.fn().mockResolvedValue({
-        entries: [],
-        conflictOperation: 'unknown',
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
-      } satisfies GitStatusResult)
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    const result = await scanWorkspaceCleanup(
-      makeStore({
-        repos: [{ ...REPO, connectionId: 'ssh-1' }]
-      })
-    )
-
-    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(result.errors).toEqual([])
-    expect(result.candidates[0]).toMatchObject({
-      connectionId: 'ssh-1',
-      tier: 'ready',
-      selectedByDefault: true,
-      reasons: ['idle-clean']
-    })
-  })
-
-  it('skips connected remote workspaces that fail during broad scans', async () => {
-    const provider = {
-      listWorktrees: vi.fn().mockRejectedValue(new Error('ssh timeout')),
-      getStatus: vi.fn()
-    }
-    getSshGitProviderMock.mockReturnValue(provider)
-
-    const result = await scanWorkspaceCleanup(
-      makeStore({
-        repos: [{ ...REPO, connectionId: 'ssh-1' }]
-      })
-    )
-
-    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(result.errors).toEqual([])
-    expect(result.candidates).toEqual([])
   })
 
   it('filters out recent workspaces before running git status', async () => {
@@ -858,34 +748,4 @@ describe('workspace cleanup scan', () => {
     })
   })
 
-  it('reports SSH processes inside the remote workspace path', async () => {
-    getSshPtyProviderMock.mockReturnValue({
-      listProcesses: vi.fn().mockResolvedValue([
-        {
-          id: 'remote-session-1',
-          cwd: '/remote/repo-feature/subdir',
-          title: 'codex'
-        }
-      ])
-    })
-    registerWorkspaceCleanupHandlers(makeStore(), {
-      runtime: {
-        hasTerminalsForWorktree: vi.fn().mockResolvedValue(false)
-      } as never
-    })
-
-    const handler = vi
-      .mocked(ipcMain.handle)
-      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:hasKillableLocalProcesses')?.[1]
-
-    await expect(
-      handler?.({} as never, {
-        worktreeId: 'repo-ssh::/remote/repo-feature',
-        connectionId: 'ssh-1',
-        worktreePath: '/remote/repo-feature'
-      })
-    ).resolves.toEqual({
-      hasKillableProcesses: true
-    })
-  })
 })

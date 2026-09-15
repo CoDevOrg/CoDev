@@ -10,9 +10,6 @@ const {
   hydrateShellPathMock,
   mergePathSegmentsMock,
   getActiveMultiplexerMock,
-  getBitbucketAuthStatusMock,
-  getAzureDevOpsAuthStatusMock,
-  getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   isCommandOnLocalPathMock,
   mergePersistedWindowsPathAsyncMock,
@@ -24,9 +21,6 @@ const {
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
   getActiveMultiplexerMock: vi.fn(),
-  getBitbucketAuthStatusMock: vi.fn(),
-  getAzureDevOpsAuthStatusMock: vi.fn(),
-  getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
@@ -70,22 +64,6 @@ vi.mock('../pty/windows-environment-path', () => ({
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
-vi.mock('./ssh', () => ({
-  getActiveMultiplexer: getActiveMultiplexerMock
-}))
-
-vi.mock('../bitbucket/client', () => ({
-  getBitbucketAuthStatus: getBitbucketAuthStatusMock
-}))
-
-vi.mock('../azure-devops/client', () => ({
-  getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
-}))
-
-vi.mock('../gitea/client', () => ({
-  getGiteaAuthStatus: getGiteaAuthStatusMock
-}))
-
 import {
   _resetPreflightCache,
   detectInstalledAgents,
@@ -99,21 +77,6 @@ type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<u
 describe('preflight', () => {
   const originalPlatform = process.platform
   const handlers: HandlerMap = {}
-  const defaultBitbucketStatus = { configured: false, authenticated: false, account: null }
-  const defaultAzureDevOpsStatus = {
-    configured: false,
-    authenticated: false,
-    account: null,
-    baseUrl: null,
-    tokenConfigured: false
-  }
-  const defaultGiteaStatus = {
-    configured: false,
-    authenticated: false,
-    account: null,
-    baseUrl: null,
-    tokenConfigured: false
-  }
 
   beforeEach(() => {
     handleMock.mockReset()
@@ -122,9 +85,6 @@ describe('preflight', () => {
     hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
     mergePathSegmentsMock.mockReset()
     getActiveMultiplexerMock.mockReset()
-    getBitbucketAuthStatusMock.mockReset()
-    getAzureDevOpsAuthStatusMock.mockReset()
-    getGiteaAuthStatusMock.mockReset()
     mergePersistedWindowsPathAsyncMock.mockReset()
     mergePersistedWindowsPathAsyncMock.mockResolvedValue(undefined)
     mergePersistedWindowsPathMock.mockReset()
@@ -150,9 +110,6 @@ describe('preflight', () => {
         return false
       }
     })
-    getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
-    getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
-    getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
     _resetPreflightCache()
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -176,31 +133,21 @@ describe('preflight', () => {
   })
 
   // Why: every preflight run probes (in order) `git --version`, `gh --version`,
-  // `glab --version`, then in parallel `gh auth status` + `glab auth status` —
-  // five execFile calls per cycle. Tests below provide values for all five.
+  // then `gh auth status` — three execFile calls per cycle. Tests below provide
+  // values for all three.
   it('marks gh as authenticated when gh auth status exits successfully', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const status = await runPreflightCheck()
 
     expect(status).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      glab: { installed: true, authenticated: true },
-      bitbucket: defaultBitbucketStatus,
-      azureDevOps: defaultAzureDevOpsStatus,
-      gitea: defaultGiteaStatus
+      gh: { installed: true, authenticated: true }
     })
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
-      encoding: 'utf-8',
-      timeout: 5000
-    })
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'glab', ['auth', 'status'], {
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(3, 'gh', ['auth', 'status'], {
       encoding: 'utf-8',
       timeout: 5000
     })
@@ -210,9 +157,7 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const status = await runPreflightCheck()
 
@@ -223,41 +168,11 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockRejectedValueOnce({ stderr: 'Logged in to github.com account octocat\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const status = await runPreflightCheck()
 
     expect(status.gh).toEqual({ installed: true, authenticated: true })
-  })
-
-  it('marks glab as not installed when `glab --version` fails', async () => {
-    execFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockRejectedValueOnce(new Error('command not found: glab'))
-      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-
-    const status = await runPreflightCheck()
-
-    expect(status.glab).toEqual({ installed: false, authenticated: false })
-    // Why: with glab uninstalled, glab auth status must not run — that
-    // would surface a misleading "command not found" error in logs.
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(4)
-  })
-
-  it('marks glab as installed but unauthenticated when auth status fails', async () => {
-    execFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
-      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockRejectedValueOnce({ stderr: 'You are not logged into any GitLab hosts.\n' })
-
-    const status = await runPreflightCheck()
-
-    expect(status.glab).toEqual({ installed: true, authenticated: false })
   })
 
   it('times out hung local preflight probes', async () => {
@@ -269,9 +184,6 @@ describe('preflight', () => {
         }
         if (command === 'gh' && Array.isArray(args) && args[0] === '--version') {
           return new Promise(() => {})
-        }
-        if (command === 'glab') {
-          return Promise.reject(new Error('command not found: glab'))
         }
         throw new Error(`unexpected command ${String(command)}`)
       })
@@ -294,7 +206,6 @@ describe('preflight', () => {
       await expect(statusPromise).resolves.toMatchObject({
         git: { installed: true },
         gh: { installed: false },
-        glab: { installed: false }
       })
     } finally {
       vi.useRealTimers()
@@ -312,9 +223,6 @@ describe('preflight', () => {
       }
       if (command === 'gh') {
         throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
-      }
-      if (command === 'glab') {
-        throw Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' })
       }
       if (command === 'wsl.exe') {
         const script = String(args[5])
@@ -355,9 +263,7 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const status = await runPreflightCheck()
 
@@ -383,7 +289,7 @@ describe('preflight', () => {
         if (command === 'git') {
           return Promise.resolve({ stdout: 'git version 2.0.0\n' })
         }
-        if (command === 'gh' || command === 'glab') {
+        if (command === 'gh') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
         if (
@@ -392,13 +298,6 @@ describe('preflight', () => {
           String(args.at(-1)).includes("'gh' --version")
         ) {
           return new Promise(() => {})
-        }
-        if (
-          command === 'wsl.exe' &&
-          Array.isArray(args) &&
-          String(args.at(-1)).includes("'glab' --version")
-        ) {
-          return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
         throw new Error(`unexpected command ${String(command)}`)
       })
@@ -415,7 +314,6 @@ describe('preflight', () => {
       expect(settled).toBe(true)
       await expect(statusPromise).resolves.toMatchObject({
         gh: { installed: false },
-        glab: { installed: false }
       })
     } finally {
       vi.useRealTimers()
@@ -426,21 +324,17 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const firstStatus = await runPreflightCheck()
     const refreshedStatus = await runPreflightCheck(true)
 
     expect(firstStatus.gh).toEqual({ installed: true, authenticated: false })
     expect(refreshedStatus.gh).toEqual({ installed: true, authenticated: true })
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(6)
   })
 
   it('awaits the persisted Windows Path refresh before a forced host CLI preflight', async () => {
@@ -458,9 +352,7 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     const check = runPreflightCheck(true)
     await Promise.resolve()
@@ -490,14 +382,8 @@ describe('preflight', () => {
         if (script.includes('gh') && script.includes('--version')) {
           return { stdout: 'gh version 2.0.0\n' }
         }
-        if (script.includes('glab') && script.includes('--version')) {
-          return { stdout: 'glab version 1.92.1\n' }
-        }
         if (script.includes('gh') && script.includes('auth status')) {
           return { stdout: 'github.com\n  - Active account: true\n' }
-        }
-        if (script.includes('glab') && script.includes('auth status')) {
-          return { stdout: 'Logged in to gitlab.com\n' }
         }
       }
       throw new Error(`unexpected command ${String(command)}`)
@@ -514,9 +400,7 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     registerPreflightHandlers()
 
@@ -524,11 +408,7 @@ describe('preflight', () => {
 
     expect(status).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      glab: { installed: true, authenticated: true },
-      bitbucket: defaultBitbucketStatus,
-      azureDevOps: defaultAzureDevOpsStatus,
-      gitea: defaultGiteaStatus
+      gh: { installed: true, authenticated: true }
     })
   })
 
@@ -536,14 +416,10 @@ describe('preflight', () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockRejectedValueOnce({ stderr: 'You are not logged into any GitHub hosts.\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
       .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
       .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
-      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
-      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
     registerPreflightHandlers()
 
@@ -552,42 +428,12 @@ describe('preflight', () => {
 
     expect(firstStatus).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: false },
-      glab: { installed: true, authenticated: true },
-      bitbucket: defaultBitbucketStatus,
-      azureDevOps: defaultAzureDevOpsStatus,
-      gitea: defaultGiteaStatus
+      gh: { installed: true, authenticated: false }
     })
     expect(refreshedStatus).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      glab: { installed: true, authenticated: true },
-      bitbucket: defaultBitbucketStatus,
-      azureDevOps: defaultAzureDevOpsStatus,
-      gitea: defaultGiteaStatus
+      gh: { installed: true, authenticated: true }
     })
-  })
-
-  it('only reports agents when which/where resolves to a real executable path', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-
-      const target = String(args[0])
-      if (target === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
-      }
-      if (target === 'continue') {
-        return { stdout: 'continue: shell built-in command\n' }
-      }
-      if (target === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
   })
 
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
@@ -642,37 +488,6 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
   })
 
-  it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
-    // Why: cold GUI launches can run detection before shell-PATH hydration
-    // adds user install dirs, so `which` can miss runnable CLIs.
-    execFileAsyncMock.mockImplementation(async (command) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      throw new Error('not found')
-    })
-    resolveCliCommandsMock.mockImplementation(
-      (commands: string[]) =>
-        new Map(
-          commands.map((cmd) => {
-            if (cmd === 'claude') {
-              return [cmd, '/Users/test/.local/bin/claude']
-            }
-            if (cmd === 'codex') {
-              return [cmd, '/Users/test/.asdf/shims/codex']
-            }
-            if (cmd === 'opencode') {
-              return [cmd, '/Users/test/Library/pnpm/opencode']
-            }
-            return [cmd, cmd]
-          })
-        )
-    )
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
-    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
-  })
-
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
     // Why: the fallback should not duplicate ids when PATH already finds a CLI.
     execFileAsyncMock.mockImplementation(async (command, args) => {
@@ -706,25 +521,6 @@ describe('preflight', () => {
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual([])
-  })
-
-  it('registers agent detection through the shared launch config commands', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'openclaude') {
-        return { stdout: '/Users/test/.local/bin/openclaude\n' }
-      }
-      if (String(args[0]) === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
-      }
-      throw new Error('not found')
-    })
-
-    registerPreflightHandlers()
-
-    await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
   })
 
   it('hydrates shell PATH before user-facing agent detection', async () => {
@@ -806,109 +602,6 @@ describe('preflight', () => {
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
   })
 
-  it('detects Mistral Vibe from the installed vibe executable', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe') {
-        return { stdout: '/home/test/.local/bin/vibe\n' }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
-  })
-
-  it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
-        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
-      }
-      throw new Error('not found')
-    })
-
-    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
-  })
-
-  it('sends aliased detection commands through the SSH remote preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => false,
-      request
-    })
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual(['openclaude'])
-    expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-      commands: expect.arrayContaining([
-        { id: 'openclaude', cmd: 'openclaude' },
-        { id: 'mistral-vibe', cmd: 'vibe' },
-        { id: 'mistral-vibe', cmd: 'mistral-vibe' }
-      ])
-    })
-  })
-
-  it('returns no remote agents when the SSH connection is unavailable', async () => {
-    getActiveMultiplexerMock.mockReturnValue(null)
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual([])
-  })
-
-  it('returns no remote agents when the SSH connection is disposed', async () => {
-    const request = vi.fn()
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => true,
-      request
-    })
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
-    ).resolves.toEqual([])
-    expect(request).not.toHaveBeenCalled()
-  })
-
-  it('sends remote Windows shell capability probes through the SSH preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: true,
-      gitBashAvailable: true,
-      hostPlatform: 'win32'
-    })
-    getActiveMultiplexerMock.mockReturnValue({
-      isDisposed: () => false,
-      request
-    })
-
-    registerPreflightHandlers()
-
-    await expect(
-      handlers['preflight:detectRemoteWindowsTerminalCapabilities'](undefined, {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({
-      wslAvailable: true,
-      wslDistros: ['Ubuntu'],
-      pwshAvailable: true,
-      gitBashAvailable: true,
-      hostPlatform: 'win32'
-    })
-    expect(request).toHaveBeenCalledWith('preflight.detectWindowsTerminalCapabilities', {})
-  })
-
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -977,7 +670,7 @@ describe('preflight', () => {
     })
     execFileAsyncMock.mockImplementation(async (command, args) => {
       expect(command).not.toBe('wsl.exe')
-      if (command === 'git' || command === 'gh' || command === 'glab') {
+      if (command === 'git' || command === 'gh') {
         return { stdout: `${String(command)} ok\n` }
       }
       throw new Error(`unexpected command ${String(command)} ${JSON.stringify(args)}`)
@@ -1048,46 +741,6 @@ describe('preflight', () => {
     })
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
-  })
-
-  it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
-    // Why: the Agents settings Refresh button calls this path. It must (1) ask
-    // the shell hydrator for a fresh PATH, (2) merge any new segments, then
-    // (3) re-run `which` so newly-installed CLIs appear without a restart.
-    hydrateShellPathMock.mockResolvedValueOnce({
-      segments: ['/Users/test/.opencode/bin'],
-      ok: true,
-      failureReason: 'none'
-    })
-    mergePathSegmentsMock.mockReturnValueOnce(['/Users/test/.opencode/bin'])
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'which') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      if (String(args[0]) === 'opencode') {
-        return { stdout: '/Users/test/.opencode/bin/opencode\n' }
-      }
-      throw new Error('not found')
-    })
-
-    registerPreflightHandlers()
-
-    const result = (await handlers['preflight:refreshAgents']()) as {
-      agents: string[]
-      addedPathSegments: string[]
-      shellHydrationOk: boolean
-      pathSource: string
-      pathFailureReason: string
-    }
-
-    expect(result).toEqual({
-      agents: ['opencode'],
-      addedPathSegments: ['/Users/test/.opencode/bin'],
-      shellHydrationOk: true,
-      pathSource: 'shell_hydrate',
-      pathFailureReason: 'none'
-    })
-    expect(hydrateShellPathMock).toHaveBeenCalledWith({ force: true })
   })
 
   it('still re-detects when the shell spawn fails — relies on the existing PATH', async () => {

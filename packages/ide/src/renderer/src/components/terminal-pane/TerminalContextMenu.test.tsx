@@ -77,7 +77,6 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
     globalQuickCommands: [],
     quickCommandRepoLabel: null,
     onQuickCommand: vi.fn(),
-    onAddQuickCommand: vi.fn(),
     onToggleExpand: vi.fn(),
     onSetTitle: vi.fn(),
     onClearPaneTitle: vi.fn(),

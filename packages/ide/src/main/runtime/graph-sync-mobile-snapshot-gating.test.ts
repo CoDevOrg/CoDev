@@ -749,56 +749,6 @@ describe('graph-sync mobile snapshot gating', () => {
     )
   })
 
-  it('preserves a runtime-owned SSH terminal across successive renderer revisions', () => {
-    const sshPtyId = 'ssh:conn-1@@pty-7'
-    const { runtime, sync, setSession } = createRuntime(
-      makeSession({
-        tabsByWorktree: { [WT]: [makeTerminalTab('ssh-tab', sshPtyId)] }
-      })
-    )
-    const internals = runtime as unknown as RuntimeInternals & {
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId?: string) => Set<string>
-    }
-    // Full headless hydrate (SSH tabs never come from the serve-only path)
-    // builds the SSH tab into a headless-built snapshot.
-    internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT)
-    expect(internals.mobileSessionTabsByWorktree.get(WT)?.tabs).toEqual([
-      expect.objectContaining({ type: 'terminal', parentTabId: 'ssh-tab' })
-    ])
-
-    // A renderer attaches and publishes an unrelated tab: the SSH tab is merged
-    // into the renderer epoch (broad headless-built preservation).
-    sync([makeRendererSnapshot({ version: 1 })])
-    vi.advanceTimersByTime(300)
-    const merged = internals.mobileSessionTabsByWorktree.get(WT)
-    expect(
-      merged?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
-    ).toBe(true)
-
-    // A newer renderer revision still omits the still-runtime-owned SSH tab.
-    // Its binding remains persisted, so it must remain published — this is the
-    // regression: serve-only preservation dropped app-scoped ssh:@@ bindings.
-    sync([makeRendererSnapshot({ version: 2, title: 'Renamed' })])
-    vi.advanceTimersByTime(60)
-    expect(
-      internals.mobileSessionTabsByWorktree
-        .get(WT)
-        ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
-    ).toBe(true)
-
-    // Once the recovery grace expires and the SSH binding disappears from
-    // persistence (with no live PTY), the next revision must stop preserving it.
-    setSession(makeSession())
-    vi.advanceTimersByTime(30_001)
-    sync([makeRendererSnapshot({ version: 3, title: 'Renamed again' })])
-    vi.advanceTimersByTime(60)
-    expect(
-      internals.mobileSessionTabsByWorktree
-        .get(WT)
-        ?.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'ssh-tab')
-    ).toBe(false)
-  })
-
   it('retains the split-group layout across no-op syncs with a serve-owned terminal present', () => {
     const { runtime, events, sync } = createRuntime(
       makeSession({

@@ -20,7 +20,6 @@ import {
 } from './terminal-paste-coordinator'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
@@ -246,7 +245,7 @@ export function useTerminalPaneContextMenu({
           platform: shortcutPlatform,
           ptyId,
           connectionId,
-          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+          remotePlatform: null,
           transport,
           isWindowsConpty: forceBracketedMultilineTextPaste
         })
@@ -607,8 +606,6 @@ export function useTerminalPaneContextMenu({
   }
 }
 
-function getRequestedSplitTelemetrySource(): 'contextual_tour' | 'context_menu' {
-  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
-    ? 'contextual_tour'
-    : 'context_menu'
+function getRequestedSplitTelemetrySource(): 'context_menu' {
+  return 'context_menu'
 }
