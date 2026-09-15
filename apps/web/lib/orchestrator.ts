@@ -291,8 +291,15 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
   while (Date.now() < deadline) {
     const state = await requestHostWake().catch(() => "starting" as const);
     if (state === "running") {
-      await waitForOrchestrator();
-      return;
+      try {
+        await waitForOrchestrator(Math.min(45_000, deadline - Date.now()));
+        return;
+      } catch (error) {
+        // A freshly woken host reports unhealthy on purpose until its setup
+        // finishes, which can outlast one health window; keep waiting.
+        if (Date.now() >= deadline) throw error;
+        continue;
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
@@ -304,8 +311,8 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
 
 const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
-export async function waitForOrchestrator() {
-  const deadline = Date.now() + 45_000;
+export async function waitForOrchestrator(timeoutMs = 45_000) {
+  const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
 
   while (Date.now() < deadline) {

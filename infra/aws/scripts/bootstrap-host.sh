@@ -88,6 +88,22 @@ codev_fetch() {
   mv -f "${staging}" "${destination}"
 }
 
+# Content fingerprint of the files a service runs from. A missing file hashes
+# as empty, so a first install always differs from what follows it.
+codev_fingerprint() {
+  { cat "$@" 2>/dev/null || true; } | sha256sum | cut -d' ' -f1
+}
+
+# This script re-runs on every boot, and a workspace may already be open on
+# the host by then. Restarting a service whose files did not change kills that
+# session for nothing, so restart only on a change and start one that is down.
+codev_restart_if_changed() {
+  local unit="$1" before="$2" after="$3"
+  if [[ "${before}" != "${after}" ]] || ! systemctl is-active --quiet "${unit}"; then
+    systemctl restart "${unit}"
+  fi
+}
+
 # This host's own public IPv4, used to derive the nip.io hostname Orca
 # advertises to browsers. Both clouds answer on 169.254.169.254 but with
 # different paths and a different anti-SSRF header.
@@ -357,6 +373,10 @@ if ! xfs_info "${jailer_dir}" 2>/dev/null | grep -q 'reflink=1'; then
   exit 1
 fi
 
+# Taken before the fetch below replaces the binary, so the restart at the end
+# can tell a new release from the same one re-downloaded on a plain reboot.
+readonly orchestrator_files=(/usr/local/bin/codev-orchestrator /etc/systemd/system/codev-orchestrator.service)
+orchestrator_before="$(codev_fingerprint "${orchestrator_files[@]}")"
 codev_fetch "codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/codev-orchestrator
 codev_fetch "codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
@@ -393,6 +413,7 @@ chmod -R go+rX "${orca_dir}"
 # provides the binary; this unit is what actually runs a virtual display at
 # :99, which services/orchestrator/src/backend/orca.rs assumes is already up
 # (CODEV_ORCA_DISPLAY, default ":99") before spawning any session.
+xvfb_unit_before="$(codev_fingerprint /etc/systemd/system/codev-orca-xvfb.service)"
 cat >/etc/systemd/system/codev-orca-xvfb.service <<'UNIT'
 [Unit]
 Description=CoDev virtual display for Orca IDE sessions
@@ -409,7 +430,10 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable codev-orca-xvfb.service
-systemctl restart codev-orca-xvfb.service
+# The orchestrator Requires= this unit, so restarting it also stops the
+# orchestrator and every open workspace session with it.
+codev_restart_if_changed codev-orca-xvfb.service "${xvfb_unit_before}" \
+  "$(codev_fingerprint /etc/systemd/system/codev-orca-xvfb.service)"
 
 # Caddy fronts the public 443 endpoint that browsers connect to directly for
 # Orca's WebSocket protocol; the orchestrator manages its routing table at
@@ -489,6 +513,7 @@ if [[ -n "${direct_secret}" ]]; then
 "
 fi
 
+caddyfile_before="$(codev_fingerprint /etc/caddy/Caddyfile)"
 cat >/etc/caddy/Caddyfile <<CADDYFILE
 {
   admin 127.0.0.1:2019
@@ -560,7 +585,9 @@ WantedBy=timers.target
 UNIT
 
 systemctl enable caddy.service
-systemctl restart caddy.service
+# Restarting Caddy drops every browser connection to an open workspace.
+codev_restart_if_changed caddy.service "${caddyfile_before}" \
+  "$(codev_fingerprint /etc/caddy/Caddyfile)"
 systemctl daemon-reload
 systemctl enable --now codev-caddy-cert-sync.timer
 
@@ -767,6 +794,9 @@ Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
 Environment=CODEV_DIRECT_SECRET=${direct_secret}
 Environment=CODEV_MAX_IDE_SESSIONS=4
 Environment=CODEV_IDE_IDLE_TIMEOUT=10m
+# /healthz reports unhealthy while this unit is still running, so no session
+# opens on a host that is about to restart the orchestrator under it.
+Environment=CODEV_BOOTSTRAP_UNIT=codev-bootstrap.service
 Restart=always
 RestartSec=2
 KillMode=control-group
@@ -817,5 +847,6 @@ if [[ "${codev_cloud}" == "aws" ]]; then
     -s \
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 fi
-systemctl restart codev-orchestrator.service
+codev_restart_if_changed codev-orchestrator.service "${orchestrator_before}" \
+  "$(codev_fingerprint "${orchestrator_files[@]}")"
 systemctl --no-pager --full status codev-orchestrator.service

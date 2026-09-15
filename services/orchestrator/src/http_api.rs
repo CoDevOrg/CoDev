@@ -198,12 +198,57 @@ async fn no_store(request: Request<Body>, next: Next) -> Response {
 }
 
 async fn health(State(backend): State<SharedBackend>) -> Result<Json<serde_json::Value>> {
+    if host_bootstrap_still_running().await {
+        return Err(RuntimeError::Unavailable(
+            "the host is still running its setup".into(),
+        ));
+    }
     backend.health().await?;
     Ok(Json(serde_json::json!({
         "status": "ok",
         "service": "codev-orchestrator",
         "activeSandboxes": backend.active_count().await,
     })))
+}
+
+/// The host's boot-time setup unit, written into this service's own unit file.
+/// Unset (tests, local runs) means there is nothing to wait for.
+const BOOTSTRAP_UNIT_ENV: &str = "CODEV_BOOTSTRAP_UNIT";
+
+/// The bootstrap re-runs on every boot and may restart this process when a
+/// release changed; a session opened before it finishes would die with it. So
+/// report unhealthy until it is done. Any failure to ask counts as done, so a
+/// broken check can never hold every workspace in "starting".
+async fn host_bootstrap_still_running() -> bool {
+    let Ok(unit) = std::env::var(BOOTSTRAP_UNIT_ENV) else {
+        return false;
+    };
+    if !is_systemd_service_name(&unit) {
+        return false;
+    }
+    let query = tokio::process::Command::new("systemctl")
+        .args(["show", "--property=ActiveState", "--value", &unit])
+        .output();
+    match tokio::time::timeout(std::time::Duration::from_secs(2), query).await {
+        Ok(Ok(output)) if output.status.success() => {
+            bootstrap_state_blocks_sessions(&String::from_utf8_lossy(&output.stdout))
+        }
+        _ => false,
+    }
+}
+
+/// A oneshot bootstrap is `activating` while it runs, then `active` (exited),
+/// `failed`, or `inactive`; only the first means setup is still in progress.
+fn bootstrap_state_blocks_sessions(active_state: &str) -> bool {
+    active_state.trim() == "activating"
+}
+
+fn is_systemd_service_name(unit: &str) -> bool {
+    unit.len() <= 128
+        && unit.ends_with(".service")
+        && unit
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@'))
 }
 
 async fn create_sandbox(
@@ -1016,6 +1061,24 @@ mod tests {
             .files[0]
             .path = "../credential".into();
         assert!(validate_create(&unsafe_request).is_err());
+    }
+
+    #[test]
+    fn only_a_running_bootstrap_holds_back_sessions() {
+        assert!(bootstrap_state_blocks_sessions("activating\n"));
+        assert!(!bootstrap_state_blocks_sessions("active\n"));
+        assert!(!bootstrap_state_blocks_sessions("failed"));
+        assert!(!bootstrap_state_blocks_sessions("inactive"));
+        assert!(!bootstrap_state_blocks_sessions(""));
+    }
+
+    #[test]
+    fn only_asks_systemd_about_a_plain_service_name() {
+        assert!(is_systemd_service_name("codev-bootstrap.service"));
+        assert!(is_systemd_service_name("getty@tty1.service"));
+        assert!(!is_systemd_service_name("codev-bootstrap.timer"));
+        assert!(!is_systemd_service_name("--property=MainPID.service"));
+        assert!(!is_systemd_service_name("a b.service"));
     }
 
     #[tokio::test]
