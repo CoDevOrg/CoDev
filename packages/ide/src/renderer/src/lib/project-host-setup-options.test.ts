@@ -264,7 +264,6 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it.each([
-    ['ssh:builder' as const, { kind: 'ssh', targetId: 'builder' }],
     ['runtime:gpu' as const, { kind: 'runtime', environmentId: 'gpu' }]
   ])('adds a connect action for disconnected %s setup-needed hosts', (hostId, connectAction) => {
     const options = buildProjectHostSetupOptions({

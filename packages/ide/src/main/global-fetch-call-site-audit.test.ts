@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 // goes through Node's bundled undici, which can crash the whole process when
 // an unread response body pauses the HTTP/1 parser and the peer closes the
 // socket (nodejs/undici#5360, orca#8695). This applies to every Node process
-// we ship: Electron main, the CLI, and the SSH relay.
+// we ship: Electron main and the CLI.
 //
 // Each entry below maps an audited file to its expected number of matching
 // lines. Real call sites must consume or cancel the body on every path,
@@ -15,19 +15,11 @@ import { describe, expect, it } from 'vitest'
 // and update the count.
 const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // HTTP call sites — body consumed or cancelled on every path, including !ok
-  ['main/azure-devops/azure-devops-api-request.ts', 1],
-  ['main/bitbucket/client.ts', 1],
-  ['main/gitea/client.ts', 1],
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
-  // fetch appears only inside injected-page script source strings, not as a
-  // call this process makes
-  // local identifiers named `fetch` (git fetch), not HTTP
-  ['main/ipc/worktree-remote.ts', 2],
-  ['relay/git-handler.ts', 1],
   // fetch mentioned only in a comment
   ['main/ipc/feedback.ts', 1]
 ])
@@ -37,7 +29,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
 // globalThis.fetch`). `typeof globalThis.fetch` type annotations are exempt.
 const GLOBAL_FETCH_LINE = /(^|[^.\w])fetch\(|(?<!typeof )\bglobal(This)?\.fetch\b/
 
-const SCANNED_ROOTS = ['main', 'cli', 'relay']
+const SCANNED_ROOTS = ['main', 'cli']
 
 function globalFetchLineCounts(srcRoot: string): Map<string, number> {
   const counts = new Map<string, number>()
@@ -70,7 +62,7 @@ function globalFetchLineCounts(srcRoot: string): Map<string, number> {
   return counts
 }
 
-describe('global fetch call-site audit (main, cli, relay)', () => {
+describe('global fetch call-site audit (main, cli)', () => {
   it('keeps every global-fetch line audited with its expected count', () => {
     const found = globalFetchLineCounts(join(__dirname, '..'))
 

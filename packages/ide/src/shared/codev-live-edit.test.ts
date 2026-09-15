@@ -27,9 +27,6 @@ describe('isCodevFileWriteTool', () => {
   })
 })
 
-describe('normalizeCodevAgentKind', () => {
-})
-
 describe('normalizeWorktreeRelativePath', () => {
   it('strips the worktree root and normalises separators', () => {
     expect(

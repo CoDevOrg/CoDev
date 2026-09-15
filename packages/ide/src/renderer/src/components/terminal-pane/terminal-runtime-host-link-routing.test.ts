@@ -167,10 +167,6 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
   })
 })
 
-describe('terminal HTTP links on a direct SSH pane', () => {
-
-})
-
 describe('terminal HTTP links on a local pane', () => {
   const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
 

@@ -3,13 +3,6 @@ import {
   shouldStepNativeChatAskAnswer
 } from './native-chat-agent-support'
 
-describe('resolveNativeChatTranscriptAgent', () => {
-
-})
-
-describe('isNativeChatSupportedAgent', () => {
-})
-
 describe('shouldStepNativeChatAskAnswer', () => {
 
   it('does not step other or unknown agents', () => {

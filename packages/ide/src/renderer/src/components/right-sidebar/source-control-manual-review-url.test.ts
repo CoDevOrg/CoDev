@@ -11,9 +11,6 @@ describe('resolveSourceControlManualReviewProvider', () => {
   })
 })
 
-describe('buildSourceControlManualReviewUrlFromContext', () => {
-})
-
 describe('buildSourceControlManualReviewUrl', () => {
   it('builds a GitHub compare URL for the current remote branch', () => {
     expect(

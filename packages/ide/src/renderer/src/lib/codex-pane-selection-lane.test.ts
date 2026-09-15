@@ -334,8 +334,7 @@ describe('resolveCodexPaneSelectionLane', () => {
   })
 
   it.each([
-    ['remote:env-1@@term-1', 'env:env-1'],
-    ['ssh:my-box@@pty-7', 'ssh-connection']
+    ['remote:env-1@@term-1', 'env:env-1']
   ])('keeps a record from re-keying the foreign pane %s', (ptyId, expectedLaneKey) => {
     // Why: a foreign pane's lane is settled by its id, so a record here can only
     // be a recycled id — and honouring it would mute a working remote terminal.
@@ -450,7 +449,7 @@ describe('isForeignMachineCodexPtyId', () => {
 
   it('agrees with the lane keys, so the sweep and the scan skip the same panes', () => {
     const state = laneState({ activeRuntimeEnvironmentId: 'env-1' })
-    for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7', 'pty-1']) {
+    for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'pty-1']) {
       expect(
         isLocalCodexSelectionLaneKey(
           resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId })

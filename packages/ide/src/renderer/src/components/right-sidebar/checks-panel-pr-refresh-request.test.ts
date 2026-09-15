@@ -11,11 +11,7 @@ describe('resolveChecksPanelReviewEvidenceProvider', () => {
   }
 
   it.each([
-    ['linkedGitHubPR', 'github'],
-    ['linkedGitLabMR', 'gitlab'],
-    ['linkedBitbucketPR', 'bitbucket'],
-    ['linkedAzureDevOpsPR', 'azure-devops'],
-    ['linkedGiteaPR', 'gitea']
+    ['linkedGitHubPR', 'github']
   ] as const)('lets an explicit %s link outrank stale cached metadata', (linkedField, provider) => {
     expect(
       resolveChecksPanelReviewEvidenceProvider({

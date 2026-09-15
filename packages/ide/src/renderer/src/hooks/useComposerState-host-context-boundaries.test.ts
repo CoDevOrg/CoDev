@@ -11,10 +11,6 @@ import {
 } from './useComposerState'
 
 const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
-const RECIPE_OPTIONS_SOURCE = readFileSync(
-  join(__dirname, 'useEphemeralVmRecipeOptions.ts'),
-  'utf8'
-)
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -148,14 +144,13 @@ describe('useComposerState host-context boundaries', () => {
     ).toBe('fix-workspace-name')
   })
 
-  it('does not use local SSH gates for runtime-owned folder targets', () => {
+  it('routes runtime-owned folder targets through the runtime host', () => {
     const targetSection = sourceBetween(
       HOOK_SOURCE,
       'const parsedFolderTargetHost',
       'const selectedWorkspaceTarget'
     )
     expect(targetSection).toContain("parsedFolderTargetHost?.kind === 'runtime'")
-    expect(targetSection).toContain('connectionId: folderTargetConnectionId')
     expect(HOOK_SOURCE).not.toContain('folderSourceConnectionId')
   })
 
@@ -183,38 +178,32 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
   })
 
-  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
+  it('detects composer agents against the repo host: runtime, then local (#7082)', () => {
     // Why: a repo owned by a paired runtime must show the runtime's agents, not
-    // the local machine's. SSH stays first priority; runtime falls through before
-    // local so an SSH repo never double-detects. Regression guard for #7082.
+    // the local machine's. Regression guard for #7082.
     const selectorSection = sourceBetween(
       HOOK_SOURCE,
       'const detectedAgentList = useAppStore',
       'const ensureDetectedAgents = useAppStore'
     )
-    expect(selectorSection).toContain('if (isRemote) {')
-    expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
     expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
     expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
     expect(selectorSection).toContain('return s.detectedAgentIds')
-    // SSH branch is checked before the runtime branch.
-    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
-      selectorSection.indexOf('if (runtimeEnvironmentId) {')
-    )
 
     expect(HOOK_SOURCE).toContain(
       'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
     )
 
-    // Detection effect fans out to the same three hosts in the same order and
+    // Detection effect fans out to the same two hosts in the same order and
     // re-runs when the runtime environment changes.
-    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
-    expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
+    const detectSection = sourceBetween(
+      HOOK_SOURCE,
+      'const detect = runtimeEnvironmentId',
+      'void detect.then'
+    )
     expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
     expect(detectSection).toContain('ensureDetectedAgents()')
-    expect(HOOK_SOURCE).toContain(
-      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
-    )
+    expect(HOOK_SOURCE).toMatch(/\}, \[[^\]]*\bruntimeEnvironmentId\b[^\]]*\bdisabledTuiAgents\b[^\]]*\]\)/)
   })
 
   it('seeds initial workspace run target from the task source context', () => {
@@ -515,34 +504,4 @@ describe('useComposerState host-context boundaries', () => {
     expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
   })
 
-  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
-    const recipeLoadSection = sourceBetween(
-      HOOK_SOURCE,
-      'const ephemeralVmsEnabled',
-      'const selectedRepoConnectionId'
-    )
-    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
-    expect(recipeLoadSection).toContain('useEphemeralVmRecipeOptions')
-    expect(recipeLoadSection).toContain('enabled: ephemeralVmsEnabled')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('args.enabled &&')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.ephemeralVm')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('window.api.plugins.onChanged')
-    expect(RECIPE_OPTIONS_SOURCE).toContain('requestGeneration')
-
-    const submitSection = sourceBetween(
-      HOOK_SOURCE,
-      'let ephemeralVmRecipe',
-      'const request: WorktreeCreationRequest'
-    )
-    expect(submitSection).toContain(
-      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
-    )
-    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
-
-    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
-    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
-    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
-    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
-    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
-  })
 })

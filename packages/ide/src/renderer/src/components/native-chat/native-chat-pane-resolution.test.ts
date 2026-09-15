@@ -139,7 +139,7 @@ describe('resolveNativeChatSession', () => {
     })
   })
 
-  it.each(['codex', 'claude', 'openclaude'] as TuiAgent[])(
+  it.each(['codex', 'claude'] as TuiAgent[])(
     'resolves supported title fallback %s when no hook or launch identity exists',
     (resolvedAgent) => {
       const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'

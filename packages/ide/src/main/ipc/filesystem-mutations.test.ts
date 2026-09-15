@@ -335,45 +335,6 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
-  it.each([
-    ['fs:createFile', { filePath: path.resolve('/workspace/repo/new.ts') }],
-    ['fs:createDir', { dirPath: path.resolve('/workspace/repo/new-dir') }],
-    [
-      'fs:rename',
-      {
-        oldPath: path.resolve('/workspace/repo/old.ts'),
-        newPath: path.resolve('/workspace/repo/new.ts')
-      }
-    ],
-    [
-      'fs:copy',
-      {
-        sourcePath: path.resolve('/workspace/repo/source.ts'),
-        destinationPath: path.resolve('/workspace/repo/copy.ts')
-      }
-    ],
-    [
-      'fs:importExternalPaths',
-      { sourcePaths: [path.resolve('/tmp/source.ts')], destDir: path.resolve('/workspace/repo') }
-    ],
-    [
-      'fs:resolveDroppedPathsForAgent',
-      { paths: [path.resolve('/tmp/source.ts')], worktreePath: path.resolve('/workspace/repo') }
-    ]
-  ])(
-    'rejects %s before local fallback when the expected execution host is SSH',
-    async (channel, args) => {
-      await expect(
-        handlers.get(channel)!(null, { ...args, expectedExecutionHostId: 'ssh:ssh-1' })
-      ).rejects.toThrow('Workspace host changed; refresh and try again')
-
-      expect(writeFileMock).not.toHaveBeenCalled()
-      expect(mkdirMock).not.toHaveBeenCalled()
-      expect(renameMock).not.toHaveBeenCalled()
-      expect(copyFileMock).not.toHaveBeenCalled()
-    }
-  )
-
   // ── fs:copy ────────────────────────────────────────────────────
 
   it('copies a file without overwriting an existing destination', async () => {

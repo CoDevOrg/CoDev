@@ -51,7 +51,6 @@ describe('SourceControlActionVariableChips', () => {
       )
 
       expect(markup).toContain('Empty when no GitHub issue is linked')
-      expect(markup).toContain('GitLab-linked')
       expect(markup).toContain('Example')
       expect(markup).toContain('This workspace')
       expect(markup).toContain(expected)

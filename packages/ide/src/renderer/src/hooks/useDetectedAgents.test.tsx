@@ -94,10 +94,6 @@ afterEach(async () => {
   roots.length = 0
 })
 
-describe('useDetectedAgents (ssh call site)', () => {
-
-})
-
 describe('useDetectedAgents (unresolved target)', () => {
   it('does not fall back to detecting or refreshing the local client', async () => {
     await renderProbe(undefined)

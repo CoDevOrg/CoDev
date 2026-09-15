@@ -3195,18 +3195,6 @@ describe('web worktree preload API', () => {
   })
 })
 
-describe('web SSH preload API', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.doUnmock('./web-runtime-client')
-  })
-
-})
-
 describe('web file preload API', () => {
   beforeEach(() => {
     vi.resetModules()

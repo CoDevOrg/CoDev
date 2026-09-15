@@ -84,11 +84,6 @@ const CASES: GuardCase[] = [
     label: 'Renamed from path'
   },
   {
-    file: 'components/settings/SshPassphraseDialog.tsx',
-    afterFallback: 'Enter the password for',
-    label: 'password for host'
-  },
-  {
     file: 'components/settings/ManageSessionKillDialog.tsx',
     afterFallback: 'Force-quits',
     label: 'Force-quits session id'
