@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ReviewIcon } from './worktree-review-helpers'
-import { derivePipelineStatus } from '../../../../main/gitlab/mappers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 const gitlabReview: WorktreeCardPrDisplay = {

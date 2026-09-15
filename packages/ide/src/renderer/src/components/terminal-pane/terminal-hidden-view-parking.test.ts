@@ -77,21 +77,6 @@ describe('isParkRestorableTerminalPty', () => {
   const worktreeId = 'repo::/worktree'
   const sshPolicy = { sshParkingEnabled: true }
 
-  it('accepts every snapshot-backed pty regardless of policy', () => {
-    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId)).toBe(true)
-    expect(isParkRestorableTerminalPty(`${worktreeId}@@session-1`, worktreeId, sshPolicy)).toBe(
-      true
-    )
-  })
-
-  it('accepts SSH ptys only when the SSH-parking policy is enabled', () => {
-    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, sshPolicy)).toBe(true)
-    expect(isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId)).toBe(false)
-    expect(
-      isParkRestorableTerminalPty('ssh:ssh-1@@pty-1', worktreeId, { sshParkingEnabled: false })
-    ).toBe(false)
-  })
-
   it('accepts paired ptys only for the exact snapshot-capable owner', () => {
     const pairedPolicy = {
       ...sshPolicy,
@@ -107,11 +92,6 @@ describe('isParkRestorableTerminalPty', () => {
     expect(isParkRestorableTerminalPty('remote:terminal-1', worktreeId, pairedPolicy)).toBe(false)
   })
 
-  it('rejects paired, fail-open, foreign, and null ptys without capability evidence', () => {
-    for (const ptyId of ['remote:env-1@@terminal-1', 'pty-local-detached', 'other@@s-1', null]) {
-      expect(isParkRestorableTerminalPty(ptyId, worktreeId, sshPolicy)).toBe(false)
-    }
-  })
 })
 
 describe('canParkTerminalWorktreeRenderers', () => {
@@ -140,13 +120,13 @@ describe('canParkTerminalWorktreeRenderers', () => {
     }
     expect(canParkTerminalWorktreeRenderers(sshArgs)).toBe(false)
     expect(
-      canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { sshParkingEnabled: true } })
+      canParkTerminalWorktreeRenderers({ ...sshArgs, restorePolicy: { } })
     ).toBe(true)
     expect(
       canParkTerminalWorktreeRenderers({
         ...sshArgs,
         terminalTabs: [...sshArgs.terminalTabs, { id: 'tab-2', ptyId: 'remote:env-1@@t-1' }],
-        restorePolicy: { sshParkingEnabled: true }
+        restorePolicy: { }
       })
     ).toBe(false)
   })

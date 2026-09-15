@@ -295,12 +295,6 @@ function directSshRepo(targetId: string): Repo {
   }
 }
 
-const repoReadoption = {
-  oldTargetId: 'ssh-old',
-  newTargetId: 'ssh-new',
-  repoIds: ['re-adopted-repo']
-}
-
 describe('fetchReposForAllHosts', () => {
   it('prunes a superseded direct SSH row during a local catalog transaction', async () => {
     const staleRepo = directSshRepo('ssh-old')
@@ -309,8 +303,7 @@ describe('fetchReposForAllHosts', () => {
     const store = createTestStore()
     store.setState({
       repos: [staleRepo],
-      pendingSshRepoReadoptions: [repoReadoption]
-    })
+})
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 
@@ -348,8 +341,7 @@ describe('fetchReposForAllHosts', () => {
     const store = createTestStore()
     store.setState({
       repos: [staleRepo],
-      pendingSshRepoReadoptions: [repoReadoption]
-    })
+})
 
     const load = store.getState().fetchRuntimeEnvironmentRepos('env-1')
     store.setState({ repos: [staleRepo, liveRepo] })

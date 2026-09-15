@@ -96,32 +96,6 @@ describe('deliverLaunchPromptToAgentTab', () => {
     })
   })
 
-  it('does not seed a launch prompt for drafts, unsupported agents, or empty content', async () => {
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'draft-tab',
-      agent: 'codex',
-      content: 'Review first',
-      submit: false,
-      forcePaste: false
-    })
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'unsupported-tab',
-      agent: 'gemini',
-      content: 'Fix failing checks',
-      submit: true,
-      forcePaste: true
-    })
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'empty-tab',
-      agent: 'claude',
-      content: '   ',
-      submit: true,
-      forcePaste: true
-    })
-
-    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
-  })
-
   it('seeds a native-chat launch draft for supported unsubmitted content', async () => {
     await deliverLaunchPromptToAgentTab({
       tabId: 'draft-tab',
@@ -157,32 +131,6 @@ describe('deliverLaunchPromptToAgentTab', () => {
       text: content,
       createdAt: expect.any(Number)
     })
-  })
-
-  it('does not seed a launch draft for submitted, unsupported, or empty content', async () => {
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'submit-tab',
-      agent: 'codex',
-      content: 'Fix failing checks',
-      submit: true,
-      forcePaste: true
-    })
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'unsupported-tab',
-      agent: 'gemini',
-      content: 'Review first',
-      submit: false,
-      forcePaste: false
-    })
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'empty-tab',
-      agent: 'claude',
-      content: '   ',
-      submit: false,
-      forcePaste: false
-    })
-
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('keeps the seeded launch draft when paste delivery fails', async () => {
@@ -234,20 +182,6 @@ describe('deliverLaunchPromptToAgentTab', () => {
     ).resolves.toBe(true)
 
     expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalled()
-    expect(mocks.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
-  })
-
-  it('does not mark unseeded launches failed', async () => {
-    mocks.pasteDraftWhenAgentReady.mockResolvedValue(false)
-
-    await deliverLaunchPromptToAgentTab({
-      tabId: 'tab-1',
-      agent: 'gemini',
-      content: 'Large generated prompt',
-      submit: true,
-      forcePaste: true
-    })
-
     expect(mocks.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
   })
 

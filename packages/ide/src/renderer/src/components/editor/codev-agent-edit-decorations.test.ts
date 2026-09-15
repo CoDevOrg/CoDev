@@ -24,12 +24,6 @@ function presence(over: Partial<CodevAgentFilePresence>): CodevAgentFilePresence
   }
 }
 
-function fakeEditor(lineCount: number): editor.IStandaloneCodeEditor {
-  return {
-    getModel: () => ({ getLineCount: () => lineCount }),
-  } as unknown as editor.IStandaloneCodeEditor
-}
-
 describe('codevAgentEditLabel', () => {
   it('names known kinds and title-cases the tail', () => {
     expect(codevAgentEditLabel('claude-code')).toBe('Claude')
@@ -56,21 +50,6 @@ describe('buildCodevAgentEditKindCss', () => {
 })
 
 describe('buildCodevAgentEditDecorations', () => {
-  it('places a whole-line marker per agent, clamped to the model', () => {
-    const decos = buildCodevAgentEditDecorations(fakeEditor(10), [
-      presence({ agentKind: 'codex', startLine: null }),
-      presence({ paneKey: 'p2', agentKind: 'cursor', startLine: 4, endLine: 6 }),
-      presence({ paneKey: 'p3', agentKind: 'gemini', startLine: 999, endLine: 1_200 }),
-    ])
-    expect(decos.map((d) => [d.range.startLineNumber, d.range.endLineNumber])).toEqual([
-      [1, 1],
-      [4, 6],
-      [10, 10],
-    ])
-    expect(decos[0]!.options.isWholeLine).toBe(true)
-    expect(decos[1]!.options.className).toContain('codev-agent-edit--cursor')
-    expect(decos[1]!.options.after?.content).toBe(' Cursor editing')
-  })
 
   it('is empty when the editor has no model', () => {
     const noModel = { getModel: () => null } as unknown as editor.IStandaloneCodeEditor

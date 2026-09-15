@@ -207,9 +207,7 @@ function renderCard(
         name=""
         onNameValueChange={() => {}}
         onSmartGitHubItemSelect={() => {}}
-        onSmartGitLabItemSelect={() => {}}
         onSmartBranchSelect={() => {}}
-        onSmartLinearIssueSelect={() => {}}
         smartNameSelection={null}
         onClearSmartNameSelection={() => {}}
         canReuseSelectedBranch={false}
@@ -765,15 +763,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       ] as never,
       selectedProjectHostSetupId: 'setup-local',
       onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
-      ephemeralVmRecipes: [
-        {
-          id: 'vercel',
-          name: 'Vercel Sandbox',
-          create: './scripts/orca-vm/vercel.start.sh',
-          destroy: './scripts/orca-vm/vercel.cleanup.sh',
-          destroyDisabled: false
-        }
-      ] as never,
       onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
     })
 
@@ -819,14 +808,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       ] as never,
       selectedProjectHostSetupId: 'setup-local',
       onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
-      ephemeralVmRecipes: [
-        {
-          id: 'vercel',
-          name: 'Vercel Sandbox',
-          create: './scripts/orca-vm/vercel.start.sh',
-          destroyDisabled: true
-        }
-      ] as never,
       selectedEphemeralVmRecipeId: 'vercel',
       onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
     })

@@ -16,19 +16,18 @@ function ctx(
   overrides: Partial<
     Pick<
       CmdJQuickActionContext,
-      'activeView' | 'activeGroupId' | 'activeWorktreeId' | 'isLoading' | 'sshStatus'
+      'activeView' | 'activeGroupId' | 'activeWorktreeId' | 'isLoading'
     >
   >
 ): Pick<
   CmdJQuickActionContext,
-  'activeView' | 'activeGroupId' | 'activeWorktreeId' | 'isLoading' | 'sshStatus'
+  'activeView' | 'activeGroupId' | 'activeWorktreeId' | 'isLoading'
 > {
   return {
     activeView: 'terminal',
     activeGroupId: 'group-1',
     activeWorktreeId: 'wt-1',
     isLoading: false,
-    sshStatus: null,
     ...overrides
   }
 }
@@ -69,7 +68,7 @@ describe('Cmd+J quick action context', () => {
       available: false,
       reason: 'loading'
     })
-    expect(getWorkspaceScopedActionAvailability(ctx({ sshStatus: 'disconnected' }))).toEqual({
+    expect(getWorkspaceScopedActionAvailability(ctx({ }))).toEqual({
       available: false,
       reason: 'ssh-disconnected'
     })
@@ -92,7 +91,7 @@ describe('Cmd+J quick action context', () => {
     expect(
       getCurrentWorkspaceActionAvailability(ctx({ activeGroupId: null, activeView: 'terminal' }))
     ).toEqual({ available: true })
-    expect(getCurrentWorkspaceActionAvailability(ctx({ sshStatus: 'disconnected' }))).toEqual({
+    expect(getCurrentWorkspaceActionAvailability(ctx({ }))).toEqual({
       available: false,
       reason: 'ssh-disconnected'
     })
@@ -155,7 +154,7 @@ describe('Cmd+J quick action context', () => {
         reason: 'loading'
       })
       expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, sshStatus: 'disconnected' })
+        actionById.get(actionId)?.isAvailable({ ...baseContext, })
       ).toEqual({ available: false, reason: 'ssh-disconnected' })
     }
 
@@ -166,8 +165,7 @@ describe('Cmd+J quick action context', () => {
           activeWorktreeId: null,
           activeGroupId: null,
           isLoading: true,
-          sshStatus: 'disconnected'
-        })
+})
       ).toEqual({ available: true })
     }
 
@@ -180,7 +178,7 @@ describe('Cmd+J quick action context', () => {
         actionById.get(actionId)?.isAvailable({ ...baseContext, activeView: 'settings' })
       ).toEqual({ available: false, reason: 'no-active-workspace' })
       expect(
-        actionById.get(actionId)?.isAvailable({ ...baseContext, sshStatus: 'disconnected' })
+        actionById.get(actionId)?.isAvailable({ ...baseContext, })
       ).toEqual({ available: false, reason: 'ssh-disconnected' })
     }
   })

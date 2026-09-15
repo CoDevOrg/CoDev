@@ -175,22 +175,6 @@ describe('ExperimentalPane', () => {
     expect(markup).not.toContain('Show idle agents')
   })
 
-  it('renders Cloud VM as an off-by-default experimental subsection', () => {
-    const settings = getDefaultSettings('/tmp')
-    const markup = renderToStaticMarkup(
-      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
-    )
-    const entry = getExperimentalPaneSearchEntries().find(
-      (searchEntry) => searchEntry.title === 'Cloud VM'
-    )
-
-    expect(settings.experimentalEphemeralVms).toBe(false)
-    expect(markup).toContain('Cloud VM')
-    expect(markup).toContain('aria-checked="false"')
-    expect(markup).not.toContain('Cloud VM pane')
-    expect(entry?.targetSectionId).toBe('ephemeral-vms')
-  })
-
   it('enables Cloud VM through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })
@@ -213,7 +197,7 @@ describe('ExperimentalPane', () => {
   it('shows Cloud VM setup controls when enabled', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane
-        settings={{ ...getDefaultSettings('/tmp'), experimentalEphemeralVms: true }}
+        settings={{ ...getDefaultSettings('/tmp'), }}
         updateSettings={vi.fn()}
       />
     )

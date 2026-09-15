@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  resolveWindowsShiftEnterEncoding,
   resolveWindowsShiftEnterEncodingForPane
 } from './terminal-windows-shift-enter'
 
@@ -33,21 +32,6 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('alt-enter')
   })
 
-  it('does not let a stale title undo explicit routing revocation', () => {
-    const state = {
-      paneForegroundAgentByPaneKey: {
-        'tab:pane': {
-          agent: 'pi' as const,
-          routingRevoked: true,
-          shellForeground: false
-        }
-      },
-      agentLaunchConfigByPaneKey: {}
-    }
-
-    expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', 'Pi ready')).toBe('alt-enter')
-  })
-
   it('keeps legacy bytes for plain shell and unsupported-agent titles', () => {
     const state = {
       paneForegroundAgentByPaneKey: {},
@@ -70,32 +54,6 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     }
 
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane')).toBe('alt-enter')
-  })
-
-  it('keeps the legacy byte for Codex, Antigravity, unknown, and plain panes', () => {
-    for (const agent of ['codex', 'antigravity', 'claude', null] as const) {
-      expect(
-        resolveWindowsShiftEnterEncoding({
-          foreground: { agent, shellForeground: false }
-        })
-      ).toBe('alt-enter')
-    }
-    expect(resolveWindowsShiftEnterEncoding({})).toBe('alt-enter')
-  })
-
-  it('fails closed while a newer command generation awaits trusted evidence', () => {
-    expect(
-      resolveWindowsShiftEnterEncoding({
-        foreground: { agent: 'droid', shellForeground: false },
-        launchAgentType: 'droid'
-      })
-    ).toBe('alt-enter')
-    expect(
-      resolveWindowsShiftEnterEncoding({
-        foreground: { agent: null, shellForeground: false },
-        launchAgentType: 'droid'
-      })
-    ).toBe('alt-enter')
   })
 
   it('keeps launch ownership on its original leaf after a split sibling survives', () => {

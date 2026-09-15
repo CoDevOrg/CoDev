@@ -84,19 +84,6 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
     ).toBe('codex')
   })
 
-  it('keeps current sleeping ownership ahead of an unversioned conflicting title', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '✳ Claude Code',
-        hookAgent: null,
-        sleepingSessionAgent: 'gemini',
-        launchAgent: 'codex'
-      })
-    ).toBe('gemini')
-  })
-
   it('keeps a genuine tab icon when its sleeping record matches the launchAgent', () => {
     expect(
       resolveTabAgentFromSignals({

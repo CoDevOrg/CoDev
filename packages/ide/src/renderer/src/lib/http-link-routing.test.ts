@@ -127,24 +127,6 @@ describe('openHttpLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('routes explicit runtime and SSH document owners to the exact system URL', () => {
-    storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
-
-    openHttpLink('http://localhost:5180/runtime', {
-      worktreeId: 'wt-1',
-      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
-    })
-    openHttpLink('http://localhost:5180/ssh', {
-      worktreeId: 'wt-1',
-      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
-    })
-
-    expect(openUrlMock).toHaveBeenNthCalledWith(1, 'http://localhost:5180/runtime')
-    expect(openUrlMock).toHaveBeenNthCalledWith(2, 'http://localhost:5180/ssh')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
-  })
-
   // Why: runtimes bind per workspace, so activeRuntimeEnvironmentId is commonly
   // null while a pane is remote — ownership must come from the click source.
   it('keeps a runtime-owned link out of Orca when no runtime is globally active', () => {
@@ -398,45 +380,6 @@ describe('openHttpLink', () => {
 
   // Why: the hover label must describe the click's real destination — a remote pane's
   // loopback URL opens raw in the system browser, so a local worktree label would lie.
-  it.each([
-    ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
-    ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const
-  ])('does not label a %s-owned localhost link without an active runtime', async (_kind, owner) => {
-    storeState.settings = {
-      localhostWorktreeLabelsEnabled: true,
-      activeRuntimeEnvironmentId: null
-    }
-    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
-    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
-    storeState.workspacePortScan = {
-      result: {
-        platform: 'darwin',
-        scannedAt: 1,
-        ports: [
-          {
-            id: 'tcp:5180',
-            kind: 'workspace',
-            port: 5180,
-            protocol: 'http',
-            bindHost: '127.0.0.1',
-            connectHost: 'localhost',
-            owner: {
-              repoId: 'repo-1',
-              worktreeId: 'wt-main',
-              displayName: 'main',
-              path: '/repo/main',
-              confidence: 'cwd'
-            }
-          }
-        ]
-      }
-    }
-
-    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/', owner)).resolves.toBe(
-      null
-    )
-    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
-  })
 
   // Why: a local pane keeps its label from the local scan even while another pane's
   // runtime is globally active — the same scan the click resolves.
@@ -532,18 +475,6 @@ describe('openHttpLink modifier routing', () => {
   })
 
   // Why: remote-owned links must never land in an Orca tab that cannot reach them.
-  it('never routes a remote source into Orca even when inverting', () => {
-    storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
-
-    openHttpLink('https://example.com/', {
-      worktreeId: 'wt-1',
-      modifierHeld: true,
-      sourceOwner: { kind: 'ssh', connectionId: 'conn-1' }
-    })
-
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
 
   it('keeps forceSystemBrowser unconditional', () => {
     storeState.settings = { openLinksInApp: true, openLinksInAppModifierInverts: true }

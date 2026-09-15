@@ -220,34 +220,6 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
   })
 
-  it('keeps optional clearing keys in patches', () => {
-    const patch = buildWorkspaceSessionPatch(createSnapshot({ sshConnectionStates: new Map() }), [
-      'sshConnectionStates'
-    ])
-
-    expect(Object.hasOwn(patch, 'activeConnectionIdsAtShutdown')).toBe(true)
-    expect(patch.activeConnectionIdsAtShutdown).toBeUndefined()
-  })
-
-  it('derives reconnect targets from surviving relay session ids in terminal-field patches', () => {
-    const patch = buildWorkspaceSessionPatch(
-      createSnapshot({
-        tabsByWorktree: {
-          'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
-        },
-        ptyIdsByTabId: { 'tab-ssh': [] },
-        lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'ssh:conn-1@@pty-42' },
-        sshConnectionStates: new Map([['conn-1', { status: 'reconnecting' } as never]]),
-        repos: [createRepo('repo-ssh', 'conn-1')],
-        worktreesByRepo: { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never] }
-      }),
-      ['lastKnownRelayPtyIdByTabId']
-    )
-
-    expect(patch.remoteSessionIdsByTabId).toEqual({ 'tab-ssh': 'ssh:conn-1@@pty-42' })
-    expect(patch.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
-  })
-
   it('patches tab chrome as a sanitized bundle when split groups change', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({

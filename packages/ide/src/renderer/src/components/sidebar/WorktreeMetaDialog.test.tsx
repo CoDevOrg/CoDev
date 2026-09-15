@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type {
   FolderWorkspace,
-  LinearIssue,
   Repo,
   Worktree,
   WorktreeMeta
@@ -112,8 +111,7 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
       number: 901,
       title: 'Fix auth',
       url: 'https://linear.app/acme/issue/STA-901',
-      linearIdentifier: 'STA-901'
-    },
+},
     comment: '',
     isArchived: false,
     isUnread: false,
@@ -175,10 +173,7 @@ function openDialog(
       focus: 'comment'
     },
     updateWorktreeMeta,
-    fetchLinearIssue: fetchLinearIssue as unknown as ReturnType<
-      typeof useAppStore.getState
-    >['fetchLinearIssue']
-  })
+})
   render(<WorktreeMetaDialog />)
 }
 
@@ -225,7 +220,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('seeds the chip and value from a Linear link', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     expect(providerChip().textContent).toContain('Linear')
     expect(issueInput().value).toBe('STA-335')
@@ -253,7 +248,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('flips to GitHub when a GitHub issue URL is pasted over a Linear link', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(issueInput(), {
       target: { value: 'https://github.com/acme/orca/issues/77' }
@@ -263,7 +258,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('names the Linear issue that switching to GitHub would unlink', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'GitHub' }))
     fireEvent.change(issueInput(), { target: { value: '99' } })
@@ -275,7 +270,7 @@ describe('WorktreeMetaDialog issue link row', () => {
 
   // Both slots can hold a link at once — naming only one understates the save.
   it('names both links when clearing the field would drop both', () => {
-    openDialog({ worktree: { linkedIssue: 42, linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { linkedIssue: 42, } })
 
     fireEvent.change(issueInput(), { target: { value: '' } })
 
@@ -288,20 +283,6 @@ describe('WorktreeMetaDialog issue link row', () => {
 
   // The warning above only promises the displacement — this asserts the payload
   // that carries it out, which is where the one-issue-per-workspace rule lives.
-  it('clears the displaced GitHub link when a Linear value is saved', async () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Linear' }))
-    fireEvent.change(issueInput(), { target: { value: 'STA-335' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.linkedLinearIssue).toBe('STA-335')
-    expect(updates.linkedIssue).toBeNull()
-  })
 
   // A GitHub-only save must carry no Linear keys: persistence gates the remote
   // Linear capability on key presence, so a synthetic clear fails the save.
@@ -322,7 +303,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   // updateWorktreeMeta stamps lastActivityAt on any comment write, which would
   // reorder the workspace under the time-decay sidebar sort.
   it('sends no comment when only the issue link changed', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
     await act(async () => {
@@ -336,7 +317,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   // A failed save refetches and reverts the optimistic write, so closing here
   // would report success for an edit that silently undid itself.
   it('keeps the dialog open and reports why when the save fails', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
     updateWorktreeMeta.mockResolvedValue({ ok: false, error: 'Runtime is offline' })
 
     fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
@@ -349,7 +330,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('leaves the Linear link alone when only the comment is edited', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
       target: { value: 'updated note' }
@@ -369,7 +350,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('blocks saving an unparseable Linear value', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(issueInput(), { target: { value: 'not an issue' } })
 
@@ -401,12 +382,12 @@ describe('WorktreeMetaDialog issue link row', () => {
   // A background `orca worktree set` must not move the baseline mid-edit: the
   // field would read as dirty and a comment-only save would write the stale seed.
   it('keeps the baseline frozen when the store changes while open', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     act(() => {
       useAppStore.setState({
         worktreesByRepo: {
-          [REPO_ID]: [makeWorktree({ linkedLinearIssue: 'STA-999' })]
+          [REPO_ID]: [makeWorktree({ })]
         }
       })
     })
@@ -429,7 +410,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   it('resolves a bare Linear key across workspaces rather than the active organization', async () => {
     fetchLinearIssue.mockResolvedValue(makeLinearIssue('https://linear.app/other/issue/STA-999'))
     openDialog({
-      worktree: { linkedLinearIssue: 'STA-335' },
+      worktree: { },
       linearViewerOrganizationUrlKey: 'active-org'
     })
 
@@ -447,7 +428,6 @@ describe('WorktreeMetaDialog issue link row', () => {
   it('opens a stored Linear link directly from its organization key', async () => {
     openDialog({
       worktree: {
-        linkedLinearIssue: 'STA-335',
         linkedLinearIssueOrganizationUrlKey: 'acme'
       },
       linearViewerOrganizationUrlKey: 'active-org'
@@ -470,7 +450,7 @@ describe('WorktreeMetaDialog issue link row', () => {
         resolveLookup = resolve
       })
     )
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
     fireEvent.click(openIssueButton())
@@ -489,62 +469,9 @@ describe('WorktreeMetaDialog issue link row', () => {
 
   // Displacement is decided at save time, not at open: a link added by the CLI
   // while the dialog sat open must not outlive the save that warned about it.
-  it('clears a Linear link added while the dialog was open', async () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    act(() => {
-      useAppStore.setState({
-        worktreesByRepo: {
-          [REPO_ID]: [makeWorktree({ linkedIssue: 42, linkedLinearIssue: 'STA-999' })]
-        }
-      })
-    })
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-
-    expect(
-      screen.getByText('Saving unlinks Linear STA-999 — a workspace tracks one issue.')
-    ).toBeTruthy()
-
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.linkedIssue).toBe(99)
-    expect(updates.linkedLinearIssue).toBeNull()
-  })
 
   // Same issue, different spelling: the link is unchanged, so its title and
   // SSH/runtime source context must survive the save.
-  it('keeps the linked work item when the value is only respelled', async () => {
-    openDialog({
-      worktree: {
-        linkedLinearIssue: 'STA-335',
-        linkedWorkItem: {
-          provider: 'linear',
-          type: 'issue',
-          number: 335,
-          title: 'Fix auth',
-          url: 'https://linear.app/acme/issue/STA-335'
-        }
-      }
-    })
-
-    fireEvent.change(issueInput(), { target: { value: 'sta-335' } })
-
-    expect(screen.queryByText(/Saving unlinks/)).toBeNull()
-
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates).not.toHaveProperty('linkedWorkItem')
-    expect(updates).not.toHaveProperty('linkedTaskSourceContext')
-    expect(updates).not.toHaveProperty('linkedLinearIssue')
-  })
 
   // The owner index reports a duplicated workspace ID as ambiguous rather than
   // guessing, so the opening row has to name its own bucket.
@@ -560,7 +487,7 @@ describe('WorktreeMetaDialog issue link row', () => {
   })
 
   it('dispatches nothing when the dialog is cancelled', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
+    openDialog({ worktree: { } })
 
     fireEvent.change(issueInput(), { target: { value: '99' } })
     await act(async () => {

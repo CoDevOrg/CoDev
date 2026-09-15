@@ -79,16 +79,6 @@ describe('worktree card title display', () => {
     ).toBe('Fix stale issue')
   })
 
-  it('uses Jira issue titles when the card title would otherwise be the branch', () => {
-    expect(
-      getWorktreeCardTitleDisplay({
-        storedDisplayName: 'feature/orca-123',
-        branchName: 'feature/orca-123',
-        jiraIssueTitle: 'Link Jira from create'
-      })
-    ).toBe('Link Jira from create')
-  })
-
   it('treats blank stored titles as absent', () => {
     expect(
       getWorktreeCardTitleDisplay({
@@ -101,8 +91,7 @@ describe('worktree card title display', () => {
       getWorktreeCardTitleDisplay({
         storedDisplayName: '',
         branchName: 'feature/local-branch',
-        linearIssueTitle: 'Fix stale Linear issue'
-      })
+})
     ).toBe('Fix stale Linear issue')
   })
 

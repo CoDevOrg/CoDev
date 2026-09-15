@@ -13,8 +13,7 @@ describe('buildHostHeaderMenuModel', () => {
     const model = buildHostHeaderMenuModel({
       kind: 'ssh',
       health: 'disconnected',
-      sshConnected: false
-    })
+})
     expect(model.actions).toEqual(['rename', 'ssh-reconnect', 'manage', 'remove'])
   })
 
@@ -22,8 +21,7 @@ describe('buildHostHeaderMenuModel', () => {
     const model = buildHostHeaderMenuModel({
       kind: 'ssh',
       health: 'available',
-      sshConnected: true
-    })
+})
     expect(model.actions).toEqual(['rename', 'ssh-disconnect', 'manage', 'remove'])
   })
 

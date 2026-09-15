@@ -87,15 +87,7 @@ describe('resolveTerminalInputHostPlatform', () => {
           runtimeStatusByEnvironmentId: new Map([
             ['hub', { status: { hostPlatform: 'linux' } } as never]
           ]),
-          sshStateByEnvironment: new Map([
-            [
-              'hub',
-              {
-                connectionStates: new Map([['ssh-windows', { remotePlatform: 'win32' } as never]])
-              } as never
-            ]
-          ])
-        }),
+}),
         worktreeId: 'repo::C:\\repo',
         transport: {
           getConnectionId: () => null,
@@ -206,8 +198,7 @@ describe('resolveTerminalInputHostPlatform', () => {
       resolveTerminalInputHostPlatform({
         clientPlatform: 'darwin',
         state: state({
-          sshConnectionStates: new Map([['ssh-win', { remotePlatform: 'win32' } as never]])
-        }),
+}),
         worktreeId: 'repo::C:\\repo',
         transport: { getConnectionId: () => 'ssh-win' }
       })
@@ -218,7 +209,7 @@ describe('resolveTerminalInputHostPlatform', () => {
     expect(
       resolveTerminalInputHostPlatform({
         clientPlatform: 'darwin',
-        state: state({ sshConnectionStates: new Map([['ssh-unknown', {} as never]]) }),
+        state: state({ }),
         worktreeId: 'repo::/repo',
         transport: { getConnectionId: () => 'ssh-unknown' }
       })
@@ -229,7 +220,7 @@ describe('resolveTerminalInputHostPlatform', () => {
     expect(
       resolveTerminalInputHostPlatform({
         clientPlatform: 'darwin',
-        state: state({ sshStateByEnvironment: new Map() }),
+        state: state({ }),
         worktreeId: 'repo::/repo',
         transport: {
           getConnectionId: () => null,
@@ -272,8 +263,7 @@ describe('resolveTerminalInputHostPlatform', () => {
               executionHostId: 'ssh:ssh-win'
             }
           ],
-          sshConnectionStates: new Map([['ssh-win', { remotePlatform: 'win32' } as never]])
-        }),
+}),
         worktreeId,
         transport: { getConnectionId: () => null }
       })

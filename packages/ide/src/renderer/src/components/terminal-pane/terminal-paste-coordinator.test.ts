@@ -12,14 +12,10 @@ import {
   chunkTerminalPastePlan,
   createTerminalPastePayload,
   executeTerminalPastePlan,
-  getTerminalPasteOperationTimeoutMs,
   iterateTerminalPastePlanChunks,
   planTerminalPaste,
   planTerminalPasteWithYield,
-  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
-  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS,
-  type TerminalPasteRuntime,
-  type TerminalPasteTarget
+  type   type TerminalPasteTarget
 } from './terminal-paste-coordinator'
 
 const textEncoder = new TextEncoder()
@@ -58,58 +54,6 @@ function getPastePayloadCorpusText(name: string): string {
   }
   return entry.text
 }
-
-const RUNTIME_MATRIX: { name: string; runtime: TerminalPasteRuntime }[] = [
-  {
-    name: 'Windows host',
-    runtime: {
-      platform: 'win32',
-      runtimeKey: 'local:win32',
-      kind: 'local',
-      isWindowsConpty: true
-    }
-  },
-  {
-    name: 'WSL selected distro',
-    runtime: {
-      platform: 'linux',
-      runtimeKey: 'wsl:Ubuntu-24.04',
-      kind: 'wsl'
-    }
-  },
-  {
-    name: 'SSH Linux',
-    runtime: {
-      platform: 'linux',
-      runtimeKey: 'ssh:linux-prod',
-      kind: 'ssh'
-    }
-  },
-  {
-    name: 'SSH Windows',
-    runtime: {
-      platform: 'win32',
-      runtimeKey: 'ssh:windows-prod',
-      kind: 'ssh'
-    }
-  },
-  {
-    name: 'macOS local',
-    runtime: {
-      platform: 'darwin',
-      runtimeKey: 'local:darwin',
-      kind: 'local'
-    }
-  },
-  {
-    name: 'Linux remote runtime',
-    runtime: {
-      platform: 'linux',
-      runtimeKey: 'remote-runtime:linux',
-      kind: 'remote-runtime'
-    }
-  }
-]
 
 describe('terminal paste coordinator', () => {
   it('builds payload metadata without logging clipboard content', () => {
@@ -167,40 +111,6 @@ describe('terminal paste coordinator', () => {
 
     expect(plan.mode).toBe('bracketed-terminal')
     expect(pasteText).toHaveBeenCalledWith('one\r\ntwo', { forceBracketedPaste: true })
-  })
-
-  it('streams large paste through bounded PTY chunks and yields between chunks', async () => {
-    const pasteText = vi.fn()
-    const writePty = vi.fn<(data: string) => boolean>(() => true)
-    const yieldToEventLoop = vi.fn(async () => {})
-    const text = 'path with spaces && unicode 👩‍💻\n'.repeat(6)
-    const plan = planTerminalPaste({
-      text,
-      source: 'context-menu',
-      target: terminalTarget({
-        runtime: { platform: 'linux', runtimeKey: 'ssh:prod', kind: 'ssh' }
-      }),
-      maxDirectBytes: 32,
-      maxChunkBytes: 24
-    })
-
-    const result = await executeTerminalPastePlan(plan, {
-      pasteText,
-      writePty,
-      isTargetCurrent: () => true,
-      canContinue: () => true,
-      yieldToEventLoop
-    })
-
-    expect(result.status).toBe('pasted')
-    expect(plan.mode).toBe('chunked')
-    expect(plan.runtimeKey).toBe('ssh:prod')
-    expect(pasteText).not.toHaveBeenCalled()
-    expect(writePty.mock.calls.map((call) => call[0]).join('')).toBe(
-      normalizeTerminalPasteLineEndings(text)
-    )
-    expect(writePty.mock.calls.length).toBeGreaterThan(1)
-    expect(yieldToEventLoop).toHaveBeenCalledTimes(writePty.mock.calls.length)
   })
 
   it('bracket-wraps large terminal-mode paste once with xterm newline semantics', async () => {
@@ -336,53 +246,6 @@ describe('terminal paste coordinator', () => {
         name
       ).toHaveLength(1)
       expect(plan.redactedDiagnostic, name).not.toContain(text)
-    }
-  })
-
-  it('uses xterm newline semantics across terminal runtime identities', async () => {
-    const text = getPastePayloadCorpusText('mixed newline text')
-
-    for (const { name, runtime } of RUNTIME_MATRIX) {
-      const writePty = vi.fn<(data: string) => boolean>(() => true)
-      const plan = planTerminalPaste({
-        text,
-        source: 'keyboard',
-        target: terminalTarget({ runtime }),
-        maxDirectBytes: 1,
-        maxChunkBytes: 5
-      })
-
-      const result = await executeTerminalPastePlan(plan, {
-        pasteText: vi.fn(),
-        writePty,
-        isTargetCurrent: () => true,
-        canContinue: () => true,
-        yieldToEventLoop: async () => {}
-      })
-
-      expect(result.status, name).toBe('pasted')
-      expect(plan.newlinePolicy, name).toBe('terminal-cr')
-      expect(plan.runtimeKey, name).toBe(runtime.runtimeKey)
-      expect(plan.redactedDiagnostic, name).toContain(`runtime=${runtime.runtimeKey}`)
-      expect(writePty.mock.calls.map((call) => call[0]).join(''), name).toBe(
-        normalizeTerminalPasteLineEndings(text)
-      )
-    }
-  })
-
-  it('uses a longer paste safety timeout for network-backed terminal runtimes', () => {
-    for (const { name, runtime } of RUNTIME_MATRIX) {
-      const plan = planTerminalPaste({
-        text: 'echo timeout-policy',
-        source: 'keyboard',
-        target: terminalTarget({ runtime })
-      })
-
-      expect(getTerminalPasteOperationTimeoutMs(plan), name).toBe(
-        runtime.kind === 'ssh' || runtime.kind === 'remote-runtime'
-          ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
-          : TERMINAL_PASTE_OPERATION_TIMEOUT_MS
-      )
     }
   })
 

@@ -122,7 +122,6 @@ describe('sanitizeWebRuntimeWorkspaceSession', () => {
       },
       tabGroupLayouts: { 'repo-1::/worktree': { type: 'leaf', groupId: 'group-1' } },
       activeGroupIdByWorktree: { 'repo-1::/worktree': 'group-1' },
-      activeConnectionIdsAtShutdown: ['ssh-1'],
       remoteSessionIdsByTabId: { 'stale-terminal-tab': 'remote-pty-1' },
       lastVisitedAtByWorktreeId: { 'repo-1::/worktree': 2 }
     }

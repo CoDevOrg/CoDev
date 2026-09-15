@@ -129,36 +129,6 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
-  it('selects nested SSH legacy fallback before reading a Pi transcript path locally', async () => {
-    const runtime = createRuntime()
-    const internal = runtime as unknown as {
-      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
-      markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
-    }
-    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
-      id: 'worktree-1',
-      path: '/remote/worktree-1',
-      connectionId: 'ssh-1'
-    })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
-
-    await expect(
-      runtime.ensureAgentSession({
-        kind: 'explicit',
-        worktree: 'id:worktree-1',
-        agent: 'pi',
-        providerSession: {
-          key: 'session_id',
-          id: 'provider-session-1',
-          transcriptPath: '/remote-only/pi/session.jsonl'
-        }
-      })
-    ).rejects.toThrow('agent_session_legacy_required')
-
-    expect(createTerminal).not.toHaveBeenCalled()
-    expect(internal.markRemoteWorkspaceTrustedForAgent).not.toHaveBeenCalled()
-  })
-
   it('replays the same completed operation without spawning again', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())

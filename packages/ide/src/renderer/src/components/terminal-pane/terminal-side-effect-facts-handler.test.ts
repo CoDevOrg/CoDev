@@ -260,8 +260,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       ptyId: PTY_ID,
       callbacks: {
         onBell: () => events.push(['bell']),
-        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt])
-      }
+}
     })
 
     expect(events).toEqual([['bell'], ['cc-done', 'Fix the spinner']])
@@ -274,8 +273,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       ptyId: PTY_ID,
       callbacks: {
         onBell: () => later.push(['bell']),
-        onCommandCodeDone: (prompt) => later.push(['cc-done', prompt])
-      }
+}
     })
 
     expect(later).toEqual([])

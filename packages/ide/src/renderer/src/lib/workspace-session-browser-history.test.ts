@@ -26,7 +26,6 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     groupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
-    sshConnectionStates: new Map(),
     repos: [],
     worktreesByRepo: {},
     lastKnownRelayPtyIdByTabId: {},

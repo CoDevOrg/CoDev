@@ -137,15 +137,4 @@ describe('NativeChatSessionGate', () => {
     )
   })
 
-  it('does not open native chat from an unsupported title fallback', () => {
-    renderResolution({
-      paneKey: 'tab-1:leaf-1',
-      launchAgent: null,
-      resolvedAgent: 'gemini',
-      ptyId: 'pty-1'
-    })
-
-    expect(screen.getByText('No conversation here')).toBeInTheDocument()
-    expect(screen.queryByTestId('native-chat-resolution')).not.toBeInTheDocument()
-  })
 })

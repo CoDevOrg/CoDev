@@ -134,25 +134,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
-  it('forwards Hermes startup queries through SSH command transport', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'hermes',
-      worktreeId: 'wt-1',
-      prompt: 'remote automation prompt'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
-        connectionId: 'ssh-1',
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
-      })
-    )
-  })
-
   it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {

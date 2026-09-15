@@ -3,7 +3,6 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
 } from '../../../../shared/detected-worktree-provider-contract'
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
 import {
   createDetectedWorktreeRefreshLeaseRegistry,
   type DetectedWorktreeRefreshProviderInput

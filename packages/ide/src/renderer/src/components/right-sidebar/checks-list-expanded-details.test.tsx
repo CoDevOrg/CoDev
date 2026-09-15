@@ -249,8 +249,7 @@ describe('ChecksList expanded check details', () => {
       status: 'completed',
       conclusion: 'failure',
       url: null,
-      gitlabJobId: 987654
-    }
+}
     const onLoadCheckDetails = vi.fn(async () => ({
       ...checkDetails,
       name: gitLabCheck.name,
@@ -278,8 +277,7 @@ describe('ChecksList expanded check details', () => {
       status: 'in_progress',
       conclusion: 'failure',
       url: null,
-      gitlabJobId: 5150
-    }
+}
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
       .mockRejectedValueOnce(new Error('401 Unauthorized'))
@@ -318,8 +316,7 @@ describe('ChecksList expanded check details', () => {
       status: 'in_progress',
       conclusion: 'failure',
       url: null,
-      gitlabJobId: 5150
-    }
+}
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
       .mockResolvedValueOnce(null)
@@ -357,8 +354,7 @@ describe('ChecksList expanded check details', () => {
       status: 'completed',
       conclusion: 'failure',
       url: null,
-      gitlabJobId: 5150
-    }
+}
 
     renderChecksList({ worktreeId: 'wt-child-1', checks: [gitLabCheck], onLoadCheckDetails })
     await act(async () => {

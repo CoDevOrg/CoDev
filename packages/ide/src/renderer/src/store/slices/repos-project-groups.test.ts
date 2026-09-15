@@ -12,7 +12,6 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
   id: 'remote-repo',
@@ -53,15 +52,6 @@ const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
-
-function makeSshConnectionState(status: SshConnectionState['status']): SshConnectionState {
-  return {
-    targetId: 'ssh-1',
-    status,
-    error: null,
-    reconnectAttempt: 0
-  }
-}
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -400,8 +390,7 @@ describe('project group store routing', () => {
       projectGroups: [
         { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
       ],
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
-    })
+})
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     await store.getState().fetchFolderWorkspacePathStatus(request)
 
@@ -411,8 +400,7 @@ describe('project group store routing', () => {
     })
 
     store.setState({
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
-    })
+})
 
     expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
   })
@@ -430,14 +418,12 @@ describe('project group store routing', () => {
       projectGroups: [
         { ...projectGroup, parentPath: '/workspace/platform', connectionId: 'ssh-1' }
       ],
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
-    })
+})
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
     const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
 
     store.setState({
-      sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
-    })
+})
     const disconnectedStatusPromise = store
       .getState()
       .fetchFolderWorkspacePathStatus(request, { force: true })

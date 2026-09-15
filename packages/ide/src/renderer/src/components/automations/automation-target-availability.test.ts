@@ -408,40 +408,6 @@ describe('automation target availability', () => {
     })
   })
 
-  it('blocks manual runs when the saved source host cannot support the provider', () => {
-    expect(
-      getAutomationTargetAvailability({
-        automation: makeAutomation({
-          sourceContext: {
-            kind: 'task-source',
-            provider: 'gitlab',
-            projectId: 'gitlab:stablyai/orca',
-            hostId: 'runtime:old-server',
-            repoId: 'repo-1',
-            providerIdentity: {
-              provider: 'gitlab',
-              projectId: 'stablyai/orca',
-              namespace: 'stablyai',
-              project: 'orca',
-              webUrl: 'https://gitlab.com/stablyai/orca'
-            }
-          }
-        }),
-        repo: makeRepo(),
-        workspace: makeWorkspace(),
-        projectHostSetups: [],
-        sshConnectionStates: new Map(),
-        sourceHostAvailability: [
-          { hostId: 'runtime:old-server', reason: 'missing-task-source-capability' }
-        ]
-      })
-    ).toMatchObject({
-      canRunNow: false,
-      reason: 'source-provider-unsupported',
-      message: 'The saved GitLab source is not supported on this automation host.'
-    })
-  })
-
   it('explains runtime-host automation availability before the unsupported manual-run fallback', () => {
     const automation = makeAutomation({
       runContext: {

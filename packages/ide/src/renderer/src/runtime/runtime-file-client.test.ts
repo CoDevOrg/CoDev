@@ -25,7 +25,6 @@ import {
 } from './runtime-file-client'
 import {
   clearRuntimeCompatibilityCacheForTests,
-  markRuntimeEnvironmentCompatible
 } from './runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
@@ -170,8 +169,7 @@ describe('runtime file client', () => {
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
         connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
+})
     ).resolves.toBe(sshResult)
 
     expect(fsReadFile).toHaveBeenCalledWith({
@@ -189,8 +187,7 @@ describe('runtime file client', () => {
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
         connectionId: 'ssh-2',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
+})
     ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
 
     expect(fsReadFile).not.toHaveBeenCalled()
@@ -204,53 +201,11 @@ describe('runtime file client', () => {
         relativePath: '/tmp/external.md',
         worktreeId: 'wt-1',
         connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
+})
     ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
 
     expect(fsReadFile).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('binds direct SSH mutations to the captured target and generation', async () => {
-    const context = {
-      settings: { activeRuntimeEnvironmentId: null },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1' as const,
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    }
-
-    await writeRuntimeFile(context, '/repo/a.ts', 'a')
-    await renameRuntimePath(context, '/repo/a.ts', '/repo/b.ts')
-    await deleteRuntimePath(context, '/repo/b.ts')
-
-    expect(fsWriteFile).toHaveBeenCalledWith({
-      filePath: '/repo/a.ts',
-      content: 'a',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-    expect(fsRename).toHaveBeenCalledWith({
-      oldPath: '/repo/a.ts',
-      newPath: '/repo/b.ts',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-    expect(fsDeletePath).toHaveBeenCalledWith({
-      targetPath: '/repo/b.ts',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      recursive: undefined,
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
   })
 
   it('routes worktree-relative text reads through the selected runtime environment', async () => {
@@ -608,8 +563,7 @@ describe('runtime file client', () => {
           worktreeId: 'wt-1',
           worktreePath: '/remote/repo',
           connectionId: 'ssh-2',
-          expectedExternalSshTargetId: 'ssh-1'
-        },
+},
         '/tmp/logo.png'
       )
     ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
@@ -1054,48 +1008,6 @@ describe('runtime file client', () => {
     expect(fsWriteFile).not.toHaveBeenCalled()
   })
 
-  it('refuses nested SSH mutations before RPC when the HUB lacks ownership support', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-
-    await expect(
-      renameRuntimePath(
-        {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          connectionId: 'hub-ssh-1',
-          expectedExecutionHostId: 'ssh:hub-ssh-1',
-          expectedSshTargetId: 'hub-ssh-1',
-          expectedSshConnectionGeneration: 7
-        },
-        '/ssh/repo/old.md',
-        '/ssh/repo/new.md'
-      )
-    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
-
-    expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith({
-      selector: 'env-old-hub',
-      method: 'status.get',
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsRename).not.toHaveBeenCalled()
-  })
-
   it('keeps reads compatible with HUBs that lack mutation ownership support', async () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'status.get') {
@@ -1140,43 +1052,6 @@ describe('runtime file client', () => {
     expect(fsReadFile).not.toHaveBeenCalled()
   })
 
-  it('refuses old-HUB imports before staging client-local files', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-
-    await expect(
-      importExternalPathsToRuntime(
-        {
-          settings: { activeRuntimeEnvironmentId: 'env-old-hub' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          expectedExecutionHostId: 'ssh:hub-ssh-1',
-          expectedSshTargetId: 'hub-ssh-1',
-          expectedSshConnectionGeneration: 7
-        },
-        ['/client/secret.txt'],
-        '/ssh/repo/uploads'
-      )
-    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
-
-    expect(fsStageExternalPathsForRuntimeUpload).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsImportExternalPaths).not.toHaveBeenCalled()
-  })
-
   it('re-probes mutation support so a HUB downgrade cannot reuse a cached capability', async () => {
     let statusCalls = 0
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
@@ -1218,82 +1093,6 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.delete' })
     )
-    expect(fsDeletePath).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when a same-id re-pair occurs after the capability probe', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-repaired', createdAt: 1, pairingRevision: 41 }])
-    markRuntimeEnvironmentCompatible('env-repaired')
-    let currentRevision = 41
-    runtimeEnvironmentTransportCall.mockImplementation(
-      (args: { method: string; expectedEnvironmentPairingRevision?: number }) => {
-        if (args.expectedEnvironmentPairingRevision !== currentRevision) {
-          return Promise.resolve({
-            id: args.method,
-            ok: false,
-            error: {
-              code: 'runtime_environment_repaired',
-              message: 'Runtime environment was re-paired before the mutation.'
-            },
-            _meta: { runtimeId: 'old-hub-runtime' }
-          })
-        }
-        if (args.method === 'status.get') {
-          currentRevision = 42
-          replaceRuntimeEnvironmentRevisions([
-            { id: 'env-repaired', createdAt: 1, pairingRevision: currentRevision }
-          ])
-          return Promise.resolve({
-            id: 'status',
-            ok: true,
-            result: {
-              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-              capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
-            },
-            _meta: { runtimeId: 'new-hub-runtime' }
-          })
-        }
-        return runtimeEnvironmentCall(args)
-      }
-    )
-
-    await expect(
-      deleteRuntimePath(
-        {
-          settings: { activeRuntimeEnvironmentId: 'env-repaired' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          expectedExecutionHostId: 'ssh:hub-ssh-1',
-          expectedSshTargetId: 'hub-ssh-1',
-          expectedSshConnectionGeneration: 7
-        },
-        '/ssh/repo/readme.md'
-      )
-    ).rejects.toThrow('re-paired before the mutation')
-
-    expect(runtimeEnvironmentTransportCall).toHaveBeenNthCalledWith(1, {
-      selector: 'env-repaired',
-      method: 'status.get',
-      params: undefined,
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: 41
-    })
-    expect(runtimeEnvironmentTransportCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-repaired',
-      method: 'files.delete',
-      params: {
-        worktree: 'id:wt-nested-ssh',
-        relativePath: 'readme.md',
-        recursive: undefined,
-        expectedExecutionHostId: 'ssh:hub-ssh-1',
-        expectedSshTargetId: 'hub-ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: 41
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
   })
 
@@ -1369,9 +1168,7 @@ describe('runtime file client', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 5
-      },
+},
       '/repo/a.md',
       '/repo/a copy.md'
     )
@@ -1972,9 +1769,7 @@ describe('runtime file client', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 5
-      },
+},
       ['/Users/me/readme.md'],
       '/repo',
       { ensureDestinationDir: true }

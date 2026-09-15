@@ -49,9 +49,7 @@ vi.mock('node-pty', () => ({
 import {
   deletePtyOwnership,
   registerPtyHandlers,
-  registerSshPtyProvider,
   setPtyOwnership,
-  unregisterSshPtyProvider
 } from '../ipc/pty'
 import type { IPtyProvider } from './types'
 
@@ -124,8 +122,6 @@ describe('PTY provider dispatch', () => {
     setup()
     const mockSshProvider = createMockProvider('ssh-pty-1')
 
-    registerSshPtyProvider('conn-123', mockSshProvider)
-
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
@@ -148,7 +144,6 @@ describe('PTY provider dispatch', () => {
       expect.objectContaining({ cols: 80, rows: 24, cwd: undefined, env: undefined })
     )
 
-    unregisterSshPtyProvider('conn-123')
   })
 
   it('throws for unknown connectionId', async () => {
@@ -164,10 +159,6 @@ describe('PTY provider dispatch', () => {
 
   it('unregisterSshPtyProvider removes the provider', async () => {
     setup()
-    const mockProvider = createMockProvider('ssh-pty-2')
-
-    registerSshPtyProvider('conn-456', mockProvider)
-    unregisterSshPtyProvider('conn-456')
 
     await expect(
       handlers.get('pty:spawn')!(null, {
@@ -182,8 +173,6 @@ describe('PTY provider dispatch', () => {
     setup()
     const providerA = createMockProvider('ssh:conn-a@@pty-1')
     const providerB = createMockProvider('ssh:conn-b@@pty-1')
-    registerSshPtyProvider('conn-a', providerA)
-    registerSshPtyProvider('conn-b', providerB)
     setPtyOwnership('ssh:conn-a@@pty-1', 'conn-a')
     setPtyOwnership('ssh:conn-b@@pty-1', 'conn-b')
 
@@ -199,8 +188,6 @@ describe('PTY provider dispatch', () => {
     } finally {
       deletePtyOwnership('ssh:conn-a@@pty-1')
       deletePtyOwnership('ssh:conn-b@@pty-1')
-      unregisterSshPtyProvider('conn-a')
-      unregisterSshPtyProvider('conn-b')
     }
   })
 })

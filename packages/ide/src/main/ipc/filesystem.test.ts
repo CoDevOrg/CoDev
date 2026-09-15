@@ -228,7 +228,6 @@ describe('registerFilesystemHandlers', () => {
   const folderDownloadSender = Object.assign(new EventEmitter(), {
     isDestroyed: vi.fn(() => false)
   })
-  const folderDownloadEvent = { sender: folderDownloadSender }
   const store = {
     getRepos: () => [
       {

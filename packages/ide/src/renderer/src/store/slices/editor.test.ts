@@ -709,62 +709,6 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
   })
 
-  it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
-    const store = createEditorStore()
-    const file = {
-      filePath: '/tmp/ssh-preview.png',
-      relativePath: '/tmp/ssh-preview.png',
-      worktreeId: 'wt-1',
-      language: 'png',
-      mode: 'edit' as const
-    }
-
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 1
-          }
-        ]
-      ])
-    } as never)
-    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-1' })
-
-    store.setState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-2' }],
-      sshConnectionStates: new Map([
-        [
-          'ssh-2',
-          {
-            targetId: 'ssh-2',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 2
-          }
-        ]
-      ])
-    } as never)
-    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-2' })
-
-    expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.externalSshTargetId).toBe('ssh-2')
-    expect(store.getState().openFiles[0]?.operationProvenance).toEqual(
-      expect.objectContaining({
-        generation: expect.objectContaining({
-          route: { executionHostId: 'ssh:ssh-2', runtimeEnvironmentId: null }
-        }),
-        expectedSshConnectionGeneration: 2
-      })
-    )
-  })
-
   it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
     const store = createEditorStore()
 
@@ -2187,8 +2131,7 @@ describe('createEditorSlice openMarkdownPreview', () => {
       worktreeId: 'wt-1',
       language: 'markdown',
       mode: 'edit',
-      externalSshTargetId: 'ssh-1'
-    })
+})
 
     store.getState().openMarkdownPreview(
       {

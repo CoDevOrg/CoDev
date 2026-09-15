@@ -43,6 +43,53 @@ import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
 
+const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
+const REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
+const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
+  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
+  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
+]
+const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' }
+]
+
+const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
+  trackMock: vi.fn(),
+  getCohortAtEmitMock: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
@@ -7076,35 +7123,6 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
-  it('patches workspace session without replacing unchanged slices', async () => {
-    const store = await createStore()
-    const tabsByWorktree = {
-      wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
-    }
-    const terminalLayoutsByTabId = {
-      tab1: { root: null, activeLeafId: null, expandedLeafId: null }
-    }
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree,
-      terminalLayoutsByTabId,
-      activeConnectionIdsAtShutdown: ['ssh-1']
-    })
-
-    store.patchWorkspaceSession({
-      activeTabId: 'tab2',
-      activeConnectionIdsAtShutdown: undefined
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.activeTabId).toBe('tab2')
-    expect(session.tabsByWorktree).toEqual(tabsByWorktree)
-    expect(session.terminalLayoutsByTabId).toEqual(terminalLayoutsByTabId)
-    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
-  })
-
   it('uses full normalization for structural workspace session patches', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
@@ -9823,35 +9841,6 @@ describe('Store host-partitioned workspace sessions', () => {
   const makeHostSession = (activeRepoId: string): WorkspaceSessionState => ({
     ...getDefaultWorkspaceSession(),
     activeRepoId
-  })
-
-  const makeBoundHostSession = (ptyId: string | null): WorkspaceSessionState => ({
-    ...getDefaultWorkspaceSession(),
-    activeRepoId: 'repo-1',
-    activeWorktreeId: 'repo-1::/worktree',
-    activeTabId: 'tab-1',
-    tabsByWorktree: {
-      'repo-1::/worktree': [
-        {
-          id: 'tab-1',
-          worktreeId: 'repo-1::/worktree',
-          title: 'Terminal',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1,
-          ptyId
-        }
-      ]
-    },
-    terminalLayoutsByTabId: {
-      'tab-1': {
-        root: { type: 'leaf', leafId: TEST_LEAF_1 },
-        activeLeafId: TEST_LEAF_1,
-        expandedLeafId: null,
-        ptyIdsByLeafId: ptyId ? { [TEST_LEAF_1]: ptyId } : {}
-      }
-    }
   })
 
   it('migrates a legacy workspaceSession blob into the local partition', async () => {

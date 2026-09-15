@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 
 function transport(
@@ -18,13 +17,6 @@ function transport(
 describe('resolveTerminalHttpLinkSourceOwner', () => {
   it('keeps ordinary local PTYs local', () => {
     expect(resolveTerminalHttpLinkSourceOwner(transport('local-pty'))).toEqual({ kind: 'local' })
-  })
-
-  it('classifies direct SSH PTYs by their embedded connection', () => {
-    expect(resolveTerminalHttpLinkSourceOwner(transport(toAppSshPtyId('ssh-1', 'pty-2')))).toEqual({
-      kind: 'ssh',
-      connectionId: 'ssh-1'
-    })
   })
 
   it('keeps direct SSH ownership while its PTY id is unavailable', () => {

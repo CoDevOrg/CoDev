@@ -36,7 +36,7 @@ describe('terminal paste runtime', () => {
         platform: 'linux',
         ptyId: 'pty-1',
         connectionId: 'ssh-current',
-        transport: { getConnectionId: () => 'ssh-original' }
+        transport: { }
       })
     ).toMatchObject({
       platform: 'linux',
@@ -52,9 +52,7 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: 'ssh-current',
         transport: {
-          getConnectionId: () => 'ssh-original',
-          getRemotePlatform: () => 'linux'
-        }
+}
       })
     ).toEqual({
       platform: 'linux',
@@ -86,9 +84,7 @@ describe('terminal paste runtime', () => {
         connectionId: 'ssh-current',
         remotePlatform: 'win32',
         transport: {
-          getConnectionId: () => null,
-          getRemotePlatform: () => 'linux'
-        }
+}
       })
     ).toMatchObject({
       platform: 'darwin',
@@ -103,7 +99,7 @@ describe('terminal paste runtime', () => {
         platform: 'darwin',
         ptyId: 'pty-1',
         connectionId: 'ssh-current',
-        transport: { getConnectionId: () => null }
+        transport: { }
       })
     ).toMatchObject({
       platform: 'darwin',
@@ -119,7 +115,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
           })
@@ -141,7 +136,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({ shellOverride: 'C:\\Windows\\System32\\wsl.exe' })
         }
       })
@@ -159,7 +153,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             shellOverride: '  "C:\\Windows\\System32\\wsl.exe" -d Ubuntu-24.04'
           })
@@ -178,7 +171,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             shellOverride: 'powershell.exe -NoProfile wsl.exe'
           })
@@ -197,7 +189,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'pty-1',
         connectionId: 'ssh-current',
         transport: {
-          getConnectionId: () => 'ssh-original',
           getLocalSessionMetadata: () => ({
             cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
           })
@@ -215,7 +206,7 @@ describe('terminal paste runtime', () => {
         platform: 'linux',
         ptyId: 'remote:terminal-1',
         connectionId: 'ssh-current',
-        transport: { getConnectionId: () => 'ssh-original' },
+        transport: { },
         isWindowsConpty: true
       })
     ).toEqual({
@@ -233,7 +224,6 @@ describe('terminal paste runtime', () => {
         ptyId: 'remote:env-1@@terminal-1',
         connectionId: null,
         transport: {
-          getConnectionId: () => null,
           getLocalSessionMetadata: () => ({
             cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
           })

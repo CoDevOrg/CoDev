@@ -73,7 +73,6 @@ import {
   wrapWindowsHookCommand
 } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
-import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')

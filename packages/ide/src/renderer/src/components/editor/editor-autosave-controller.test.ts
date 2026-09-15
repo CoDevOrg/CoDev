@@ -227,19 +227,7 @@ describe('attachEditorAutosaveController', () => {
           }
         ] as never
       },
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0,
-            connectionGeneration: 4
-          }
-        ]
-      ])
-    })
+})
     store.getState().openFile({
       filePath: '/home/neil/platform/api/src/file.ts',
       relativePath: 'api/src/file.ts',

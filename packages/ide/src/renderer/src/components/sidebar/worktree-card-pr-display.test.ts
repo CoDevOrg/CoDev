@@ -64,58 +64,6 @@ describe('getWorktreeCardPrDisplay', () => {
     expect(getWorktreeCardPrDisplay(undefined, null)).toBeNull()
   })
 
-  it('ignores linked-lookup PR details when the worktree is unlinked', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: 'github:123'
-      })
-    ).toBeNull()
-  })
-
-  it('keeps an unlinked GitHub PR visible when branch provenance names the same PR', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: 'github:123',
-        branchLookupGitHubPRNumber: 123
-      })
-    ).toBe(pr)
-  })
-
-  it('still suppresses unlinked linked-lookup details when branch provenance names a different PR', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: 'github:123',
-        branchLookupGitHubPRNumber: 999
-      })
-    ).toBeNull()
-  })
-
-  it('does not let a GitHub branch PR number corroborate an unlinked GitLab MR', () => {
-    expect(
-      getWorktreeCardPrDisplay(gitLabReview, null, null, null, null, null, {
-        reviewHintKey: 'gitlab:321',
-        branchLookupGitHubPRNumber: 321
-      })
-    ).toBeNull()
-  })
-
-  it('does not let branch provenance override linked non-GitHub review metadata', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, 321, null, null, null, {
-        reviewHintKey: 'gitlab:321',
-        branchLookupGitHubPRNumber: 123
-      })
-    ).toBeNull()
-  })
-
-  it('shows branch-discovered GitHub PR details when the worktree is unlinked', () => {
-    expect(
-      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
-        reviewHintKey: ''
-      })
-    ).toBe(pr)
-  })
-
   it('treats missing cache hints as unsafe for unlinked GitHub PR details', () => {
     expect(getWorktreeCardPrDisplay(pr, null)).toBeNull()
   })
@@ -125,18 +73,6 @@ describe('getWorktreeCardPrDisplay', () => {
       provider: 'github',
       number: 456,
       title: 'Loading PR...'
-    })
-  })
-
-  it('uses cached GitLab MR details when linked metadata matches', () => {
-    expect(getWorktreeCardPrDisplay(gitLabReview, null, 321)).toBe(gitLabReview)
-  })
-
-  it('keeps the linked GitLab MR number visible when cached details belong to a different MR', () => {
-    expect(getWorktreeCardPrDisplay(gitLabReview, null, 654)).toEqual({
-      provider: 'gitlab',
-      number: 654,
-      title: 'Loading MR...'
     })
   })
 

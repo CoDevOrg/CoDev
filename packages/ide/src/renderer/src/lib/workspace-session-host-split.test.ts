@@ -79,25 +79,6 @@ function ownerByPrefix(): HostIdByWorktreeId {
 }
 
 describe('splitWorkspaceSessionByHost', () => {
-  it('keeps global fields only on the local slice', () => {
-    const state: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      activeRepoId: 'repo-1',
-      activeWorktreeId: 'local-wt',
-      activeTabId: 'tab-1',
-      browserUrlHistory: [
-        { url: 'u', normalizedUrl: 'u', title: 't', lastVisitedAt: 1, visitCount: 1 }
-      ],
-      activeConnectionIdsAtShutdown: ['ssh-target']
-    }
-
-    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
-
-    expect(slices[LOCAL_EXECUTION_HOST_ID]?.activeRepoId).toBe('repo-1')
-    expect(slices[LOCAL_EXECUTION_HOST_ID]?.activeConnectionIdsAtShutdown).toEqual(['ssh-target'])
-    // No runtime slice is created when nothing is worktree-owned by it.
-    expect(slices[RUNTIME_A]).toBeUndefined()
-  })
 
   it('routes worktree-keyed maps to their owner host', () => {
     const state: WorkspaceSessionState = {

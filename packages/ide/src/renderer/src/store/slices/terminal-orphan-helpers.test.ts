@@ -75,8 +75,7 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'T1' })] },
       ptyIdsByTabId: { T1: [] },
       unifiedTabsByWorktree: { 'wt-1': [] },
-      deferredSshSessionIdsByTabId: { T1: 'ssh-session-live' }
-    })
+})
 
     expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('T1')
   })

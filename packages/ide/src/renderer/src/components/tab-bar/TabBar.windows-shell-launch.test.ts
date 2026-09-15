@@ -774,8 +774,7 @@ describe('TabBar PowerShell launch wiring', () => {
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       ownerKey: 'ssh:ssh-1',
-      sshConnectionId: 'ssh-1'
-    })
+})
 
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule
@@ -845,8 +844,7 @@ describe('TabBar PowerShell launch wiring', () => {
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       ownerKey: 'ssh:ssh-1',
-      sshConnectionId: 'ssh-1'
-    })
+})
 
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule

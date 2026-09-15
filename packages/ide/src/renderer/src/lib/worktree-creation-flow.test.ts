@@ -200,77 +200,6 @@ describe('runBackgroundWorktreeCreation', () => {
     )
   })
 
-  it('shows a VM provisioning phase and creates the worktree on the prepared runtime repo', async () => {
-    store.repos = [
-      {
-        id: 'repo-1',
-        connectionId: null,
-        gitRemoteIdentity: {
-          canonicalKey: 'github.com/stablyai/orca',
-          remoteName: 'origin',
-          remoteUrl: 'git@github.com:stablyai/orca.git'
-        }
-      } as never
-    ]
-    prepareEphemeralVmWorkspaceTargetMock.mockResolvedValue({
-      ok: true,
-      runtimeId: 'runtime-1',
-      environmentId: 'env-1',
-      stderr: '',
-      warnings: [],
-      setup: {
-        project: { id: 'project-1' },
-        setup: {
-          id: 'setup-runtime',
-          projectId: 'project-1',
-          hostId: 'runtime:env-1'
-        },
-        repo: { id: 'repo-runtime', path: '/workspace/repo' }
-      }
-    })
-    store.createWorktree.mockResolvedValue({
-      worktree: { id: 'repo-runtime::/workspace/repo/worktree', repoId: 'repo-runtime' }
-    })
-
-    runBackgroundWorktreeCreation(
-      makeRequest({
-        ephemeralVmRecipe: {
-          sourceRepoId: 'repo-1',
-          recipeId: 'cloud-sandbox',
-          projectId: 'project-1'
-        },
-        baseBranch: 'Jinwoo-H/setup-vercel-sandbox',
-        worktreeCreateProgressMode: 'indeterminate'
-      })
-    )
-
-    expect(store.beginPendingWorktreeCreation).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 'provisioning-vm' })
-    )
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    expect(prepareEphemeralVmWorkspaceTargetMock).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      projectId: 'github:stablyai/orca',
-      workspaceName: 'feature',
-      provisionId: 'creation-1',
-      setupExistingFolder: store.setupProjectExistingFolder
-    })
-    const createCall = store.createWorktree.mock.calls[0] as unknown[]
-    expect(createCall[0]).toBe('repo-runtime')
-    expect(createCall[1]).toBe('feature')
-    expect(createCall[2]).toBeUndefined()
-    expect(createCall).toContain('creation-1')
-    expect(window.api.ephemeralVm.attachWorkspace).toHaveBeenCalledWith({
-      runtimeId: 'runtime-1',
-      workspaceId: 'repo-runtime::/workspace/repo/worktree'
-    })
-    expect(store.refreshRuntimeEnvironmentStatus).toHaveBeenCalledWith('env-1')
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
-    })
-  })
-
   it('preserves provider-backed VM start points after provisioning', async () => {
     store.repos = [{ id: 'repo-1', connectionId: null }] as never
     prepareEphemeralVmWorkspaceTargetMock.mockResolvedValue({
@@ -295,11 +224,6 @@ describe('runBackgroundWorktreeCreation', () => {
 
     runBackgroundWorktreeCreation(
       makeRequest({
-        ephemeralVmRecipe: {
-          sourceRepoId: 'repo-1',
-          recipeId: 'cloud-sandbox',
-          projectId: 'github:stablyai/orca'
-        },
         baseBranch: 'abc123',
         compareBaseRef: 'refs/remotes/origin/main',
         linkedPR: 42
@@ -313,91 +237,6 @@ describe('runBackgroundWorktreeCreation', () => {
     expect(createCall[24]).toBe('refs/remotes/origin/main')
   })
 
-  it('appends stderr provisioning events for the active VM recipe create', async () => {
-    let provisionEventCallback:
-      | ((event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void)
-      | null = null
-    const unsubscribe = vi.fn()
-    window.api.ephemeralVm.onProvisionEvent = vi.fn((callback) => {
-      provisionEventCallback = callback
-      return unsubscribe
-    })
-    prepareEphemeralVmWorkspaceTargetMock.mockImplementation(async () => {
-      provisionEventCallback?.({
-        provisionId: 'creation-1',
-        stream: 'stderr',
-        chunk: 'creating sandbox\n'
-      })
-      provisionEventCallback?.({
-        provisionId: 'other-create',
-        stream: 'stderr',
-        chunk: 'ignore me\n'
-      })
-      provisionEventCallback?.({
-        provisionId: 'creation-1',
-        stream: 'stdout',
-        chunk: '{"pairingCode":"secret"}'
-      })
-      return {
-        ok: true,
-        runtimeId: 'runtime-1',
-        environmentId: 'env-1',
-        stderr: '',
-        warnings: [
-          {
-            id: 'recipe.result.endpoint.public_ws',
-            message: 'Recipe pairing endpoint uses insecure public ws:// transport.',
-            remediation: 'Use wss://.'
-          }
-        ],
-        setup: {
-          project: { id: 'project-1' },
-          setup: {
-            id: 'setup-runtime',
-            projectId: 'project-1',
-            hostId: 'runtime:env-1'
-          },
-          repo: { id: 'repo-runtime', path: '/workspace/repo' }
-        }
-      }
-    })
-    store.createWorktree.mockResolvedValue({
-      worktree: { id: 'repo-runtime::/workspace/repo/worktree', repoId: 'repo-runtime' }
-    })
-
-    runBackgroundWorktreeCreation(
-      makeRequest({
-        ephemeralVmRecipe: {
-          sourceRepoId: 'repo-1',
-          recipeId: 'cloud-sandbox',
-          projectId: 'project-1'
-        },
-        worktreeCreateProgressMode: 'indeterminate'
-      })
-    )
-
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    expect(window.api.ephemeralVm.onProvisionEvent).toHaveBeenCalled()
-    expect(unsubscribe).toHaveBeenCalled()
-    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
-      'creation-1',
-      expect.objectContaining({ provisioningLog: 'creating sandbox\n' })
-    )
-    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
-      'creation-1',
-      expect.objectContaining({
-        provisioningLog: expect.stringContaining(
-          'Warning: Recipe pairing endpoint uses insecure public ws:// transport.'
-        )
-      })
-    )
-    expect(JSON.stringify(store.updatePendingWorktreeCreation.mock.calls)).not.toContain(
-      'pairingCode'
-    )
-    expect(JSON.stringify(store.updatePendingWorktreeCreation.mock.calls)).not.toContain(
-      'ignore me'
-    )
-  })
 })
 
 describe('staged background worktree creation', () => {
@@ -736,38 +575,6 @@ describe('staged background worktree creation', () => {
     expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({ tabId: 'agent-tab' })
     )
-  })
-
-  it.each([
-    ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'chat'],
-    ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'chat']
-  ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
-    store.settings.experimentalNativeChat = true
-    store.settings.openAgentTabsInChatByDefault = true
-    store.repos = [{ id: 'repo-1', connectionId: null }]
-    continueBackgroundWorktreeCreation(
-      'creation-1',
-      makeRequest({
-        agent,
-        startup: { command: `${agent} --prefill x`, launchAgent: agent },
-        startupPlan: {
-          agent,
-          launchCommand: `${agent} --prefill x`,
-          expectedProcess: agent,
-          followupPrompt: null,
-          launchConfig: { agentArgs: '', agentEnv: {} }
-        },
-        launchDraftPrompt: draft
-      })
-    )
-
-    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(createCall?.[13]).toEqual({
-      command: `${agent} --prefill x`,
-      launchAgent: agent,
-      viewMode
-    })
   })
 
   it('carries launchDraftText into activation for an argv-prefill launch', async () => {

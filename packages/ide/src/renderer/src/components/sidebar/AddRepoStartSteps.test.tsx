@@ -20,7 +20,6 @@ function renderLocalStartStep(isSshLikely: boolean): string {
   return renderToStaticMarkup(
     <AddRepoLocalStartStep
       repoCount={1}
-      isSshLikely={isSshLikely}
       isAdding={false}
       addProjectBusyLabel={null}
       nestedScanInProgress={false}
@@ -74,7 +73,6 @@ async function renderLocalStartStepDom(
       <TooltipProvider>
         <AddRepoLocalStartStep
           repoCount={1}
-          isSshLikely={isSshLikely}
           isAdding={options.isAdding ?? false}
           addProjectBusyLabel={options.addProjectBusyLabel ?? null}
           nestedScanInProgress={options.nestedScanInProgress ?? false}
@@ -102,12 +100,11 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
-function getActionTitles(isSshLikely: boolean): {
+function getActionTitles(_isSshLikely: boolean): {
   primary: string
   secondary: string[]
 } {
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
-    isSshLikely,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
     onOpenRemoteStep: vi.fn(),
@@ -125,7 +122,6 @@ function getHostAwareActionModel(): {
   createDisabled: boolean | undefined
 } {
   const { secondaryActions } = getAddRepoLocalStartActions({
-    isSshLikely: true,
     showRemoteAction: false,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
@@ -145,7 +141,6 @@ function getRuntimeHostActionModel(): {
   description: string
 } {
   const { primaryAction } = getAddRepoLocalStartActions({
-    isSshLikely: false,
     showRemoteAction: false,
     browseHostKind: 'runtime',
     onBrowse: vi.fn(),

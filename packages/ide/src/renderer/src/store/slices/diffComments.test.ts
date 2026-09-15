@@ -107,8 +107,6 @@ import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
@@ -144,8 +142,6 @@ function createTestStore() {
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createRuntimeEnvironmentSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),

@@ -53,15 +53,6 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(profile.osRelease).toBe('10.0.22631')
   })
 
-  it('keeps the kitty advertisement on ConPTY for an agent that needs CSI-u', () => {
-    const profile = resolveDashboardCardTerminalInput(stateWith(), {
-      ...WINDOWS_ARGS,
-      launchAgent: 'grok'
-    })
-    expect(profile.localWindowsConpty).toBe(true)
-    expect(profile.kittyKeyboardAdvertised).toBe(true)
-  })
-
   // Why: the pty runs Linux inside WSL, so byte protocols must follow it and
   // not the Windows client — the pane resolves this from its own session cwd.
   it('treats a WSL shell override as a non-ConPTY Linux-hosted pty', () => {

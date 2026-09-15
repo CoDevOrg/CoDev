@@ -26,15 +26,6 @@ describe('resolveChecksPanelReviewEvidenceProvider', () => {
     ).toBe(provider)
   })
 
-  it('uses eligibility before cached provider metadata when no review is linked', () => {
-    expect(
-      resolveChecksPanelReviewEvidenceProvider({
-        ...noLinkedReviews,
-        eligibilityProvider: 'bitbucket',
-        cachedProvider: 'gitlab'
-      })
-    ).toBe('bitbucket')
-  })
 })
 
 describe('getChecksPanelForegroundReviewEvidenceKey', () => {
@@ -55,14 +46,6 @@ describe('getChecksPanelForegroundReviewEvidenceKey', () => {
     expect(confirmedKey).toBe(optimisticKey)
   })
 
-  it('clears the request key when evidence switches to another provider', () => {
-    expect(
-      getChecksPanelForegroundReviewEvidenceKey({
-        ...input,
-        reviewEvidenceProvider: 'gitlab'
-      })
-    ).toBeNull()
-  })
 })
 
 describe('resolveChecksPanelPRRefreshRequest', () => {

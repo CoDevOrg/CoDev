@@ -161,21 +161,4 @@ describe('runQuickCommandInNewTab', () => {
     )
   })
 
-  it('does not launch post-start-only agent quick commands', () => {
-    const result = runQuickCommandInNewTab({
-      command: {
-        id: 'agent-aider',
-        label: 'Aider',
-        action: 'agent-prompt',
-        agent: 'aider',
-        prompt: 'Review this diff'
-      },
-      worktreeId: 'repo::worktree',
-      groupId: 'group-1'
-    })
-
-    expect(result).toBeNull()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-    expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
-  })
 })

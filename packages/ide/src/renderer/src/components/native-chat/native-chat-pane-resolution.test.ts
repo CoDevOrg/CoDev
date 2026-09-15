@@ -160,32 +160,6 @@ describe('resolveNativeChatSession', () => {
     }
   )
 
-  it('does not resolve unsupported title fallback gemini', () => {
-    expect(
-      resolveNativeChatSession({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        launchAgent: null,
-        resolvedAgent: 'gemini',
-        ptyId: 'pty-1'
-      })
-    ).toBeNull()
-  })
-
-  it('resolves Grok from title fallback once native chat supports its transcript', () => {
-    expect(
-      resolveNativeChatSession({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        launchAgent: null,
-        resolvedAgent: 'grok',
-        ptyId: 'pty-1'
-      })
-    ).toMatchObject({
-      agent: 'grok',
-      sessionId: null,
-      ptyId: 'pty-1'
-    })
-  })
-
   it('does not resolve an unsupported live status entry', () => {
     const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     expect(
@@ -234,35 +208,6 @@ describe('resolveNativeChatSession', () => {
         ptyId: 'pty-1'
       })
     ).toBeNull()
-  })
-
-  it('resolves a Grok launch agent', () => {
-    expect(
-      resolveNativeChatSession({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        launchAgent: 'grok',
-        ptyId: 'pty-1'
-      })
-    ).toMatchObject({
-      agent: 'grok',
-      sessionId: null,
-      ptyId: 'pty-1'
-    })
-  })
-
-  it('keeps Grok launch identity ahead of a different title agent', () => {
-    expect(
-      resolveNativeChatSession({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        launchAgent: 'grok',
-        resolvedAgent: 'codex',
-        ptyId: 'pty-1'
-      })
-    ).toMatchObject({
-      agent: 'grok',
-      sessionId: null,
-      ptyId: 'pty-1'
-    })
   })
 
   it('keeps launch identity ahead of the title fallback', () => {

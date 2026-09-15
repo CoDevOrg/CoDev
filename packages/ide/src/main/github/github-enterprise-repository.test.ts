@@ -30,19 +30,6 @@ function mockOriginRemote(url: string): void {
   })
 }
 
-function sshConfig(hostname: string, port = 22) {
-  return {
-    hostname,
-    port,
-    identityFile: [],
-    identitiesOnly: false,
-    forwardAgent: false,
-    proxyUseFdpass: false,
-    controlMaster: 'no',
-    controlPersist: 'no'
-  }
-}
-
 // gh auth status inventory entries represent hosts with configured credentials.
 function mockHostAuthenticated(host = 'github.acme-corp.com'): void {
   mockAuthenticatedHosts([host])

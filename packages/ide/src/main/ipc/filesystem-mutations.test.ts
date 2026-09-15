@@ -67,7 +67,6 @@ describe('registerFilesystemMutationHandlers', () => {
     renameMock.mockReset()
     writeFileMock.mockReset()
     realpathMock.mockReset()
-    resetSshConnectionGenerations()
 
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)

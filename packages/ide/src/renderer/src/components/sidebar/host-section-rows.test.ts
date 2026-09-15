@@ -621,8 +621,7 @@ describe('addHostSectionRows', () => {
           label: 'Builder',
           detail: 'SSH',
           health: 'error',
-          connectionStatus: 'auth-failed'
-        }
+}
       ],
       workspaceHostScope: 'all',
       defaultHostId: 'local'

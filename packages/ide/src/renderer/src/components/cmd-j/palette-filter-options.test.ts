@@ -56,7 +56,6 @@ const projects = [project('p1', 'Orca')]
 const projectHostSetups = [setup('s1', 'p1', 'local', 'r1'), setup('s2', 'p1', 'ssh-1', 'r2')]
 const hostOptions = buildSidebarHostOptions({
   repos,
-  sshTargetLabels: new Map([['ssh-1', 'Builder']]),
   settings: { activeRuntimeEnvironmentId: null }
 })
 

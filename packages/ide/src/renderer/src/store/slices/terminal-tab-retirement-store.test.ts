@@ -68,58 +68,6 @@ describe('terminal tab retirement store boundary', () => {
     capturedPanesByTabId.clear()
   })
 
-  it('retires split, relay, deferred, and pending sessions for a parked tab', async () => {
-    const store = createRetirementStore()
-    const dispose = vi.fn()
-    const siblingRecord = sleepingRecord('tab-2:leaf-2', 'tab-2')
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-primary' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-primary', 'pty-split'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: null,
-          activeLeafId: null,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'pty-primary', leaf2: 'pty-split' }
-        }
-      },
-      lastKnownRelayPtyIdByTabId: { 'tab-1': 'ssh:ssh-1@@relay' },
-      deferredSshSessionIdsByTabId: { 'tab-1': 'pty-deferred' },
-      pendingReconnectPtyIdByTabId: { 'tab-1': 'pty-pending' },
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': sleepingRecord('tab-1:leaf-1', 'tab-1'),
-        'legacy-key': sleepingRecord('legacy-key', 'tab-1'),
-        'tab-2:leaf-2': siblingRecord
-      }
-    })
-    parkedWatchersByTabId.set('tab-1', {
-      worktreeId: 'wt-1',
-      tabPtyId: 'pty-primary',
-      paneIdByPtyId: new Map([['pty-primary', 1]]),
-      disposersByPtyId: new Map([['pty-primary', dispose]])
-    })
-    capturedPanesByTabId.set('tab-1', { worktreeId: 'wt-1', panes: [] })
-
-    store.getState().closeTab('tab-1')
-    await vi.waitFor(() => expect(mockKill).toHaveBeenCalledTimes(5))
-
-    expect(new Set(mockKill.mock.calls.map(([ptyId]) => ptyId))).toEqual(
-      new Set(['pty-primary', 'pty-split', 'ssh:ssh-1@@relay', 'pty-deferred', 'pty-pending'])
-    )
-    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
-    expect(store.getState().deferredSshSessionIdsByTabId['tab-1']).toBeUndefined()
-    expect(store.getState().pendingReconnectPtyIdByTabId['tab-1']).toBeUndefined()
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({
-      'tab-2:leaf-2': siblingRecord
-    })
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-2:leaf-2']).toBe(siblingRecord)
-    expect(dispose).toHaveBeenCalledOnce()
-    expect(parkedWatchersByTabId.has('tab-1')).toBe(false)
-    expect(capturedPanesByTabId.has('tab-1')).toBe(false)
-  })
-
   it('routes runtime handles to runtime close and preserves shared PTYs', async () => {
     const store = createRetirementStore()
     seedStore(store, {

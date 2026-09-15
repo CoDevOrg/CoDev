@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners } = vi.hoisted(
+const { handleMock, getSshFilesystemProviderMock } = vi.hoisted(
   () => ({
     handleMock: vi.fn(),
     getSshFilesystemProviderMock: vi.fn(),
@@ -9,11 +9,6 @@ const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners 
 )
 
 /** Drive the provider-registration hook the way a relay establish/reconnect would. */
-function emitProviderRegistered(connectionId: string): void {
-  for (const listener of providerRegistrationListeners) {
-    listener(connectionId)
-  }
-}
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -35,10 +30,7 @@ vi.mock('./filesystem-watcher-wsl', () => ({
 
 import {
   closeAllWatchers,
-  closeRemoteWatcherForWorktreePath,
-  forgetRemoteWatcherRemovalSnapshot,
   registerFilesystemWatcherHandlers,
-  restoreRemoteWatcherAfterFailedRemoval
 } from './filesystem-watcher'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
@@ -50,17 +42,11 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
-import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
+import { } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
 /** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
-const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
-  onEvents(events)
-  await (vi.isFakeTimers()
-    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS)
-    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_TRAILING_MS + 25)))
-}
 
 describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}

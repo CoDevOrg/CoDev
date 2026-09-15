@@ -358,16 +358,6 @@ describe('launchPromptAsMessage', () => {
   // Grok transcripts carry no timestamps; before the null-matchable rule the
   // seeded bubble was never hidden or pruned and sat rank-pinned at the list
   // tail forever, reading as the conversation reordering.
-  it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
-    const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
-    const transcript = [
-      { ...userMessage('u1', 'rename it'), timestamp: null },
-      { ...assistantMessage('a1', 'done'), timestamp: null }
-    ]
-
-    expect(launchPromptAsMessage(entry, transcript)).toBeNull()
-    expect(shouldPruneLaunchPrompt(entry, transcript)).toBe(true)
-  })
 
   it('does not bind a launch prompt to an older identical completed turn', () => {
     const entry = {

@@ -171,13 +171,7 @@ describe('file explorer deletion owner provenance', () => {
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
       },
-      sshStateByEnvironment: new Map([
-        [
-          'owner-hub',
-          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
-        ]
-      ])
-    })
+})
     const owner = getFileExplorerOperationOwner(LOCAL_WORKTREE_ID)
     expect(owner).toEqual({
       kind: 'runtime',
@@ -224,13 +218,7 @@ describe('file explorer deletion owner provenance', () => {
       worktreesByRepo: {
         [LOCAL_REPO_ID]: [makeWorktree(`ssh:${SSH_ID}`, 'owner-hub')]
       },
-      sshStateByEnvironment: new Map([
-        [
-          'owner-hub',
-          { connectionStates: new Map([[SSH_ID, { connectionGeneration: 1 }]]) } as never
-        ]
-      ])
-    })
+})
 
     await renameFileOnDisk({
       oldPath: '/tmp/project/src/old.ts',

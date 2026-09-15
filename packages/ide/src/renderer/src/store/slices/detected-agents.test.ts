@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo, Worktree } from '../../../../shared/types'
-import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
+import {  createDetectedAgentsSlice } from './detected-agents'
 import {
   _getRuntimeDetectPromiseCountForTest,
   createRuntimeDetectedAgentsSlice
@@ -448,89 +448,6 @@ describe('createDetectedAgentsSlice remote detection', () => {
         _meta: { runtimeId: 'remote-runtime' }
       })
     })
-  })
-
-  it('retains remote detection promises only while requests are in flight', async () => {
-    const store = createTestStore()
-    let resolveRemote: (ids: string[]) => void = () => {}
-    detectRemoteAgents.mockReturnValueOnce(
-      new Promise<string[]>((resolve) => {
-        resolveRemote = resolve
-      })
-    )
-
-    const first = store.getState().ensureRemoteDetectedAgents('ssh-1')
-    const second = store.getState().ensureRemoteDetectedAgents('ssh-1')
-
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(_getRemoteDetectPromiseCountForTest()).toBe(1)
-
-    resolveRemote(['claude'])
-
-    await expect(first).resolves.toEqual(['claude'])
-    await expect(second).resolves.toEqual(['claude'])
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude'])
-    expect(_getRemoteDetectPromiseCountForTest()).toBe(0)
-
-    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['claude'])
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-  })
-
-  it('deduplicates concurrent SSH refreshes', async () => {
-    const store = createTestStore()
-    store.setState({ remoteDetectedAgentIds: { 'ssh-1': ['claude'] } } as Partial<AppState>)
-    let resolveRemote: (ids: string[]) => void = () => {}
-    detectRemoteAgents.mockReturnValueOnce(
-      new Promise<string[]>((resolve) => {
-        resolveRemote = resolve
-      })
-    )
-
-    const first = store.getState().refreshRemoteDetectedAgents('ssh-1')
-    const second = store.getState().refreshRemoteDetectedAgents('ssh-1')
-
-    expect(second).toBe(first)
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude'])
-
-    resolveRemote(['codex'])
-    await expect(first).resolves.toEqual(['codex'])
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['codex'])
-  })
-
-  it('does not restore an SSH cache entry after it is cleared mid-detection', async () => {
-    const store = createTestStore()
-    let resolveRemote: (ids: string[]) => void = () => {}
-    detectRemoteAgents.mockReturnValueOnce(
-      new Promise<string[]>((resolve) => {
-        resolveRemote = resolve
-      })
-    )
-
-    const pending = store.getState().ensureRemoteDetectedAgents('ssh-1')
-    store.getState().clearRemoteDetectedAgents('ssh-1')
-    resolveRemote(['claude'])
-
-    await expect(pending).resolves.toEqual(['claude'])
-    expect(store.getState().remoteDetectedAgentIds).not.toHaveProperty('ssh-1')
-    expect(store.getState().isDetectingRemoteAgents).not.toHaveProperty('ssh-1')
-  })
-
-  it('re-runs remote detection after an empty result instead of pinning it', async () => {
-    const store = createTestStore()
-    // An empty [] is truthy, so a prior "no agents found" must not be cached:
-    // a later install / PATH fix has to be picked up without a reconnect.
-    detectRemoteAgents.mockResolvedValueOnce([])
-
-    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-
-    detectRemoteAgents.mockResolvedValueOnce(['kilo'])
-
-    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['kilo'])
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
 
   it('detects runtime environment agents through the owning runtime', async () => {

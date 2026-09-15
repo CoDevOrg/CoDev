@@ -245,7 +245,7 @@ describe('useCreateProjectDefaults', () => {
   it('does not use client defaults or Git probing for SSH targets', async () => {
     mocks.isGitAvailable.mockResolvedValue(true)
 
-    const { setCreateParent } = useHarness({ sshTargetId: 'ssh-1' })
+    const { setCreateParent } = useHarness({ })
     await flushAsync()
 
     expect(setCreateParent).not.toHaveBeenCalled()

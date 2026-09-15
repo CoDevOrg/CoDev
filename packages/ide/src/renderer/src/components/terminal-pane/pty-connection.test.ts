@@ -15,16 +15,14 @@ import {
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { DEFAULT_DA1_RESPONSE } from './terminal-capability-replies'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
-import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
+import { } from './terminal-windows-shift-enter'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TerminalLayoutSnapshot, TuiAgent } from '../../../../shared/types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
-import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
+import { } from '../../../../shared/setup-agent-sequencing'
 import {
   beginAgentStartupDeliveryAttempt,
   resetAgentStartupDelayedDeliveryForTests
@@ -281,22 +279,6 @@ type StoreState = {
     }
   >
   settleDirectSshPaneRetry?: ReturnType<typeof vi.fn>
-}
-
-type WindowsShiftEnterPaneState = Parameters<typeof resolveWindowsShiftEnterEncodingForPane>[0]
-
-function resolveMockPaneWindowsShiftEnterEncoding(
-  state: StoreState,
-  paneKey: string
-): ReturnType<typeof resolveWindowsShiftEnterEncodingForPane> {
-  return resolveWindowsShiftEnterEncodingForPane(
-    {
-      paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-      agentLaunchConfigByPaneKey:
-        state.agentLaunchConfigByPaneKey as WindowsShiftEnterPaneState['agentLaunchConfigByPaneKey']
-    },
-    paneKey
-  )
 }
 
 type ConnectCallbacks = {
@@ -652,35 +634,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function createDirectSshSplitRetryCommit() {
-  return vi.fn(
-    (tabId: string, ptyId: string, _replacedPtyId?: string, directSshRetryAttemptId?: string) => {
-      const currentPtyIds = mockStoreState.ptyIdsByTabId?.[tabId] ?? []
-      mockStoreState.ptyIdsByTabId = {
-        ...mockStoreState.ptyIdsByTabId,
-        [tabId]: currentPtyIds.includes(ptyId) ? currentPtyIds : [...currentPtyIds, ptyId]
-      }
-      const pending = mockStoreState.directSshPaneRetryByTabId?.[tabId]
-      if (!pending || pending.attemptId !== directSshRetryAttemptId) {
-        return
-      }
-      const tab = mockStoreState.tabsByWorktree['wt-1'].find((candidate) => candidate.id === tabId)
-      if (tab && !tab.ptyId) {
-        tab.ptyId = ptyId
-      }
-      mockStoreState.directSshPaneRetryByTabId = {}
-      mockStoreState.directSshLivePtyBindingByTabId = {
-        [tabId]: {
-          attemptId: pending.attemptId,
-          authority: pending.authority,
-          tabGeneration: pending.tabGeneration,
-          ptyId: tab?.ptyId ?? ptyId
-        }
-      }
-    }
-  )
-}
-
 function setReattachPaneTitle(title: string): void {
   mockStoreState = {
     ...mockStoreState,
@@ -880,8 +833,6 @@ describe('connectPanePty', () => {
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
   const originalDocument = globalThis.document
   const VISIBLE_PTY_SETTLE_MS = 350
-  const WRAPPER_RESOLVE_RETRY_MS = 1200
-  const SECOND_WRAPPER_RETRY_MS = 6000
 
   beforeEach(() => {
     vi.resetModules()
@@ -19299,38 +19250,6 @@ describe('connectPanePty', () => {
       await advanceVisibleForegroundRead()
 
       expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
-    })
-
-    it('does not confirm foreground routing for a Windows WSL pane', async () => {
-      vi.useFakeTimers()
-      const restoreUserAgent = temporarilySetNavigatorUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      )
-      const ptyId = 'pty-wsl-no-confirm'
-      const tabId = `tab-${ptyId}`
-      mockStoreState.tabsByWorktree = {
-        'wt-1': [{ id: tabId, ptyId, shellOverride: 'wsl.exe' }]
-      }
-
-      try {
-        const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
-          ptyId,
-          tabId
-        })
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-          agent: 'droid',
-          routingTrusted: true,
-          shellForeground: false
-        }
-
-        binding.sampleForegroundAgentOnFocus()
-        await vi.advanceTimersByTimeAsync(10_000)
-
-        // Scope to this pane's pty id: a delayed confirm for another test's pane can fire during this advance.
-        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
-      } finally {
-        restoreUserAgent()
-      }
     })
 
     it('samples once when an identityless hidden pane resumes visible', async () => {

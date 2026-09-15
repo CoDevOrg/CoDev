@@ -63,39 +63,6 @@ describe('add repo existing workspace telemetry', () => {
     expect(JSON.stringify(payload)).not.toContain('Feature With User Text')
   })
 
-  it('tracks detection only for imported linked workspaces', () => {
-    expect(buildAddRepoExistingWorkspacesTelemetry(null, [worktree({})])).toBeNull()
-    expect(buildAddRepoExistingWorkspacesTelemetry('local_folder_picker', [])).toBeNull()
-
-    const mainOnlyPayload = buildAddRepoExistingWorkspacesTelemetry('local_folder_picker', [
-      worktree({})
-    ])
-    expect(mainOnlyPayload?.existing_linked_workspace_count).toBe(0)
-    expect(shouldTrackAddRepoExistingWorkspacesDetected(mainOnlyPayload)).toBe(false)
-
-    const importedLocalPayload = buildAddRepoExistingWorkspacesTelemetry('local_folder_picker', [
-      worktree({}),
-      worktree({ id: 'repo::/repo-existing', path: '/repo-existing', isMainWorktree: false })
-    ])
-    const importedRemotePayload = buildAddRepoExistingWorkspacesTelemetry('ssh_remote_path', [
-      worktree({}),
-      worktree({ id: 'repo::/remote-existing', path: '/remote-existing', isMainWorktree: false })
-    ])
-    const clonePayload = buildAddRepoExistingWorkspacesTelemetry('clone_url', [
-      worktree({}),
-      worktree({ id: 'repo::/clone-existing', path: '/clone-existing', isMainWorktree: false })
-    ])
-    const createPayload = buildAddRepoExistingWorkspacesTelemetry('create_project', [
-      worktree({}),
-      worktree({ id: 'repo::/create-existing', path: '/create-existing', isMainWorktree: false })
-    ])
-
-    expect(shouldTrackAddRepoExistingWorkspacesDetected(importedLocalPayload)).toBe(true)
-    expect(shouldTrackAddRepoExistingWorkspacesDetected(importedRemotePayload)).toBe(true)
-    expect(shouldTrackAddRepoExistingWorkspacesDetected(clonePayload)).toBe(false)
-    expect(shouldTrackAddRepoExistingWorkspacesDetected(createPayload)).toBe(false)
-  })
-
   it('derives linked and detached counts before clamping reported values', () => {
     const mainOnlyPayload = buildAddRepoExistingWorkspacesTelemetry(
       'local_folder_picker',

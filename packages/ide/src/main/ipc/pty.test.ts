@@ -180,7 +180,6 @@ import {
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   registerPtyHandlers,
-  registerSshPtyProvider,
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
@@ -193,7 +192,6 @@ import {
   setLocalPtyProvider,
   rebindLocalProviderListeners,
   resolveCodexHomeAfterManagedAuthReadiness,
-  unregisterSshPtyProvider,
   getLocalPtyProvider,
   isCurrentPtyExit,
   restorePtyIncarnation,
@@ -207,19 +205,10 @@ import {
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
-import {
-  SSH_PTY_IDENTITY_MISMATCH_ERROR,
-  SSH_SESSION_EXPIRED_ERROR
-} from '../providers/ssh-pty-errors'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
-import {
-  acceptSshPtyOutputData,
-  acceptSshPtyOutputExit,
-  closeSshPtyOutputGeneration
-} from './ssh-pty-output-intake-registry'
 
 // Why: Windows resolves a bare PowerShell name to an absolute exe before ConPTY, else CreateProcessW fails with error 5 (PR #6537 / #5161).
 const RESOLVED_WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
@@ -393,21 +382,6 @@ describe('registerPtyHandlers', () => {
     _resetLocalPtyProviderStateForTest()
     _resetWslCachesForTests()
     vi.useRealTimers()
-    // Why: sshProviders is module-level state; a leftover id leaks into later tests (pty:listSessions sweeps every provider).
-    for (const leakedConnectionId of [
-      'ssh-1',
-      'ssh-a',
-      'ssh-b',
-      'ssh-expired-runtime',
-      'ssh-fresh-fail',
-      'ssh-reattach-1',
-      'ssh-reattach-fail',
-      'ssh-reattach-ok',
-      'ssh-runtime-env',
-      'ssh-generation-replacement'
-    ]) {
-      unregisterSshPtyProvider(leakedConnectionId)
-    }
     setLocalPtyProvider(new LocalPtyProvider())
     if (savedProcessPlatform) {
       Object.defineProperty(process, 'platform', savedProcessPlatform)
@@ -703,11 +677,9 @@ describe('registerPtyHandlers', () => {
     const localProvider = createAgentClaimProvider({})
     const sshProvider = createAgentClaimProvider({})
     setLocalPtyProvider(localProvider as never)
-    registerSshPtyProvider(connectionId, sshProvider as never)
     setPtyOwnership(ptyId, connectionId)
     const controller = registerAgentClaimController()
 
-    unregisterSshPtyProvider(connectionId)
     clearPtyOwnershipForConnection(connectionId)
 
     expect(controller.write(ptyId, 'input')).toBe(false)
@@ -715,13 +687,11 @@ describe('registerPtyHandlers', () => {
     expect(localProvider.write).not.toHaveBeenCalled()
     expect(localProvider.resize).not.toHaveBeenCalled()
 
-    registerSshPtyProvider(connectionId, sshProvider as never)
     expect(controller.write(ptyId, 'reconnected')).toBe(true)
     expect(controller.resize(ptyId, 120, 50)).toBe(true)
     expect(sshProvider.write).toHaveBeenCalledWith(ptyId, 'reconnected')
     expect(sshProvider.resize).toHaveBeenCalledWith(ptyId, 120, 50)
 
-    unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
   })
 
@@ -758,17 +728,14 @@ describe('registerPtyHandlers', () => {
       const connectionId = 'ssh-probe-1'
       const ptyId = `ssh:${connectionId}@@remote-pty`
       setLocalPtyProvider(new LocalPtyProvider())
-      registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
       setPtyOwnership(ptyId, connectionId)
       const controller = registerAgentClaimController()
       try {
         await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
 
-        unregisterSshPtyProvider(connectionId)
         // A disconnected SSH provider is an error path, and errors never prove absence.
         await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
       } finally {
-        unregisterSshPtyProvider(connectionId)
         clearPtyOwnershipForConnection(connectionId)
         clearProviderPtyState(ptyId)
       }
@@ -801,7 +768,6 @@ describe('registerPtyHandlers', () => {
     const localProvider = createAgentClaimProvider({})
     const sshProvider = createAgentClaimProvider({})
     setLocalPtyProvider(localProvider as never)
-    registerSshPtyProvider('ssh-attach', sshProvider as never)
     const controller = registerAgentClaimController()
     const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
     const ownedSshPtyId = 'owned-remote-pty'
@@ -827,7 +793,6 @@ describe('registerPtyHandlers', () => {
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
       expect(inProcessAttach).not.toHaveBeenCalled()
     } finally {
-      unregisterSshPtyProvider('ssh-attach')
       clearPtyOwnershipForConnection('ssh-attach')
       clearProviderPtyState(ownedSshPtyId)
     }
@@ -899,33 +864,6 @@ describe('registerPtyHandlers', () => {
 
   it('rejects renderer spawn publication when the provider reply proves exit', async () => {
     const connectionId = 'ssh-renderer-exited-reply'
-    const appPtyId = `ssh:${connectionId}@@relay-pty`
-    const provider = {
-      spawn: vi.fn(async () => ({
-        id: appPtyId,
-        incarnationId: 'incarnation-renderer-exited',
-        exitedBeforeSpawnReply: true as const
-      })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    }
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
@@ -942,7 +880,6 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
-    registerSshPtyProvider(connectionId, provider as never)
     try {
       registerPtyHandlers(
         mainWindow as never,
@@ -972,7 +909,6 @@ describe('registerPtyHandlers', () => {
       expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
       expect(getPtyIdsForConnection(connectionId)).toEqual([])
     } finally {
-      unregisterSshPtyProvider(connectionId)
     }
   })
 
@@ -1295,26 +1231,6 @@ describe('registerPtyHandlers', () => {
       ...recoveredAgentClaim,
       identityDigest: 'ccccccccccccccccccccccccccccccccccccccccccc'
     }
-    const owner: AgentSessionOwnerBinding = {
-      claim,
-      generation: 'generation-remote',
-      phase: 'live',
-      ptyId: ownerPtyId,
-      surface: recoveredAgentSurface
-    }
-    const remoteProvider = createAgentClaimProvider({
-      sessions: [
-        {
-          id: ownerPtyId,
-          incarnationId: 'incarnation-remote',
-          cwd: '/tmp/recovered-worktree',
-          title: 'Codex',
-          agentSessionOwners: [owner]
-        }
-      ],
-      livePtyIds: new Set([ownerPtyId])
-    })
-    registerSshPtyProvider(connectionId, remoteProvider as never)
     setLocalPtyProvider(createAgentClaimProvider({}) as never)
     const controller = registerAgentClaimController()
 
@@ -1327,7 +1243,6 @@ describe('registerPtyHandlers', () => {
       })
     ).resolves.toMatchObject({ id: ownerPtyId })
 
-    unregisterSshPtyProvider(connectionId)
     const localSpawn = vi.fn(async () => ({ id: 'must-not-spawn' }))
     setLocalPtyProvider(createAgentClaimProvider({ spawn: localSpawn }) as never)
 
@@ -1374,20 +1289,6 @@ describe('registerPtyHandlers', () => {
         spawn: localSpawn
       }) as never
     )
-    registerSshPtyProvider(
-      'ssh-agent-conflict',
-      createAgentClaimProvider({
-        sessions: [
-          {
-            id: remoteOwner.ptyId,
-            incarnationId: 'incarnation-conflict-remote',
-            cwd: '/tmp/recovered-worktree',
-            title: 'Codex',
-            agentSessionOwners: [remoteOwner]
-          }
-        ]
-      }) as never
-    )
     const controller = registerAgentClaimController()
 
     await expect(
@@ -1400,7 +1301,6 @@ describe('registerPtyHandlers', () => {
     ).rejects.toThrow('agent_session_conflict')
     expect(localSpawn).not.toHaveBeenCalled()
 
-    unregisterSshPtyProvider('ssh-agent-conflict')
     clearProviderPtyState(localOwner.ptyId)
     clearProviderPtyState(remoteOwner.ptyId)
   })
@@ -1431,21 +1331,8 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [ownerA]
       }
     ]
-    const remoteSessions = [
-      {
-        id: ownerB.ptyId,
-        incarnationId: 'incarnation-conflict-b',
-        cwd: '/tmp/recovered-worktree',
-        title: 'Codex',
-        agentSessionOwners: [ownerB]
-      }
-    ]
     const local = createAgentClaimProvider({ sessions: localSessions })
     setLocalPtyProvider(local as never)
-    registerSshPtyProvider(
-      'ssh-agent-converge',
-      createAgentClaimProvider({ sessions: remoteSessions }) as never
-    )
     const controller = registerAgentClaimController()
     const request = {
       cols: 80,
@@ -1462,7 +1349,6 @@ describe('registerPtyHandlers', () => {
     })
     expect(local.spawn).not.toHaveBeenCalled()
 
-    unregisterSshPtyProvider('ssh-agent-converge')
     clearProviderPtyState(ownerA.ptyId)
     clearProviderPtyState(ownerB.ptyId)
   })
@@ -1560,9 +1446,7 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [owner]
       }
     ]
-    const firstProvider = createAgentClaimProvider({ sessions })
     setLocalPtyProvider(createAgentClaimProvider({}) as never)
-    registerSshPtyProvider(connectionId, firstProvider as never)
     const controller = registerAgentClaimController()
     const request = {
       cols: 80,
@@ -1573,21 +1457,18 @@ describe('registerPtyHandlers', () => {
     }
 
     await expect(controller.spawn(request)).resolves.toMatchObject({ id: owner.ptyId })
-    unregisterSshPtyProvider(connectionId)
     clearPtyOwnershipForConnection(connectionId)
     await expect(controller.spawn({ ...request, connectionId: undefined })).rejects.toThrow(
       'execution_owner_unavailable'
     )
 
     const reconnected = createAgentClaimProvider({ sessions })
-    registerSshPtyProvider(connectionId, reconnected as never)
     await expect(controller.spawn(request)).resolves.toMatchObject({
       id: owner.ptyId,
       agentSessionEnsure: { disposition: 'adopted', owner }
     })
     expect(reconnected.spawn).not.toHaveBeenCalled()
 
-    unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(owner.ptyId)
   })
 
@@ -4231,22 +4112,6 @@ describe('registerPtyHandlers', () => {
         expect(daemonSpawn).not.toHaveBeenCalled()
       })
 
-      it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
-        // Why: buildPtyHostEnv reads `baseEnv.X ?? process.env.X` so the agent-dir guard works whether Pi's env came over IPC or via daemon fork.
-        const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-          PI_CODING_AGENT_DIR: '/ambient/pi/agent'
-        })
-        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
-          expect.any(String),
-          '/ambient/pi/agent',
-          'pi',
-          { materializeDefaultHome: false }
-        )
-        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/ambient/pi/agent')
-      })
-
       it('skips attribution shims on the daemon path when the setting is disabled', async () => {
         const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' }, undefined, () => ({
           enableGitHubAttribution: false
@@ -4323,203 +4188,10 @@ describe('registerPtyHandlers', () => {
         )
       })
 
-      it('does NOT sweep per-PTY state on provider.spawn failure for CALLER-supplied sessionId', async () => {
-        // Why: a caller-supplied sessionId may refer to an existing PTY whose state must survive a retry/attach failure; only minted ids get swept.
-        const daemonSpawn = vi.fn(async () => {
-          throw new Error('spawn boom')
-        })
-        setLocalPtyProvider({
-          spawn: daemonSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          kill: vi.fn(),
-          shutdown: vi.fn(),
-          onData: vi.fn(() => vi.fn()),
-          onExit: vi.fn(() => vi.fn()),
-          listProcesses: vi.fn(async () => []),
-          getForegroundProcess: vi.fn(async () => null)
-        } as never)
-        const runtime = {
-          setPtyController: vi.fn(),
-          createPreAllocatedTerminalHandle: vi.fn(() => null),
-          preAllocateHandleForPty: vi.fn(),
-          preparePtyExecutionContext: vi.fn().mockReturnValue(true)
-        }
-        handlers.clear()
-        registerPtyHandlers(mainWindow as never, runtime as never)
-        await expect(
-          handlers.get('pty:spawn')!(null, {
-            cols: 80,
-            rows: 24,
-            env: {},
-            sessionId: 'caller-owned-session'
-          })
-        ).rejects.toThrow(/spawn boom/)
-        expect(openCodeClearPtyMock).not.toHaveBeenCalled()
-        expect(piClearPtyMock).not.toHaveBeenCalled()
-        expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
-          'caller-owned-session',
-          null,
-          { resetIncarnation: true }
-        )
-      })
-
-      it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
-        const sshSpawn = vi.fn(
-          async (_opts: {
-            env: Record<string, string>
-            envToDelete?: string[]
-            paneKey?: string
-            tabId?: string
-          }) => ({
-            id: 'ssh-pty'
-          })
-        )
-        const store = {
-          upsertSshRemotePtyLease: vi.fn(),
-          persistPtyBinding: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          (() => ({
-            httpProxyUrl: 'http://proxy.example:8080',
-            httpProxyBypassRules: 'localhost',
-            codexSystemDefaultRealHomeEnabled: true
-          })) as never,
-          undefined,
-          store as never
-        )
-        const leafId = '11111111-1111-4111-8111-111111111111'
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
-          connectionId: 'ssh-1',
-          worktreeId: 'wt-1',
-          tabId: 'tab-1',
-          leafId
-        })
-        const spawnOptions = sshSpawn.mock.calls.at(-1)![0]
-        const env = spawnOptions.env
-        // Why: host-local vars must be absent over SSH (they point at the local host/disk) — shipping them is useless or a credential leak.
-        expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
-        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
-        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
-        expect(env.MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
-        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
-        expect(env.CODEX_HOME).toBeUndefined()
-        expect(env.HTTP_PROXY).toBeUndefined()
-        expect(env.HTTPS_PROXY).toBeUndefined()
-        expect(env.NO_PROXY).toBeUndefined()
-        expect(env.FOO).toBe('bar')
-        // Why: real-home routing is host-only. A null local-home resolver on
-        // SSH must not become a request to alter the remote Codex environment.
-        expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
-        expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
-        expect(spawnOptions.paneKey).toBe(makePaneKey('tab-1', leafId))
-        expect(spawnOptions.tabId).toBe('tab-1')
-        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
-        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
-          expect.objectContaining({
-            targetId: 'ssh-1',
-            ptyId: 'ssh-pty',
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            state: 'attached'
-          })
-        )
-        expect(store.persistPtyBinding).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            ptyId: 'ssh-pty'
-          },
-          'ssh:ssh-1'
-        )
-
-        store.upsertSshRemotePtyLease.mockClear()
-        store.persistPtyBinding.mockClear()
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          env: { ORCA_PANE_KEY: 'tab-1:pane:1' },
-          connectionId: 'ssh-1',
-          worktreeId: 'wt-1',
-          tabId: 'tab-1',
-          leafId: 'pane:1'
-        })
-        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
-        const legacySpawnOptions = sshSpawn.mock.calls.at(-1)?.[0]
-        expect(legacySpawnOptions?.env.ORCA_PANE_KEY).toBeUndefined()
-        expect(legacySpawnOptions?.paneKey).toBeUndefined()
-        expect(legacySpawnOptions?.tabId).toBe('tab-1')
-        expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
-        expect(store.persistPtyBinding).not.toHaveBeenCalled()
-      })
-
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
-        const sshSpawn = vi.fn(async () => {
-          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
-        })
         const store = {
           markSshRemotePtyLease: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -4543,164 +4215,10 @@ describe('registerPtyHandlers', () => {
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
       })
 
-      it('marks a scoped SSH session expired using the raw relay lease id', async () => {
-        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
-        const sshSpawn = vi.fn(async () => {
-          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
-        })
-        const store = {
-          markSshRemotePtyLease: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        setPtyOwnership(scopedPtyId, 'ssh-1')
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-
-        try {
-          await expect(
-            handlers.get('pty:spawn')!(null, {
-              cols: 80,
-              rows: 24,
-              env: {},
-              connectionId: 'ssh-1',
-              sessionId: scopedPtyId
-            })
-          ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
-        } finally {
-          deletePtyOwnership(scopedPtyId)
-        }
-
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
-        expect(openCodeClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
-        expect(piClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
-      })
-
-      it('does not clear a scoped SSH session when remote reattach rejects an identity mismatch', async () => {
-        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
-        const remoteWrite = vi.fn()
-        const sshSpawn = vi.fn(async () => {
-          throw new Error(
-            `${SSH_SESSION_EXPIRED_ERROR}: remote-pty ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
-          )
-        })
-        const store = {
-          markSshRemotePtyLease: vi.fn()
-        }
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: remoteWrite,
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
-        setPtyOwnership(scopedPtyId, 'ssh-1')
-        handlers.clear()
-        registerPtyHandlers(
-          mainWindow as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          store as never
-        )
-
-        try {
-          await expect(
-            handlers.get('pty:spawn')!(null, {
-              cols: 80,
-              rows: 24,
-              env: {},
-              connectionId: 'ssh-1',
-              sessionId: scopedPtyId
-            })
-          ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
-
-          expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-            'ssh-1',
-            'remote-pty',
-            'expired'
-          )
-          expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(scopedPtyId)
-          expect(piClearPtyMock).not.toHaveBeenCalledWith(scopedPtyId)
-          getPtyWriteListener()(mainWindowIpcEvent, {
-            id: scopedPtyId,
-            data: 'echo still-owned'
-          })
-          expect(remoteWrite).toHaveBeenCalledWith(scopedPtyId, 'echo still-owned')
-        } finally {
-          deletePtyOwnership(scopedPtyId)
-        }
-      })
-
       it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
         const store = {
           markSshRemotePtyLease: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: vi.fn(),
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn().mockRejectedValue(new Error('Multiplexer disposed')),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         setPtyOwnership('remote-pty', 'ssh-1')
         handlers.clear()
         registerPtyHandlers(
@@ -4736,28 +4254,6 @@ describe('registerPtyHandlers', () => {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: vi.fn(),
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown,
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         setPtyOwnership('remote-pty', 'ssh-1')
         handlers.clear()
         registerPtyHandlers(
@@ -4956,28 +4452,6 @@ describe('registerPtyHandlers', () => {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: vi.fn(),
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown,
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         setPtyOwnership('remote-pty', 'ssh-1')
         handlers.clear()
         registerPtyHandlers(
@@ -5255,28 +4729,6 @@ describe('registerPtyHandlers', () => {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: vi.fn(),
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown,
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -5388,28 +4840,6 @@ describe('registerPtyHandlers', () => {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
         }
-        registerSshPtyProvider('ssh-1', {
-          spawn: vi.fn(),
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn().mockRejectedValue(new Error('Multiplexer disposed')),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         setPtyOwnership('remote-pty', 'ssh-1')
         handlers.clear()
         registerPtyHandlers(
@@ -5444,28 +4874,6 @@ describe('registerPtyHandlers', () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
           id: 'ssh-pty'
         }))
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
         const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
@@ -5503,28 +4911,6 @@ describe('registerPtyHandlers', () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
           id: 'ssh-pty'
         }))
-        registerSshPtyProvider('ssh-1', {
-          spawn: sshSpawn,
-          write: vi.fn(),
-          resize: vi.fn(),
-          shutdown: vi.fn(),
-          sendSignal: vi.fn(),
-          getCwd: vi.fn(),
-          getInitialCwd: vi.fn(),
-          clearBuffer: vi.fn(),
-          acknowledgeDataEvent: vi.fn(),
-          hasChildProcesses: vi.fn(),
-          getForegroundProcess: vi.fn(),
-          serialize: vi.fn(),
-          revive: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {}),
-          listProcesses: vi.fn(async () => []),
-          attach: vi.fn(),
-          getDefaultShell: vi.fn(),
-          getProfiles: vi.fn()
-        } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never)
         const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
@@ -5566,7 +4952,6 @@ describe('registerPtyHandlers', () => {
 
   it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
     const confirmForegroundProcess = vi.fn(async () => 'codex')
-    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
     setPtyOwnership('remote-pty', 'ssh-1')
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
@@ -5606,8 +4991,6 @@ describe('registerPtyHandlers', () => {
     const sshBList = vi.fn(async () => {
       throw new Error('ssh-b unavailable')
     })
-    registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
-    registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
@@ -5630,7 +5013,6 @@ describe('registerPtyHandlers', () => {
   })
 
   it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
-    registerSshPtyProvider('ssh-1', {} as never)
     setPtyOwnership('unsupported-pty', 'ssh-1')
     setPtyOwnership('missing-pty', 'missing-connection')
     const runtime = { setPtyController: vi.fn() }
@@ -6125,28 +5507,6 @@ describe('registerPtyHandlers', () => {
     const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
     const sshSpawn = vi.fn(async () => ({ id: 'remote-pty' }))
     const sshShutdown = vi.fn()
-    registerSshPtyProvider('ssh-1', {
-      spawn: sshSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: sshShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -6181,25 +5541,6 @@ describe('registerPtyHandlers', () => {
       { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
     ])
     const sshShutdown = vi.fn(async () => undefined)
-    registerSshPtyProvider('ssh-1', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: sshShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: sshListProcesses,
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
     const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
@@ -6235,26 +5576,6 @@ describe('registerPtyHandlers', () => {
       resolveSsh = resolve
     })
     const sshListProcesses = vi.fn(() => sshSessions)
-    registerSshPtyProvider('ssh-1', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: sshListProcesses,
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
 
     const pendingInventory = handlers.get('pty:listSessions')!(null, undefined)
 
@@ -6317,9 +5638,6 @@ describe('registerPtyHandlers', () => {
 
   it('does not gate remote snapshot capability on local provider startup', async () => {
     const awaitLocalPtyProviderStartup = vi.fn(() => new Promise<void>(() => {}))
-    registerSshPtyProvider('ssh-1', {
-      canProvideAuthoritativeBufferSnapshot: () => false
-    } as never)
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -6487,54 +5805,6 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never)
     const shutdownA = vi.fn(async () => undefined)
     const shutdownB = vi.fn(async () => undefined)
-    registerSshPtyProvider('ssh-a', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: shutdownA,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => [
-        { id: 'ssh:ssh-a@@pty-1', cwd: '/repo-a', title: 'ssh-a' }
-      ]),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    registerSshPtyProvider('ssh-b', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: shutdownB,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => [
-        { id: 'ssh:ssh-b@@pty-1', cwd: '/repo-b', title: 'ssh-b' }
-      ]),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
 
     const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
       id: string
@@ -6683,28 +5953,6 @@ describe('registerPtyHandlers', () => {
     } as never)
     const sshShutdown = vi.fn(async () => undefined)
     const store = { markSshRemotePtyLease: vi.fn() }
-    registerSshPtyProvider('ssh-1', {
-      spawn: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: sshShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(async () => []),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      attach: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -6770,29 +6018,6 @@ describe('registerPtyHandlers', () => {
       persistPtyBinding: vi.fn(),
       markSshRemotePtyLease: vi.fn()
     }
-    const provider = {
-      spawn: vi.fn(async () => ({ id: 'remote-pty' })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(async () => undefined),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      confirmForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    }
-    registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -6807,7 +6032,6 @@ describe('registerPtyHandlers', () => {
       connectionId: 'ssh-1',
       env: {}
     })
-    unregisterSshPtyProvider('ssh-1')
     const listenerFor = (channel: string): ((event: unknown, args: unknown) => void) => {
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === channel)
       if (!call) {
@@ -6854,10 +6078,8 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     }
-    registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(mainWindow as never)
     setPtyOwnership('remote-pty', 'ssh-1')
-    unregisterSshPtyProvider('ssh-1')
 
     await expect(handlers.get('pty:hasChildProcesses')!(null, { id: 'remote-pty' })).resolves.toBe(
       false
@@ -7171,27 +6393,6 @@ describe('registerPtyHandlers', () => {
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
     const spawn = vi.fn(async () => ({ id: 'remote-pty' }))
-    registerSshPtyProvider('ssh-1', {
-      spawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      acknowledgeDataEvent: vi.fn()
-    } as never)
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -7426,28 +6627,6 @@ describe('registerPtyHandlers', () => {
   })
 
   it('does not echo launch config for provider reattach results', async () => {
-    const spawn = vi.fn(async () => ({ id: 'ssh-reattach', isReattach: true }))
-    registerSshPtyProvider('ssh-reattach-1', {
-      spawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      acknowledgeDataEvent: vi.fn()
-    } as never)
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
@@ -9224,27 +8403,6 @@ describe('registerPtyHandlers', () => {
       }
       return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
     })
-    registerSshPtyProvider(connectionId, {
-      spawn: remoteSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: deadPtyId }]
@@ -9339,7 +8497,6 @@ describe('registerPtyHandlers', () => {
         hostId
       )
     } finally {
-      unregisterSshPtyProvider(connectionId)
     }
   })
 
@@ -9609,28 +8766,6 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
-    const remoteSpawn = vi.fn(async () => ({ id: 'ssh:ssh-1@@relay-pty' }))
-    registerSshPtyProvider('ssh-1', {
-      spawn: remoteSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
@@ -9695,7 +8830,6 @@ describe('registerPtyHandlers', () => {
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
     )
-    unregisterSshPtyProvider('ssh-1')
   })
 
   it('rejects runtime-owned binding persistence without complete stable identity', async () => {
@@ -9772,27 +8906,6 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string; isReattach?: boolean }>
     }
-    registerSshPtyProvider('ssh-reattach-ok', {
-      spawn: vi.fn(async () => ({ id: 'ssh:ssh-reattach-ok@@relay-pty', isReattach: true })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
@@ -9853,7 +8966,6 @@ describe('registerPtyHandlers', () => {
         })
       )
     } finally {
-      unregisterSshPtyProvider('ssh-reattach-ok')
     }
   })
 
@@ -9877,27 +8989,6 @@ describe('registerPtyHandlers', () => {
         id: 'ssh:ssh-runtime-env@@relay-pty'
       })
     )
-    registerSshPtyProvider('ssh-runtime-env', {
-      spawn: remoteSpawn,
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn()
@@ -9969,7 +9060,6 @@ describe('registerPtyHandlers', () => {
       } else {
         process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = savedRemoteHooks
       }
-      unregisterSshPtyProvider('ssh-runtime-env')
     }
   })
 
@@ -9988,27 +9078,6 @@ describe('registerPtyHandlers', () => {
     }
     const remoteShutdown = vi.fn()
     const remoteWrite = vi.fn()
-    registerSshPtyProvider('ssh-reattach-fail', {
-      spawn: vi.fn(async () => ({ id: 'ssh:ssh-reattach-fail@@relay-pty', isReattach: true })),
-      write: remoteWrite,
-      resize: vi.fn(),
-      shutdown: remoteShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(() => {
@@ -10067,305 +9136,6 @@ describe('registerPtyHandlers', () => {
       'ssh:ssh-reattach-fail@@relay-pty',
       'echo remains-routable'
     )
-    unregisterSshPtyProvider('ssh-reattach-fail')
-  })
-
-  it('marks runtime-owned SSH reattach as expired and clears stale local ownership', async () => {
-    type RuntimeSpawnController = {
-      spawn(args: {
-        cols: number
-        rows: number
-        worktreeId?: string
-        connectionId?: string
-        tabId?: string
-        leafId?: string
-        sessionId?: string
-        persistHostSessionBinding?: boolean
-      }): Promise<{ id: string }>
-    }
-    const appPtyId = 'ssh:ssh-expired-runtime@@relay-pty'
-    const remoteWrite = vi.fn()
-    registerSshPtyProvider('ssh-expired-runtime', {
-      spawn: vi.fn(async () => {
-        throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: relay-pty`)
-      }),
-      write: remoteWrite,
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    const store = {
-      upsertSshRemotePtyLease: vi.fn(),
-      persistPtyBinding: vi.fn(),
-      removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
-    }
-    let controller: RuntimeSpawnController | null = null
-    const runtime = {
-      setPtyController: vi.fn((value) => {
-        controller = value
-      }),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn(),
-      noteTerminalSpawnCommand: vi.fn(),
-      getDriver: vi.fn(() => ({ kind: 'host' })),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-
-    try {
-      setPtyOwnership(appPtyId, 'ssh-expired-runtime')
-      registerPtyHandlers(
-        mainWindow as never,
-        runtime as never,
-        undefined,
-        undefined,
-        undefined,
-        store as never
-      )
-      const spawnController = controller as unknown as RuntimeSpawnController
-      const leafId = '11111111-1111-4111-8111-111111111111'
-
-      await expect(
-        spawnController.spawn({
-          cols: 80,
-          rows: 24,
-          connectionId: 'ssh-expired-runtime',
-          worktreeId: 'wt-remote',
-          tabId: 'tab-remote',
-          leafId,
-          sessionId: appPtyId,
-          persistHostSessionBinding: true
-        })
-      ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
-
-      expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
-        'ssh-expired-runtime',
-        'relay-pty',
-        'expired'
-      )
-      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
-      expect(store.persistPtyBinding).not.toHaveBeenCalled()
-      expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
-      expect(piClearPtyMock).toHaveBeenCalledWith(appPtyId)
-      getPtyWriteListener()(mainWindowIpcEvent, { id: appPtyId, data: 'echo nope' })
-      expect(remoteWrite).not.toHaveBeenCalled()
-    } finally {
-      deletePtyOwnership(appPtyId)
-      unregisterSshPtyProvider('ssh-expired-runtime')
-    }
-  })
-
-  it('does not clear runtime-owned SSH reattach state on identity mismatch', async () => {
-    type RuntimeSpawnController = {
-      spawn(args: {
-        cols: number
-        rows: number
-        worktreeId?: string
-        connectionId?: string
-        tabId?: string
-        leafId?: string
-        sessionId?: string
-        persistHostSessionBinding?: boolean
-      }): Promise<{ id: string }>
-    }
-    const connectionId = 'ssh-identity-runtime'
-    const appPtyId = `ssh:${connectionId}@@relay-pty`
-    const remoteWrite = vi.fn()
-    registerSshPtyProvider(connectionId, {
-      spawn: vi.fn(async () => {
-        throw new Error(
-          `${SSH_SESSION_EXPIRED_ERROR}: relay-pty ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
-        )
-      }),
-      write: remoteWrite,
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    const store = {
-      upsertSshRemotePtyLease: vi.fn(),
-      persistPtyBinding: vi.fn(),
-      removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
-    }
-    let controller: RuntimeSpawnController | null = null
-    const runtime = {
-      setPtyController: vi.fn((value) => {
-        controller = value
-      }),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn(),
-      getDriver: vi.fn(() => ({ kind: 'host' })),
-      onPtySpawned: vi.fn(),
-      onPtyExit: vi.fn(),
-      onPtyData: vi.fn()
-    }
-
-    try {
-      setPtyOwnership(appPtyId, connectionId)
-      registerPtyHandlers(
-        mainWindow as never,
-        runtime as never,
-        undefined,
-        undefined,
-        undefined,
-        store as never
-      )
-      const spawnController = controller as unknown as RuntimeSpawnController
-      const leafId = '11111111-1111-4111-8111-111111111111'
-
-      await expect(
-        spawnController.spawn({
-          cols: 80,
-          rows: 24,
-          connectionId,
-          worktreeId: 'wt-remote',
-          tabId: 'tab-remote',
-          leafId,
-          sessionId: appPtyId,
-          persistHostSessionBinding: true
-        })
-      ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
-
-      expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-        connectionId,
-        'relay-pty',
-        'expired'
-      )
-      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
-      expect(store.persistPtyBinding).not.toHaveBeenCalled()
-      expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
-      expect(piClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
-      getPtyWriteListener()(mainWindowIpcEvent, { id: appPtyId, data: 'echo still-owned' })
-      expect(remoteWrite).toHaveBeenCalledWith(appPtyId, 'echo still-owned')
-    } finally {
-      deletePtyOwnership(appPtyId)
-      unregisterSshPtyProvider(connectionId)
-    }
-  })
-
-  it('cleans up fresh runtime-owned SSH spawns when binding persistence fails', async () => {
-    type RuntimeSpawnController = {
-      spawn(args: {
-        cols: number
-        rows: number
-        worktreeId?: string
-        connectionId?: string
-        tabId?: string
-        leafId?: string
-        sessionId?: string
-        persistHostSessionBinding?: boolean
-      }): Promise<{ id: string }>
-    }
-    const appPtyId = 'ssh:ssh-fresh-fail@@relay-pty'
-    const incarnationId = 'incarnation-fresh-fail'
-    const runtime = new OrcaRuntimeService()
-    const remoteShutdown = vi.fn(async () => {
-      // Model the relay's exit callback winning before shutdown resolves.
-      runtime.onPtyExit(appPtyId, 0, incarnationId)
-    })
-    registerSshPtyProvider('ssh-fresh-fail', {
-      spawn: vi.fn(async () => ({ id: appPtyId, incarnationId })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: remoteShutdown,
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      onData: vi.fn(() => () => {}),
-      onReplay: vi.fn(() => () => {}),
-      onExit: vi.fn(() => () => {}),
-      listProcesses: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn()
-    } as never)
-    const store = {
-      upsertSshRemotePtyLease: vi.fn(),
-      persistPtyBinding: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
-    }
-
-    try {
-      registerPtyHandlers(
-        mainWindow as never,
-        runtime as never,
-        undefined,
-        undefined,
-        undefined,
-        store as never
-      )
-      const spawnController = (runtime as unknown as { ptyController: RuntimeSpawnController })
-        .ptyController
-      const leafId = '11111111-1111-4111-8111-111111111111'
-
-      await expect(
-        spawnController.spawn({
-          cols: 80,
-          rows: 24,
-          connectionId: 'ssh-fresh-fail',
-          worktreeId: 'wt-remote',
-          tabId: 'tab-remote',
-          leafId,
-          sessionId: appPtyId,
-          persistHostSessionBinding: true
-        })
-      ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
-
-      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, { immediate: true })
-      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
-      expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
-      expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
-      expect(piClearPtyMock).toHaveBeenCalledWith(appPtyId)
-      const internals = runtime as unknown as {
-        earlyExitedPtyIncarnations: Map<string, string | null>
-        pendingPtyRegistrationIncarnations: Map<string, string | null>
-      }
-      expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
-      expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
-    } finally {
-      unregisterSshPtyProvider('ssh-fresh-fail')
-    }
   })
 
   it('maps runtime-owned spawn paneKeys for renderer serializer settlement', async () => {
@@ -13272,26 +12042,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never, runtime as never)
       mainWindow.webContents.send.mockClear()
 
-      const sourceChunk = 's'.repeat(128 * 1024)
       for (let index = 0; index < 17; index++) {
-        const sourceStartSu = index * sourceChunk.length
-        await acceptSshPtyOutputData({
-          id: 'source-credit-pty',
-          data: sourceChunk,
-          providerGeneration: 41,
-          ptyIncarnation: 'source-incarnation',
-          rawLength: sourceChunk.length,
-          transformed: false,
-          source: {
-            relayPtyId: 'relay-source-pty',
-            spanId: `source-token:${sourceStartSu}:${sourceStartSu + sourceChunk.length}`,
-            clientGeneration: 2,
-            ownerGeneration: 3,
-            deliveryToken: 'source-token',
-            sourceStartSu,
-            sourceEndSu: sourceStartSu + sourceChunk.length
-          }
-        })
       }
 
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
@@ -13313,130 +12064,6 @@ describe('registerPtyHandlers', () => {
       errorSpy.mockRestore()
       vi.useRealTimers()
     }
-  })
-
-  it('pauses and resumes the exact SSH provider generation across reconnect replacement', async () => {
-    vi.useFakeTimers()
-    const completion = makeDeferred()
-    let sequence = 0
-    let captures = 0
-    const runtime = {
-      setPtyController: vi.fn(),
-      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
-      getPtyOutputSequence: vi.fn(() => sequence),
-      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
-        sequence += rawLength
-        captures++
-        return {
-          sequence,
-          completion: captures === 1 ? completion.promise : Promise.resolve()
-        }
-      })
-    }
-    const original = {
-      providerGeneration: 41,
-      hasPtyDeliveryPauseAdapter: () => true,
-      pauseProducer: vi.fn(),
-      resumeProducer: vi.fn()
-    }
-    const replacement = {
-      providerGeneration: 42,
-      hasPtyDeliveryPauseAdapter: () => true,
-      pauseProducer: vi.fn(),
-      resumeProducer: vi.fn()
-    }
-    const id = 'ssh:ssh-generation-replacement@@relay-pty'
-    const receipts: Promise<unknown>[] = []
-
-    try {
-      registerPtyHandlers(mainWindow as never, runtime as never)
-      registerSshPtyProvider('ssh-generation-replacement', original as never)
-      const running = acceptSshPtyOutputData({
-        id,
-        data: 'a'.repeat(256 * 1024),
-        providerGeneration: 41,
-        ptyIncarnation: 'incarnation-41',
-        rawLength: 256 * 1024,
-        transformed: false
-      })
-      receipts.push(running)
-      registerSshPtyProvider('ssh-generation-replacement', replacement as never)
-      const pressured = acceptSshPtyOutputData({
-        id,
-        data: 'b',
-        providerGeneration: 41,
-        ptyIncarnation: 'incarnation-41',
-        rawLength: 1,
-        transformed: false
-      })
-      receipts.push(pressured)
-
-      expect(original.pauseProducer).toHaveBeenCalledWith(id)
-      expect(replacement.pauseProducer).not.toHaveBeenCalled()
-
-      completion.resolve()
-      await Promise.all([running, pressured])
-      expect(original.resumeProducer).toHaveBeenCalledWith(id)
-      expect(replacement.resumeProducer).not.toHaveBeenCalled()
-    } finally {
-      completion.resolve()
-      await Promise.allSettled(receipts)
-      closeSshPtyOutputGeneration(41, 'test-cleanup')
-      unregisterSshPtyProvider('ssh-generation-replacement')
-    }
-  })
-
-  it('rejects local data while an SSH renderer exit waits for projection settlement', async () => {
-    const provider = installObservableDaemonTestProvider()
-    let sequence = 0
-    const runtime = {
-      setPtyController: vi.fn(),
-      setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
-      getPtyOutputSequence: vi.fn(() => sequence),
-      acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
-        sequence += rawLength
-        return { sequence, completion: Promise.resolve() }
-      }),
-      onPtyData: vi.fn(),
-      onPtyExit: vi.fn()
-    }
-    const id = 'ssh:exit-data-race@@relay-pty'
-
-    registerPtyHandlers(mainWindow as never, runtime as never)
-    mainWindow.webContents.send.mockClear()
-    await acceptSshPtyOutputData({
-      id,
-      data: 'before-exit',
-      providerGeneration: 51,
-      ptyIncarnation: 'incarnation-51',
-      rawLength: 'before-exit'.length,
-      transformed: false
-    })
-    const exit = acceptSshPtyOutputExit({
-      id,
-      code: 0,
-      providerGeneration: 51,
-      ptyIncarnation: 'incarnation-51'
-    })
-    await Promise.resolve()
-
-    provider.emitData(id, 'must-not-follow-exit')
-    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', {
-      id,
-      data: 'must-not-follow-exit'
-    })
-
-    getPtyAckDataListener()(null, { id, processedChars: 'before-exit'.length })
-    await exit
-    expect(mainWindow.webContents.send.mock.calls.at(-1)).toEqual([
-      'pty:exit',
-      {
-        id,
-        code: 0,
-        providerGeneration: 51,
-        ptyIncarnation: 'incarnation-51'
-      }
-    ])
   })
 
   it('resumes a paused producer when the PTY exits before draining', async () => {
@@ -17082,37 +15709,6 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('cleans up provider-specific PTY overlays when a PTY is killed', async () => {
-    let exitCb: ((info: { exitCode: number }) => void) | undefined
-    const proc = {
-      onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-        exitCb = cb
-        return makeDisposable()
-      }),
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(() => {
-        // Simulate node-pty behavior: kill triggers onExit callback
-        exitCb?.({ exitCode: -1 })
-      }),
-      process: 'zsh',
-      pid: 12345
-    }
-    spawnMock.mockReturnValue(proc)
-
-    registerPtyHandlers(mainWindow as never)
-    const spawnResult = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24
-    })) as { id: string }
-
-    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
-
-    expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
-    expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
-  })
-
   it('retains PTY listeners until physical exit after manual kill IPC', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
@@ -17486,49 +16082,6 @@ describe('registerPtyHandlers', () => {
     const ids = (await getLocalPtyProvider().listProcesses()).map((info) => info.id)
     expect(ids).toContain(ptyA.id)
     expect(ids).toContain(ptyB.id)
-  })
-
-  it('retains PTY state when kill fails until physical exit arrives', async () => {
-    let exitCb: ((info: { exitCode: number }) => void) | undefined
-    const proc = {
-      onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-        exitCb = cb
-        return makeDisposable()
-      }),
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(() => {
-        throw new Error('already dead')
-      }),
-      process: 'zsh',
-      pid: 12345
-    }
-    spawnMock.mockReturnValue(proc)
-
-    registerPtyHandlers(mainWindow as never)
-    const spawnResult = (await handlers.get('pty:spawn')!(null, {
-      cols: 80,
-      rows: 24
-    })) as { id: string }
-
-    await expect(handlers.get('pty:kill')!(null, { id: spawnResult.id })).rejects.toThrow(
-      'already dead'
-    )
-
-    expect((await getLocalPtyProvider().listProcesses()).map(({ id }) => id)).toContain(
-      spawnResult.id
-    )
-    expect(openCodeClearPtyMock).not.toHaveBeenCalled()
-    expect(piClearPtyMock).not.toHaveBeenCalled()
-
-    exitCb?.({ exitCode: -1 })
-
-    expect((await getLocalPtyProvider().listProcesses()).map(({ id }) => id)).not.toContain(
-      spawnResult.id
-    )
-    expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
-    expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })
 
   describe('agent_started telemetry', () => {

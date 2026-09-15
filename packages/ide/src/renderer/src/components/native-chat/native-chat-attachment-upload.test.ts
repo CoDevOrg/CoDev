@@ -71,8 +71,7 @@ describe('resolveNativeChatAttachmentOwner', () => {
       resolveNativeChatAttachmentOwner(
         state({
           repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
-        }),
+}),
         'tab-1'
       )
     ).toEqual({

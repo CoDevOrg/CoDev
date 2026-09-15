@@ -43,8 +43,7 @@ describe('getCheckDetailsPromptKey', () => {
       status: 'completed',
       conclusion: 'failure',
       url: null,
-      gitlabJobId: 987654
-    }
+}
 
     expect(getCheckDetailsPromptKey(manualJob, 0)).toBe('gitlab-job:987654:deploy: production')
     expect(getCheckDetailsPromptKey(manualJob, 3)).toBe(getCheckDetailsPromptKey(manualJob, 0))

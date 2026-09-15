@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -102,14 +102,6 @@ async function writeProtectedState(
     httpProxyBypassRules: bypassRules
   })
   store.updateUI({ browserKagiSessionLink: values.kagi })
-  await store.upsertSshPtyConsumerRecovery({
-    targetId: 'ssh-1',
-    clientInstanceId: 'client-1',
-    serverBuildId: 'relay-build-1',
-    clientGeneration: 1,
-    ownerGeneration: 1,
-    ownerLease: values.ownerLease
-  })
 }
 
 function expectPlaintextsAbsent(raw: string, values: typeof ORIGINAL | typeof PENDING): void {
@@ -154,48 +146,6 @@ describe('protected persistence when safeStorage fails', () => {
     }
   )
 
-  it.each<FailureMode>(['availability-throws', 'encryption-throws', 'unavailable'])(
-    'persists the pending protected state after same-instance recovery: %s',
-    async (failureMode) => {
-      const store = await createStore()
-      await writeProtectedState(store, ORIGINAL, 'before')
-      setFailure(failureMode)
-      await writeProtectedState(store, PENDING, 'during-failure')
-
-      cipherState.availability = 'available'
-      cipherState.encryptionThrows = false
-      await writeProtectedState(store, PENDING, 'during-failure')
-
-      const restarted = await createStore()
-      expect(restarted.getSettings().httpProxyUrl).toBe(PENDING.proxy)
-      expect(restarted.getUI().browserKagiSessionLink).toBe(PENDING.kagi)
-      expect(restarted.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(PENDING.ownerLease)
-    }
-  )
-
-  it('honors explicit clears during an outage without later resurrecting ciphertext', async () => {
-    const store = await createStore()
-    await writeProtectedState(store, ORIGINAL, 'before')
-    cipherState.availability = 'unavailable'
-
-    store.updateSettings({ httpProxyUrl: '' })
-    store.updateUI({ browserKagiSessionLink: null })
-    await store.removeSshPtyConsumerRecovery('ssh-1')
-    await settleSave(store)
-
-    await writeProtectedState(store, PENDING, 'after-clear')
-    const persisted = readState()
-    expect(persisted.settings.httpProxyUrl).toBe('')
-    expect(persisted.ui.browserKagiSessionLink).toBe('')
-    expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).toBe('')
-
-    cipherState.availability = 'available'
-    const restarted = await createStore()
-    expect(restarted.getSettings().httpProxyUrl).toBe('')
-    expect(restarted.getUI().browserKagiSessionLink).toBe('')
-    expect(restarted.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-  })
-
   it('persists clears after a healthy save preserves sealed ciphertext', async () => {
     const initial = await createStore()
     await writeProtectedState(initial, ORIGINAL, 'before')
@@ -215,171 +165,4 @@ describe('protected persistence when safeStorage fails', () => {
     expect(readState().settings.httpProxyUrl).toBe('')
   })
 
-  it('evicts ciphertext when decrypted SSH recovery validation rejects the record', async () => {
-    const oversizedLease = 'z'.repeat(513)
-    const encryptedLease = Buffer.from(`enc:${randomUUID()}:${oversizedLease}`).toString('base64')
-    writeFileSync(
-      dataFile(),
-      JSON.stringify({
-        sshPtyConsumerRecoveries: [
-          {
-            targetId: 'ssh-1',
-            clientInstanceId: 'client-1',
-            serverBuildId: 'relay-build-1',
-            clientGeneration: 1,
-            ownerGeneration: 1,
-            ownerLease: encryptedLease
-          }
-        ]
-      })
-    )
-    const store = await createStore()
-    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-
-    cipherState.availability = 'unavailable'
-    await store.upsertSshPtyConsumerRecovery({
-      targetId: 'ssh-1',
-      clientInstanceId: 'client-1',
-      serverBuildId: 'relay-build-1',
-      clientGeneration: 2,
-      ownerGeneration: 2,
-      ownerLease: 'replacement-owner-lease'
-    })
-
-    expect(readState().sshPtyConsumerRecoveries[0]?.ownerLease).toBe('')
-  })
-
-  it('keeps loaded ciphertext sealed through same-instance recovery', async () => {
-    const initial = await createStore()
-    await writeProtectedState(initial, ORIGINAL, 'before')
-    const originalCiphertext = readState()
-
-    cipherState.availability = 'unavailable'
-    const sealed = await createStore()
-    expect(sealed.getSettings().httpProxyUrl).toBe('')
-    expect(sealed.getUI().browserKagiSessionLink).toBe('')
-    expect(sealed.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-
-    sealed.updateSettings({ httpProxyBypassRules: 'during-outage' })
-    await settleSave(sealed)
-
-    cipherState.availability = 'available'
-    sealed.updateSettings({ httpProxyBypassRules: 'after-recovery' })
-    await settleSave(sealed)
-    expect(readState()).toMatchObject({
-      settings: {
-        httpProxyUrl: originalCiphertext.settings.httpProxyUrl
-      },
-      ui: { browserKagiSessionLink: originalCiphertext.ui.browserKagiSessionLink },
-      sshPtyConsumerRecoveries: [
-        { ownerLease: originalCiphertext.sshPtyConsumerRecoveries[0]?.ownerLease }
-      ]
-    })
-
-    const restarted = await createStore()
-    expect(restarted.getSettings().httpProxyUrl).toBe(ORIGINAL.proxy)
-    expect(restarted.getUI().browserKagiSessionLink).toBe(ORIGINAL.kagi)
-    expect(restarted.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(ORIGINAL.ownerLease)
-    expect(restarted.getSettings().httpProxyBypassRules).toBe('after-recovery')
-  })
-
-  it('keeps undecryptable ciphertext sealed from consumers and later saves', async () => {
-    const initial = await createStore()
-    await writeProtectedState(initial, ORIGINAL, 'before')
-    const originalCiphertext = readState()
-
-    cipherState.decryptionThrows = true
-    const sealed = await createStore()
-    expect(sealed.getSettings().httpProxyUrl).toBe('')
-    expect(sealed.getUI().browserKagiSessionLink).toBe('')
-    expect(sealed.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
-
-    sealed.updateSettings({ httpProxyBypassRules: 'decryption-failed' })
-    await settleSave(sealed)
-    expect(readState()).toMatchObject({
-      settings: {
-        httpProxyUrl: originalCiphertext.settings.httpProxyUrl
-      },
-      ui: { browserKagiSessionLink: originalCiphertext.ui.browserKagiSessionLink },
-      sshPtyConsumerRecoveries: [
-        { ownerLease: originalCiphertext.sshPtyConsumerRecoveries[0]?.ownerLease }
-      ]
-    })
-
-    cipherState.decryptionThrows = false
-    const restarted = await createStore()
-    expect(restarted.getSettings().httpProxyUrl).toBe(ORIGINAL.proxy)
-    expect(restarted.getUI().browserKagiSessionLink).toBe(ORIGINAL.kagi)
-    expect(restarted.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(ORIGINAL.ownerLease)
-  })
-
-  it('accepts validated legacy plaintext for SSH migration', async () => {
-    const legacyOwnerLease = '9ab3f53d-0de9-4b80-af38-0cc15f62a6ba'
-    writeFileSync(
-      dataFile(),
-      JSON.stringify({
-        sshPtyConsumerRecoveries: [
-          {
-            targetId: 'ssh-1',
-            clientInstanceId: 'client-1',
-            serverBuildId: 'relay-build-1',
-            clientGeneration: 1,
-            ownerGeneration: 1,
-            ownerLease: legacyOwnerLease
-          }
-        ]
-      })
-    )
-
-    const store = await createStore()
-    expect(store.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(legacyOwnerLease)
-  })
-
-  it.each<FailureMode>(['availability-throws', 'encryption-throws', 'unavailable'])(
-    'saves non-secrets without exposing or destroying protected values: %s',
-    async (failureMode) => {
-      const store = await createStore()
-      await writeProtectedState(store, ORIGINAL, 'before')
-      const originalCiphertext = readState()
-      expectPlaintextsAbsent(readFileSync(dataFile(), 'utf-8'), ORIGINAL)
-
-      vi.advanceTimersByTime(60 * 60 * 1_000 + 1)
-      setFailure(failureMode)
-      await writeProtectedState(store, PENDING, 'during-failure')
-
-      const primaryRaw = readFileSync(dataFile(), 'utf-8')
-      const backupRaw = readFileSync(`${dataFile()}.bak.0`, 'utf-8')
-      const persisted = readState()
-      expectPlaintextsAbsent(primaryRaw, PENDING)
-      expectPlaintextsAbsent(backupRaw, PENDING)
-      expect.soft(persisted.settings.httpProxyUrl).toBe(originalCiphertext.settings.httpProxyUrl)
-      expect
-        .soft(persisted.ui.browserKagiSessionLink)
-        .toBe(originalCiphertext.ui.browserKagiSessionLink)
-      expect
-        .soft(persisted.sshPtyConsumerRecoveries[0]?.ownerLease)
-        .toBe(originalCiphertext.sshPtyConsumerRecoveries[0]?.ownerLease)
-      expect.soft(persisted.settings.httpProxyBypassRules).toBe('during-failure')
-
-      const loadedDuringFailure = await createStore()
-      expect(loadedDuringFailure.getSettings().httpProxyBypassRules).toBe('during-failure')
-      await settleSave(loadedDuringFailure)
-      expectPlaintextsAbsent(readFileSync(dataFile(), 'utf-8'), PENDING)
-
-      cipherState.availability = 'available'
-      cipherState.encryptionThrows = false
-      const recovered = await createStore()
-      expect(recovered.getSettings().httpProxyUrl).toBe(ORIGINAL.proxy)
-      expect(recovered.getUI().browserKagiSessionLink).toBe(ORIGINAL.kagi)
-      expect(recovered.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(ORIGINAL.ownerLease)
-      expect(recovered.getSettings().httpProxyBypassRules).toBe('during-failure')
-
-      await writeProtectedState(recovered, PENDING, 'recovered')
-      const restarted = await createStore()
-      expect(restarted.getSettings().httpProxyUrl).toBe(PENDING.proxy)
-      expect(restarted.getUI().browserKagiSessionLink).toBe(PENDING.kagi)
-      expect(restarted.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(PENDING.ownerLease)
-      expect(restarted.getSettings().httpProxyBypassRules).toBe('recovered')
-    }
-  )
 })

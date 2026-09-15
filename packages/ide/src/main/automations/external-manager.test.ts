@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createExternalAutomation,
   listExternalAutomationManagers,
-  listExternalAutomationRuns,
   runExternalAutomationAction,
   updateExternalAutomation
 } from './external-manager'

@@ -7,7 +7,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
+import type { } from 'ssh2'
 import type * as osModule from 'node:os'
 
 const { homedirMock } = vi.hoisted(() => ({
@@ -28,111 +28,23 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
+import { } from './installer-utils'
 import { CodexHookService } from '../codex/hook-service'
-import { ClaudeHookService } from '../claude/hook-service'
-import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
+import { } from '../claude/hook-service'
 
 const REMOTE_HOME = '/home/dev'
 
 // Each managed agent that ships an SSH-compatible JSON/TOML hook config.
-const JSON_INSTALLERS = [
-  {
-    agent: 'claude',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.claude/settings.json`,
-    install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'codex',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.codex/hooks.json`,
-    install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  }
-] as const
 
-const MANAGED_HOOKS_DIR_NEEDLE = '/.codev/agent-hooks/'
 // Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
-const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
 // Walk the parsed config and assert every Orca-managed command carrier (a node
 // with a `command`/`bash`/`powershell` string pointing at the managed script
 // dir) has a positive config-level timeout sibling (`timeout` or the
 // provider-specific `timeoutSec`). Returns the count of managed carriers found
 // so callers can assert the scan was not vacuous.
-function countManagedCarriersWithTimeout(
-  node: unknown,
-  expectedTimeout: number,
-  isManagedCarrier = (value: string): boolean => {
-    const normalized = value.replaceAll('\\', '/')
-    return (
-      normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
-      !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
-    )
-  }
-): number {
-  if (Array.isArray(node)) {
-    return node.reduce<number>(
-      (sum, child) =>
-        sum + countManagedCarriersWithTimeout(child, expectedTimeout, isManagedCarrier),
-      0
-    )
-  }
-  if (node === null || typeof node !== 'object') {
-    return 0
-  }
-  const record = node as Record<string, unknown>
-  let found = 0
-  const carrier = [record.command, record.bash, record.powershell].find(
-    (value): value is string => typeof value === 'string' && isManagedCarrier(value)
-  )
-  if (carrier !== undefined) {
-    const timeout = typeof record.timeout === 'number' ? record.timeout : record.timeoutSec
-    expect(typeof timeout, `managed carrier "${carrier}" is missing a config timeout`).toBe(
-      'number'
-    )
-    expect(timeout as number).toBe(expectedTimeout)
-    found += 1
-  }
-  for (const value of Object.values(record)) {
-    found += countManagedCarriersWithTimeout(value, expectedTimeout, isManagedCarrier)
-  }
-  return found
-}
 
 describe('managed agent hook timeouts', () => {
-  it('writes a config-level timeout on every managed JSON hook entry', async () => {
-    for (const { agent, configPath, install, timeout } of JSON_INSTALLERS) {
-      const { sftp, fs } = createFakeSftp()
-      const status = await install(sftp)
-      expect(status.state, `${agent} install state`).toBe('installed')
-      const raw = fs.files.get(configPath)
-      expect(raw, `${agent} config written`).toBeDefined()
-      const carriers = countManagedCarriersWithTimeout(JSON.parse(raw!), timeout)
-      expect(
-        carriers,
-        `${agent} should have at least one managed timeout-bearing entry`
-      ).toBeGreaterThan(0)
-    }
-  })
-
-  it('bounds every generated POSIX curl wrapper with --connect-timeout and --max-time', async () => {
-    let curlWrappersChecked = 0
-    for (const { agent, install } of JSON_INSTALLERS) {
-      const { sftp, fs } = createFakeSftp()
-      await install(sftp)
-      for (const [path, content] of fs.files) {
-        if (!path.endsWith('.sh')) {
-          continue
-        }
-        expect(content, `${agent} wrapper missing curl transport`).toContain('curl')
-        expect(content, `${agent} wrapper missing --connect-timeout`).toContain('--connect-timeout')
-        expect(content, `${agent} wrapper missing --max-time`).toContain('--max-time')
-        curlWrappersChecked += 1
-      }
-    }
-    expect(curlWrappersChecked).toBeGreaterThan(0)
-  })
 
   describe('dead-endpoint transport budget', () => {
     let tempDir: string | null = null

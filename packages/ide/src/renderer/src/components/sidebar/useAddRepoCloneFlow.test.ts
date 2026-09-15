@@ -122,7 +122,6 @@ describe('useAddRepoCloneFlow', () => {
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
       workspaceDir: '/local/workspace',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
@@ -159,7 +158,6 @@ describe('useAddRepoCloneFlow', () => {
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
       workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
@@ -180,7 +178,6 @@ describe('useAddRepoCloneFlow', () => {
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
       workspaceDir: '/local/workspace',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
@@ -205,7 +202,6 @@ describe('useAddRepoCloneFlow', () => {
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: 'env-1',
-      sshTargetId: null,
       workspaceDir: '/local/workspace',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady

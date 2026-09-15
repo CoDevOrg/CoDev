@@ -77,19 +77,6 @@ function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
   return child
 }
 
-function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
-  return {
-    id: 'ssh-1',
-    label: 'Builder',
-    host: 'builder.example.com',
-    port: 22,
-    username: 'ada',
-    source: 'ssh-config',
-    configHost: 'builder',
-    ...overrides
-  }
-}
-
 describe('registerShellHandlers', () => {
   const settings = { activeRuntimeEnvironmentId: null as string | null }
   const sshTargets = new Map<string, SshTarget>()

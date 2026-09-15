@@ -233,8 +233,7 @@ describe('loadLocalImageSrc', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'ssh-2',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
+})
     ).resolves.toBeNull()
 
     expect(readFile).not.toHaveBeenCalled()

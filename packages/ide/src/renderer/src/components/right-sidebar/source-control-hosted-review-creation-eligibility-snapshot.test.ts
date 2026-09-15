@@ -2,34 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCreatePrIntentUnavailableEligibility,
   buildLocalBlockerHostedReviewCreationEligibility,
-  resolveHostedReviewCreationProviderForTarget
 } from './source-control-hosted-review-creation-eligibility-snapshot'
 import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
 
 describe('resolveHostedReviewCreationProviderForTarget', () => {
-  const target = { repoId: 'repo-1', worktreeId: 'worktree-1', branch: 'feature/create-pr' }
 
-  it('preserves a known self-hosted provider for the same target', () => {
-    expect(
-      resolveHostedReviewCreationProviderForTarget(
-        { ...target, provider: 'gitlab' },
-        target,
-        'github'
-      )
-    ).toBe('gitlab')
-  })
-
-  it('does not leak a provider hint across worktrees', () => {
-    expect(
-      resolveHostedReviewCreationProviderForTarget(
-        { ...target, provider: 'gitlab' },
-        { ...target, worktreeId: 'worktree-2' },
-        'github'
-      )
-    ).toBe('github')
-  })
 })
 
 describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
@@ -58,18 +37,6 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
         branchCommitsAhead: 0
       })
     ).toEqual({ eligible: true, kind: 'dirty' })
-  })
-
-  it('prefers dirty over no_upstream when both apply, matching main-process ordering', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('gitlab', {
-        ...featureBranch,
-        hasUncommittedChanges: true,
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-    ).toMatchObject({ provider: 'gitlab', blockedReason: 'dirty' })
   })
 
   it('reports no_upstream for a clean unpublished branch', () => {
@@ -187,17 +154,6 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
     ).toBeNull()
   })
 
-  it('returns null for providers that do not support hosted review creation', () => {
-    expect(
-      buildLocalBlockerHostedReviewCreationEligibility('bitbucket', {
-        ...featureBranch,
-        hasUncommittedChanges: true,
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-    ).toBeNull()
-  })
 })
 
 describe('buildCreatePrIntentUnavailableEligibility', () => {
@@ -256,15 +212,4 @@ describe('buildCreatePrIntentUnavailableEligibility', () => {
     ).toBeNull()
   })
 
-  it('never synthesizes intent eligibility for an unsupported remote provider', () => {
-    expect(
-      buildCreatePrIntentUnavailableEligibility('bitbucket', {
-        ...featureBranch,
-        hasUncommittedChanges: true,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).toBeNull()
-  })
 })

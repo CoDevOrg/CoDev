@@ -203,7 +203,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
 
 function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
   return {
-    provider: 'gitlab',
+    provider: 'github',
     number: 42,
     title: 'Child GitLab MR',
     state: 'open',
@@ -243,7 +243,6 @@ function setLineageState(
     branch: 'child-branch',
     sortOrder: 10,
     overrides: {
-      linkedGitLabMR: 42,
       comment: 'Child handoff note'
     }
   })

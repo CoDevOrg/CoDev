@@ -123,7 +123,6 @@ describe('WorktreeCardDetailsHover interactions', () => {
       root.render(
         <WorktreeCardDetailsHover
           issue={null}
-          linearIssue={null}
           review={reviewFixture}
           comment={null}
           onEditIssue={vi.fn()}
@@ -145,7 +144,6 @@ describe('WorktreeCardDetailsHover interactions', () => {
       root.render(
         <WorktreeCardDetailsHover
           issue={null}
-          linearIssue={null}
           review={null}
           comment={null}
           workspaceTitle="Editable hover title"

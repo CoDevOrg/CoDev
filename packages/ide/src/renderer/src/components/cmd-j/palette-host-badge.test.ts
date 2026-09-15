@@ -7,16 +7,11 @@ const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 // Why: a connected SSH state makes the target a live remote, which is what the
 // palette badge now requires before disambiguating rows with a host label.
-const connectedSshStates = (targetId: string) =>
-  new Map([
-    [targetId, { targetId, status: 'connected' as const, error: null, reconnectAttempt: 0 }]
-  ])
 
 describe('getPaletteHostBadge', () => {
   it('returns null for single-host (local-only) workspaces', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: null }],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -26,7 +21,6 @@ describe('getPaletteHostBadge', () => {
   it('returns null when the only non-local host is configured but disconnected', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -38,7 +32,6 @@ describe('getPaletteHostBadge', () => {
   it('badges a disconnected host anyway when a host filter is applied', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -53,8 +46,6 @@ describe('getPaletteHostBadge', () => {
   it('badges the local host when a connected remote host exists', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: connectedSshStates('ssh-1'),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -67,8 +58,6 @@ describe('getPaletteHostBadge', () => {
   it('uses the ssh target label for ssh repos', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: connectedSshStates('ssh-1'),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -81,7 +70,6 @@ describe('getPaletteHostBadge', () => {
   it('badges runtime-hosted repos when the runtime is live', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ executionHostId: 'runtime:env-1' }],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'env-2' },
       // A live status makes the runtime 'available'; without it the host reads
       // 'disconnected' and the badge is suppressed (covered below).
@@ -113,7 +101,6 @@ describe('getPaletteHostBadge', () => {
   it('suppresses the badge when the only remote runtime has no live status', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ executionHostId: 'runtime:env-1' }],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -123,8 +110,6 @@ describe('getPaletteHostBadge', () => {
   it('maps repos with no executionHostId/connectionId to local', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: connectedSshStates('ssh-1'),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -137,8 +122,6 @@ describe('getPaletteHostBadge', () => {
   it('returns null when the repo is missing', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: connectedSshStates('ssh-1'),
       settings: { activeRuntimeEnvironmentId: null }
     })
 

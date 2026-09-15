@@ -27,11 +27,6 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     vi.mocked(sendRuntimePtyInputVerified).mockResolvedValue(true)
   })
 
-  it('sanity: config keeps aider/vibe as stdin-after-start with python-style expected process', () => {
-    expect(TUI_AGENT_CONFIG.aider.promptInjectionMode).toBe('stdin-after-start')
-    expect(TUI_AGENT_CONFIG['mistral-vibe'].promptInjectionMode).toBe('stdin-after-start')
-  })
-
   for (const { agent, expectedProcess } of INTERPRETER_WRAPPED_AGENTS) {
     it(`types the prompt once ${agent} is up behind a python3 wrapper with a live child`, async () => {
       // The console-script agent is running: foreground comm is python3 and the

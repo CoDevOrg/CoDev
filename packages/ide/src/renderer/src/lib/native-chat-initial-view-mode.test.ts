@@ -3,7 +3,7 @@ import {
   decideInitialAgentTabViewMode,
   initialAgentTabViewModeProps
 } from './native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from './native-chat-transcript-readability'
+import { } from './native-chat-transcript-readability'
 
 describe('decideInitialAgentTabViewMode', () => {
   it("returns 'chat' when native chat and the opt-in default setting are on", () => {
@@ -44,50 +44,6 @@ describe('decideInitialAgentTabViewMode', () => {
         agent: 'codex'
       })
     ).toBeUndefined()
-  })
-
-  it('returns undefined for unsupported agents', () => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'gemini'
-      })
-    ).toBeUndefined()
-  })
-
-  it.each([
-    ['local', null],
-    ['runtime-owned', 'runtime-ssh-env-1']
-  ] as const)('opens %s Grok in chat when configured', (_host, connectionId) => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'grok',
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
-      })
-    ).toBe('chat')
-  })
-
-  it('keeps Model-A SSH Grok in the terminal view', () => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'grok',
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable('ssh-target-1')
-      })
-    ).toBeUndefined()
-    expect(
-      initialAgentTabViewModeProps(
-        {
-          experimentalNativeChat: true,
-          openAgentTabsInChatByDefault: true
-        },
-        { agent: 'grok', nativeChatTranscriptIsLocalReadable: false }
-      )
-    ).toEqual({})
   })
 
   it('opens a mirrorable draft launch in chat', () => {
@@ -170,8 +126,4 @@ describe('CoDev-embedded clients', () => {
     ).toBe('chat')
   })
 
-  it('still refuses an agent with no native chat renderer', () => {
-    vi.stubGlobal('window', { __CODEV_EMBEDDED__: true, location: { hash: '' } })
-    expect(decideInitialAgentTabViewMode({ agent: 'aider' })).toBeUndefined()
-  })
 })

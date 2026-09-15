@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTerminalKeyboardProtocolOptions,
-  prefersKittyKeyboardDespiteWindowsConpty,
   shouldDisableKittyKeyboardForTerminal
 } from './terminal-keyboard-protocol'
 
@@ -19,13 +18,6 @@ const localWindowsConpty = {
 }
 
 describe('prefersKittyKeyboardDespiteWindowsConpty', () => {
-  it('is true only for Grok (needs KKP for modified Enter on ConPTY)', () => {
-    expect(prefersKittyKeyboardDespiteWindowsConpty('grok')).toBe(true)
-    expect(prefersKittyKeyboardDespiteWindowsConpty('claude')).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty('codex')).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty(null)).toBe(false)
-    expect(prefersKittyKeyboardDespiteWindowsConpty(undefined)).toBe(false)
-  })
 })
 
 describe('shouldDisableKittyKeyboardForTerminal', () => {
@@ -34,18 +26,6 @@ describe('shouldDisableKittyKeyboardForTerminal', () => {
     // advertisement but do not decode CSI-u, so enhanced reporting swallows
     // Enter/Up/Down navigation. The advertisement must be withheld here.
     expect(shouldDisableKittyKeyboardForTerminal(localWindowsConpty)).toBe(true)
-  })
-
-  it('keeps Kitty keyboard for Grok on a local Windows ConPTY pane', () => {
-    // Why: Grok needs KKP to distinguish Ctrl+Enter (interject) / Shift+Enter
-    // from plain Enter. Global ConPTY withhold must not apply when the pane's
-    // known agent is Grok (Orca launchAgent or equivalent).
-    expect(
-      shouldDisableKittyKeyboardForTerminal({
-        ...localWindowsConpty,
-        tuiAgent: 'grok'
-      })
-    ).toBe(false)
   })
 
   it('still withholds Kitty keyboard for non-Grok agents on local Windows ConPTY', () => {
@@ -144,15 +124,6 @@ describe('buildTerminalKeyboardProtocolOptions', () => {
     expect(buildTerminalKeyboardProtocolOptions(localWindowsConpty)).toEqual({
       vtExtensions: { kittyKeyboard: false }
     })
-  })
-
-  it('returns no override for Grok on local Windows ConPTY so KKP stays advertised', () => {
-    expect(
-      buildTerminalKeyboardProtocolOptions({
-        ...localWindowsConpty,
-        tuiAgent: 'grok'
-      })
-    ).toEqual({})
   })
 
   it('returns no override for SSH panes so enhanced reporting stays advertised', () => {

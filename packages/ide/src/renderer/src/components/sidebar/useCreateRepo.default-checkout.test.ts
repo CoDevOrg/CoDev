@@ -228,8 +228,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const { useCreateRepo } = await import('./useCreateRepo')
 
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
-      sshTargetId: 'ssh-1'
-    })
+})
     await result.handleCreate()
 
     expect(mocks.createRemoteRepo).toHaveBeenCalledWith({

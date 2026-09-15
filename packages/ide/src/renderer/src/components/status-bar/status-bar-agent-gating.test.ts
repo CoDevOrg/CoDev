@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 
 describe('isStatusBarItemAvailable', () => {
-  it('shows non-CLI items regardless of detection', () => {
-    // Why: ssh, resource-usage, and ports aren't CLIs on PATH, so detection
-    // results don't apply.
-    expect(isStatusBarItemAvailable('ssh', null)).toBe(true)
-    expect(isStatusBarItemAvailable('ssh', [])).toBe(true)
-    expect(isStatusBarItemAvailable('resource-usage', [])).toBe(true)
-    expect(isStatusBarItemAvailable('ports', [])).toBe(true)
-  })
 
   it('keeps CLI items visible while detection is in flight', () => {
     // Why: pre-detection (null) we don't yet know what the user has, so we

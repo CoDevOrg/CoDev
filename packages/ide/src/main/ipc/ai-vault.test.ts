@@ -29,7 +29,6 @@ vi.mock('../ai-vault/session-scanner-claude-subagents', () => ({
   listClaudeSubagentSessions: mocks.listClaudeSubagentSessions
 }))
 
-
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getAiVaultWslHomeDirs,
   listWslDistrosAsync: vi.fn().mockResolvedValue([])
@@ -146,14 +145,6 @@ function getPrepareSessionResumeHandler(): (
   return registration[1]
 }
 
-function getIpcHandler(channel: string): (...args: unknown[]) => unknown {
-  const registration = mocks.ipcHandle.mock.calls.find(([registered]) => registered === channel)
-  if (!registration) {
-    throw new Error(`${channel} was not registered`)
-  }
-  return registration[1]
-}
-
 describe('listAiVaultSubagentSessions gating', () => {
   const claudeRoot = join(homedir(), '.claude', 'projects')
 
@@ -231,11 +222,6 @@ function hostInfo(targetId: string) {
 
 /** Mirrors the multiplexer's typed timeout: callers branch on the code, not on
  * the message text. */
-function relayTimeoutError(): Error {
-  return Object.assign(new Error('Request "aiVault.listSessions" timed out after 130000ms'), {
-    code: SSH_MUX_REQUEST_TIMEOUT_CODE
-  })
-}
 
 function result(sessions: AiVaultSession[]): AiVaultListResult {
   return { sessions, issues: [], scannedAt: new Date().toISOString() }

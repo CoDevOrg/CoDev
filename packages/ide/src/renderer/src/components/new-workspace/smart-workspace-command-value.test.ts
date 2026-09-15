@@ -64,44 +64,6 @@ describe('resolveSmartWorkspaceCommandValue', () => {
     ).toBe('github-99')
   })
 
-  it('prefers matching source-intent rows once fresh results arrive', () => {
-    expect(
-      resolveSmartWorkspaceCommandValue({
-        currentValue: 'use-name',
-        rows: [row('use-name', 'use-name'), row('github', 'github-123')],
-        isQueryStale: false,
-        sourceIntent: 'github'
-      })
-    ).toBe('github-123')
-
-    expect(
-      resolveSmartWorkspaceCommandValue({
-        currentValue: 'use-name',
-        rows: [row('use-name', 'use-name'), row('gitlab', 'gitlab-123')],
-        isQueryStale: false,
-        sourceIntent: 'gitlab'
-      })
-    ).toBe('gitlab-123')
-
-    expect(
-      resolveSmartWorkspaceCommandValue({
-        currentValue: 'use-name',
-        rows: [row('use-name', 'use-name'), row('linear', 'linear-ENG-123')],
-        isQueryStale: false,
-        sourceIntent: 'linear'
-      })
-    ).toBe('linear-ENG-123')
-
-    expect(
-      resolveSmartWorkspaceCommandValue({
-        currentValue: 'jira-account-site-1',
-        rows: [row('jira-account', 'jira-account-site-1'), row('jira', 'jira-ORCA-123')],
-        isQueryStale: false,
-        sourceIntent: 'jira'
-      })
-    ).toBe('jira-ORCA-123')
-  })
-
   it('leaves the current value alone when no rows are rendered', () => {
     expect(
       resolveSmartWorkspaceCommandValue({

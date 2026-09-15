@@ -4,9 +4,8 @@ import type * as GitUsernameModule from '../git/git-username'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { CreateWorktreeResult, GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
-import type { ProviderRequestId } from '../../shared/detected-worktree-provider-contract'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import type { CreateWorktreeResult, GitWorktreeInfo,  Worktree } from '../../shared/types'
+import type { } from '../../shared/detected-worktree-provider-contract'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -233,12 +232,10 @@ vi.mock('./pty', () => ({
 }))
 
 import {
-  __resetSshWorktreeCreateFetchCacheForTests,
   notifyWorktreesChanged
 } from './worktree-remote'
 import {
   invalidateAuthorizedRootsCache,
-  registerWorktreeRootsForRepo,
   resolveRegisteredWorktreePath
 } from './filesystem-auth'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
@@ -252,8 +249,6 @@ import {
 const ORIGIN_REMOTE_URL = 'git@github.com:org/repo.git'
 const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import {
-  DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
-  LINEAGE_HYDRATION_TIMEOUT_MS,
   __getDetectedWorktreeScanCacheStatsForTests,
   __resetDetectedWorktreeScanCacheForTests,
   registerWorktreeHandlers
@@ -309,9 +304,7 @@ describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
     setPlatform(ORIGINAL_PLATFORM)
     clearConfiguredWorktreeSharedDirectoriesCacheForTests()
-    __resetSshWorktreeCreateFetchCacheForTests()
     __resetDetectedWorktreeScanCacheForTests()
-    resetSshProviderAuthorities()
     invalidateAuthorizedRootsCache()
     for (const m of [
       handleMock,

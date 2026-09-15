@@ -171,9 +171,6 @@ describe('GitHub PR refresh owner-host routing', () => {
           executionHostId: 'ssh:ssh-1'
         })
       ],
-      sshConnectionStates: new Map([
-        ['ssh-1', { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }]
-      ]),
       worktreesByRepo: {
         'repo-ssh': [makeWorktree('repo-ssh', branch, 'wt-ssh')]
       }

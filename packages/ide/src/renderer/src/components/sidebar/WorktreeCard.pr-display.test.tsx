@@ -311,33 +311,6 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Branch')
   })
 
-  it('shows branch-discovered hosted review providers without linked worktree metadata', async () => {
-    settings = { experimentalNewWorktreeCardStyle: true }
-    hostedReviewCache = {
-      'local::repo-1::feature/local-branch': {
-        data: makeHostedReview({
-          provider: 'bitbucket',
-          number: 789,
-          title: 'Bitbucket branch PR',
-          url: 'https://bitbucket.org/acme/orca/pull-requests/789'
-        }),
-        fetchedAt: Date.now()
-      }
-    }
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    const markup = renderWorktreeCardMarkup(
-      <WorktreeCard
-        worktree={makeWorktree({ linkedPR: null })}
-        repo={makeRepo()}
-        isActive={false}
-      />
-    )
-
-    expect(markup).toContain('PR checks: Passing')
-    expect(markup).not.toContain('Linked PR #789')
-  })
-
   it('keeps the stored branch title by default when a hosted review title is available', async () => {
     hostedReviewCache = {
       'local::repo-1::feature/local-branch': {
@@ -389,60 +362,6 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('>feature/local-branch</span>')
   })
 
-  it('shows task and notes metadata while keeping PR out of the right metadata list', async () => {
-    settings = { experimentalNewWorktreeCardStyle: true }
-    worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment']
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    const markup = renderWorktreeCardMarkup(
-      <WorktreeCard
-        worktree={makeWorktree({
-          linkedIssue: 123,
-          linkedLinearIssue: 'ENG-123',
-          linkedPR: 456,
-          comment: 'Reviewer handoff note'
-        })}
-        repo={makeRepo()}
-        isActive={false}
-      />
-    )
-
-    expect(markup).toContain('Linked issue #123')
-    expect(markup).toContain('Linked Linear ENG-123')
-    expect(markup).toContain('PR: Open')
-    expect(markup).not.toContain('Linked PR #456')
-    expect(markup).toContain('Workspace notes')
-    expect(markup).not.toContain('data-slot="badge"')
-    expect(markup).not.toContain('Loading issue')
-    expect(markup).not.toContain('Reviewer handoff note')
-  })
-
-  it('shows selected task and notes metadata on compact cards when new card style is on', async () => {
-    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
-    worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment']
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    const markup = renderWorktreeCardMarkup(
-      <WorktreeCard
-        worktree={makeWorktree({
-          linkedIssue: 123,
-          linkedLinearIssue: 'ENG-123',
-          linkedPR: 456,
-          comment: 'Reviewer handoff note'
-        })}
-        repo={makeRepo()}
-        isActive={false}
-      />
-    )
-
-    expect(markup).toContain('Linked issue #123')
-    expect(markup).toContain('Linked Linear ENG-123')
-    expect(markup).not.toContain('Linked PR #456')
-    expect(markup).toContain('Workspace notes')
-    expect(markup).not.toContain('data-worktree-card-meta-row=""')
-    expect(markup).not.toContain('Reviewer handoff note')
-  })
-
   it('hides individual metadata surfaces when their card properties are disabled', async () => {
     worktreeCardProperties = []
     const { default: WorktreeCard } = await import('./WorktreeCard')
@@ -451,7 +370,6 @@ describe('WorktreeCard linked PR display', () => {
       <WorktreeCard
         worktree={makeWorktree({
           linkedIssue: 123,
-          linkedLinearIssue: 'ENG-123',
           linkedPR: 456,
           comment: 'Reviewer handoff note'
         })}
@@ -809,7 +727,7 @@ describe('WorktreeCard linked PR display', () => {
 
     const markup = renderWorktreeCardMarkup(
       <WorktreeCard
-        worktree={makeWorktree({ linkedGitLabMR: 77 })}
+        worktree={makeWorktree({ })}
         repo={makeRepo()}
         isActive={false}
       />

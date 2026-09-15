@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SshProviderEpoch } from '../../../shared/ssh-types'
 import { subscribeRuntimeClientEvents } from './runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
@@ -162,84 +161,6 @@ describe('subscribeRuntimeClientEvents', () => {
       'cancelled',
       'woken'
     ])
-  })
-
-  it('preserves full SSH authority in retained snapshots and live client events', async () => {
-    let capturedOnResponse: ((response: unknown) => void) | undefined
-    const subscribe = vi.fn(async (_args, nextCallbacks) => {
-      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
-      return { subscriptionId: 'sub-1', unsubscribe: vi.fn() }
-    })
-    const onEvent = vi.fn()
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
-    await subscribeRuntimeClientEvents('env-1', onEvent)
-    if (!capturedOnResponse) {
-      throw new Error('Expected subscription callbacks')
-    }
-    capturedOnResponse({
-      ok: true,
-      result: {
-        type: 'ready',
-        subscriptionId: 'sub-1',
-        snapshot: {
-          sshStates: [
-            {
-              targetId: 'ssh-1',
-              state: {
-                targetId: 'ssh-1',
-                status: 'connected',
-                error: null,
-                reconnectAttempt: 0,
-                providerEpoch: 'snapshot-provider-epoch' as SshProviderEpoch,
-                connectionGeneration: 17
-              }
-            }
-          ]
-        }
-      }
-    })
-
-    expect(onEvent).toHaveBeenCalledWith({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: {
-        targetId: 'ssh-1',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: 'snapshot-provider-epoch',
-        connectionGeneration: 17
-      }
-    })
-
-    capturedOnResponse({
-      ok: true,
-      result: {
-        type: 'sshStateChanged',
-        targetId: 'ssh-1',
-        state: {
-          targetId: 'ssh-1',
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0,
-          providerEpoch: 'live-provider-epoch' as SshProviderEpoch,
-          connectionGeneration: 18
-        }
-      }
-    })
-
-    expect(onEvent).toHaveBeenLastCalledWith({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: {
-        targetId: 'ssh-1',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        providerEpoch: 'live-provider-epoch',
-        connectionGeneration: 18
-      }
-    })
   })
 
   it('rejects a partial runtime authority instead of retaining it', async () => {

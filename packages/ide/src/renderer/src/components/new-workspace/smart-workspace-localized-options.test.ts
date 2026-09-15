@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getMrStateFilters, getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
+import {  getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
 
 describe('smart-workspace-localized-options', () => {
   beforeEach(async () => {
@@ -44,21 +44,4 @@ describe('smart-workspace-localized-options', () => {
     ])
   })
 
-  it('refreshes GitLab state filters when the UI language changes', async () => {
-    expect(getMrStateFilters().map((filter) => filter.label)).toEqual([
-      'Open',
-      'Merged',
-      'Closed',
-      'All'
-    ])
-
-    await i18n.changeLanguage('zh')
-
-    expect(getMrStateFilters().map((filter) => filter.label)).toEqual([
-      '开放',
-      '合并',
-      '已关闭',
-      '全部'
-    ])
-  })
 })

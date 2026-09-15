@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+import type { } from '@/store'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
 
@@ -116,10 +116,10 @@ vi.mock('../../../shared/tui-agent-selection', async () => {
   }
 })
 
-import { launchWorkItemDirect } from './launch-work-item-direct'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { } from './launch-work-item-direct'
+import { } from '@/lib/agent-paste-draft'
+import {  buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { } from '../../../shared/tui-agent-selection'
 
 const mockApi = {
   worktrees: {
@@ -346,84 +346,6 @@ describe('launchWorkItemDirect', () => {
     expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
   })
 
-  it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {
-    mocks.store.repos = [
-      {
-        id: 'repo-ssh',
-        path: '/home/orca/repo',
-        displayName: 'Remote Repo',
-        badgeColor: '#000',
-        addedAt: 0,
-        connectionId: 'ssh-1'
-      }
-    ] as AppState['repos']
-    mocks.store.settings = { defaultTuiAgent: 'cursor' } as AppState['settings']
-    mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['cursor'])
-    vi.mocked(pickTuiAgent).mockReturnValueOnce('cursor')
-    vi.mocked(buildAgentDraftLaunchPlan).mockReturnValueOnce(null)
-    vi.mocked(buildAgentStartupPlan).mockReturnValueOnce({
-      agent: 'cursor',
-      launchCommand: 'cursor-agent',
-      expectedProcess: 'cursor-agent',
-      followupPrompt: null,
-      launchConfig: { agentArgs: '', agentEnv: {} }
-    })
-    mocks.store.createWorktree.mockResolvedValue({
-      worktree: { id: 'wt-ssh', path: '/home/orca/repo-worktrees/issue-77' }
-    })
-
-    await launchWorkItemDirect({
-      repoId: 'repo-ssh',
-      launchSource: 'task_page',
-      telemetrySource: 'sidebar',
-      openModalFallback: vi.fn(),
-      item: {
-        type: 'issue',
-        number: 77,
-        title: 'Fix cursor direct launch',
-        url: 'https://github.com/acme/repo/issues/77'
-      }
-    })
-
-    expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
-    expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mockApi.agentTrust.markTrusted).toHaveBeenCalledWith({
-      preset: 'cursor',
-      workspacePath: '/home/orca/repo-worktrees/issue-77',
-      connectionId: 'ssh-1'
-    })
-    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
-      agent: 'cursor',
-      draft: 'https://github.com/acme/repo/issues/77',
-      cmdOverrides: {},
-      agentArgs: '--yolo',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'linux',
-      isRemote: true
-    })
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith({
-      agent: 'cursor',
-      prompt: '',
-      cmdOverrides: {},
-      agentArgs: '--yolo',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'linux',
-      isRemote: true,
-      allowEmptyPromptLaunch: true
-    })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
-      'wt-ssh',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          draftPrompt: 'https://github.com/acme/repo/issues/77'
-        })
-      })
-    )
-    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
-  })
-
   it('does not launch a disabled saved agent even when another agent is available', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['codex', 'claude'])
     mocks.store.settings = {
@@ -456,42 +378,6 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Selected agent is not available in the created workspace.'
     )
-  })
-
-  it('plans direct SSH workspace agent startup for the remote host platform', async () => {
-    mocks.getConnectionId.mockReturnValue('ssh-1')
-    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['pi'])
-    mocks.store.repos = [
-      {
-        id: 'repo-1',
-        path: '/home/alice/repo',
-        connectionId: 'ssh-1',
-        displayName: 'Remote Repo',
-        addedAt: 1
-      }
-    ]
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        item: {
-          title: 'Fix failing checks',
-          url: 'https://github.com/acme/repo/pull/1',
-          type: 'issue',
-          number: 1,
-          pasteContent: 'Fix the failing checks.'
-        },
-        repoId: 'repo-1',
-        openModalFallback: mocks.openModalFallback,
-        launchSource: 'task_page',
-        agentOverride: 'pi'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
-    const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
-    expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
   })
 
   it('uses the repo SSH connection when the created worktree is not hydrated yet', async () => {

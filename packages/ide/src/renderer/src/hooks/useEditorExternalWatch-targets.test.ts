@@ -72,7 +72,6 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
-    sshConnectionStates: args.sshConnectionStates ?? new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings:

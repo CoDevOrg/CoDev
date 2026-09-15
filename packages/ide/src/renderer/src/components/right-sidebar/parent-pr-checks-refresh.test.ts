@@ -114,11 +114,7 @@ describe('parent PR checks refresh', () => {
       id: 'repo-1::/linked',
       displayName: 'Z linked',
       linkedPR: 7,
-      linkedGitLabMR: 9,
-      linkedBitbucketPR: 10,
-      linkedAzureDevOpsPR: 11,
-      linkedGiteaPR: 12
-    })
+})
     const candidates = getParentPrChecksRefreshCandidates({
       worktrees: [unlinked, linked],
       repos: [repo]
@@ -157,7 +153,7 @@ describe('parent PR checks refresh', () => {
   it('keeps ambiguous null neutral while preserving thrown refresh failures as errors', async () => {
     const repo = makeRepo()
     const unlinked = makeWorktree({ id: 'repo-1::/unlinked' })
-    const linked = makeWorktree({ id: 'repo-1::/linked', linkedGitLabMR: 5 })
+    const linked = makeWorktree({ id: 'repo-1::/linked', })
     const ambiguousNull = await runLimitedParentPrChecksRefreshes({
       candidates: getParentPrChecksRefreshCandidates({
         worktrees: [unlinked],

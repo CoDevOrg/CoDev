@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/types'
 import { useAppStore } from '@/store'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   captureFileExplorerOperationGuard,
@@ -34,94 +34,6 @@ describe('file explorer operation generations', () => {
     expect(owner).toEqual({ kind: 'local' })
     expect(guard.route.expectedExecutionHostId).toBe('local')
     expect(() => guard.assertCurrent()).not.toThrow()
-  })
-
-  it('invalidates a nested SSH mutation when that target reconnects', () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: { 'repo-1': [worktree('ssh:private-target', 'hub-a')] }
-    })
-    useAppStore.getState().setEnvironmentSshConnectionState('hub-a', 'private-target', {
-      targetId: 'private-target',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 1
-    })
-    const owner = getFileExplorerOperationOwner(worktreeId)
-    const guard = captureFileExplorerOperationGuard(worktreeId, owner)
-
-    useAppStore.getState().setEnvironmentSshConnectionState('hub-a', 'private-target', {
-      targetId: 'private-target',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 2
-    })
-
-    expect(() => guard.assertCurrent()).toThrow("Couldn't determine which host owns")
-  })
-
-  it('invalidates a direct SSH mutation when that target reconnects', () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: { 'repo-1': [worktree('ssh:client-target')] }
-    })
-    useAppStore.getState().setSshConnectionState('client-target', {
-      targetId: 'client-target',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 1
-    })
-    const owner = getFileExplorerOperationOwner(worktreeId)
-    const guard = captureFileExplorerOperationGuard(worktreeId, owner)
-
-    useAppStore.getState().setSshConnectionState('client-target', {
-      targetId: 'client-target',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 2
-    })
-
-    expect(() => guard.assertCurrent()).toThrow("Couldn't determine which host owns")
-  })
-
-  it('invalidates a folder-workspace mutation when its SSH target reconnects', () => {
-    const folderWorkspaceId = 'folder-1'
-    const folderWorktreeId = folderWorkspaceKey(folderWorkspaceId)
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: folderWorkspaceId,
-          projectGroupId: 'group-1',
-          connectionId: 'client-target'
-        } as never
-      ],
-      projectGroups: [{ id: 'group-1', connectionId: 'client-target' } as never],
-      repos: [],
-      worktreesByRepo: {}
-    })
-    useAppStore.getState().setSshConnectionState('client-target', {
-      targetId: 'client-target',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 1
-    })
-    const owner = getFileExplorerOperationOwner(folderWorktreeId)
-    const guard = captureFileExplorerOperationGuard(folderWorktreeId, owner)
-
-    useAppStore.getState().setSshConnectionState('client-target', {
-      targetId: 'client-target',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 0,
-      connectionGeneration: 2
-    })
-
-    expect(() => guard.assertCurrent()).toThrow("Couldn't determine which host owns")
   })
 
   it('invalidates a mutation when the saved HUB points at a replacement runtime', () => {

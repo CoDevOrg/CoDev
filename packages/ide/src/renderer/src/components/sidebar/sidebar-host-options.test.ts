@@ -14,7 +14,6 @@ describe('sidebar host options', () => {
   it('hides host controls for local-only workspaces', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: null }],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -34,7 +33,6 @@ describe('sidebar host options', () => {
   it('includes SSH hosts from labels and repos', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-from-repo' }],
-      sshTargetLabels: new Map([['ssh-saved', 'Saved SSH']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -48,18 +46,6 @@ describe('sidebar host options', () => {
   it('includes SSH health in options', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: new Map([
-        [
-          'ssh-1',
-          {
-            targetId: 'ssh-1',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        ]
-      ]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -72,7 +58,6 @@ describe('sidebar host options', () => {
   it('includes the focused runtime compatibility host', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' }
     })
 
@@ -88,7 +73,6 @@ describe('sidebar host options', () => {
   it('uses saved runtime environment names for runtime host labels', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: '03ef704c-b180-4b10-998d-e28fbd5de9a3' },
       runtimeEnvironments: [
         {
@@ -107,7 +91,6 @@ describe('sidebar host options', () => {
   it('marks a runtime host blocked when its live status fails compat', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       // Why: protocol 0 is below the minimum compatible server version, so the
       // registry must surface a 'server-too-old' blocked verdict + health when
@@ -142,7 +125,6 @@ describe('sidebar host options', () => {
   it('leaves a runtime host available when its live status is compatible', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],
-      sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       runtimeStatusByEnvironmentId: new Map([
         [
@@ -171,7 +153,6 @@ describe('sidebar host options', () => {
   it('builds all-host plus focused-host scope options', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -185,7 +166,6 @@ describe('sidebar host options', () => {
   it('labels visible host selections for the workspace options menu', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: null }
     })
 
@@ -197,7 +177,6 @@ describe('sidebar host options', () => {
   it('carries host kind so the header menu can pick lifecycle actions', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
       settings: { activeRuntimeEnvironmentId: 'runtime-1' }
     })
 

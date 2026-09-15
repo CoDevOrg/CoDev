@@ -94,7 +94,6 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   registerPty as registerLocalPtyMemoryRow,
   unregisterPty as unregisterLocalPtyMemoryRow
@@ -361,24 +360,6 @@ vi.mock('../git/worktree', () => ({
 
 vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
-  requireSshGitProvider: (connectionId: string) => {
-    const provider = getSshGitProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  },
-  registerSshGitProvider: registerSshGitProviderMock,
-  unregisterSshGitProvider: unregisterSshGitProviderMock
 }))
 
 vi.mock('../ipc/ssh', () => ({
@@ -1150,22 +1131,9 @@ function createRuntimeWithSshLease(
   tabId: string,
   state: 'expired' | 'terminated' = 'expired'
 ): OrcaRuntimeService {
-  const now = Date.now()
   return new OrcaRuntimeService({
     ...store,
-    getSshRemotePtyLeases: () => [
-      {
-        targetId: 'ssh-target',
-        ptyId,
-        worktreeId: TEST_WORKTREE_ID,
-        tabId,
-        leafId: HEADLESS_LEAF_ID,
-        state,
-        createdAt: now,
-        updatedAt: now
-      }
-    ]
-  })
+})
 }
 
 async function createExplicitAgentStatusHarness(options: {
@@ -2177,7 +2145,6 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         activeWorktreeIdsOnShutdown: [],
-        activeConnectionIdsAtShutdown: [],
         remoteSessionIdsByTabId: {},
         tabsByWorktree: {
           [TEST_WORKTREE_ID]: [
@@ -3479,7 +3446,6 @@ describe('OrcaRuntimeService', () => {
       })
     }
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -3490,7 +3456,6 @@ describe('OrcaRuntimeService', () => {
       })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')
-      unregisterSshGitProvider('ssh-1')
     }
 
     expect(listWorktrees).not.toHaveBeenCalled()
@@ -4894,7 +4859,6 @@ describe('OrcaRuntimeService', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
-    registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
@@ -4973,29 +4937,6 @@ describe('OrcaRuntimeService', () => {
         return lineage
       })
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValueOnce([parent]).mockResolvedValue([parent, created])
-    }
-    registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
@@ -5023,7 +4964,6 @@ describe('OrcaRuntimeService', () => {
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -5092,13 +5032,6 @@ describe('OrcaRuntimeService', () => {
   it('activates SSH worktrees created with startup agents', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
-    const created = {
-      path: '/remote/agent-feature',
-      head: 'def',
-      branch: 'refs/heads/agent-feature',
-      isBare: false,
-      isMainWorktree: false
-    }
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -5130,31 +5063,8 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-agent-startup' })
     const activateWorktree = vi.fn()
-    registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -5205,20 +5115,12 @@ describe('OrcaRuntimeService', () => {
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
   it('quotes startup prompts for Windows SSH worktrees using PowerShell syntax', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
-    const created = {
-      path: 'C:/remote/agent-feature',
-      head: 'def',
-      branch: 'refs/heads/agent-feature',
-      isBare: false,
-      isMainWorktree: false
-    }
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: 'C:/remote/repo',
@@ -5243,30 +5145,7 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-windows-agent' })
-    registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -5308,20 +5187,12 @@ describe('OrcaRuntimeService', () => {
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
   it('launches SSH setup terminals for runtime task-created worktrees', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
-    const created = {
-      path: '/remote/mobile-setup',
-      head: 'def',
-      branch: 'refs/heads/mobile-setup',
-      isBare: false,
-      isMainWorktree: false
-    }
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -5348,37 +5219,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-          return {
-            stdout: '/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh\n',
-            stderr: ''
-          }
-        }
-        if (args[0] === 'rev-parse') {
-          throw new Error('missing local branch')
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
@@ -5393,7 +5233,6 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'pty-remote-agent' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote' })
-    registerSshGitProvider('ssh-1', provider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -5479,7 +5318,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
     } finally {
-      unregisterSshGitProvider('ssh-1')
       unregisterSshFilesystemProvider('ssh-1')
     }
   })
@@ -5487,13 +5325,6 @@ describe('OrcaRuntimeService', () => {
   it('honors split setup placement for SSH worktrees without startup agents', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
-    const created = {
-      path: '/remote/mobile-setup-split',
-      head: 'def',
-      branch: 'refs/heads/mobile-setup-split',
-      isBare: false,
-      isMainWorktree: false
-    }
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -5518,37 +5349,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'rev-parse' && args[1] === '--git-path') {
-          return {
-            stdout: '/remote/repo/.git/worktrees/mobile-setup-split/orca/setup-runner.sh\n',
-            stderr: ''
-          }
-        }
-        if (args[0] === 'rev-parse') {
-          throw new Error('missing local branch')
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
@@ -5563,7 +5363,6 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'pty-remote-initial' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup-split' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote-split' })
-    registerSshGitProvider('ssh-1', provider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -5612,7 +5411,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
     } finally {
-      unregisterSshGitProvider('ssh-1')
       unregisterSshFilesystemProvider('ssh-1')
     }
   })
@@ -5659,7 +5457,6 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const ptyProvider = {
       listProcesses: vi.fn().mockResolvedValue([
         {
@@ -5672,13 +5469,11 @@ describe('OrcaRuntimeService', () => {
       shutdown: vi.fn().mockResolvedValue(undefined)
     }
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
-      getSshProvider: () => ptyProvider as never
-    })
+})
 
     try {
       await runtime.removeManagedWorktree('path:/remote/feature', true, false)
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
 
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
@@ -5710,33 +5505,8 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-1'
     }
     const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/repo',
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        },
-        {
-          path: '/remote/feature',
-          head: 'abc',
-          branch: 'feature/foo',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]),
-      removeWorktree: vi.fn().mockResolvedValue(undefined)
-    }
-    registerSshGitProvider('ssh-1', gitProvider as never)
-    const ptyProvider = {
-      listProcesses: vi.fn().mockResolvedValue([]),
-      shutdown: vi.fn().mockResolvedValue(undefined)
-    }
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
-      getSshProvider: () => ptyProvider as never
-    })
+})
     const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
@@ -5751,7 +5521,6 @@ describe('OrcaRuntimeService', () => {
     try {
       await runtime.removeManagedWorktree('path:/remote/feature', true, false)
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
 
     expect(stopAndWait).toHaveBeenCalledWith('pty-remote', expect.anything())
@@ -5792,7 +5561,6 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -5800,7 +5568,6 @@ describe('OrcaRuntimeService', () => {
         'Refusing to delete protected worktree path: /remote/repo'
       )
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
 
     expect(gitProvider.removeWorktree).not.toHaveBeenCalled()
@@ -6785,13 +6552,11 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
       await expect(runtime.probeWorktreeDrift('path:/remote/repo')).resolves.toBeNull()
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
 
     expect(gitProvider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
@@ -12178,126 +11943,6 @@ describe('OrcaRuntimeService', () => {
     expect(internals.syntheticTerminalHandles.has(handle)).toBe(false)
   })
 
-  it('drops an out-of-order aggregate inventory after a newer SSH inventory', async () => {
-    const targetId = 'ssh-1'
-    const ptyId = `ssh:${targetId}@@persisted-pty`
-    const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
-    const oldIncarnation = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-    const newIncarnation = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-    const session = makeWorkspaceSessionWithHeadlessTerminal({
-      tabsByWorktree: {
-        [TEST_WORKTREE_ID]: [
-          {
-            id: 'host-tab',
-            ptyId,
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'Persisted Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
-      },
-      terminalPtyIncarnationsByPaneKey: { [paneKey]: oldIncarnation }
-    })
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      attestAgentHookCompatibilityAuthority: ({ paneKey: candidate, launchTokenHash }) =>
-        candidate === paneKey && launchTokenHash === RESTORED_AUTHORITY_TOKEN_HASH
-          ? { paneKey: candidate, source: 'hydrated_commitment' }
-          : null
-    })
-    const oldInventory = deferred<
-      {
-        id: string
-        incarnationId: string
-        terminalHandle: string
-        worktreeId: string
-        cwd: string
-        title: string
-        wslDistro: null
-      }[]
-    >()
-    const newInventory =
-      deferred<typeof oldInventory.promise extends Promise<infer T> ? T : never>()
-    const listProcesses = vi
-      .fn()
-      .mockImplementationOnce(() => oldInventory.promise)
-      .mockImplementationOnce(() => newInventory.promise)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses
-    })
-    const internals = runtime as unknown as {
-      refreshPtyWorktreeRecordsWithControllerInventory: (
-        worktrees: [],
-        targetWorktreeId: string | null,
-        deadline: number | undefined,
-        connectionId: string | null | undefined
-      ) => Promise<unknown>
-      ptysById: Map<string, { incarnationId: string | null }>
-      restoredOrchestrationAuthorityByPtyId: Map<string, unknown>
-    }
-    const host = runtime.registerOrchestrationCompatibilitySshAttachment(
-      targetId,
-      'connection-incarnation'
-    )
-
-    const staleRefresh = internals.refreshPtyWorktreeRecordsWithControllerInventory(
-      [],
-      null,
-      undefined,
-      undefined
-    )
-    const currentRefresh = internals.refreshPtyWorktreeRecordsWithControllerInventory(
-      [],
-      null,
-      undefined,
-      targetId
-    )
-    newInventory.resolve([
-      {
-        id: ptyId,
-        incarnationId: newIncarnation,
-        terminalHandle: 'term_new_process',
-        worktreeId: TEST_WORKTREE_ID,
-        cwd: TEST_WORKTREE_PATH,
-        title: 'Replacement',
-        wslDistro: null
-      }
-    ])
-    await expect(currentRefresh).resolves.not.toBeNull()
-    oldInventory.resolve([
-      {
-        id: ptyId,
-        incarnationId: oldIncarnation,
-        terminalHandle: 'term_old_process',
-        worktreeId: TEST_WORKTREE_ID,
-        cwd: TEST_WORKTREE_PATH,
-        title: 'Retained coordinator',
-        wslDistro: null
-      }
-    ])
-    await expect(staleRefresh).resolves.toBeNull()
-
-    expect(internals.ptysById.get(ptyId)?.incarnationId).toBe(newIncarnation)
-    expect(internals.restoredOrchestrationAuthorityByPtyId.has(ptyId)).toBe(false)
-    expect(
-      runtime.verifyOrchestrationCompatibilityCaller({
-        terminalHandle: 'term_old_process',
-        paneKey,
-        launchToken: RESTORED_AUTHORITY_TOKEN,
-        host
-      })
-    ).toBeNull()
-  })
-
   it('keeps restored receipts outside a targeted worktree scan', async () => {
     const secondWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
     const runtime = new OrcaRuntimeService(store)
@@ -12352,142 +11997,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(receipts.has('pty-moved')).toBe(false)
     expect(receipts.has('pty-second')).toBe(true)
-  })
-
-  it('preserves SSH dispatch authority commitment across transient relay loss', async () => {
-    const targetId = 'ssh-1'
-    const ptyId = `ssh:${targetId}@@pty-retained`
-    const tabId = 'ssh-worker'
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    const incarnationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-    const sshSession = makeWorkspaceSessionWithHeadlessTerminal({
-      activeTabId: tabId,
-      activeTabIdByWorktree: { [TEST_WORKTREE_ID]: tabId },
-      tabsByWorktree: {
-        [TEST_WORKTREE_ID]: [
-          {
-            id: tabId,
-            ptyId,
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'SSH worker',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        [tabId]: makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
-      },
-      terminalPtyIncarnationsByPaneKey: { [paneKey]: incarnationId }
-    })
-    const retireAuthority = vi.fn()
-    const failDispatch = vi.fn()
-    const runtime = new OrcaRuntimeService(
-      {
-        ...store,
-        getWorkspaceSession: (hostId?: string | null) =>
-          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession()
-      },
-      undefined,
-      {
-        attestAgentHookCompatibilityAuthority: ({
-          paneKey: candidate,
-          launchTokenHash,
-          connectionId
-        }) =>
-          candidate === paneKey &&
-          launchTokenHash === RESTORED_AUTHORITY_TOKEN_HASH &&
-          connectionId === targetId
-            ? { paneKey: candidate, source: 'hydrated_commitment' }
-            : null,
-        retireAgentHookCompatibilityAuthority: retireAuthority
-      }
-    )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: (handle: string) =>
-        handle === 'term_ssh_retained'
-          ? { id: 'dispatch-ssh', task_id: 'task-ssh', status: 'dispatched' }
-          : undefined,
-      failDispatch,
-      getActiveCoordinatorRun: () => undefined
-    } as unknown as OrchestrationDb)
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'SSH worker',
-          activeLeafId: HEADLESS_LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: HEADLESS_LEAF_ID,
-          paneRuntimeId: 1,
-          ptyId
-        }
-      ]
-    })
-    const listProcesses = vi.fn(async () => [
-      {
-        id: ptyId,
-        incarnationId,
-        terminalHandle: 'term_ssh_retained',
-        title: 'SSH worker',
-        cwd: TEST_WORKTREE_PATH,
-        worktreeId: TEST_WORKTREE_ID,
-        wslDistro: null
-      }
-    ])
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses
-    })
-    const refreshInventory = (connectionId: string | undefined) =>
-      (
-        runtime as unknown as {
-          refreshPtyWorktreeRecordsWithControllerInventory: (
-            worktrees: [],
-            targetWorktreeId: string | null,
-            deadline: number | undefined,
-            connectionId: string | undefined
-          ) => Promise<unknown>
-        }
-      ).refreshPtyWorktreeRecordsWithControllerInventory([], null, undefined, connectionId)
-    const host = runtime.registerOrchestrationCompatibilitySshAttachment(
-      targetId,
-      'connection-incarnation'
-    )
-    const evidence = {
-      terminalHandle: 'term_ssh_retained',
-      paneKey,
-      launchToken: RESTORED_AUTHORITY_TOKEN,
-      host
-    } as const
-
-    await expect(refreshInventory(targetId)).resolves.not.toBeNull()
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-    await expect(refreshInventory(undefined)).resolves.not.toBeNull()
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-
-    runtime.onPtyExit(ptyId, -1, incarnationId)
-
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
-    expect(retireAuthority).not.toHaveBeenCalled()
-    expect(failDispatch).not.toHaveBeenCalled()
-
-    await expect(refreshInventory(targetId)).resolves.not.toBeNull()
-
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-    expect(listProcesses).toHaveBeenCalledTimes(3)
   })
 
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
@@ -12913,20 +12422,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: {}
       })
     }
-    const provider = {
-      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: 'C:/remote/repo',
-          head: 'abc',
-          branch: 'main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-windows-bare' })
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
       spawn,
@@ -12948,7 +12444,6 @@ describe('OrcaRuntimeService', () => {
         hostPlatform: 'linux'
       })
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -19778,12 +19273,6 @@ describe('OrcaRuntimeService', () => {
         connectionId: 'ssh-retry',
         materializeRenderer: true
       })
-      runtime.notifySshStateChanged('ssh-retry', {
-        targetId: 'ssh-retry',
-        status: 'disconnected',
-        error: null,
-        reconnectAttempt: 0
-      })
       await vi.advanceTimersByTimeAsync(30_000)
 
       expect(reconcile).not.toHaveBeenCalled()
@@ -20357,17 +19846,6 @@ describe('OrcaRuntimeService', () => {
       })
     )
     runtime.setNotifier({ revealTerminalSession } as never)
-    registerSshGitProvider(connectionId, {
-      listWorktrees: vi.fn(async () => [
-        {
-          path: TEST_WORKTREE_PATH,
-          head: 'abc',
-          branch: 'main',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    } as never)
 
     try {
       await expect(
@@ -20399,7 +19877,6 @@ describe('OrcaRuntimeService', () => {
       })
       expect(listProcesses).toHaveBeenLastCalledWith(connectionId)
     } finally {
-      unregisterSshGitProvider(connectionId)
     }
 
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
@@ -28273,7 +27750,6 @@ describe('OrcaRuntimeService', () => {
       .spyOn(runtime, 'reconcileLegacyWorkerTerminals')
       .mockReturnValue(new Promise(() => undefined))
 
-    runtime.notifySshRelayReady('ssh-1')
     await vi.waitFor(() =>
       expect(
         events.some((snapshot) =>
@@ -34314,9 +33790,6 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession: () => getDefaultWorkspaceSession()
     }
-    registerSshGitProvider('ssh-6072', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
@@ -34387,9 +33860,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    registerSshGitProvider('ssh-1', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
 
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
@@ -34476,13 +33946,6 @@ describe('OrcaRuntimeService', () => {
         getAllWorktreeMeta: () => ({}),
         getWorktreeMeta: () => undefined
       }
-      registerSshGitProvider('ssh-relative', {
-        listWorktrees: vi
-          .fn()
-          .mockResolvedValue(
-            includeSlashWorktree ? [backslashWorktree, slashWorktree] : [backslashWorktree]
-          )
-      } as never)
 
       const now = Date.now()
       const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
@@ -34554,9 +34017,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-pair-aware-scale', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -34612,9 +34072,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-malformed-scale', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -34649,13 +34106,6 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-repeated-miss'
     }
-    const remoteWorktree = {
-      path: '/remote/existing',
-      head: 'head-existing',
-      branch: 'refs/heads/existing',
-      isBare: false,
-      isMainWorktree: false
-    }
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -34663,9 +34113,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-repeated-miss', {
-      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -34704,22 +34151,6 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-truncated'
     }
     const targetPath = '/remote/zzz-live-agent'
-    const remoteWorktrees = [
-      ...Array.from({ length: 200 }, (_, index) => ({
-        path: `/remote/inactive-${String(index).padStart(3, '0')}`,
-        head: `head-${index}`,
-        branch: `refs/heads/inactive-${index}`,
-        isBare: false,
-        isMainWorktree: false
-      })),
-      {
-        path: targetPath,
-        head: 'live-agent',
-        branch: 'refs/heads/live-agent',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ]
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -34727,9 +34158,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
-    registerSshGitProvider('ssh-truncated', {
-      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
@@ -34774,20 +34202,7 @@ describe('OrcaRuntimeService', () => {
       isMainWorktree: false
     }))
     const pinnedPath = 'relative/zzz-pinned'
-    const pinnedWorktree = {
-      path: pinnedPath,
-      head: 'pinned',
-      branch: 'refs/heads/pinned',
-      isBare: false,
-      isMainWorktree: false
-    }
     const unreadPath = 'relative/zzz-unread'
-    const unreadWorktree = {
-      ...pinnedWorktree,
-      path: unreadPath,
-      head: 'unread',
-      branch: 'refs/heads/unread'
-    }
     const pinnedId = `${remoteRepo.id}::${pinnedPath}`
     const unreadId = `${remoteRepo.id}::${unreadPath}`
     const metaById: Record<string, WorktreeMeta> = {
@@ -34801,9 +34216,6 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     }
-    registerSshGitProvider('ssh-pinned-limit', {
-      listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree, unreadWorktree])
-    } as never)
     const now = Date.now()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
@@ -36498,7 +35910,6 @@ describe('OrcaRuntimeService', () => {
         })
       })
     }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const result = await runtime.searchRepoRefs('id:remote-repo', '', 2)
@@ -36561,7 +35972,6 @@ describe('OrcaRuntimeService', () => {
         })
       })
     }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const result = await runtime.searchRepoRefs('id:remote-repo', '', 1)
@@ -37519,9 +36929,7 @@ describe('OrcaRuntimeService', () => {
       undefined,
       {
         getLocalProvider: () => localProvider as never,
-        getSshProvider: (connectionId) =>
-          connectionId === 'ssh-1' ? (sshProvider as never) : undefined
-      }
+}
     )
     vi.spyOn(
       runtime as unknown as { listDetectedWorktreesForResolvedRepo: () => unknown },
@@ -37853,20 +37261,17 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo]
     }
     const provider = { listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES) }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
       await expect(
         runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
       ).resolves.toMatchObject({ authoritative: true })
-      unregisterSshGitProvider('ssh-1')
       await expect(
         runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
       ).resolves.toMatchObject({ authoritative: false })
       expect(provider.listWorktrees).toHaveBeenCalledTimes(1)
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -37881,25 +37286,17 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => repos
     }
     const provider = { listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES) }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
       await runtime.listDetectedManagedWorktrees('id:local-repo')
       await runtime.listDetectedManagedWorktrees('id:remote-repo')
-      runtime.notifySshStateChanged('ssh-1', {
-        targetId: 'ssh-1',
-        status: 'disconnected',
-        error: null,
-        reconnectAttempt: 0
-      })
       await runtime.listDetectedManagedWorktrees('id:local-repo')
       await runtime.listDetectedManagedWorktrees('id:remote-repo')
 
       expect(listWorktrees).toHaveBeenCalledTimes(1)
       expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -37911,21 +37308,13 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [remoteRepo]
     }
     const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
-    registerSshGitProvider('ssh-empty', provider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
       await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
-      runtime.notifySshStateChanged('ssh-empty', {
-        targetId: 'ssh-empty',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0
-      })
       await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
       expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
     } finally {
-      unregisterSshGitProvider('ssh-empty')
     }
   })
 
@@ -37937,12 +37326,6 @@ describe('OrcaRuntimeService', () => {
 
     const first = runtime.listManagedWorktrees()
     await Promise.resolve()
-    runtime.notifySshStateChanged('ssh-unknown', {
-      targetId: 'ssh-unknown',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 0
-    })
     pending.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
     await expect(first).resolves.toMatchObject({ totalCount: 1 })
     await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 1 })
@@ -41768,13 +41151,6 @@ describe('OrcaRuntimeService', () => {
 
   it('detects agents on the SSH host before launching remote startup drafts', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['claude'])
-    const created = {
-      path: '/remote/mobile-startup-draft',
-      head: 'def',
-      branch: 'refs/heads/mobile-startup-draft',
-      isBare: false,
-      isMainWorktree: false
-    }
     const metaById: Record<string, WorktreeMeta> = {}
     const remoteStore = {
       ...store,
@@ -41808,29 +41184,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
-    registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-startup-draft' })
@@ -41864,13 +41217,6 @@ describe('OrcaRuntimeService', () => {
   it('pre-marks remote Codex workspaces trusted before pasting startup drafts', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['codex'])
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
-    const created = {
-      path: '/remote/mobile-codex-draft',
-      head: 'def',
-      branch: 'refs/heads/mobile-codex-draft',
-      isBare: false,
-      isMainWorktree: false
-    }
     const metaById: Record<string, WorktreeMeta> = {}
     const remoteStore = {
       ...store,
@@ -41904,35 +41250,12 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const gitProvider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-draft'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-codex-draft' })
@@ -41975,19 +41298,11 @@ describe('OrcaRuntimeService', () => {
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
   it('pre-marks remote Codex workspaces trusted before explicit startup commands', async () => {
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
-    const created = {
-      path: '/remote/mobile-codex-command',
-      head: 'def',
-      branch: 'refs/heads/mobile-codex-command',
-      isBare: false,
-      isMainWorktree: false
-    }
     const metaById: Record<string, WorktreeMeta> = {}
     const remoteStore = {
       ...store,
@@ -42017,35 +41332,12 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const gitProvider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'config') {
-          return { stdout: 'Remote User\n', stderr: '' }
-        }
-        if (args[0] === 'branch') {
-          return { stdout: '', stderr: '' }
-        }
-        if (args[0] === 'symbolic-ref') {
-          return { stdout: 'origin/main\n', stderr: '' }
-        }
-        if (isOriginMainBaseRefProbe(args)) {
-          return { stdout: 'main-sha\n', stderr: '' }
-        }
-        if (args[0] === 'fetch') {
-          return { stdout: '', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([created])
-    }
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-command'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshGitProvider('ssh-1', gitProvider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-codex-command' })
@@ -42088,7 +41380,6 @@ describe('OrcaRuntimeService', () => {
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {
       unregisterSshFilesystemProvider('ssh-1')
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -42231,7 +41522,6 @@ describe('OrcaRuntimeService', () => {
         .mockResolvedValue(`refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const result = await runtime.resolveManagedPrBase({
@@ -42662,8 +41952,7 @@ describe('OrcaRuntimeService', () => {
     }
     return new OrcaRuntimeService(runtimeStore as never, undefined, {
       getLocalProvider: () => emptyPtyProvider as never,
-      getSshProvider: () => emptyPtyProvider as never
-    })
+})
   }
 
   it('skips archive hooks for CLI worktree removal by default', async () => {
@@ -42881,8 +42170,7 @@ describe('OrcaRuntimeService', () => {
     const getSshProvider = vi.fn(() => sshProvider as never)
     const runtime = new OrcaRuntimeService(orphanStore as never, undefined, {
       getLocalProvider: () => localProvider as never,
-      getSshProvider
-    })
+})
 
     await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({
       warning: expect.stringContaining(TEST_WORKTREE_PATH)
@@ -43444,7 +42732,6 @@ describe('OrcaRuntimeService', () => {
         preservedBranch: { branchName: 'feature/test', head: 'def456' }
       })
     }
-    registerSshGitProvider('ssh-1', provider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
@@ -43463,7 +42750,6 @@ describe('OrcaRuntimeService', () => {
       )
       expect(forceDeleteLocalBranchMock).not.toHaveBeenCalled()
     } finally {
-      unregisterSshGitProvider('ssh-1')
     }
   })
 
@@ -43789,66 +43075,6 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
     } finally {
       await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
-    }
-  })
-
-  it('does not inspect or delete a local path when SSH runtime orphan cleanup has no filesystem provider', async () => {
-    const localPath = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-missing-fs-'))
-    const repo = {
-      id: 'repo-runtime-ssh-missing-fs',
-      path: '/remote/repo',
-      displayName: 'ssh',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-missing-fs'
-    }
-    const worktreeId = `${repo.id}::${localPath}`
-    const metaById: Record<string, WorktreeMeta> = {
-      [worktreeId]: makeWorktreeMeta({
-        orcaCreatedAt: Date.now(),
-        orcaCreationSource: 'ssh'
-      })
-    }
-    const removeWorktreeMeta = vi.fn((id: string) => {
-      delete metaById[id]
-    })
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [repo],
-      getRepo: (id: string) => (id === repo.id ? repo : undefined),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (id: string) => metaById[id],
-      setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
-        metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
-        return metaById[id]
-      },
-      removeWorktreeMeta
-    }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: repo.path,
-          head: 'main',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
-        }
-      ])
-    }
-    registerSshGitProvider(repo.connectionId, gitProvider as never)
-    const runtime = createWorktreeRemovalRuntime(runtimeStore)
-
-    try {
-      await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).rejects.toThrow(
-        'SSH filesystem provider unavailable'
-      )
-
-      await expect(lstat(localPath)).resolves.toBeTruthy()
-      expect(removeWorktree).not.toHaveBeenCalled()
-      expect(removeWorktreeMeta).not.toHaveBeenCalled()
-    } finally {
-      unregisterSshGitProvider(repo.connectionId)
-      await rm(localPath, { recursive: true, force: true })
     }
   })
 

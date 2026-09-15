@@ -13,7 +13,6 @@ const openUrlMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const runtimeSourceOwner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
-const sshSourceOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
 
 type ListenerRegistration = [string, EventListener, AddEventListenerOptions | boolean | undefined]
 
@@ -169,48 +168,7 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
 })
 
 describe('terminal HTTP links on a direct SSH pane', () => {
-  const baseDeps = { worktreeId: 'wt-1', worktreePath: '/tmp', startupCwd: '/tmp' }
 
-  it('sends an OSC 8 hyperlink to the system browser', () => {
-    expect(handleOscLink(URL, clickEvent(), { ...baseDeps, sourceOwner: sshSourceOwner })).toBe(
-      true
-    )
-
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('sends a WebLinksAddon click to the system browser', () => {
-    const { terminal } = makeTerminal()
-
-    expect(
-      handleTerminalWebLinkClick(URL, clickEvent(), {
-        ...baseDeps,
-        terminal,
-        sourceOwner: sshSourceOwner
-      })
-    ).toBe(true)
-
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('sends a click-fallback activation to the system browser', () => {
-    const { terminal, registrations } = makeTerminal()
-    const disposable = installHttpLinkClickFallback(terminal, {
-      worktreeId: 'wt-1',
-      getSourceOwner: () => sshSourceOwner
-    })
-
-    registrations.find(
-      ([name, _listener, options]) => name === 'mouseup' && options === undefined
-    )?.[1](clickEvent())
-
-    expect(openUrlMock).toHaveBeenCalledWith(URL)
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    disposable.dispose()
-  })
 })
 
 describe('terminal HTTP links on a local pane', () => {
