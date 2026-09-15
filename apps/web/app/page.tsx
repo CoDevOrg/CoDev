@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { FlaskConical, GitBranch, MessagesSquare } from "lucide-react";
 
 import { LandingMotion } from "@/components/landing-motion";
 import { LandingWorkspaceDemo } from "@/components/landing-workspace-demo";
@@ -14,7 +15,7 @@ import "./landing.css";
 export const metadata: Metadata = {
   title: "Build together, with agents",
   description:
-    "CoDev is a shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time. Request access to the private beta.",
+    "CoDev is a shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time, helping teams ship up to 50% faster. Request access to the private beta.",
 };
 
 export default async function HomePage() {
@@ -86,11 +87,65 @@ export default async function HomePage() {
             <strong>1 link</strong>
             <span>to bring anyone in</span>
           </li>
+          <li>
+            <strong>50% faster</strong>
+            <span>from idea to merged code</span>
+          </li>
         </ul>
       </section>
 
       <section className="lp-tour" id="tour" data-reveal>
         <LandingWorkspaceDemo />
+      </section>
+
+      <section
+        className="lp-speed"
+        aria-labelledby="lp-speed-title"
+        data-reveal
+      >
+        <div className="lp-speed-heading">
+          <p className="lp-speed-kicker">The speed advantage</p>
+          <h2 id="lp-speed-title">
+            Ship up to <em>50% faster.</em>
+          </h2>
+          <p>
+            CoDev removes the waiting and rework between writing code and
+            getting it safely merged.
+          </p>
+        </div>
+
+        <div className="lp-speed-grid">
+          <article>
+            <span className="lp-speed-icon" aria-hidden="true">
+              <FlaskConical size={18} strokeWidth={1.8} />
+            </span>
+            <h3>Test before merge</h3>
+            <p>
+              Run and review a teammate&apos;s in-progress work before a commit,
+              push, or merge.
+            </p>
+          </article>
+          <article>
+            <span className="lp-speed-icon" aria-hidden="true">
+              <MessagesSquare size={18} strokeWidth={1.8} />
+            </span>
+            <h3>Coordinate, don&apos;t duplicate</h3>
+            <p>
+              Agents see the same live context, divide the work, and stop
+              repeating the same investigation.
+            </p>
+          </article>
+          <article>
+            <span className="lp-speed-icon" aria-hidden="true">
+              <GitBranch size={18} strokeWidth={1.8} />
+            </span>
+            <h3>Prevent conflicts early</h3>
+            <p>
+              Shared awareness and isolated worktrees reveal overlap before it
+              becomes merge-day rework.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section className="lp-contrast" data-reveal>

@@ -174,6 +174,7 @@
 .lp-nav,
 .lp-hero,
 .lp-tour,
+.lp-speed,
 .lp-contrast,
 .lp-request,
 .lp-footer {
@@ -2012,6 +2013,113 @@
 }
 
 /* --------------------------------------------------------------------------
+   Speed advantage
+   -------------------------------------------------------------------------- */
+
+.lp-speed {
+  display: grid;
+  padding: clamp(56px, 8vw, 96px) 0;
+  align-items: center;
+  gap: clamp(32px, 6vw, 76px);
+  grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1.22fr);
+  border-top: 1px solid var(--lp-line);
+  border-bottom: 1px solid var(--lp-line);
+}
+
+.lp-speed-heading {
+  max-width: 28rem;
+}
+
+.lp-speed-kicker {
+  margin: 0 0 16px;
+  color: var(--lp-orange);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lp-speed h2 {
+  margin: 0;
+  font-weight: 600;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.lp-speed h2 em {
+  color: var(--lp-orange);
+  font-style: italic;
+}
+
+.lp-speed-heading > p:last-child {
+  max-width: 25rem;
+  margin: 20px 0 0;
+  color: var(--lp-muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.lp-speed-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lp-speed-grid article {
+  min-height: 218px;
+  padding: 22px 20px;
+  border: 1px solid var(--lp-line);
+  border-radius: 16px;
+  background: var(--lp-panel);
+}
+
+.lp-speed-grid article:hover {
+  border-color: var(--lp-line-strong);
+  background: var(--lp-panel-2);
+}
+
+.lp-speed-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 26px;
+  place-items: center;
+  border: 1px solid rgba(242, 96, 74, 0.3);
+  border-radius: 11px;
+  background: rgba(242, 96, 74, 0.1);
+  color: var(--lp-orange);
+}
+
+.lp-speed-grid article:nth-child(2) .lp-speed-icon {
+  border-color: rgba(176, 139, 245, 0.34);
+  background: rgba(176, 139, 245, 0.1);
+  color: var(--lp-violet);
+}
+
+.lp-speed-grid article:nth-child(3) .lp-speed-icon {
+  border-color: rgba(91, 155, 213, 0.34);
+  background: rgba(91, 155, 213, 0.1);
+  color: var(--lp-sky);
+}
+
+.lp-speed-grid h3 {
+  margin: 0;
+  font-weight: 580;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.lp-speed-grid p {
+  margin: 10px 0 0;
+  color: var(--lp-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------------------------
    Contrast band
    -------------------------------------------------------------------------- */
 
@@ -2379,6 +2487,23 @@
     flex-direction: column;
   }
 
+  .lp-speed {
+    gap: 32px;
+    grid-template-columns: 1fr;
+  }
+
+  .lp-speed-heading {
+    max-width: 34rem;
+  }
+
+  .lp-speed-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .lp-speed-grid article {
+    min-height: 0;
+  }
+
   .lp-phase-list {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2513,6 +2638,18 @@
     align-items: center;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .lp-speed-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-speed-grid article {
+    padding: 20px;
+  }
+
+  .lp-speed-icon {
+    margin-bottom: 18px;
   }
 }
 
